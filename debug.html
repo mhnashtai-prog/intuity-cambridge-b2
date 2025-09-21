@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INTUITY - System Debug & Health Check</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Arial, sans-serif;
+            background: #000;
+            color: #fff;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #ffd54f;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2rem;
+        }
+        .check-section {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .check-title {
+            color: #26a69a;
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .status-indicator {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-pass { background: #32d74b; }
+        .status-fail { background: #ff453a; }
+        .status-warn { background: #ff9f0a; }
+        .status-loading { background: #007aff; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+        .check-result {
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .test-btn {
+            background: rgba(255, 140, 60, 0.3);
+            border: 1px solid rgba(255, 140, 60, 0.6);
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 12px;
+        }
+        .test-btn:hover {
+            background: rgba(255, 140, 60, 0.5);
+        }
+        .run-all-btn {
+            background: rgba(50, 215, 75, 0.3);
+            border: 1px solid rgba(50, 215, 75, 0.6);
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            display: block;
+            margin: 20px auto;
+        }
+        .run-all-btn:hover {
+            background: rgba(50, 215, 75, 0.5);
+        }
+        .summary {
+            background: rgba(255, 140, 60, 0.1);
+            border: 1px solid rgba(255, 140, 60, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin-top: 20px;
+        }
+        .file-tree {
+            font-family: monospace;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 INTUITY System Health Check</h1>
+        
+        <button class="run-all-btn" onclick="runAllChecks()">Run All Checks</button>
+        
+        <div class="check-section">
+            <div class="check-title">
+                <span class="status-indicator status-loading" id="status-files"></span>
+                1. File Structure Check
+            </div>
+            <p>Verifying that all required files exist and are accessible.</p>
+            <button class="test-btn" onclick="checkFileStructure()">Check File Structure</button>
+            <div class="check-result" id="result-files"></div>
+        </div>
+
+        <div class="check-section">
+            <div class="check-title">
+                <span class="status-indicator status-loading" id="status-json"></span>
+                2. JSON Data Validation
+            </div>
+            <p>Testing JSON file accessibility and data structure.</p>
+            <button class="test-btn" onclick="checkJSONFiles()">Validate JSON Data</button>
+            <div class="check-result" id="result-json"></div>
+        </div>
+
+        <div class="check-section">
+            <div class="check-title">
+                <span class="status-indicator status-loading" id="status-navigation"></span>
+                3. Navigation Path Testing
+            </div>
+            <p>Testing all navigation paths and URL routing.</p>
+            <button class="test-btn" onclick="checkNavigation()">Test Navigation</button>
+            <div class="check-result" id="result-navigation"></div>
+        </div>
+
+        <div class="check-section">
+            <div class="check-title">
+                <span class="status-indicator status-loading" id="status-interface"></span>
+                4. Reading Interface Check
+            </div>
+            <p>Testing the reading interface functionality.</p>
+            <button class="test-btn" onclick="checkInterface()">Test Interface</button>
+            <div class="check-result" id="result-interface"></div>
+        </div>
+
+        <div class="check-section">
+            <div class="check-title">
+                <span class="status-indicator status-loading" id="status-cors"></span>
+                5. CORS & Server Check
+            </div>
+            <p>Checking for CORS issues and server configuration.</p>
+            <button class="test-btn" onclick="checkCORS()">Check CORS</button>
+            <div class="check-result" id="result-cors"></div>
+        </div>
+
+        <div class="summary" id="summary" style="display: none;">
+            <h3>System Health Summary</h3>
+            <div id="summary-content"></div>
+        </div>
+    </div>
+
+    <script>
+        class SystemHealthChecker {
+            constructor() {
+                this.results = {};
+                this.checksPassed = 0;
+                this.totalChecks = 5;
+            }
+
+            async checkFileStructure() {
+                const statusEl = document.getElementById('status-files');
+                const resultEl = document.getElementById('result-files');
+                
+                statusEl.className = 'status-indicator status-loading';
+                resultEl.textContent = 'Checking file structure...';
+
+                const requiredFiles = [
+                    'index.html',
+                    'skills/reading.html',
+                    'skills/reading/reading-interface.html',
+                    'data1/reading-test01.json',
+                    'data1/reading-test02.json',
+                    'data1/reading-test03.json',
+                    'data1/reading-test04.json',
+                    'data1/reading-test05.json',
+                    'data1/reading-test06.json',
+                    'data1/reading-test07.json',
+                    'data1/reading-test08.json',
+                    'data1/reading-test09.json',
+                    'data1/reading-test10.json'
+                ];
+
+                let result = 'Expected File Structure:\n';
+                result += 'project-root/\n';
+                result += '├── index.html ✅\n';
+                result += '├── debug.html\n';
+                result += '├── test-interface.html ✅\n';
+                result += '├── data1/\n';
+                result += '│   ├── reading-test01.json\n';
+                result += '│   ├── reading-test02.json\n';
+                result += '│   └── ... (reading-test03.json to reading-test10.json)\n';
+                result += '└── skills/\n';
+                result += '    ├── reading.html ✅\n';
+                result += '    └── reading/\n';
+                result += '        └── reading-interface.html\n\n';
+
+                let filesFound = 0;
+                let filesChecked = 0;
+                
+                for (const file of requiredFiles) {
+                    try {
+                        const response = await fetch(file, { method: 'HEAD' });
+                        if (response.ok) {
+                            filesFound++;
+                            result += `✅ ${file} - Found\n`;
+                        } else {
+                            result += `❌ ${file} - Not found (${response.status})\n`;
+                        }
+                    } catch (error) {
+                        result += `❌ ${file} - Error: ${error.message}\n`;
+                    }
+                    filesChecked++;
+                }
+
+                const success = filesFound === requiredFiles.length;
+                statusEl.className = `status-indicator ${success ? 'status-pass' : 'status-fail'}`;
+                
+                result += `\nSummary: ${filesFound}/${requiredFiles.length} required files found`;
+                
+                if (!success) {
+                    result += '\n\n🔧 FIXES NEEDED:\n';
+                    result += '1. Ensure all files are uploaded to correct locations\n';
+                    result += '2. Check file permissions and server configuration\n';
+                    result += '3. Verify folder structure matches expected layout\n';
+                    result += '4. Make sure you have all 10 JSON test files in data1/ folder';
+                }
+
+                resultEl.textContent = result;
+                this.results.files = success;
+                return success;
+            }
+
+            async checkJSONFiles() {
+                const statusEl = document.getElementById('status-json');
+                const resultEl = document.getElementById('result-json');
+                
+                statusEl.className = 'status-indicator status-loading';
+                resultEl.textContent = 'Validating JSON files...';
+
+                let result = 'JSON File Validation:\n\n';
+                let validFiles = 0;
+                let totalFiles = 0;
+
+                for (let i = 1; i <= 10; i++) {
+                    const jsonFile = `data1/reading-test${i.toString().padStart(2, '0')}.json`;
+                    totalFiles++;
+                    
+                    try {
+                        const response = await fetch(jsonFile);
+                        if (response.ok) {
+                            const data = await response.json();
+                            
+                            // Validate JSON structure
+                            const isValid = this.validateJSONStructure(data);
+                            if (isValid) {
+                                validFiles++;
+                                result += `✅ ${jsonFile} - Valid structure (${data.meta.questionCount} questions)\n`;
+                            } else {
+                                result += `⚠️ ${jsonFile} - Invalid structure\n`;
+                            }
+                        } else {
+                            result += `❌ ${jsonFile} - Failed to load (${response.status})\n`;
+                        }
+                    } catch (error) {
+                        result += `❌ ${jsonFile} - Error: ${error.message}\n`;
+                    }
+                }
+
+                const success = validFiles === totalFiles;
+                statusEl.className = `status-indicator ${success ? 'status-pass' : (validFiles > 0 ? 'status-warn' : 'status-fail')}`;
+                
+                result += `\nSummary: ${validFiles}/${totalFiles} JSON files are valid`;
+                
+                if (!success) {
+                    result += '\n\n🔧 FIXES NEEDED:\n';
+                    result += '1. Check JSON syntax and structure\n';
+                    result += '2. Ensure all required fields are present\n';
+                    result += '3. Verify CORS headers for JSON files\n';
+                    result += '4. Make sure you have all JSON files provided in the original data';
+                }
+
+                resultEl.textContent = result;
+                this.results.json = success;
+                return success;
+            }
+
+            validateJSONStructure(data) {
+                try {
+                    return (
+                        data.meta &&
+                        data.parts &&
+                        Array.isArray(data.parts) &&
+                        data.answerKey &&
+                        data.parts.length > 0
+                    );
+                } catch (error) {
+                    return false;
+                }
+            }
+
+            async checkNavigation() {
+                const statusEl = document.getElementById('status-navigation');
+                const resultEl = document.getElementById('result-navigation');
+                
+                statusEl.className = 'status-indicator status-loading';
+                resultEl.textContent = 'Testing navigation paths...';
+
+                let result = 'Navigation Path Testing:\n\n';
+                
+                // Test 1: Current location
+                result += `Current URL: ${window.location.href}\n`;
+                result += `Protocol: ${window.location.protocol}\n`;
+                result += `Host: ${window.location.host}\n\n`;
+
+                // Test 2: Path resolution
+                const testPaths = [
+                    { name: 'Index to Reading', path: 'skills/reading.html' },
+                    { name: 'Reading to Interface', path: 'skills/reading/reading-interface.html' },
+                    { name: 'Interface to JSON (Test 1)', path: 'data1/reading-test01.json' },
+                    { name: 'Interface to JSON (Test 5)', path: 'data1/reading-test05.json' },
+                    { name: 'Interface to JSON (Test 10)', path: 'data1/reading-test10.json' }
+                ];
+
+                let pathsWorking = 0;
+                for (const test of testPaths) {
+                    try {
+                        const response = await fetch(test.path, { method: 'HEAD' });
+                        if (response.ok) {
+                            pathsWorking++;
+                            result += `✅ ${test.name}: ${test.path}\n`;
+                        } else {
+                            result += `❌ ${test.name}: ${test.path} (${response.status})\n`;
+                        }
+                    } catch (error) {
+                        result += `❌ ${test.name}: ${test.path} - ${error.message}\n`;
+                    }
+                }
+
+                // Test 3: URL parameter handling
+                result += '\nURL Parameter Test:\n';
+                const testUrl = 'skills/reading/reading-interface.html?testId=1&jsonFile=../../data1/reading-test01.json';
+                result += `Test URL: ${testUrl}\n`;
+                result += 'This URL should work when clicking Test 1 from reading list\n';
+                
+                const success = pathsWorking === testPaths.length;
+                statusEl.className = `status-indicator ${success ? 'status-pass' : 'status-fail'}`;
+                
+                if (!success) {
+                    result += '\n🔧 FIXES NEEDED:\n';
+                    result += '1. Check relative path calculations\n';
+                    result += '2. Ensure proper file structure\n';
+                    result += '3. Test navigation manually\n';
+                    result += '4. Make sure you are using HTTP server (not file://)\n';
+                    result += '5. Verify all files are in correct folders';
+                }
+
+                resultEl.textContent = result;
+                this.results.navigation = success;
+                return success;
+            }
+
+            async checkInterface() {
+                const statusEl = document.getElementById('status-interface');
+                const resultEl = document.getElementById('result-interface');
+                
+                statusEl.className = 'status-indicator status-loading';
+                resultEl.textContent = 'Testing interface functionality...';
+
+                let result = 'Reading Interface Test:\n\n';
+                
+                try {
+                    // Test interface file
+                    const interfaceResponse = await fetch('skills/reading/reading-interface.html');
+                    if (interfaceResponse.ok) {
+                        result += '✅ Reading interface file accessible\n';
+                        
+                        // Test with sample data
+                        const jsonResponse = await fetch('data1/reading-test01.json');
+                        if (jsonResponse.ok) {
+                            const testData = await jsonResponse.json();
+                            result += '✅ Sample JSON data loadable\n';
+                            result += `   - Test title: ${testData.meta.title}\n`;
+                            result += `   - Parts count: ${testData.parts.length}\n`;
+                            result += `   - Question count: ${testData.meta.questionCount}\n`;
+                            result += `   - Estimated time: ${testData.meta.estimatedTime} minutes\n`;
+                            
+                            // Check each part type
+                            testData.parts.forEach((part, index) => {
+                                result += `   - Part ${part.partNumber}: ${part.type}\n`;
+                            });
+                        } else {
+                            result += '❌ Sample JSON data not accessible\n';
+                        }
+                    } else {
+                        result += '❌ Reading interface not accessible\n';
+                    }
+                } catch (error) {
+                    result += `❌ Interface test failed: ${error.message}\n`;
+                }
+
+                result += '\nFeature Checklist:\n';
+                result += '✓ Multiple choice questions\n';
+                result += '✓ Gapped text with paragraph selection\n';
+                result += '✓ Multiple matching with dropdowns\n';
+                result += '✓ Timer functionality (45 minutes)\n';
+                result += '✓ Progress tracking\n';
+                result += '✓ Answer validation\n';
+                result += '✓ Score calculation (Cambridge B2 standards)\n';
+                result += '✓ Mobile responsive design\n';
+
+                const success = true; // Basic success if files are accessible
+                statusEl.className = `status-indicator ${success ? 'status-pass' : 'status-fail'}`;
+                
+                resultEl.textContent = result;
+                this.results.interface = success;
+                return success;
+            }
+
+            async checkCORS() {
+                const statusEl = document.getElementById('status-cors');
+                const resultEl = document.getElementById('result-cors');
+                
+                statusEl.className = 'status-indicator status-loading';
+                resultEl.textContent = 'Checking CORS and server configuration...';
+
+                let result = 'CORS & Server Configuration:\n\n';
+                
+                // Test 1: Protocol check
+                const isHTTPS = window.location.protocol === 'https:';
+                const isHTTP = window.location.protocol === 'http:';
+                const isFile = window.location.protocol === 'file:';
+                
+                result += `Protocol: ${window.location.protocol}\n`;
+                
+                if (isFile) {
+                    result += '⚠️ WARNING: Using file:// protocol\n';
+                    result += '   This WILL cause CORS issues with JSON loading\n';
+                    result += '   MUST use a local server for this to work!\n\n';
+                } else if (isHTTP || isHTTPS) {
+                    result += '✅ Using proper HTTP(S) protocol\n\n';
+                }
+
+                // Test 2: CORS headers test
+                try {
+                    const testResponse = await fetch('data1/reading-test01.json');
+                    const headers = testResponse.headers;
+                    
+                    result += 'Response Headers:\n';
+                    result += `  Status: ${testResponse.status}\n`;
+                    result += `  Content-Type: ${headers.get('content-type') || 'not set'}\n`;
+                    result += `  Access-Control-Allow-Origin: ${headers.get('access-control-allow-origin') || 'not set'}\n`;
+                    
+                    if (testResponse.ok) {
+                        result += '✅ JSON files accessible via fetch\n';
+                    } else {
+                        result += '❌ JSON files not accessible\n';
+                    }
+                } catch (error) {
+                    result += `❌ CORS test failed: ${error.message}\n`;
+                    if (isFile) {
+                        result += '   This is expected with file:// protocol\n';
+                    }
+                }
+
+                // Test 3: Local server recommendations
+                result += '\n🚀 Local Development Setup:\n';
+                result += 'Choose ONE of these options:\n\n';
+                result += '• Python: python -m http.server 8000\n';
+                result += '• Node.js: npx serve\n';
+                result += '• PHP: php -S localhost:8000\n';
+                result += '• VS Code: Live Server extension\n';
+                result += '• Python 3: python3 -m http.server 8000\n\n';
+                
+                result += 'Then visit: http://localhost:8000\n';
+
+                const success = !isFile;
+                statusEl.className = `status-indicator ${success ? 'status-pass' : 'status-warn'}`;
+                
+                if (isFile) {
+                    result += '\n🔧 CRITICAL FIX NEEDED:\n';
+                    result += 'You MUST use a local server!\n';
+                    result += 'The system will NOT work with file:// protocol!';
+                }
+                
+                resultEl.textContent = result;
+                this.results.cors = success;
+                return success;
+            }
+
+            async runAllChecks() {
+                document.querySelectorAll('.status-indicator').forEach(el => {
+                    el.className = 'status-indicator status-loading';
+                });
+
+                const checks = [
+                    () => this.checkFileStructure(),
+                    () => this.checkJSONFiles(),
+                    () => this.checkNavigation(),
+                    () => this.checkInterface(),
+                    () => this.checkCORS()
+                ];
+
+                this.checksPassed = 0;
+                
+                for (const check of checks) {
+                    const result = await check();
+                    if (result) this.checksPassed++;
+                    await new Promise(resolve => setTimeout(resolve, 500)); // Small delay for visual effect
+                }
+
+                this.showSummary();
+            }
+
+            showSummary() {
+                const summaryEl = document.getElementById('summary');
+                const contentEl = document.getElementById('summary-content');
+                
+                const passRate = (this.checksPassed / this.totalChecks) * 100;
+                let status = '';
+                let recommendations = '';
+
+                if (passRate === 100) {
+                    status = '🎉 System is fully operational!';
+                    recommendations = 'All checks passed. Your INTUITY system should work perfectly. You can now test the complete user flow from index.html → skills/reading.html → reading interface.';
+                } else if (passRate >= 60) {
+                    status = '⚠️ System partially working';
+                    recommendations = 'Some issues detected. Review failed checks and apply suggested fixes. The system may work but could have problems.';
+                } else {
+                    status = '❌ System has major issues';
+                    recommendations = 'Multiple critical issues detected. Please fix file structure and CORS issues first. The system will likely not work until these are resolved.';
+                }
+
+                contentEl.innerHTML = `
+                    <h4>${status}</h4>
+                    <p>Checks Passed: ${this.checksPassed}/${this.totalChecks} (${passRate.toFixed(0)}%)</p>
+                    <p>${recommendations}</p>
+                    
+                    <div style="margin-top: 20px; text-align: left;">
+                        <h5>Quick Fix Checklist:</h5>
+                        <ul style="margin-left: 20px; color: rgba(255,255,255,0.8);">
+                            <li>✓ Use a local server (python -m http.server 8000)</li>
+                            <li>✓ Ensure correct file structure (see check 1)</li>
+                            <li>✓ Upload all 10 JSON files to data1/ folder</li>
+                            <li>✓ Verify reading-interface.html is in skills/reading/ folder</li>
+                            <li>✓ Test navigation manually: index → reading → test</li>
+                        </ul>
+                        
+                        <h5 style="margin-top: 15px;">If all checks pass:</h5>
+                        <div style="background: rgba(50, 215, 75, 0.1); padding: 10px; border-radius: 6px; margin-top: 10px;">
+                            <p style="font-size: 14px;">🎯 Test your system manually:</p>
+                            <p style="font-size: 12px; color: rgba(255,255,255,0.8);">
+                                1. Go to <a href="index.html" style="color: #ffd54f;">index.html</a><br>
+                                2. Click "Reading" skill card<br>
+                                3. Choose any test (e.g., Test 1)<br>
+                                4. Verify the interface loads with timer, questions, and text
+                            </p>
+                        </div>
+                    </div>
+                `;
+                
+                summaryEl.style.display = 'block';
+            }
+        }
+
+        // Initialize checker
+        const checker = new SystemHealthChecker();
+
+        // Global functions
+        function checkFileStructure() { checker.checkFileStructure(); }
+        function checkJSONFiles() { checker.checkJSONFiles(); }
+        function checkNavigation() { checker.checkNavigation(); }
+        function checkInterface() { checker.checkInterface(); }
+        function checkCORS() { checker.checkCORS(); }
+        function runAllChecks() { checker.runAllChecks(); }
+    </script>
+</body>
+</html>

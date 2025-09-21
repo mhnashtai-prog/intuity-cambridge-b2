@@ -336,6 +336,12 @@
             transform: scale(1.05);
         }
 
+        .gap-marker.selected {
+            background: rgba(255, 140, 60, 0.6);
+            color: #fff;
+            box-shadow: 0 0 10px rgba(255, 140, 60, 0.4);
+        }
+
         .gap-filled {
             background: rgba(0, 191, 255, 0.2);
             color: rgba(0, 191, 255, 0.9);
@@ -348,7 +354,6 @@
             border-color: #32d74b !important;
         }
 
-        /* FIXED: Improved questions panel sizing for Parts 6 & 7 */
         .questions-panel {
             flex: 1.75;
             background: rgba(0, 0, 0, 0.45);
@@ -366,7 +371,6 @@
             margin-top: 8px;
         }
 
-        /* FIXED: Significantly increased panel size for Parts 6 & 7 */
         .questions-panel.part-6,
         .questions-panel.part-7 {
             transform: translateY(25%);
@@ -545,7 +549,6 @@
             line-height: 1.2;
         }
 
-        /* FIXED: Improved dropdown styling for better mobile visibility */
         .match-select {
             background: rgba(255, 255, 255, 0.98);
             border: 2px solid rgba(255, 140, 60, 0.6);
@@ -798,7 +801,6 @@
             font-size: 9px;
         }
 
-        /* FIXED: Mobile responsiveness improvements */
         @media (max-width: 768px) {
             .main-content {
                 flex-direction: column;
@@ -821,7 +823,6 @@
                 margin-top: 12px;
             }
 
-            /* FIXED: Much larger panel size for Parts 6 & 7 on mobile */
             .questions-panel.part-6,
             .questions-panel.part-7 {
                 height: 45vh;
@@ -864,7 +865,6 @@
                 font-size: 14px;
             }
 
-            /* FIXED: Better mobile dropdown visibility */
             .match-select {
                 min-width: 110px;
                 max-width: 110px;
@@ -884,7 +884,6 @@
                 margin-bottom: 2px;
             }
 
-            /* FIXED: Improved touch targets */
             .paragraph-chip {
                 padding: 8px 10px;
                 font-size: 9px;
@@ -929,6 +928,26 @@
             z-index: 2000;
             text-align: center;
         }
+
+        /* Back button */
+        .back-btn {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 140, 60, 0.4);
+            color: rgba(255, 140, 60, 0.9);
+            padding: 6px 10px;
+            border-radius: 16px;
+            font-size: 10px;
+            cursor: pointer;
+            z-index: 101;
+            transition: all 0.3s ease;
+        }
+        .back-btn:hover {
+            background: rgba(255, 140, 60, 0.2);
+            transform: translateY(-1px);
+        }
     </style>
 </head>
 <body>
@@ -946,6 +965,9 @@
     <div class="timer">
         <span id="timer-display">45:00</span>
     </div>
+
+    <!-- FIXED: Added back button -->
+    <button class="back-btn" onclick="window.history.back()">← Back</button>
 
     <!-- Loading overlay -->
     <div class="loading-overlay" id="loading-overlay">
@@ -1004,6 +1026,7 @@
                 this.answersShownForParts = {};
                 this.correctAnswers = {};
                 this.partMapping = {};
+                this.currentSelectedGap = null;
                 
                 this.init();
             }
@@ -1033,6 +1056,7 @@
                 }
 
                 try {
+                    console.log('Loading JSON file:', jsonFile);
                     const response = await fetch(jsonFile);
                     if (!response.ok) {
                         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -1156,8 +1180,19 @@
                 // Load instructions
                 document.getElementById('instructions').textContent = part.instructions;
 
-                // Load passage text
-                const passageHtml = `<h3>${part.passage.title}</h3>${part.passage.content}`;
+                // Load passage text with gap markers for gapped text
+                let passageHtml = `<h3>${part.passage.title}</h3>`;
+                let content = part.passage.content;
+
+                // FIXED: Add gap markers for gapped text parts
+                if (part.type === 'gapped-text') {
+                    // Replace [15], [16], etc. with clickable gap markers
+                    content = content.replace(/\[(\d+)\]/g, (match, gapNum) => {
+                        return `<span class="gap-marker" data-gap="${gapNum}">${gapNum}</span>`;
+                    });
+                }
+
+                passageHtml += content;
                 document.getElementById('reading-passage').innerHTML = passageHtml;
 
                 // Load questions
@@ -1211,14 +1246,13 @@
             }
 
             generateGappedTextQuestions(part, partIndex) {
+                const totalGaps = part.correctAnswers ? Object.keys(part.correctAnswers).length : 7;
                 return `
                     <div class="question-nav">
-                        <button class="question-nav-btn" id="prev-q${partIndex}" disabled>← Prev</button>
-                        <div class="question-counter">Gap <span id="current-q${partIndex}">1</span> of ${part.correctAnswers ? Object.keys(part.correctAnswers).length : 7}</div>
-                        <button class="question-nav-btn" id="next-q${partIndex}">Next →</button>
+                        <div class="question-counter">Gaps: 0/${totalGaps} filled</div>
                     </div>
                     <div class="current-question" id="question-text${partIndex}">
-                        Choose the paragraph that best fits the gap.
+                        Click a gap number in the text, then select the matching paragraph below.
                     </div>
                     <div class="paragraph-bank">
                         ${part.paragraphs.map(para => `
@@ -1279,7 +1313,30 @@
                     });
                 });
 
-                // FIXED: Complete gapped text functionality
+                // FIXED: Gap markers in text
+                document.querySelectorAll('.gap-marker').forEach(marker => {
+                    marker.addEventListener('click', () => {
+                        // Reset all gap marker styles
+                        document.querySelectorAll('.gap-marker').forEach(g => {
+                            g.classList.remove('selected');
+                        });
+                        
+                        // Highlight selected gap
+                        marker.classList.add('selected');
+                        this.currentSelectedGap = marker.dataset.gap;
+                        
+                        // Remove previous paragraph selections
+                        document.querySelectorAll('.paragraph-chip').forEach(c => c.classList.remove('selected'));
+
+                        // Update instruction
+                        const instruction = document.getElementById(`question-text${partIndex}`);
+                        if (instruction) {
+                            instruction.textContent = `Gap ${this.currentSelectedGap} selected. Choose the paragraph that fits best.`;
+                        }
+                    });
+                });
+
+                // FIXED: Paragraph chip selection
                 document.querySelectorAll('.paragraph-chip').forEach(chip => {
                     chip.addEventListener('click', () => {
                         if (this.currentSelectedGap) {
@@ -1297,29 +1354,34 @@
                                 gapElement.classList.add('gap-filled');
                             }
                             
+                            // Reset selection
                             this.currentSelectedGap = null;
+                            document.querySelectorAll('.gap-marker').forEach(g => {
+                                g.classList.remove('selected');
+                            });
+                            
+                            // Update instruction
+                            const instruction = document.getElementById(`question-text${partIndex}`);
+                            if (instruction) {
+                                instruction.textContent = 'Click a gap number in the text, then select the matching paragraph below.';
+                            }
+                            
                             this.checkPartCompletion(partIndex);
                             
                             // Visual feedback
                             if (navigator.vibrate) navigator.vibrate(10);
+                        } else {
+                            // Show hint if no gap selected
+                            const instruction = document.getElementById(`question-text${partIndex}`);
+                            if (instruction) {
+                                instruction.textContent = 'Please click a gap number in the text first!';
+                                instruction.style.color = 'rgba(255, 69, 58, 0.9)';
+                                setTimeout(() => {
+                                    instruction.textContent = 'Click a gap number in the text, then select the matching paragraph below.';
+                                    instruction.style.color = '#fff';
+                                }, 2000);
+                            }
                         }
-                    });
-                });
-
-                // FIXED: Gap selection in text
-                document.querySelectorAll('.gap-marker').forEach(marker => {
-                    marker.addEventListener('click', () => {
-                        // Reset all gap markers
-                        document.querySelectorAll('.gap-marker').forEach(g => {
-                            g.style.background = 'rgba(255, 140, 60, 0.2)';
-                        });
-                        
-                        // Highlight selected gap
-                        marker.style.background = 'rgba(255, 140, 60, 0.6)';
-                        this.currentSelectedGap = marker.dataset.gap;
-                        
-                        // Remove previous paragraph selections
-                        document.querySelectorAll('.paragraph-chip').forEach(c => c.classList.remove('selected'));
                     });
                 });
 
@@ -1353,7 +1415,7 @@
                     });
                 });
 
-                // Question navigation
+                // Question navigation for multiple choice
                 this.initQuestionNavigation(partIndex);
             }
 
@@ -1445,6 +1507,16 @@
                             if (option) option.classList.add('selected');
                         }
                     });
+                } else if (part.type === 'gapped-text') {
+                    // Restore gap selections
+                    Object.keys(this.gapSelections).forEach(gapNum => {
+                        const para = this.gapSelections[gapNum];
+                        const gapElement = document.querySelector(`[data-gap="${gapNum}"]`);
+                        if (gapElement) {
+                            gapElement.textContent = `${gapNum} (${para})`;
+                            gapElement.classList.add('gap-filled');
+                        }
+                    });
                 } else if (part.type === 'multiple-matching') {
                     part.questions.forEach(question => {
                         if (this.answers[question.id]) {
@@ -1512,9 +1584,14 @@
                     totalQuestions = part.correctAnswers ? Object.keys(part.correctAnswers).length : 7;
                     answeredQuestions = Object.keys(this.gapSelections).length;
                     isCompleted = answeredQuestions >= totalQuestions;
+                    
+                    // Update gap counter
+                    const counterDiv = document.querySelector('.question-counter');
+                    if (counterDiv) {
+                        counterDiv.textContent = `Gaps: ${answeredQuestions}/${totalQuestions} filled`;
+                    }
                 }
                 
-                // FIXED: Update question counter display smoothly
                 this.updateQuestionCounter(partIndex, answeredQuestions, totalQuestions);
                 
                 if (isCompleted && !this.completedParts.has(partIndex)) {
@@ -1526,7 +1603,6 @@
             }
 
             updateQuestionCounter(partIndex, answered, total) {
-                // FIXED: Smooth question counter updates
                 const currentQuestionSpan = document.getElementById(`current-q${partIndex}`);
                 if (currentQuestionSpan && currentQuestionSpan.parentElement) {
                     const counterDiv = currentQuestionSpan.parentElement;
@@ -1534,13 +1610,10 @@
                     
                     if (part.type === 'multiple-choice') {
                         counterDiv.innerHTML = `Question <span id="current-q${partIndex}">${this.currentQuestions[partIndex]}</span> of ${total} | Answered: ${answered}/${total}`;
-                    } else if (part.type === 'gapped-text') {
-                        counterDiv.innerHTML = `Gap <span id="current-q${partIndex}">1</span> of ${total} | Filled: ${answered}/${total}`;
                     } else if (part.type === 'multiple-matching') {
                         counterDiv.innerHTML = `Questions 1-${total} | Completed: ${answered}/${total}`;
                     }
                     
-                    // FIXED: Visual feedback for completion progress
                     if (answered === total) {
                         counterDiv.style.background = 'rgba(50, 215, 75, 0.2)';
                         counterDiv.style.borderColor = 'rgba(50, 215, 75, 0.6)';
@@ -1555,13 +1628,11 @@
             enableShowAnswersButton(partIndex) {
                 const btn = document.getElementById(`show-answers-btn${partIndex}`);
                 if (btn) {
-                    // FIXED: Smooth button transition
                     btn.style.transition = 'all 0.5s ease';
                     btn.classList.add('ready');
                     btn.textContent = 'Show Answers';
                     btn.style.transform = 'scale(1.05)';
                     
-                    // FIXED: Button animation
                     setTimeout(() => {
                         btn.style.transform = 'scale(1)';
                     }, 200);
@@ -1596,6 +1667,8 @@
                     this.highlightMultipleChoiceAnswers(part);
                 } else if (part.type === 'multiple-matching') {
                     this.highlightMatchingAnswers(part);
+                } else if (part.type === 'gapped-text') {
+                    this.highlightGappedTextAnswers(part);
                 }
             }
 
@@ -1644,6 +1717,35 @@
                 });
             }
 
+            // FIXED: Added highlighting for gapped text answers
+            highlightGappedTextAnswers(part) {
+                const correctAnswers = part.correctAnswers || {};
+                
+                Object.keys(correctAnswers).forEach((gapNum, index) => {
+                    setTimeout(() => {
+                        const correctAnswer = correctAnswers[gapNum];
+                        const userAnswer = this.gapSelections[gapNum];
+                        
+                        // Highlight correct gap
+                        const gapElement = document.querySelector(`[data-gap="${gapNum}"]`);
+                        if (gapElement) {
+                            if (userAnswer === correctAnswer) {
+                                gapElement.classList.add('gap-correct');
+                            } else {
+                                gapElement.textContent = `${gapNum} (${correctAnswer})`;
+                                gapElement.classList.add('gap-correct');
+                            }
+                        }
+                        
+                        // Highlight correct paragraph
+                        const correctPara = document.querySelector(`[data-para="${correctAnswer}"]`);
+                        if (correctPara) {
+                            correctPara.classList.add('correct');
+                        }
+                    }, index * 300);
+                });
+            }
+
             showDetailedScore() {
                 const scoreData = this.calculateDetailedScore();
                 this.displayScoreModal(scoreData);
@@ -1660,12 +1762,27 @@
 
                 this.testData.parts.forEach((part, index) => {
                     let correct = 0;
-                    let total = part.questions ? part.questions.length : 0;
+                    let total = 0;
 
-                    if (part.questions) {
-                        part.questions.forEach(question => {
-                            const userAnswer = this.answers[question.id];
-                            const correctAnswer = this.correctAnswers[question.id];
+                    if (part.type === 'multiple-choice' || part.type === 'multiple-matching') {
+                        total = part.questions ? part.questions.length : 0;
+                        if (part.questions) {
+                            part.questions.forEach(question => {
+                                const userAnswer = this.answers[question.id];
+                                const correctAnswer = this.correctAnswers[question.id];
+                                
+                                if (userAnswer === correctAnswer) {
+                                    correct++;
+                                }
+                            });
+                        }
+                    } else if (part.type === 'gapped-text') {
+                        const correctAnswers = part.correctAnswers || {};
+                        total = Object.keys(correctAnswers).length;
+                        
+                        Object.keys(correctAnswers).forEach(gapNum => {
+                            const userAnswer = this.gapSelections[gapNum];
+                            const correctAnswer = correctAnswers[gapNum];
                             
                             if (userAnswer === correctAnswer) {
                                 correct++;
@@ -1706,7 +1823,6 @@
             }
 
             getGrade(percentage) {
-                // FIXED: Authentic Cambridge B2 scoring criteria
                 if (percentage >= 84) return { grade: 'A', level: 'Excellent - Above B2 Level', cef: 'C1 Ready' };
                 if (percentage >= 78) return { grade: 'B', level: 'Good - Strong B2', cef: 'B2+ Level' };
                 if (percentage >= 72) return { grade: 'C', level: 'Pass - Solid B2', cef: 'B2 Level' };
@@ -1715,7 +1831,6 @@
             }
 
             displayScoreModal(scoreData) {
-                // FIXED: Enhanced scoring display with Cambridge criteria
                 const modal = document.createElement('div');
                 modal.className = 'score-display';
                 modal.innerHTML = `

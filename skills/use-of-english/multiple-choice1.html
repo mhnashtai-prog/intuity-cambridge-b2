@@ -122,42 +122,54 @@
     let completedTests = [];
     let expandedIds = [];
     let answers = {};
+    let currentDatasetName = '';
 
-    // Load JSON - MODIFIED for 20 questions per test
+    // Get JSON path from URL parameter
+    function getJSONPath() {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('json') || '../../data3/test-03.json';
+    }
+
+    // Load JSON from the path specified in URL
     async function loadQuestions() {
       try {
-        const jsonPath = "individual-sentences-3.json";
+        const jsonPath = getJSONPath();
+        currentDatasetName = jsonPath.split('/').pop().replace('.json', '');
         
         const res = await fetch(jsonPath);
         if (!res.ok) throw new Error('Failed to load questions');
         const data = await res.json();
         
-        // Handle the sets structure (12 sets of 20 questions each)
+        // Handle different JSON structures
         if (data.sets) {
           allSets = data.sets;
+        } else if (Array.isArray(data)) {
+          allSets = data.map((set, idx) => ({
+            sentences: set.sentences || set
+          }));
         } else {
-          // Fallback for different format
-          document.getElementById('questionsList').innerHTML = 
-            '<div class="error">Invalid JSON format. Expected "sets" array.</div>';
-          return;
+          throw new Error('Invalid JSON format');
         }
         
         loadTest(1);
       } catch (error) {
         console.error('Error loading questions:', error);
         document.getElementById('questionsList').innerHTML = 
-          '<div class="error">Error loading questions. Please check the file path.</div>';
+          `<div class="error">Error loading questions.<br>Path: ${getJSONPath()}</div>`;
       }
     }
 
     function loadTest(testNum) {
       currentTest = testNum;
-      questionsData = allSets[testNum - 1].sentences.map((q, idx) => ({
+      const testData = allSets[testNum - 1];
+      
+      questionsData = testData.sentences.map((q, idx) => ({
         id: idx + 1,
         text: q.q,
-        options: q.options.map(opt => opt.replace(/^[A-E]\)\s*/, "")),
-        correct: q.answer.charCodeAt(0) - 65
+        options: q.options ? q.options.map(opt => opt.replace(/^[A-E]\)\s*/, "")) : [],
+        correct: q.answer ? (q.answer.charCodeAt(0) - 65) : (q.correct || 0)
       }));
+      
       expandedIds = questionsData.map(q => q.id);
       answers = {};
       createDots();
@@ -243,7 +255,7 @@
     function updateAnswerCount() {
       const count = Object.keys(answers).length;
       document.getElementById('testInfo').textContent = 
-        `Test ${currentTest} of ${allSets.length} • ${count}/20 answered`;
+        `${currentDatasetName} • Test ${currentTest} of ${allSets.length} • ${count}/${questionsData.length} answered`;
     }
 
     function navigateTest(direction) {
@@ -264,7 +276,7 @@
         createDots();
       }
       let correctCount = 0;
-      let message = `Test ${currentTest} - Answers:\n\n`;
+      let message = `${currentDatasetName} • Test ${currentTest} - Answers:\n\n`;
       questionsData.forEach(q => {
         const userAnswer = answers[q.id];
         const correctLetter = String.fromCharCode(65 + q.correct);
@@ -273,7 +285,7 @@
         if (isCorrect) correctCount++;
         message += `Q${q.id}: ${userLetter} ${isCorrect ? '✓' : '✗ (Correct: ' + correctLetter + ')'}\n`;
       });
-      message += `\nScore: ${correctCount}/20`;
+      message += `\nScore: ${correctCount}/${questionsData.length}`;
       alert(message);
     }
 
@@ -287,7 +299,7 @@
         completedTests.push(currentTest);
         createDots();
       }
-      alert(`Test ${currentTest}\nAnswered: ${count}/20\nCorrect: ${correctCount}/20\nTotal Progress: ${completedTests.length}/${allSets.length} tests completed`);
+      alert(`${currentDatasetName} • Test ${currentTest}\nAnswered: ${count}/${questionsData.length}\nCorrect: ${correctCount}/${questionsData.length}\nTotal Progress: ${completedTests.length}/${allSets.length} tests completed`);
     }
 
     function goHome() { 

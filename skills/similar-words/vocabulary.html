@@ -6,7 +6,6 @@
   <title>INTUITY - Word Choice Quiz</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet">
   <style>
-    /* --- styles unchanged --- */
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: 'Inter', sans-serif;
@@ -133,7 +132,7 @@
       indices.forEach((oldIdx, newIdx) => indexMap[oldIdx] = newIdx);
       return { words: newWords, indexMap };
     }
-    /* --- rest of JS unchanged (renderDots, loadSet, renderWordBank, renderQuestions, checkAnswers, etc.) --- */
+
     function renderDots() {
       const container = document.getElementById('dotsContainer');
       container.innerHTML = '';
@@ -157,6 +156,7 @@
       document.getElementById('infoBar').textContent =
         `Set ${currentSetIndex + 1} of ${quizData.sets.length} • ${answered}/${set.sentences.length} answered`;
     }
+
     function renderWordBank() {
       const container = document.getElementById('wordBank');
       const set = quizData.sets[currentSetIndex];
@@ -170,14 +170,22 @@
         chip.textContent = word;
         chip.onclick = () => {
           if (activeBlank !== null && !isChecked && !chip.classList.contains('used')) {
+            // Remove the word from any other filled blank
+            const usedIdx = Object.keys(userAnswers).find(key => userAnswers[key] === wordIdx);
+            if (usedIdx !== undefined) {
+              delete userAnswers[usedIdx];
+            }
             userAnswers[activeBlank] = wordIdx;
             activeBlank = null;
-            updateInfoBar(); renderWordBank(); renderQuestions();
+            updateInfoBar();
+            renderWordBank();
+            renderQuestions();
           }
         };
         container.appendChild(chip);
       });
     }
+
     function renderQuestions() {
       const container = document.getElementById('questionsContainer');
       const set = quizData.sets[currentSetIndex];
@@ -198,22 +206,42 @@
         const textDiv = document.createElement('div'); textDiv.className = 'question-text';
         const parts = sentence.text.split('_____');
         const blank = document.createElement('span'); blank.className = 'blank';
+        const isFilled = userAnswers[idx] !== undefined;
         if (activeBlank === idx) blank.classList.add('active');
-        if (userAnswers[idx] !== undefined) {
+        if (isFilled) {
           blank.textContent = shuffled.words[userAnswers[idx]];
           blank.classList.add('filled');
           if (isChecked) {
             const correctShuffledIdx = shuffled.indexMap[sentence.correct];
             blank.classList.add(userAnswers[idx] === correctShuffledIdx ? 'correct' : 'incorrect');
           }
-        } else { blank.textContent = '_____'; }
-        blank.onclick = () => { if (!isChecked) { activeBlank = idx; renderQuestions(); } };
-        textDiv.innerHTML = parts[0]; textDiv.appendChild(blank);
+          blank.onclick = () => {
+            if (!isChecked) {
+              delete userAnswers[idx];
+              activeBlank = null;
+              renderWordBank();
+              renderQuestions();
+            }
+          };
+          blank.title = 'Click to remove word';
+        } else {
+          blank.textContent = '_____';
+          blank.onclick = () => {
+            if (!isChecked) {
+              activeBlank = idx;
+              renderQuestions();
+            }
+          };
+          blank.title = 'Click then pick a word';
+        }
+        textDiv.innerHTML = parts[0];
+        textDiv.appendChild(blank);
         if (parts[1]) textDiv.innerHTML += parts[1];
         header.appendChild(numBadge); header.appendChild(textDiv);
         questionDiv.appendChild(header); container.appendChild(questionDiv);
       });
     }
+
     function changeSet(direction) { const newIndex = currentSetIndex + direction; if (newIndex>=0 && newIndex<quizData.sets.length) loadSet(newIndex); }
     function updateNavButtons() { document.getElementById('prevBtn').disabled = currentSetIndex===0; document.getElementById('nextBtn').disabled = currentSetIndex===quizData.sets.length-1; }
     function checkAnswers() { isChecked=true; checkedSets.add(currentSetIndex); activeBlank=null; renderWordBank(); renderQuestions(); renderDots(); }

@@ -503,6 +503,7 @@
     let openQuestions = new Set();
     let checkedSets = new Set();
     let isChecked = false;
+    let shuffledWords = {}; // Store shuffled word mappings per set
 
     async function init() {
       try {
@@ -518,6 +519,11 @@
           throw new Error('No quiz sets found');
         }
         
+        // Pre-shuffle words for each set
+        quizData.sets.forEach((set, setIdx) => {
+          shuffledWords[setIdx] = shuffleWords(set.words, set.sentences);
+        });
+        
         renderDots();
         loadSet(0);
       } catch (error) {
@@ -525,6 +531,28 @@
         document.getElementById('questionsContainer').innerHTML = 
           `<div class="error">❌ Error loading quiz<br><small>${error.message}</small></div>`;
       }
+    }
+
+    // Shuffle words while maintaining correct answer mapping
+    function shuffleWords(originalWords, sentences) {
+      const indices = [0, 1, 2, 3];
+      
+      // Fisher-Yates shuffle
+      for (let i = indices.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [indices[i], indices[j]] = [indices[j], indices[i]];
+      }
+      
+      // Create new word array in shuffled order
+      const newWords = indices.map(idx => originalWords[idx]);
+      
+      // Create mapping: old index -> new index
+      const indexMap = {};
+      indices.forEach((oldIdx, newIdx) => {
+        indexMap[oldIdx] = newIdx;
+      });
+      
+      return { words: newWords, indexMap };
     }
 
     function renderDots() {
@@ -564,10 +592,11 @@
     function renderWordBank() {
       const container = document.getElementById('wordBank');
       const set = quizData.sets[currentSetIndex];
+      const shuffled = shuffledWords[currentSetIndex];
       
       container.innerHTML = '';
       
-      set.words.forEach((word, wordIdx) => {
+      shuffled.words.forEach((word, wordIdx) => {
         const chip = document.createElement('div');
         chip.className = 'word-chip';
         
@@ -583,6 +612,7 @@
     function renderQuestions() {
       const container = document.getElementById('questionsContainer');
       const set = quizData.sets[currentSetIndex];
+      const shuffled = shuffledWords[currentSetIndex];
       
       container.innerHTML = '';
       
@@ -599,7 +629,9 @@
         numBadge.className = 'question-num';
         if (userAnswers[idx] !== undefined) numBadge.classList.add('answered');
         if (isChecked) {
-          if (userAnswers[idx] === sentence.correct) {
+          // Map original correct index to shuffled index
+          const correctShuffledIdx = shuffled.indexMap[sentence.correct];
+          if (userAnswers[idx] === correctShuffledIdx) {
             numBadge.classList.add('correct');
           } else if (userAnswers[idx] !== undefined) {
             numBadge.classList.add('incorrect');
@@ -615,10 +647,11 @@
         blank.className = 'blank';
         
         if (userAnswers[idx] !== undefined) {
-          blank.textContent = set.words[userAnswers[idx]];
+          blank.textContent = shuffled.words[userAnswers[idx]];
           blank.classList.add('filled');
           if (isChecked) {
-            blank.classList.add(userAnswers[idx] === sentence.correct ? 'correct' : 'incorrect');
+            const correctShuffledIdx = shuffled.indexMap[sentence.correct];
+            blank.classList.add(userAnswers[idx] === correctShuffledIdx ? 'correct' : 'incorrect');
           }
         } else {
           blank.textContent = '_____';
@@ -651,7 +684,7 @@
           const optionsGrid = document.createElement('div');
           optionsGrid.className = 'options-grid';
           
-          set.words.forEach((word, wordIdx) => {
+          shuffled.words.forEach((word, wordIdx) => {
             const usedInOther = Object.entries(userAnswers).some(
               ([qIdx, aIdx]) => qIdx != idx && aIdx === wordIdx
             );
@@ -714,13 +747,16 @@
 
     function showResults() {
       const set = quizData.sets[currentSetIndex];
+      const shuffled = shuffledWords[currentSetIndex];
       let correct = 0;
       let answered = 0;
       
       set.sentences.forEach((sentence, idx) => {
         if (userAnswers[idx] !== undefined) {
           answered++;
-          if (userAnswers[idx] === sentence.correct) correct++;
+          // Map original correct index to shuffled index
+          const correctShuffledIdx = shuffled.indexMap[sentence.correct];
+          if (userAnswers[idx] === correctShuffledIdx) correct++;
         }
       });
       

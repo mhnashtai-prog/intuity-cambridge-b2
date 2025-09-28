@@ -407,7 +407,7 @@
       return wrapper;
     }
 
-    // Create question element
+    // FIXED: Create question element with proper event binding
     function createQuestionElement(setIndex, sentenceIndex, sentence) {
       const questionDiv = document.createElement('div');
       questionDiv.className = 'question';
@@ -433,10 +433,12 @@
       blank.dataset.sentence = sentenceIndex;
       blank.textContent = '_____';
       
-      // Make it clickable
-      blank.onclick = () => selectBlank(setIndex, sentenceIndex);
+      // FIXED: Proper event binding with error handling
+      blank.addEventListener('click', () => {
+        console.log('🎯 Blank clicked:', setIndex, sentenceIndex);
+        selectBlank(setIndex, sentenceIndex);
+      });
       
-      // Make it droppable
       blank.addEventListener('dragover', handleDragOver);
       blank.addEventListener('drop', handleDrop);
       blank.addEventListener('dragleave', handleDragLeave);
@@ -532,22 +534,32 @@
       setTimeout(() => indicator.classList.remove('show'), 1000);
     }
 
-    // FIXED: Drag and Drop implementation
+    // FIXED: Drag and Drop implementation with proper event binding
     function setupDragAndDrop() {
-      // Use event delegation for dynamically created elements
-      document.addEventListener('dragstart', (e) => {
-        if (e.target.classList.contains('word-chip') && !e.target.classList.contains('used')) {
-          e.target.classList.add('dragging');
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', e.target.dataset.wordIndex);
-        }
-      });
+      console.log('🔧 Setting up drag and drop...');
       
-      document.addEventListener('dragend', (e) => {
-        if (e.target.classList.contains('word-chip')) {
-          e.target.classList.remove('dragging');
-        }
-      });
+      // Remove any existing listeners first
+      document.removeEventListener('dragstart', handleDragStart);
+      document.removeEventListener('dragend', handleDragEnd);
+      
+      // Add new listeners
+      document.addEventListener('dragstart', handleDragStart);
+      document.addEventListener('dragend', handleDragEnd);
+    }
+
+    function handleDragStart(e) {
+      if (e.target.classList.contains('word-chip') && !e.target.classList.contains('used')) {
+        console.log('🎯 Dragging word:', e.target.textContent);
+        e.target.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', e.target.dataset.wordIndex);
+      }
+    }
+
+    function handleDragEnd(e) {
+      if (e.target.classList.contains('word-chip')) {
+        e.target.classList.remove('dragging');
+      }
     }
 
     function handleDragOver(e) {
@@ -568,6 +580,7 @@
       if (wordIndex !== null && wordIndex !== '') {
         const setIndex = parseInt(e.currentTarget.dataset.set);
         const sentenceIndex = parseInt(e.currentTarget.dataset.sentence);
+        console.log('📍 Dropping word', wordIndex, 'into blank', setIndex, sentenceIndex);
         fillBlankWithWord(setIndex, sentenceIndex, parseInt(wordIndex));
       }
     }
@@ -590,17 +603,29 @@
       });
     }
 
-    // Select blank for keyboard/click input
+    // FIXED: Select blank with proper visual feedback
     function selectBlank(setIndex, sentenceIndex) {
+      console.log('🎯 Selecting blank:', setIndex, sentenceIndex);
+      
       deselectAllBlanks();
       activeBlank = { set: setIndex, sentence: sentenceIndex };
+      
       const blank = document.getElementById(`blank-${setIndex}-${sentenceIndex}`);
+      if (!blank) {
+        console.error('❌ Blank element not found:', `blank-${setIndex}-${sentenceIndex}`);
+        return;
+      }
+      
       blank.classList.add('active');
       blank.classList.add('keyboard-focus');
+      
+      // Update word bank to show words for this set
       updateWordBankForSet(setIndex);
       
       // Auto-scroll to make sure it's visible
       blank.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      
+      console.log('✅ Blank selected, active blank:', activeBlank);
     }
 
     function deselectAllBlanks() {
@@ -610,19 +635,31 @@
       activeBlank = null;
     }
 
-    // Fill blank with word
+    // FIXED: Fill blank with word - enhanced with debugging
     function fillBlankWithWord(setIndex, sentenceIndex, wordIndex) {
+      console.log('🎯 Filling blank:', setIndex, sentenceIndex, 'with word index:', wordIndex);
+      
       const key = `${setIndex}-${sentenceIndex}`;
       userAnswers[key] = parseInt(wordIndex);
       
       const blank = document.getElementById(`blank-${setIndex}-${sentenceIndex}`);
       const shuffled = shuffledWords[setIndex];
+      
+      if (!blank || !shuffled) {
+        console.error('❌ Missing blank element or shuffled words');
+        return;
+      }
+      
       blank.textContent = shuffled.words[wordIndex];
       blank.classList.add('filled');
+      blank.classList.remove('correct', 'incorrect'); // Remove any previous feedback
       
       // Update badge
       const badge = document.getElementById(`badge-${setIndex}-${sentenceIndex}`);
-      badge.classList.add('answered');
+      if (badge) {
+        badge.classList.add('answered');
+        badge.classList.remove('correct', 'incorrect');
+      }
       
       // Update progress
       updateSetProgress(setIndex);
@@ -634,6 +671,8 @@
       
       // Auto-save
       saveProgress();
+      
+      console.log('✅ Successfully filled blank with:', shuffled.words[wordIndex]);
     }
 
     // Auto-advance to next empty blank
@@ -690,10 +729,11 @@
       selectBlank(setIndex, sentenceIndex);
     }
 
-    // Update word bank for specific set
+    // FIXED: Update word bank with proper event binding and debugging
     function updateWordBankForSet(setIndex) {
       if (!quizData || setIndex >= quizData.sets.length) return;
       
+      console.log('🔄 Updating word bank for set:', setIndex);
       currentSetIndex = setIndex;
       const set = quizData.sets[setIndex];
       const shuffled = shuffledWords[setIndex];
@@ -717,17 +757,30 @@
           }
         });
         
-        if (isUsed) chip.classList.add('used');
+        if (isUsed) {
+          chip.classList.add('used');
+          chip.draggable = false;
+        }
         
-        // Click to fill active blank
-        chip.onclick = () => {
+        // FIXED: Proper click event binding
+        chip.addEventListener('click', () => {
+          console.log('🎯 Word chip clicked:', word, 'index:', idx);
           if (!isUsed && activeBlank && activeBlank.set === setIndex) {
             fillBlankWithWord(activeBlank.set, activeBlank.sentence, idx);
+          } else if (!activeBlank) {
+            console.log('⚠️ No active blank selected. Click a blank first!');
+            // Show visual feedback
+            const indicator = document.getElementById('gestureIndicator');
+            indicator.textContent = 'Select a blank first!';
+            indicator.classList.add('show');
+            setTimeout(() => indicator.classList.remove('show'), 2000);
           }
-        };
+        });
         
         wordBank.appendChild(chip);
       });
+      
+      console.log('✅ Word bank updated with', shuffled.words.length, 'words');
     }
 
     // Update set progress

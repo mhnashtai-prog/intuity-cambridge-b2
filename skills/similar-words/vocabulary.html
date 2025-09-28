@@ -36,7 +36,7 @@
     .word-bank{display:flex;justify-content:center;gap:.375rem;margin-bottom:1rem;flex-wrap:wrap;max-width:100%;min-height:40px;position:sticky;top:0;background:linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);padding:1rem 0;z-index:10;border-bottom:1px solid rgba(71,85,105,.2);}
     .word-chip{background:rgba(255,107,53,.15);border:1px solid rgba(255,107,53,.3);color:rgba(255,107,53,.9);padding:.375rem .75rem;border-radius:.375rem;font-weight:600;font-size:.8125rem;transition:.2s;white-space:nowrap;cursor:move;user-select:none;}
     .word-chip.used{background:rgba(71,85,105,.3);border-color:rgba(71,85,105,.5);color:#64748b;text-decoration:line-through;cursor:not-allowed;}
-    .word-chip.dragging{opacity:0.5;}
+    .word-chip.dragging{opacity:0.5;transform:scale(1.05);}
     .word-chip:hover:not(.used){transform:scale(1.05);background:rgba(255,107,53,.25);}
     @media(max-width:640px){.word-chip{padding:.3rem .6rem;font-size:.75rem;}.word-bank{gap:.3rem;}}
     .quiz-box{background:rgba(30,41,59,.6);backdrop-filter:blur(20px);border:1px solid rgba(71,85,105,.5);border-radius:1rem;padding:1rem;box-shadow:0 20px 25px -5px rgba(0,0,0,.5);}
@@ -54,8 +54,8 @@
     .question-text{flex:1;font-size:.875rem;line-height:1.5;}
     .blank{display:inline-block;min-width:70px;padding:.125rem .5rem;background:rgba(71,85,105,.4);border:1px solid rgba(71,85,105,.5);border-radius:.25rem;margin:0 .25rem;color:#94a3b8;font-weight:600;text-align:center;font-size:.8125rem;cursor:pointer;transition:all .2s;}
     .blank.filled{background:rgba(59,130,246,.2);border-color:rgba(59,130,246,.5);color:#60a5fa;}
-    .blank.correct{background:rgba(16,185,129,.2);border-color:rgba(16,185,129,.5);color:#34d399;}
-    .blank.incorrect{background:rgba(245,158,11,.2);border-color:rgba(245,158,11,.5);color:#fbbf24;}
+    .blank.correct{background:rgba(16,185,129,.25);border-color:rgba(16,185,129,.6);color:#10b981;box-shadow:0 0 0 2px rgba(16,185,129,.2);}
+    .blank.incorrect{background:rgba(249,115,22,.25);border-color:rgba(249,115,22,.6);color:#f97316;box-shadow:0 0 0 2px rgba(249,115,22,.2);}
     .blank.active{outline:2px solid rgba(255,107,53,.9);outline-offset:2px;}
     .blank.drag-over{transform:scale(1.05);background:rgba(255,107,53,.2);border-color:rgba(255,107,53,.5);}
     .controls{display:flex;justify-content:center;gap:.5rem;margin-top:1.25rem;flex-wrap:wrap;}
@@ -159,9 +159,6 @@
     let visibleSets = [];
     const SETS_TO_LOAD = 5; // Load 5 sets at a time
     let totalLoaded = 0;
-    let draggedWord = null;
-    let touchStartX = 0;
-    let touchStartY = 0;
 
     // Initialize
     async function init() {
@@ -440,6 +437,8 @@
     // Touch gestures for mobile
     function setupTouchGestures() {
       let touchStartTime = 0;
+      let touchStartX = 0;
+      let touchStartY = 0;
       
       document.addEventListener('touchstart', (e) => {
         touchStartX = e.touches[0].clientX;
@@ -476,13 +475,14 @@
       setTimeout(() => indicator.classList.remove('show'), 1000);
     }
 
-    // Drag and Drop
+    // FIXED: Drag and Drop implementation
     function setupDragAndDrop() {
+      // Use event delegation for dynamically created elements
       document.addEventListener('dragstart', (e) => {
         if (e.target.classList.contains('word-chip') && !e.target.classList.contains('used')) {
-          draggedWord = e.target.dataset.wordIndex;
           e.target.classList.add('dragging');
           e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', e.target.dataset.wordIndex);
         }
       });
       
@@ -490,15 +490,13 @@
         if (e.target.classList.contains('word-chip')) {
           e.target.classList.remove('dragging');
         }
-        draggedWord = null;
       });
     }
 
     function handleDragOver(e) {
-      if (draggedWord !== null) {
-        e.preventDefault();
-        e.currentTarget.classList.add('drag-over');
-      }
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      e.currentTarget.classList.add('drag-over');
     }
 
     function handleDragLeave(e) {
@@ -509,10 +507,11 @@
       e.preventDefault();
       e.currentTarget.classList.remove('drag-over');
       
-      if (draggedWord !== null) {
+      const wordIndex = e.dataTransfer.getData('text/plain');
+      if (wordIndex !== null && wordIndex !== '') {
         const setIndex = parseInt(e.currentTarget.dataset.set);
         const sentenceIndex = parseInt(e.currentTarget.dataset.sentence);
-        fillBlankWithWord(setIndex, sentenceIndex, draggedWord);
+        fillBlankWithWord(setIndex, sentenceIndex, parseInt(wordIndex));
       }
     }
 
@@ -746,7 +745,7 @@
       updateWordBankForSet(setIndex);
     }
 
-    // Check individual set
+    // FIXED: Check individual set with proper color feedback
     function checkSet(setIndex) {
       const set = quizData.sets[setIndex];
       const shuffled = shuffledWords[setIndex];
@@ -966,6 +965,3 @@
 
     // Start the application
     window.onload = init;
-  </script>
-</body>
-</html>

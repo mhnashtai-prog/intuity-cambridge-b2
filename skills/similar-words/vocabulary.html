@@ -122,8 +122,8 @@
     <div class="instructions-banner" id="instructionsBanner">
       <button class="close-btn" onclick="closeInstructions()" title="Close">×</button>
       <h3>📝 How to Answer Questions</h3>
-      <p><strong>Method 1:</strong> Click a blank space, then click a word<br>
-      <strong>Method 2:</strong> Click a word, then click a blank space<br>
+      <p><strong>Step 1:</strong> Click a blank space (it will highlight)<br>
+      <strong>Step 2:</strong> Click a word to fill that blank<br>
       <em>💡 Tip: Use keyboard shortcuts for faster navigation (see bottom right)</em></p>
     </div>
     
@@ -173,7 +173,6 @@
     let checkedSets = new Set();
     let shuffledWords = {};
     let activeBlank = null;
-    let activeWord = null; // NEW: Track selected word
     let visibleSets = [];
     const SETS_TO_LOAD = 5; // Load 5 sets at a time
     let totalLoaded = 0;
@@ -561,27 +560,16 @@
       });
     }
 
-    // Select blank for keyboard/click input
+    // Select blank for keyboard/click input - SIMPLIFIED (like Document 2)
     function selectBlank(setIndex, sentenceIndex) {
-      // If a word is already selected, fill the blank immediately
-      if (activeWord !== null && activeWord.set === setIndex) {
-        fillBlankWithWord(setIndex, sentenceIndex, activeWord.wordIndex);
-        deselectAllWords();
-        deselectAllBlanks();
-        return;
-      }
-      
       deselectAllBlanks();
-      deselectAllWords();
       activeBlank = { set: setIndex, sentence: sentenceIndex };
       const blank = document.getElementById(`blank-${setIndex}-${sentenceIndex}`);
       if (blank) {
         blank.classList.add('active');
         blank.classList.add('keyboard-focus');
+        blank.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
-      
-      // Auto-scroll to make sure it's visible
-      blank.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     function deselectAllBlanks() {
@@ -590,66 +578,34 @@
       });
       activeBlank = null;
     }
-    
-    // NEW: Select word for click-then-blank interaction
-    function selectWord(setIndex, wordIndex) {
-      // If a blank is already selected, fill it immediately
-      if (activeBlank !== null && activeBlank.set === setIndex) {
-        fillBlankWithWord(activeBlank.set, activeBlank.sentence, wordIndex);
-        deselectAllWords();
-        deselectAllBlanks();
-        return;
-      }
-      
-      // Otherwise, mark this word as selected
-      deselectAllWords();
-      deselectAllBlanks();
-      activeWord = { set: setIndex, wordIndex: wordIndex };
-      
-      // Visual feedback - find the specific chip
-      const wordChips = document.querySelectorAll('.word-chip');
-      wordChips.forEach(chip => {
-        if (parseInt(chip.dataset.wordIndex) === wordIndex && !chip.classList.contains('used')) {
-          chip.style.transform = 'scale(1.1)';
-          chip.style.boxShadow = '0 0 0 3px rgba(255,107,53,0.4)';
-        }
-      });
-    }
-    
-    function deselectAllWords() {
-      const wordChips = document.querySelectorAll('.word-chip');
-      wordChips.forEach(chip => {
-        chip.style.transform = '';
-        chip.style.boxShadow = '';
-      });
-      activeWord = null;
-    }
 
-    // Fill blank with word
+    // Fill blank with word - SIMPLIFIED
     function fillBlankWithWord(setIndex, sentenceIndex, wordIndex) {
       const key = `${setIndex}-${sentenceIndex}`;
       userAnswers[key] = parseInt(wordIndex);
       
       const blank = document.getElementById(`blank-${setIndex}-${sentenceIndex}`);
       const shuffled = shuffledWords[setIndex];
-      blank.textContent = shuffled.words[wordIndex];
-      blank.classList.add('filled');
-      blank.classList.remove('active', 'keyboard-focus');
+      
+      if (blank && shuffled) {
+        blank.textContent = shuffled.words[wordIndex];
+        blank.classList.add('filled');
+        blank.classList.remove('active', 'keyboard-focus');
+      }
       
       // Update badge
       const badge = document.getElementById(`badge-${setIndex}-${sentenceIndex}`);
-      badge.classList.add('answered');
+      if (badge) {
+        badge.classList.add('answered');
+      }
       
-      // Update progress
+      // Clear active blank
+      activeBlank = null;
+      
+      // Update everything
       updateSetProgress(setIndex);
       updateInfoBar();
       updateWordBankForSet(setIndex);
-      
-      // Clear selections
-      deselectAllBlanks();
-      deselectAllWords();
-      
-      // Auto-save
       saveProgress();
     }
 
@@ -735,17 +691,30 @@
         
         if (isUsed) chip.classList.add('used');
         
-        // Click to either: select word OR fill active blank
+        // Simple click handler (like Document 2)
         chip.onclick = () => {
           if (isUsed) return;
           
-          if (activeBlank && activeBlank.set === setIndex) {
-            // If blank is selected, fill it
-            fillBlankWithWord(activeBlank.set, activeBlank.sentence, idx);
-          } else {
-            // Otherwise, select this word
-            selectWord(setIndex, idx);
+          // Check if a blank is selected
+          if (!activeBlank) {
+            // Show visual feedback that they need to select a blank first
+            chip.style.transform = 'scale(1.1)';
+            chip.style.boxShadow = '0 0 0 3px rgba(255,107,53,0.4)';
+            setTimeout(() => {
+              chip.style.transform = '';
+              chip.style.boxShadow = '';
+            }, 300);
+            return;
           }
+          
+          // Check if the blank is from the same set
+          if (activeBlank.set !== setIndex) {
+            alert('Please select a blank from this set first!');
+            return;
+          }
+          
+          // Fill the blank
+          fillBlankWithWord(activeBlank.set, activeBlank.sentence, idx);
         };
         
         wordBank.appendChild(chip);

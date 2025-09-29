@@ -161,7 +161,6 @@
     let visibleSets = [];
     const SETS_TO_LOAD = 5;
     let totalLoaded = 0;
-    let draggedWord = null;
     let touchStartX = 0;
     let touchStartY = 0;
 
@@ -187,7 +186,6 @@
         initializeEnhancedNavigation();
         setupKeyboardShortcuts();
         setupTouchGestures();
-        setupDragAndDrop();
         loadMultipleSets(0, SETS_TO_LOAD);
         setupInfiniteScroll();
         updateInfoBar();
@@ -355,13 +353,8 @@
       blank.dataset.set = setIndex;
       blank.dataset.sentence = sentenceIndex;
       blank.textContent = '_____';
-      blank.draggable = false;
       
       blank.onclick = () => handleBlankClick(setIndex, sentenceIndex);
-      
-      blank.addEventListener('dragover', handleDragOver);
-      blank.addEventListener('dragleave', handleDragLeave);
-      blank.addEventListener('drop', handleDrop);
       
       textDiv.appendChild(blank);
       if (parts[1]) textDiv.innerHTML += parts[1];
@@ -379,7 +372,7 @@
           const wordIndex = parseInt(e.key) - 1;
           const words = document.querySelectorAll('.word-chip:not(.used)');
           if (words[wordIndex]) {
-            fillBlankWithWord(activeBlank.set, activeBlank.sentence, words[wordIndex].dataset.wordIndex);
+            fillBlankWithWord(activeBlank.set, activeBlank.sentence, parseInt(words[wordIndex].dataset.wordIndex));
           }
         }
         
@@ -443,66 +436,31 @@
       setTimeout(() => indicator.classList.remove('show'), 1000);
     }
 
-    function setupDragAndDrop() {
-      document.addEventListener('dragstart', (e) => {
-        if (e.target.classList.contains('word-chip') && !e.target.classList.contains('used')) {
-          draggedWord = e.target.dataset.wordIndex;
-          e.target.classList.add('dragging');
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', e.target.dataset.wordIndex);
-        }
-      });
-      
-      document.addEventListener('dragend', (e) => {
-        if (e.target.classList.contains('word-chip')) {
-          e.target.classList.remove('dragging');
-        }
-        draggedWord = null;
-      });
-    }
-
-    function handleDragOver(e) {
-      if (draggedWord !== null) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        e.currentTarget.classList.add('drag-over');
-      }
-    }
-
-    function handleDragLeave(e) {
-      e.currentTarget.classList.remove('drag-over');
-    }
-
-    function handleDrop(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      e.currentTarget.classList.remove('drag-over');
-      
-      if (draggedWord !== null) {
-        const setIndex = parseInt(e.currentTarget.dataset.set);
-        const sentenceIndex = parseInt(e.currentTarget.dataset.sentence);
-        fillBlankWithWord(setIndex, sentenceIndex, draggedWord);
-        draggedWord = null;
-      }
-    }
-
     function handleBlankClick(setIndex, sentenceIndex) {
+      console.log('Blank clicked:', setIndex, sentenceIndex);
       const key = `${setIndex}-${sentenceIndex}`;
       const blank = document.getElementById(`blank-${setIndex}-${sentenceIndex}`);
       
+      // Check if blank is already filled - click to clear
       if (userAnswers[key] !== undefined) {
+        console.log('Clearing filled blank');
         clearBlank(setIndex, sentenceIndex);
         return;
       }
       
+      // Check if a word is selected - fill immediately
       if (activeWord !== null && activeWord.set === setIndex) {
+        console.log('Filling with selected word:', activeWord.wordIndex);
         fillBlankWithWord(setIndex, sentenceIndex, activeWord.wordIndex);
         deselectAllWords();
         deselectAllBlanks();
         return;
       }
       
+      // Otherwise, select this blank and wait for word
+      console.log('Selecting blank for input');
       deselectAllBlanks();
+      deselectAllWords();
       activeBlank = { set: setIndex, sentence: sentenceIndex };
       if (blank) {
         blank.classList.add('active');
@@ -542,20 +500,30 @@
     }
     
     function handleWordClick(setIndex, wordIndex, chip) {
-      if (chip.classList.contains('used')) return;
+      console.log('Word clicked:', setIndex, wordIndex);
+      if (chip.classList.contains('used')) {
+        console.log('Word is already used');
+        return;
+      }
       
+      // If a blank is selected, fill it immediately
       if (activeBlank !== null && activeBlank.set === setIndex) {
+        console.log('Filling active blank with word');
         fillBlankWithWord(activeBlank.set, activeBlank.sentence, wordIndex);
         deselectAllWords();
         deselectAllBlanks();
         return;
       }
       
+      // If clicking same word again, deselect
       if (activeWord && activeWord.wordIndex === wordIndex) {
+        console.log('Deselecting word');
         deselectAllWords();
         return;
       }
       
+      // Otherwise, select this word
+      console.log('Selecting word');
       deselectAllBlanks();
       deselectAllWords();
       activeWord = { set: setIndex, wordIndex: wordIndex };
@@ -654,7 +622,6 @@
         chip.className = 'word-chip';
         chip.textContent = word;
         chip.dataset.wordIndex = idx;
-        chip.draggable = true;
         
         let isUsed = false;
         Object.keys(userAnswers).forEach(key => {

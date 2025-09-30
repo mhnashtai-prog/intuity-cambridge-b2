@@ -465,6 +465,15 @@
 
     // Load quiz data from JSON - works on both web servers and Claude artifacts
     async function loadQuizData() {
+      // Try multiple possible paths
+      const paths = [
+        '../../datacentre/datasm-01.json',  // For skills/similar-words/vocabulary.html
+        './datacentre/datasm-01.json',
+        'datacentre/datasm-01.json',
+        '/datacentre/datasm-01.json',
+        '../datacentre/datasm-01.json'
+      ];
+      
       try {
         let fileContent;
         
@@ -472,15 +481,33 @@
         if (window.fs && typeof window.fs.readFile === 'function') {
           fileContent = await window.fs.readFile('datacentre/datasm-01.json', { encoding: 'utf8' });
           quizData = JSON.parse(fileContent);
-        } else {
-          // Fall back to fetch for regular web servers (Netlify, etc.)
-          const response = await fetch('datacentre/datasm-01.json');
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-          quizData = await response.json();
+          renderTest();
+          enableButtons();
+          return;
         }
         
-        renderTest();
-        enableButtons();
+        // Try each path until one works (for web servers)
+        let lastError = null;
+        for (const path of paths) {
+          try {
+            console.log(`Trying path: ${path}`);
+            const response = await fetch(path);
+            if (response.ok) {
+              quizData = await response.json();
+              console.log(`✓ Success! Loaded from: ${path}`);
+              renderTest();
+              enableButtons();
+              return;
+            }
+            lastError = new Error(`HTTP ${response.status} for ${path}`);
+          } catch (err) {
+            lastError = err;
+            console.log(`✗ Failed: ${path} - ${err.message}`);
+          }
+        }
+        
+        throw lastError || new Error('All paths failed');
+        
       } catch (error) {
         console.error('Error loading quiz:', error);
         showError(error);

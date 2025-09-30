@@ -411,9 +411,9 @@
 
     <!-- Footer -->
     <div class="footer">
-      <button id="showAnswersBtn" onclick="showAnswers()">Show Answers</button>
-      <button id="scoreBtn" onclick="showScore()">Score</button>
-      <button id="resetBtn" onclick="resetTest()">Repeat Test</button>
+      <button id="showAnswersBtn" onclick="showAnswers()" disabled>Show Answers</button>
+      <button id="scoreBtn" onclick="showScore()" disabled>Score</button>
+      <button id="resetBtn" onclick="resetTest()" disabled>Repeat Test</button>
     </div>
   </div>
 
@@ -463,30 +463,41 @@
       await loadQuizData();
     }
 
-    // Load quiz data from JSON
+    // Load quiz data from JSON - works on both web servers and Claude artifacts
     async function loadQuizData() {
       try {
-        // Read the JSON file using the browser's file system API
-        const fileContent = await window.fs.readFile('datacentre/datasm-01.json', { encoding: 'utf8' });
-        quizData = JSON.parse(fileContent);
+        let fileContent;
+        
+        // Try window.fs.readFile first (for Claude artifacts)
+        if (window.fs && typeof window.fs.readFile === 'function') {
+          fileContent = await window.fs.readFile('datacentre/datasm-01.json', { encoding: 'utf8' });
+          quizData = JSON.parse(fileContent);
+        } else {
+          // Fall back to fetch for regular web servers (Netlify, etc.)
+          const response = await fetch('datacentre/datasm-01.json');
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          quizData = await response.json();
+        }
+        
         renderTest();
         enableButtons();
       } catch (error) {
         console.error('Error loading quiz:', error);
-        showError();
+        showError(error);
       }
     }
 
     // Show error state
-    function showError() {
+    function showError(error) {
       const container = document.getElementById('questionsContainer');
       container.innerHTML = `
         <div class="error-state">
           <div class="error-icon">⚠️</div>
           <div class="error-title">Unable to load quiz</div>
           <div class="error-message">
-            The data file couldn't be loaded. Please check that the file path is correct:<br/>
+            The data file couldn't be loaded. Please check that the file exists at:<br/>
             <code class="error-path">datacentre/datasm-01.json</code>
+            ${error ? '<br/><br/>Error: ' + error.message : ''}
           </div>
         </div>
       `;

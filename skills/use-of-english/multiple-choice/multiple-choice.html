@@ -35,16 +35,12 @@
       position: relative;
     }
     
-    /* Trophy Container */
-    .trophy-container {
-      position: absolute;
-      top: -0.875rem;
+    .dot-wrapper {
+      position: relative;
       display: flex;
-      gap: 0.375rem;
-      flex-wrap: wrap;
-      justify-content: center;
-      max-width: 28rem;
-      pointer-events: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.125rem;
     }
     
     .trophy {
@@ -52,22 +48,11 @@
       height: 0.625rem;
       opacity: 0;
       transition: opacity 0.3s;
+      filter: drop-shadow(0 0 2px rgba(16, 185, 129, 0.6));
     }
     
     .trophy.visible {
       opacity: 1;
-    }
-    
-    .trophy.perfect {
-      filter: drop-shadow(0 0 2px rgba(16, 185, 129, 0.6));
-    }
-    
-    .trophy.pass {
-      filter: drop-shadow(0 0 2px rgba(250, 204, 21, 0.6));
-    }
-    
-    .trophy.fail {
-      filter: drop-shadow(0 0 2px rgba(249, 115, 22, 0.6));
     }
     
     .nav-arrow {
@@ -77,10 +62,33 @@
     .nav-arrow:hover:not(:disabled) { color: white; }
     .nav-arrow:disabled { opacity: 0.3; cursor: not-allowed; }
     .dots-container { display: flex; gap: 0.375rem; flex-wrap: wrap; justify-content: center; max-width: 28rem; }
-    .test-dot { width: 0.625rem; height: 0.625rem; border-radius: 50%; background: #475569; cursor: pointer; transition: all 0.2s; }
-    .test-dot:hover { background: #64748b; }
-    .test-dot.completed { background: #10b981; }
-    .test-dot.current { background: #c9a961; box-shadow: 0 0 0 2px rgba(201, 169, 97, 0.5); }
+    .test-dot { 
+      position: relative;
+      width: 0.625rem; 
+      height: 0.625rem; 
+      border-radius: 50%; 
+      background: #475569; 
+      cursor: pointer; 
+      transition: all 0.2s; 
+    }
+    .test-dot:hover { transform: scale(1.1); }
+    .test-dot.score-perfect { background: #10b981; }
+    .test-dot.score-high { background: #38bdf8; }
+    .test-dot.score-medium { background: #facc15; }
+    .test-dot.score-low { background: #ef4444; }
+    .test-dot.current { box-shadow: 0 0 0 2px rgba(201, 169, 97, 0.8); }
+    .test-dot::after {
+      content: '✓';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 0.5rem;
+      color: white;
+      opacity: 0;
+      font-weight: bold;
+    }
+    .test-dot.attempted::after { opacity: 0.9; }
     .test-info { text-align: center; color: #94a3b8; font-size: 0.8125rem; margin-bottom: 1rem; font-weight: 400; letter-spacing: -0.005em; }
     
     /* Main Container - Level 1 */
@@ -339,7 +347,6 @@
     </div>
 
     <div class="test-nav">
-      <div class="trophy-container" id="trophyContainer"></div>
       <button class="nav-arrow" id="prevArrow" onclick="navigateTest(-1)">←</button>
       <div class="dots-container" id="dotsContainer"></div>
       <button class="nav-arrow" id="nextArrow" onclick="navigateTest(1)">→</button>
@@ -370,7 +377,7 @@
       <div class="modal-content">
         <div class="score-display">
           <div class="score-number" id="scoreNumber">0/0</div>
-          <div class="score-label">Correct Answers</div>
+          <div class="score-label">First Attempt Score</div>
         </div>
         <div class="stats-grid">
           <div class="stat-item">
@@ -394,11 +401,10 @@
     let allSets = [];
     let questionsData = [];
     let currentTest = 1;
-    let completedTests = [];
     let expandedIds = [];
     let answers = {};
     let currentDatasetName = '';
-    let testScores = {};
+    let firstAttemptScores = {};
     let storageKey = '';
 
     function getJSONPath() {
@@ -409,11 +415,8 @@
     function loadProgress() {
       try {
         const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-        if (saved.completedTests) {
-          completedTests = saved.completedTests;
-        }
-        if (saved.testScores) {
-          testScores = saved.testScores;
+        if (saved.firstAttemptScores) {
+          firstAttemptScores = saved.firstAttemptScores;
         }
       } catch (e) {
         console.log('No saved progress found');
@@ -423,44 +426,53 @@
     function saveProgress() {
       try {
         localStorage.setItem(storageKey, JSON.stringify({
-          completedTests: completedTests,
-          testScores: testScores
+          firstAttemptScores: firstAttemptScores
         }));
       } catch (e) {
         console.error('Could not save progress');
       }
     }
 
-    function createTrophies() {
-      const container = document.getElementById('trophyContainer');
+    function createDots() {
+      const container = document.getElementById('dotsContainer');
       container.innerHTML = '';
       for (let i = 1; i <= allSets.length; i++) {
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.setAttribute('viewBox', '0 0 24 24');
-        svg.setAttribute('fill', 'none');
+        const wrapper = document.createElement('div');
+        wrapper.className = 'dot-wrapper';
         
-        const score = testScores[i];
-        let fillColor = 'none';
-        let className = 'trophy';
+        // Trophy (only for 100%)
+        const score = firstAttemptScores[i];
+        if (score && score.percentage === 100) {
+          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          svg.setAttribute('viewBox', '0 0 24 24');
+          svg.setAttribute('fill', 'none');
+          svg.setAttribute('class', 'trophy visible');
+          svg.innerHTML = `<path d="M5.166 2.621v.858c-1.035.148-2.059.33-3.071.543a.75.75 0 0 0-.584.859 6.753 6.753 0 0 0 6.138 5.6 6.73 6.73 0 0 0 2.743 1.346A6.707 6.707 0 0 1 9.279 15H8.54c-1.036 0-1.875.84-1.875 1.875V19.5h-.75a2.25 2.25 0 0 0-2.25 2.25c0 .414.336.75.75.75h15a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-2.25-2.25h-.75v-2.625c0-1.036-.84-1.875-1.875-1.875h-.739a6.706 6.706 0 0 1-1.112-3.173 6.73 6.73 0 0 0 2.743-1.347 6.753 6.753 0 0 0 6.139-5.6.75.75 0 0 0-.585-.858 47.077 47.077 0 0 0-3.07-.543V2.62a.75.75 0 0 0-.658-.744 49.22 49.22 0 0 0-6.093-.377c-2.063 0-4.096.128-6.093.377a.75.75 0 0 0-.657.744Z" fill="#10b981"/>`;
+          wrapper.appendChild(svg);
+        }
         
-        if (score !== undefined) {
-          const percentage = (score.correct / score.total) * 100;
-          if (percentage === 100) {
-            fillColor = '#10b981';
-            className = 'trophy visible perfect';
-          } else if (percentage >= 70) {
-            fillColor = '#facc15';
-            className = 'trophy visible pass';
+        // Dot
+        const dot = document.createElement('div');
+        dot.className = 'test-dot';
+        
+        if (i === currentTest) dot.classList.add('current');
+        
+        if (score) {
+          dot.classList.add('attempted');
+          if (score.percentage === 100) {
+            dot.classList.add('score-perfect');
+          } else if (score.percentage >= 80) {
+            dot.classList.add('score-high');
+          } else if (score.percentage >= 60) {
+            dot.classList.add('score-medium');
           } else {
-            fillColor = '#f97316';
-            className = 'trophy visible fail';
+            dot.classList.add('score-low');
           }
         }
         
-        svg.setAttribute('class', className);
-        svg.innerHTML = `<path d="M5.166 2.621v.858c-1.035.148-2.059.33-3.071.543a.75.75 0 0 0-.584.859 6.753 6.753 0 0 0 6.138 5.6 6.73 6.73 0 0 0 2.743 1.346A6.707 6.707 0 0 1 9.279 15H8.54c-1.036 0-1.875.84-1.875 1.875V19.5h-.75a2.25 2.25 0 0 0-2.25 2.25c0 .414.336.75.75.75h15a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-2.25-2.25h-.75v-2.625c0-1.036-.84-1.875-1.875-1.875h-.739a6.706 6.706 0 0 1-1.112-3.173 6.73 6.73 0 0 0 2.743-1.347 6.753 6.753 0 0 0 6.139-5.6.75.75 0 0 0-.585-.858 47.077 47.077 0 0 0-3.07-.543V2.62a.75.75 0 0 0-.658-.744 49.22 49.22 0 0 0-6.093-.377c-2.063 0-4.096.128-6.093.377a.75.75 0 0 0-.657.744Z" fill="${fillColor}"/>`;
-        
-        container.appendChild(svg);
+        dot.onclick = () => goToTest(i);
+        wrapper.appendChild(dot);
+        container.appendChild(wrapper);
       }
     }
 
@@ -495,7 +507,6 @@
         }
         
         loadTest(1);
-        createTrophies();
       } catch (error) {
         console.error('Error loading questions:', error);
         document.getElementById('questionsList').innerHTML = 
@@ -519,19 +530,6 @@
       createDots();
       renderQuestions();
       updateNavigation();
-    }
-
-    function createDots() {
-      const container = document.getElementById('dotsContainer');
-      container.innerHTML = '';
-      for (let i = 1; i <= allSets.length; i++) {
-        const dot = document.createElement('div');
-        dot.className = 'test-dot';
-        if (i === currentTest) dot.classList.add('current');
-        if (completedTests.includes(i)) dot.classList.add('completed');
-        dot.onclick = () => goToTest(i);
-        container.appendChild(dot);
-      }
     }
 
     function renderQuestions() {
@@ -646,12 +644,6 @@
     }
 
     function showAnswers() {
-      if (!completedTests.includes(currentTest)) {
-        completedTests.push(currentTest);
-        saveProgress();
-        createDots();
-      }
-      
       expandedIds = questionsData.map(q => q.id);
       renderQuestions();
       
@@ -684,25 +676,31 @@
         if (answers[q.id] === q.correct) correctCount++;
       });
       
-      // Save score data
-      testScores[currentTest] = { correct: correctCount, total: questionsData.length };
+      const percentage = Math.round((correctCount / questionsData.length) * 100);
       
-      if (!completedTests.includes(currentTest)) {
-        completedTests.push(currentTest);
+      // Only save if this is the first attempt OR no score exists
+      if (!firstAttemptScores[currentTest]) {
+        firstAttemptScores[currentTest] = {
+          correct: correctCount,
+          total: questionsData.length,
+          percentage: percentage
+        };
+        saveProgress();
+        createDots();
       }
       
-      saveProgress();
-      createDots();
-      createTrophies();
+      // Display the first attempt score, not the current one
+      const savedScore = firstAttemptScores[currentTest];
+      const completedCount = Object.keys(firstAttemptScores).length;
       
       document.getElementById('modalSubtitle').textContent = 
         `${currentDatasetName} • Test ${currentTest} of ${allSets.length}`;
       document.getElementById('scoreNumber').textContent = 
-        `${correctCount}/${questionsData.length}`;
+        `${savedScore.correct}/${savedScore.total}`;
       document.getElementById('answeredStat').textContent = 
         `${count}/${questionsData.length}`;
       document.getElementById('progressStat').textContent = 
-        `${completedTests.length}/${allSets.length}`;
+        `${completedCount}/${allSets.length}`;
       
       document.getElementById('scoreModal').classList.add('active');
     }

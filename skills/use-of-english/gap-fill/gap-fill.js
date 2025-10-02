@@ -111,31 +111,41 @@ function processData(data) {
 }
 
 function parseTextIntoParagraphs(text, gaps) {
-  // Split text into paragraphs (by double newline or sentence groups)
+  // Split text by periods followed by space and capital letter (sentence boundaries)
   const sentences = text.split(/\. (?=[A-Z])/);
   const paragraphs = [];
-  const sentencesPerParagraph = Math.ceil(sentences.length / Math.min(4, Math.ceil(sentences.length / 3)));
+  const sentencesPerParagraph = Math.max(2, Math.ceil(sentences.length / 4));
+  
+  let globalGapIndex = 0;
   
   for (let i = 0; i < sentences.length; i += sentencesPerParagraph) {
     const paragraphSentences = sentences.slice(i, i + sentencesPerParagraph);
     let paragraphText = paragraphSentences.join('. ');
     if (!paragraphText.endsWith('.')) paragraphText += '.';
     
-    // Find gaps in this paragraph
+    // Count and assign gaps in this paragraph
+    const gapMatches = paragraphText.match(/_____/g);
     const gapsInParagraph = [];
-    gaps.forEach((gap, idx) => {
-      if (paragraphText.includes('_____')) {
-        gapsInParagraph.push({ ...gap, globalIndex: idx });
-      }
-    });
     
-    paragraphs.push({
-      text: paragraphText,
-      gaps: gapsInParagraph
-    });
+    if (gapMatches) {
+      gapMatches.forEach(() => {
+        if (globalGapIndex < gaps.length) {
+          gapsInParagraph.push({
+            ...gaps[globalGapIndex],
+            globalIndex: globalGapIndex
+          });
+          globalGapIndex++;
+        }
+      });
+      
+      paragraphs.push({
+        text: paragraphText,
+        gaps: gapsInParagraph
+      });
+    }
   }
   
-  return paragraphs.filter(p => p.text.includes('_____'));
+  return paragraphs;
 }
 
 // === PROGRESS MANAGEMENT ===

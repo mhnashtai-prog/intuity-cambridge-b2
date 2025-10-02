@@ -46,6 +46,30 @@
       font-weight: 400; 
     }
     
+    /* Dataset Selector */
+    .dataset-selector {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 0.75rem;
+    }
+    
+    .dataset-select {
+      padding: 0.5rem 1rem;
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid rgba(71, 85, 105, 0.5);
+      border-radius: 0.625rem;
+      color: #e2e8f0;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      backdrop-filter: blur(24px);
+    }
+    
+    .dataset-select:focus {
+      outline: none;
+      border-color: rgba(255, 107, 53, 0.5);
+    }
+    
     /* Mode Toggle */
     .mode-toggle {
       display: flex;
@@ -351,6 +375,56 @@
       color: #f1f5f9;
       line-height: 1.75;
       margin-bottom: 1rem;
+    }
+    
+    /* Multiple Choice Options */
+    .options-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    
+    .option-btn {
+      padding: 0.75rem 1rem;
+      background: rgba(51, 65, 85, 0.5);
+      border: 2px solid rgba(71, 85, 105, 0.5);
+      border-radius: 0.625rem;
+      color: #e2e8f0;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+    }
+    
+    .option-btn:hover:not(:disabled) {
+      background: rgba(51, 65, 85, 0.7);
+      border-color: rgba(71, 85, 105, 0.7);
+      transform: scale(1.02);
+    }
+    
+    .option-btn.selected {
+      background: rgba(59, 130, 246, 0.3);
+      border-color: #3b82f6;
+      color: #60a5fa;
+    }
+    
+    .option-btn.correct {
+      background: rgba(16, 185, 129, 0.2);
+      border-color: #10b981;
+      color: #10b981;
+    }
+    
+    .option-btn.incorrect {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: #ef4444;
+      color: #ef4444;
+    }
+    
+    .option-btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.9;
     }
     
     /* Gap Input */
@@ -689,6 +763,18 @@
       <p class="subtitle">Gap-Fill Quiz · B2 Level · by Majid Nashtai</p>
     </div>
 
+    <!-- Dataset Selector -->
+    <div class="dataset-selector">
+      <select class="dataset-select" id="datasetSelect" onchange="loadDataset()">
+        <option value="">Select Dataset...</option>
+        <option value="data/use-of-english/gapfill/set-01.json">Set 01 - 8 Gaps (Current Exam)</option>
+        <option value="data/use-of-english/gapfill/set-02.json">Set 02 - 12 Gaps (Intermediate)</option>
+        <option value="data/use-of-english/gapfill/set-03.json">Set 03 - 15 Gaps (Advanced)</option>
+        <option value="data/use-of-english/gapfill/set-04.json">Set 04 - Grammar Focus</option>
+        <option value="data/use-of-english/gapfill/set-05.json">Set 05 - Open Cloze (Pure Gap-Fill)</option>
+      </select>
+    </div>
+
     <div class="mode-toggle">
       <div class="mode-toggle-container">
         <button class="mode-btn-main active" data-mode="guided" onclick="setMode('guided')">Guided Mode</button>
@@ -696,23 +782,16 @@
       </div>
     </div>
 
-    <div class="top-bar">
-      <button class="top-btn active" data-filter="8gaps" onclick="setFilter('8gaps')">8 spaces</button>
-      <button class="top-btn" data-filter="12gaps" onclick="setFilter('12gaps')">12 spaces</button>
-      <button class="top-btn" data-filter="15gaps" onclick="setFilter('15gaps')">15 spaces</button>
-      <button class="top-btn" data-filter="grammar" onclick="setFilter('grammar')">Grammar Focus</button>
-    </div>
-
     <div class="test-nav">
       <button class="nav-arrow" id="prevArrow" onclick="navigateTest(-1)">←</button>
       <div class="dots-container" id="dotsContainer"></div>
-      <span class="test-info" id="testInfo">1/10</span>
+      <span class="test-info" id="testInfo">Select a dataset</span>
       <button class="nav-arrow" id="nextArrow" onclick="navigateTest(1)">→</button>
     </div>
 
     <!-- Classic Mode -->
     <div class="content-container" id="classicContainer">
-      <div class="loading">Loading test...</div>
+      <div class="loading">Please select a dataset to begin...</div>
     </div>
 
     <!-- Guided Mode -->
@@ -723,6 +802,7 @@
         <div class="sentence-card">
           <div class="sentence-label" id="sentenceLabel">Sentence 1 of 8</div>
           <div class="sentence-text-large" id="sentenceTextLarge"></div>
+          <div id="optionsContainer"></div>
           <div class="nav-buttons">
             <button class="nav-btn nav-btn-secondary" id="prevSentenceBtn" onclick="previousSentence()">← Previous</button>
             <button class="nav-btn nav-btn-info hidden" id="reviseBtn" onclick="showReviewMode()">👁 Revise Before Submit</button>
@@ -775,594 +855,6 @@
     </div>
   </div>
 
-  <script>
-    let allSets = [];
-    let currentTest = 1;
-    let currentSentence = 0;
-    let currentMode = 'guided';
-    let currentFilter = '8gaps';
-    let userAnswers = {};
-    let showingAnswers = false;
-    let firstAttemptScores = {};
-    let storageKey = 'gap_fill_progress';
-    let currentDatasetName = '';
-
-    // Sample data structure
-    const sampleData = {
-      "sets": [
-        {
-          "id": 1,
-          "title": "The Navigation Instinct",
-          "topic": "Animal Behavior",
-          "gapCount": 8,
-          "sentences": [
-            {
-              "q": "The navigation instinct is what makes certain creatures, birds and amphibians return _____ the place they consider home.",
-              "answer": "to"
-            },
-            {
-              "q": "Cats often have this instinct. It was particularly strong in an American cat called Ninja, which disappeared shortly _____ its owners had taken it to their new home.",
-              "answer": "after"
-            },
-            {
-              "q": "A year later the cat turned up at its old home even _____ this was 1,360 kilometres away from where its owners were now living.",
-              "answer": "though"
-            },
-            {
-              "q": "Other cats may not travel so far but many _____ on going back to their old home.",
-              "answer": "keep"
-            },
-            {
-              "q": "Pilsbury, an English cat, made a 13-kilometre journey back to its former home 40 times in spite _____ having to cross several busy roads to do so.",
-              "answer": "of"
-            },
-            {
-              "q": "Pigeons also have the homing instinct and, over _____ centuries, human beings have used them to carry messages back home.",
-              "answer": "the"
-            },
-            {
-              "q": "However, cat owners, _____ have to keep returning to their old address in order to bring their cat home, tend to find the homing instinct simply irritating.",
-              "answer": "who"
-            },
-            {
-              "q": "Cat owners have to keep returning to their old address in _____ to bring their cat home.",
-              "answer": "order"
-            }
-          ]
-        },
-        {
-          "id": 2,
-          "title": "The Portable Cycle",
-          "topic": "Technology",
-          "gapCount": 8,
-          "sentences": [
-            {
-              "q": "Folding bicycles have _____ around for quite some time now.",
-              "answer": "been"
-            },
-            {
-              "q": "However, an amazing new Japanese version _____ be folded with a swiftness and efficiency never seen before.",
-              "answer": "can"
-            }
-          ]
-        }
-      ]
-    };
-
-    // Load progress
-    function loadProgress() {
-      try {
-        const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-        if (saved.firstAttemptScores) {
-          firstAttemptScores = saved.firstAttemptScores;
-        }
-      } catch (e) {
-        console.log('No saved progress found');
-      }
-    }
-
-    // Save progress
-    function saveProgress() {
-      try {
-        localStorage.setItem(storageKey, JSON.stringify({
-          firstAttemptScores: firstAttemptScores
-        }));
-      } catch (e) {
-        console.error('Could not save progress');
-      }
-    }
-
-    // Check if test is locked
-    function isTestLocked(testNum) {
-      return firstAttemptScores[testNum] !== undefined;
-    }
-
-    async function loadData() {
-      try {
-        allSets = sampleData.sets;
-        currentDatasetName = 'Sample Data';
-        loadProgress();
-        loadTest(1);
-      } catch (error) {
-        console.error('Error loading data:', error);
-        document.getElementById('classicContainer').innerHTML = 
-          '<div class="loading">Error loading test data</div>';
-      }
-    }
-
-    function setMode(mode) {
-      currentMode = mode;
-      document.querySelectorAll('.mode-btn-main').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.mode === mode);
-      });
-      
-      const classicContainer = document.getElementById('classicContainer');
-      const guidedContainer = document.getElementById('guidedContainer');
-      
-      if (mode === 'guided') {
-        classicContainer.classList.add('hidden');
-        guidedContainer.classList.remove('hidden');
-        renderGuidedMode();
-      } else {
-        classicContainer.classList.remove('hidden');
-        guidedContainer.classList.add('hidden');
-        renderClassic();
-      }
-    }
-
-    function setFilter(filter) {
-      currentFilter = filter;
-      document.querySelectorAll('.top-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.filter === filter);
-      });
-    }
-
-    function loadTest(testNum) {
-      currentTest = testNum;
-      currentSentence = 0;
-      userAnswers = {};
-      showingAnswers = false;
-      
-      const isLocked = isTestLocked(testNum);
-      if (isLocked) {
-        showingAnswers = true;
-      }
-      
-      createDots();
-      
-      if (currentMode === 'guided') {
-        renderGuidedMode();
-      } else {
-        renderClassic();
-      }
-      
-      updateNavigation();
-      updateTestInfo();
-      updateSubmitButton();
-      
-      if (isLocked) {
-        setTimeout(() => {
-          const score = firstAttemptScores[testNum];
-          alert(`🔒 TEST LOCKED\n\nYou already completed this test!\n\nYour Score: ${score.correct}/${score.total} (${score.percentage}%)\n\n${score.percentage === 100 ? '🏆 Perfect! You earned your sweets!' : 'This score is final. Choose another test to practice.'}`);
-        }, 500);
-      }
-    }
-
-    function createDots() {
-      const container = document.getElementById('dotsContainer');
-      container.innerHTML = '';
-      
-      for (let i = 1; i <= allSets.length; i++) {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'dot-wrapper';
-        
-        const score = firstAttemptScores[i];
-        if (score && score.percentage === 100) {
-          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-          svg.setAttribute('viewBox', '0 0 24 24');
-          svg.setAttribute('fill', 'none');
-          svg.setAttribute('class', 'trophy visible');
-          svg.innerHTML = `<path d="M5.166 2.621v.858c-1.035.148-2.059.33-3.071.543a.75.75 0 0 0-.584.859 6.753 6.753 0 0 0 6.138 5.6 6.73 6.73 0 0 0 2.743 1.346A6.707 6.707 0 0 1 9.279 15H8.54c-1.036 0-1.875.84-1.875 1.875V19.5h-.75a2.25 2.25 0 0 0-2.25 2.25c0 .414.336.75.75.75h15a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-2.25-2.25h-.75v-2.625c0-1.036-.84-1.875-1.875-1.875h-.739a6.706 6.706 0 0 1-1.112-3.173 6.73 6.73 0 0 0 2.743-1.347 6.753 6.753 0 0 0 6.139-5.6.75.75 0 0 0-.585-.858 47.077 47.077 0 0 0-3.07-.543V2.62a.75.75 0 0 0-.658-.744 49.22 49.22 0 0 0-6.093-.377c-2.063 0-4.096.128-6.093.377a.75.75 0 0 0-.657.744Z" fill="#10b981"/>`;
-          wrapper.appendChild(svg);
-        }
-        
-        const dot = document.createElement('div');
-        dot.className = 'test-dot';
-        
-        if (i === currentTest) dot.classList.add('current');
-        
-        if (score) {
-          if (score.percentage === 100) {
-            dot.classList.add('score-perfect');
-          } else if (score.percentage >= 80) {
-            dot.classList.add('score-high');
-          } else if (score.percentage >= 60) {
-            dot.classList.add('score-medium');
-          } else {
-            dot.classList.add('score-low');
-          }
-        }
-        
-        dot.onclick = () => loadTest(i);
-        wrapper.appendChild(dot);
-        container.appendChild(wrapper);
-      }
-    }
-
-    // Classic Mode Rendering
-    function renderClassic() {
-      const testData = allSets[currentTest - 1];
-      const container = document.getElementById('classicContainer');
-      
-      let html = `<div class="text-title">${testData.title}</div><div class="text-content"><p>`;
-      
-      testData.sentences.forEach((sentence, idx) => {
-        html += createGapHTML(sentence.q, idx) + ' ';
-      });
-      
-      html += '</p></div>';
-      container.innerHTML = html;
-      
-      attachGapListeners();
-    }
-
-    // Guided Mode Rendering
-    function renderGuidedMode() {
-      showSingleSentence();
-      createSentenceDots();
-      renderSingleSentence();
-    }
-
-    function createSentenceDots() {
-      const testData = allSets[currentTest - 1];
-      const container = document.getElementById('sentenceDots');
-      container.innerHTML = '';
-      
-      testData.sentences.forEach((sentence, idx) => {
-        const dot = document.createElement('div');
-        dot.className = 'sentence-dot';
-        
-        const gapId = `gap-${idx}`;
-        const isFilled = userAnswers[gapId] && userAnswers[gapId].trim() !== '';
-        
-        if (idx === currentSentence) {
-          dot.classList.add('current');
-        } else if (isFilled) {
-          dot.classList.add('filled');
-        } else {
-          dot.textContent = idx + 1;
-        }
-        
-        dot.onclick = () => jumpToSentence(idx);
-        container.appendChild(dot);
-      });
-    }
-
-    function renderSingleSentence() {
-      const testData = allSets[currentTest - 1];
-      const sentence = testData.sentences[currentSentence];
-      
-      document.getElementById('sentenceLabel').textContent = 
-        `Sentence ${currentSentence + 1} of ${testData.sentences.length}`;
-      
-      const sentenceDiv = document.getElementById('sentenceTextLarge');
-      sentenceDiv.innerHTML = createGapHTML(sentence.q, currentSentence);
-      
-      attachGapListeners();
-      
-      document.getElementById('prevSentenceBtn').disabled = currentSentence === 0;
-      document.getElementById('nextSentenceBtn').disabled = currentSentence === testData.sentences.length - 1;
-      
-      // Show revise button if all filled
-      const allFilled = testData.sentences.every((s, idx) => {
-        const gapId = `gap-${idx}`;
-        return userAnswers[gapId] && userAnswers[gapId].trim() !== '';
-      });
-      
-      const reviseBtn = document.getElementById('reviseBtn');
-      if (allFilled && !showingAnswers) {
-        reviseBtn.classList.remove('hidden');
-      } else {
-        reviseBtn.classList.add('hidden');
-      }
-    }
-
-    function showSingleSentence() {
-      document.getElementById('singleSentenceView').classList.remove('hidden');
-      document.getElementById('reviewView').classList.add('hidden');
-    }
-
-    function showReviewMode() {
-      document.getElementById('singleSentenceView').classList.add('hidden');
-      document.getElementById('reviewView').classList.remove('hidden');
-      renderReviewGrid();
-    }
-
-    function renderReviewGrid() {
-      const testData = allSets[currentTest - 1];
-      const grid = document.getElementById('reviewGrid');
-      grid.innerHTML = '';
-      
-      testData.sentences.forEach((sentence, idx) => {
-        const card = document.createElement('div');
-        card.className = 'review-card';
-        
-        const gapId = `gap-${idx}`;
-        const userAnswer = userAnswers[gapId];
-        const isFilled = userAnswer && userAnswer.trim() !== '';
-        
-        const number = document.createElement('div');
-        number.className = 'review-number';
-        
-        if (showingAnswers) {
-          const isCorrect = userAnswer && userAnswer.toLowerCase().trim() === sentence.answer.toLowerCase().trim();
-          number.className += isCorrect ? ' correct' : (isFilled ? ' incorrect' : '');
-        } else if (isFilled) {
-          number.classList.add('filled');
-        }
-        number.textContent = idx + 1;
-        
-        const sentenceDiv = document.createElement('div');
-        sentenceDiv.className = 'review-sentence';
-        sentenceDiv.innerHTML = createGapHTML(sentence.q, idx, true);
-        
-        card.appendChild(number);
-        card.appendChild(sentenceDiv);
-        grid.appendChild(card);
-      });
-      
-      attachGapListeners();
-    }
-
-    function jumpToSentence(idx) {
-      currentSentence = idx;
-      showSingleSentence();
-      renderSingleSentence();
-      createSentenceDots();
-    }
-
-    function previousSentence() {
-      if (currentSentence > 0) {
-        currentSentence--;
-        renderSingleSentence();
-        createSentenceDots();
-      }
-    }
-
-    function nextSentence() {
-      const testData = allSets[currentTest - 1];
-      if (currentSentence < testData.sentences.length - 1) {
-        currentSentence++;
-        renderSingleSentence();
-        createSentenceDots();
-      }
-    }
-
-    function createGapHTML(text, sentenceIdx, isReview = false) {
-      return text.replace(/_____/g, () => {
-        const gapId = `gap-${sentenceIdx}`;
-        const userAnswer = userAnswers[gapId] || '';
-        const disabled = showingAnswers ? 'disabled' : '';
-        const size = isReview ? 'style="min-width: 60px; font-size: 0.75rem;"' : '';
-        return `<input type="text" class="gap ${userAnswer ? 'filled' : ''}" data-gap-id="${gapId}" value="${userAnswer}" placeholder="____" ${disabled} ${size}>`;
-      });
-    }
-
-    function attachGapListeners() {
-      document.querySelectorAll('.gap').forEach(input => {
-        input.addEventListener('input', function() {
-          if (showingAnswers || isTestLocked(currentTest)) return;
-          
-          const gapId = this.dataset.gapId;
-          const value = this.value.trim();
-          
-          if (value) {
-            this.classList.add('filled');
-            userAnswers[gapId] = value;
-          } else {
-            this.classList.remove('filled');
-            delete userAnswers[gapId];
-          }
-          
-          checkCompletion();
-          
-          if (currentMode === 'guided') {
-            createSentenceDots();
-            
-            // Update revise button visibility
-            const testData = allSets[currentTest - 1];
-            const allFilled = testData.sentences.every((s, idx) => {
-              const gId = `gap-${idx}`;
-              return userAnswers[gId] && userAnswers[gId].trim() !== '';
-            });
-            
-            const reviseBtn = document.getElementById('reviseBtn');
-            if (allFilled && !showingAnswers) {
-              reviseBtn.classList.remove('hidden');
-            } else {
-              reviseBtn.classList.add('hidden');
-            }
-          }
-        });
-        
-        input.addEventListener('keydown', function(e) {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            
-            if (currentMode === 'guided') {
-              nextSentence();
-            } else {
-              const allInputs = Array.from(document.querySelectorAll('.gap'));
-              const currentIndex = allInputs.indexOf(this);
-              if (currentIndex < allInputs.length - 1) {
-                allInputs[currentIndex + 1].focus();
-              }
-            }
-          }
-        });
-      });
-    }
-
-    function checkCompletion() {
-      const testData = allSets[currentTest - 1];
-      const totalGaps = testData.sentences.length;
-      const filledGaps = Object.keys(userAnswers).filter(key => userAnswers[key].trim() !== '').length;
-      
-      updateSubmitButton();
-      
-      if (filledGaps === totalGaps && !showingAnswers) {
-        document.getElementById('footer').classList.add('visible');
-      }
-    }
-
-    function updateTestInfo() {
-      const testData = allSets[currentTest - 1];
-      const filledGaps = Object.keys(userAnswers).filter(key => userAnswers[key].trim() !== '').length;
-      document.getElementById('testInfo').textContent = `${currentTest}/${allSets.length}`;
-    }
-
-    function updateSubmitButton() {
-      const testData = allSets[currentTest - 1];
-      const filledGaps = Object.keys(userAnswers).filter(key => userAnswers[key].trim() !== '').length;
-      const submitBtn = document.getElementById('submitBtn');
-      
-      if (filledGaps === testData.sentences.length && !showingAnswers) {
-        submitBtn.classList.remove('hidden');
-      } else {
-        submitBtn.classList.add('hidden');
-      }
-    }
-
-    function submitAndScore() {
-      const testData = allSets[currentTest - 1];
-      
-      if (isTestLocked(currentTest)) {
-        alert('❌ This test has already been submitted!\n\nNice try, but no extra sweets for you! 🍬');
-        return;
-      }
-      
-      showingAnswers = true;
-      let correctCount = 0;
-      
-      testData.sentences.forEach((sentence, idx) => {
-        const gapId = `gap-${idx}`;
-        const userAnswer = userAnswers[gapId] || '';
-        const correctAnswer = sentence.answer;
-        
-        const gapElement = document.querySelector(`[data-gap-id="${gapId}"]`);
-        if (gapElement) {
-          gapElement.disabled = true;
-          if (userAnswer.toLowerCase().trim() === correctAnswer.toLowerCase().trim()) {
-            gapElement.classList.add('correct');
-            correctCount++;
-          } else {
-            gapElement.classList.add('incorrect');
-            const correctSpan = document.createElement('span');
-            correctSpan.style.cssText = 'color: #10b981; font-size: 0.75rem; margin-left: 0.25rem;';
-            correctSpan.textContent = `(${correctAnswer})`;
-            gapElement.parentNode.insertBefore(correctSpan, gapElement.nextSibling);
-          }
-        }
-      });
-      
-      const percentage = Math.round((correctCount / testData.sentences.length) * 100);
-      
-      firstAttemptScores[currentTest] = {
-        correct: correctCount,
-        total: testData.sentences.length,
-        percentage: percentage,
-        timestamp: new Date().toISOString(),
-        locked: true
-      };
-      saveProgress();
-      createDots();
-      
-      const completedCount = Object.keys(firstAttemptScores).length;
-      
-      document.getElementById('modalSubtitle').textContent = 
-        `Test ${currentTest} of ${allSets.length}`;
-      document.getElementById('scoreNumber').textContent = 
-        `${correctCount}/${testData.sentences.length}`;
-      document.getElementById('answeredStat').textContent = 
-        `${testData.sentences.length}/${testData.sentences.length}`;
-      document.getElementById('progressStat').textContent = 
-        `${completedCount}/${allSets.length}`;
-      
-      document.getElementById('scoreModal').classList.add('active');
-      
-      if (currentMode === 'guided') {
-        showReviewMode();
-      }
-      
-      updateSubmitButton();
-    }
-
-    function clearAnswers() {
-      if (showingAnswers || isTestLocked(currentTest)) {
-        alert('❌ This test is locked! You have already submitted it.\n\nNo cheating allowed - your teacher is watching! 🍬');
-        return;
-      }
-      
-      if (Object.keys(userAnswers).length === 0) {
-        return;
-      }
-      
-      if (confirm('Are you sure you want to clear all answers?')) {
-        userAnswers = {};
-        showingAnswers = false;
-        
-        if (currentMode === 'classic') {
-          renderClassic();
-        } else {
-          renderGuidedMode();
-        }
-        updateSubmitButton();
-        document.getElementById('footer').classList.remove('visible');
-      }
-    }
-
-    function repeatTest() {
-      if (isTestLocked(currentTest)) {
-        alert('❌ NO CHEATING!\n\nThis test is locked because you already submitted it.\n\nYou got your score, and that\'s final! 🍬\n\nMove to another test if you want to practice more.');
-        return;
-      }
-      
-      userAnswers = {};
-      showingAnswers = false;
-      currentSentence = 0;
-      
-      if (currentMode === 'classic') {
-        renderClassic();
-      } else {
-        renderGuidedMode();
-      }
-      
-      updateSubmitButton();
-      document.getElementById('footer').classList.remove('visible');
-    }
-
-    function goHome() {
-      window.location.href = '../use-of-english.html';
-    }
-
-    function navigateTest(direction) {
-      const newTest = currentTest + direction;
-      if (newTest >= 1 && newTest <= allSets.length) {
-        loadTest(newTest);
-      }
-    }
-
-    function updateNavigation() {
-      document.getElementById('prevArrow').disabled = currentTest === 1;
-      document.getElementById('nextArrow').disabled = currentTest === allSets.length;
-    }
-
-    function closeModal() {
-      document.getElementById('scoreModal').classList.remove('active');
-    }
-
-    document.getElementById('scoreModal').addEventListener('click', function(e) {
-      if (e.target === this) closeModal();
-    });
-
-    window.onload = loadData;
+  <script src="gap-fill.js"></script>
+</body>
+</html>

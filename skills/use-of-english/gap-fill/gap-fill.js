@@ -1,9 +1,8 @@
 // Global State
 let allSets = [];
 let currentTest = 0;
-let currentSentence = 0;
+let currentParagraph = 0;
 let currentMode = 'guided';
-let dataFormat = 'unknown'; // 'multiple-choice', 'open-cloze', 'grammar-focus'
 let userAnswers = {};
 let showingAnswers = false;
 let firstAttemptScores = {};
@@ -28,8 +27,6 @@ async function loadDataset() {
     const data = await response.json();
     currentDatasetPath = path;
     
-    // Detect format and load data
-    detectFormat(data);
     processData(data);
     
     // Load progress for this dataset
@@ -47,116 +44,98 @@ async function loadDataset() {
   }
 }
 
-function detectFormat(data) {
-  // Check if it's Set 04 (grammar focus)
-  if (data.categories) {
-    dataFormat = 'grammar-focus';
-    return;
-  }
-  
-  // Check if it's Set 05 (open cloze)
-  if (data.metadata && data.metadata.format === 'open-cloze') {
-    dataFormat = 'open-cloze';
-    return;
-  }
-  
-  // Check if it's Sets 1-3 (multiple choice or text-based)
-  if (data.sets && data.sets[0] && data.sets[0].sentences) {
-    const firstSentence = data.sets[0].sentences[0];
-    
-    // Has options = multiple choice
-    if (firstSentence.options) {
-      dataFormat = 'multiple-choice';
-    } 
-    // Has text field (Set 05) or just answer (Sets 1-3 text)
-    else if (data.sets[0].text) {
-      dataFormat = 'open-cloze';
-    }
-    // Just q and answer = simple open cloze
-    else {
-      dataFormat = 'open-cloze';
-    }
-    return;
-  }
-  
-  dataFormat = 'unknown';
-}
-
 function processData(data) {
-  // Grammar Focus (Set 04)
-  if (dataFormat === 'grammar-focus') {
-    allSets = data.categories.map(cat => ({
-      id: cat.id,
-      title: cat.name,
-      topic: cat.grammarFocus,
-      description: cat.description,
-      gapCount: cat.totalSentences,
-      sentences: cat.sentences.map(s => ({
-        q: s.q,
-        options: s.options,
+  // Handle Set 05 format (with full text)
+  if (data.sets && data.sets[0] && data.sets[0].text) {
+    allSets = data.sets.map(set => {
+      const paragraphs = parseTextIntoParagraphs(set.text, set.gaps);
+      return {
+        id: set.id,
+        title: set.title,
+        topic: set.topic,
+        text: set.text,
+        gaps: set.gaps,
+        paragraphs: paragraphs,
+        gapCount: set.gaps.length
+      };
+    });
+  }
+  // Handle Sets 1-3 format (sentence-based, needs conversion)
+  else if (data.sets && data.sets[0] && data.sets[0].sentences) {
+    allSets = data.sets.map(set => {
+      // Convert sentences into text
+      const fullText = set.sentences.map(s => s.q).join(' ');
+      const gaps = set.sentences.map((s, idx) => ({
+        number: idx + 1,
+        answer: s.answer,
+        type: s.pattern || 'general'
+      }));
+      
+      const paragraphs = parseTextIntoParagraphs(fullText, gaps);
+      
+      return {
+        id: set.id,
+        title: set.title,
+        topic: set.topic,
+        text: fullText,
+        gaps: gaps,
+        paragraphs: paragraphs,
+        gapCount: gaps.length
+      };
+    });
+  }
+  // Handle Set 04 format (categories)
+  else if (data.categories) {
+    allSets = data.categories.map(cat => {
+      const fullText = cat.sentences.map(s => s.q).join(' ');
+      const gaps = cat.sentences.map((s, idx) => ({
+        number: idx + 1,
         answer: s.answer,
         pattern: s.pattern
-      }))
-    }));
-  }
-  // Open Cloze (Set 05) with text field
-  else if (dataFormat === 'open-cloze' && data.sets && data.sets[0].text) {
-    allSets = data.sets.map(set => ({
-      id: set.id,
-      title: set.title,
-      topic: set.topic,
-      gapCount: set.gaps.length,
-      text: set.text,
-      gaps: set.gaps,
-      // Parse text into sentences for guided mode
-      sentences: parseTextIntoSentences(set.text, set.gaps)
-    }));
-  }
-  // Multiple Choice or Simple Open Cloze (Sets 1-3)
-  else if (data.sets) {
-    allSets = data.sets;
+      }));
+      
+      const paragraphs = parseTextIntoParagraphs(fullText, gaps);
+      
+      return {
+        id: cat.id,
+        title: cat.name,
+        topic: cat.grammarFocus,
+        description: cat.description,
+        text: fullText,
+        gaps: gaps,
+        paragraphs: paragraphs,
+        gapCount: gaps.length
+      };
+    });
   }
 }
 
-function parseTextIntoSentences(text, gaps) {
-  // Extract sentences with gaps from the text
-  const sentences = [];
-  const parts = text.split(/\(\d+\)_____/);
+function parseTextIntoParagraphs(text, gaps) {
+  // Split text into paragraphs (by double newline or sentence groups)
+  const sentences = text.split(/\. (?=[A-Z])/);
+  const paragraphs = [];
+  const sentencesPerParagraph = Math.ceil(sentences.length / Math.min(4, Math.ceil(sentences.length / 3)));
   
-  gaps.forEach((gap, idx) => {
-    // Find the sentence containing this gap
-    const gapPattern = `(${gap.number})_____`;
-    const startIdx = text.indexOf(gapPattern);
+  for (let i = 0; i < sentences.length; i += sentencesPerParagraph) {
+    const paragraphSentences = sentences.slice(i, i + sentencesPerParagraph);
+    let paragraphText = paragraphSentences.join('. ');
+    if (!paragraphText.endsWith('.')) paragraphText += '.';
     
-    if (startIdx !== -1) {
-      // Extract surrounding sentence
-      const beforeGap = text.substring(0, startIdx);
-      const afterGap = text.substring(startIdx + gapPattern.length);
-      
-      // Find sentence boundaries
-      const sentenceStart = beforeGap.lastIndexOf('. ') + 2;
-      const sentenceEnd = afterGap.indexOf('. ') !== -1 ? 
-        startIdx + gapPattern.length + afterGap.indexOf('. ') + 1 : 
-        text.length;
-      
-      const fullSentence = text.substring(
-        sentenceStart === 1 ? 0 : sentenceStart, 
-        sentenceEnd
-      );
-      
-      // Replace numbered gap with generic gap marker
-      const sentenceWithGap = fullSentence.replace(`(${gap.number})_____`, '_____');
-      
-      sentences.push({
-        q: sentenceWithGap,
-        answer: gap.answer,
-        type: gap.type,
-        pattern: gap.pattern
-      });
-    }
-  });
+    // Find gaps in this paragraph
+    const gapsInParagraph = [];
+    gaps.forEach((gap, idx) => {
+      if (paragraphText.includes('_____')) {
+        gapsInParagraph.push({ ...gap, globalIndex: idx });
+      }
+    });
+    
+    paragraphs.push({
+      text: paragraphText,
+      gaps: gapsInParagraph
+    });
+  }
   
-  return sentences;
+  return paragraphs.filter(p => p.text.includes('_____'));
 }
 
 // === PROGRESS MANAGEMENT ===
@@ -214,7 +193,7 @@ function loadTest(testNum) {
   if (allSets.length === 0) return;
   
   currentTest = testNum;
-  currentSentence = 0;
+  currentParagraph = 0;
   userAnswers = {};
   showingAnswers = false;
   
@@ -238,7 +217,7 @@ function loadTest(testNum) {
   if (isLocked) {
     setTimeout(() => {
       const score = firstAttemptScores[testNum];
-      alert(`🔒 TEST LOCKED\n\nYou already completed this test!\n\nYour Score: ${score.correct}/${score.total} (${score.percentage}%)\n\n${score.percentage === 100 ? '🏆 Perfect! You earned your sweets!' : 'This score is final. Choose another test to practice.'}`);
+      alert(`🔒 TEST LOCKED\n\nYou already completed this test!\n\nYour Score: ${score.correct}/${score.total} (${score.percentage}%)\n\n${score.percentage === 100 ? '🏆 Perfect!' : 'This score is final. Choose another test to practice.'}`);
     }, 500);
   }
 }
@@ -292,95 +271,94 @@ function renderClassic() {
   
   let html = `<div class="text-title">${testData.title}</div>`;
   
-  // If has description (grammar focus), show it
   if (testData.description) {
     html += `<div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 1rem;">${testData.description}</div>`;
   }
   
-  html += `<div class="text-content"><p>`;
+  html += `<div class="text-content">`;
   
-  // Render based on format
-  if (dataFormat === 'multiple-choice') {
-    testData.sentences.forEach((sentence, idx) => {
-      html += createMultipleChoiceHTML(sentence, idx, 'classic') + ' ';
-    });
-  } else {
-    testData.sentences.forEach((sentence, idx) => {
-      html += createGapHTML(sentence.q, idx) + ' ';
-    });
-  }
+  // Render full text with all gaps
+  html += createTextWithGaps(testData.text, testData.gaps);
   
-  html += '</p></div>';
+  html += '</div>';
   container.innerHTML = html;
   
-  if (dataFormat === 'multiple-choice') {
-    attachMultipleChoiceListeners();
-  } else {
-    attachGapListeners();
-  }
+  attachGapListeners();
+}
+
+function createTextWithGaps(text, gaps) {
+  let result = text;
+  let gapIndex = 0;
+  
+  result = result.replace(/_____/g, () => {
+    const gap = gaps[gapIndex];
+    const gapId = `gap-${gapIndex}`;
+    const userAnswer = userAnswers[gapId] || '';
+    const disabled = showingAnswers ? 'disabled' : '';
+    
+    gapIndex++;
+    
+    return `<input type="text" class="gap ${userAnswer ? 'filled' : ''}" data-gap-id="${gapId}" value="${userAnswer}" placeholder="____" ${disabled}>`;
+  });
+  
+  return result;
 }
 
 // === GUIDED MODE RENDERING ===
 
 function renderGuidedMode() {
-  showSingleSentence();
-  createSentenceDots();
-  renderSingleSentence();
+  showSingleParagraph();
+  createParagraphDots();
+  renderSingleParagraph();
 }
 
-function createSentenceDots() {
+function createParagraphDots() {
   const testData = allSets[currentTest];
   const container = document.getElementById('sentenceDots');
   container.innerHTML = '';
   
-  testData.sentences.forEach((sentence, idx) => {
+  testData.paragraphs.forEach((para, idx) => {
     const dot = document.createElement('div');
     dot.className = 'sentence-dot';
     
-    const gapId = `gap-${idx}`;
-    const isFilled = userAnswers[gapId] && userAnswers[gapId].trim() !== '';
+    // Check if all gaps in this paragraph are filled
+    const allGapsFilled = para.gaps.every(gap => {
+      const gapId = `gap-${gap.globalIndex}`;
+      return userAnswers[gapId] && userAnswers[gapId].trim() !== '';
+    });
     
-    if (idx === currentSentence) {
+    if (idx === currentParagraph) {
       dot.classList.add('current');
-    } else if (isFilled) {
+    } else if (allGapsFilled) {
       dot.classList.add('filled');
     } else {
       dot.textContent = idx + 1;
     }
     
-    dot.onclick = () => jumpToSentence(idx);
+    dot.onclick = () => jumpToParagraph(idx);
     container.appendChild(dot);
   });
 }
 
-function renderSingleSentence() {
+function renderSingleParagraph() {
   const testData = allSets[currentTest];
-  const sentence = testData.sentences[currentSentence];
+  const paragraph = testData.paragraphs[currentParagraph];
   
   document.getElementById('sentenceLabel').textContent = 
-    `Sentence ${currentSentence + 1} of ${testData.sentences.length}`;
+    `Paragraph ${currentParagraph + 1} of ${testData.paragraphs.length}`;
   
   const sentenceDiv = document.getElementById('sentenceTextLarge');
+  sentenceDiv.innerHTML = createParagraphWithGaps(paragraph);
   
-  if (dataFormat === 'multiple-choice') {
-    sentenceDiv.innerHTML = sentence.q.replace('_____', '<strong style="color: #c9a961;">_____</strong>');
-    renderMultipleChoiceOptions(sentence, currentSentence);
-  } else {
-    sentenceDiv.innerHTML = createGapHTML(sentence.q, currentSentence);
-    document.getElementById('optionsContainer').innerHTML = '';
-  }
+  document.getElementById('optionsContainer').innerHTML = '';
   
-  if (dataFormat === 'multiple-choice') {
-    attachMultipleChoiceListeners();
-  } else {
-    attachGapListeners();
-  }
+  attachGapListeners();
   
-  document.getElementById('prevSentenceBtn').disabled = currentSentence === 0;
-  document.getElementById('nextSentenceBtn').disabled = currentSentence === testData.sentences.length - 1;
+  document.getElementById('prevSentenceBtn').disabled = currentParagraph === 0;
+  document.getElementById('nextSentenceBtn').disabled = currentParagraph === testData.paragraphs.length - 1;
   
-  // Show revise button if all filled
-  const allFilled = testData.sentences.every((s, idx) => {
+  // Show revise button if all gaps filled
+  const allFilled = testData.gaps.every((gap, idx) => {
     const gapId = `gap-${idx}`;
     return userAnswers[gapId] && userAnswers[gapId].trim() !== '';
   });
@@ -393,107 +371,30 @@ function renderSingleSentence() {
   }
 }
 
-function renderMultipleChoiceOptions(sentence, sentenceIdx) {
-  const container = document.getElementById('optionsContainer');
-  if (!sentence.options) {
-    container.innerHTML = '';
-    return;
-  }
+function createParagraphWithGaps(paragraph) {
+  let result = paragraph.text;
+  let localGapIndex = 0;
   
-  const gapId = `gap-${sentenceIdx}`;
-  const userAnswer = userAnswers[gapId];
-  
-  let html = '<div class="options-container">';
-  
-  sentence.options.forEach((option) => {
-    const letter = option.split('.')[0]; // "A", "B", "C", "D"
-    const text = option.substring(3); // Remove "A. " prefix
-    const isSelected = userAnswer === letter;
-    const disabled = showingAnswers ? 'disabled' : '';
+  result = result.replace(/_____/g, () => {
+    if (localGapIndex >= paragraph.gaps.length) return '_____';
     
-    let classList = 'option-btn';
-    if (isSelected) classList += ' selected';
-    
-    if (showingAnswers) {
-      if (letter === sentence.answer) {
-        classList += ' correct';
-      } else if (isSelected && letter !== sentence.answer) {
-        classList += ' incorrect';
-      }
-    }
-    
-    html += `<button class="${classList}" data-gap-id="${gapId}" data-option="${letter}" ${disabled}>${option}</button>`;
-  });
-  
-  html += '</div>';
-  container.innerHTML = html;
-}
-
-// === MULTIPLE CHOICE HANDLING ===
-
-function createMultipleChoiceHTML(sentence, sentenceIdx, mode) {
-  const gapId = `gap-${sentenceIdx}`;
-  const userAnswer = userAnswers[gapId] || '';
-  
-  // In classic mode, show inline
-  let gapDisplay = '_____';
-  if (userAnswer) {
-    gapDisplay = `<span class="gap filled" data-gap-id="${gapId}">${userAnswer}</span>`;
-  } else {
-    gapDisplay = `<span class="gap" data-gap-id="${gapId}">_____</span>`;
-  }
-  
-  return sentence.q.replace('_____', gapDisplay);
-}
-
-function attachMultipleChoiceListeners() {
-  document.querySelectorAll('.option-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-      if (showingAnswers || isTestLocked(currentTest)) return;
-      
-      const gapId = this.dataset.gapId;
-      const option = this.dataset.option;
-      
-      // Toggle selection
-      const wasSelected = this.classList.contains('selected');
-      
-      // Deselect all options for this gap
-      document.querySelectorAll(`[data-gap-id="${gapId}"]`).forEach(opt => {
-        opt.classList.remove('selected');
-      });
-      
-      // Select this option if it wasn't selected
-      if (!wasSelected) {
-        this.classList.add('selected');
-        userAnswers[gapId] = option;
-      } else {
-        delete userAnswers[gapId];
-      }
-      
-      checkCompletion();
-      
-      if (currentMode === 'guided') {
-        createSentenceDots();
-        updateReviseButton();
-      }
-    });
-  });
-}
-
-// === OPEN CLOZE (GAP INPUT) HANDLING ===
-
-function createGapHTML(text, sentenceIdx, isReview = false) {
-  return text.replace(/_____/g, () => {
-    const gapId = `gap-${sentenceIdx}`;
+    const gap = paragraph.gaps[localGapIndex];
+    const gapId = `gap-${gap.globalIndex}`;
     const userAnswer = userAnswers[gapId] || '';
     const disabled = showingAnswers ? 'disabled' : '';
-    const size = isReview ? 'style="min-width: 60px; font-size: 0.75rem;"' : '';
-    return `<input type="text" class="gap ${userAnswer ? 'filled' : ''}" data-gap-id="${gapId}" value="${userAnswer}" placeholder="____" ${disabled} ${size}>`;
+    
+    localGapIndex++;
+    
+    return `<input type="text" class="gap ${userAnswer ? 'filled' : ''}" data-gap-id="${gapId}" value="${userAnswer}" placeholder="____" ${disabled}>`;
   });
+  
+  return result;
 }
 
+// === GAP INPUT HANDLING ===
+
 function attachGapListeners() {
-  document.querySelectorAll('.gap[type="text"]').forEach(input => {
+  document.querySelectorAll('.gap').forEach(input => {
     input.addEventListener('input', function() {
       if (showingAnswers || isTestLocked(currentTest)) return;
       
@@ -511,7 +412,7 @@ function attachGapListeners() {
       checkCompletion();
       
       if (currentMode === 'guided') {
-        createSentenceDots();
+        createParagraphDots();
         updateReviseButton();
       }
     });
@@ -521,9 +422,9 @@ function attachGapListeners() {
         e.preventDefault();
         
         if (currentMode === 'guided') {
-          nextSentence();
+          nextParagraph();
         } else {
-          const allInputs = Array.from(document.querySelectorAll('.gap[type="text"]'));
+          const allInputs = Array.from(document.querySelectorAll('.gap'));
           const currentIndex = allInputs.indexOf(this);
           if (currentIndex < allInputs.length - 1) {
             allInputs[currentIndex + 1].focus();
@@ -536,7 +437,7 @@ function attachGapListeners() {
 
 function updateReviseButton() {
   const testData = allSets[currentTest];
-  const allFilled = testData.sentences.every((s, idx) => {
+  const allFilled = testData.gaps.every((gap, idx) => {
     const gId = `gap-${idx}`;
     return userAnswers[gId] && userAnswers[gId].trim() !== '';
   });
@@ -551,28 +452,32 @@ function updateReviseButton() {
 
 // === NAVIGATION ===
 
-function jumpToSentence(idx) {
-  currentSentence = idx;
-  showSingleSentence();
-  renderSingleSentence();
-  createSentenceDots();
+function jumpToParagraph(idx) {
+  currentParagraph = idx;
+  showSingleParagraph();
+  renderSingleParagraph();
+  createParagraphDots();
 }
 
 function previousSentence() {
-  if (currentSentence > 0) {
-    currentSentence--;
-    renderSingleSentence();
-    createSentenceDots();
+  if (currentParagraph > 0) {
+    currentParagraph--;
+    renderSingleParagraph();
+    createParagraphDots();
   }
 }
 
 function nextSentence() {
   const testData = allSets[currentTest];
-  if (currentSentence < testData.sentences.length - 1) {
-    currentSentence++;
-    renderSingleSentence();
-    createSentenceDots();
+  if (currentParagraph < testData.paragraphs.length - 1) {
+    currentParagraph++;
+    renderSingleParagraph();
+    createParagraphDots();
   }
+}
+
+function nextParagraph() {
+  nextSentence();
 }
 
 function navigateTest(direction) {
@@ -589,9 +494,13 @@ function updateNavigation() {
 
 // === VIEW MANAGEMENT ===
 
-function showSingleSentence() {
+function showSingleParagraph() {
   document.getElementById('singleSentenceView').classList.remove('hidden');
   document.getElementById('reviewView').classList.add('hidden');
+}
+
+function showSingleSentence() {
+  showSingleParagraph();
 }
 
 function showReviewMode() {
@@ -605,56 +514,48 @@ function renderReviewGrid() {
   const grid = document.getElementById('reviewGrid');
   grid.innerHTML = '';
   
-  testData.sentences.forEach((sentence, idx) => {
+  testData.paragraphs.forEach((paragraph, idx) => {
     const card = document.createElement('div');
     card.className = 'review-card';
     
-    const gapId = `gap-${idx}`;
-    const userAnswer = userAnswers[gapId];
-    const isFilled = userAnswer && userAnswer.trim() !== '';
-    
     const number = document.createElement('div');
     number.className = 'review-number';
-    
-    if (showingAnswers) {
-      let correctAnswer = sentence.answer;
-      if (dataFormat === 'multiple-choice') {
-        correctAnswer = sentence.answer; // Just the letter
-      }
-      
-      const isCorrect = userAnswer && userAnswer.toLowerCase().trim() === correctAnswer.toLowerCase().trim();
-      number.className += isCorrect ? ' correct' : (isFilled ? ' incorrect' : '');
-    } else if (isFilled) {
-      number.classList.add('filled');
-    }
     number.textContent = idx + 1;
     
-    const sentenceDiv = document.createElement('div');
-    sentenceDiv.className = 'review-sentence';
+    // Check if paragraph is complete
+    const allGapsFilled = paragraph.gaps.every(gap => {
+      const gapId = `gap-${gap.globalIndex}`;
+      return userAnswers[gapId] && userAnswers[gapId].trim() !== '';
+    });
     
-    if (dataFormat === 'multiple-choice') {
-      sentenceDiv.innerHTML = createMultipleChoiceHTML(sentence, idx, 'review');
-    } else {
-      sentenceDiv.innerHTML = createGapHTML(sentence.q, idx, true);
+    if (showingAnswers) {
+      const allCorrect = paragraph.gaps.every(gap => {
+        const gapId = `gap-${gap.globalIndex}`;
+        const userAnswer = userAnswers[gapId];
+        return userAnswer && userAnswer.toLowerCase().trim() === gap.answer.toLowerCase().trim();
+      });
+      number.className += allCorrect ? ' correct' : (allGapsFilled ? ' incorrect' : '');
+    } else if (allGapsFilled) {
+      number.classList.add('filled');
     }
     
+    const paragraphDiv = document.createElement('div');
+    paragraphDiv.className = 'review-sentence';
+    paragraphDiv.innerHTML = createParagraphWithGaps(paragraph);
+    
     card.appendChild(number);
-    card.appendChild(sentenceDiv);
+    card.appendChild(paragraphDiv);
     grid.appendChild(card);
   });
   
-  if (dataFormat === 'multiple-choice') {
-    attachMultipleChoiceListeners();
-  } else {
-    attachGapListeners();
-  }
+  attachGapListeners();
 }
 
 // === COMPLETION & SUBMISSION ===
 
 function checkCompletion() {
   const testData = allSets[currentTest];
-  const totalGaps = testData.sentences.length;
+  const totalGaps = testData.gaps.length;
   const filledGaps = Object.keys(userAnswers).filter(key => userAnswers[key] && userAnswers[key].trim() !== '').length;
   
   updateSubmitButton();
@@ -673,7 +574,7 @@ function updateSubmitButton() {
   const filledGaps = Object.keys(userAnswers).filter(key => userAnswers[key] && userAnswers[key].trim() !== '').length;
   const submitBtn = document.getElementById('submitBtn');
   
-  if (filledGaps === testData.sentences.length && !showingAnswers) {
+  if (filledGaps === testData.gaps.length && !showingAnswers) {
     submitBtn.classList.remove('hidden');
   } else {
     submitBtn.classList.add('hidden');
@@ -684,55 +585,41 @@ function submitAndScore() {
   const testData = allSets[currentTest];
   
   if (isTestLocked(currentTest)) {
-    alert('❌ This test has already been submitted!\n\nNice try, but no extra sweets for you! 🍬');
+    alert('❌ This test has already been submitted!');
     return;
   }
   
   showingAnswers = true;
   let correctCount = 0;
   
-  testData.sentences.forEach((sentence, idx) => {
+  testData.gaps.forEach((gap, idx) => {
     const gapId = `gap-${idx}`;
     const userAnswer = userAnswers[gapId] || '';
-    const correctAnswer = sentence.answer;
+    const correctAnswer = gap.answer;
     
     const isCorrect = userAnswer.toLowerCase().trim() === correctAnswer.toLowerCase().trim();
     if (isCorrect) correctCount++;
     
-    // Mark answers in UI
-    if (dataFormat === 'multiple-choice') {
-      const allOptions = document.querySelectorAll(`[data-gap-id="${gapId}"]`);
-      allOptions.forEach(opt => {
-        opt.disabled = true;
-        const optLetter = opt.dataset.option;
-        if (optLetter === correctAnswer) {
-          opt.classList.add('correct');
-        } else if (opt.classList.contains('selected')) {
-          opt.classList.add('incorrect');
-        }
-      });
-    } else {
-      const gapElement = document.querySelector(`input[data-gap-id="${gapId}"]`);
-      if (gapElement) {
-        gapElement.disabled = true;
-        if (isCorrect) {
-          gapElement.classList.add('correct');
-        } else {
-          gapElement.classList.add('incorrect');
-          const correctSpan = document.createElement('span');
-          correctSpan.style.cssText = 'color: #10b981; font-size: 0.75rem; margin-left: 0.25rem;';
-          correctSpan.textContent = `(${correctAnswer})`;
-          gapElement.parentNode.insertBefore(correctSpan, gapElement.nextSibling);
-        }
+    const gapElement = document.querySelector(`input[data-gap-id="${gapId}"]`);
+    if (gapElement) {
+      gapElement.disabled = true;
+      if (isCorrect) {
+        gapElement.classList.add('correct');
+      } else {
+        gapElement.classList.add('incorrect');
+        const correctSpan = document.createElement('span');
+        correctSpan.style.cssText = 'color: #10b981; font-size: 0.75rem; margin-left: 0.25rem;';
+        correctSpan.textContent = `(${correctAnswer})`;
+        gapElement.parentNode.insertBefore(correctSpan, gapElement.nextSibling);
       }
     }
   });
   
-  const percentage = Math.round((correctCount / testData.sentences.length) * 100);
+  const percentage = Math.round((correctCount / testData.gaps.length) * 100);
   
   firstAttemptScores[currentTest] = {
     correct: correctCount,
-    total: testData.sentences.length,
+    total: testData.gaps.length,
     percentage: percentage,
     timestamp: new Date().toISOString(),
     locked: true
@@ -745,9 +632,9 @@ function submitAndScore() {
   document.getElementById('modalSubtitle').textContent = 
     `Test ${currentTest + 1} of ${allSets.length}`;
   document.getElementById('scoreNumber').textContent = 
-    `${correctCount}/${testData.sentences.length}`;
+    `${correctCount}/${testData.gaps.length}`;
   document.getElementById('answeredStat').textContent = 
-    `${testData.sentences.length}/${testData.sentences.length}`;
+    `${testData.gaps.length}/${testData.gaps.length}`;
   document.getElementById('progressStat').textContent = 
     `${completedCount}/${allSets.length}`;
   
@@ -764,7 +651,7 @@ function submitAndScore() {
 
 function clearAnswers() {
   if (showingAnswers || isTestLocked(currentTest)) {
-    alert('❌ This test is locked! You have already submitted it.\n\nNo cheating allowed - your teacher is watching! 🍬');
+    alert('❌ This test is locked! You have already submitted it.');
     return;
   }
   
@@ -788,13 +675,13 @@ function clearAnswers() {
 
 function repeatTest() {
   if (isTestLocked(currentTest)) {
-    alert('❌ NO CHEATING!\n\nThis test is locked because you already submitted it.\n\nYou got your score, and that\'s final! 🍬\n\nMove to another test if you want to practice more.');
+    alert('❌ This test is locked because you already submitted it.\n\nMove to another test if you want to practice more.');
     return;
   }
   
   userAnswers = {};
   showingAnswers = false;
-  currentSentence = 0;
+  currentParagraph = 0;
   
   if (currentMode === 'classic') {
     renderClassic();
@@ -807,7 +694,7 @@ function repeatTest() {
 }
 
 function goHome() {
-  window.location.href = '../use-of-english.html';
+  window.location.href = '../../../index.html';
 }
 
 function closeModal() {
@@ -820,7 +707,6 @@ document.getElementById('scoreModal').addEventListener('click', function(e) {
   if (e.target === this) closeModal();
 });
 
-// Initialize
 window.onload = function() {
   console.log('Gap-Fill Quiz loaded. Select a dataset to begin.');
 };

@@ -528,16 +528,19 @@
       transition: color 0.2s;
       font-weight: 500;
     }
-    .footer button:hover:not(:disabled) { color: #e2e8f0; }
-    .footer button:disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
-    }
-    .submit-btn {
-      color: #10b981 !important;
+    .footer button:hover { color: #e2e8f0; }
+    .footer button#submitBtn {
+      background: linear-gradient(135deg, rgba(255, 107, 53, 1) 0%, rgba(255, 160, 80, 0.9) 100%);
+      color: white;
+      padding: 0.5rem 1.5rem;
+      border-radius: 0.5rem;
       font-weight: 600;
+      box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
     }
-    .submit-btn:hover:not(:disabled) { color: #34d399 !important; }
+    .footer button#submitBtn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 6px 16px rgba(255, 107, 53, 0.4);
+    }
     
     /* Modal */
     .modal-overlay {
@@ -671,7 +674,24 @@
           <div class="question-text-large" id="questionTextLarge"></div>
           <div class="options-grid-large" id="optionsGridLarge"></div>
           <div class="nav-buttons">
-            <button class="nav-btn nav-btn-secondary" onclick="showSingleQuestion()">
+            <button class="nav-btn nav-btn-secondary" id="prevBtn" onclick="previousQuestion()">
+              ← Previous
+            </button>
+            <button class="nav-btn nav-btn-info" id="reviseBtn" onclick="showReviewMode()">
+              👁 Revise Before Submit
+            </button>
+            <button class="nav-btn nav-btn-primary" id="nextBtn" onclick="nextQuestion()">
+              Next →
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Review all view -->
+      <div id="reviewAllView" class="hidden">
+        <div class="review-grid" id="reviewGrid"></div>
+        <div style="text-align: center;">
+          <button class="nav-btn nav-btn-secondary" onclick="showSingleQuestion()">
             ← Back to Questions
           </button>
         </div>
@@ -681,8 +701,9 @@
     <!-- Footer -->
     <div class="footer">
       <button onclick="goHome()">Home</button>
-      <button id="submitBtn" class="submit-btn" onclick="submitAndCheckAnswers()" disabled>Submit & Check Answers</button>
-      <button id="repeatBtn" onclick="repeatTest()" style="display:none;">Repeat Test</button>
+      <button onclick="clearAnswers()">Clear</button>
+      <button onclick="repeatTest()">Repeat Test</button>
+      <button id="submitBtn" class="hidden" onclick="submitAndScore()">Submit & Score</button>
     </div>
   </div>
 
@@ -735,7 +756,7 @@
       return urlParams.get('json') || './data4/test-04.json';
     }
 
-    // Load progress from localStorage
+    // Load progress
     function loadProgress() {
       try {
         const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
@@ -747,7 +768,7 @@
       }
     }
 
-    // Save progress to localStorage
+    // Save progress
     function saveProgress() {
       try {
         localStorage.setItem(storageKey, JSON.stringify({
@@ -846,7 +867,6 @@
       showingResults = false;
       createDots();
       
-      // Render the appropriate mode
       if (currentMode === 'classic') {
         renderClassicMode();
       } else {
@@ -855,12 +875,7 @@
       
       updateNavigation();
       updateAnswerCount();
-      
-      // Reset footer buttons
-      const repeatBtn = document.getElementById('repeatBtn');
-      const submitBtn = document.getElementById('submitBtn');
-      if (repeatBtn) repeatBtn.style.display = 'none';
-      if (submitBtn) submitBtn.style.display = 'inline';
+      updateSubmitButton();
     }
 
     // Switch between modes
@@ -930,6 +945,16 @@
           q.options.forEach((option, idx) => {
             const optionBtn = document.createElement('button');
             optionBtn.className = 'option' + (answers[q.id] === idx ? ' selected' : '');
+            
+            if (showingResults) {
+              if (idx === q.correct) {
+                optionBtn.classList.add('correct');
+              }
+              if (answers[q.id] === idx && idx !== q.correct) {
+                optionBtn.classList.add('incorrect');
+              }
+            }
+            
             optionBtn.onclick = () => selectAnswer(q.id, idx);
             const letter = option.charAt(0);
             const text = option.substring(3).trim();
@@ -956,6 +981,8 @@
     }
 
     function selectAnswer(questionId, answerIndex) {
+      if (showingResults) return;
+      
       answers[questionId] = answerIndex;
       
       if (currentMode === 'classic') {
@@ -980,12 +1007,14 @@
       }
       
       updateAnswerCount();
+      updateSubmitButton();
     }
 
     // ============ GUIDED MODE ============
     function renderGuidedMode() {
-      createQuestionDots();
       showSingleQuestion();
+      createQuestionDots();
+      renderSingleQuestion();
     }
 
     function createQuestionDots() {
@@ -1020,7 +1049,6 @@
       document.getElementById('questionLabel').textContent = 
         `Question ${currentQuestion + 1} of ${questionsData.length}`;
       
-      // Render question with blank fill
       const questionDiv = document.getElementById('questionTextLarge');
       const parts = q.text.split('_____');
       questionDiv.innerHTML = '';
@@ -1043,38 +1071,37 @@
         }
       });
       
-      // Render options
       const optionsGrid = document.getElementById('optionsGridLarge');
       optionsGrid.innerHTML = '';
       
-      q.options.forEach((option, idx) => {
-        const btn = document.createElement('button');
-        btn.className = 'option-large';
-        if (answers[q.id] === idx) {
-          btn.classList.add('selected');
+      const optionOrder = [0, 2, 1, 3];
+      
+      optionOrder.forEach((idx) => {
+        if (idx < q.options.length) {
+          const option = q.options[idx];
+          const btn = document.createElement('button');
+          btn.className = 'option-large';
+          if (answers[q.id] === idx) {
+            btn.classList.add('selected');
+          }
+          const letter = option.charAt(0);
+          const text = option.substring(3).trim();
+          btn.innerHTML = `<span class="option-letter">${letter}</span> ${text}`;
+          btn.onclick = () => {
+            selectAnswer(q.id, idx);
+            renderSingleQuestion();
+          };
+          optionsGrid.appendChild(btn);
         }
-        const letter = option.charAt(0);
-        const text = option.substring(3).trim();
-        btn.innerHTML = `<span class="option-letter">${letter}</span> ${text}`;
-        btn.onclick = () => {
-          selectAnswer(q.id, idx);
-          renderSingleQuestion();
-        };
-        optionsGrid.appendChild(btn);
       });
       
-      // Update navigation buttons (check if they exist)
-      const prevBtn = document.getElementById('prevBtn');
-      const nextBtn = document.getElementById('nextBtn');
-      if (prevBtn) prevBtn.disabled = currentQuestion === 0;
-      if (nextBtn) nextBtn.disabled = currentQuestion === questionsData.length - 1;
+      document.getElementById('prevBtn').disabled = currentQuestion === 0;
+      document.getElementById('nextBtn').disabled = currentQuestion === questionsData.length - 1;
     }
 
     function showSingleQuestion() {
       document.getElementById('singleQuestionView').classList.remove('hidden');
       document.getElementById('reviewAllView').classList.add('hidden');
-      renderSingleQuestion();
-      createQuestionDots();
     }
 
     function showReviewMode() {
@@ -1110,7 +1137,6 @@
         const questionText = document.createElement('div');
         questionText.className = 'review-question';
         
-        // Render question with blank
         const parts = q.text.split('_____');
         questionText.innerHTML = '';
         parts.forEach((part, pIdx) => {
@@ -1150,7 +1176,6 @@
         header.appendChild(questionText);
         card.appendChild(header);
         
-        // Render options
         const optionsDiv = document.createElement('div');
         optionsDiv.className = 'review-options';
         
@@ -1216,16 +1241,91 @@
     // ============ SHARED FUNCTIONS ============
     function updateAnswerCount() {
       const count = Object.keys(answers).length;
-      const allAnswered = count === questionsData.length;
-      
       document.getElementById('testInfo').textContent = 
         `${currentDatasetName} • Test ${currentTest} of ${allSets.length} • ${count}/${questionsData.length} answered`;
-      
-      // Enable/disable submit button based on completion
+    }
+
+    function updateSubmitButton() {
+      const count = Object.keys(answers).length;
       const submitBtn = document.getElementById('submitBtn');
-      if (submitBtn) {
-        submitBtn.disabled = !allAnswered;
+      
+      if (count === questionsData.length && !showingResults) {
+        submitBtn.classList.remove('hidden');
+      } else {
+        submitBtn.classList.add('hidden');
       }
+    }
+
+    function clearAnswers() {
+      if (showingResults) {
+        alert('Cannot clear answers after submission. Use "Repeat Test" to start over.');
+        return;
+      }
+      
+      if (Object.keys(answers).length === 0) {
+        return;
+      }
+      
+      if (confirm('Are you sure you want to clear all answers?')) {
+        answers = {};
+        showingResults = false;
+        
+        if (currentMode === 'classic') {
+          renderClassicMode();
+        } else {
+          renderGuidedMode();
+        }
+        updateSubmitButton();
+      }
+    }
+
+    function submitAndScore() {
+      if (Object.keys(answers).length < questionsData.length) {
+        alert('Please answer all questions before submitting.');
+        return;
+      }
+      
+      showingResults = true;
+      
+      let correctCount = 0;
+      questionsData.forEach(q => {
+        if (answers[q.id] === q.correct) correctCount++;
+      });
+      
+      const percentage = Math.round((correctCount / questionsData.length) * 100);
+      
+      if (!firstAttemptScores[currentTest]) {
+        firstAttemptScores[currentTest] = {
+          correct: correctCount,
+          total: questionsData.length,
+          percentage: percentage
+        };
+        saveProgress();
+        createDots();
+      }
+      
+      const savedScore = firstAttemptScores[currentTest];
+      const completedCount = Object.keys(firstAttemptScores).length;
+      
+      document.getElementById('modalSubtitle').textContent = 
+        `${currentDatasetName} • Test ${currentTest} of ${allSets.length}`;
+      document.getElementById('scoreNumber').textContent = 
+        `${savedScore.correct}/${savedScore.total}`;
+      document.getElementById('answeredStat').textContent = 
+        `${questionsData.length}/${questionsData.length}`;
+      document.getElementById('progressStat').textContent = 
+        `${completedCount}/${allSets.length}`;
+      
+      document.getElementById('scoreModal').classList.add('active');
+      
+      if (currentMode === 'classic') {
+        expandedIds = questionsData.map(q => q.id);
+        renderClassicMode();
+      } else {
+        showReviewMode();
+      }
+      
+      updateSubmitButton();
     }
 
     function navigateTest(direction) {
@@ -1240,84 +1340,6 @@
     function updateNavigation() {
       document.getElementById('prevArrow').disabled = currentTest === 1;
       document.getElementById('nextArrow').disabled = currentTest === allSets.length;
-    }
-
-    function showAnswers() {
-      showingResults = true;
-      
-      if (currentMode === 'classic') {
-        expandedIds = questionsData.map(q => q.id);
-        renderClassicMode();
-        
-        questionsData.forEach(q => {
-          const questionDiv = document.querySelector(`[data-question-id="${q.id}"]`);
-          if (!questionDiv) return;
-          
-          const userAnswer = answers[q.id];
-          const correctAnswer = q.correct;
-          const options = questionDiv.querySelectorAll('.option');
-          
-          options.forEach((opt, idx) => {
-            opt.classList.remove('selected');
-            
-            if (idx === correctAnswer) {
-              opt.classList.add('correct');
-            }
-            
-            if (userAnswer !== undefined && idx === userAnswer && userAnswer !== correctAnswer) {
-              opt.classList.add('incorrect');
-            }
-          });
-        });
-      } else {
-        showReviewMode();
-      }
-      
-      // Show repeat button after checking answers
-      const repeatBtn = document.getElementById('repeatBtn');
-      const submitBtn = document.getElementById('submitBtn');
-      if (repeatBtn) repeatBtn.style.display = 'inline';
-      if (submitBtn) submitBtn.style.display = 'none';
-    }
-
-    function submitAndCheckAnswers() {
-      // Calculate score
-      const count = Object.keys(answers).length;
-      let correctCount = 0;
-      questionsData.forEach(q => {
-        if (answers[q.id] === q.correct) correctCount++;
-      });
-      
-      const percentage = Math.round((correctCount / questionsData.length) * 100);
-      
-      // Save score data (only if first attempt)
-      if (!firstAttemptScores[currentTest]) {
-        firstAttemptScores[currentTest] = {
-          correct: correctCount,
-          total: questionsData.length,
-          percentage: percentage
-        };
-        saveProgress();
-        createDots();
-      }
-      
-      const savedScore = firstAttemptScores[currentTest];
-      const completedCount = Object.keys(firstAttemptScores).length;
-      
-      // Show score modal
-      document.getElementById('modalSubtitle').textContent = 
-        `${currentDatasetName} • Test ${currentTest} of ${allSets.length}`;
-      document.getElementById('scoreNumber').textContent = 
-        `${savedScore.correct}/${savedScore.total}`;
-      document.getElementById('answeredStat').textContent = 
-        `${count}/${questionsData.length}`;
-      document.getElementById('progressStat').textContent = 
-        `${completedCount}/${allSets.length}`;
-      
-      document.getElementById('scoreModal').classList.add('active');
-      
-      // Then show the answers
-      showAnswers();
     }
 
     function closeModal() {
@@ -1343,11 +1365,7 @@
         renderGuidedMode();
       }
       
-      // Hide repeat button, show submit button
-      const repeatBtn = document.getElementById('repeatBtn');
-      const submitBtn = document.getElementById('submitBtn');
-      if (repeatBtn) repeatBtn.style.display = 'none';
-      if (submitBtn) submitBtn.style.display = 'inline';
+      updateSubmitButton();
     }
 
     document.getElementById('scoreModal').addEventListener('click', function(e) {
@@ -1357,21 +1375,4 @@
     window.onload = loadQuestions;
   </script>
 </body>
-</html>" id="prevBtn" onclick="previousQuestion()">
-              ← Previous
-            </button>
-            <button class="nav-btn nav-btn-info" id="reviseBtn" onclick="showReviewMode()">
-              👁 Revise Before Submit
-            </button>
-            <button class="nav-btn nav-btn-primary" id="nextBtn" onclick="nextQuestion()">
-              Next →
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Review all view -->
-      <div id="reviewAllView" class="hidden">
-        <div class="review-grid" id="reviewGrid"></div>
-        <div style="text-align: center;">
-          <button class="nav-btn nav-btn-secondary
+</html>

@@ -786,11 +786,79 @@
           throw new Error('No quiz sets found in data');
         }
         
+        allTests.forEach(test => normalizeTestData(test));
+        
         createDots();
         loadTest(0);
       } catch (error) {
         console.error('Error loading quiz data:', error);
         showDataError(`Could not load quiz data: ${error.message}`);
+      }
+    }
+
+    function normalizeTestData(test) {
+      const answersObj = test.answers || test.gaps || {};
+      const gapNumbers = Object.keys(answersObj).map(n => parseInt(n)).sort((a, b) => a - b);
+      
+      if (gapNumbers.length === 0) return;
+      
+      let textContent = test.fullText || test.text || '';
+      
+      if (!test.sections || test.sections.length === 0) {
+        const GAPS_PER_SECTION = 3;
+        const sections = [];
+        
+        for (let i = 0; i < gapNumbers.length; i += GAPS_PER_SECTION) {
+          const sectionGaps = gapNumbers.slice(i, i + GAPS_PER_SECTION);
+          
+          let sectionText = '';
+          let lastEndIndex = 0;
+          
+          for (let j = 0; j < sectionGaps.length; j++) {
+            const gapNum = sectionGaps[j];
+            const gapPattern = new RegExp(`\\{\\{${gapNum}\\}\\}`, 'g');
+            const match = gapPattern.exec(textContent.substring(lastEndIndex));
+            
+            if (match) {
+              const matchIndex = lastEndIndex + match.index;
+              
+              if (j === 0) {
+                let startIndex = matchIndex;
+                while (startIndex > 0 && textContent[startIndex - 1] !== '\n' && 
+                       (matchIndex - startIndex) < 100) {
+                  startIndex--;
+                }
+                sectionText = textContent.substring(startIndex, matchIndex);
+              }
+              
+              sectionText += textContent.substring(matchIndex, matchIndex + match[0].length);
+              
+              if (j === sectionGaps.length - 1) {
+                let endIndex = matchIndex + match[0].length;
+                let sentenceEnd = textContent.indexOf('.', endIndex);
+                if (sentenceEnd === -1) sentenceEnd = textContent.length;
+                else sentenceEnd += 1;
+                
+                while (endIndex < sentenceEnd && endIndex < textContent.length) {
+                  sectionText += textContent[endIndex];
+                  endIndex++;
+                }
+                lastEndIndex = endIndex;
+              } else {
+                lastEndIndex = matchIndex + match[0].length;
+              }
+            }
+          }
+          
+          if (sectionText.trim()) {
+            sections.push({
+              text: sectionText.trim(),
+              gaps: sectionGaps
+            });
+          }
+        }
+        
+        test.sections = sections;
       }
     }
 
@@ -868,10 +936,6 @@
       return `test${currentTest}`;
     }
 
-    function isTestLocked() {
-      return testScores[getTestKey()] !== undefined;
-    }
-
     function createDots() {
       const container = document.getElementById('dotsContainer');
       container.innerHTML = '';
@@ -947,7 +1011,7 @@
       let html = `<div class="text-title">${test.title}</div><div class="text-content">`;
       
       let textToRender = test.fullText || test.text || '';
-      const paragraphs = textToRender.split('\n\n');
+      const paragraphs = textContent.split('\n\n');
       
       paragraphs.forEach(para => {
         let processedPara = para;
@@ -966,7 +1030,7 @@
               gapClass += ' filled';
             }
             
-            const disabledAttr = (showingResults || isTestLocked()) ? 'disabled' : '';
+            const disabledAttr = showingResults ? 'disabled' : '';
             const input = `<input type="text" class="${gapClass}" data-gap-idx="${gapNum}" value="${userValue}" placeholder="....." ${disabledAttr} autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">`;
             processedPara = processedPara.replace(match, input);
           });
@@ -984,29 +1048,6 @@
     function renderGuidedMode() {
       const test = allTests[currentTest];
       const container = document.getElementById('guidedContainer');
-      
-      if (!test.sections || test.sections.length === 0) {
-        const textContent = test.fullText || test.text || '';
-        const answersObj = test.answers || test.gaps || {};
-        const gapNumbers = Object.keys(answersObj).map(n => parseInt(n)).sort((a, b) => a - b);
-        
-        const paragraphs = textContent.split('\n\n').filter(p => p.trim());
-        
-        if (paragraphs.length > 1) {
-          test.sections = paragraphs.map(para => {
-            const paraGaps = gapNumbers.filter(num => para.includes(`{{${num}}}`));
-            return {
-              text: para,
-              gaps: paraGaps
-            };
-          }).filter(section => section.gaps.length > 0);
-        } else {
-          test.sections = [{
-            text: textContent,
-            gaps: gapNumbers
-          }];
-        }
-      }
       
       const totalSections = test.sections.length;
       
@@ -1036,7 +1077,7 @@
           gapClass += ' filled';
         }
         
-        const disabledAttr = (showingResults || isTestLocked()) ? 'disabled' : '';
+        const disabledAttr = showingResults ? 'disabled' : '';
         const input = `<input type="text" class="${gapClass}" data-gap-idx="${gapNum}" value="${userValue}" placeholder="....." ${disabledAttr} autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">`;
         sectionText = sectionText.replace(`{{${gapNum}}}`, input);
       });
@@ -1179,6 +1220,7 @@
     function repeatTest() {
       userAnswers = {};
       showingResults = false;
+      currentSection = 0;
       loadTest(currentTest);
     }
 
@@ -1190,16 +1232,13 @@
     }
 
     function goToTest(testIdx) {
+      userAnswers = {};
+      showingResults = false;
       loadTest(testIdx);
       createDots();
     }
 
     function submitAndScore() {
-      if (isTestLocked()) {
-        alert('Already submitted!');
-        return;
-      }
-      
       const test = allTests[currentTest];
       const answersObj = test.answers || test.gaps || {};
       let correct = 0;
@@ -1213,7 +1252,8 @@
       
       const percentage = Math.round((correct / totalGaps) * 100);
       
-      if (!testScores[getTestKey()]) {
+      const existingScore = testScores[getTestKey()];
+      if (!existingScore || percentage > existingScore.percentage) {
         testScores[getTestKey()] = {
           correct,
           total: totalGaps,

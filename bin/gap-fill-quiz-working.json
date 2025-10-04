@@ -217,6 +217,37 @@
       position: relative;
     }
     
+    .test-dot.excellent {
+      background: #84cc16;
+      box-shadow: 0 0 8px rgba(132, 204, 22, 0.5);
+      position: relative;
+    }
+    
+    .test-dot.good {
+      background: #86efac;
+      box-shadow: 0 0 8px rgba(134, 239, 172, 0.4);
+    }
+    
+    .test-dot.fair {
+      background: #7dd3fc;
+      box-shadow: 0 0 8px rgba(125, 211, 252, 0.4);
+    }
+    
+    .test-dot.poor {
+      background: #f87171;
+      box-shadow: 0 0 8px rgba(248, 113, 113, 0.4);
+    }
+    
+    .star-badge {
+      position: absolute;
+      bottom: -8px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.75rem;
+      color: #fbbf24;
+      filter: drop-shadow(0 0 3px rgba(251, 191, 36, 0.8));
+    }
+    
     .test-dot.current { 
       box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.8);
       transform: scale(1.3);
@@ -576,7 +607,7 @@
 
     <div class="footer" id="footer">
       <button onclick="showAnswers()" class="show-answers" id="showAnswersBtn">Show Answers</button>
-      <button onclick="repeatTest()">Repeat</button>
+      <button onclick="repeatTest()">Try Again</button>
       <button class="primary" onclick="submitAndScore()">Submit</button>
     </div>
   </div>
@@ -702,12 +733,25 @@
         
         const score = testScores[`test${i}`];
         if (score) {
-          if (score.percentage === 100) {
+          const percentage = score.bestPercentage || score.percentage;
+          
+          if (percentage === 100) {
             dot.classList.add('perfect');
-            dot.title = `Perfect`;
+            dot.innerHTML = '<span class="star-badge">⭐</span>';
+            dot.title = `Perfect Score! ${score.bestScore || score.correct}/${score.total}`;
+          } else if (percentage >= 90) {
+            dot.classList.add('excellent');
+            dot.innerHTML = '<span class="star-badge">⭐</span>';
+            dot.title = `Excellent! ${score.bestScore || score.correct}/${score.total} (${percentage}%)`;
+          } else if (percentage >= 75) {
+            dot.classList.add('good');
+            dot.title = `Good! ${score.bestScore || score.correct}/${score.total} (${percentage}%)`;
+          } else if (percentage >= 60) {
+            dot.classList.add('fair');
+            dot.title = `Fair - ${score.bestScore || score.correct}/${score.total} (${percentage}%)`;
           } else {
-            dot.classList.add('completed');
-            dot.title = `${score.correct}/${score.total}`;
+            dot.classList.add('poor');
+            dot.title = `Needs improvement - ${score.bestScore || score.correct}/${score.total} (${percentage}%)`;
           }
         }
         
@@ -758,16 +802,20 @@
             const correct = test.gaps[num] || '';
             
             let cls = 'gap';
+            let displayValue = value;
+            let isReadonly = showingResults;
+            
             if (showingResults) {
               cls += value.toLowerCase().trim() === correct.toLowerCase().trim() ? ' correct' : ' incorrect';
             } else if (answersVisible) {
               cls += ' correct';
+              displayValue = correct;
+              isReadonly = true;
             } else if (value) {
               cls += ' filled';
             }
             
-            const displayValue = answersVisible && !showingResults ? correct : value;
-            const input = `<input type="text" class="${cls}" data-gap="${num}" value="${displayValue}" ${answersVisible && !showingResults ? 'readonly' : ''}>`;
+            const input = `<input type="text" class="${cls}" data-gap="${num}" value="${displayValue}" ${isReadonly ? 'readonly' : ''}>`;
             processed = processed.replace(match, input);
           });
         }
@@ -809,22 +857,28 @@
         const correct = test.gaps[num] || '';
         
         let cls = 'gap';
+        let displayValue = value;
+        let isReadonly = showingResults;
+        
         if (showingResults) {
           cls += value.toLowerCase().trim() === correct.toLowerCase().trim() ? ' correct' : ' incorrect';
         } else if (answersVisible) {
           cls += ' correct';
+          displayValue = correct;
+          isReadonly = true;
         } else if (value) {
           cls += ' filled';
         }
         
-        const displayValue = answersVisible && !showingResults ? correct : value;
-        const input = `<input type="text" class="${cls}" data-gap="${num}" value="${displayValue}" ${answersVisible && !showingResults ? 'readonly' : ''}>`;
+        const input = `<input type="text" class="${cls}" data-gap="${num}" value="${displayValue}" ${isReadonly ? 'readonly' : ''}>`;
         sectionText = sectionText.replace(`{{${num}}}`, input);
       });
       
+      const paragraphsHtml = sectionText.split('\n\n').map(para => `<p>${para}</p>`).join('');
+      
       container.innerHTML = dotsHtml + `
         <div class="section-label">Part ${currentSection + 1} of ${totalSections} • ${test.title}</div>
-        <div class="text-content"><p>${sectionText}</p></div>
+        <div class="text-content">${paragraphsHtml}</div>
         <div class="nav-buttons">
           <button class="nav-btn nav-btn-secondary" ${currentSection === 0 ? 'disabled' : ''} onclick="previousSection()">← Prev</button>
           <button class="nav-btn nav-btn-primary" ${currentSection >= totalSections - 1 ? 'disabled' : ''} onclick="nextSection()">Next →</button>
@@ -836,7 +890,7 @@
 
     function attachListeners() {
       document.querySelectorAll('.gap').forEach(input => {
-        if (!answersVisible || showingResults) {
+        if (!showingResults && !answersVisible) {
           input.addEventListener('input', function() {
             const num = this.dataset.gap;
             userAnswers[num] = this.value.trim();
@@ -909,7 +963,14 @@
       userAnswers = {};
       showingResults = false;
       answersVisible = false;
-      loadTest(currentTest);
+      currentSection = 0;
+      if (currentMode === 'guided') {
+        renderGuidedMode();
+      } else {
+        renderClassicMode();
+      }
+      updateFooter();
+      updateShowAnswersButton();
     }
 
     function navigateTest(direction) {
@@ -937,11 +998,20 @@
       
       const percentage = Math.round((correct / total) * 100);
       
-      testScores[`test${currentTest}`] = {
-        correct,
-        total,
-        percentage
-      };
+      const existingScore = testScores[`test${currentTest}`];
+      if (!existingScore || percentage > existingScore.bestPercentage) {
+        testScores[`test${currentTest}`] = {
+          correct,
+          total,
+          percentage,
+          bestScore: correct,
+          bestPercentage: percentage,
+          attempts: existingScore ? existingScore.attempts + 1 : 1
+        };
+      } else {
+        testScores[`test${currentTest}`].attempts++;
+      }
+      
       saveProgress();
       
       showingResults = true;
@@ -949,15 +1019,42 @@
       else renderClassicMode();
       createDots();
       
-      showResultsModal(test, correct, total);
+      showResultsModal(test, correct, total, percentage);
     }
 
-    function showResultsModal(test, correct, total) {
-      document.getElementById('modalSubtitle').textContent = `${test.title} • Test ${currentTest + 1}`;
+    function showResultsModal(test, correct, total, percentage) {
+      const existingScore = testScores[`test${currentTest}`];
+      const isNewBest = !existingScore || percentage >= existingScore.bestPercentage;
+      const attempts = existingScore ? existingScore.attempts : 1;
+      
+      let subtitle = `${test.title} • Test ${currentTest + 1}`;
+      if (attempts > 1) {
+        subtitle += ` • Attempt ${attempts}`;
+      }
+      
+      document.getElementById('modalSubtitle').textContent = subtitle;
       document.getElementById('scoreNumber').textContent = `${correct}/${total}`;
       
       const answersDisplay = document.getElementById('answersDisplay');
       let html = '';
+      
+      if (isNewBest) {
+        let badge = '';
+        if (percentage === 100) {
+          badge = '<div style="text-align: center; padding: 1rem; font-size: 2rem;">🎉 Perfect Score! ⭐</div>';
+        } else if (percentage >= 90) {
+          badge = '<div style="text-align: center; padding: 1rem; font-size: 1.5rem;">🌟 Excellent! You earned a star! ⭐</div>';
+        } else if (percentage >= 75) {
+          badge = '<div style="text-align: center; padding: 1rem; color: #86efac;">✓ Good Job!</div>';
+        } else if (percentage >= 60) {
+          badge = '<div style="text-align: center; padding: 1rem; color: #7dd3fc;">Keep practicing!</div>';
+        } else {
+          badge = '<div style="text-align: center; padding: 1rem; color: #f87171;">Review and try again!</div>';
+        }
+        html += badge;
+      } else {
+        html += `<div style="text-align: center; padding: 1rem; color: #94a3b8;">Your best: ${existingScore.bestScore}/${total} (${existingScore.bestPercentage}%)</div>`;
+      }
       
       Object.keys(test.gaps).sort((a, b) => parseInt(a) - parseInt(b)).forEach(num => {
         const userAns = userAnswers[num] || '';

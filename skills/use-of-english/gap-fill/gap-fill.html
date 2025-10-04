@@ -810,45 +810,48 @@
         
         for (let i = 0; i < gapNumbers.length; i += GAPS_PER_SECTION) {
           const sectionGaps = gapNumbers.slice(i, i + GAPS_PER_SECTION);
-          
           let sectionText = '';
-          let lastEndIndex = 0;
           
-          for (let j = 0; j < sectionGaps.length; j++) {
-            const gapNum = sectionGaps[j];
-            const gapPattern = new RegExp(`\\{\\{${gapNum}\\}\\}`, 'g');
-            const match = gapPattern.exec(textContent.substring(lastEndIndex));
+          sectionGaps.forEach((gapNum, idx) => {
+            const gapPattern = `{{${gapNum}}}`;
+            const gapIndex = textContent.indexOf(gapPattern);
             
-            if (match) {
-              const matchIndex = lastEndIndex + match.index;
-              
-              if (j === 0) {
-                let startIndex = matchIndex;
-                while (startIndex > 0 && textContent[startIndex - 1] !== '\n' && 
-                       (matchIndex - startIndex) < 100) {
-                  startIndex--;
+            if (gapIndex !== -1) {
+              if (idx === 0) {
+                let startIndex = Math.max(0, gapIndex - 150);
+                let searchStart = startIndex;
+                const sentenceStarts = ['. ', '! ', '? ', '\n'];
+                let bestStart = startIndex;
+                
+                for (let s = gapIndex - 1; s >= searchStart; s--) {
+                  const char = textContent.substring(s, s + 2);
+                  if (sentenceStarts.includes(char) || s === 0) {
+                    bestStart = s === 0 ? 0 : s + 2;
+                    break;
+                  }
                 }
-                sectionText = textContent.substring(startIndex, matchIndex);
+                startIndex = bestStart;
+                sectionText = textContent.substring(startIndex, gapIndex + gapPattern.length);
+              } else {
+                const prevGapPattern = `{{${sectionGaps[idx - 1]}}}`;
+                const prevGapIndex = textContent.indexOf(prevGapPattern);
+                if (prevGapIndex !== -1) {
+                  sectionText += textContent.substring(prevGapIndex + prevGapPattern.length, gapIndex + gapPattern.length);
+                }
               }
               
-              sectionText += textContent.substring(matchIndex, matchIndex + match[0].length);
-              
-              if (j === sectionGaps.length - 1) {
-                let endIndex = matchIndex + match[0].length;
-                let sentenceEnd = textContent.indexOf('.', endIndex);
-                if (sentenceEnd === -1) sentenceEnd = textContent.length;
-                else sentenceEnd += 1;
-                
-                while (endIndex < sentenceEnd && endIndex < textContent.length) {
-                  sectionText += textContent[endIndex];
-                  endIndex++;
+              if (idx === sectionGaps.length - 1) {
+                let endIndex = gapIndex + gapPattern.length;
+                const nextSentenceEnd = textContent.substring(endIndex).search(/[.!?]\s/);
+                if (nextSentenceEnd !== -1) {
+                  endIndex += nextSentenceEnd + 2;
+                } else {
+                  endIndex = Math.min(textContent.length, endIndex + 150);
                 }
-                lastEndIndex = endIndex;
-              } else {
-                lastEndIndex = matchIndex + match[0].length;
+                sectionText += textContent.substring(gapIndex + gapPattern.length, endIndex);
               }
             }
-          }
+          });
           
           if (sectionText.trim()) {
             sections.push({
@@ -858,7 +861,16 @@
           }
         }
         
-        test.sections = sections;
+        test.sections = sections.length > 0 ? sections : [{
+          text: textContent,
+          gaps: gapNumbers
+        }];
+      } else {
+        test.sections.forEach(section => {
+          if (!section.text) {
+            section.text = textContent;
+          }
+        });
       }
     }
 
@@ -1049,7 +1061,21 @@
       const test = allTests[currentTest];
       const container = document.getElementById('guidedContainer');
       
+      if (!test.sections || test.sections.length === 0) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 3rem; color: #94a3b8;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">⚠️</div>
+            <div>No sections available for this test</div>
+          </div>
+        `;
+        return;
+      }
+      
       const totalSections = test.sections.length;
+      
+      if (currentSection >= totalSections) {
+        currentSection = totalSections - 1;
+      }
       
       let dotsHtml = '<div class="section-dots" id="sectionDots">';
       for (let i = 0; i < totalSections; i++) {
@@ -1062,6 +1088,16 @@
       dotsHtml += '</div>';
       
       const section = test.sections[currentSection];
+      if (!section || !section.text) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 3rem; color: #94a3b8;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">⚠️</div>
+            <div>Section data is missing</div>
+          </div>
+        `;
+        return;
+      }
+      
       let sectionText = section.text;
       
       const answersObj = test.answers || test.gaps || {};

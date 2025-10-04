@@ -1018,19 +1018,36 @@
       const test = allTests[currentTest];
       const container = document.getElementById('guidedContainer');
       
-      console.log('Test:', test.title);
-      console.log('Has sections:', test.sections?.length || 0);
+      console.log('Test title:', test.title);
+      console.log('Test has sections:', !!test.sections);
+      console.log('Sections count:', test.sections?.length || 0);
       
-      // All tests should now have sections after processing
+      // Check if sections exist and are valid
       if (!test.sections || test.sections.length === 0) {
-        console.warn('No sections available for guided mode');
-        container.innerHTML = `
-          <div style="text-align: center; padding: 2rem; color: #94a3b8;">
-            <div style="font-size: 1rem; margin-bottom: 1rem;">📝</div>
-            <div style="font-size: 0.875rem; margin-bottom: 1rem;">Processing test data...</div>
-          </div>
-        `;
-        return;
+        console.error('No sections available - attempting to create them');
+        
+        // Try to create sections on the fly
+        if (test.fullText || test.text) {
+          const textContent = test.fullText || test.text;
+          const answersObj = test.answers || test.gaps || {};
+          const gapNumbers = Object.keys(answersObj).map(n => parseInt(n)).sort((a, b) => a - b);
+          
+          test.sections = [{
+            text: textContent,
+            gaps: gapNumbers
+          }];
+          
+          console.log('Created fallback section with', gapNumbers.length, 'gaps');
+        } else {
+          container.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: #94a3b8;">
+              <div style="font-size: 1rem; margin-bottom: 1rem;">⚠️</div>
+              <div style="font-size: 0.875rem; margin-bottom: 1rem;">Unable to load test data</div>
+              <button onclick="setMode('classic')" style="padding: 0.5rem 1rem; background: rgba(255, 107, 53, 0.8); color: white; border: none; border-radius: 0.5rem; cursor: pointer;">Try Classic Mode</button>
+            </div>
+          `;
+          return;
+        }
       }
       
       const totalSections = test.sections.length;
@@ -1049,9 +1066,11 @@
       const section = test.sections[currentSection];
       let sectionText = section.text;
       
+      const answersObj = test.answers || test.gaps || {};
+      
       section.gaps.forEach(gapNum => {
         const userValue = userAnswers[gapNum] || '';
-        const correctValue = test.answers[gapNum] || '';
+        const correctValue = answersObj[gapNum] || '';
         
         let gapClass = 'gap';
         if (showingResults) {

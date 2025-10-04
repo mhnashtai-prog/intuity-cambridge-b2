@@ -625,9 +625,9 @@
     <div class="dataset-selector">
       <button class="dataset-btn" onclick="toggleDatasetMenu()">SELECT TYPES ▾</button>
       <div class="dataset-dropdown" id="datasetDropdown">
-        <button class="dataset-option active" data-path="../../../data/use-of-english/gapfill/test-07.json" data-name="8 Blanks">8 Blanks per Text</button>
-        <button class="dataset-option" data-path="../../../data/use-of-english/gapfill/test-06.json" data-name="15 Blanks">15 Blanks per Text</button>
-        <button class="dataset-option" data-path="../../../data/use-of-english/gapfill/test-06.json" data-name="20 Blanks">20 Blanks per Text</button>
+        <button class="dataset-option active" data-path="../../../data/use-of-english/gapfill/test-07.json" data-name="8 Blanks">8 Blanks (Word Bank)</button>
+        <button class="dataset-option" data-path="../../../data/use-of-english/gapfill/test-05.json" data-name="8 Blanks">8 Blanks (Open Cloze)</button>
+        <button class="dataset-option" data-path="../../../data/use-of-english/gapfill/test-06.json" data-name="15-20 Blanks">15-20 Blanks per Text</button>
       </div>
     </div>
   </div>
@@ -696,7 +696,7 @@
   <script>
     const TOTAL_DOTS = 16;
     let allTests = [];
-    let currentDataset = 'quiz-data-8.json';
+    let currentDataset = '../../../data/use-of-english/gapfill/test-07.json';
     let currentTest = 0;
     let currentSection = 0;
     let userAnswers = {};
@@ -718,6 +718,14 @@
           this.classList.add('active');
           currentDataset = this.dataset.path;
           toggleDatasetMenu();
+          
+          showLoading();
+          
+          currentTest = 0;
+          currentSection = 0;
+          userAnswers = {};
+          showingResults = false;
+          
           await loadQuizData();
         });
       });
@@ -737,21 +745,29 @@
 
     async function loadQuizData() {
       try {
+        console.log('Loading data from:', currentDataset);
         const response = await fetch(currentDataset);
-        if (!response.ok) throw new Error('Data file not found');
+        console.log('Response status:', response.status);
         
-        const data = await response.json();
-        allTests = data.sets || [];
-        
-        if (allTests.length === 0) {
-          throw new Error('No quiz sets found');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
         
+        const data = await response.json();
+        console.log('Data loaded:', data);
+        
+        allTests = data.sets || data.exercises || [];
+        
+        if (allTests.length === 0) {
+          throw new Error('No quiz sets found in data');
+        }
+        
+        console.log('Tests loaded:', allTests.length);
         createDots();
         loadTest(0);
       } catch (error) {
         console.error('Error loading quiz data:', error);
-        showDataError('Could not load ' + currentDataset);
+        showDataError(`Could not load quiz data: ${error.message}`);
       }
     }
 
@@ -762,6 +778,19 @@
           <div style="font-size: 3rem; margin-bottom: 1rem;">⚠️</div>
           <div style="font-size: 1.125rem; color: #f1f5f9; margin-bottom: 0.5rem;">Data Not Found</div>
           <div style="font-size: 0.875rem; color: #94a3b8; margin-bottom: 1.5rem;">${message}</div>
+          <div style="font-size: 0.75rem; color: #64748b; margin-top: 1rem;">Attempted to load: ${currentDataset}</div>
+          <button onclick="location.reload()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: rgba(255, 107, 53, 0.8); color: white; border: none; border-radius: 0.5rem; cursor: pointer;">Reload Page</button>
+        </div>
+      `;
+      container.classList.remove('hidden');
+    }
+
+    function showLoading() {
+      const container = document.getElementById('guidedContainer');
+      container.innerHTML = `
+        <div style="text-align: center; padding: 3rem; color: #94a3b8;">
+          <div style="font-size: 2rem; margin-bottom: 0.5rem;">⏳</div>
+          <div>Loading quiz...</div>
         </div>
       `;
       container.classList.remove('hidden');
@@ -825,7 +854,6 @@
         
         const score = testScores[`test${i}`];
         
-        // Trophy for 100% score
         if (score && score.percentage === 100) {
           const trophy = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
           trophy.setAttribute('viewBox', '0 0 24 24');
@@ -839,16 +867,14 @@
         dot.className = 'test-dot';
         if (i === currentTest) dot.classList.add('current');
         
-        // Apply colors based on score
         if (score) {
           if (score.percentage === 100) {
-            dot.classList.add('completed'); // Lime fill for 100%
+            dot.classList.add('completed');
           } else if (score.percentage > 60) {
-            dot.classList.add('high-score'); // Orange fill for >60%
+            dot.classList.add('high-score');
           }
         }
         
-        // Only clickable if test exists
         if (i < allTests.length) {
           dot.onclick = () => goToTest(i);
           dot.style.cursor = 'pointer';
@@ -1050,11 +1076,9 @@
       const submitBtn = document.getElementById('submitBtn');
       const showAnswersBtn = document.getElementById('showAnswersBtn');
       
-      // Show footer only when all blanks are filled OR after submission
       if (filled === totalGaps) {
         footer.classList.add('visible');
         
-        // After submission, show "Show Answers" button and hide "Submit"
         if (showingResults) {
           submitBtn.style.display = 'none';
           showAnswersBtn.style.display = 'inline-block';
@@ -1072,7 +1096,6 @@
     function showAnswers() {
       const test = allTests[currentTest];
       
-      // Mark all gaps as correct/incorrect without changing answers
       Object.keys(test.answers).forEach(gapNum => {
         const userAnswer = (userAnswers[gapNum] || '').toLowerCase().trim();
         const correctAnswer = (test.answers[gapNum] || '').toLowerCase().trim();
@@ -1090,8 +1113,6 @@
     }
 
     function repeatTest() {
-      // Allow repeating even if test was submitted
-      // But keep the original score for dot colors
       userAnswers = {};
       showingResults = false;
       loadTest(currentTest);
@@ -1120,29 +1141,6 @@
       createDots();
     }
 
-    function clearAnswers() {
-      if (isTestLocked()) {
-        alert('This test is locked! You already submitted it.');
-        return;
-      }
-      if (Object.keys(userAnswers).length === 0) return;
-      if (confirm('Clear all answers?')) {
-        userAnswers = {};
-        showingResults = false;
-        loadTest(currentTest);
-      }
-    }
-
-    function repeatTest() {
-      if (isTestLocked()) {
-        alert('This test is locked! Choose another test.');
-        return;
-      }
-      userAnswers = {};
-      showingResults = false;
-      loadTest(currentTest);
-    }
-
     function submitAndScore() {
       if (isTestLocked()) {
         alert('Already submitted!');
@@ -1161,7 +1159,6 @@
       
       const percentage = Math.round((correct / totalGaps) * 100);
       
-      // Only save first-time attempts
       if (!testScores[getTestKey()]) {
         testScores[getTestKey()] = {
           correct,

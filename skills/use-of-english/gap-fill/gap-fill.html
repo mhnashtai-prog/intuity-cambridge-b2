@@ -925,7 +925,17 @@
       
       let html = `<div class="text-title">${test.title}</div><div class="text-content">`;
       
-      const paragraphs = test.fullText.split('\n\n');
+      // Handle different data structures
+      let textToRender = '';
+      if (test.fullText) {
+        // test-05 or test-07 format
+        textToRender = test.fullText;
+      } else if (test.text) {
+        // test-06 format
+        textToRender = test.text;
+      }
+      
+      const paragraphs = textToRender.split('\n\n');
       paragraphs.forEach(para => {
         let processedPara = para;
         const gapMatches = para.match(/\{\{(\d+)\}\}/g);
@@ -934,7 +944,7 @@
           gapMatches.forEach(match => {
             const gapNum = match.match(/\d+/)[0];
             const userValue = userAnswers[gapNum] || '';
-            const correctValue = test.answers[gapNum] || '';
+            const correctValue = (test.answers && test.answers[gapNum]) || (test.gaps && test.gaps[gapNum]) || '';
             
             let gapClass = 'gap';
             if (showingResults) {
@@ -960,6 +970,19 @@
     function renderGuidedMode() {
       const test = allTests[currentTest];
       const container = document.getElementById('guidedContainer');
+      
+      // Check if test has sections (test-05/test-07 format)
+      if (!test.sections || test.sections.length === 0) {
+        // Fallback to classic mode for tests without sections
+        container.innerHTML = `
+          <div style="text-align: center; padding: 2rem; color: #94a3b8;">
+            <div style="font-size: 1rem; margin-bottom: 1rem;">📝</div>
+            <div style="font-size: 0.875rem; margin-bottom: 1rem;">This test doesn't support Guided Mode</div>
+            <button onclick="setMode('classic')" style="padding: 0.5rem 1rem; background: rgba(255, 107, 53, 0.8); color: white; border: none; border-radius: 0.5rem; cursor: pointer;">Switch to Classic Mode</button>
+          </div>
+        `;
+        return;
+      }
       
       const totalSections = test.sections.length;
       let dotsHtml = '<div class="section-dots" id="sectionDots">';
@@ -1065,7 +1088,8 @@
       if (!allTests || allTests.length === 0) return;
       
       const test = allTests[currentTest];
-      const totalGaps = Object.keys(test.answers).length;
+      // Handle both answer formats
+      const totalGaps = Object.keys(test.answers || test.gaps || {}).length;
       const filled = Object.keys(userAnswers).filter(k => userAnswers[k]).length;
       
       document.getElementById('testInfo').textContent = 
@@ -1081,7 +1105,7 @@
       if (!allTests || allTests.length === 0) return;
       
       const test = allTests[currentTest];
-      const totalGaps = Object.keys(test.answers).length;
+      const totalGaps = Object.keys(test.answers || test.gaps || {}).length;
       const filled = Object.keys(userAnswers).filter(k => userAnswers[k] && userAnswers[k].trim()).length;
       
       const footer = document.getElementById('footer');
@@ -1107,10 +1131,11 @@
 
     function showAnswers() {
       const test = allTests[currentTest];
+      const answersObj = test.answers || test.gaps || {};
       
-      Object.keys(test.answers).forEach(gapNum => {
+      Object.keys(answersObj).forEach(gapNum => {
         const userAnswer = (userAnswers[gapNum] || '').toLowerCase().trim();
-        const correctAnswer = (test.answers[gapNum] || '').toLowerCase().trim();
+        const correctAnswer = (answersObj[gapNum] || '').toLowerCase().trim();
         
         const inputs = document.querySelectorAll(`input[data-gap-idx="${gapNum}"]`);
         inputs.forEach(input => {
@@ -1160,12 +1185,13 @@
       }
       
       const test = allTests[currentTest];
+      const answersObj = test.answers || test.gaps || {};
       let correct = 0;
-      const totalGaps = Object.keys(test.answers).length;
+      const totalGaps = Object.keys(answersObj).length;
       
-      Object.keys(test.answers).forEach(gapNum => {
+      Object.keys(answersObj).forEach(gapNum => {
         const userAnswer = (userAnswers[gapNum] || '').toLowerCase().trim();
-        const correctAnswer = (test.answers[gapNum] || '').toLowerCase().trim();
+        const correctAnswer = (answersObj[gapNum] || '').toLowerCase().trim();
         if (userAnswer === correctAnswer) correct++;
       });
       
@@ -1194,11 +1220,12 @@
       document.getElementById('scoreNumber').textContent = `${correct}/${total}`;
       
       const answersDisplay = document.getElementById('answersDisplay');
+      const answersObj = test.answers || test.gaps || {};
       let answersHtml = '';
       
-      Object.keys(test.answers).sort((a, b) => parseInt(a) - parseInt(b)).forEach(gapNum => {
+      Object.keys(answersObj).sort((a, b) => parseInt(a) - parseInt(b)).forEach(gapNum => {
         const userAnswer = userAnswers[gapNum] || '';
-        const correctAnswer = test.answers[gapNum];
+        const correctAnswer = answersObj[gapNum];
         const isCorrect = userAnswer.toLowerCase().trim() === correctAnswer.toLowerCase().trim();
         
         answersHtml += `

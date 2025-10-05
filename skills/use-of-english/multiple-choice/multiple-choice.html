@@ -349,6 +349,50 @@
     
     .mode-toggle-icon:focus { outline: 2px solid #C9A961; outline-offset: 2px; }
     
+    .question-nav-dots {
+      display: flex;
+      justify-content: center;
+      gap: 0.625rem;
+      margin-bottom: 2rem;
+      padding-top: 0.5rem;
+      flex-wrap: wrap;
+    }
+    
+    .question-nav-dot {
+      width: 0.75rem;
+      height: 0.75rem;
+      border-radius: 50%;
+      background: rgba(99, 99, 102, 0.3);
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border: none;
+      position: relative;
+    }
+    
+    .question-nav-dot:hover {
+      transform: scale(1.3);
+      background: rgba(142, 142, 147, 0.5);
+    }
+    
+    .question-nav-dot:focus { outline: 2px solid #C9A961; outline-offset: 2px; }
+    
+    .question-nav-dot.current {
+      background: #C9A961;
+      box-shadow: 0 0 0 2px rgba(201, 169, 97, 0.4);
+      transform: scale(1.4);
+    }
+    
+    .question-nav-dot.answered {
+      background: linear-gradient(135deg, #84cc16 0%, #65a30d 100%);
+      box-shadow: 0 0 8px rgba(132, 204, 22, 0.4);
+    }
+    
+    .question-nav-dot.answered.current {
+      background: linear-gradient(135deg, #84cc16 0%, #65a30d 100%);
+      box-shadow: 0 0 0 2px rgba(201, 169, 97, 0.6);
+      transform: scale(1.4);
+    }
+    
     .external-nav {
       display: flex;
       align-items: center;
@@ -711,8 +755,7 @@
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgba(201, 169, 97, 0.25);
     }
-    
-    /* FOOTER */
+/* FOOTER */
     .footer {
       position: fixed;
       bottom: 0;
@@ -1055,14 +1098,15 @@
 
     <div class="content-container">
       <button class="mode-toggle-icon" id="modeToggle" onclick="toggleMode()" aria-label="Switch view mode">
-        <span class="mode-toggle-label" id="modeLabel">All Questions</span>
-        <svg class="mode-toggle-svg" id="modeSvg" viewBox="0 0 24 24" fill="none
-" xmlns="http://www.w3.org/2000/svg" stroke="currentColor">
+        <span class="mode-toggle-label" id="modeLabel">Full Page</span>
+        <svg class="mode-toggle-svg" id="modeSvg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor">
           <rect x="4" y="6" width="16" height="12" rx="1.5" stroke-width="1.5"/>
           <line x1="4" y1="10" x2="20" y2="10" stroke-width="1.5"/>
           <line x1="4" y1="14" x2="20" y2="14" stroke-width="1.5"/>
         </svg>
       </button>
+      
+      <div class="question-nav-dots" id="questionNavDots"></div>
       
       <div id="guidedContainer" class="hidden"></div>
       <div id="classicContainer">
@@ -1212,7 +1256,7 @@
           const dropdown = document.getElementById('datasetDropdown');
           if (dropdown.classList.contains('active')) toggleDatasetMenu();
         }
-        if (!showingResults && !e.target.matches('input')) {
+        if (currentMode === 'guided' && !showingResults && !e.target.matches('input')) {
           if (e.key === 'ArrowLeft') navigatePrevQuestion();
           if (e.key === 'ArrowRight') navigateNextQuestion();
         }
@@ -1234,10 +1278,10 @@
         
         allTests = data.sets;
         
-        // Update dropdown button text with actual count
         updateDatasetButtonText(index);
         
         createDots();
+        createQuestionNavDots();
         loadTest(0);
       } catch (error) {
         console.error('Error loading dataset:', error);
@@ -1253,7 +1297,6 @@
         buttons[index].textContent = `${dataset.name} (${count} tests)`;
       }
       
-      // Update main button text if this is the active dataset
       if (index === currentDatasetIndex) {
         const mainBtn = document.querySelector('.dataset-btn');
         if (mainBtn) {
@@ -1288,7 +1331,6 @@
       const container = document.getElementById('dotsContainer');
       container.innerHTML = '';
       
-      // Dynamic loop - no hardcoded limit
       for (let i = 0; i < allTests.length; i++) {
         const dot = document.createElement('button');
         dot.className = 'test-dot';
@@ -1316,6 +1358,42 @@
       }
     }
 
+    function createQuestionNavDots() {
+      const test = allTests[currentTest];
+      if (!test || !test.sentences) return;
+      
+      const container = document.getElementById('questionNavDots');
+      container.innerHTML = '';
+      
+      test.sentences.forEach((q, idx) => {
+        const dot = document.createElement('button');
+        dot.className = 'question-nav-dot';
+        dot.setAttribute('aria-label', `Question ${idx + 1}`);
+        
+        if (idx === currentQuestion) {
+          dot.classList.add('current');
+          dot.setAttribute('aria-current', 'true');
+        }
+        
+        if (answers[idx] !== undefined) {
+          dot.classList.add('answered');
+        }
+        
+        dot.onclick = () => jumpToQuestionNav(idx);
+        container.appendChild(dot);
+      });
+      
+      updateExternalNav();
+    }
+
+    function updateExternalNav() {
+      const test = allTests[currentTest];
+      if (!test) return;
+      
+      document.getElementById('prevQuestionBtn').disabled = currentQuestion === 0;
+      document.getElementById('nextQuestionBtn').disabled = currentQuestion >= test.sentences.length - 1;
+    }
+
     function loadTest(testIdx) {
       if (!allTests[testIdx]) return;
       
@@ -1326,13 +1404,14 @@
       showingResults = false;
       keyVisible = false;
       
+      createQuestionNavDots();
+      
       if (currentMode === 'guided') renderGuidedMode();
       else renderClassicMode();
       
       updateTestInfo();
       updateFooter();
       updateKeyButton();
-      updateExternalNav();
       createDots();
     }
 
@@ -1349,9 +1428,9 @@
     function goToTest(testIdx) {
       loadTest(testIdx);
     }
-function toggleMode() {
-      const targetQuestion = currentQuestion;
-      
+
+    // *** FIXED TOGGLE MODE - EXTRACTED FROM WORKING VERSION ***
+    function toggleMode() {
       if (currentMode === 'classic') {
         currentMode = 'guided';
         document.getElementById('modeLabel').textContent = 'One at a Time';
@@ -1361,20 +1440,13 @@ function toggleMode() {
         renderGuidedMode();
       } else {
         currentMode = 'classic';
-        document.getElementById('modeLabel').textContent = 'All Questions';
+        document.getElementById('modeLabel').textContent = 'Full Page';
         document.getElementById('modeSvg').innerHTML = '<rect x="4" y="6" width="16" height="12" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><line x1="4" y1="10" x2="20" y2="10" stroke="currentColor" stroke-width="1.5"/><line x1="4" y1="14" x2="20" y2="14" stroke="currentColor" stroke-width="1.5"/>';
         document.getElementById('guidedContainer').classList.add('hidden');
         document.getElementById('classicContainer').classList.remove('hidden');
-        
-        if (!expandedQuestions.includes(targetQuestion)) {
-          expandedQuestions.push(targetQuestion);
-        }
         renderClassicMode();
-        scrollToQuestion(targetQuestion);
       }
-      
-      updateExternalNav();
-      showToast(`Switched to ${currentMode === 'classic' ? 'All Questions' : 'One at a Time'} mode`);
+      showToast(`Switched to ${currentMode === 'classic' ? 'Full Page' : 'One at a Time'} mode`);
     }
 
     function renderGuidedMode() {
@@ -1429,6 +1501,7 @@ function toggleMode() {
           btn.onclick = () => {
             selectAnswer(currentQuestion, idx);
             renderGuidedMode();
+            createQuestionNavDots();
           };
         }
         
@@ -1447,11 +1520,10 @@ function toggleMode() {
       test.sentences.forEach((q, qIdx) => {
         const isExpanded = expandedQuestions.includes(qIdx);
         const isAnswered = answers[qIdx] !== undefined;
-        const isCurrent = qIdx === currentQuestion;
         const correctIndex = q.answer ? (q.answer.charCodeAt(0) - 65) : 0;
         
         const questionDiv = document.createElement('div');
-        questionDiv.className = 'question-item' + (isExpanded ? ' expanded' : '') + (isCurrent ? ' current-question' : '');
+        questionDiv.className = 'question-item' + (isExpanded ? ' expanded' : '');
         
         const headerDiv = document.createElement('div');
         headerDiv.className = 'question-header';
@@ -1512,6 +1584,7 @@ function toggleMode() {
       });
     }
 
+    // *** FIXED TOGGLE QUESTION - EXTRACTED FROM WORKING VERSION ***
     function toggleQuestion(qIdx) {
       currentQuestion = qIdx;
       if (expandedQuestions.includes(qIdx)) {
@@ -1520,19 +1593,51 @@ function toggleMode() {
         expandedQuestions.push(qIdx);
       }
       renderClassicMode();
-      updateExternalNav();
+      createQuestionNavDots();
     }
 
     function selectAnswer(qIdx, answerIdx) {
       if (showingResults) return;
       answers[qIdx] = answerIdx;
+      createQuestionNavDots();
       updateTestInfo();
       updateFooter();
     }
 
-    function navigateToQuestion(idx) {
+    function navigatePrevQuestion() {
+      if (currentQuestion > 0) {
+        currentQuestion--;
+        if (currentMode === 'guided') renderGuidedMode();
+        else {
+          renderClassicMode();
+          scrollToQuestion(currentQuestion);
+        }
+        createQuestionNavDots();
+      }
+    }
+
+    function navigateNextQuestion() {
+      const test = allTests[currentTest];
+      if (currentQuestion < test.sentences.length - 1) {
+        currentQuestion++;
+        if (currentMode === 'guided') renderGuidedMode();
+        else {
+          renderClassicMode();
+          scrollToQuestion(currentQuestion);
+        }
+        createQuestionNavDots();
+      }
+    }
+
+    function jumpToQuestion(idx) {
       currentQuestion = idx;
-      
+      renderGuidedMode();
+      createQuestionNavDots();
+    }
+
+    // *** FIXED NAVIGATION - EXTRACTED FROM WORKING VERSION ***
+    function jumpToQuestionNav(idx) {
+      currentQuestion = idx;
       if (currentMode === 'guided') {
         renderGuidedMode();
       } else {
@@ -1542,25 +1647,7 @@ function toggleMode() {
         renderClassicMode();
         scrollToQuestion(idx);
       }
-      
-      updateExternalNav();
-    }
-
-    function navigatePrevQuestion() {
-      if (currentQuestion > 0) {
-        navigateToQuestion(currentQuestion - 1);
-      }
-    }
-
-    function navigateNextQuestion() {
-      const test = allTests[currentTest];
-      if (currentQuestion < test.sentences.length - 1) {
-        navigateToQuestion(currentQuestion + 1);
-      }
-    }
-
-    function jumpToQuestion(idx) {
-      navigateToQuestion(idx);
+      createQuestionNavDots();
     }
 
     function scrollToQuestion(idx) {
@@ -1570,14 +1657,6 @@ function toggleMode() {
           questionEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       }, 100);
-    }
-
-    function updateExternalNav() {
-      const test = allTests[currentTest];
-      if (!test) return;
-      
-      document.getElementById('prevQuestionBtn').disabled = currentQuestion === 0;
-      document.getElementById('nextQuestionBtn').disabled = currentQuestion >= test.sentences.length - 1;
     }
 
     function updateFooter() {
@@ -1632,8 +1711,22 @@ function showHint() {
       }
       
       const randomIdx = unanswered[Math.floor(Math.random() * unanswered.length)];
-      navigateToQuestion(randomIdx);
-      showToast(`Showing question ${randomIdx + 1}`, 2000);
+      
+      if (currentMode === 'guided') {
+        currentQuestion = randomIdx;
+        renderGuidedMode();
+        createQuestionNavDots();
+        showToast(`Showing question ${randomIdx + 1}`, 2000);
+      } else {
+        if (!expandedQuestions.includes(randomIdx)) {
+          expandedQuestions.push(randomIdx);
+        }
+        currentQuestion = randomIdx;
+        renderClassicMode();
+        createQuestionNavDots();
+        scrollToQuestion(randomIdx);
+        showToast(`Highlighted question ${randomIdx + 1}`, 2000);
+      }
     }
 
     function showKey() {
@@ -1666,6 +1759,7 @@ function showHint() {
         answers = {};
         if (currentMode === 'guided') renderGuidedMode();
         else renderClassicMode();
+        createQuestionNavDots();
         updateTestInfo();
         updateFooter();
         showToast('Cleared');
@@ -1708,9 +1802,8 @@ function showHint() {
       showingResults = true;
       keyVisible = false;
       
-      if (currentMode === 'classic') {
-        expandedQuestions = test.sentences.map((_, idx) => idx);
-      }
+      // Expand all questions in classic mode after submission
+      expandedQuestions = test.sentences.map((_, idx) => idx);
       
       if (currentMode === 'guided') renderGuidedMode();
       else renderClassicMode();

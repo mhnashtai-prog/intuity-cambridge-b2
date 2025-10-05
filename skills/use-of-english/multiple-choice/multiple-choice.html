@@ -579,7 +579,11 @@
       margin-right: 0.5rem;
     }
     
-    /* GUIDED MODE STYLES */
+    /* Add click feedback animation */
+    .option:active:not(.correct):not(.incorrect):not(.key-shown) {
+      transform: scale(0.98);
+    }
+/* GUIDED MODE STYLES */
     .guided-container { }
     
     .question-dots {
@@ -706,6 +710,11 @@
       border-color: #84cc16 !important;
     }
     
+    /* Add click feedback animation */
+    .option-large:active:not(.correct):not(.incorrect):not(.key-shown) {
+      transform: scale(0.98);
+    }
+    
     .nav-buttons {
       display: flex;
       justify-content: space-between;
@@ -755,7 +764,8 @@
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgba(201, 169, 97, 0.25);
     }
-/* FOOTER */
+
+    /* FOOTER */
     .footer {
       position: fixed;
       bottom: 0;
@@ -1153,7 +1163,7 @@
   <div class="toast" id="toast" role="alert" aria-live="polite"></div>
 
   <script>
-// DATASETS array - count removed, calculated dynamically after load
+    // DATASETS array - count removed, calculated dynamically after load
     const DATASETS = [
       { name: 'Set 1', path: '../../../data4/test-04.json' },
       { name: 'Set 2', path: '../../../data2/test-01.json' },
@@ -1197,6 +1207,7 @@
       } catch (e) {
         console.error('Error loading progress:', e);
         testScores = {};
+        showToast('⚠ Progress saving disabled', 3000);
       }
     }
 
@@ -1205,6 +1216,7 @@
         localStorage.setItem(storageKey, JSON.stringify(testScores));
       } catch (e) {
         console.error('Error saving progress:', e);
+        showToast('⚠ Could not save progress', 3000);
       }
     }
 
@@ -1386,7 +1398,6 @@
       updateExternalNav();
     }
 
-    // *** FIX #1: Hide navigation in classic mode, show in guided mode ***
     function updateExternalNav() {
       const test = allTests[currentTest];
       if (!test) return;
@@ -1405,7 +1416,6 @@
       }
     }
 
-    // *** FIX #2: Auto-expand ALL questions in classic mode ***
     function loadTest(testIdx) {
       if (!allTests[testIdx]) return;
       
@@ -1452,7 +1462,6 @@
       loadTest(testIdx);
     }
 
-    // *** FIX #3: Toggle mode with proper expansion handling ***
     function toggleMode() {
       if (currentMode === 'classic') {
         currentMode = 'guided';
@@ -1479,8 +1488,7 @@
       updateExternalNav();
       showToast(`Switched to ${currentMode === 'classic' ? 'Full Page' : 'One at a Time'} mode`);
     }
-
-    function renderGuidedMode() {
+function renderGuidedMode() {
       const test = allTests[currentTest];
       if (!test || !test.sentences) return;
       
@@ -1545,6 +1553,10 @@
       if (!test || !test.sentences) return;
       
       const container = document.getElementById('classicContainer');
+      
+      // Store scroll position before rendering
+      const scrollPos = window.scrollY;
+      
       container.innerHTML = '<div class="questions-list"></div>';
       const list = container.querySelector('.questions-list');
       
@@ -1599,7 +1611,10 @@
             }
             
             if (!showingResults) {
-              optionBtn.onclick = () => selectAnswer(qIdx, idx);
+              optionBtn.onclick = () => {
+                selectAnswer(qIdx, idx);
+                renderClassicMode(); // Re-render to show selection
+              };
             }
             
             const letter = option.charAt(0);
@@ -1612,6 +1627,11 @@
         }
         
         list.appendChild(questionDiv);
+      });
+      
+      // Restore scroll position after rendering
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollPos);
       });
     }
 
@@ -1723,7 +1743,8 @@
         btn.setAttribute('aria-pressed', 'false');
       }
     }
-function showHint() {
+
+    function showHint() {
       if (showingResults) {
         showToast('Hints not available after submission');
         return;
@@ -1832,7 +1853,10 @@ function showHint() {
       keyVisible = false;
       
       // Expand all questions in classic mode after submission
-      expandedQuestions = test.sentences.map((_, idx) => idx);
+      const testData = allTests[currentTest];
+      if (testData && testData.sentences) {
+        expandedQuestions = testData.sentences.map((_, idx) => idx);
+      }
       
       if (currentMode === 'guided') renderGuidedMode();
       else renderClassicMode();

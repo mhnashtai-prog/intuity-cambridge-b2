@@ -963,10 +963,10 @@
     </div>
     <div class="nav-right">
       <div class="dataset-selector">
-        <button class="dataset-btn" onclick="toggleDatasetMenu()" aria-label="Select quiz type">Select Type ▾</button>
+        <button class="dataset-btn" onclick="toggleDatasetMenu()" aria-label="Select quiz type">Select Set ▾</button>
         <div class="dataset-dropdown" id="datasetDropdown" role="menu">
-          <button class="dataset-option active" data-path="../../../data/use-of-english/word-transformation/word-transformation-6sentences.json" role="menuitem">Set 1</button>
-          <button class="dataset-option" data-path="../../../data/use-of-english/word-transformation/word-transformation-6sentences1.json" role="menuitem">Set 2</button>
+          <button class="dataset-option active" data-set="set1" role="menuitem">Set 1 (29 sets)</button>
+          <button class="dataset-option" data-set="set2" role="menuitem">Set 2 (16 sets)</button>
         </div>
       </div>
     </div>
@@ -1080,7 +1080,7 @@
 
   <script>
     let allTests = [];
-    let currentDataset = '../../../data/use-of-english/word-transformation/word-transformation-6sentences.json';
+    let currentDataset = 'set1';
     let currentTest = 0;
     let currentSection = 0;
     let userAnswers = {};
@@ -1088,6 +1088,11 @@
     let testScores = {};
     let currentMode = 'classic';
     let answersVisible = false;
+    
+    const DATASETS = {
+      'set1': '../../../data/use-of-english/word-transformation/word-transformation-6sentences.json',
+      'set2': '../../../data/use-of-english/word-transformation/word-transformation-6sentences1.json'
+    };
 
     function sanitizeText(text) {
       const div = document.createElement('div');
@@ -1143,12 +1148,17 @@
         btn.addEventListener('click', async function() {
           document.querySelectorAll('.dataset-option').forEach(b => b.classList.remove('active'));
           this.classList.add('active');
-          currentDataset = this.dataset.path;
-          toggleDatasetMenu();
-          currentTest = 0;
-          currentSection = 0;
-          userAnswers = {};
-          await loadQuizData();
+          const newDataset = this.dataset.set;
+          if (newDataset !== currentDataset) {
+            currentDataset = newDataset;
+            toggleDatasetMenu();
+            currentTest = 0;
+            currentSection = 0;
+            userAnswers = {};
+            testScores = {};
+            loadProgress();
+            await loadQuizData();
+          }
         });
       });
     }
@@ -1179,13 +1189,48 @@
     async function loadQuizData() {
       try {
         showLoadingState();
-        const response = await fetch(currentDataset);
+        const dataPath = DATASETS[currentDataset];
+        const response = await fetch(dataPath);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
-        if (!data || !data.exercises || !Array.isArray(data.exercises)) {
-          throw new Error('Invalid data format');
+        
+        // Handle different JSON structures
+        if (currentDataset === 'set1') {
+          // Structure: array of sets with exercises
+          if (!Array.isArray(data)) throw new Error('Invalid data format for Set 1');
+          allTests = [];
+          data.forEach(setData => {
+            if (setData.exercises && Array.isArray(setData.exercises)) {
+              setData.exercises.forEach(exercise => {
+                allTests.push({
+                  sentences: [{
+                    number: exercise.question,
+                    first_sentence: exercise.first_sentence,
+                    keyword: exercise.keyword,
+                    prompt: exercise.incomplete_sentence,
+                    answers: [exercise.missing_words]
+                  }]
+                });
+              });
+            }
+          });
+        } else if (currentDataset === 'set2') {
+          // Structure: object with exercises array containing sentences
+          if (!data || !data.exercises || !Array.isArray(data.exercises)) {
+            throw new Error('Invalid data format for Set 2');
+          }
+          allTests = data.exercises.map(exercise => ({
+            sentences: exercise.sentences.map(s => ({
+              number: s.number,
+              first_sentence: s.first_sentence,
+              keyword: s.keyword,
+              prompt: s.prompt,
+              answers: s.answers.filter(a => a !== "ANSWER_NEEDED")
+            }))
+          }));
         }
-        allTests = data.exercises;
+        
+        if (allTests.length === 0) throw new Error('No valid exercises found');
         createDots();
         loadTest(0);
       } catch (error) {
@@ -1226,8 +1271,9 @@
 
     function loadProgress() {
       try {
-        const saved = localStorage.getItem('wordtransform_progress');
+        const saved = localStorage.getItem(`wordtransform_progress_${currentDataset}`);
         if (saved) testScores = JSON.parse(saved);
+        else testScores = {};
       } catch (e) {
         console.error('Error loading progress:', e);
         testScores = {};
@@ -1236,7 +1282,7 @@
 
     function saveProgress() {
       try {
-        localStorage.setItem('wordtransform_progress', JSON.stringify(testScores));
+        localStorage.setItem(`wordtransform_progress_${currentDataset}`, JSON.stringify(testScores));
       } catch (e) {
         console.error('Error saving progress:', e);
       }

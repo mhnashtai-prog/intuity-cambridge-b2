@@ -433,6 +433,7 @@
       text-align: center;
     }
     
+    /* Example styling - shown as completed */
     .example-word {
       display: inline;
       color: #84cc16;
@@ -445,6 +446,7 @@
       text-underline-offset: 3px;
     }
     
+    /* Prompt word before gaps */
     .prompt-word {
       display: inline;
       color: #d87556;
@@ -1003,7 +1005,7 @@
   <div class="toast" id="toast" role="alert" aria-live="polite"></div>
 
   <script>
-    // THIS IS YOUR ORIGINAL FILE - RESTORED
+    // DATASETS configuration - like multiple-choice
     const DATASETS = [
       { name: '8 Gaps', path: '../../../data/use-of-english/word-formation/word-formation-8gaps.json' },
       { name: '10 Gaps', path: '../../../data/use-of-english/word-formation/word-formation-10gaps.json' },
@@ -1222,9 +1224,799 @@
       }
     }
 
-    // REST OF YOUR ORIGINAL JAVASCRIPT CONTINUES HERE...
-    // I'll continue with the remaining functions in the next message
-    
+    function createDots() {
+      const container = document.getElementById('dotsContainer');
+      container.innerHTML = '';
+      
+      for (let i = 0; i < allTests.length; i++) {
+        const dot = document.createElement('button');
+        dot.className = 'test-dot';
+        dot.setAttribute('aria-label', `Test ${i + 1}`);
+        
+        if (i === currentTest) {
+          dot.classList.add('current');
+          dot.setAttribute('aria-current', 'true');
+        }
+        
+        const score = testScores[`test${i}`];
+        if (score) {
+          const percentage = score.bestPercentage || score.percentage;
+          if (percentage === 100) {
+            dot.classList.add('perfect');
+            dot.innerHTML = '<span class="star-badge">⭐</span>';
+          } else if (percentage >= 75) dot.classList.add('excellent');
+          else if (percentage >= 60) dot.classList.add('good');
+          else if (percentage >= 50) dot.classList.add('fair');
+          else dot.classList.add('poor');
+        }
+        
+        dot.onclick = () => goToTest(i);
+        container.appendChild(dot);
+      }
+    }
+
+    function loadTest(testIdx) {
+      if (!allTests[testIdx]) return;
+      
+      currentTest = testIdx;
+      currentSection = 0;
+      showingResults = false;
+      answersVisible = false;
+      userAnswers = {};
+      hintsUsed.clear();
+      Object.values(inputDebounceTimers).forEach(clearTimeout);
+      inputDebounceTimers = {};
+      
+      if (currentMode === 'guided') renderGuidedMode();
+      else renderClassicMode();
+      
+      updateTestInfo();
+      updateFooter();
+      updateKeyButton();
+      createDots();
+    }
+
+    function renderClassicMode() {
+      const test = allTests[currentTest];
+      if (!test) return;
+      const container = document.getElementById('classicContainer');
+      
+      const headerWrapper = document.createElement('div');
+      headerWrapper.className = 'content-header-wrapper';
+      headerWrapper.innerHTML = `
+        <div class="section-dots" id="sectionDotsClassic"></div>
+        <div class="mode-toggle-container">
+          <span class="mode-toggle-label">Text</span>
+          <div class="mode-toggle-switch" id="modeToggleSwitch" onclick="toggleMode()" role="switch" aria-checked="false"></div>
+          <span class="mode-toggle-label">Chunks</span>
+        </div>
+      `;
+      
+      const titleDiv = document.createElement('div');
+      titleDiv.className = 'text-title';
+      titleDiv.textContent = test.title;
+      
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'text-content';
+
+      if (isSentenceFormat && test.sentences) {
+        // Single sentence format with example handling
+        test.sentences.forEach((sentence, idx) => {
+          const p = document.createElement('p');
+          const num = sentence.number;
+          
+          // Handle example (Gap 0) differently
+          if (sentence.isExample) {
+            // Parse example: "(0) PROMPT answer" format
+            const examplePattern = /\(0\)\s*([A-Z]+)\s+(\w+)/;
+            const match = sentence.text.match(examplePattern);
+            
+            if (match) {
+              const promptWord = match[1];
+              const exampleAnswer = match[2];
+              const textBefore = sentence.text.substring(0, match.index);
+              const textAfter = sentence.text.substring(match.index + match[0].length);
+              
+              p.innerHTML = `${sanitizeText(textBefore)}<span class="prompt-word">${sanitizeText(promptWord)}</span> <span class="example-word">${sanitizeText(exampleAnswer)}</span>${sanitizeText(textAfter)}`;
+            } else {
+              p.textContent = sentence.text;
+            }
+          } else {
+            // Regular gap handling
+            const value = userAnswers[num] || '';
+            const correct = sentence.answer || '';
+            let cls = 'gap';
+            let displayValue = '';
+            let isReadonly = false;
+            
+            if (answersVisible) {
+              cls += ' key-shown';
+              displayValue = sanitizeText(correct);
+              isReadonly = true;
+            } else if (showingResults) {
+              cls += answersMatch(value, correct) ? ' correct' : ' incorrect';
+              displayValue = sanitizeText(value);
+              isReadonly = true;
+            } else {
+              displayValue = sanitizeText(value);
+              if (value) cls += ' filled';
+            }
+            
+            if (hintsUsed.has(num.toString())) cls += ' hint-active';
+            
+            const prompt = `<span class="prompt-word">${sanitizeText(sentence.prompt)}</span>`;
+            const input = `<input type="text" class="${cls}" data-gap="${num}" value="${displayValue}" ${isReadonly ? 'readonly' : ''} autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Gap ${num}">`;
+            
+            // Replace the prompt word with prompt + input
+            const pattern = new RegExp(`\\(${num}\\)\\s*${sentence.prompt}\\s+\\.+`, 'g');
+            p.innerHTML = sentence.text.replace(pattern, `(${num}) ${prompt} ${input}`);
+          }
+          
+          contentDiv.appendChild(p);
+        });
+      } else {
+        // Paragraph format
+        const paragraphs = test.text.split('\n\n');
+        paragraphs.forEach(para => {
+          const p = document.createElement('p');
+          let html = sanitizeText(para);
+          
+          const gapPattern = /\((\d+)\)\s*([A-Z]+)\s+/g;
+          let match;
+          const replacements = [];
+          
+          while ((match = gapPattern.exec(para)) !== null) {
+            const num = match[1];
+            const promptWord = match[2];
+            
+            // Check if this is the example (0)
+            if (num === '0') {
+              const answer = test.gaps && test.gaps[num] ? test.gaps[num] : '';
+              replacements.push({
+                original: match[0],
+                replacement: `(${num}) <span class="prompt-word">${sanitizeText(promptWord)}</span> <span class="example-word">${sanitizeText(answer)}</span> `
+              });
+            } else {
+              const value = userAnswers[num] || '';
+              const correct = test.gaps && test.gaps[num] ? test.gaps[num] : '';
+              let cls = 'gap';
+              let displayValue = '';
+              let isReadonly = false;
+              
+              if (answersVisible) {
+                cls += ' key-shown';
+                displayValue = sanitizeText(correct);
+                isReadonly = true;
+              } else if (showingResults) {
+                cls += answersMatch(value, correct) ? ' correct' : ' incorrect';
+                displayValue = sanitizeText(value);
+                isReadonly = true;
+              } else {
+                displayValue = sanitizeText(value);
+                if (value) cls += ' filled';
+              }
+              
+              if (hintsUsed.has(num)) cls += ' hint-active';
+              
+              const prompt = `<span class="prompt-word">${sanitizeText(promptWord)}</span>`;
+              const input = `<input type="text" class="${cls}" data-gap="${num}" value="${displayValue}" ${isReadonly ? 'readonly' : ''} autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Gap ${num}">`;
+              
+              replacements.push({
+                original: match[0],
+                replacement: `(${num}) ${prompt} ${input} `
+              });
+            }
+          }
+          
+          replacements.forEach(r => {
+            html = html.replace(r.original, r.replacement);
+          });
+          
+          p.innerHTML = html;
+          contentDiv.appendChild(p);
+        });
+      }
+      
+      container.innerHTML = '';
+      container.appendChild(headerWrapper);
+      container.appendChild(titleDiv);
+      container.appendChild(contentDiv);
+      attachListeners();
+    }
+
+    function renderGuidedMode() {
+      const test = allTests[currentTest];
+      if (!test) return;
+      const container = document.getElementById('guidedContainer');
+
+      if (isSentenceFormat && test.sentences) {
+        // Filter out example sentences for guided mode
+        const nonExampleSentences = test.sentences.filter(s => !s.isExample);
+        const totalSections = Math.ceil(nonExampleSentences.length / 3);
+        const startIdx = currentSection * 3;
+        const endIdx = Math.min(startIdx + 3, nonExampleSentences.length);
+        const currentSentences = nonExampleSentences.slice(startIdx, endIdx);
+
+        const headerWrapper = document.createElement('div');
+        headerWrapper.className = 'content-header-wrapper';
+        
+        const dotsContainer = document.createElement('div');
+        dotsContainer.className = 'section-dots';
+        for (let i = 0; i < totalSections; i++) {
+          const sectionStart = i * 3;
+          const sectionEnd = Math.min(sectionStart + 3, nonExampleSentences.length);
+          const sectionGaps = nonExampleSentences.slice(sectionStart, sectionEnd).map(s => s.number);
+          const filled = sectionGaps.every(g => userAnswers[g]);
+          const dot = document.createElement('button');
+          dot.className = `section-dot ${i === currentSection ? 'current' : ''} ${filled ? 'filled' : ''}`;
+          dot.textContent = i + 1;
+          dot.onclick = () => jumpToSection(i);
+          dotsContainer.appendChild(dot);
+        }
+        
+        const toggleContainer = document.createElement('div');
+        toggleContainer.className = 'mode-toggle-container';
+        toggleContainer.innerHTML = `
+          <span class="mode-toggle-label">Text</span>
+          <div class="mode-toggle-switch active" id="modeToggleSwitchGuided" onclick="toggleMode()" role="switch" aria-checked="true"></div>
+          <span class="mode-toggle-label">Chunks</span>
+        `;
+        
+        headerWrapper.appendChild(dotsContainer);
+        headerWrapper.appendChild(toggleContainer);
+        
+        const label = document.createElement('div');
+        label.className = 'section-label';
+        label.textContent = `Part ${currentSection + 1} of ${totalSections} • ${test.title}`;
+        
+        const content = document.createElement('div');
+        content.className = 'text-content';
+        
+        currentSentences.forEach(sentence => {
+          const p = document.createElement('p');
+          const num = sentence.number;
+          const value = userAnswers[num] || '';
+          const correct = sentence.answer || '';
+          let cls = 'gap';
+          let displayValue = '';
+          let isReadonly = false;
+          
+          if (answersVisible) {
+            cls += ' key-shown';
+            displayValue = sanitizeText(correct);
+            isReadonly = true;
+          } else if (showingResults) {
+            cls += answersMatch(value, correct) ? ' correct' : ' incorrect';
+            displayValue = sanitizeText(value);
+            isReadonly = true;
+          } else {
+            displayValue = sanitizeText(value);
+            if (value) cls += ' filled';
+          }
+          
+          if (hintsUsed.has(num.toString())) cls += ' hint-active';
+          
+          const prompt = `<span class="prompt-word">${sanitizeText(sentence.prompt)}</span>`;
+          const input = `<input type="text" class="${cls}" data-gap="${num}" value="${displayValue}" ${isReadonly ? 'readonly' : ''} autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">`;
+          
+          const pattern = new RegExp(`\\(${num}\\)\\s*${sentence.prompt}\\s+\\.+`, 'g');
+          p.innerHTML = sentence.text.replace(pattern, `(${num}) ${prompt} ${input}`);
+          content.appendChild(p);
+        });
+        
+        const navButtons = document.createElement('div');
+        navButtons.className = 'nav-buttons';
+        navButtons.innerHTML = `
+          <button class="nav-btn nav-btn-secondary" ${currentSection === 0 ? 'disabled' : ''} onclick="previousSection()">← Previous</button>
+          <button class="nav-btn nav-btn-primary" ${currentSection >= totalSections - 1 ? 'disabled' : ''} onclick="nextSection()">Next →</button>
+        `;
+        
+        container.innerHTML = '';
+        container.appendChild(headerWrapper);
+        container.appendChild(label);
+        container.appendChild(content);
+        container.appendChild(navButtons);
+        attachListeners();
+
+      } else {
+        // Paragraph format with chunking (existing code)
+        const paragraphs = test.text.split('\n\n').filter(p => p.trim());
+        const sections = [];
+        let currentParagraphs = [];
+        let currentGaps = [];
+        
+        paragraphs.forEach((para) => {
+          const gapPattern = /\((\d+)\)/g;
+          const paraGaps = [];
+          let match;
+          while ((match = gapPattern.exec(para)) !== null) {
+            const gapNum = parseInt(match[1]);
+            if (gapNum !== 0) paraGaps.push(gapNum); // Exclude example
+          }
+          
+          if (paraGaps.length === 0) return;
+          
+          if (paraGaps.length >= 2) {
+            if (currentParagraphs.length > 0) {
+              sections.push({ text: currentParagraphs.join('\n\n'), gaps: currentGaps });
+              currentParagraphs = [];
+              currentGaps = [];
+            }
+            sections.push({ text: para, gaps: paraGaps });
+          } else {
+            currentParagraphs.push(para);
+            currentGaps = currentGaps.concat(paraGaps);
+            if (currentGaps.length >= 2) {
+              sections.push({ text: currentParagraphs.join('\n\n'), gaps: currentGaps });
+              currentParagraphs = [];
+              currentGaps = [];
+            }
+          }
+        });
+        
+        if (currentParagraphs.length > 0) {
+          sections.push({ text: currentParagraphs.join('\n\n'), gaps: currentGaps });
+        }
+        
+        const totalSections = sections.length;
+        
+        const headerWrapper = document.createElement('div');
+        headerWrapper.className = 'content-header-wrapper';
+        
+        const dotsContainer = document.createElement('div');
+        dotsContainer.className = 'section-dots';
+        for (let i = 0; i < totalSections; i++) {
+          const filled = sections[i].gaps.every(g => userAnswers[g]);
+          const dot = document.createElement('button');
+          dot.className = `section-dot ${i === currentSection ? 'current' : ''} ${filled ? 'filled' : ''}`;
+          dot.textContent = i + 1;
+          dot.onclick = () => jumpToSection(i);
+          dotsContainer.appendChild(dot);
+        }
+        
+        const toggleContainer = document.createElement('div');
+        toggleContainer.className = 'mode-toggle-container';
+        toggleContainer.innerHTML = `
+          <span class="mode-toggle-label">Text</span>
+          <div class="mode-toggle-switch active" id="modeToggleSwitchGuided" onclick="toggleMode()" role="switch" aria-checked="true"></div>
+          <span class="mode-toggle-label">Chunks</span>
+        `;
+        
+        headerWrapper.appendChild(dotsContainer);
+        headerWrapper.appendChild(toggleContainer);
+        
+        const section = sections[currentSection];
+        let sectionHtml = sanitizeText(section.text);
+        
+        const gapPattern = /\((\d+)\)\s*([A-Z]+)\s+/g;
+        let match2;
+        const replacements = [];
+        
+        while ((match2 = gapPattern.exec(section.text)) !== null) {
+          const num = match2[1];
+          const promptWord = match2[2];
+          
+          if (num === '0') {
+            const answer = test.gaps && test.gaps[num] ? test.gaps[num] : '';
+            replacements.push({
+              original: match2[0],
+              replacement: `(${num}) <span class="prompt-word">${sanitizeText(promptWord)}</span> <span class="example-word">${sanitizeText(answer)}</span> `
+            });
+          } else {
+            const value = userAnswers[num] || '';
+            const correct = test.gaps && test.gaps[num] ? test.gaps[num] : '';
+            let cls = 'gap';
+            let displayValue = '';
+            let isReadonly = false;
+            
+            if (answersVisible) {
+              cls += ' key-shown';
+              displayValue = sanitizeText(correct);
+              isReadonly = true;
+            } else if (showingResults) {
+              cls += answersMatch(value, correct) ? ' correct' : ' incorrect';
+              displayValue = sanitizeText(value);
+              isReadonly = true;
+            } else {
+              displayValue = sanitizeText(value);
+              if (value) cls += ' filled';
+            }
+            
+            if (hintsUsed.has(num.toString())) cls += ' hint-active';
+            
+            const prompt = `<span class="prompt-word">${sanitizeText(promptWord)}</span>`;
+            const input = `<input type="text" class="${cls}" data-gap="${num}" value="${displayValue}" ${isReadonly ? 'readonly' : ''} autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">`;
+            
+            replacements.push({
+              original: match2[0],
+              replacement: `(${num}) ${prompt} ${input} `
+            });
+          }
+        }
+        
+        replacements.forEach(r => {
+          sectionHtml = sectionHtml.replace(r.original, r.replacement);
+        });
+        
+        const label = document.createElement('div');
+        label.className = 'section-label';
+        label.textContent = `Part ${currentSection + 1} of ${totalSections} • ${test.title}`;
+        
+        const content = document.createElement('div');
+        content.className = 'text-content';
+        content.innerHTML = sectionHtml.split('\n\n').map(para => `<p>${para}</p>`).join('');
+        
+        const navButtons = document.createElement('div');
+        navButtons.className = 'nav-buttons';
+        navButtons.innerHTML = `
+          <button class="nav-btn nav-btn-secondary" ${currentSection === 0 ? 'disabled' : ''} onclick="previousSection()">← Previous</button>
+          <button class="nav-btn nav-btn-primary" ${currentSection >= totalSections - 1 ? 'disabled' : ''} onclick="nextSection()">Next →</button>
+        `;
+        
+        container.innerHTML = '';
+        container.appendChild(headerWrapper);
+        container.appendChild(label);
+        container.appendChild(content);
+        container.appendChild(navButtons);
+        attachListeners();
+      }
+    }
+
+    function attachListeners() {
+      document.querySelectorAll('.gap').forEach(input => {
+        if (!showingResults && !answersVisible) {
+          input.addEventListener('input', function() {
+            const num = this.dataset.gap;
+            if (inputDebounceTimers[num]) clearTimeout(inputDebounceTimers[num]);
+            inputDebounceTimers[num] = setTimeout(() => {
+              userAnswers[num] = this.value.trim();
+              if (this.value.trim()) this.classList.add('filled');
+              else {
+                this.classList.remove('filled');
+                delete userAnswers[num];
+              }
+              updateFooter();
+            }, 100);
+          });
+        }
+      });
+    }
+
+    function previousSection() {
+      if (currentSection > 0) {
+        currentSection--;
+        renderGuidedMode();
+      }
+    }
+
+    function nextSection() {
+      const test = allTests[currentTest];
+      let totalSections;
+      
+      if (isSentenceFormat && test.sentences) {
+        const nonExample = test.sentences.filter(s => !s.isExample);
+        totalSections = Math.ceil(nonExample.length / 3);
+      } else {
+        // Calculate sections for paragraph format
+        const paragraphs = test.text.split('\n\n').filter(p => p.trim());
+        const sections = [];
+        let currentParagraphs = [];
+        let currentGaps = [];
+        
+        paragraphs.forEach((para) => {
+          const gapPattern = /\((\d+)\)/g;
+          const paraGaps = [];
+          let match;
+          while ((match = gapPattern.exec(para)) !== null) {
+            const gapNum = parseInt(match[1]);
+            if (gapNum !== 0) paraGaps.push(gapNum);
+          }
+          
+          if (paraGaps.length === 0) return;
+          
+          if (paraGaps.length >= 2) {
+            if (currentParagraphs.length > 0) {
+              sections.push({ text: currentParagraphs.join('\n\n'), gaps: currentGaps });
+              currentParagraphs = [];
+              currentGaps = [];
+            }
+            sections.push({ text: para, gaps: paraGaps });
+          } else {
+            currentParagraphs.push(para);
+            currentGaps = currentGaps.concat(paraGaps);
+            if (currentGaps.length >= 2) {
+              sections.push({ text: currentParagraphs.join('\n\n'), gaps: currentGaps });
+              currentParagraphs = [];
+              currentGaps = [];
+            }
+          }
+        });
+        
+        if (currentParagraphs.length > 0) {
+          sections.push({ text: currentParagraphs.join('\n\n'), gaps: currentGaps });
+        }
+        
+        totalSections = sections.length;
+      }
+      
+      if (currentSection < totalSections - 1) {
+        currentSection++;
+        renderGuidedMode();
+      }
+    }
+
+    function jumpToSection(idx) {
+      currentSection = idx;
+      renderGuidedMode();
+    }
+
+    function updateTestInfo() {
+      const test = allTests[currentTest];
+      if (!test) return;
+      
+      let total, filled;
+      if (isSentenceFormat && test.sentences) {
+        const nonExample = test.sentences.filter(s => !s.isExample);
+        total = nonExample.length;
+        filled = Object.keys(userAnswers).filter(k => userAnswers[k]).length;
+      } else {
+        const gaps = test.gaps ? Object.keys(test.gaps).filter(n => n !== '0') : [];
+        total = gaps.length;
+        filled = Object.keys(userAnswers).filter(k => userAnswers[k] && k !== '0').length;
+      }
+      
+      const datasetName = DATASETS[currentDatasetIndex].name;
+      document.getElementById('testInfo').textContent = `${datasetName} • Test ${currentTest + 1} of ${allTests.length} • ${filled}/${total} answered`;
+    }
+
+    function updateFooter() {
+      const test = allTests[currentTest];
+      if (!test) return;
+      
+      let total, filled;
+      if (isSentenceFormat && test.sentences) {
+        const nonExample = test.sentences.filter(s => !s.isExample);
+        total = nonExample.length;
+        filled = Object.keys(userAnswers).filter(k => userAnswers[k]).length;
+      } else {
+        const gaps = test.gaps ? Object.keys(test.gaps).filter(n => n !== '0') : [];
+        total = gaps.length;
+        filled = Object.keys(userAnswers).filter(k => userAnswers[k] && k !== '0').length;
+      }
+      
+      const footer = document.getElementById('footer');
+      if (filled === total && !showingResults) {
+        footer.classList.add('visible');
+      } else if (showingResults) {
+        footer.classList.add('visible');
+      } else {
+        footer.classList.remove('visible');
+      }
+      updateTestInfo();
+    }
+
+    function showHint() {
+      if (showingResults || answersVisible) {
+        showToast('Hints not available in review mode');
+        return;
+      }
+      
+      const test = allTests[currentTest];
+      let emptyGaps;
+      
+      if (isSentenceFormat && test.sentences) {
+        emptyGaps = test.sentences.filter(s => !s.isExample && !userAnswers[s.number]).map(s => s.number.toString());
+      } else {
+        const gaps = test.gaps ? Object.keys(test.gaps).filter(n => n !== '0') : [];
+        emptyGaps = gaps.filter(num => !userAnswers[num]);
+      }
+      
+      if (emptyGaps.length === 0) {
+        showToast('All gaps are filled');
+        return;
+      }
+      
+      const randomGap = emptyGaps[Math.floor(Math.random() * emptyGaps.length)];
+      let correctAnswer;
+      
+      if (isSentenceFormat && test.sentences) {
+        const sentence = test.sentences.find(s => s.number.toString() === randomGap);
+        correctAnswer = sentence ? sentence.answer : '';
+      } else {
+        correctAnswer = test.gaps ? test.gaps[randomGap] : '';
+      }
+      
+      const hint = correctAnswer.charAt(0);
+      hintsUsed.add(randomGap);
+      const input = document.querySelector(`input[data-gap="${randomGap}"]`);
+      if (input) {
+        input.classList.add('hint-active');
+        input.focus();
+        showToast(`Gap ${randomGap}: Starts with "${hint.toUpperCase()}"`, 3500);
+      }
+    }
+
+    function repeatTest() {
+      userAnswers = {};
+      showingResults = false;
+      answersVisible = false;
+      currentSection = 0;
+      hintsUsed.clear();
+      if (currentMode === 'guided') renderGuidedMode();
+      else renderClassicMode();
+      updateFooter();
+      updateKeyButton();
+      showToast('Cleared');
+    }
+
+    function goToTest(testIdx) {
+      loadTest(testIdx);
+    }
+
+    function showAnswers() {
+      if (!showingResults) {
+        showToast('Submit first to enable Key');
+        return;
+      }
+      answersVisible = !answersVisible;
+      updateKeyButton();
+      if (currentMode === 'guided') renderGuidedMode();
+      else renderClassicMode();
+      if (answersVisible) showToast('All correct answers shown in green');
+      else showToast('Key hidden');
+    }
+
+    function updateKeyButton() {
+      const btn = document.getElementById('showKeyBtn');
+      if (btn) {
+        if (showingResults) {
+          btn.disabled = false;
+          if (answersVisible) {
+            btn.classList.add('key-active');
+            btn.setAttribute('aria-pressed', 'true');
+          } else {
+            btn.classList.remove('key-active');
+            btn.setAttribute('aria-pressed', 'false');
+          }
+        } else {
+          btn.disabled = true;
+          btn.classList.remove('key-active');
+          btn.setAttribute('aria-pressed', 'false');
+        }
+      }
+    }
+
+    function submitAndScore() {
+      const test = allTests[currentTest];
+      let correct = 0;
+      let total;
+      
+      if (isSentenceFormat && test.sentences) {
+        const nonExample = test.sentences.filter(s => !s.isExample);
+        total = nonExample.length;
+        nonExample.forEach(sentence => {
+          const userAns = userAnswers[sentence.number] || '';
+          const correctAns = sentence.answer || '';
+          if (answersMatch(userAns, correctAns)) correct++;
+        });
+      } else {
+        const gaps = test.gaps ? Object.keys(test.gaps).filter(n => n !== '0') : [];
+        total = gaps.length;
+        gaps.forEach(num => {
+          const userAns = userAnswers[num] || '';
+          const correctAns = test.gaps[num] || '';
+          if (answersMatch(userAns, correctAns)) correct++;
+        });
+      }
+      
+      const percentage = Math.round((correct / total) * 100);
+      const existingScore = testScores[`test${currentTest}`];
+      const isNewBest = !existingScore || percentage > (existingScore.bestPercentage || 0);
+      
+      testScores[`test${currentTest}`] = {
+        correct,
+        total,
+        percentage,
+        firstAttemptScore: !existingScore ? percentage : existingScore.firstAttemptScore,
+        bestPercentage: Math.max(percentage, existingScore?.bestPercentage || 0),
+        attempts: (existingScore?.attempts || 0) + 1,
+        timestamp: new Date().toISOString(),
+        hintsUsed: hintsUsed.size
+      };
+      
+      saveProgress();
+      showingResults = true;
+      answersVisible = false;
+      if (currentMode === 'guided') renderGuidedMode();
+      else renderClassicMode();
+      createDots();
+      updateKeyButton();
+      setTimeout(() => showResultsModal(test, correct, total, percentage), 200);
+    }
+
+    function showResultsModal(test, correct, total, percentage) {
+      const datasetName = DATASETS[currentDatasetIndex].name;
+      const existingScore = testScores[`test${currentTest}`];
+      const attempts = existingScore?.attempts || 1;
+      
+      let subtitle = `${datasetName} • ${test.title} • Test ${currentTest + 1}`;
+      if (attempts > 1) {
+        subtitle += ` • Attempt ${attempts}`;
+        if (percentage > (existingScore.firstAttemptScore || 0)) {
+          subtitle += ' (Improved!)';
+        }
+      }
+      if (hintsUsed.size > 0) subtitle += ` • ${hintsUsed.size} hint${hintsUsed.size !== 1 ? 's' : ''}`;
+      
+      document.getElementById('modalSubtitle').textContent = subtitle;
+      document.getElementById('scoreNumber').textContent = `${correct}/${total}`;
+      
+      const answersDisplay = document.getElementById('answersDisplay');
+      let html = '';
+      
+      if (percentage === 100 && hintsUsed.size === 0) {
+        html += '<div style="text-align: center; padding: 1.5rem; font-size: 1.375rem; color: #84cc16; font-weight: 600;">Perfect Score ⭐<br><span style="font-size: 0.875rem; color: #8e8e93; font-weight: 400; margin-top: 0.5rem; display: block;">No hints used</span></div>';
+      } else if (percentage === 100) {
+        html += '<div style="text-align: center; padding: 1.5rem; font-size: 1.375rem; color: #84cc16; font-weight: 600;">Perfect Score ⭐</div>';
+      } else if (percentage >= 75) {
+        html += '<div style="text-align: center; padding: 1.5rem; font-size: 1.25rem; color: #86efac; font-weight: 600;">Great Job!</div>';
+      } else if (percentage >= 60) {
+        html += '<div style="text-align: center; padding: 1.5rem; color: #7dd3fc; font-weight: 500;">Good Effort</div>';
+      } else if (percentage >= 50) {
+        html += '<div style="text-align: center; padding: 1.5rem; color: #fb923c; font-weight: 500;">Keep Practicing</div>';
+      } else {
+        html += '<div style="text-align: center; padding: 1.5rem; color: #fb923c; font-weight: 500;">Review & Try Again</div>';
+      }
+      
+      if (isSentenceFormat && test.sentences) {
+        test.sentences.filter(s => !s.isExample).forEach((sentence, idx) => {
+          const num = sentence.number;
+          const userAns = userAnswers[num] || '';
+          const correctAns = sentence.answer;
+          const isCorrect = answersMatch(userAns, correctAns);
+          html += `
+            <div class="answer-item ${isCorrect ? 'correct' : 'incorrect'}" style="animation-delay: ${idx * 50}ms">
+              <span>${num}. <strong>${sanitizeText(userAns) || '(empty)'}</strong></span>
+              ${!isCorrect ? `<span style="color: #84cc16;">→ ${sanitizeText(correctAns)}</span>` : '<span style="color: #84cc16;">✓</span>'}
+            </div>
+          `;
+        });
+      } else {
+        const gaps = test.gaps ? Object.keys(test.gaps).filter(n => n !== '0').sort((a, b) => parseInt(a) - parseInt(b)) : [];
+        gaps.forEach((num, idx) => {
+          const userAns = userAnswers[num] || '';
+          const correctAns = test.gaps[num];
+          const isCorrect = answersMatch(userAns, correctAns);
+          html += `
+            <div class="answer-item ${isCorrect ? 'correct' : 'incorrect'}" style="animation-delay: ${idx * 50}ms">
+              <span>Gap ${num}: <strong>${sanitizeText(userAns) || '(empty)'}</strong></span>
+              ${!isCorrect ? `<span style="color: #84cc16;">→ ${sanitizeText(correctAns)}</span>` : '<span style="color: #84cc16;">✓</span>'}
+            </div>
+          `;
+        });
+      }
+      
+      answersDisplay.innerHTML = html;
+      document.getElementById('scoreModal').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('scoreModal').classList.remove('active');
+    }
+
+    function nextTest() {
+      closeModal();
+      if (currentTest < allTests.length - 1) {
+        goToTest(currentTest + 1);
+      } else {
+        showToast('No more tests available');
+      }
+    }
+
+    document.getElementById('scoreModal').addEventListener('click', function(e) {
+      if (e.target === this) closeModal();
+    });
+
     window.addEventListener('load', init);
   </script>
 </body>

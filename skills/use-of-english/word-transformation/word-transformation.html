@@ -397,7 +397,11 @@
       color: #aeaeb2;
       font-size: 0.9375rem;
       margin-bottom: 1rem;
-      line-height: 1.6;
+      line-height: 1.8;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
     }
     
     .keyword-row {
@@ -423,23 +427,21 @@
       letter-spacing: 0.01em;
     }
     
-    .answer-input-wrapper {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-    
     .answer-input {
-      width: 100%;
-      padding: 0.75rem 1rem;
+      width: auto !important;
+      min-width: 150px;
+      max-width: 400px;
+      padding: 0.5rem 0.75rem;
       background: rgba(99, 99, 102, 0.1);
       border: 1px solid rgba(212, 175, 55, 0.3);
-      border-radius: 0.625rem;
+      border-radius: 0.5rem;
       color: #e5e5e7;
       font-size: 0.9375rem;
       font-family: inherit;
       outline: none;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: inline-block;
+      flex: 0 1 auto;
     }
     
     .answer-input:focus {
@@ -473,6 +475,7 @@
       margin-top: 0.5rem;
       opacity: 0;
       animation: fadeIn 0.3s forwards;
+      width: 100%;
     }
     
     @keyframes fadeIn {
@@ -965,8 +968,8 @@
       <div class="dataset-selector">
         <button class="dataset-btn" onclick="toggleDatasetMenu()" aria-label="Select quiz type">Select Set ▾</button>
         <div class="dataset-dropdown" id="datasetDropdown" role="menu">
-          <button class="dataset-option active" data-set="set1" role="menuitem">Set 1 (29 sets)</button>
-          <button class="dataset-option" data-set="set2" role="menuitem">Set 2 (16 sets)</button>
+          <button class="dataset-option active" data-set="set1" role="menuitem">Set 1 (16 tests)</button>
+          <button class="dataset-option" data-set="set2" role="menuitem">Set 2 (16 tests)</button>
         </div>
       </div>
     </div>
@@ -1194,41 +1197,11 @@
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
         
-        // Handle different JSON structures
-        if (currentDataset === 'set1') {
-          // Structure: array of sets with exercises
-          if (!Array.isArray(data)) throw new Error('Invalid data format for Set 1');
-          allTests = [];
-          data.forEach(setData => {
-            if (setData.exercises && Array.isArray(setData.exercises)) {
-              setData.exercises.forEach(exercise => {
-                allTests.push({
-                  sentences: [{
-                    number: exercise.question,
-                    first_sentence: exercise.first_sentence,
-                    keyword: exercise.keyword,
-                    prompt: exercise.incomplete_sentence,
-                    answers: [exercise.missing_words]
-                  }]
-                });
-              });
-            }
-          });
-        } else if (currentDataset === 'set2') {
-          // Structure: object with exercises array containing sentences
-          if (!data || !data.exercises || !Array.isArray(data.exercises)) {
-            throw new Error('Invalid data format for Set 2');
-          }
-          allTests = data.exercises.map(exercise => ({
-            sentences: exercise.sentences.map(s => ({
-              number: s.number,
-              first_sentence: s.first_sentence,
-              keyword: s.keyword,
-              prompt: s.prompt,
-              answers: s.answers.filter(a => a !== "ANSWER_NEEDED")
-            }))
-          }));
+        if (!data || !data.exercises || !Array.isArray(data.exercises)) {
+          throw new Error('Invalid data format');
         }
+        
+        allTests = data.exercises;
         
         if (allTests.length === 0) throw new Error('No valid exercises found');
         createDots();
@@ -1382,10 +1355,6 @@
         numberDiv.className = 'sentence-number';
         numberDiv.textContent = `Question ${sentence.number}`;
         
-        const promptDiv = document.createElement('div');
-        promptDiv.className = 'sentence-prompt';
-        promptDiv.textContent = sentence.prompt;
-        
         const keywordRow = document.createElement('div');
         keywordRow.className = 'keyword-row';
         keywordRow.innerHTML = `
@@ -1393,48 +1362,61 @@
           <span class="keyword">${sanitizeText(sentence.keyword).toUpperCase()}</span>
         `;
         
-        const answerWrapper = document.createElement('div');
-        answerWrapper.className = 'answer-input-wrapper';
+        // Create inline prompt with input
+        const promptDiv = document.createElement('div');
+        promptDiv.className = 'sentence-prompt';
         
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'answer-input';
-        input.dataset.sentence = idx;
-        input.placeholder = 'Type your answer here...';
-        input.value = userAnswers[idx] || '';
-        input.autocomplete = 'off';
-        input.autocorrect = 'off';
-        input.autocapitalize = 'off';
-        input.spellcheck = false;
-        
-        if (answersVisible) {
-          input.classList.add('key-shown');
-          input.value = sentence.answers[0];
-          input.readOnly = true;
-        } else if (showingResults) {
-          const isCorrect = answersMatch(userAnswers[idx] || '', sentence.answers);
-          input.classList.add(isCorrect ? 'correct' : 'incorrect');
-          input.readOnly = true;
+        const parts = sentence.prompt.split(/\.{2,}/);
+        if (parts.length === 2) {
+          promptDiv.appendChild(document.createTextNode(parts[0] + ' '));
           
-          if (!isCorrect) {
-            const correctDiv = document.createElement('div');
-            correctDiv.className = 'correct-answer';
-            correctDiv.textContent = `✓ ${sentence.answers[0]}`;
-            answerWrapper.appendChild(correctDiv);
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'answer-input';
+          input.dataset.sentence = idx;
+          input.placeholder = '...';
+          input.value = userAnswers[idx] || '';
+          input.autocomplete = 'off';
+          input.autocorrect = 'off';
+          input.autocapitalize = 'off';
+          input.spellcheck = false;
+          
+          if (answersVisible) {
+            input.classList.add('key-shown');
+            input.value = sentence.answers[0];
+            input.readOnly = true;
+          } else if (showingResults) {
+            const isCorrect = answersMatch(userAnswers[idx] || '', sentence.answers);
+            input.classList.add(isCorrect ? 'correct' : 'incorrect');
+            input.readOnly = true;
+          } else {
+            input.addEventListener('input', function() {
+              userAnswers[idx] = this.value.trim();
+              updateFooter();
+            });
+          }
+          
+          promptDiv.appendChild(input);
+          promptDiv.appendChild(document.createTextNode(' ' + parts[1]));
+          
+          // Add correct answer below if incorrect
+          if (showingResults && !answersVisible) {
+            const isCorrect = answersMatch(userAnswers[idx] || '', sentence.answers);
+            if (!isCorrect) {
+              const correctDiv = document.createElement('div');
+              correctDiv.className = 'correct-answer';
+              correctDiv.textContent = `✓ Correct answer: ${sentence.answers[0]}`;
+              promptDiv.appendChild(document.createElement('br'));
+              promptDiv.appendChild(correctDiv);
+            }
           }
         } else {
-          input.addEventListener('input', function() {
-            userAnswers[idx] = this.value.trim();
-            updateFooter();
-          });
+          promptDiv.textContent = sentence.prompt;
         }
         
-        answerWrapper.insertBefore(input, answerWrapper.firstChild);
-        
         item.appendChild(numberDiv);
-        item.appendChild(promptDiv);
         item.appendChild(keywordRow);
-        item.appendChild(answerWrapper);
+        item.appendChild(promptDiv);
         contentDiv.appendChild(item);
       });
       
@@ -1482,10 +1464,6 @@
       numberDiv.className = 'sentence-number';
       numberDiv.textContent = `Question ${sentence.number} of ${totalSections}`;
       
-      const promptDiv = document.createElement('div');
-      promptDiv.className = 'sentence-prompt';
-      promptDiv.textContent = sentence.prompt;
-      
       const keywordRow = document.createElement('div');
       keywordRow.className = 'keyword-row';
       keywordRow.innerHTML = `
@@ -1493,48 +1471,61 @@
         <span class="keyword">${sanitizeText(sentence.keyword).toUpperCase()}</span>
       `;
       
-      const answerWrapper = document.createElement('div');
-      answerWrapper.className = 'answer-input-wrapper';
+      // Create inline prompt with input
+      const promptDiv = document.createElement('div');
+      promptDiv.className = 'sentence-prompt';
       
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.className = 'answer-input';
-      input.dataset.sentence = currentSection;
-      input.placeholder = 'Type your answer here...';
-      input.value = userAnswers[currentSection] || '';
-      input.autocomplete = 'off';
-      input.autocorrect = 'off';
-      input.autocapitalize = 'off';
-      input.spellcheck = false;
-      
-      if (answersVisible) {
-        input.classList.add('key-shown');
-        input.value = sentence.answers[0];
-        input.readOnly = true;
-      } else if (showingResults) {
-        const isCorrect = answersMatch(userAnswers[currentSection] || '', sentence.answers);
-        input.classList.add(isCorrect ? 'correct' : 'incorrect');
-        input.readOnly = true;
+      const parts = sentence.prompt.split(/\.{2,}/);
+      if (parts.length === 2) {
+        promptDiv.appendChild(document.createTextNode(parts[0] + ' '));
         
-        if (!isCorrect) {
-          const correctDiv = document.createElement('div');
-          correctDiv.className = 'correct-answer';
-          correctDiv.textContent = `✓ ${sentence.answers[0]}`;
-          answerWrapper.appendChild(correctDiv);
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'answer-input';
+        input.dataset.sentence = currentSection;
+        input.placeholder = '...';
+        input.value = userAnswers[currentSection] || '';
+        input.autocomplete = 'off';
+        input.autocorrect = 'off';
+        input.autocapitalize = 'off';
+        input.spellcheck = false;
+        
+        if (answersVisible) {
+          input.classList.add('key-shown');
+          input.value = sentence.answers[0];
+          input.readOnly = true;
+        } else if (showingResults) {
+          const isCorrect = answersMatch(userAnswers[currentSection] || '', sentence.answers);
+          input.classList.add(isCorrect ? 'correct' : 'incorrect');
+          input.readOnly = true;
+        } else {
+          input.addEventListener('input', function() {
+            userAnswers[currentSection] = this.value.trim();
+            updateFooter();
+          });
+        }
+        
+        promptDiv.appendChild(input);
+        promptDiv.appendChild(document.createTextNode(' ' + parts[1]));
+        
+        // Add correct answer below if incorrect
+        if (showingResults && !answersVisible) {
+          const isCorrect = answersMatch(userAnswers[currentSection] || '', sentence.answers);
+          if (!isCorrect) {
+            const correctDiv = document.createElement('div');
+            correctDiv.className = 'correct-answer';
+            correctDiv.textContent = `✓ Correct answer: ${sentence.answers[0]}`;
+            promptDiv.appendChild(document.createElement('br'));
+            promptDiv.appendChild(correctDiv);
+          }
         }
       } else {
-        input.addEventListener('input', function() {
-          userAnswers[currentSection] = this.value.trim();
-          updateFooter();
-        });
+        promptDiv.textContent = sentence.prompt;
       }
       
-      answerWrapper.insertBefore(input, answerWrapper.firstChild);
-      
       item.appendChild(numberDiv);
-      item.appendChild(promptDiv);
       item.appendChild(keywordRow);
-      item.appendChild(answerWrapper);
+      item.appendChild(promptDiv);
       
       const navButtons = document.createElement('div');
       navButtons.className = 'nav-buttons';

@@ -435,6 +435,12 @@
       padding: 1rem;
     }
 
+    #writeMode {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+
     .write-header {
       margin-bottom: 0.75rem;
       border-bottom: 1px solid rgba(84, 84, 88, 0.2);
@@ -908,11 +914,11 @@
         </div>
 
         <div class="tab-content active" id="phrasesTab">
-          <p style="color: #8e8e93; text-align: center; padding: 2rem;">Loading phrases...</p>
+          <p style="color: #8e8e93; text-align: center; padding: 2rem;">Click quick access buttons above to filter phrases for this stage</p>
         </div>
 
         <div class="tab-content" id="ideasTab">
-         <p style="color: #8e8e93; text-align: center; padding: 2rem;">Loading ideas...</p>
+         <p style="color: #8e8e93; text-align: center; padding: 2rem;">Ideas will appear here</p>
         </div>
 
         <div class="tab-content" id="samplesTab">
@@ -922,7 +928,7 @@
             </button>
           </div>
           <div id="samplesContent">
-            <p style="color: #8e8e93; text-align: center; padding: 2rem;">Loading samples...</p>
+            <p style="color: #8e8e93; text-align: center; padding: 2rem;">Sample essays will appear here</p>
           </div>
         </div>
 
@@ -941,7 +947,7 @@
           <textarea 
             id="textarea" 
             class="textarea" 
-            placeholder="Start writing..."
+            placeholder="Start writing your essay here..."
           ></textarea>
 
           <div class="word-count">
@@ -958,7 +964,6 @@
             <button class="btn" onclick="saveEssay()">💾 Save</button>
             <button class="btn" onclick="exportEssay()">📥 Export</button>
             <button class="btn" onclick="resetEssay()">🔄 Reset</button>
-            <button class="btn" onclick="window.location.href='../essays-hub.html'">← Back</button>
           </div>
         </div>
 
@@ -973,7 +978,7 @@
           <div class="paragraph-nav" id="paragraphNav"></div>
 
           <div class="samples-content" id="samplesMainContent">
-            <p style="color: #8e8e93; text-align: center; padding: 2rem;">Loading samples...</p>
+            <p style="color: #8e8e93; text-align: center; padding: 2rem;">Toggle to Samples mode to read example essays with interactive phrase highlighting</p>
           </div>
         </div>
 
@@ -995,31 +1000,19 @@
   </div>
 
   <script>
-    const urlParams = new URLSearchParams(window.location.search);
-    const essayType = urlParams.get('type') || 'for-against';
     let currentStage = 0;
     let essayData = ['', '', '', '', ''];
-    let sampleViewMode = 'filtered';
     let appMode = 'write';
     let samplesViewMode = 'full';
     let currentParagraph = 0;
-    let currentSampleIndex = 0;
-    
-    let hooksData = {};
-    let thesisData = {};
-    let bodyPhrasesData = {};
-    let conclusionPhrasesData = {};
-    let ideasData = {};
-    let samplesData = {};
-    let phraseIndex = {};
 
     const stageInfo = [
       { 
         name: 'Introduction', 
         target: 40,
         quickButtons: [
-          {label: 'introduce topic', action: 'filterHooks'},
-          {label: 'state position', action: 'filterThesis'}
+          {label: 'hooks', action: 'filterHooks'},
+          {label: 'thesis', action: 'filterThesis'}
         ]
       },
       { 
@@ -1027,223 +1020,54 @@
         target: 50,
         quickButtons: [
           {label: 'points', action: 'filterPoints'},
-          {label: 'examples', action: 'filterExamples'},
-          {label: 'reasons', action: 'filterReasons'}
+          {label: 'examples', action: 'filterExamples'}
         ]
       },
       { 
         name: 'Claim 2', 
         target: 50,
         quickButtons: [
-          {label: 'points', action: 'filterPoints'},
-          {label: 'examples', action: 'filterExamples'},
-          {label: 'contrast', action: 'filterContrast'}
+          {label: 'contrast', action: 'filterContrast'},
+          {label: 'examples', action: 'filterExamples'}
         ]
       },
       { 
         name: 'Claim 3', 
         target: 40,
         quickButtons: [
-          {label: 'contrast', action: 'filterContrast'},
-          {label: 'examples', action: 'filterExamples'},
-          {label: 'ideas', action: 'filterIdeas:all'}
+          {label: 'counter-args', action: 'filterCounter'},
+          {label: 'refute', action: 'filterRefute'}
         ]
       },
       { 
         name: 'Conclusion', 
         target: 40,
         quickButtons: [
-          {label: 'summarize', action: 'filterOpeners'},
-          {label: 'restate position', action: 'filterPosition'}
+          {label: 'opening', action: 'filterOpeners'},
+          {label: 'restate', action: 'filterPosition'}
         ]
       }
     ];
 
-    async function init() {
-      try {
-        await loadAllJSON();
-        buildPhraseIndex();
-        renderQuickAccess();
-        renderPhrases();
-        renderIdeas();
-        renderSamples();
-        renderSamplesMode();
-        updateInterface();
-        
-        document.getElementById('textarea').addEventListener('input', handleInput);
-        
-        document.addEventListener('click', function(e) {
-          const popup = document.getElementById('phrasePopup');
-          if (!popup.contains(e.target) && !e.target.classList.contains('interactive-phrase')) {
-            closePopup();
-          }
-        });
-      } catch (error) {
-        console.error('Initialization error:', error);
-      }
+    function init() {
+      renderQuickAccess();
+      updateInterface();
+      document.getElementById('textarea').addEventListener('input', handleInput);
     }
 
-    async function loadAllJSON() {
-      try {
-        const hooksText = await window.fs.readFile('skills/writing/essays/data/introduction-hooks.json', { encoding: 'utf8' });
-        hooksData = JSON.parse(hooksText);
-        
-        const thesisText = await window.fs.readFile('skills/writing/essays/data/thesis-statements.json', { encoding: 'utf8' });
-        thesisData = JSON.parse(thesisText);
-        
-        const bodyText = await window.fs.readFile('skills/writing/essays/data/body-phrases.json', { encoding: 'utf8' });
-        bodyPhrasesData = JSON.parse(bodyText);
-        
-        const conclusionText = await window.fs.readFile('skills/writing/essays/data/conclusion-phrases.json', { encoding: 'utf8' });
-        conclusionPhrasesData = JSON.parse(conclusionText);
-        
-        const ideasText = await window.fs.readFile('skills/writing/essays/data/ideas.json', { encoding: 'utf8' });
-        ideasData = JSON.parse(ideasText);
-        
-        const samplesText = await window.fs.readFile('skills/writing/essays/data/samples.json', { encoding: 'utf8' });
-        samplesData = JSON.parse(samplesText);
-      } catch (error) {
-        console.error('Error loading JSON files:', error);
-        alert('Error loading data files. Please ensure all JSON files are uploaded correctly.');
-      }
+    function renderQuickAccess() {
+      const bar = document.getElementById('quickAccessBar');
+      const buttons = stageInfo[currentStage].quickButtons;
+      
+      bar.innerHTML = buttons.map(btn => 
+        `<button class="quick-btn" onclick="handleQuickClick('${btn.action}')">${btn.label}</button>`
+      ).join('');
     }
 
-    function buildPhraseIndex() {
-      phraseIndex = {};
-      
-      function normalizePhrase(phrase) {
-        return phrase.toLowerCase()
-          .replace(/[.,;:!?'"]/g, '')
-          .replace(/\s+/g, ' ')
-          .trim();
-      }
-      
-      function addToIndex(phrases, category, subcategory = null) {
-        if (!phrases || !Array.isArray(phrases)) return;
-        
-        phrases.forEach(phrase => {
-          const normalized = normalizePhrase(phrase);
-          if (normalized.length > 3) {
-            if (!phraseIndex[normalized]) {
-              phraseIndex[normalized] = {
-                original: phrase,
-                category: category,
-                subcategory: subcategory,
-                alternatives: phrases.filter(p => normalizePhrase(p) !== normalized)
-              };
-            }
-          }
-        });
-      }
-      
-      if (hooksData.hooks) {
-        Object.entries(hooksData.hooks).forEach(([key, phrases]) => {
-          const category = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-          addToIndex(phrases, 'Introduction Hook', category);
-        });
-      }
-      
-      if (thesisData.general) {
-        Object.entries(thesisData.general).forEach(([key, phrases]) => {
-          const category = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-          addToIndex(phrases, 'Thesis Statement', category);
-        });
-      }
-      
-      const typeKey = essayType.replace(/-/g, '_');
-      if (thesisData[typeKey]) {
-        Object.entries(thesisData[typeKey]).forEach(([key, phrases]) => {
-          const category = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-          addToIndex(phrases, 'Thesis Statement', category);
-        });
-      }
-      
-      if (bodyPhrasesData.introducing_points) {
-        Object.entries(bodyPhrasesData.introducing_points).forEach(([key, phrases]) => {
-          const category = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-          addToIndex(phrases, 'Introducing Points', category);
-        });
-      }
-      
-      ['giving_examples', 'explaining_reasons', 'showing_results', 'adding_information', 
-       'contrasting', 'emphasizing', 'acknowledging_counter_arguments', 'refuting_counter_arguments'].forEach(key => {
-        if (bodyPhrasesData[key]) {
-          const category = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-          addToIndex(bodyPhrasesData[key], 'Body Phrase', category);
-        }
-      });
-      
-      if (conclusionPhrasesData.opening_conclusion) {
-        addToIndex(conclusionPhrasesData.opening_conclusion, 'Conclusion', 'Opening');
-      }
-      
-      if (conclusionPhrasesData.restating_position) {
-        Object.entries(conclusionPhrasesData.restating_position).forEach(([key, phrases]) => {
-          const category = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-          addToIndex(phrases, 'Conclusion', category);
-        });
-      }
-      
-      if (conclusionPhrasesData.final_thought) {
-        Object.entries(conclusionPhrasesData.final_thought).forEach(([key, phrases]) => {
-          const category = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-          addToIndex(phrases, 'Conclusion', category);
-        });
-      }
-    }
-
-    function highlightPhrases(text) {
-      if (!text) return '';
-      
-      const sortedPhrases = Object.keys(phraseIndex).sort((a, b) => b.length - a.length);
-      
-      let result = text;
-      const matches = [];
-      
-      sortedPhrases.forEach(normalized => {
-        const phraseData = phraseIndex[normalized];
-        const regex = new RegExp(
-          normalized.replace(/\s+/g, '\\s+'),
-          'gi'
-        );
-        
-        let match;
-        while ((match = regex.exec(text)) !== null) {
-          matches.push({
-            start: match.index,
-            end: match.index + match[0].length,
-            text: match[0],
-            normalized: normalized,
-            data: phraseData
-          });
-        }
-      });
-      
-      matches.sort((a, b) => a.start - b.start);
-      const filteredMatches = [];
-      let lastEnd = 0;
-      
-      matches.forEach(match => {
-        if (match.start >= lastEnd) {
-          filteredMatches.push(match);
-          lastEnd = match.end;
-        }
-      });
-      
-      if (filteredMatches.length === 0) return text;
-      
-      let highlighted = '';
-      let lastIndex = 0;
-      
-      filteredMatches.forEach(match => {
-        highlighted += text.substring(lastIndex, match.start);
-        highlighted += `<span class="interactive-phrase" data-phrase="${match.normalized.replace(/"/g, '&quot;')}">${match.text}</span>`;
-        lastIndex = match.end;
-      });
-      
-      highlighted += text.substring(lastIndex);
-      
-      return highlighted;
+    function handleQuickClick(action) {
+      document.querySelectorAll('.quick-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+      switchTab('phrases');
     }
 
     function toggleMode() {
@@ -1266,7 +1090,7 @@
         appMode = 'write';
         toggle.classList.remove('samples-mode');
         toggle.classList.add('write-mode');
-        writeMode.style.display = 'block';
+        writeMode.style.display = 'flex';
         samplesDisplay.classList.remove('active');
         banner.classList.remove('show');
       }
@@ -1283,143 +1107,12 @@
         fullBtn.classList.add('active');
         chunksBtn.classList.remove('active');
         paragraphNav.classList.remove('show');
-        currentParagraph = -1;
       } else {
         fullBtn.classList.remove('active');
         chunksBtn.classList.add('active');
         paragraphNav.classList.add('show');
         currentParagraph = 0;
       }
-      
-      renderSamplesMode();
-    }
-
-    function renderSamplesMode() {
-      const container = document.getElementById('samplesMainContent');
-      const paragraphNav = document.getElementById('paragraphNav');
-      
-      container.innerHTML = '';
-      paragraphNav.innerHTML = '';
-      
-      const typeKey = essayType.replace(/-/g, '_');
-      const samples = samplesData[typeKey] || [];
-      
-      if (samples.length === 0) {
-        container.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No samples available for this essay type.</p>';
-        return;
-      }
-      
-      const sample = samples[0];
-      const paragraphs = sample.fullText.split('\n\n').filter(p => p.trim());
-      
-      if (samplesViewMode === 'full') {
-        const essay = document.createElement('div');
-        essay.className = 'sample-essay active';
-        
-        const title = document.createElement('div');
-        title.className = 'sample-essay-title';
-        title.textContent = `${sample.title} (${sample.wordCount} words)`;
-        essay.appendChild(title);
-        
-        paragraphs.forEach((para, idx) => {
-          const p = document.createElement('div');
-          p.className = 'sample-paragraph';
-          p.innerHTML = highlightPhrases(para);
-          essay.appendChild(p);
-          
-          p.querySelectorAll('.interactive-phrase').forEach(span => {
-            span.addEventListener('click', function(e) {
-              showPhrasePopup(this, e);
-            });
-          });
-        });
-        
-        container.appendChild(essay);
-        
-      } else {
-        const essay = document.createElement('div');
-        essay.className = 'sample-essay active';
-        
-        const title = document.createElement('div');
-        title.className = 'sample-essay-title';
-        title.textContent = sample.title;
-        essay.appendChild(title);
-        
-        paragraphs.forEach((para, idx) => {
-          const navBtn = document.createElement('button');
-          navBtn.className = 'para-nav-btn' + (idx === currentParagraph ? ' active' : '');
-          
-          let label = 'Paragraph ' + (idx + 1);
-          if (idx === 0) label = 'Introduction';
-          else if (idx === paragraphs.length - 1) label = 'Conclusion';
-          
-          navBtn.textContent = label;
-          navBtn.onclick = () => {
-            currentParagraph = idx;
-            renderSamplesMode();
-          };
-          paragraphNav.appendChild(navBtn);
-        });
-        
-        if (currentParagraph >= 0 && currentParagraph < paragraphs.length) {
-          const p = document.createElement('div');
-          p.className = 'sample-paragraph';
-          p.innerHTML = highlightPhrases(paragraphs[currentParagraph]);
-          essay.appendChild(p);
-          
-          p.querySelectorAll('.interactive-phrase').forEach(span => {
-            span.addEventListener('click', function(e) {
-              showPhrasePopup(this, e);
-            });
-          });
-        }
-        
-        container.appendChild(essay);
-      }
-    }
-
-    function showPhrasePopup(element, event) {
-      const normalized = element.getAttribute('data-phrase');
-      const phraseData = phraseIndex[normalized];
-      
-      if (!phraseData) return;
-      
-      const popup = document.getElementById('phrasePopup');
-      const category = document.getElementById('popupCategory');
-      const phrase = document.getElementById('popupPhrase');
-      const alternatives = document.getElementById('popupAlternatives');
-      
-      category.textContent = phraseData.subcategory 
-        ? `${phraseData.category} - ${phraseData.subcategory}` 
-        : phraseData.category;
-      phrase.textContent = `"${element.textContent}"`;
-      
-      alternatives.innerHTML = '';
-      if (phraseData.alternatives && phraseData.alternatives.length > 0) {
-        phraseData.alternatives.slice(0, 5).forEach(alt => {
-          const altDiv = document.createElement('div');
-          altDiv.className = 'alt-phrase';
-          altDiv.textContent = alt;
-          altDiv.onclick = () => {
-            copyToClipboard(alt);
-            altDiv.style.borderLeftColor = '#C9A961';
-            setTimeout(() => {
-              altDiv.style.borderLeftColor = 'rgba(201, 169, 97, 0.3)';
-            }, 500);
-          };
-          alternatives.appendChild(altDiv);
-        });
-      } else {
-        alternatives.innerHTML = '<div style="color: #636366; font-size: 0.65rem; text-align: center;">No alternatives available</div>';
-      }
-      
-      const rect = element.getBoundingClientRect();
-      popup.style.left = Math.min(rect.left, window.innerWidth - 320) + 'px';
-      popup.style.top = (rect.bottom + 10) + 'px';
-      
-      popup.dataset.currentPhrase = element.textContent;
-      
-      popup.classList.add('show');
     }
 
     function closePopup() {
@@ -1429,7 +1122,10 @@
     function copyPhrase() {
       const popup = document.getElementById('phrasePopup');
       const phrase = popup.dataset.currentPhrase;
-      copyToClipboard(phrase);
+      
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(phrase);
+      }
       
       const btn = event.target;
       const originalText = btn.textContent;
@@ -1437,373 +1133,6 @@
       setTimeout(() => {
         btn.textContent = originalText;
       }, 1500);
-    }
-
-    function copyToClipboard(text) {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
-    }
-
-    function renderQuickAccess() {
-      const bar = document.getElementById('quickAccessBar');
-      const buttons = stageInfo[currentStage].quickButtons;
-      
-      bar.innerHTML = buttons.map(btn => 
-        `<button class="quick-btn" onclick="handleQuickClick('${btn.action}')">${btn.label}</button>`
-      ).join('');
-    }
-
-    function handleQuickClick(action) {
-      const [filterType, filterParam] = action.split(':');
-      
-      document.querySelectorAll('.quick-btn').forEach(btn => btn.classList.remove('active'));
-      event.target.classList.add('active');
-      
-      if (filterType.includes('Ideas')) {
-        switchTab('ideas');
-        if (filterParam === 'positive') showOnlyIdeas('positive');
-        else if (filterParam === 'negative') showOnlyIdeas('negative');
-        else showAllIdeas();
-      } else {
-        switchTab('phrases');
-        applyPhraseFilter(filterType);
-      }
-    }
-
-    function applyPhraseFilter(filterType) {
-      switchTab('phrases');
-      
-      const allGroups = document.querySelectorAll('.phrase-group');
-      allGroups.forEach(g => {
-        g.classList.remove('show');
-        const list = g.querySelector('.phrase-list');
-        if (list) list.classList.remove('show');
-      });
-      
-      let groupsToShow = [];
-      
-      switch(filterType) {
-        case 'filterHooks':
-          groupsToShow = ['hooks-background', 'hooks-controversy', 'hooks-trend', 'hooks-reference', 'hooks-question'];
-          break;
-        case 'filterThesis':
-          groupsToShow = ['thesis-introducing', 'thesis-balanced', 'thesis-position'];
-          break;
-        case 'filterPoints':
-          groupsToShow = ['body-first', 'body-second', 'body-third'];
-          break;
-        case 'filterExamples':
-          groupsToShow = ['body-examples', 'body-reasons'];
-          break;
-        case 'filterReasons':
-          groupsToShow = ['body-reasons', 'body-results'];
-          break;
-        case 'filterContrast':
-          groupsToShow = ['body-contrasting', 'body-acknowledging'];
-          break;
-        case 'filterOpeners':
-          groupsToShow = ['conclusion-opening'];
-          break;
-        case 'filterPosition':
-          groupsToShow = ['conclusion-position-strong_agreement', 'conclusion-position-strong_disagreement', 'conclusion-position-balanced_view'];
-          break;
-      }
-      
-      groupsToShow.forEach(id => {
-        const group = document.getElementById(id);
-        if (group) {
-          group.classList.add('show');
-          const list = group.querySelector('.phrase-list');
-          if (list) list.classList.add('show');
-        }
-      });
-    }
-
-    function renderPhrases() {
-      const tab = document.getElementById('phrasesTab');
-      tab.innerHTML = '';
-
-      if (hooksData.hooks) {
-        createPhraseGroup('hooks-background', '🎣 Background Facts', hooksData.hooks.background_facts);
-        createPhraseGroup('hooks-controversy', '🎣 Controversy', hooksData.hooks.controversy);
-        createPhraseGroup('hooks-concern', '🎣 Concern', hooksData.hooks.concern);
-        createPhraseGroup('hooks-trend', '🎣 Trend & Generalisation', hooksData.hooks.trend_generalisation);
-        createPhraseGroup('hooks-reference', '🎣 Reference', hooksData.hooks.reference);
-        createPhraseGroup('hooks-question', '🎣 Question', hooksData.hooks.question);
-      }
-
-      if (thesisData.general) {
-        createPhraseGroup('thesis-introducing', '📝 Introducing Topic', thesisData.general.introducing_topic);
-      }
-      const typeKey = essayType.replace(/-/g, '_');
-      if (thesisData[typeKey]) {
-        for (let key in thesisData[typeKey]) {
-          const title = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-          createPhraseGroup(`thesis-${key}`, `📝 ${title}`, thesisData[typeKey][key]);
-        }
-      }
-
-      if (bodyPhrasesData.introducing_points) {
-        createPhraseGroup('body-first', '➡️ First Point', bodyPhrasesData.introducing_points.first_point);
-        createPhraseGroup('body-second', '➡️ Second Point', bodyPhrasesData.introducing_points.second_point);
-        createPhraseGroup('body-third', '➡️ Third Point', bodyPhrasesData.introducing_points.third_point);
-      }
-      if (bodyPhrasesData.giving_examples) {
-        createPhraseGroup('body-examples', '💡 Examples', bodyPhrasesData.giving_examples);
-      }
-      if (bodyPhrasesData.explaining_reasons) {
-        createPhraseGroup('body-reasons', '🔍 Reasons', bodyPhrasesData.explaining_reasons);
-      }
-      if (bodyPhrasesData.showing_results) {
-        createPhraseGroup('body-results', '📊 Results', bodyPhrasesData.showing_results);
-      }
-      if (bodyPhrasesData.adding_information) {
-        createPhraseGroup('body-adding', '➕ Adding Info', bodyPhrasesData.adding_information);
-      }
-      if (bodyPhrasesData.contrasting) {
-        createPhraseGroup('body-contrasting', '⚖️ Contrasting', bodyPhrasesData.contrasting);
-      }
-      if (bodyPhrasesData.acknowledging_counter_arguments) {
-        createPhraseGroup('body-acknowledging', '⚠️ Counter-Arguments', bodyPhrasesData.acknowledging_counter_arguments);
-      }
-
-      if (conclusionPhrasesData.opening_conclusion) {
-        createPhraseGroup('conclusion-opening', '🏁 Opening', conclusionPhrasesData.opening_conclusion);
-      }
-      if (conclusionPhrasesData.restating_position) {
-        for (let key in conclusionPhrasesData.restating_position) {
-          const title = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-          createPhraseGroup(`conclusion-position-${key}`, `📍 ${title}`, conclusionPhrasesData.restating_position[key]);
-        }
-      }
-      if (conclusionPhrasesData.final_thought) {
-        for (let key in conclusionPhrasesData.final_thought) {
-          const title = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-          createPhraseGroup(`conclusion-final-${key}`, `🎯 ${title}`, conclusionPhrasesData.final_thought[key]);
-        }
-      }
-    }
-
-    function createPhraseGroup(id, title, phrases) {
-      if (!phrases || phrases.length === 0) return;
-
-      const group = document.createElement('div');
-      group.id = id;
-      group.className = 'phrase-group';
-      
-      const titleEl = document.createElement('div');
-      titleEl.className = 'phrase-title';
-      titleEl.textContent = title + ' ▼';
-      titleEl.onclick = function() { toggleGroup(this); };
-      
-      const list = document.createElement('div');
-      list.className = 'phrase-list';
-      
-      phrases.forEach(phrase => {
-        const item = document.createElement('div');
-        item.className = 'phrase-item';
-        item.textContent = phrase;
-        list.appendChild(item);
-      });
-      
-      group.appendChild(titleEl);
-      group.appendChild(list);
-      document.getElementById('phrasesTab').appendChild(group);
-    }
-
-    function renderIdeas() {
-      const tab = document.getElementById('ideasTab');
-      tab.innerHTML = '';
-
-      const typeKey = essayType.replace(/-/g, '_');
-      
-      if (!ideasData[typeKey]) {
-        tab.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No ideas available for this essay type.</p>';
-        return;
-      }
-
-      const topicKey = Object.keys(ideasData[typeKey])[0];
-      if (!topicKey) return;
-      
-      const topicData = ideasData[typeKey][topicKey];
-
-      if (topicData.positive || topicData.advantages || topicData.arguments_for) {
-        const positiveIdeas = topicData.positive || topicData.advantages || topicData.arguments_for;
-        positiveIdeas.forEach(idea => {
-          const card = document.createElement('div');
-          card.className = 'idea-card';
-          card.dataset.type = 'positive';
-          card.innerHTML = `
-            <div class="idea-label">✅ ${idea.label || idea.point}</div>
-            <div class="idea-text">
-              <strong>Reason:</strong> ${idea.reason || idea.support}<br>
-              <strong>Example:</strong> ${idea.example}
-              ${idea.result ? `<br><strong>Result:</strong> ${idea.result}` : ''}
-            </div>
-          `;
-          tab.appendChild(card);
-        });
-      }
-
-      if (topicData.negative || topicData.disadvantages || topicData.arguments_against) {
-        const negativeIdeas = topicData.negative || topicData.disadvantages || topicData.arguments_against;
-        negativeIdeas.forEach(idea => {
-          const card = document.createElement('div');
-          card.className = 'idea-card';
-          card.dataset.type = 'negative';
-          card.innerHTML = `
-            <div class="idea-label">❌ ${idea.label || idea.point}</div>
-            <div class="idea-text">
-              <strong>Reason:</strong> ${idea.reason || idea.support}<br>
-              <strong>Example:</strong> ${idea.example}
-              ${idea.result ? `<br><strong>Result:</strong> ${idea.result}` : ''}
-            </div>
-          `;
-          tab.appendChild(card);
-        });
-      }
-
-      showAllIdeas();
-    }
-
-    function toggleSampleView() {
-      sampleViewMode = sampleViewMode === 'filtered' ? 'full' : 'filtered';
-      const btn = document.getElementById('sampleToggleBtn');
-      const text = document.getElementById('sampleToggleText');
-      
-      if (sampleViewMode === 'full') {
-        btn.classList.remove('active');
-        text.textContent = 'full view';
-      } else {
-        btn.classList.add('active');
-        text.textContent = 'stage view';
-      }
-      
-      renderSamples();
-    }
-
-    function renderSamples() {
-      const container = document.getElementById('samplesContent');
-      container.innerHTML = '';
-      
-      const typeKey = essayType.replace(/-/g, '_');
-      const samples = samplesData[typeKey] || [];
-      
-      if (samples.length === 0) {
-        container.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No samples available for this essay type.</p>';
-        return;
-      }
-
-      if (sampleViewMode === 'full') {
-        samples.forEach(sample => {
-          const box = document.createElement('div');
-          box.className = 'sample-box';
-          
-          const header = document.createElement('div');
-          header.className = 'sample-header';
-          
-          const title = document.createElement('div');
-          title.className = 'sample-title';
-          title.textContent = `${sample.title} (${sample.wordCount}w)`;
-          
-          const btn = document.createElement('button');
-          btn.className = 'expand-btn';
-          btn.textContent = 'Show';
-          btn.onclick = function() { toggleSample(this); };
-          
-          const body = document.createElement('div');
-          body.className = 'sample-body';
-          body.innerHTML = sample.fullText.replace(/\n\n/g, '<br><br>');
-          
-          header.appendChild(title);
-          header.appendChild(btn);
-          box.appendChild(header);
-          box.appendChild(body);
-          container.appendChild(box);
-        });
-      } else {
-        samples.forEach(sample => {
-          const paragraphs = sample.fullText.split('\n\n').filter(p => p.trim());
-          
-          let relevantText = '';
-          let stageLabel = '';
-          
-          switch(currentStage) {
-            case 0:
-              relevantText = paragraphs[0] || '';
-              stageLabel = 'Introduction';
-              break;
-            case 1:
-              relevantText = paragraphs[1] || '';
-              stageLabel = 'First Body Paragraph';
-              break;
-            case 2:
-              relevantText = paragraphs[2] || '';
-              stageLabel = 'Second Body Paragraph';
-              break;
-            case 3:
-              relevantText = paragraphs[3] || paragraphs[2] || '';
-              stageLabel = 'Third Body Paragraph';
-              break;
-            case 4:
-              relevantText = paragraphs[paragraphs.length - 1] || '';
-              stageLabel = 'Conclusion';
-              break;
-          }
-          
-          if (!relevantText) return;
-          
-          const box = document.createElement('div');
-          box.className = 'sample-box';
-          
-          const header = document.createElement('div');
-          header.className = 'sample-header';
-          
-          const title = document.createElement('div');
-          title.className = 'sample-title';
-          title.textContent = `${sample.title} - ${stageLabel}`;
-          
-          const btn = document.createElement('button');
-          btn.className = 'expand-btn';
-          btn.textContent = 'Show';
-          btn.onclick = function() { toggleSample(this); };
-          
-          const body = document.createElement('div');
-          body.className = 'sample-body';
-          body.textContent = relevantText;
-          
-          header.appendChild(title);
-          header.appendChild(btn);
-          box.appendChild(header);
-          box.appendChild(body);
-          container.appendChild(box);
-        });
-      }
-    }
-
-    function showOnlyIdeas(type) {
-      document.querySelectorAll('.idea-card').forEach(card => {
-        card.classList.remove('show');
-        if (card.dataset.type === type) {
-          card.classList.add('show');
-        }
-      });
-    }
-
-    function showAllIdeas() {
-      document.querySelectorAll('.idea-card').forEach(card => {
-        card.classList.add('show');
-      });
     }
 
     function updateInterface() {
@@ -1822,14 +1151,7 @@
       document.getElementById('nextBtn').disabled = currentStage === 4;
       
       renderQuickAccess();
-      
-      document.querySelectorAll('.phrase-group').forEach(g => g.classList.remove('show'));
       document.querySelectorAll('.quick-btn').forEach(btn => btn.classList.remove('active'));
-      showAllIdeas();
-      
-      if (sampleViewMode === 'filtered') {
-        renderSamples();
-      }
       
       updateWordCount();
     }
@@ -1884,24 +1206,22 @@
       document.getElementById(tabName + 'Tab').classList.add('active');
     }
 
-    function toggleGroup(title) {
-      const list = title.nextElementSibling;
-      list.classList.toggle('show');
-      title.textContent = list.classList.contains('show') 
-        ? title.textContent.replace('▼', '▲')
-        : title.textContent.replace('▲', '▼');
-    }
-
-    function toggleSample(btn) {
-      const body = btn.parentElement.nextElementSibling;
-      body.classList.toggle('show');
-      btn.textContent = body.classList.contains('show') ? 'Hide' : 'Show';
+    function toggleSampleView() {
+      const btn = document.getElementById('sampleToggleBtn');
+      const text = document.getElementById('sampleToggleText');
+      
+      if (btn.classList.contains('active')) {
+        btn.classList.remove('active');
+        text.textContent = 'full view';
+      } else {
+        btn.classList.add('active');
+        text.textContent = 'stage view';
+      }
     }
 
     function saveEssay() {
       essayData[currentStage] = document.getElementById('textarea').value;
       const data = {
-        type: essayType,
         timestamp: new Date().toISOString(),
         stages: essayData
       };
@@ -1909,7 +1229,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `essay-${essayType}-${Date.now()}.json`;
+      a.download = `essay-${Date.now()}.json`;
       a.click();
       URL.revokeObjectURL(url);
     }
@@ -1921,7 +1241,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `essay-${essayType}.txt`;
+      a.download = `essay-export.txt`;
       a.click();
       URL.revokeObjectURL(url);
     }

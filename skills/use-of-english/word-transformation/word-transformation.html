@@ -429,7 +429,8 @@
     
     .answer-input {
       width: auto !important;
-      min-width: 120px;
+      min-width: 180px;
+      max-width: 100%;
       padding: 0.5rem 0.75rem;
       background: rgba(99, 99, 102, 0.1);
       border: 1px solid rgba(212, 175, 55, 0.3);
@@ -1106,17 +1107,55 @@
       return answer.toLowerCase().trim().replace(/\s+/g, ' ').replace(/['']/g, "'");
     }
 
+    // ISSUE 3 FIX: Improved answer matching with flexible word order and verb forms
     function answersMatch(userAnswer, correctAnswers) {
       const normalized = normalizeAnswer(userAnswer);
+      
       return correctAnswers.some(correct => {
         const correctNorm = normalizeAnswer(correct);
+        
+        // Exact match
         if (normalized === correctNorm) return true;
+        
+        // Check variations
         const variations = [
           [normalized.replace(/ise/g, 'ize'), correctNorm],
           [normalized.replace(/our/g, 'or'), correctNorm],
           [normalized.replace(/re$/g, 'er'), correctNorm]
         ];
-        return variations.some(([a, b]) => a === b || b === a);
+        
+        if (variations.some(([a, b]) => a === b || b === a)) return true;
+        
+        // Split into words for flexible matching
+        const userWords = normalized.split(' ').filter(w => w.length > 0);
+        const correctWords = correctNorm.split(' ').filter(w => w.length > 0);
+        
+        // If word counts are very different, likely not a match
+        if (Math.abs(userWords.length - correctWords.length) > 2) return false;
+        
+        // Check if all important words from correct answer appear in user answer
+        const importantCorrectWords = correctWords.filter(w => 
+          !['a', 'an', 'the', 'to', 'of', 'in', 'for', 'on', 'at', 'by', 'with'].includes(w)
+        );
+        
+        const hasAllImportantWords = importantCorrectWords.every(word => {
+          // Check exact word or common verb variations
+          return userWords.some(userWord => {
+            if (userWord === word) return true;
+            // Check verb forms (e.g., "fancied" vs "would fancy")
+            if (word.endsWith('ed') && userWord.includes(word.slice(0, -2))) return true;
+            if (userWord.endsWith('ed') && word.includes(userWord.slice(0, -2))) return true;
+            if (word.endsWith('ing') && userWord.includes(word.slice(0, -3))) return true;
+            if (userWord.endsWith('ing') && word.includes(userWord.slice(0, -3))) return true;
+            return false;
+          });
+        });
+        
+        // Check structural similarity for auxiliary verbs
+        const hasAuxiliary = (words) => words.some(w => ['would', 'could', 'should', 'might', 'may', 'will', 'can'].includes(w));
+        const bothHaveOrLackAuxiliary = hasAuxiliary(userWords) === hasAuxiliary(correctWords);
+        
+        return hasAllImportantWords && bothHaveOrLackAuxiliary;
       });
     }
 
@@ -1347,6 +1386,7 @@
       updateKeyButton();
     }
 
+    // ISSUE 1 & 2 FIX: Auto-expanding input + keyword at beginning
     function renderClassicMode() {
       const test = allTests[currentTest];
       if (!test) return;
@@ -1372,10 +1412,8 @@
         numberDiv.className = 'sentence-number';
         numberDiv.textContent = `Question ${sentence.number}`;
         
-        // Get original sentence - handle both JSON formats
         const originalText = sentence.original_sentence || sentence.first_sentence || '';
         
-        // Add original sentence with better styling
         if (originalText) {
           const originalDiv = document.createElement('div');
           originalDiv.style.cssText = 'color: #e5e5e7; font-size: 0.9375rem; margin-bottom: 1.25rem; line-height: 1.7; font-weight: 400;';
@@ -1386,7 +1424,6 @@
           item.appendChild(numberDiv);
         }
         
-        // Just the keyword - centered
         const keywordDiv = document.createElement('div');
         keywordDiv.style.cssText = 'text-align: center; margin: 1.25rem 0;';
         keywordDiv.innerHTML = `<span class="keyword">${sanitizeText(sentence.keyword).toUpperCase()}</span>`;
@@ -1399,39 +1436,23 @@
         const parts = promptText.split(/\.{2,}/);
         
         if (parts.length === 2) {
-          promptDiv.appendChild(document.createTextNode(parts[0] + ' '));
+          const firstPart = parts[0].trim();
+          const secondPart = parts[1].trim();
           
-          const input = document.createElement('input');
-          input.type = 'text';
-          input.className = 'answer-input';
-          input.dataset.sentence = idx;
-          input.placeholder = '...';
-          input.value = userAnswers[idx] || '';
-          input.autocomplete = 'off';
-          input.autocorrect = 'off';
-          input.autocapitalize = 'off';
-          input.spellcheck = false;
-          
-          const estimatedChars = Math.max(15, Math.min(40, (parts[0].length + parts[1].length) / 4));
-          input.style.width = `${estimatedChars}ch`;
-          
-          if (answersVisible) {
-            input.classList.add('key-shown');
-            input.value = sentence.answers[0];
-            input.readOnly = true;
-          } else if (showingResults) {
-            const isCorrect = answersMatch(userAnswers[idx] || '', sentence.answers);
-            input.classList.add(isCorrect ? 'correct' : 'incorrect');
-            input.readOnly = true;
+          // ISSUE 2 FIX: Check if keyword should be at the start
+          if (firstPart.length < 3) {
+            // Keyword goes first
+            const input = createAutoExpandingInput(idx, sentence);
+            if (firstPart) promptDiv.appendChild(document.createTextNode(firstPart + ' '));
+            promptDiv.appendChild(input);
+            promptDiv.appendChild(document.createTextNode(' ' + secondPart));
           } else {
-            input.addEventListener('input', function() {
-              userAnswers[idx] = this.value.trim();
-              updateFooter();
-            });
+            // Normal case
+            promptDiv.appendChild(document.createTextNode(firstPart + ' '));
+            const input = createAutoExpandingInput(idx, sentence);
+            promptDiv.appendChild(input);
+            promptDiv.appendChild(document.createTextNode(' ' + secondPart));
           }
-          
-          promptDiv.appendChild(input);
-          promptDiv.appendChild(document.createTextNode(' ' + parts[1]));
           
           if (showingResults && !answersVisible) {
             const isCorrect = answersMatch(userAnswers[idx] || '', sentence.answers);
@@ -1454,6 +1475,68 @@
       container.innerHTML = '';
       container.appendChild(headerWrapper);
       container.appendChild(contentDiv);
+    }
+
+    // ISSUE 1 FIX: Helper function to create auto-expanding input
+    function createAutoExpandingInput(idx, sentence) {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'answer-input';
+      input.dataset.sentence = idx;
+      input.placeholder = '...';
+      input.value = userAnswers[idx] || '';
+      input.autocomplete = 'off';
+      input.autocorrect = 'off';
+      input.autocapitalize = 'off';
+      input.spellcheck = false;
+      input.style.minWidth = '180px';
+      input.style.maxWidth = '100%';
+      
+      // Set initial width
+      setTimeout(() => {
+        if (input.value) {
+          const width = calculateInputWidth(input);
+          input.style.width = width + 'px';
+        } else {
+          input.style.width = '180px';
+        }
+      }, 0);
+      
+      if (answersVisible) {
+        input.classList.add('key-shown');
+        input.value = sentence.answers[0];
+        input.readOnly = true;
+        const width = calculateInputWidth(input);
+        input.style.width = width + 'px';
+      } else if (showingResults) {
+        const isCorrect = answersMatch(userAnswers[idx] || '', sentence.answers);
+        input.classList.add(isCorrect ? 'correct' : 'incorrect');
+        input.readOnly = true;
+      } else {
+        input.addEventListener('input', function() {
+          userAnswers[idx] = this.value.trim();
+          const width = calculateInputWidth(this);
+          this.style.width = width + 'px';
+          updateFooter();
+        });
+      }
+      
+      return input;
+    }
+
+    function calculateInputWidth(input) {
+      const tempSpan = document.createElement('span');
+      tempSpan.style.visibility = 'hidden';
+      tempSpan.style.position = 'absolute';
+      tempSpan.style.whiteSpace = 'pre';
+      tempSpan.style.fontSize = window.getComputedStyle(input).fontSize;
+      tempSpan.style.fontFamily = window.getComputedStyle(input).fontFamily;
+      tempSpan.style.fontWeight = window.getComputedStyle(input).fontWeight;
+      tempSpan.textContent = input.value || input.placeholder;
+      document.body.appendChild(tempSpan);
+      const textWidth = tempSpan.offsetWidth + 40;
+      document.body.removeChild(tempSpan);
+      return Math.max(180, Math.min(textWidth, 600));
     }
 
     function renderGuidedMode() {
@@ -1495,10 +1578,8 @@
       numberDiv.className = 'sentence-number';
       numberDiv.textContent = `Question ${sentence.number} of ${totalSections}`;
       
-      // Get original sentence - handle both JSON formats
       const originalText = sentence.original_sentence || sentence.first_sentence || '';
       
-      // Add original sentence with better styling
       if (originalText) {
         const originalDiv = document.createElement('div');
         originalDiv.style.cssText = 'color: #e5e5e7; font-size: 0.9375rem; margin-bottom: 1.25rem; line-height: 1.7; font-weight: 400;';
@@ -1509,7 +1590,6 @@
         item.appendChild(numberDiv);
       }
       
-      // Just the keyword - centered
       const keywordDiv = document.createElement('div');
       keywordDiv.style.cssText = 'text-align: center; margin: 1.25rem 0;';
       keywordDiv.innerHTML = `<span class="keyword">${sanitizeText(sentence.keyword).toUpperCase()}</span>`;
@@ -1522,39 +1602,20 @@
       const parts = promptText.split(/\.{2,}/);
       
       if (parts.length === 2) {
-        promptDiv.appendChild(document.createTextNode(parts[0] + ' '));
+        const firstPart = parts[0].trim();
+        const secondPart = parts[1].trim();
         
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'answer-input';
-        input.dataset.sentence = currentSection;
-        input.placeholder = '...';
-        input.value = userAnswers[currentSection] || '';
-        input.autocomplete = 'off';
-        input.autocorrect = 'off';
-        input.autocapitalize = 'off';
-        input.spellcheck = false;
-        
-        const estimatedChars = Math.max(15, Math.min(40, (parts[0].length + parts[1].length) / 4));
-        input.style.width = `${estimatedChars}ch`;
-        
-        if (answersVisible) {
-          input.classList.add('key-shown');
-          input.value = sentence.answers[0];
-          input.readOnly = true;
-        } else if (showingResults) {
-          const isCorrect = answersMatch(userAnswers[currentSection] || '', sentence.answers);
-          input.classList.add(isCorrect ? 'correct' : 'incorrect');
-          input.readOnly = true;
+        if (firstPart.length < 3) {
+          const input = createAutoExpandingInput(currentSection, sentence);
+          if (firstPart) promptDiv.appendChild(document.createTextNode(firstPart + ' '));
+          promptDiv.appendChild(input);
+          promptDiv.appendChild(document.createTextNode(' ' + secondPart));
         } else {
-          input.addEventListener('input', function() {
-            userAnswers[currentSection] = this.value.trim();
-            updateFooter();
-          });
+          promptDiv.appendChild(document.createTextNode(firstPart + ' '));
+          const input = createAutoExpandingInput(currentSection, sentence);
+          promptDiv.appendChild(input);
+          promptDiv.appendChild(document.createTextNode(' ' + secondPart));
         }
-        
-        promptDiv.appendChild(input);
-        promptDiv.appendChild(document.createTextNode(' ' + parts[1]));
         
         if (showingResults && !answersVisible) {
           const isCorrect = answersMatch(userAnswers[currentSection] || '', sentence.answers);

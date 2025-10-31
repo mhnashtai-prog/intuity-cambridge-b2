@@ -161,7 +161,7 @@
       transition: all 0.2s;
     }
     
-    .option-btn:hover {
+    .option-btn:hover:not(:disabled) {
       background: rgba(201, 169, 97, 0.25);
       transform: scale(1.05);
     }
@@ -181,6 +181,10 @@
       background: rgba(239, 68, 68, 0.25);
       border-color: #ef4444;
       color: #ef4444;
+    }
+
+    .option-btn:disabled {
+      cursor: not-allowed;
     }
     
     .study-mode .expression-card {
@@ -397,22 +401,58 @@
       try {
         const basePath = 'data/';
         
-        const practiceResponse = await fetch(basePath + 'essay-expressions-interface.json');
-        if (practiceResponse.ok) {
-          practiceData = await practiceResponse.json();
-          console.log('✓ Practice data loaded:', practiceData.sets.length, 'sets');
+        // Load practice data
+        try {
+          const practiceResponse = await fetch(basePath + 'essay-expressions-interface.json');
+          console.log('Practice response status:', practiceResponse.status);
+          
+          if (practiceResponse.ok) {
+            const text = await practiceResponse.text();
+            console.log('Practice data length:', text.length);
+            practiceData = JSON.parse(text);
+            console.log('✓ Practice data loaded:', practiceData);
+            console.log('Sets:', practiceData?.sets?.length);
+          } else {
+            console.error('Failed to load practice data:', practiceResponse.status);
+          }
+        } catch (err) {
+          console.error('Error loading practice data:', err);
         }
 
-        const studyResponse = await fetch(basePath + 'essay-expressions-database.json');
-        if (studyResponse.ok) {
-          studyData = await studyResponse.json();
-          console.log('✓ Study data loaded');
+        // Load study data
+        try {
+          const studyResponse = await fetch(basePath + 'essay-expressions-database.json');
+          console.log('Study response status:', studyResponse.status);
+          
+          if (studyResponse.ok) {
+            const text = await studyResponse.text();
+            console.log('Study data length:', text.length);
+            studyData = JSON.parse(text);
+            console.log('✓ Study data loaded');
+          } else {
+            console.error('Failed to load study data:', studyResponse.status);
+          }
+        } catch (err) {
+          console.error('Error loading study data:', err);
+        }
+
+        // Check if we have any data
+        if (!practiceData && !studyData) {
+          showError('Could not load any data files. Please check the file paths.');
+          return;
+        }
+
+        if (!practiceData) {
+          console.warn('Practice data not available, switching to study mode');
+          switchMode('study');
+        } else if (!studyData) {
+          console.warn('Study data not available, staying in practice mode');
         }
 
         render();
       } catch (error) {
-        console.error('Error loading data:', error);
-        showError(`Could not load data: ${error.message}`);
+        console.error('Error in loadData:', error);
+        showError(`Error: ${error.message}`);
       }
     }
 
@@ -422,14 +462,30 @@
         <div class="error-state">
           <div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div>
           <div style="font-size: 1.125rem; margin-bottom: 0.5rem;">Error Loading Content</div>
-          <div style="font-size: 0.875rem; color: #8e8e93; margin-top: 0.5rem;">
+          <div style="font-size: 0.875rem; color: #8e8e93; margin-top: 0.5rem; max-width: 500px; text-align: center;">
             ${message}
+          </div>
+          <div style="font-size: 0.75rem; color: #636366; margin-top: 1.5rem; text-align: left; max-width: 600px;">
+            <strong>Debug info:</strong><br>
+            Current URL: ${window.location.href}<br>
+            Practice data loaded: ${practiceData ? 'Yes' : 'No'}<br>
+            Study data loaded: ${studyData ? 'Yes' : 'No'}
           </div>
         </div>
       `;
     }
 
     function switchMode(mode) {
+      // Check if data is available for the mode
+      if (mode === 'practice' && !practiceData) {
+        console.warn('Cannot switch to practice mode - no data available');
+        return;
+      }
+      if (mode === 'study' && !studyData) {
+        console.warn('Cannot switch to study mode - no data available');
+        return;
+      }
+
       currentMode = mode;
       currentSetIndex = 0;
       currentQuestionIndex = 0;
@@ -443,6 +499,8 @@
 
     function navigate(direction) {
       if (currentMode === 'practice') {
+        if (!practiceData?.sets) return;
+        
         const set = practiceData.sets[currentSetIndex];
         const newQuestionIndex = currentQuestionIndex + direction;
         
@@ -456,7 +514,8 @@
           currentQuestionIndex = practiceData.sets[currentSetIndex].sentences.length - 1;
         }
       } else {
-        const maxIndex = getAllStudyPhrases().length - 1;
+        const phrases = getAllStudyPhrases();
+        const maxIndex = phrases.length - 1;
         currentSetIndex = Math.max(0, Math.min(maxIndex, currentSetIndex + direction));
       }
       
@@ -519,7 +578,7 @@
     }
 
     function renderPracticeMode(container) {
-      if (!practiceData || !practiceData.sets || practiceData.sets.length === 0) {
+      if (!practiceData?.sets || practiceData.sets.length === 0) {
         container.innerHTML = `
           <div class="loading-state">
             <div style="font-size: 2rem; margin-bottom: 1rem;">📝</div>
@@ -559,7 +618,7 @@
               } else if (i === selectedAnswer) {
                 classes += ' selected';
               }
-              return `<button class="option-btn ${classes}" onclick="selectOption(${i})" ${isAnswered ? 'disabled' : ''}>
+              return `<button class="${classes}" onclick="selectOption(${i})" ${isAnswered ? 'disabled' : ''}>
                 ${word}
               </button>`;
             }).join('')}
@@ -592,12 +651,18 @@
       }
 
       const phrases = getAllStudyPhrases();
-      const phrase = phrases[currentSetIndex];
       
-      if (!phrase) {
-        container.innerHTML = `<div class="loading-state">No data available</div>`;
+      if (phrases.length === 0) {
+        container.innerHTML = `
+          <div class="loading-state">
+            <div style="font-size: 2rem; margin-bottom: 1rem;">📚</div>
+            <div>No study phrases found in database</div>
+          </div>
+        `;
         return;
       }
+
+      const phrase = phrases[currentSetIndex];
 
       container.className = 'content-container study-mode';
       container.innerHTML = `
@@ -673,6 +738,12 @@
       const nextBtn = document.getElementById('nextBtn');
       
       if (currentMode === 'practice') {
+        if (!practiceData?.sets) {
+          prevBtn.disabled = true;
+          nextBtn.disabled = true;
+          return;
+        }
+
         const isFirstQuestion = currentSetIndex === 0 && currentQuestionIndex === 0;
         const set = practiceData.sets[currentSetIndex];
         const isLastQuestion = currentSetIndex === practiceData.sets.length - 1 && 

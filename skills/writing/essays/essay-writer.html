@@ -947,8 +947,9 @@
         populateQuestionDropdown();
         
         // Set first sample as default if available
-        if (samplesData && samplesData.essays && samplesData.essays.length > 0) {
-          selectedSample = samplesData.essays[0];
+        if (samplesData && samplesData.opinion && samplesData.opinion.length > 0) {
+          selectedSample = samplesData.opinion[0];
+          console.log('✓ Default sample loaded:', selectedSample.title);
         }
         
         updateInterface();
@@ -1283,16 +1284,21 @@
     function updateSampleDisplay() {
       const display = document.getElementById('sampleDisplay');
       
-      // Use selected sample if available
-      if (selectedSample && selectedSample.paragraphs) {
+      // Use selected sample if available (samples have 'answer' field with HTML)
+      if (selectedSample && selectedSample.answer) {
+        // Parse the HTML answer to extract paragraphs
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = selectedSample.answer;
+        const paragraphs = Array.from(tempDiv.querySelectorAll('p')).map(p => p.innerHTML);
+        
         if (sampleViewMode === 'full') {
           display.innerHTML = `
             <h3 style="color: #C9A961; margin-bottom: 1rem;">${selectedSample.title || 'Sample Essay'}</h3>
-            ${selectedSample.paragraphs.map(p => `<p>${p}</p>`).join('')}
+            ${paragraphs.map(p => `<p>${p}</p>`).join('')}
           `;
         } else {
-          // Show paragraph based on current stage
-          const paragraph = selectedSample.paragraphs[currentStage];
+          // Show paragraph based on current stage (0-3 for intro, body1, body2, conclusion)
+          const paragraph = paragraphs[currentStage];
           if (paragraph) {
             display.innerHTML = `
               <h3 style="color: #C9A961; margin-bottom: 1rem;">${stageInfo[currentStage].name}</h3>
@@ -1425,16 +1431,21 @@
     function renderSamplesTab() {
       const tab = document.getElementById('samplesTab');
       
-      if (!samplesData || !samplesData.essays || samplesData.essays.length === 0) {
+      if (!samplesData || !samplesData.opinion || samplesData.opinion.length === 0) {
         tab.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample essays available yet</p>';
         return;
       }
 
       let html = '';
+      const stageNames = ['Introduction', 'Body 1', 'Body 2', 'Conclusion'];
       
-      samplesData.essays.forEach((essay, index) => {
-        const stageNames = ['Introduction', 'Body 1', 'Body 2', 'Conclusion'];
+      samplesData.opinion.forEach((essay, index) => {
         const isSelected = selectedSample === essay;
+        
+        // Parse HTML to extract paragraphs
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = essay.answer;
+        const paragraphs = Array.from(tempDiv.querySelectorAll('p')).map(p => p.textContent);
         
         html += `
           <div class="phrase-group" style="cursor: pointer; ${isSelected ? 'background: rgba(201, 169, 97, 0.1); border-radius: 0.5rem;' : ''}" onclick="selectSample(${index})">
@@ -1442,19 +1453,19 @@
               <span>${isSelected ? '✓ ' : ''}📄 ${essay.title || `Essay ${index + 1}`}</span>
               <span>▼</span>
             </div>
-            <div class="phrase-list">`;
+            <div class="phrase-list">
+              <div class="point-item"><strong>Topic:</strong> ${essay.topic}</div>
+              <div class="point-item"><strong>Question:</strong> ${essay.question}</div>`;
         
-        if (essay.paragraphs && Array.isArray(essay.paragraphs)) {
-          essay.paragraphs.forEach((paragraph, pIndex) => {
+        paragraphs.forEach((paragraph, pIndex) => {
+          if (paragraph.trim()) {
             html += `
               <div class="point-item">
                 <strong>${stageNames[pIndex] || `Paragraph ${pIndex + 1}`}:</strong><br>
-                ${paragraph}
+                ${paragraph.substring(0, 150)}${paragraph.length > 150 ? '...' : ''}
               </div>`;
-          });
-        } else {
-          html += `<div class="point-item">${essay.fullText || 'No content available'}</div>`;
-        }
+          }
+        });
         
         html += `
             </div>
@@ -1465,8 +1476,8 @@
     }
 
     function selectSample(index) {
-      if (samplesData && samplesData.essays && samplesData.essays[index]) {
-        selectedSample = samplesData.essays[index];
+      if (samplesData && samplesData.opinion && samplesData.opinion[index]) {
+        selectedSample = samplesData.opinion[index];
         updateSampleDisplay();
         renderSamplesTab();
         console.log('✓ Selected sample:', selectedSample.title);

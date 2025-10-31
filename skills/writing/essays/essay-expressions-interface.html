@@ -116,7 +116,7 @@
     }
     
     .practice-mode .question {
-      margin-bottom: 2rem;
+      margin-bottom: 1.5rem;
       padding: 1.5rem;
       background: rgba(48, 48, 51, 0.4);
       border-radius: 1rem;
@@ -170,6 +170,18 @@
       border-color: #C9A961;
       box-shadow: 0 0 0 2px rgba(201, 169, 97, 0.2);
     }
+
+    .option-btn.correct {
+      background: rgba(34, 197, 94, 0.25);
+      border-color: #22c55e;
+      color: #22c55e;
+    }
+
+    .option-btn.incorrect {
+      background: rgba(239, 68, 68, 0.25);
+      border-color: #ef4444;
+      color: #ef4444;
+    }
     
     .study-mode .expression-card {
       margin-bottom: 1.5rem;
@@ -184,6 +196,8 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 1rem;
+      flex-wrap: wrap;
+      gap: 1rem;
     }
     
     .expression-text {
@@ -195,6 +209,7 @@
     .badges {
       display: flex;
       gap: 0.5rem;
+      flex-wrap: wrap;
     }
     
     .badge {
@@ -292,7 +307,7 @@
       transition: all 0.3s;
     }
     
-    .nav-btn:hover {
+    .nav-btn:hover:not(:disabled) {
       background: rgba(201, 169, 97, 0.35);
       transform: translateY(-1px);
     }
@@ -309,6 +324,26 @@
       justify-content: center;
       min-height: 300px;
       color: #ef4444;
+    }
+
+    .feedback {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      text-align: center;
+    }
+
+    .feedback.correct {
+      background: rgba(34, 197, 94, 0.15);
+      color: #22c55e;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .feedback.incorrect {
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.3);
     }
   </style>
 </head>
@@ -354,43 +389,26 @@
     let currentMode = 'practice';
     let practiceData = null;
     let studyData = null;
-    let currentIndex = 0;
+    let currentSetIndex = 0;
+    let currentQuestionIndex = 0;
+    let selectedAnswers = {};
 
     async function loadData() {
       try {
-        console.log('Starting to load data...');
-        console.log('Current page location:', window.location.href);
-        
-        // HTML is at: skills/writing/essays/essay-expressions-interface.html
-        // Data is at: skills/writing/essays/data/
-        // So we just need: data/
         const basePath = 'data/';
         
-        // Load practice quiz data
         const practiceResponse = await fetch(basePath + 'essay-expressions-interface.json');
-        console.log('Attempting to load:', basePath + 'essay-expressions-interface.json');
-                console.log('Practice response status:', practiceResponse.status);
-        
         if (practiceResponse.ok) {
           practiceData = await practiceResponse.json();
-          console.log('✓ Practice data loaded successfully');
-        } else {
-          console.error('✗ Failed to load practice data:', practiceResponse.status);
+          console.log('✓ Practice data loaded:', practiceData.sets.length, 'sets');
         }
 
-        // Load study database
         const studyResponse = await fetch(basePath + 'essay-expressions-database.json');
-        console.log('Attempting to load:', basePath + 'essay-expressions-database.json');
-        console.log('Study response status:', studyResponse.status);
-        
         if (studyResponse.ok) {
           studyData = await studyResponse.json();
-          console.log('✓ Study data loaded successfully');
-        } else {
-          console.error('✗ Failed to load study data:', studyResponse.status);
+          console.log('✓ Study data loaded');
         }
 
-        // Render initial content
         render();
       } catch (error) {
         console.error('Error loading data:', error);
@@ -407,20 +425,16 @@
           <div style="font-size: 0.875rem; color: #8e8e93; margin-top: 0.5rem;">
             ${message}
           </div>
-          <div style="font-size: 0.75rem; color: #636366; margin-top: 1rem;">
-            Make sure you're running a local server and files exist at:<br>
-            • skills/writing/essays/data/essay-expressions-interface.json<br>
-            • skills/writing/essays/data/essay-expressions-database.json
-          </div>
         </div>
       `;
     }
 
     function switchMode(mode) {
       currentMode = mode;
-      currentIndex = 0;
+      currentSetIndex = 0;
+      currentQuestionIndex = 0;
+      selectedAnswers = {};
       
-      // Update buttons
       document.getElementById('practiceModeBtn').classList.toggle('active', mode === 'practice');
       document.getElementById('studyModeBtn').classList.toggle('active', mode === 'study');
       
@@ -428,50 +442,68 @@
     }
 
     function navigate(direction) {
-      const maxIndex = currentMode === 'practice' 
-        ? (practiceData?.sets?.length || 0) - 1
-        : getStudyItemsCount() - 1;
+      if (currentMode === 'practice') {
+        const set = practiceData.sets[currentSetIndex];
+        const newQuestionIndex = currentQuestionIndex + direction;
+        
+        if (newQuestionIndex >= 0 && newQuestionIndex < set.sentences.length) {
+          currentQuestionIndex = newQuestionIndex;
+        } else if (direction > 0 && currentSetIndex < practiceData.sets.length - 1) {
+          currentSetIndex++;
+          currentQuestionIndex = 0;
+        } else if (direction < 0 && currentSetIndex > 0) {
+          currentSetIndex--;
+          currentQuestionIndex = practiceData.sets[currentSetIndex].sentences.length - 1;
+        }
+      } else {
+        const maxIndex = getAllStudyPhrases().length - 1;
+        currentSetIndex = Math.max(0, Math.min(maxIndex, currentSetIndex + direction));
+      }
       
-      currentIndex = Math.max(0, Math.min(maxIndex, currentIndex + direction));
       render();
     }
 
-    function getStudyItemsCount() {
-      if (!studyData) return 0;
-      let count = 0;
+    function getAllStudyPhrases() {
+      if (!studyData) return [];
       
-      // Count phrases in cause_effect category
-      if (studyData.categories?.cause_effect?.subcategories) {
-        const subcats = studyData.categories.cause_effect.subcategories;
-        for (const subcat in subcats) {
-          count += subcats[subcat].phrases?.length || 0;
-        }
-      }
+      const phrases = [];
       
-      return count;
-    }
-
-    function getStudyItemAtIndex(index) {
-      if (!studyData) return null;
-      
-      let currentCount = 0;
-      
-      // Get phrases from cause_effect category
-      if (studyData.categories?.cause_effect?.subcategories) {
-        const subcats = studyData.categories.cause_effect.subcategories;
-        for (const subcatKey in subcats) {
-          const phrases = subcats[subcatKey].phrases || [];
-          if (index < currentCount + phrases.length) {
-            return {
-              ...phrases[index - currentCount],
-              subcategory: subcats[subcatKey].title
-            };
+      // Collect from all categories
+      for (const catKey in studyData.categories) {
+        const category = studyData.categories[catKey];
+        
+        if (category.subcategories) {
+          for (const subKey in category.subcategories) {
+            const subcat = category.subcategories[subKey];
+            if (subcat.phrases) {
+              subcat.phrases.forEach(phrase => {
+                phrases.push({
+                  ...phrase,
+                  category: category.title,
+                  subcategory: subcat.title
+                });
+              });
+            }
           }
-          currentCount += phrases.length;
+        }
+        
+        if (category.levels) {
+          for (const levelKey in category.levels) {
+            const level = category.levels[levelKey];
+            if (level.phrases) {
+              level.phrases.forEach(phrase => {
+                phrases.push({
+                  ...phrase,
+                  category: category.title,
+                  subcategory: level.name
+                });
+              });
+            }
+          }
         }
       }
       
-      return null;
+      return phrases;
     }
 
     function render() {
@@ -492,15 +524,16 @@
           <div class="loading-state">
             <div style="font-size: 2rem; margin-bottom: 1rem;">📝</div>
             <div>No practice data available</div>
-            <div style="font-size: 0.875rem; color: #8e8e93; margin-top: 0.5rem;">
-              Make sure essay-expressions-interface.json is in the skills/writing/essays/data folder
-            </div>
           </div>
         `;
         return;
       }
 
-      const set = practiceData.sets[currentIndex];
+      const set = practiceData.sets[currentSetIndex];
+      const sentence = set.sentences[currentQuestionIndex];
+      const questionKey = `${currentSetIndex}-${currentQuestionIndex}`;
+      const selectedAnswer = selectedAnswers[questionKey];
+      const isAnswered = selectedAnswer !== undefined;
       
       container.className = 'content-container practice-mode';
       container.innerHTML = `
@@ -509,25 +542,40 @@
             Set ${set.setNumber}: ${set.topic}
           </h2>
           <p style="color: #8e8e93; font-size: 0.875rem;">
-            Question ${currentIndex + 1} of ${practiceData.sets.length}
+            Question ${currentQuestionIndex + 1} of ${set.sentences.length}
           </p>
         </div>
         
         <div class="question">
           <div class="question-text">
-            ${set.sentences[0].text.replace('_____', '<span class="blank">______</span>')}
+            ${sentence.text.replace('_____', '<span class="blank">______</span>')}
           </div>
           <div class="options">
-            ${set.words.map((word, i) => `
-              <button class="option-btn" onclick="selectOption(${i})">
+            ${set.words.map((word, i) => {
+              let classes = 'option-btn';
+              if (isAnswered) {
+                if (i === sentence.correct) classes += ' correct';
+                else if (i === selectedAnswer) classes += ' incorrect';
+              } else if (i === selectedAnswer) {
+                classes += ' selected';
+              }
+              return `<button class="option-btn ${classes}" onclick="selectOption(${i})" ${isAnswered ? 'disabled' : ''}>
                 ${word}
-              </button>
-            `).join('')}
+              </button>`;
+            }).join('')}
           </div>
+          ${isAnswered ? `
+            <div class="feedback ${selectedAnswer === sentence.correct ? 'correct' : 'incorrect'}">
+              ${selectedAnswer === sentence.correct 
+                ? '✓ Correct! Well done.' 
+                : `✗ Incorrect. The correct answer is "${set.words[sentence.correct]}"`
+              }
+            </div>
+          ` : ''}
         </div>
         
         <div style="text-align: center; color: #8e8e93; font-size: 0.875rem; margin-top: 2rem;">
-          💡 Quick practice - select the best option
+          💡 Select the best option to fill the blank
         </div>
       `;
     }
@@ -538,17 +586,15 @@
           <div class="loading-state">
             <div style="font-size: 2rem; margin-bottom: 1rem;">📚</div>
             <div>No study data available</div>
-            <div style="font-size: 0.875rem; color: #8e8e93; margin-top: 0.5rem;">
-              Make sure essay-expressions-database.json is in the skills/writing/essays/data folder
-            </div>
           </div>
         `;
         return;
       }
 
-      const item = getStudyItemAtIndex(currentIndex);
+      const phrases = getAllStudyPhrases();
+      const phrase = phrases[currentSetIndex];
       
-      if (!item) {
+      if (!phrase) {
         container.innerHTML = `<div class="loading-state">No data available</div>`;
         return;
       }
@@ -556,74 +602,91 @@
       container.className = 'content-container study-mode';
       container.innerHTML = `
         <div style="text-align: center; margin-bottom: 2rem;">
-          <p style="color: #8e8e93; font-size: 0.875rem;">
-            Expression ${currentIndex + 1} of ${getStudyItemsCount()}
+          <p style="color: #C9A961; font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">
+            ${phrase.category}
           </p>
-          <p style="color: #636366; font-size: 0.75rem; margin-top: 0.25rem;">
-            ${item.subcategory || ''}
+          <p style="color: #636366; font-size: 0.75rem;">
+            ${phrase.subcategory || ''} · Expression ${currentSetIndex + 1} of ${phrases.length}
           </p>
         </div>
         
         <div class="expression-card">
           <div class="expression-header">
-            <div class="expression-text">${item.text}</div>
+            <div class="expression-text">${phrase.text}</div>
             <div class="badges">
-              <span class="badge badge-level">${item.level}</span>
-              <span class="badge badge-formality">${item.formality}</span>
+              ${phrase.level ? `<span class="badge badge-level">${phrase.level}</span>` : ''}
+              ${phrase.formality ? `<span class="badge badge-formality">${phrase.formality}</span>` : ''}
             </div>
           </div>
           
-          <div class="expression-example">
-            "${item.example}"
-          </div>
+          ${phrase.example ? `
+            <div class="expression-example">
+              "${phrase.example}"
+            </div>
+          ` : ''}
           
           <div class="expression-notes">
-            ${item.grammarNote ? `
+            ${phrase.grammarNote ? `
               <div class="note-item">
                 <div class="note-label">Grammar:</div>
-                <div class="note-value">${item.grammarNote}</div>
+                <div class="note-value">${phrase.grammarNote}</div>
               </div>
             ` : ''}
             
-            ${item.usage ? `
+            ${phrase.usage ? `
               <div class="note-item">
                 <div class="note-label">Usage:</div>
-                <div class="note-value">${item.usage}</div>
+                <div class="note-value">${phrase.usage}</div>
               </div>
             ` : ''}
             
-            ${item.topics ? `
+            ${phrase.topics ? `
               <div class="note-item">
                 <div class="note-label">Topics:</div>
-                <div class="note-value">${item.topics.join(', ')}</div>
+                <div class="note-value">${phrase.topics.join(', ')}</div>
+              </div>
+            ` : ''}
+
+            ${phrase.collocations ? `
+              <div class="note-item">
+                <div class="note-label">Collocations:</div>
+                <div class="note-value">${phrase.collocations.join(', ')}</div>
               </div>
             ` : ''}
           </div>
         </div>
         
         <div style="text-align: center; color: #8e8e93; font-size: 0.875rem; margin-top: 2rem;">
-          📖 Study each expression carefully with context and usage notes
+          📖 Study each expression with examples and usage notes
         </div>
       `;
     }
 
     function selectOption(index) {
-      const buttons = document.querySelectorAll('.option-btn');
-      buttons.forEach((btn, i) => {
-        btn.classList.toggle('selected', i === index);
-      });
+      const questionKey = `${currentSetIndex}-${currentQuestionIndex}`;
+      selectedAnswers[questionKey] = index;
+      render();
     }
 
     function updateNavButtons() {
-      const maxIndex = currentMode === 'practice' 
-        ? (practiceData?.sets?.length || 0) - 1
-        : getStudyItemsCount() - 1;
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
       
-      document.getElementById('prevBtn').disabled = currentIndex === 0;
-      document.getElementById('nextBtn').disabled = currentIndex >= maxIndex;
+      if (currentMode === 'practice') {
+        const isFirstQuestion = currentSetIndex === 0 && currentQuestionIndex === 0;
+        const set = practiceData.sets[currentSetIndex];
+        const isLastQuestion = currentSetIndex === practiceData.sets.length - 1 && 
+                              currentQuestionIndex === set.sentences.length - 1;
+        
+        prevBtn.disabled = isFirstQuestion;
+        nextBtn.disabled = isLastQuestion;
+      } else {
+        const phrases = getAllStudyPhrases();
+        prevBtn.disabled = currentSetIndex === 0;
+        nextBtn.disabled = currentSetIndex >= phrases.length - 1;
+      }
     }
 
-    // Initialize on page load
     loadData();
   </script>
 </body>

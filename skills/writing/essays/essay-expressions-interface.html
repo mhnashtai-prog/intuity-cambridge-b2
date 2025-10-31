@@ -464,26 +464,60 @@
         // Log the structure we received
         if (practiceData) {
           console.log('Practice data structure:', Object.keys(practiceData));
-          if (!practiceData.sets && practiceData.length) {
-            // If it's an array at root level, wrap it
+          
+          // Check if this is actually the practice file (has "sets" property)
+          if (practiceData.sets && Array.isArray(practiceData.sets)) {
+            console.log('✓ Practice data has sets array');
+          } 
+          // Check if this is actually the study/database file (has "categories" or "metadata")
+          else if (practiceData.categories || practiceData.metadata) {
+            console.log('⚠️ This looks like study data, not practice data. Swapping...');
+            // Swap them
+            const temp = practiceData;
+            practiceData = studyData;
+            studyData = temp;
+          }
+          // If it's an array at root level, wrap it
+          else if (practiceData.length) {
             practiceData = { sets: practiceData };
-          } else if (!practiceData.sets) {
+          } 
+          // Still no sets? Mark as invalid
+          else {
             console.error('Practice data missing "sets" property. Available keys:', Object.keys(practiceData));
-            console.log('Practice data sample:', JSON.stringify(practiceData).substring(0, 200));
             practiceData = null;
           }
         }
 
         if (studyData) {
           console.log('Study data structure:', Object.keys(studyData));
-          if (!studyData.categories && studyData.length) {
-            // If it's an array at root level, try to categorize
+          
+          // Check if this has categories (correct for study mode)
+          if (studyData.categories) {
+            console.log('✓ Study data has categories');
+          }
+          // Check if this has metadata (another format for study data)
+          else if (studyData.metadata && studyData.categories) {
+            console.log('✓ Study data has metadata and categories');
+          }
+          // If it's an array at root level, try to categorize
+          else if (studyData.length) {
             studyData = { categories: { general: { title: "All Expressions", phrases: studyData } } };
-          } else if (!studyData.categories) {
+          }
+          // Still no categories? Mark as invalid
+          else {
             console.error('Study data missing "categories" property. Available keys:', Object.keys(studyData));
-            console.log('Study data sample:', JSON.stringify(studyData).substring(0, 200));
             studyData = null;
           }
+        }
+
+        // Final validation after potential swap
+        if (practiceData && !practiceData.sets) {
+          console.error('Final check: Practice data still missing "sets"');
+          practiceData = null;
+        }
+        if (studyData && !studyData.categories) {
+          console.error('Final check: Study data still missing "categories"');
+          studyData = null;
         }
 
         // Log success
@@ -543,12 +577,12 @@
     function switchMode(mode) {
       // Validate mode has data
       if (mode === 'practice' && !practiceData) {
-        showError('Practice mode data not available. Please ensure "essay-expressions-interface.json" is properly formatted.');
+        showError('Practice mode data not available. The file should contain a "sets" array with practice questions.');
         console.warn('Cannot switch to practice mode - no data');
         return;
       }
       if (mode === 'study' && !studyData) {
-        showError('Study mode data not available. Please ensure "essay-expressions-database.json" is properly formatted.');
+        showError('Study mode data not available. The file should contain a "categories" object with study materials.');
         console.warn('Cannot switch to study mode - no data');
         return;
       }

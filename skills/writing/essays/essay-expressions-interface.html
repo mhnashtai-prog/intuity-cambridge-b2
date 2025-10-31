@@ -95,7 +95,7 @@
       transition: all 0.3s;
     }
     
-    .mode-btn:hover {
+    .mode-btn:hover:not(:disabled) {
       color: #d1d1d6;
       background: rgba(99, 99, 102, 0.2);
     }
@@ -104,6 +104,11 @@
       background: rgba(201, 169, 97, 0.25);
       color: #C9A961;
       box-shadow: 0 2px 8px rgba(201, 169, 97, 0.3);
+    }
+    
+    .mode-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
     }
     
     .content-container {
@@ -456,14 +461,29 @@
           return;
         }
 
-        if (practiceData && !practiceData.sets) {
-          console.error('Practice data missing "sets" property');
-          practiceData = null;
+        // Log the structure we received
+        if (practiceData) {
+          console.log('Practice data structure:', Object.keys(practiceData));
+          if (!practiceData.sets && practiceData.length) {
+            // If it's an array at root level, wrap it
+            practiceData = { sets: practiceData };
+          } else if (!practiceData.sets) {
+            console.error('Practice data missing "sets" property. Available keys:', Object.keys(practiceData));
+            console.log('Practice data sample:', JSON.stringify(practiceData).substring(0, 200));
+            practiceData = null;
+          }
         }
 
-        if (studyData && !studyData.categories) {
-          console.error('Study data missing "categories" property');
-          studyData = null;
+        if (studyData) {
+          console.log('Study data structure:', Object.keys(studyData));
+          if (!studyData.categories && studyData.length) {
+            // If it's an array at root level, try to categorize
+            studyData = { categories: { general: { title: "All Expressions", phrases: studyData } } };
+          } else if (!studyData.categories) {
+            console.error('Study data missing "categories" property. Available keys:', Object.keys(studyData));
+            console.log('Study data sample:', JSON.stringify(studyData).substring(0, 200));
+            studyData = null;
+          }
         }
 
         // Log success
@@ -474,12 +494,16 @@
           console.log(`✓ Study data: ${Object.keys(studyData.categories).length} categories loaded`);
         }
 
-        // Auto-switch mode if needed
+        // Auto-switch mode if needed and update button states
         if (!practiceData && studyData) {
           console.log('Practice data unavailable, switching to study mode');
           currentMode = 'study';
           document.getElementById('practiceModeBtn').classList.remove('active');
+          document.getElementById('practiceModeBtn').disabled = true;
           document.getElementById('studyModeBtn').classList.add('active');
+        } else if (practiceData && !studyData) {
+          console.log('Study data unavailable, staying in practice mode');
+          document.getElementById('studyModeBtn').disabled = true;
         }
 
         // Initial render
@@ -519,10 +543,12 @@
     function switchMode(mode) {
       // Validate mode has data
       if (mode === 'practice' && !practiceData) {
+        showError('Practice mode data not available. Please ensure "essay-expressions-interface.json" is properly formatted.');
         console.warn('Cannot switch to practice mode - no data');
         return;
       }
       if (mode === 'study' && !studyData) {
+        showError('Study mode data not available. Please ensure "essay-expressions-database.json" is properly formatted.');
         console.warn('Cannot switch to study mode - no data');
         return;
       }

@@ -971,7 +971,6 @@
 
   <script>
     // Embedded JSON data
-    // Embedded JSON data
     const QUIZ_DATA = {
   "title": "B2 Adjective Practice - Complete 10 Tests",
   "level": "B2",
@@ -1530,9 +1529,9 @@
       ]
     }
   ]
-}
-;
-
+};
+  </script>
+  <script>
     // Global state variables
     let quizData = null;
     let currentTest = 0;
@@ -1545,6 +1544,17 @@
     let testScores = {};
     let storageKey = '';
     let SETS_PER_TEST = 5;
+    let wordOrderMap = {}; // Maps setIdx to randomized word order
+
+    // Fisher-Yates shuffle algorithm
+    function shuffleArray(array) {
+      const shuffled = [...array];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      return shuffled;
+    }
 
     // Utility Functions
     function sanitizeText(text) {
@@ -1583,12 +1593,36 @@
       }
     }
 
+    // NEW: Initialize word order randomization for each set
+    function initializeWordOrder() {
+      wordOrderMap = {};
+      if (!quizData) return;
+      
+      quizData.sets.forEach((set, setIdx) => {
+        // Create array of indices [0, 1, 2, 3]
+        const indices = set.words.map((_, i) => i);
+        // Shuffle them
+        wordOrderMap[setIdx] = shuffleArray(indices);
+      });
+    }
+
+    // NEW: Get the randomized words for a set
+    function getShuffledWords(setIdx) {
+      const setData = quizData.sets[setIdx];
+      const order = wordOrderMap[setIdx];
+      return order.map(idx => ({
+        word: setData.words[idx],
+        originalIdx: idx
+      }));
+    }
+
     // Data Loading
     function loadQuizData() {
       try {
         loadProgress();
-        quizData = QUIZ_DATA;
+        quizData = window.QUIZ_DATA || QUIZ_DATA;
         SETS_PER_TEST = quizData.setsPerTest || 5;
+        initializeWordOrder(); // NEW: Randomize word order
         createDots();
         createQuestionNavDots();
         loadTest(0);
@@ -1765,7 +1799,7 @@
       }
     }
 
-    // Rendering
+    // MODIFIED: Rendering with randomized word order
     function renderClassicMode() {
       const container = document.getElementById('classicContainer');
       container.innerHTML = '';
@@ -1786,15 +1820,19 @@
         
         const wordBank = document.createElement('div');
         wordBank.className = 'word-bank';
-        setData.words.forEach((word, wordIdx) => {
+        
+        // NEW: Use shuffled word order
+        const shuffledWords = getShuffledWords(setIdx);
+        shuffledWords.forEach((wordObj) => {
           const chip = document.createElement('button');
           chip.className = 'word-chip';
-          chip.textContent = word;
-          chip.setAttribute('data-word', word);
-          chip.setAttribute('data-word-idx', wordIdx);
-          chip.onclick = () => selectWord(setIdx, wordIdx, chip);
+          chip.textContent = wordObj.word;
+          chip.setAttribute('data-word', wordObj.word);
+          chip.setAttribute('data-word-idx', wordObj.originalIdx);
+          chip.onclick = () => selectWord(setIdx, wordObj.originalIdx, chip);
           wordBank.appendChild(chip);
         });
+        
         setDiv.appendChild(wordBank);
         
         const sentences = document.createElement('div');
@@ -1854,6 +1892,7 @@
       updateFooter();
     }
 
+    // MODIFIED: Guided mode with randomized word order
     function renderGuidedMode() {
       const container = document.getElementById('guidedContainer');
       container.innerHTML = '';
@@ -1875,15 +1914,19 @@
       
       const wordBank = document.createElement('div');
       wordBank.className = 'word-bank';
-      setData.words.forEach((word, wordIdx) => {
+      
+      // NEW: Use shuffled word order
+      const shuffledWords = getShuffledWords(setIdx);
+      shuffledWords.forEach((wordObj) => {
         const chip = document.createElement('button');
         chip.className = 'word-chip';
-        chip.textContent = word;
-        chip.setAttribute('data-word', word);
-        chip.setAttribute('data-word-idx', wordIdx);
-        chip.onclick = () => selectWord(setIdx, wordIdx, chip);
+        chip.textContent = wordObj.word;
+        chip.setAttribute('data-word', wordObj.word);
+        chip.setAttribute('data-word-idx', wordObj.originalIdx);
+        chip.onclick = () => selectWord(setIdx, wordObj.originalIdx, chip);
         wordBank.appendChild(chip);
       });
+      
       card.appendChild(wordBank);
       
       const sentences = document.createElement('div');
@@ -1944,7 +1987,7 @@
       updateExternalNav();
     }
 
-    // Word Selection
+    // Word Selection (unchanged - uses originalIdx)
     function selectWord(setIdx, wordIdx, chipElement) {
       if (showingResults) return;
       

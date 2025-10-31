@@ -328,6 +328,7 @@
       justify-content: center;
       min-height: 300px;
       color: #ef4444;
+      text-align: center;
     }
 
     .feedback {
@@ -349,6 +350,23 @@
       color: #ef4444;
       border: 1px solid rgba(239, 68, 68, 0.3);
     }
+
+    .progress-info {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .progress-title {
+      color: #C9A961;
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .progress-subtitle {
+      color: #8e8e93;
+      font-size: 0.875rem;
+    }
   </style>
 </head>
 <body>
@@ -367,10 +385,10 @@
       <p class="subtitle">Essay Expressions · B2/C1 Level</p>
       
       <div class="mode-selector">
-        <button class="mode-btn active" id="practiceModeBtn" onclick="switchMode('practice')">
+        <button class="mode-btn active" id="practiceModeBtn">
           ⚡ Practice Mode
         </button>
-        <button class="mode-btn" id="studyModeBtn" onclick="switchMode('study')">
+        <button class="mode-btn" id="studyModeBtn">
           📚 Study Mode
         </button>
       </div>
@@ -384,12 +402,13 @@
     </div>
 
     <div class="nav-controls">
-      <button class="nav-btn" id="prevBtn" onclick="navigate(-1)">← Previous</button>
-      <button class="nav-btn" id="nextBtn" onclick="navigate(1)">Next →</button>
+      <button class="nav-btn" id="prevBtn">← Previous</button>
+      <button class="nav-btn" id="nextBtn">Next →</button>
     </div>
   </div>
 
   <script>
+    // Global state
     let currentMode = 'practice';
     let practiceData = null;
     let studyData = null;
@@ -397,92 +416,114 @@
     let currentQuestionIndex = 0;
     let selectedAnswers = {};
 
+    // Try to fetch JSON from multiple possible locations
+    async function tryFetchJSON(filename) {
+      const possiblePaths = ['', 'data/', '../', '../data/'];
+      
+      for (const path of possiblePaths) {
+        try {
+          console.log(`Attempting to load: ${path}${filename}`);
+          const response = await fetch(path + filename);
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log(`✓ Successfully loaded ${filename} from ${path}`);
+            return data;
+          }
+        } catch (err) {
+          console.log(`Failed from ${path}: ${err.message}`);
+        }
+      }
+      
+      console.error(`❌ Could not load ${filename} from any location`);
+      return null;
+    }
+
+    // Load data files
     async function loadData() {
       try {
-        const basePath = 'data/';
+        console.log('=== Starting data load ===');
         
         // Load practice data
-        try {
-          const practiceResponse = await fetch(basePath + 'essay-expressions-interface.json');
-          console.log('Practice response status:', practiceResponse.status);
-          
-          if (practiceResponse.ok) {
-            const text = await practiceResponse.text();
-            console.log('Practice data length:', text.length);
-            practiceData = JSON.parse(text);
-            console.log('✓ Practice data loaded:', practiceData);
-            console.log('Sets:', practiceData?.sets?.length);
-          } else {
-            console.error('Failed to load practice data:', practiceResponse.status);
-          }
-        } catch (err) {
-          console.error('Error loading practice data:', err);
-        }
-
+        practiceData = await tryFetchJSON('essay-expressions-interface.json');
+        
         // Load study data
-        try {
-          const studyResponse = await fetch(basePath + 'essay-expressions-database.json');
-          console.log('Study response status:', studyResponse.status);
-          
-          if (studyResponse.ok) {
-            const text = await studyResponse.text();
-            console.log('Study data length:', text.length);
-            studyData = JSON.parse(text);
-            console.log('✓ Study data loaded');
-          } else {
-            console.error('Failed to load study data:', studyResponse.status);
-          }
-        } catch (err) {
-          console.error('Error loading study data:', err);
-        }
+        studyData = await tryFetchJSON('essay-expressions-database.json');
 
-        // Check if we have any data
+        // Validate data
         if (!practiceData && !studyData) {
-          showError('Could not load any data files. Please check the file paths.');
+          showError('Could not load any data files. Please ensure the JSON files are in the same folder as this HTML file or in a "data" subfolder.');
           return;
         }
 
-        if (!practiceData) {
-          console.warn('Practice data not available, switching to study mode');
-          switchMode('study');
-        } else if (!studyData) {
-          console.warn('Study data not available, staying in practice mode');
+        if (practiceData && !practiceData.sets) {
+          console.error('Practice data missing "sets" property');
+          practiceData = null;
         }
 
+        if (studyData && !studyData.categories) {
+          console.error('Study data missing "categories" property');
+          studyData = null;
+        }
+
+        // Log success
+        if (practiceData) {
+          console.log(`✓ Practice data: ${practiceData.sets.length} sets loaded`);
+        }
+        if (studyData) {
+          console.log(`✓ Study data: ${Object.keys(studyData.categories).length} categories loaded`);
+        }
+
+        // Auto-switch mode if needed
+        if (!practiceData && studyData) {
+          console.log('Practice data unavailable, switching to study mode');
+          currentMode = 'study';
+          document.getElementById('practiceModeBtn').classList.remove('active');
+          document.getElementById('studyModeBtn').classList.add('active');
+        }
+
+        // Initial render
         render();
+
       } catch (error) {
-        console.error('Error in loadData:', error);
-        showError(`Error: ${error.message}`);
+        console.error('Fatal error in loadData:', error);
+        showError(`Error loading data: ${error.message}`);
       }
     }
 
+    // Show error message
     function showError(message) {
       const container = document.getElementById('contentContainer');
       container.innerHTML = `
         <div class="error-state">
           <div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div>
           <div style="font-size: 1.125rem; margin-bottom: 0.5rem;">Error Loading Content</div>
-          <div style="font-size: 0.875rem; color: #8e8e93; margin-top: 0.5rem; max-width: 500px; text-align: center;">
+          <div style="font-size: 0.875rem; color: #8e8e93; margin-top: 0.5rem; max-width: 500px;">
             ${message}
           </div>
-          <div style="font-size: 0.75rem; color: #636366; margin-top: 1.5rem; text-align: left; max-width: 600px;">
+          <div style="font-size: 0.75rem; color: #636366; margin-top: 1.5rem; text-align: left; max-width: 600px; font-family: monospace;">
             <strong>Debug info:</strong><br>
             Current URL: ${window.location.href}<br>
-            Practice data loaded: ${practiceData ? 'Yes' : 'No'}<br>
-            Study data loaded: ${studyData ? 'Yes' : 'No'}
+            Practice data: ${practiceData ? 'Loaded' : 'Failed'}<br>
+            Study data: ${studyData ? 'Loaded' : 'Failed'}
           </div>
         </div>
       `;
+      
+      // Disable navigation
+      document.getElementById('prevBtn').disabled = true;
+      document.getElementById('nextBtn').disabled = true;
     }
 
+    // Switch between modes
     function switchMode(mode) {
-      // Check if data is available for the mode
+      // Validate mode has data
       if (mode === 'practice' && !practiceData) {
-        console.warn('Cannot switch to practice mode - no data available');
+        console.warn('Cannot switch to practice mode - no data');
         return;
       }
       if (mode === 'study' && !studyData) {
-        console.warn('Cannot switch to study mode - no data available');
+        console.warn('Cannot switch to study mode - no data');
         return;
       }
 
@@ -491,46 +532,63 @@
       currentQuestionIndex = 0;
       selectedAnswers = {};
       
+      // Update UI
       document.getElementById('practiceModeBtn').classList.toggle('active', mode === 'practice');
       document.getElementById('studyModeBtn').classList.toggle('active', mode === 'study');
       
       render();
     }
 
+    // Navigate between questions/cards
     function navigate(direction) {
       if (currentMode === 'practice') {
-        if (!practiceData?.sets) return;
-        
-        const set = practiceData.sets[currentSetIndex];
-        const newQuestionIndex = currentQuestionIndex + direction;
-        
-        if (newQuestionIndex >= 0 && newQuestionIndex < set.sentences.length) {
-          currentQuestionIndex = newQuestionIndex;
-        } else if (direction > 0 && currentSetIndex < practiceData.sets.length - 1) {
-          currentSetIndex++;
-          currentQuestionIndex = 0;
-        } else if (direction < 0 && currentSetIndex > 0) {
-          currentSetIndex--;
-          currentQuestionIndex = practiceData.sets[currentSetIndex].sentences.length - 1;
-        }
+        navigatePractice(direction);
       } else {
-        const phrases = getAllStudyPhrases();
-        const maxIndex = phrases.length - 1;
-        currentSetIndex = Math.max(0, Math.min(maxIndex, currentSetIndex + direction));
+        navigateStudy(direction);
       }
-      
       render();
     }
 
+    // Navigate practice mode
+    function navigatePractice(direction) {
+      if (!practiceData?.sets) return;
+      
+      const set = practiceData.sets[currentSetIndex];
+      const newQuestionIndex = currentQuestionIndex + direction;
+      
+      // Move within current set
+      if (newQuestionIndex >= 0 && newQuestionIndex < set.sentences.length) {
+        currentQuestionIndex = newQuestionIndex;
+      }
+      // Move to next set
+      else if (direction > 0 && currentSetIndex < practiceData.sets.length - 1) {
+        currentSetIndex++;
+        currentQuestionIndex = 0;
+      }
+      // Move to previous set
+      else if (direction < 0 && currentSetIndex > 0) {
+        currentSetIndex--;
+        currentQuestionIndex = practiceData.sets[currentSetIndex].sentences.length - 1;
+      }
+    }
+
+    // Navigate study mode
+    function navigateStudy(direction) {
+      const phrases = getAllStudyPhrases();
+      const maxIndex = phrases.length - 1;
+      currentSetIndex = Math.max(0, Math.min(maxIndex, currentSetIndex + direction));
+    }
+
+    // Get all study phrases from database
     function getAllStudyPhrases() {
       if (!studyData) return [];
       
       const phrases = [];
       
-      // Collect from all categories
       for (const catKey in studyData.categories) {
         const category = studyData.categories[catKey];
         
+        // Handle subcategories
         if (category.subcategories) {
           for (const subKey in category.subcategories) {
             const subcat = category.subcategories[subKey];
@@ -546,6 +604,7 @@
           }
         }
         
+        // Handle levels
         if (category.levels) {
           for (const levelKey in category.levels) {
             const level = category.levels[levelKey];
@@ -565,6 +624,7 @@
       return phrases;
     }
 
+    // Main render function
     function render() {
       const container = document.getElementById('contentContainer');
       
@@ -577,6 +637,7 @@
       updateNavButtons();
     }
 
+    // Render practice mode
     function renderPracticeMode(container) {
       if (!practiceData?.sets || practiceData.sets.length === 0) {
         container.innerHTML = `
@@ -596,13 +657,9 @@
       
       container.className = 'content-container practice-mode';
       container.innerHTML = `
-        <div style="text-align: center; margin-bottom: 2rem;">
-          <h2 style="color: #C9A961; font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem;">
-            Set ${set.setNumber}: ${set.topic}
-          </h2>
-          <p style="color: #8e8e93; font-size: 0.875rem;">
-            Question ${currentQuestionIndex + 1} of ${set.sentences.length}
-          </p>
+        <div class="progress-info">
+          <div class="progress-title">Set ${set.setNumber}: ${set.topic}</div>
+          <div class="progress-subtitle">Question ${currentQuestionIndex + 1} of ${set.sentences.length}</div>
         </div>
         
         <div class="question">
@@ -639,6 +696,7 @@
       `;
     }
 
+    // Render study mode
     function renderStudyMode(container) {
       if (!studyData) {
         container.innerHTML = `
@@ -656,7 +714,7 @@
         container.innerHTML = `
           <div class="loading-state">
             <div style="font-size: 2rem; margin-bottom: 1rem;">📚</div>
-            <div>No study phrases found in database</div>
+            <div>No study phrases found</div>
           </div>
         `;
         return;
@@ -666,13 +724,11 @@
 
       container.className = 'content-container study-mode';
       container.innerHTML = `
-        <div style="text-align: center; margin-bottom: 2rem;">
-          <p style="color: #C9A961; font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">
-            ${phrase.category}
-          </p>
-          <p style="color: #636366; font-size: 0.75rem;">
+        <div class="progress-info">
+          <div class="progress-title">${phrase.category}</div>
+          <div class="progress-subtitle">
             ${phrase.subcategory || ''} · Expression ${currentSetIndex + 1} of ${phrases.length}
-          </p>
+          </div>
         </div>
         
         <div class="expression-card">
@@ -727,12 +783,14 @@
       `;
     }
 
+    // Select an option in practice mode
     function selectOption(index) {
       const questionKey = `${currentSetIndex}-${currentQuestionIndex}`;
       selectedAnswers[questionKey] = index;
       render();
     }
 
+    // Update navigation buttons
     function updateNavButtons() {
       const prevBtn = document.getElementById('prevBtn');
       const nextBtn = document.getElementById('nextBtn');
@@ -758,6 +816,13 @@
       }
     }
 
+    // Event listeners
+    document.getElementById('practiceModeBtn').addEventListener('click', () => switchMode('practice'));
+    document.getElementById('studyModeBtn').addEventListener('click', () => switchMode('study'));
+    document.getElementById('prevBtn').addEventListener('click', () => navigate(-1));
+    document.getElementById('nextBtn').addEventListener('click', () => navigate(1));
+
+    // Start the app
     loadData();
   </script>
 </body>

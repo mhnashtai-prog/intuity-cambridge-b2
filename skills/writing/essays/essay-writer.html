@@ -885,6 +885,7 @@
     let essayData = ['', '', '', ''];
     let sampleViewMode = 'full';
     let selectedQuestion = null;
+    let selectedSample = null;
     let activeFilter = null;
     
     let introductionHooksData = {};
@@ -944,6 +945,12 @@
       try {
         await loadAllJSON();
         populateQuestionDropdown();
+        
+        // Set first sample as default if available
+        if (samplesData && samplesData.essays && samplesData.essays.length > 0) {
+          selectedSample = samplesData.essays[0];
+        }
+        
         updateInterface();
         
         document.getElementById('textarea').addEventListener('input', handleInput);
@@ -1276,48 +1283,40 @@
     function updateSampleDisplay() {
       const display = document.getElementById('sampleDisplay');
       
-      if (!selectedQuestion) {
-        display.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">Select a question to begin</p>';
-        return;
-      }
-
-      // Check if samples exist for this question
-      if (samplesData && samplesData.essays) {
-        const matchingSample = samplesData.essays.find(essay => 
-          essay.questionId === selectedQuestion.id || 
-          essay.topic === selectedQuestion.topic
-        );
-        
-        if (matchingSample) {
-          if (sampleViewMode === 'full') {
+      // Use selected sample if available
+      if (selectedSample && selectedSample.paragraphs) {
+        if (sampleViewMode === 'full') {
+          display.innerHTML = `
+            <h3 style="color: #C9A961; margin-bottom: 1rem;">${selectedSample.title || 'Sample Essay'}</h3>
+            ${selectedSample.paragraphs.map(p => `<p>${p}</p>`).join('')}
+          `;
+        } else {
+          // Show paragraph based on current stage
+          const paragraph = selectedSample.paragraphs[currentStage];
+          if (paragraph) {
             display.innerHTML = `
-              <h3 style="color: #C9A961; margin-bottom: 1rem;">${matchingSample.title || 'Sample Essay'}</h3>
-              ${matchingSample.paragraphs.map(p => `<p>${p}</p>`).join('')}
+              <h3 style="color: #C9A961; margin-bottom: 1rem;">${stageInfo[currentStage].name}</h3>
+              <p>${paragraph}</p>
             `;
           } else {
-            // Show paragraph based on current stage
-            const paragraph = matchingSample.paragraphs[currentStage];
-            if (paragraph) {
-              display.innerHTML = `
-                <h3 style="color: #C9A961; margin-bottom: 1rem;">${stageInfo[currentStage].name}</h3>
-                <p>${paragraph}</p>
-              `;
-            } else {
-              display.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample for this stage</p>';
-            }
+            display.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample for this stage</p>';
           }
-          return;
         }
+        return;
       }
-
-      // Fallback: show question info
-      display.innerHTML = `
-        <h3 style="color: #C9A961; margin-bottom: 1rem;">Selected Question</h3>
-        <p style="margin-bottom: 0.5rem;"><strong>Topic:</strong> ${selectedQuestion.topic}</p>
-        <p style="margin-bottom: 0.5rem;"><strong>Type:</strong> ${selectedQuestion.essayType}</p>
-        <p style="color: #aeaeb2; font-style: italic;">${selectedQuestion.mainQuestion}</p>
-        <p style="margin-top: 1rem; color: #8e8e93; font-size: 0.7rem;">💡 No sample essay available yet. Write your own!</p>
-      `;
+      
+      // Fallback: show question info if selected
+      if (selectedQuestion) {
+        display.innerHTML = `
+          <h3 style="color: #C9A961; margin-bottom: 1rem;">Selected Question</h3>
+          <p style="margin-bottom: 0.5rem;"><strong>Topic:</strong> ${selectedQuestion.topic}</p>
+          <p style="margin-bottom: 0.5rem;"><strong>Type:</strong> ${selectedQuestion.essayType}</p>
+          <p style="color: #aeaeb2; font-style: italic;">${selectedQuestion.mainQuestion}</p>
+          <p style="margin-top: 1rem; color: #8e8e93; font-size: 0.7rem;">💡 No sample essay available yet. Write your own!</p>
+        `;
+      } else {
+        display.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">Select a question to begin</p>';
+      }
     }
 
     function toggleSampleView() {
@@ -1435,11 +1434,12 @@
       
       samplesData.essays.forEach((essay, index) => {
         const stageNames = ['Introduction', 'Body 1', 'Body 2', 'Conclusion'];
+        const isSelected = selectedSample === essay;
         
         html += `
-          <div class="phrase-group">
-            <div class="phrase-title" onclick="toggleGroup(this.parentElement)">
-              <span>📄 ${essay.title || `Essay ${index + 1}`}</span>
+          <div class="phrase-group" style="cursor: pointer; ${isSelected ? 'background: rgba(201, 169, 97, 0.1); border-radius: 0.5rem;' : ''}" onclick="selectSample(${index})">
+            <div class="phrase-title" onclick="event.stopPropagation(); toggleGroup(this.parentElement)">
+              <span>${isSelected ? '✓ ' : ''}📄 ${essay.title || `Essay ${index + 1}`}</span>
               <span>▼</span>
             </div>
             <div class="phrase-list">`;
@@ -1462,6 +1462,15 @@
       });
       
       tab.innerHTML = html;
+    }
+
+    function selectSample(index) {
+      if (samplesData && samplesData.essays && samplesData.essays[index]) {
+        selectedSample = samplesData.essays[index];
+        updateSampleDisplay();
+        renderSamplesTab();
+        console.log('✓ Selected sample:', selectedSample.title);
+      }
     }
 
     function saveEssay() {

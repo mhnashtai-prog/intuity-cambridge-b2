@@ -1,4 +1,104 @@
-<!DOCTYPE html>
+<script>
+    let reviewData = [];
+    let questionMap = {};
+    let isLoading = true;
+
+    async function loadQuestions() {
+      try {
+        const response = await fetch('data/ideas.json');
+        if (!response.ok) {
+          console.warn('Could not load ideas.json - will use questionId as fallback');
+          return;
+        }
+        const data = await response.json();
+        
+        // Build question map from ideas.json review_templates
+        if (data && data.review_templates) {
+          Object.keys(data.review_templates).forEach(key => {
+            const template = data.review_templates[key];
+            // Use the template's id field as the key
+            if (template.id) {
+              questionMap[template.id] = {
+                context: template.context || '',
+                question: template.question || ''
+              };
+            }
+          });
+        }
+        console.log('Loaded question templates:', Object.keys(questionMap).length);
+      } catch (error) {
+        console.error('Error loading questions:', error);
+      }
+    }
+
+    async function loadData() {
+      try {
+        // Load questions first
+        await loadQuestions();
+        
+        const response = await fetch('data/samples.json');
+        if (!response.ok) {
+          throw new Error('Failed to load samples.json');
+        }
+        const data = await response.json();
+        
+        // Handle the samples.json structure which has categories as keys
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+          reviewData = [];
+          
+          // Iterate through each category (tv_documentary_reviews, concert_reviews, etc.)
+          Object.keys(data).forEach(category => {
+            if (Array.isArray(data[category])) {
+              data[category].forEach(review => {
+                // Get question details from the questionMap loaded from ideas.json
+                const questionDetails = questionMap[review.questionId];
+                
+                // Transform to expected format
+                reviewData.push({
+                  id: review.id,
+                  topic: review.topic,
+                  type: review.type,
+                  context: questionDetails ? questionDetails.context : (review.context || ''),
+                  question: questionDetails ? questionDetails.question : (review.question || review.questionId || ''),
+                  skeleton: review.skeleton || [],
+                  reviewTitle: review.title,
+                  wordCount: review.wordCount,
+                  answer: review.fullText
+                });
+              });
+            }
+          });
+        } else if (Array.isArray(data)) {
+          // If it's already an array, use it directly
+          reviewData = data;
+        }
+        
+        isLoading = false;
+        
+        if (reviewData.length === 0) {
+          throw new Error('No review data found in JSON file');
+        }
+        
+        console.log('Loaded reviews:', reviewData.length);
+        render();
+      } catch (error) {
+        console.error('Error loading data:', error);
+        isLoading = false;
+        document.querySelector('.card-container').innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: center; height: 100%; flex-direction: column; gap: 1rem;">
+            <div style="font-size: 1.2rem; color: #C9A961;">⚠️ Error Loading Data</div>
+            <div style="font-size: 0.9rem; color: #8e8e93; text-align: center; max-width: 80%;">
+              Unable to load review samples. Please check that both files exist:<br>
+              <span style="font-size: 0.8rem; color: #a8a8ad; margin-top: 0.5rem; display: block;">
+                • data/samples.json<br>
+                • data/ideas.json
+              </span>
+              <span style="font-size: 0.75rem; color: #636366; margin-top: 0.5rem; display: block;">Error: ${error.message}</span>
+            </div>
+          </div>
+        `;
+      }
+    }<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -724,8 +824,40 @@
           throw new Error('Failed to load samples.json');
         }
         const data = await response.json();
-        reviewData = data;
+        
+        // Handle different JSON structures
+        // Check if data is an object with categories
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+          // Flatten all reviews from different categories into a single array
+          reviewData = [];
+          Object.keys(data).forEach(category => {
+            if (Array.isArray(data[category])) {
+              data[category].forEach(review => {
+                // Transform the structure to match expected format
+                reviewData.push({
+                  id: review.id,
+                  topic: review.topic,
+                  type: review.type,
+                  context: review.questionId || '',
+                  question: review.questionId || '',
+                  skeleton: review.skeleton || [],
+                  reviewTitle: review.title,
+                  wordCount: review.wordCount,
+                  answer: review.fullText
+                });
+              });
+            }
+          });
+        } else if (Array.isArray(data)) {
+          reviewData = data;
+        }
+        
         isLoading = false;
+        
+        if (reviewData.length === 0) {
+          throw new Error('No review data found');
+        }
+        
         render();
       } catch (error) {
         console.error('Error loading data:', error);
@@ -733,7 +865,8 @@
           <div style="display: flex; align-items: center; justify-content: center; height: 100%; flex-direction: column; gap: 1rem;">
             <div style="font-size: 1.2rem; color: #C9A961;">⚠️ Error Loading Data</div>
             <div style="font-size: 0.9rem; color: #8e8e93; text-align: center;">
-              Unable to load review samples. Please ensure the data/samples.json file exists.
+              Unable to load review samples. Please ensure the data/samples.json file exists.<br>
+              Error: ${error.message}
             </div>
           </div>
         `;

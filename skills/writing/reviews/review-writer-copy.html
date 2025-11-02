@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -680,6 +681,8 @@
       font-family: 'DM Sans';
       text-align: center;
       white-space: nowrap;
+      text-decoration: none;
+      display: inline-block;
     }
 
     .btn-compact:hover:not(:disabled) {
@@ -979,11 +982,12 @@
           </div>
 
           <div class="action-group">
-            <button class="btn-compact" onclick="saveReview()">💾</button>
-            <button class="btn-compact" onclick="exportReview()">📥</button>
-            <button class="btn-compact" onclick="resetReview()">🔄</button>
-            <button class="btn.compact" onclick="window.location.href='../../../index.html'">← Back</button>
-          </div>
+  <a href="adjective-practice.html" class="btn-compact" title="Practice adjectives">📝 Adjectives</a>
+  <button class="btn-compact" onclick="saveReview()">💾</button>
+  <button class="btn-compact" onclick="exportReview()">📥</button>
+  <button class="btn-compact" onclick="resetReview()">🔄</button>
+  <a href="../../../index.html?openModal=writing" class="btn-compact">← Back</a>
+</div>
         </div>
 
       </div>
@@ -1023,10 +1027,10 @@
   </div>
 
   <script>
-    let currentMode = 'read'; // ISSUE 2: Default to READ
+    let currentMode = 'read';
     let currentStage = 0;
     let reviewData = ['', '', '', ''];
-    let sampleViewMode = 'full'; // ISSUE 2: Default to FULL
+    let sampleViewMode = 'full';
     let selectedQuestion = null;
     let selectedSample = null;
     let activeFilter = null;
@@ -1090,7 +1094,6 @@
         await loadAllJSON();
         populateQuestionDropdown();
         
-        // ISSUE 2: Initialize in READ mode with full text and first sample
         const allSamples = getAllSamples();
         if (allSamples.length > 0) {
           selectedSample = allSamples[0];
@@ -1157,11 +1160,30 @@
       const dropdown = document.getElementById('questionDropdown');
       dropdown.innerHTML = '';
       
-      // ISSUE 2: Add samples option
-      const samplesOption = document.createElement('option');
-      samplesOption.value = '__SAMPLES__';
-      samplesOption.textContent = '📚 Sample Reviews';
-      dropdown.appendChild(samplesOption);
+      // Add all sample categories
+      const sampleCategories = [
+        { key: 'film_reviews', label: '🎬 Film Reviews' },
+        { key: 'book_reviews', label: '📚 Book Reviews' },
+        { key: 'restaurant_reviews', label: '🍽️ Restaurant Reviews' },
+        { key: 'app_reviews', label: '📱 App Reviews' },
+        { key: 'concert_reviews', label: '🎵 Concert Reviews' },
+        { key: 'game_reviews', label: '🎮 Game Reviews' }
+      ];
+      
+      sampleCategories.forEach(category => {
+        if (samplesData[category.key] && samplesData[category.key].length > 0) {
+          const option = document.createElement('option');
+          option.value = '__SAMPLES__' + category.key;
+          option.textContent = category.label;
+          dropdown.appendChild(option);
+        }
+      });
+      
+      // Add separator
+      const separator = document.createElement('option');
+      separator.disabled = true;
+      separator.textContent = '─────────────';
+      dropdown.appendChild(separator);
       
       if (questionsData.questions && questionsData.questions.length > 0) {
         questionsData.questions.forEach((q, i) => {
@@ -1172,22 +1194,26 @@
         });
       }
 
-      dropdown.value = '__SAMPLES__';
-      selectedQuestion = null;
+      // Select first sample category by default
+      dropdown.value = '__SAMPLES__film_reviews';
+      handleQuestionChange();
     }
 
     function handleQuestionChange() {
       const dropdown = document.getElementById('questionDropdown');
-      const questionId = dropdown.value;
+      const selectedValue = dropdown.value;
       
-      if (questionId === '__SAMPLES__') {
+      if (selectedValue.startsWith('__SAMPLES__')) {
         selectedQuestion = null;
-        const allSamples = getAllSamples();
-        if (allSamples.length > 0 && !selectedSample) {
-          selectedSample = allSamples[0];
+        const categoryKey = selectedValue.replace('__SAMPLES__', '');
+        
+        // Select first sample from this category
+        if (samplesData[categoryKey] && samplesData[categoryKey].length > 0) {
+          selectedSample = samplesData[categoryKey][0];
         }
       } else {
-        selectedQuestion = questionsData.questions.find(q => q.id === questionId);
+        selectedQuestion = questionsData.questions.find(q => q.id === selectedValue);
+        selectedSample = null;
       }
       
       renderIdeasTab();
@@ -1214,7 +1240,6 @@
         showEmptyPhrasesState();
         renderSamplesTab();
       } else {
-        // ISSUE 3: In READ mode, always show phrases based on current stage
         renderPhrasesForReadMode();
         renderIdeasTab();
         updateSampleDisplay();
@@ -1222,15 +1247,14 @@
       }
     }
 
-    // ISSUE 3: New function to auto-show phrases in READ mode
     function renderPhrasesForReadMode() {
       if (currentMode !== 'read') return;
       
       const stageFilters = [
-        ['opening_A', 'opening_B'],  // Introduction
-        ['features', 'reasons', 'examples'],  // Feature 1
-        ['features', 'reasons', 'comparing'],  // Feature 2
-        ['strong_recommend', 'targeted_recommend']  // Recommendation
+        ['opening_A', 'opening_B'],
+        ['features', 'reasons', 'examples'],
+        ['features', 'reasons', 'comparing'],
+        ['strong_recommend', 'targeted_recommend']
       ];
       
       const filters = stageFilters[currentStage];
@@ -1500,16 +1524,13 @@
       allSamples.forEach((sample, sampleIndex) => {
         const paragraphs = sample.fullText.split('\n\n').filter(p => p.trim());
         
-        // Determine what to show based on view mode
         let displayContent;
         let labelText;
         
         if (sampleViewMode === 'full') {
-          // FULL mode: Show entire review
           displayContent = paragraphs.join('<br><br>');
           labelText = 'Full Review';
         } else {
-          // CHUNK mode: Show current stage only
           displayContent = paragraphs[currentStage] || 'No content for this stage';
           labelText = stageNames[currentStage];
         }
@@ -1606,7 +1627,6 @@
       viewSwitch.classList.toggle('active', sampleViewMode === 'full');
       viewSwitch.setAttribute('aria-checked', sampleViewMode === 'full');
       
-      // Update stage title
       if (currentMode === 'read' && sampleViewMode === 'full') {
         document.getElementById('stageName').textContent = 'FULL TEXT';
       } else {
@@ -1614,12 +1634,12 @@
       }
       
       updateSampleDisplay();
+      renderSamplesTab();
     }
 
     function updateInterface() {
       const info = stageInfo[currentStage];
       
-      // Update stage title based on mode and view
       if (currentMode === 'read' && sampleViewMode === 'full') {
         document.getElementById('stageName').textContent = 'FULL TEXT';
       } else {
@@ -1650,7 +1670,7 @@
           renderPhrasesByFilter(activeFilter);
         }
       } else {
-        renderPhrasesForReadMode(); // ISSUE 3: Auto-show phrases in READ mode
+        renderPhrasesForReadMode();
         updateSampleDisplay();
       }
       
@@ -1773,7 +1793,7 @@
         updateInterface();
       }
     }
-
+       
     init();
   </script>
 </body>

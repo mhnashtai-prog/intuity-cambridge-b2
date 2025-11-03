@@ -63,6 +63,13 @@
       align-items: center;
       gap: 0.4rem;
       max-width: 280px;
+      transition: opacity 0.3s, visibility 0.3s;
+    }
+
+    .question-selector-compact.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
     }
 
     .question-selector-compact label {
@@ -1048,18 +1055,26 @@
       const dropdown = document.getElementById('questionDropdown');
       const selectedValue = dropdown.value;
       
+      console.log('🔽 Dropdown changed to:', selectedValue);
+      
       selectedQuestion = questionsData.questions.find(q => q.id === selectedValue);
       
       if (samplesData && samplesData.opinion) {
         selectedSample = samplesData.opinion.find(s => s.id === selectedValue);
         if (!selectedSample) {
+          console.warn('⚠️ No matching sample found for:', selectedValue, '- using first sample');
           selectedSample = samplesData.opinion[0];
         }
       }
       
       console.log('✓ Question changed:', selectedQuestion?.topic);
       console.log('✓ Sample loaded:', selectedSample?.title);
+      console.log('✓ Sample ID:', selectedSample?.id);
       
+      // CRITICAL: Force refresh of main display
+      updateSampleDisplay();
+      
+      // Then refresh side panels
       refreshAllPanels();
     }
 
@@ -1071,7 +1086,11 @@
       modeSwitch.classList.toggle('active', currentMode === 'write');
       modeSwitch.setAttribute('aria-checked', currentMode === 'write');
       
+      const dropdown = document.getElementById('questionSelector');
+      
       if (currentMode === 'write') {
+        // WRITE MODE: Hide dropdown, show writing tools
+        dropdown.classList.add('hidden');
         currentStage = 0;
         document.getElementById('quickAccessBar').classList.add('show');
         document.getElementById('textarea').style.display = 'block';
@@ -1081,6 +1100,8 @@
         
         renderQuickAccess();
       } else {
+        // READ MODE: Show dropdown, show sample display
+        dropdown.classList.remove('hidden');
         document.getElementById('quickAccessBar').classList.remove('show');
         document.getElementById('textarea').style.display = 'none';
         document.getElementById('sampleDisplay').style.display = 'block';
@@ -1320,6 +1341,8 @@
         return;
       }
 
+      console.log('💡 Rendering Ideas for question ID:', selectedQuestion.id);
+
       let html = `
         <div class="question-display">
           <h4>📝 Review Task</h4>
@@ -1339,14 +1362,19 @@
         </div>
       `;
       
+      // Check if ideas data exists for this question
       if (ideasData && ideasData.reviews) {
+        console.log('💡 Available review IDs in ideas.json:', Object.keys(ideasData.reviews));
+        
         const reviewIdea = ideasData.reviews[selectedQuestion.id];
+        
         if (reviewIdea && reviewIdea.skeleton) {
+          console.log('✓ Found ideas for:', selectedQuestion.id);
           
           if (viewMode === 'full') {
             console.log('💡 Rendering FULL structure ideas');
             html += `<div class="phrase-group">
-              <div class="phrase-title">💡 Structure Ideas for ${reviewIdea.topic}</div>
+              <div class="phrase-title">💡 Complete Structure: ${reviewIdea.topic}</div>
               <div class="phrase-list">`;
             
             reviewIdea.skeleton.forEach(section => {
@@ -1372,9 +1400,17 @@
               });
               
               html += `</div></div></div>`;
+            } else {
+              console.warn('⚠️ No skeleton data for stage:', currentStage);
             }
           }
+        } else {
+          console.warn('⚠️ No ideas found for question ID:', selectedQuestion.id);
+          html += '<p style="color: #636366; font-size: 0.65rem; text-align: center; padding: 1rem;">No structure ideas available for this topic</p>';
         }
+      } else {
+        console.error('❌ Ideas data not loaded');
+        html += '<p style="color: #636366; font-size: 0.65rem; text-align: center; padding: 1rem;">Ideas data not available</p>';
       }
       
       tab.innerHTML = html;

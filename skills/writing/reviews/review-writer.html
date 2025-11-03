@@ -922,7 +922,7 @@
   <script>
     let currentMode = 'read';
     let currentStage = 0;
-    let currentQuestionIndex = 0;  // NEW: Track current question index
+    let currentQuestionIndex = 0;
     let reviewData = ['', '', '', ''];
     let viewMode = 'full';
     let selectedQuestion = null;
@@ -983,11 +983,6 @@
         await loadAllJSON();
         populateQuestionDropdown();
         
-        if (samplesData && samplesData.opinion && samplesData.opinion.length > 0) {
-          selectedSample = samplesData.opinion[0];
-          console.log('✓ Default sample loaded:', selectedSample.title);
-        }
-        
         currentMode = 'read';
         viewMode = 'full';
         currentStage = 0;
@@ -998,10 +993,9 @@
         viewSwitch.setAttribute('aria-checked', 'true');
         
         updateInterface();
-        refreshAllPanels();
         
         document.getElementById('textarea').addEventListener('input', handleInput);
-        console.log('✅ Initialization complete - READ mode, FULL view');
+        console.log('✅ Initialization complete');
       } catch (error) {
         console.error('❌ Initialization error:', error);
       }
@@ -1029,9 +1023,10 @@
         samplesData = samples;
         questionsData = questions;
         
-        console.log('✅ All JSON files loaded');
-        console.log('Questions available:', questionsData.questions?.length || 0);
-        console.log('Ideas available:', Object.keys(ideasData.reviews || {}).length);
+        console.log('✅ JSON loaded');
+        console.log('Questions:', Object.keys(questionsData.questions || {}));
+        console.log('Samples:', samplesData.opinion?.map(s => s.id));
+        console.log('Ideas:', Object.keys(ideasData.reviews || {}));
         
       } catch (error) {
         console.error('❌ Error loading JSON:', error);
@@ -1052,80 +1047,106 @@
         
         currentQuestionIndex = 0;
         dropdown.value = questionsData.questions[0].id;
-        handleQuestionChange();
+        loadQuestionData(questionsData.questions[0].id);
       }
+    }
+
+    // CORE FIX: Separate function to load data
+    function loadQuestionData(questionId) {
+      console.log('📥 Loading data for:', questionId);
+      
+      // Find and set question
+      selectedQuestion = questionsData.questions.find(q => q.id === questionId);
+      if (!selectedQuestion) {
+        console.error('❌ Question not found:', questionId);
+        return;
+      }
+      
+      // Find and set sample
+      selectedSample = samplesData.opinion?.find(s => s.id === questionId);
+      if (!selectedSample) {
+        console.warn('⚠️ No sample for:', questionId);
+        selectedSample = samplesData.opinion?.[0];
+      }
+      
+      console.log('✅ Loaded:', selectedQuestion.topic);
+      console.log('✅ Sample:', selectedSample?.title);
+      
+      // FORCE immediate display update
+      forceUpdateDisplay();
+    }
+
+    // FORCE display refresh
+    function forceUpdateDisplay() {
+      console.log('🔄 FORCING display update');
+      
+      // Update main display
+      updateSampleDisplay();
+      
+      // Update all side panels
+      renderIdeasTab();
+      renderSamplesTab();
+      renderPhrasesTab();
+      renderAdjectivesTab();
+      
+      // Update navigation
+      updateNavigationButtons();
     }
 
     function handleQuestionChange() {
       const dropdown = document.getElementById('questionDropdown');
       const selectedValue = dropdown.value;
       
-      // Update current question index
       currentQuestionIndex = questionsData.questions.findIndex(q => q.id === selectedValue);
       
-      console.log('🔽 Question changed to:', selectedValue, 'Index:', currentQuestionIndex);
+      console.log('🔽 Dropdown changed:', selectedValue, 'Index:', currentQuestionIndex);
       
-      selectedQuestion = questionsData.questions[currentQuestionIndex];
-      
-      // Find matching sample
-      if (samplesData && samplesData.opinion) {
-        selectedSample = samplesData.opinion.find(s => s.id === selectedValue);
-        if (!selectedSample) {
-          console.warn('⚠️ No matching sample found for:', selectedValue);
-          selectedSample = samplesData.opinion[0];
-        }
-      }
-      
-      console.log('✓ Question:', selectedQuestion?.topic);
-      console.log('✓ Sample:', selectedSample?.title);
-      
-      // Update navigation buttons
-      updateNavigationButtons();
-      
-      // Refresh display
-      updateSampleDisplay();
-      refreshAllPanels();
+      loadQuestionData(selectedValue);
     }
 
-    // NEW: Smart navigation handler
     function handleNextClick() {
       if (currentMode === 'read') {
-        // READ MODE: Navigate to next question
         nextQuestion();
       } else {
-        // WRITE MODE: Navigate to next stage
         nextStage();
       }
     }
 
     function handlePrevClick() {
       if (currentMode === 'read') {
-        // READ MODE: Navigate to previous question
         prevQuestion();
       } else {
-        // WRITE MODE: Navigate to previous stage
         prevStage();
       }
     }
 
-    // NEW: Question navigation functions
     function nextQuestion() {
       if (currentQuestionIndex < questionsData.questions.length - 1) {
         currentQuestionIndex++;
-        const dropdown = document.getElementById('questionDropdown');
-        dropdown.value = questionsData.questions[currentQuestionIndex].id;
-        handleQuestionChange();
-        console.log('➡️ Moved to next question:', currentQuestionIndex);
+        const newQuestionId = questionsData.questions[currentQuestionIndex].id;
+        
+        console.log('➡️ Next question:', newQuestionId);
+        
+        // Update dropdown
+        document.getElementById('questionDropdown').value = newQuestionId;
+        
+        // Load data
+        loadQuestionData(newQuestionId);
       }
     }
 
     function prevQuestion() {
       if (currentQuestionIndex > 0) {
         currentQuestionIndex--;
-        const dropdown = document.getElementById('questionDropdown');
-        dropdown.value = questionsData.questions[currentQuestionIndex].id;
-        handleQuestionChange();
-        console.log('⬅️ Moved to previous question:', currentQuestionIndex);
+        const newQuestionId = questionsData.questions[currentQuestionIndex].id;
+        
+        console.log('⬅️ Prev question:', newQuestionId);
+        
+        // Update dropdown
+        document.getElementById('questionDropdown').value = newQuestionId;
+        
+        // Load data
+        loadQuestionData(newQuestionId);
       }
     }
 
@@ -1134,11 +1155,9 @@
       const nextBtn = document.getElementById('nextBtn');
       
       if (currentMode === 'read') {
-        // READ MODE: Disable based on question index
         prevBtn.disabled = currentQuestionIndex === 0;
         nextBtn.disabled = currentQuestionIndex === questionsData.questions.length - 1;
       } else {
-        // WRITE MODE: Disable based on stage
         prevBtn.disabled = currentStage === 0;
         nextBtn.disabled = currentStage === 3;
       }
@@ -1146,7 +1165,7 @@
 
     function switchMode() {
       currentMode = currentMode === 'read' ? 'write' : 'read';
-      console.log(`🔄 Switching to ${currentMode.toUpperCase()} mode`);
+      console.log(`🔄 Mode: ${currentMode.toUpperCase()}`);
       
       const modeSwitch = document.getElementById('modeToggleSwitch');
       modeSwitch.classList.toggle('active', currentMode === 'write');
@@ -1174,16 +1193,6 @@
       }
       
       updateInterface();
-      refreshAllPanels();
-    }
-
-    function refreshAllPanels() {
-      console.log(`🔄 Refreshing all panels - Mode: ${viewMode}, Stage: ${currentStage}`);
-      renderPhrasesTab();
-      renderAdjectivesTab();
-      renderIdeasTab();
-      renderSamplesTab();
-      updateSampleDisplay();
     }
 
     function extractParagraphs(htmlAnswer) {
@@ -1195,21 +1204,23 @@
     function updateSampleDisplay() {
       const display = document.getElementById('sampleDisplay');
       
+      console.log('📺 Updating display - Sample:', selectedSample?.id);
+      
       if (!selectedSample || !selectedSample.answer) {
-        display.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample review available</p>';
+        display.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample available</p>';
         return;
       }
       
       const paragraphs = extractParagraphs(selectedSample.answer);
-      console.log(`📄 Displaying sample - Mode: ${viewMode}, Stage: ${currentStage}, Paragraphs: ${paragraphs.length}`);
       
       if (viewMode === 'full') {
         display.innerHTML = `
-          <h3 style="color: #C9A961; margin-bottom: 1rem;">${selectedSample.title || 'Sample Review'}</h3>
+          <h3 style="color: #C9A961; margin-bottom: 1rem;">${selectedSample.title}</h3>
           ${paragraphs.map((p, i) => `
-            <p><strong style="color: #8e8e93; font-size: 0.65rem; text-transform: uppercase;">${stageNames[i] || 'Paragraph ' + (i+1)}:</strong><br>${p}</p>
+            <p><strong style="color: #8e8e93; font-size: 0.65rem; text-transform: uppercase;">${stageNames[i]}:</strong><br>${p}</p>
           `).join('')}
         `;
+        console.log('✅ Displayed FULL review');
       } else {
         const paragraph = paragraphs[currentStage];
         if (paragraph) {
@@ -1217,8 +1228,9 @@
             <h3 style="color: #C9A961; margin-bottom: 1rem;">${stageInfo[currentStage].name}</h3>
             <p>${paragraph}</p>
           `;
+          console.log('✅ Displayed stage', currentStage);
         } else {
-          display.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample for this stage</p>';
+          display.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No content</p>';
         }
       }
     }
@@ -1230,9 +1242,9 @@
       viewSwitch.classList.toggle('active', viewMode === 'full');
       viewSwitch.setAttribute('aria-checked', viewMode === 'full');
       
-      console.log(`🔄 View mode switched to: ${viewMode}`);
+      console.log('🔄 View:', viewMode);
       
-      refreshAllPanels();
+      forceUpdateDisplay();
     }
 
     function renderPhrasesTab() {
@@ -1374,7 +1386,7 @@
       tab.innerHTML = '';
 
       if (!topicsAdjectivesData || Object.keys(topicsAdjectivesData).length === 0) {
-        tab.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No adjectives data available</p>';
+        tab.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No adjectives</p>';
         return;
       }
 
@@ -1395,11 +1407,11 @@
       const tab = document.getElementById('ideasTab');
       
       if (!selectedQuestion) {
-        tab.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">Select a question</p>';
+        tab.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">Select question</p>';
         return;
       }
 
-      console.log('💡 Rendering Ideas for:', selectedQuestion.id);
+      console.log('💡 Rendering ideas for:', selectedQuestion.id);
 
       let html = `
         <div class="question-display">
@@ -1408,7 +1420,7 @@
           <div class="question-main">${selectedQuestion.question}</div>
           
           <div class="key-points">
-            <div class="key-points-title">Include information about:</div>`;
+            <div class="key-points-title">Include:</div>`;
       
       selectedQuestion.keyPoints.forEach((point, i) => {
         html += `<div class="point-item">${i + 1}. ${point}</div>`;
@@ -1416,33 +1428,29 @@
 
       html += `
           </div>
-          <div class="key-points-title" style="margin-top: 0.75rem;">Word count: ${selectedQuestion.wordCount}</div>
+          <div class="key-points-title" style="margin-top: 0.75rem;">Words: ${selectedQuestion.wordCount}</div>
         </div>
       `;
       
-      if (!ideasData || !ideasData.reviews) {
-        html += '<p style="color: #636366; font-size: 0.65rem; text-align: center; padding: 1rem;">Ideas data not loaded</p>';
+      if (!ideasData?.reviews) {
+        html += '<p style="color: #636366; font-size: 0.65rem; text-align: center; padding: 1rem;">Ideas not loaded</p>';
         tab.innerHTML = html;
         return;
       }
-
-      console.log('💡 Looking for ideas with ID:', selectedQuestion.id);
-      console.log('💡 Available IDs:', Object.keys(ideasData.reviews));
 
       const reviewIdea = ideasData.reviews[selectedQuestion.id];
       
-      if (!reviewIdea || !reviewIdea.skeleton) {
-        console.warn('⚠️ No ideas found for:', selectedQuestion.id);
-        html += '<p style="color: #636366; font-size: 0.65rem; text-align: center; padding: 1rem;">No structure ideas available for this topic</p>';
+      if (!reviewIdea?.skeleton) {
+        console.warn('⚠️ No ideas for:', selectedQuestion.id);
+        html += '<p style="color: #636366; font-size: 0.65rem; text-align: center; padding: 1rem;">No ideas available</p>';
         tab.innerHTML = html;
         return;
       }
 
-      console.log('✓ Found ideas!', reviewIdea.skeleton.length, 'sections');
+      console.log('✅ Found', reviewIdea.skeleton.length, 'sections');
       
       if (viewMode === 'full') {
-        console.log('💡 Rendering ALL 4 paragraphs');
-        reviewIdea.skeleton.forEach((section, idx) => {
+        reviewIdea.skeleton.forEach(section => {
           html += `
             <div class="phrase-group">
               <div class="phrase-title">💡 ${section.title}</div>
@@ -1456,7 +1464,6 @@
           html += `</div></div></div>`;
         });
       } else {
-        console.log('💡 Rendering stage', currentStage);
         const section = reviewIdea.skeleton[currentStage];
         if (section) {
           html += `
@@ -1480,33 +1487,33 @@
     function renderSamplesTab() {
       const tab = document.getElementById('samplesTab');
       
-      if (!samplesData || !samplesData.opinion || samplesData.opinion.length === 0) {
-        tab.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No samples available</p>';
+      if (!samplesData?.opinion || samplesData.opinion.length === 0) {
+        tab.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No samples</p>';
         return;
       }
 
       let html = '';
       
-      samplesData.opinion.forEach((review, index) => {
+      samplesData.opinion.forEach(review => {
         const paragraphs = extractParagraphs(review.answer);
         
         html += `<div class="sample-block">
-          <h4>📄 ${review.title || `Sample ${index + 1}`}</h4>`;
+          <h4>📄 ${review.title}</h4>`;
         
         if (viewMode === 'full') {
           paragraphs.forEach((para, pIndex) => {
             if (para.trim()) {
               html += `
-                <div class="stage-label">${stageNames[pIndex] || `Paragraph ${pIndex + 1}`}</div>
+                <div class="stage-label">${stageNames[pIndex]}</div>
                 <p>${para}</p>`;
             }
           });
         } else {
           const paragraph = paragraphs[currentStage];
-          if (paragraph && paragraph.trim()) {
+          if (paragraph?.trim()) {
             html += `<p>${paragraph}</p>`;
           } else {
-            html += `<p style="color: #636366; font-style: italic;">No content for this stage</p>`;
+            html += `<p style="color: #636366; font-style: italic;">No content</p>`;
           }
         }
         
@@ -1528,7 +1535,6 @@
     }
 
     function handleQuickClick(filter) {
-      console.log(`🔍 Quick filter: ${filter}`);
       switchTab('phrases');
       
       const tab = document.getElementById('phrasesTab');
@@ -1547,7 +1553,7 @@
         dot.classList.remove('current', 'done');
         if (i === currentStage) {
           dot.classList.add('current');
-        } else if (reviewData[i] && reviewData[i].trim()) {
+        } else if (reviewData[i]?.trim()) {
           dot.classList.add('done');
         }
       });
@@ -1583,7 +1589,7 @@
         currentStage++;
         updateInterface();
         if (viewMode === 'byStage') {
-          refreshAllPanels();
+          forceUpdateDisplay();
         }
       }
     }
@@ -1594,7 +1600,7 @@
         currentStage--;
         updateInterface();
         if (viewMode === 'byStage') {
-          refreshAllPanels();
+          forceUpdateDisplay();
         }
       }
     }
@@ -1608,7 +1614,7 @@
       updateInterface();
       
       if (viewMode === 'byStage') {
-        refreshAllPanels();
+        forceUpdateDisplay();
       }
     }
 
@@ -1628,7 +1634,7 @@
       reviewData[currentStage] = document.getElementById('textarea').value;
       const data = {
         type: 'review',
-        question: selectedQuestion ? selectedQuestion.id : null,
+        question: selectedQuestion?.id,
         timestamp: new Date().toISOString(),
         stages: reviewData
       };
@@ -1654,7 +1660,7 @@
     }
 
     function resetReview() {
-      if (confirm('Reset all content? This cannot be undone.')) {
+      if (confirm('Reset all content?')) {
         reviewData = ['', '', '', ''];
         currentStage = 0;
         updateInterface();

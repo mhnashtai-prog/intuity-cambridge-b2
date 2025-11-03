@@ -260,34 +260,20 @@
     }
 
     .phrase-group {
-      margin-bottom: 0.75rem;
+      margin-bottom: 1.5rem;
     }
 
     .phrase-title {
       font-size: 0.7rem;
       color: #C9A961;
       font-weight: 700;
-      margin-bottom: 0.375rem;
-      cursor: pointer;
+      margin-bottom: 0.5rem;
       padding: 0.375rem 0.5rem;
       background: rgba(201, 169, 97, 0.08);
       border-radius: 0.5rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .phrase-title:hover {
-      background: rgba(201, 169, 97, 0.12);
     }
 
     .phrase-list {
-      display: none;
-      padding-left: 0.5rem;
-      margin-top: 0.375rem;
-    }
-
-    .phrase-list.show {
       display: block;
     }
 
@@ -300,6 +286,45 @@
       background: rgba(0, 0, 0, 0.2);
       border-radius: 0.375rem;
       border-left: 2px solid rgba(201, 169, 97, 0.3);
+    }
+
+    .sample-block {
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid rgba(84, 84, 88, 0.15);
+    }
+
+    .sample-block:last-child {
+      border-bottom: none;
+    }
+
+    .sample-block h4 {
+      font-size: 0.75rem;
+      color: #C9A961;
+      margin-bottom: 0.75rem;
+      font-weight: 700;
+      position: sticky;
+      top: 0;
+      background: rgba(28, 28, 30, 0.95);
+      padding: 0.5rem 0;
+      z-index: 10;
+      backdrop-filter: blur(10px);
+    }
+
+    .sample-block p {
+      font-size: 0.65rem;
+      color: #e5e5e7;
+      line-height: 1.6;
+      margin-bottom: 0.5rem;
+    }
+
+    .sample-block .stage-label {
+      font-size: 0.6rem;
+      color: #8e8e93;
+      font-weight: 600;
+      margin-top: 0.75rem;
+      margin-bottom: 0.25rem;
+      text-transform: uppercase;
     }
 
     .question-display {
@@ -809,7 +834,7 @@
           <div class="view-toggle-container" id="viewToggleContainer">
             <span class="view-toggle-label">By Stage</span>
             <div class="view-toggle-switch active" id="viewToggleSwitch" onclick="toggleSampleView()" role="switch" aria-checked="true"></div>
-            <span class="view-toggle-label">Complete Review</span>
+            <span class="view-toggle-label">Complete</span>
           </div>
         </div>
 
@@ -888,13 +913,12 @@
   </div>
 
   <script>
-    let currentMode = 'read';  // START IN READ MODE
+    let currentMode = 'read';
     let currentStage = 0;
     let reviewData = ['', '', '', ''];
-    let sampleViewMode = 'full';  // START IN FULL VIEW
+    let viewMode = 'full';  // 'full' or 'byStage'
     let selectedQuestion = null;
     let selectedSample = null;
-    let activeFilter = null;
     
     let supportingPhrasesData = {};
     let bodyPhrasesData = {};
@@ -908,7 +932,6 @@
       { 
         name: 'INTRODUCTION', 
         target: 50,
-        placeholder: '',
         quickButtons: [
           {label: 'opening hooks', filter: 'opening_hooks'},
           {label: 'context', filter: 'context'}
@@ -917,7 +940,6 @@
       { 
         name: 'FEATURE 1', 
         target: 55,
-        placeholder: '',
         quickButtons: [
           {label: 'introducing features', filter: 'features'},
           {label: 'describing details', filter: 'details'},
@@ -927,7 +949,6 @@
       { 
         name: 'FEATURE 2', 
         target: 45,
-        placeholder: '',
         quickButtons: [
           {label: 'additional features', filter: 'features'},
           {label: 'balanced view', filter: 'balanced'},
@@ -937,7 +958,6 @@
       { 
         name: 'RECOMMENDATION', 
         target: 45,
-        placeholder: '',
         quickButtons: [
           {label: 'strong positive', filter: 'strong_recommend'},
           {label: 'targeted', filter: 'targeted_recommend'},
@@ -946,36 +966,33 @@
       }
     ];
 
+    const stageNames = ['Introduction', 'Feature 1', 'Feature 2', 'Recommendation'];
+
     async function init() {
-      console.log('🚀 Initializing Review Writer in READ mode...');
+      console.log('🚀 Initializing Review Writer...');
       
       try {
         await loadAllJSON();
         populateQuestionDropdown();
         
-        // SET FIRST SAMPLE AS DEFAULT
         if (samplesData && samplesData.opinion && samplesData.opinion.length > 0) {
           selectedSample = samplesData.opinion[0];
           console.log('✓ Default sample loaded:', selectedSample.title);
         }
         
-        // INITIALIZE IN READ MODE WITH FULL VIEW
         currentMode = 'read';
-        sampleViewMode = 'full';
+        viewMode = 'full';
         currentStage = 0;
         
-        // Set the view toggle switch to active (full view)
         const viewSwitch = document.getElementById('viewToggleSwitch');
         viewSwitch.classList.add('active');
         viewSwitch.setAttribute('aria-checked', 'true');
         
-        // Initialize all UI elements
         updateInterface();
-        renderPhrasesForReadMode();
-        updateSampleDisplay();
+        refreshAllPanels();
         
         document.getElementById('textarea').addEventListener('input', handleInput);
-        console.log('✅ Initialization complete - READ mode, FULL view, first sample displayed');
+        console.log('✅ Initialization complete - READ mode, FULL view');
       } catch (error) {
         console.error('❌ Initialization error:', error);
       }
@@ -1003,11 +1020,10 @@
         samplesData = samples;
         questionsData = questions;
         
-        console.log('✅ All JSON files loaded successfully');
+        console.log('✅ All JSON files loaded');
         
       } catch (error) {
         console.error('❌ Error loading JSON:', error);
-        alert('Error loading data files. Check console for details.');
       }
     }
 
@@ -1023,7 +1039,6 @@
           dropdown.appendChild(option);
         });
         
-        // Select first question by default
         dropdown.value = questionsData.questions[0].id;
         handleQuestionChange();
       }
@@ -1035,21 +1050,17 @@
       
       selectedQuestion = questionsData.questions.find(q => q.id === selectedValue);
       
-      // Find matching sample by ID
       if (samplesData && samplesData.opinion) {
         selectedSample = samplesData.opinion.find(s => s.id === selectedValue);
         if (!selectedSample) {
-          // If no exact match, use first sample as fallback
           selectedSample = samplesData.opinion[0];
         }
       }
       
-      renderIdeasTab();
-      renderSamplesTab();
-      updateSampleDisplay();
-      
       console.log('✓ Question changed:', selectedQuestion?.topic);
       console.log('✓ Sample loaded:', selectedSample?.title);
+      
+      refreshAllPanels();
     }
 
     function switchMode() {
@@ -1061,37 +1072,90 @@
       modeSwitch.setAttribute('aria-checked', currentMode === 'write');
       
       if (currentMode === 'write') {
-        // RESET TO INTRODUCTION STAGE
         currentStage = 0;
-        
-        // Show write mode elements
         document.getElementById('quickAccessBar').classList.add('show');
         document.getElementById('textarea').style.display = 'block';
         document.getElementById('sampleDisplay').style.display = 'none';
         document.getElementById('wordCountDisplay').style.display = 'block';
         document.getElementById('actionButtons').style.display = 'flex';
         
-        // Auto-show all introduction phrases
-        renderPhrasesForReadMode();
         renderQuickAccess();
-        
       } else {
-        // SWITCH TO READ MODE
         document.getElementById('quickAccessBar').classList.remove('show');
         document.getElementById('textarea').style.display = 'none';
         document.getElementById('sampleDisplay').style.display = 'block';
         document.getElementById('wordCountDisplay').style.display = 'none';
         document.getElementById('actionButtons').style.display = 'none';
-        
-        renderPhrasesForReadMode();
-        updateSampleDisplay();
       }
       
-      renderIdeasTab();
       updateInterface();
+      refreshAllPanels();
     }
 
-    function renderPhrasesForReadMode() {
+    function refreshAllPanels() {
+      console.log(`🔄 Refreshing all panels - Mode: ${viewMode}, Stage: ${currentStage}`);
+      renderPhrasesTab();
+      renderAdjectivesTab();
+      renderIdeasTab();
+      renderSamplesTab();
+      updateSampleDisplay();
+    }
+
+    function extractParagraphs(htmlAnswer) {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = htmlAnswer;
+      return Array.from(tempDiv.querySelectorAll('p')).map(p => p.innerHTML);
+    }
+
+    function updateSampleDisplay() {
+      const display = document.getElementById('sampleDisplay');
+      
+      if (!selectedSample || !selectedSample.answer) {
+        display.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample review available</p>';
+        return;
+      }
+      
+      const paragraphs = extractParagraphs(selectedSample.answer);
+      console.log(`📄 Displaying sample - Mode: ${viewMode}, Stage: ${currentStage}, Paragraphs: ${paragraphs.length}`);
+      
+      if (viewMode === 'full') {
+        display.innerHTML = `
+          <h3 style="color: #C9A961; margin-bottom: 1rem;">${selectedSample.title || 'Sample Review'}</h3>
+          ${paragraphs.map((p, i) => `
+            <p><strong style="color: #8e8e93; font-size: 0.65rem; text-transform: uppercase;">${stageNames[i] || 'Paragraph ' + (i+1)}:</strong><br>${p}</p>
+          `).join('')}
+        `;
+        console.log('✓ Displaying full review');
+      } else {
+        const paragraph = paragraphs[currentStage];
+        if (paragraph) {
+          display.innerHTML = `
+            <h3 style="color: #C9A961; margin-bottom: 1rem;">${stageInfo[currentStage].name}</h3>
+            <p>${paragraph}</p>
+          `;
+          console.log(`✓ Displaying stage ${currentStage}`);
+        } else {
+          display.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample for this stage</p>';
+        }
+      }
+    }
+
+    function toggleSampleView() {
+      viewMode = viewMode === 'full' ? 'byStage' : 'full';
+      
+      const viewSwitch = document.getElementById('viewToggleSwitch');
+      viewSwitch.classList.toggle('active', viewMode === 'full');
+      viewSwitch.setAttribute('aria-checked', viewMode === 'full');
+      
+      console.log(`🔄 View mode switched to: ${viewMode}`);
+      
+      refreshAllPanels();
+    }
+
+    function renderPhrasesTab() {
+      const tab = document.getElementById('phrasesTab');
+      tab.innerHTML = '';
+      
       const stageFilters = [
         ['opening_hooks', 'context'],
         ['features', 'details', 'reasons'],
@@ -1099,58 +1163,19 @@
         ['strong_recommend', 'targeted_recommend', 'final']
       ];
       
-      const filters = stageFilters[currentStage];
-      const tab = document.getElementById('phrasesTab');
-      tab.innerHTML = '';
-      
-      console.log(`📝 Rendering phrases for stage ${currentStage}:`, filters);
-      
-      filters.forEach(filter => {
-        renderPhrasesByFilterToContainer(filter, tab);
-      });
-      
-      // Expand all groups by default in READ mode
-      if (currentMode === 'read') {
-        tab.querySelectorAll('.phrase-list').forEach(list => {
-          list.classList.add('show');
+      if (viewMode === 'full') {
+        console.log('📝 Rendering ALL phrases');
+        stageFilters.forEach(filters => {
+          filters.forEach(filter => renderPhrasesByFilter(filter, tab));
         });
-        tab.querySelectorAll('.phrase-title span:last-child').forEach(arrow => {
-          arrow.textContent = '▲';
-        });
+      } else {
+        console.log(`📝 Rendering phrases for stage ${currentStage}`);
+        const filters = stageFilters[currentStage];
+        filters.forEach(filter => renderPhrasesByFilter(filter, tab));
       }
     }
 
-    function renderQuickAccess() {
-      const bar = document.getElementById('quickAccessBar');
-      const buttons = stageInfo[currentStage].quickButtons;
-      
-      bar.innerHTML = buttons.map(btn => 
-        `<button class="quick-btn" onclick="handleQuickClick('${btn.filter}')">${btn.label}</button>`
-      ).join('');
-      
-      bar.classList.add('show');
-    }
-
-    function handleQuickClick(filter) {
-      console.log(`🔍 Filter activated: ${filter}`);
-      activeFilter = filter;
-      
-      document.querySelectorAll('.quick-btn').forEach((btn, index) => {
-        btn.classList.toggle('active', stageInfo[currentStage].quickButtons[index].filter === filter);
-      });
-      
-      switchTab('phrases');
-      renderPhrasesByFilter(filter);
-    }
-
-    function renderPhrasesByFilter(filter) {
-      const tab = document.getElementById('phrasesTab');
-      tab.innerHTML = '';
-      renderPhrasesByFilterToContainer(filter, tab);
-    }
-
-    function renderPhrasesByFilterToContainer(filter, container) {
-      // Introduction filters
+    function renderPhrasesByFilter(filter, container) {
       if (filter === 'opening_hooks') {
         if (supportingPhrasesData.introduction_type_A) {
           createPhraseGroup('🎯 Choosing Challenge', supportingPhrasesData.introduction_type_A.choosing_challenge, container);
@@ -1172,7 +1197,6 @@
         }
       }
       
-      // Feature filters
       if (filter === 'features') {
         if (bodyPhrasesData.introducing_features) {
           createPhraseGroup('🎯 First Feature', bodyPhrasesData.introducing_features.first_feature, container);
@@ -1213,7 +1237,6 @@
         }
       }
       
-      // Recommendation filters
       if (filter === 'strong_recommend') {
         if (conclusionPhrasesData.strong_positive_recommendation) {
           createPhraseGroup('🌟 Enthusiastic', conclusionPhrasesData.strong_positive_recommendation.enthusiastic, container);
@@ -1248,11 +1271,10 @@
       
       const titleEl = document.createElement('div');
       titleEl.className = 'phrase-title';
-      titleEl.innerHTML = `<span>${title}</span><span>▼</span>`;
-      titleEl.onclick = function() { toggleGroup(group); };
+      titleEl.textContent = title;
       
       const list = document.createElement('div');
-      list.className = 'phrase-list show';
+      list.className = 'phrase-list';
       
       phrases.forEach(phrase => {
         const item = document.createElement('div');
@@ -1266,19 +1288,35 @@
       container.appendChild(group);
     }
 
-    function toggleGroup(group) {
-      const list = group.querySelector('.phrase-list');
-      const titleSpan = group.querySelector('.phrase-title span:last-child');
+    function renderAdjectivesTab() {
+      const tab = document.getElementById('adjectivesTab');
+      tab.innerHTML = '';
       
-      list.classList.toggle('show');
-      titleSpan.textContent = list.classList.contains('show') ? '▲' : '▼';
+      console.log('📚 Rendering adjectives (ALWAYS FULL)');
+
+      if (!topicsAdjectivesData || Object.keys(topicsAdjectivesData).length === 0) {
+        tab.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No adjectives data available</p>';
+        return;
+      }
+
+      Object.keys(topicsAdjectivesData).forEach(topicKey => {
+        const topic = topicsAdjectivesData[topicKey];
+        const topicTitle = topicKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+        Object.keys(topic).forEach(categoryKey => {
+          const categoryTitle = categoryKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+          const fullTitle = `${topicTitle} - ${categoryTitle}`;
+          
+          createPhraseGroup(fullTitle, topic[categoryKey], tab);
+        });
+      });
     }
 
     function renderIdeasTab() {
       const tab = document.getElementById('ideasTab');
       
       if (!selectedQuestion) {
-        tab.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">Select a question from the dropdown</p>';
+        tab.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">Select a question</p>';
         return;
       }
 
@@ -1301,91 +1339,107 @@
         </div>
       `;
       
-      // Add related ideas from ideas.json if available
       if (ideasData && ideasData.reviews) {
         const reviewIdea = ideasData.reviews[selectedQuestion.id];
         if (reviewIdea && reviewIdea.skeleton) {
-          html += `
-            <div class="phrase-group">
-              <div class="phrase-title" onclick="toggleGroup(this.parentElement)">
-                <span>💡 Structure Ideas for ${reviewIdea.topic}</span>
-                <span>▼</span>
-              </div>
+          
+          if (viewMode === 'full') {
+            console.log('💡 Rendering FULL structure ideas');
+            html += `<div class="phrase-group">
+              <div class="phrase-title">💡 Structure Ideas for ${reviewIdea.topic}</div>
               <div class="phrase-list">`;
-          
-          reviewIdea.skeleton.forEach(section => {
-            html += `<div class="point-item"><strong>${section.title}</strong><br>`;
-            section.items.forEach(item => {
-              html += `${item.marker} ${item.text}${item.sub ? ' (' + item.sub + ')' : ''}<br>`;
+            
+            reviewIdea.skeleton.forEach(section => {
+              html += `<div class="point-item"><strong>${section.title}</strong><br>`;
+              section.items.forEach(item => {
+                html += `${item.marker} ${item.text}${item.sub ? ' (' + item.sub + ')' : ''}<br>`;
+              });
+              html += `</div>`;
             });
-            html += `</div>`;
-          });
-          
-          html += `
-              </div>
-            </div>`;
+            
+            html += `</div></div>`;
+          } else {
+            console.log(`💡 Rendering structure ideas for stage ${currentStage}`);
+            const section = reviewIdea.skeleton[currentStage];
+            if (section) {
+              html += `<div class="phrase-group">
+                <div class="phrase-title">💡 ${section.title}</div>
+                <div class="phrase-list">
+                  <div class="point-item">`;
+              
+              section.items.forEach(item => {
+                html += `${item.marker} ${item.text}${item.sub ? ' (' + item.sub + ')' : ''}<br>`;
+              });
+              
+              html += `</div></div></div>`;
+            }
+          }
         }
       }
       
       tab.innerHTML = html;
     }
 
-    function updateSampleDisplay() {
-      const display = document.getElementById('sampleDisplay');
+    function renderSamplesTab() {
+      const tab = document.getElementById('samplesTab');
       
-      console.log('🔍 updateSampleDisplay called:', {
-        selectedSample: selectedSample?.title,
-        sampleViewMode: sampleViewMode,
-        currentStage: currentStage
-      });
-      
-      if (!selectedSample || !selectedSample.answer) {
-        display.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample review available</p>';
+      if (!samplesData || !samplesData.opinion || samplesData.opinion.length === 0) {
+        tab.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No samples available</p>';
         return;
       }
+
+      let html = '';
       
-      // Parse the HTML answer to extract paragraphs
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = selectedSample.answer;
-      const paragraphs = Array.from(tempDiv.querySelectorAll('p')).map(p => p.innerHTML);
+      console.log(`📄 Rendering samples - Mode: ${viewMode}, Stage: ${currentStage}`);
       
-      console.log('📄 Parsed paragraphs:', paragraphs.length);
-      
-      if (sampleViewMode === 'full') {
-        // SHOW COMPLETE REVIEW
-        display.innerHTML = `
-          <h3 style="color: #C9A961; margin-bottom: 1rem;">${selectedSample.title || 'Sample Review'}</h3>
-          ${paragraphs.map(p => `<p>${p}</p>`).join('')}
-        `;
-        console.log('✓ Displaying full review');
-      } else {
-        // SHOW PARAGRAPH BY STAGE
-        const paragraph = paragraphs[currentStage];
-        if (paragraph) {
-          display.innerHTML = `
-            <h3 style="color: #C9A961; margin-bottom: 1rem;">${stageInfo[currentStage].name}</h3>
-            <p>${paragraph}</p>
-          `;
-          console.log(`✓ Displaying stage ${currentStage} paragraph`);
+      samplesData.opinion.forEach((review, index) => {
+        const paragraphs = extractParagraphs(review.answer);
+        
+        html += `<div class="sample-block">
+          <h4>📄 ${review.title || `Sample ${index + 1}`}</h4>`;
+        
+        if (viewMode === 'full') {
+          paragraphs.forEach((para, pIndex) => {
+            if (para.trim()) {
+              html += `
+                <div class="stage-label">${stageNames[pIndex] || `Paragraph ${pIndex + 1}`}</div>
+                <p>${para}</p>`;
+            }
+          });
         } else {
-          display.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample for this stage</p>';
-          console.warn(`⚠️ No paragraph found for stage ${currentStage}`);
+          const paragraph = paragraphs[currentStage];
+          if (paragraph && paragraph.trim()) {
+            html += `<p>${paragraph}</p>`;
+          } else {
+            html += `<p style="color: #636366; font-style: italic;">No content for this stage</p>`;
+          }
         }
-      }
+        
+        html += `</div>`;
+      });
+      
+      tab.innerHTML = html;
+      console.log(`✓ Rendered ${samplesData.opinion.length} samples`);
     }
 
-    function toggleSampleView() {
-      sampleViewMode = sampleViewMode === 'paragraph' ? 'full' : 'paragraph';
+    function renderQuickAccess() {
+      const bar = document.getElementById('quickAccessBar');
+      const buttons = stageInfo[currentStage].quickButtons;
       
-      const viewSwitch = document.getElementById('viewToggleSwitch');
-      viewSwitch.classList.toggle('active', sampleViewMode === 'full');
-      viewSwitch.setAttribute('aria-checked', sampleViewMode === 'full');
+      bar.innerHTML = buttons.map(btn => 
+        `<button class="quick-btn" onclick="handleQuickClick('${btn.filter}')">${btn.label}</button>`
+      ).join('');
       
-      console.log(`🔄 View mode switched to: ${sampleViewMode}`);
+      bar.classList.add('show');
+    }
+
+    function handleQuickClick(filter) {
+      console.log(`🔍 Quick filter: ${filter}`);
+      switchTab('phrases');
       
-      // Update everything that depends on view mode
-      updateSampleDisplay();
-      renderSamplesTab();
+      const tab = document.getElementById('phrasesTab');
+      tab.innerHTML = '';
+      renderPhrasesByFilter(filter, tab);
     }
 
     function updateInterface() {
@@ -1394,7 +1448,6 @@
       document.getElementById('stageName').textContent = info.name;
       document.getElementById('targetWords').textContent = info.target;
       document.getElementById('textarea').value = reviewData[currentStage];
-      document.getElementById('textarea').placeholder = info.placeholder || '';
       
       document.querySelectorAll('.stage-dot').forEach((dot, i) => {
         dot.classList.remove('current', 'done');
@@ -1410,14 +1463,8 @@
       
       if (currentMode === 'write') {
         renderQuickAccess();
-        renderPhrasesForReadMode();
-      } else {
-        renderPhrasesForReadMode();
-        updateSampleDisplay();
       }
       
-      renderIdeasTab();
-      renderSamplesTab();  // ✅ Refresh samples tab to show current stage
       updateWordCount();
     }
 
@@ -1444,6 +1491,9 @@
         }
         currentStage++;
         updateInterface();
+        if (viewMode === 'byStage') {
+          refreshAllPanels();
+        }
       }
     }
 
@@ -1454,6 +1504,9 @@
         }
         currentStage--;
         updateInterface();
+        if (viewMode === 'byStage') {
+          refreshAllPanels();
+        }
       }
     }
 
@@ -1467,9 +1520,8 @@
       
       updateInterface();
       
-      // Force update sample display in READ mode
-      if (currentMode === 'read') {
-        updateSampleDisplay();
+      if (viewMode === 'byStage') {
+        refreshAllPanels();
       }
     }
 
@@ -1483,110 +1535,6 @@
       });
       
       document.getElementById(tabName + 'Tab').classList.add('active');
-      
-      // Render samples tab when activated
-      if (tabName === 'samples') {
-        renderSamplesTab();
-      }
-      
-      // Render adjectives tab when activated
-      if (tabName === 'adjectives') {
-        renderAdjectivesTab();
-      }
-    }
-
-    function renderAdjectivesTab() {
-      const tab = document.getElementById('adjectivesTab');
-      tab.innerHTML = '';
-
-      if (!topicsAdjectivesData || Object.keys(topicsAdjectivesData).length === 0) {
-        tab.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No adjectives data available</p>';
-        return;
-      }
-
-      Object.keys(topicsAdjectivesData).forEach(topicKey => {
-        const topic = topicsAdjectivesData[topicKey];
-        const topicTitle = topicKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-
-        Object.keys(topic).forEach(categoryKey => {
-          const categoryTitle = categoryKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-          const fullTitle = `${topicTitle} - ${categoryTitle}`;
-          
-          createPhraseGroup(fullTitle, topic[categoryKey], tab);
-        });
-      });
-    }
-
-    function renderSamplesTab() {
-      const tab = document.getElementById('samplesTab');
-      
-      if (!samplesData || !samplesData.opinion || samplesData.opinion.length === 0) {
-        tab.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample reviews available</p>';
-        return;
-      }
-
-      let html = '';
-      const stageNames = ['Introduction', 'Feature 1', 'Feature 2', 'Recommendation'];
-      
-      samplesData.opinion.forEach((review, index) => {
-        const isSelected = selectedSample === review;
-        
-        // Parse HTML to extract paragraphs
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = review.answer;
-        const paragraphs = Array.from(tempDiv.querySelectorAll('p')).map(p => p.textContent);
-        
-        // Determine what to display based on view mode
-        let displayContent;
-        let labelText;
-        
-        if (sampleViewMode === 'full') {
-          // Show all paragraphs with stage labels
-          displayContent = '';
-          paragraphs.forEach((para, pIndex) => {
-            if (para.trim()) {
-              displayContent += `
-                <div class="point-item">
-                  <strong>${stageNames[pIndex] || `Paragraph ${pIndex + 1}`}:</strong><br>
-                  ${para.substring(0, 150)}${para.length > 150 ? '...' : ''}
-                </div>`;
-            }
-          });
-          labelText = 'Full Review';
-        } else {
-          // Show only current stage paragraph
-          const paragraph = paragraphs[currentStage];
-          displayContent = paragraph ? `
-            <div class="point-item">
-              ${paragraph.substring(0, 150)}${paragraph.length > 150 ? '...' : ''}
-            </div>` : '<div class="point-item" style="color: #636366;">No content for this stage</div>';
-          labelText = stageNames[currentStage];
-        }
-        
-        html += `
-          <div class="phrase-group" style="cursor: pointer; ${isSelected ? 'background: rgba(201, 169, 97, 0.1); border-radius: 0.5rem;' : ''}" onclick="selectSample(${index})">
-            <div class="phrase-title" onclick="event.stopPropagation(); toggleGroup(this.parentElement)">
-              <span>${isSelected ? '✓ ' : ''}📄 ${review.title || `Review ${index + 1}`}</span>
-              <span style="font-size: 0.55rem; opacity: 0.8; margin-left: 0.3rem;">[${labelText}]</span>
-              <span>▼</span>
-            </div>
-            <div class="phrase-list">
-              <div class="point-item"><strong>Topic:</strong> ${review.topic}</div>
-              ${displayContent}
-            </div>
-          </div>`;
-      });
-      
-      tab.innerHTML = html;
-    }
-
-    function selectSample(index) {
-      if (samplesData && samplesData.opinion && samplesData.opinion[index]) {
-        selectedSample = samplesData.opinion[index];
-        updateSampleDisplay();
-        renderSamplesTab();
-        console.log('✓ Selected sample:', selectedSample.title);
-      }
     }
 
     function saveReview() {

@@ -964,7 +964,15 @@
         sampleViewMode = 'full';
         currentStage = 0;
         
+        // Set the view toggle switch to active (full view)
+        const viewSwitch = document.getElementById('viewToggleSwitch');
+        viewSwitch.classList.add('active');
+        viewSwitch.setAttribute('aria-checked', 'true');
+        
+        // Initialize all UI elements
         updateInterface();
+        renderPhrasesForReadMode();
+        updateSampleDisplay();
         
         document.getElementById('textarea').addEventListener('input', handleInput);
         console.log('✅ Initialization complete - READ mode, FULL view, first sample displayed');
@@ -1027,8 +1035,21 @@
       
       selectedQuestion = questionsData.questions.find(q => q.id === selectedValue);
       
+      // Find matching sample by ID
+      if (samplesData && samplesData.opinion) {
+        selectedSample = samplesData.opinion.find(s => s.id === selectedValue);
+        if (!selectedSample) {
+          // If no exact match, use first sample as fallback
+          selectedSample = samplesData.opinion[0];
+        }
+      }
+      
       renderIdeasTab();
+      renderSamplesTab();
       updateSampleDisplay();
+      
+      console.log('✓ Question changed:', selectedQuestion?.topic);
+      console.log('✓ Sample loaded:', selectedSample?.title);
     }
 
     function switchMode() {
@@ -1082,9 +1103,21 @@
       const tab = document.getElementById('phrasesTab');
       tab.innerHTML = '';
       
+      console.log(`📝 Rendering phrases for stage ${currentStage}:`, filters);
+      
       filters.forEach(filter => {
         renderPhrasesByFilterToContainer(filter, tab);
       });
+      
+      // Expand all groups by default in READ mode
+      if (currentMode === 'read') {
+        tab.querySelectorAll('.phrase-list').forEach(list => {
+          list.classList.add('show');
+        });
+        tab.querySelectorAll('.phrase-title span:last-child').forEach(arrow => {
+          arrow.textContent = '▲';
+        });
+      }
     }
 
     function renderQuickAccess() {
@@ -1300,6 +1333,12 @@
     function updateSampleDisplay() {
       const display = document.getElementById('sampleDisplay');
       
+      console.log('🔍 updateSampleDisplay called:', {
+        selectedSample: selectedSample?.title,
+        sampleViewMode: sampleViewMode,
+        currentStage: currentStage
+      });
+      
       if (!selectedSample || !selectedSample.answer) {
         display.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample review available</p>';
         return;
@@ -1310,12 +1349,15 @@
       tempDiv.innerHTML = selectedSample.answer;
       const paragraphs = Array.from(tempDiv.querySelectorAll('p')).map(p => p.innerHTML);
       
+      console.log('📄 Parsed paragraphs:', paragraphs.length);
+      
       if (sampleViewMode === 'full') {
         // SHOW COMPLETE REVIEW
         display.innerHTML = `
           <h3 style="color: #C9A961; margin-bottom: 1rem;">${selectedSample.title || 'Sample Review'}</h3>
           ${paragraphs.map(p => `<p>${p}</p>`).join('')}
         `;
+        console.log('✓ Displaying full review');
       } else {
         // SHOW PARAGRAPH BY STAGE
         const paragraph = paragraphs[currentStage];
@@ -1324,8 +1366,10 @@
             <h3 style="color: #C9A961; margin-bottom: 1rem;">${stageInfo[currentStage].name}</h3>
             <p>${paragraph}</p>
           `;
+          console.log(`✓ Displaying stage ${currentStage} paragraph`);
         } else {
           display.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample for this stage</p>';
+          console.warn(`⚠️ No paragraph found for stage ${currentStage}`);
         }
       }
     }
@@ -1337,8 +1381,11 @@
       viewSwitch.classList.toggle('active', sampleViewMode === 'full');
       viewSwitch.setAttribute('aria-checked', sampleViewMode === 'full');
       
+      console.log(`🔄 View mode switched to: ${sampleViewMode}`);
+      
+      // Update everything that depends on view mode
       updateSampleDisplay();
-      renderSamplesTab();  // ✅ Refresh samples tab with new view mode
+      renderSamplesTab();
     }
 
     function updateInterface() {
@@ -1415,9 +1462,12 @@
         reviewData[currentStage] = document.getElementById('textarea').value;
       }
       currentStage = stage;
+      
+      console.log(`🎯 Jumped to stage ${stage}: ${stageInfo[stage].name}`);
+      
       updateInterface();
       
-      // Update sample display in READ mode
+      // Force update sample display in READ mode
       if (currentMode === 'read') {
         updateSampleDisplay();
       }

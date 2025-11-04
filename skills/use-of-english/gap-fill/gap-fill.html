@@ -441,7 +441,7 @@
       text-align: center;
     }
     
-.gap-wrapper {
+    .gap-wrapper {
       display: inline-flex;
       align-items: baseline;
       gap: 0.375rem;
@@ -523,12 +523,12 @@
     }
     
     .gap.key-shown {
-     color: #84cc16;
-     border-bottom-color: #84cc16;
-     font-weight: 500;
-   }
+      color: #84cc16;
+      border-bottom-color: #84cc16;
+      font-weight: 500;
+    }
       
-      .nav-buttons {
+    .nav-buttons {
       display: flex;
       justify-content: space-between;
       gap: 1rem;
@@ -960,7 +960,7 @@
 <body>
   <div class="top-nav">
     <div class="nav-left">
-<a href="../../../index.html?openModal=english" class="nav-link">← Back</a>
+      <a href="../../../index.html?openModal=english" class="nav-link">← Back</a>
     </div>
     <div class="nav-center">
       <div class="nav-title">INTUITY</div>
@@ -1052,6 +1052,10 @@
         <div class="modal-subtitle">Tips & Shortcuts</div>
       </div>
       <div class="help-content">
+        <div class="help-item">
+          <div class="help-item-title">Gap (0) - Example</div>
+          <div class="help-item-desc">Gap 0 is always pre-filled in lime/green as an example. This shows the type of word expected. You don't need to complete it.</div>
+        </div>
         <div class="help-item">
           <div class="help-item-title">Views</div>
           <div class="help-item-desc">Full text by default. Use the toggle to break long texts into manageable chunks.</div>
@@ -1351,18 +1355,24 @@
         if (matches) {
           matches.forEach(match => {
             const num = match.match(/\d+/)[0];
+            const gapData = test.gaps[num];
+            const isExample = gapData && gapData.isExample;
+            const correctAnswer = gapData ? gapData.answer : '';
             const value = userAnswers[num] || '';
-            const correct = test.gaps[num] || '';
             let cls = 'gap';
             let displayValue = '';
             let isReadonly = false;
             
-            if (answersVisible) {
+            if (isExample) {
+              cls += ' prefilled';
+              displayValue = sanitizeText(correctAnswer);
+              isReadonly = true;
+            } else if (answersVisible) {
               cls += ' key-shown';
-              displayValue = sanitizeText(correct);
+              displayValue = sanitizeText(correctAnswer);
               isReadonly = true;
             } else if (showingResults) {
-              cls += answersMatch(value, correct) ? ' correct' : ' incorrect';
+              cls += answersMatch(value, correctAnswer) ? ' correct' : ' incorrect';
               displayValue = sanitizeText(value);
               isReadonly = true;
             } else {
@@ -1426,7 +1436,10 @@
       const dotsContainer = document.createElement('div');
       dotsContainer.className = 'section-dots';
       for (let i = 0; i < totalSections; i++) {
-        const filled = sections[i].gaps.every(g => userAnswers[g]);
+        const filled = sections[i].gaps.every(g => {
+          const gapData = test.gaps[g];
+          return gapData.isExample || userAnswers[g];
+        });
         const dot = document.createElement('button');
         dot.className = `section-dot ${i === currentSection ? 'current' : ''} ${filled ? 'filled' : ''}`;
         dot.textContent = i + 1;
@@ -1448,18 +1461,24 @@
       const section = sections[currentSection];
       let sectionHtml = sanitizeText(section.text);
       section.gaps.forEach(num => {
+        const gapData = test.gaps[num];
+        const isExample = gapData && gapData.isExample;
+        const correctAnswer = gapData ? gapData.answer : '';
         const value = userAnswers[num] || '';
-        const correct = test.gaps[num] || '';
         let cls = 'gap';
         let displayValue = '';
         let isReadonly = false;
         
-        if (answersVisible) {
+        if (isExample) {
+          cls += ' prefilled';
+          displayValue = sanitizeText(correctAnswer);
+          isReadonly = true;
+        } else if (answersVisible) {
           cls += ' key-shown';
-          displayValue = sanitizeText(correct);
+          displayValue = sanitizeText(correctAnswer);
           isReadonly = true;
         } else if (showingResults) {
-          cls += answersMatch(value, correct) ? ' correct' : ' incorrect';
+          cls += answersMatch(value, correctAnswer) ? ' correct' : ' incorrect';
           displayValue = sanitizeText(value);
           isReadonly = true;
         } else {
@@ -1493,7 +1512,7 @@
 
     function attachListeners() {
       document.querySelectorAll('.gap').forEach(input => {
-        if (!showingResults && !answersVisible) {
+        if (!showingResults && !answersVisible && !input.readOnly) {
           input.addEventListener('input', function() {
             const num = this.dataset.gap;
             if (inputDebounceTimers[num]) clearTimeout(inputDebounceTimers[num]);
@@ -1562,7 +1581,7 @@
     function updateTestInfo() {
       const test = allTests[currentTest];
       if (!test) return;
-      const total = Object.keys(test.gaps).length;
+      const total = Object.keys(test.gaps).filter(num => !test.gaps[num].isExample).length;
       const filled = Object.keys(userAnswers).filter(k => userAnswers[k]).length;
       document.getElementById('testInfo').textContent = `Test ${currentTest + 1} of ${allTests.length} • ${filled}/${total} answered`;
     }
@@ -1570,7 +1589,7 @@
     function updateFooter() {
       const test = allTests[currentTest];
       if (!test) return;
-      const total = Object.keys(test.gaps).length;
+      const total = Object.keys(test.gaps).filter(num => !test.gaps[num].isExample).length;
       const filled = Object.keys(userAnswers).filter(k => userAnswers[k]).length;
       const footer = document.getElementById('footer');
       if (filled === total && !showingResults) {
@@ -1589,13 +1608,17 @@
         return;
       }
       const test = allTests[currentTest];
-      const emptyGaps = Object.keys(test.gaps).filter(num => !userAnswers[num]);
+      const emptyGaps = Object.keys(test.gaps).filter(num => {
+        const gapData = test.gaps[num];
+        return !gapData.isExample && !userAnswers[num];
+      });
       if (emptyGaps.length === 0) {
         showToast('All gaps are filled');
         return;
       }
       const randomGap = emptyGaps[Math.floor(Math.random() * emptyGaps.length)];
-      const correctAnswer = test.gaps[randomGap];
+      const gapData = test.gaps[randomGap];
+      const correctAnswer = gapData.answer;
       const hint = correctAnswer.charAt(0);
       hintsUsed.add(randomGap);
       const input = document.querySelector(`input[data-gap="${randomGap}"]`);
@@ -1660,12 +1683,16 @@
     function submitAndScore() {
       const test = allTests[currentTest];
       let correct = 0;
-      const total = Object.keys(test.gaps).length;
-      Object.keys(test.gaps).forEach(num => {
+      const completableGaps = Object.keys(test.gaps).filter(num => !test.gaps[num].isExample);
+      const total = completableGaps.length;
+      
+      completableGaps.forEach(num => {
+        const gapData = test.gaps[num];
         const userAns = userAnswers[num] || '';
-        const correctAns = test.gaps[num] || '';
+        const correctAns = gapData.answer;
         if (answersMatch(userAns, correctAns)) correct++;
       });
+      
       const percentage = Math.round((correct / total) * 100);
       const existingScore = testScores[`test${currentTest}`];
       const isNewBest = !existingScore || percentage > (existingScore.bestPercentage || 0);
@@ -1719,17 +1746,22 @@
       } else {
         html += `<div style="text-align: center; padding: 1rem; color: #8e8e93;">Your best: ${existingScore.bestScore}/${total} (${existingScore.bestPercentage}%)</div>`;
       }
-      Object.keys(test.gaps).sort((a, b) => parseInt(a) - parseInt(b)).forEach((num, idx) => {
-        const userAns = userAnswers[num] || '';
-        const correctAns = test.gaps[num];
-        const isCorrect = answersMatch(userAns, correctAns);
-        html += `
-          <div class="answer-item ${isCorrect ? 'correct' : 'incorrect'}" style="animation-delay: ${idx * 50}ms">
-            <span>Gap ${num}: <strong>${sanitizeText(userAns) || '(empty)'}</strong></span>
-            ${!isCorrect ? `<span style="color: #84cc16;">→ ${sanitizeText(correctAns)}</span>` : '<span style="color: #84cc16;">✓</span>'}
-          </div>
-        `;
-      });
+      
+      Object.keys(test.gaps)
+        .filter(num => !test.gaps[num].isExample)
+        .sort((a, b) => parseInt(a) - parseInt(b))
+        .forEach((num, idx) => {
+          const gapData = test.gaps[num];
+          const userAns = userAnswers[num] || '';
+          const correctAns = gapData.answer;
+          const isCorrect = answersMatch(userAns, correctAns);
+          html += `
+            <div class="answer-item ${isCorrect ? 'correct' : 'incorrect'}" style="animation-delay: ${idx * 50}ms">
+              <span>Gap ${num}: <strong>${sanitizeText(userAns) || '(empty)'}</strong></span>
+              ${!isCorrect ? `<span style="color: #84cc16;">→ ${sanitizeText(correctAns)}</span>` : '<span style="color: #84cc16;">✓</span>'}
+            </div>
+          `;
+        });
       answersDisplay.innerHTML = html;
       document.getElementById('scoreModal').classList.add('active');
     }
@@ -1773,4 +1805,3 @@
   </script>
 </body>
 </html>
-    }

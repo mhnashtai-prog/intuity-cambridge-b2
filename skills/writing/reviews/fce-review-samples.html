@@ -578,7 +578,8 @@
   <script>
     // State
     let samplesData = [];
-    let currentIndex = 0;
+    let currentSampleIndex = 0;
+    let currentStageIndex = 0;
     let viewMode = 'full';
     const stageNames = ['Introduction', 'Feature 1', 'Feature 2', 'Recommendation'];
 
@@ -623,7 +624,7 @@
     function render() {
       if (!samplesData || samplesData.length === 0) return;
       
-      const sample = samplesData[currentIndex];
+      const sample = samplesData[currentSampleIndex];
       const content = document.getElementById('contentCard');
       
       // Extract paragraphs from the answer
@@ -660,15 +661,14 @@
           }
         });
       } else {
-        // Show only current stage
-        const sectionIndex = currentIndex % 4;
-        const para = paragraphs[sectionIndex];
+        // OPTION A: Show current stage of current sample
+        const para = paragraphs[currentStageIndex];
         if (para?.trim()) {
           const wordCount = countWords(para);
           html += `
             <div class="sample-section">
               <div class="section-header">
-                <span class="section-label">${stageNames[sectionIndex]}</span>
+                <span class="section-label">${stageNames[currentStageIndex]}</span>
                 <span class="section-wordcount">${wordCount}w</span>
               </div>
               <div class="section-text">${para}</div>
@@ -685,7 +685,7 @@
         </div>
       `;
       
-      if (currentIndex < samplesData.length - 1) {
+      if (viewMode === 'full' && currentSampleIndex < samplesData.length - 1) {
         html += `
           <div class="cta-box">
             <p class="cta-text">💡 Notice the structure? Ready to explore more deeply?</p>
@@ -702,48 +702,126 @@
     function updateProgress() {
       if (!samplesData || samplesData.length === 0) return;
       
-      document.getElementById('progressFill').style.width = `${((currentIndex + 1) / samplesData.length) * 100}%`;
-      document.getElementById('currentNum').textContent = currentIndex + 1;
-      document.getElementById('totalNum').textContent = samplesData.length;
+      if (viewMode === 'full') {
+        // Full mode: show sample progress
+        document.getElementById('progressFill').style.width = `${((currentSampleIndex + 1) / samplesData.length) * 100}%`;
+        document.getElementById('currentNum').textContent = currentSampleIndex + 1;
+        document.getElementById('totalNum').textContent = samplesData.length;
+      } else {
+        // By Stage mode: show overall progress (sample * 4 stages)
+        const totalStages = samplesData.length * 4;
+        const currentPosition = (currentSampleIndex * 4) + currentStageIndex + 1;
+        document.getElementById('progressFill').style.width = `${(currentPosition / totalStages) * 100}%`;
+        document.getElementById('currentNum').textContent = currentPosition;
+        document.getElementById('totalNum').textContent = totalStages;
+      }
       
       const dotsContainer = document.getElementById('navDots');
       dotsContainer.innerHTML = '';
-      for (let i = 0; i < samplesData.length; i++) {
-        const dot = document.createElement('div');
-        dot.className = 'nav-dot' + (i === currentIndex ? ' active' : '');
-        dot.onclick = () => goTo(i);
-        dotsContainer.appendChild(dot);
+      
+      if (viewMode === 'full') {
+        // Dots for samples
+        for (let i = 0; i < samplesData.length; i++) {
+          const dot = document.createElement('div');
+          dot.className = 'nav-dot' + (i === currentSampleIndex ? ' active' : '');
+          dot.onclick = () => goToSample(i);
+          dotsContainer.appendChild(dot);
+        }
+      } else {
+        // Dots for stages of current sample
+        for (let i = 0; i < 4; i++) {
+          const dot = document.createElement('div');
+          dot.className = 'nav-dot' + (i === currentStageIndex ? ' active' : '');
+          dot.onclick = () => goToStage(i);
+          dotsContainer.appendChild(dot);
+        }
       }
     }
     
     function updateNavigation() {
-      document.getElementById('prevBtn').disabled = currentIndex === 0;
-      document.getElementById('nextBtn').disabled = currentIndex === samplesData.length - 1;
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      
+      if (viewMode === 'full') {
+        // Full mode: navigate samples
+        prevBtn.disabled = currentSampleIndex === 0;
+        nextBtn.disabled = currentSampleIndex === samplesData.length - 1;
+      } else {
+        // By Stage mode: navigate stages, then samples
+        const isFirstStageOfFirstSample = (currentSampleIndex === 0 && currentStageIndex === 0);
+        const isLastStageOfLastSample = (currentSampleIndex === samplesData.length - 1 && currentStageIndex === 3);
+        
+        prevBtn.disabled = isFirstStageOfFirstSample;
+        nextBtn.disabled = isLastStageOfLastSample;
+      }
     }
     
     function setViewMode(mode) {
       viewMode = mode;
+      
+      // Reset to beginning when switching modes
+      if (mode === 'stage') {
+        currentStageIndex = 0;
+      }
+      
       document.getElementById('fullViewBtn').classList.toggle('active', mode === 'full');
       document.getElementById('stageViewBtn').classList.toggle('active', mode === 'stage');
       render();
     }
     
     function nextSample() {
-      if (currentIndex < samplesData.length - 1) {
-        currentIndex++;
+      if (viewMode === 'full') {
+        // Full mode: go to next sample
+        if (currentSampleIndex < samplesData.length - 1) {
+          currentSampleIndex++;
+          render();
+        }
+      } else {
+        // By Stage mode: go to next stage, or next sample's first stage
+        if (currentStageIndex < 3) {
+          // Move to next stage of current sample
+          currentStageIndex++;
+        } else {
+          // Move to first stage of next sample
+          if (currentSampleIndex < samplesData.length - 1) {
+            currentSampleIndex++;
+            currentStageIndex = 0;
+          }
+        }
         render();
       }
     }
     
     function prevSample() {
-      if (currentIndex > 0) {
-        currentIndex--;
+      if (viewMode === 'full') {
+        // Full mode: go to previous sample
+        if (currentSampleIndex > 0) {
+          currentSampleIndex--;
+          render();
+        }
+      } else {
+        // By Stage mode: go to previous stage, or previous sample's last stage
+        if (currentStageIndex > 0) {
+          // Move to previous stage of current sample
+          currentStageIndex--;
+        } else {
+          // Move to last stage of previous sample
+          if (currentSampleIndex > 0) {
+            currentSampleIndex--;
+            currentStageIndex = 3;
+          }
+        }
         render();
       }
     }
     
-    function goTo(index) {
-      currentIndex = index;
+    function goToSample(index) {
+      currentSampleIndex = index;
+      render();
+    }
+    
+    function goToStage(index) {
+      currentStageIndex = index;
       render();
     }
     

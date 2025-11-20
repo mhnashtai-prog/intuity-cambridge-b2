@@ -1083,34 +1083,11 @@
 
   <div class="toast" id="toast" role="alert" aria-live="polite"></div>
 
-  <script src="data/adjective-test.json"></script>
-  <script src="data/adjective-mixed.json"></script>
   <script>
-    // NOTE: The actual data will be loaded from external files.
-    // For this demo, we'll embed minimal data structures.
-    
-    // This would be loaded from adjective-test.json (LEARN mode - thematic)
-    const LEARN_DATA = {
-      "title": "B2 Adjective Practice - Learn Mode (Thematic)",
-      "level": "B2",
-      "totalTests": 10,
-      "setsPerTest": 5,
-      "totalSets": 50,
-      "sets": [] // Would contain all 50 thematic sets from the original
-    };
-
-    // This would be loaded from adjective-mixed.json (TEST mode - mixed)
-    const TEST_DATA = {
-      "title": "B2 Adjective Practice - Test Mode (Mixed)",
-      "level": "B2",
-      "totalTests": 10,
-      "setsPerTest": 5,
-      "totalSets": 50,
-      "sets": [] // Would contain all 50 mixed sets
-    };
-
     // Global state
-    let currentDataset = 'learn'; // 'learn' or 'test'
+    let currentDataset = 'learn';
+    let LEARN_DATA = null;
+    let TEST_DATA = null;
     let quizData = null;
     let currentTest = 0;
     let currentSet = 0;
@@ -1189,6 +1166,58 @@
       }));
     }
 
+    // Data Loading with fetch()
+    async function loadQuizData() {
+      try {
+        // Show loading state
+        const container = document.getElementById('classicContainer');
+        container.innerHTML = `
+          <div class="loading-state">
+            <div class="loading-spinner"></div>
+            <div>Loading quiz data...</div>
+          </div>
+        `;
+
+        // Load both JSON files
+        const [learnResponse, testResponse] = await Promise.all([
+          fetch('data/adjective-test.json'),
+          fetch('data/adjective-mixed.json')
+        ]);
+
+        if (!learnResponse.ok || !testResponse.ok) {
+          throw new Error('Failed to load quiz data files');
+        }
+
+        LEARN_DATA = await learnResponse.json();
+        TEST_DATA = await testResponse.json();
+        
+        // Set initial dataset
+        quizData = currentDataset === 'learn' ? LEARN_DATA : TEST_DATA;
+        
+        loadProgress();
+        SETS_PER_TEST = quizData.setsPerTest || 5;
+        initializeWordOrder();
+        createDots();
+        createQuestionNavDots();
+        loadTest(0);
+      } catch (error) {
+        console.error('Error loading quiz data:', error);
+        showError(`Could not load quiz: ${error.message}`);
+      }
+    }
+
+    function showError(message) {
+      const container = document.getElementById('classicContainer');
+      container.innerHTML = `
+        <div class="error-state">
+          <div style="font-size: 3rem; margin-bottom: 1rem;">⚠</div>
+          <div style="font-size: 1.125rem; color: #f5f5f7; margin-bottom: 0.5rem;">Error Loading Quiz</div>
+          <div style="font-size: 0.875rem; color: #8e8e93; margin-bottom: 1rem;">${sanitizeText(message)}</div>
+          <button onclick="location.reload()" class="modal-btn modal-btn-primary" style="max-width: 200px; margin: 0 auto;">Reload</button>
+        </div>
+      `;
+    }
+
     // Dataset Toggle
     function toggleDataset() {
       currentDataset = currentDataset === 'learn' ? 'test' : 'learn';
@@ -1229,41 +1258,8 @@
       loadTest(0);
     }
 
-    // Data Loading
-    function loadQuizData() {
-      try {
-        // In production, load from external JSON files
-        quizData = currentDataset === 'learn' ? LEARN_DATA : TEST_DATA;
-        
-        // For demo purposes with embedded data
-        if (window.QUIZ_DATA) {
-          LEARN_DATA.sets = window.QUIZ_DATA.sets;
-          quizData = LEARN_DATA;
-        }
-        
-        loadProgress();
-        SETS_PER_TEST = quizData.setsPerTest || 5;
-        initializeWordOrder();
-        createDots();
-        createQuestionNavDots();
-        loadTest(0);
-      } catch (error) {
-        console.error('Error loading quiz data:', error);
-        showError(`Could not load quiz: ${error.message}`);
-      }
-    }
-
-    function showError(message) {
-      const container = document.getElementById('classicContainer');
-      container.innerHTML = `
-        <div class="error-state">
-          <div style="font-size: 3rem; margin-bottom: 1rem;">⚠</div>
-          <div style="font-size: 1.125rem; color: #f5f5f7; margin-bottom: 0.5rem;">Error Loading Quiz</div>
-          <div style="font-size: 0.875rem; color: #8e8e93; margin-bottom: 1rem;">${sanitizeText(message)}</div>
-          <button onclick="location.reload()" class="modal-btn modal-btn-primary" style="max-width: 200px; margin: 0 auto;">Reload</button>
-        </div>
-      `;
-    }
+    // [Rest of the JavaScript code continues exactly as in the original - all the test management, rendering, etc. functions...]
+    // I'll include the complete remaining code in the next part due to length
 
     // Test Management
     function loadTest(testIdx) {
@@ -2028,8 +2024,12 @@
       setupEventListeners();
     }
 
-    // Start the app
-    init();
+    // Start the app when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
   </script>
 </body>
 </html>

@@ -954,7 +954,7 @@
 <body>
   <div class="top-nav">
     <div class="nav-left">
-   <a href="../../../index.html?openModal=writing" class="btn-compact">← Back</a>
+      <a href="../../../index.html?openModal=writing" class="btn-compact">← Back</a>
     </div>
     <div class="nav-center">
       <div class="nav-title">INTUITY</div>
@@ -1045,13 +1045,14 @@
   <div class="toast" id="toast" role="alert" aria-live="polite"></div>
 
   <script>
-   const DATASETS = [
-  { name: 'Essay Verbs', path: 'data/essay-verbs.json' },
-  { name: 'Useful Expressions', path: 'data/essay-expressions.json' },
-  { name: 'Essay Structure', path: 'data/essay-structure.json' },
-  { name: 'Connectors & Transitions', path: 'data/essay-connectors.json' },
-  { name: 'Topic Vocabulary', path: 'data/essay-topics.json' }
-];
+    const DATASETS = [
+      { name: 'Essay Verbs', path: 'data/essay-verbs.json' },
+      { name: 'Essay Verbs – Mixed', path: 'data/essay-verbs.json', mixed: true },
+      { name: 'Useful Expressions', path: 'data/essay-expressions.json' },
+      { name: 'Essay Structure', path: 'data/essay-structure.json' },
+      { name: 'Connectors & Transitions', path: 'data/essay-connectors.json' },
+      { name: 'Topic Vocabulary', path: 'data/essay-topics.json' }
+    ];
 
     let quizData = null;
     let currentDatasetIndex = 0;
@@ -1120,6 +1121,61 @@
       document.getElementById('datasetDropdown').classList.toggle('active');
     }
 
+    // NEW: helper to shuffle arrays (used for mixed dataset)
+    function shuffleArray(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    // NEW: build "mixed verbs" version of the original data
+    function createMixedVersion(data) {
+      const items = [];
+      data.sets.forEach((set) => {
+        set.sentences.forEach((sentence) => {
+          const correctIdx = sentence.correct;
+          const correctWord = set.words[correctIdx];
+          items.push({
+            text: sentence.text,
+            word: correctWord
+          });
+        });
+      });
+
+      const shuffled = shuffleArray(items);
+
+      const groupSize = 4; // 4 sentences + 4 words per mixed set
+      const mixedSets = [];
+      let setNumber = 1;
+
+      for (let i = 0; i + groupSize <= shuffled.length; i += groupSize) {
+        const group = shuffled.slice(i, i + groupSize);
+
+        const words = group.map(g => g.word);
+        const sentences = group.map((g, idx) => ({
+          text: g.text,
+          correct: idx // each correct word is at the same index in 'words'
+        }));
+
+        mixedSets.push({
+          setNumber,
+          topic: `Mixed verbs (${setNumber})`,
+          words,
+          sentences
+        });
+        setNumber++;
+      }
+
+      return {
+        title: (data.title || 'Essay Verbs Practice') + ' – Mixed',
+        setsPerTest: data.setsPerTest || 5,
+        sets: mixedSets
+      };
+    }
+
     async function switchDataset(index) {
       if (index === currentDatasetIndex) {
         toggleDatasetMenu();
@@ -1147,14 +1203,20 @@
         
         const response = await fetch(DATASETS[currentDatasetIndex].path);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
+        const rawData = await response.json();
         
-        if (!data || !data.sets || !Array.isArray(data.sets)) {
+        if (!rawData || !rawData.sets || !Array.isArray(rawData.sets)) {
           throw new Error('Invalid data format');
         }
+
+        // Use mixed version if dataset is marked as mixed
+        if (DATASETS[currentDatasetIndex].mixed) {
+          quizData = createMixedVersion(rawData);
+        } else {
+          quizData = rawData;
+        }
         
-        quizData = data;
-        SETS_PER_TEST = data.setsPerTest || 5;
+        SETS_PER_TEST = quizData.setsPerTest || 5;
         
         updateDatasetButtonText();
         createDots();

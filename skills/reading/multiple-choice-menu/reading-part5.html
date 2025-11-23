@@ -84,15 +84,49 @@
       height: 3rem;
     }
 
+    .back-btn {
+      background: rgba(28, 28, 30, 0.8);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 0.5px solid rgba(84, 84, 88, 0.3);
+      border-radius: 50%;
+      width: 2rem;
+      height: 2rem;
+      color: #8e8e93;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+      font-size: 1.125rem;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .back-btn:active {
+      transform: scale(0.9);
+    }
+
+    .back-btn:hover {
+      color: #C9A961;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+      border-color: rgba(201, 169, 97, 0.4);
+      background: rgba(28, 28, 30, 0.95);
+    }
+
     .brand {
       font-family: 'Space Grotesk', sans-serif;
-      font-size: 1.125rem;
+      font-size: 0.9375rem;
       font-weight: 700;
       background: linear-gradient(135deg, var(--intuity-gold) 0%, rgba(255,255,255,0.85) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
       text-transform: uppercase;
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      letter-spacing: 0.02em;
     }
 
     .passage-selector {
@@ -807,7 +841,23 @@
     /* MOBILE OPTIMIZATIONS */
     @media (max-width: 768px) {
       .brand {
+        font-size: 0.75rem;
+      }
+
+      .back-btn {
+        width: 1.75rem;
+        height: 1.75rem;
         font-size: 1rem;
+      }
+
+      .passage-nav-btn {
+        width: 1.5rem;
+        height: 1.5rem;
+        font-size: 0.75rem;
+      }
+
+      .passage-indicator {
+        font-size: 0.625rem;
       }
 
       .passage-title {
@@ -828,6 +878,23 @@
       }
     }
 
+    @media (max-width: 480px) {
+      .brand {
+        font-size: 0.625rem;
+        letter-spacing: 0;
+      }
+
+      .back-btn {
+        width: 1.625rem;
+        height: 1.625rem;
+        font-size: 0.9375rem;
+      }
+
+      .top-bar {
+        padding: 0.375rem 0.625rem;
+      }
+    }
+
     /* LANDSCAPE MODE */
     @media (orientation: landscape) and (max-height: 500px) {
       .questions-panel {
@@ -843,7 +910,8 @@
 
   <!-- TOP BAR -->
   <div class="top-bar">
-    <div class="brand">INTUITY</div>
+    <button class="back-btn" onclick="window.location.href='../../index.html?openModal=reading'">←</button>
+    <div class="brand">INTUITY Reading Part 5</div>
     <div class="passage-selector">
       <button class="passage-nav-btn" id="prevPassageBtn" onclick="navigatePassage(-1)">←</button>
       <div class="passage-indicator" id="passageIndicator">Loading...</div>
@@ -952,9 +1020,9 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    // DATA FILES
+    // DATA FILES - All 10 passages
     const DATA_FILES = [
-      'data/reading/multiple-choice-folder/multiple-choice10.json',
+      'data/reading/multiple-choice-folder/multiple-choice1.json',
       'data/reading/multiple-choice-folder/multiple-choice2.json',
       'data/reading/multiple-choice-folder/multiple-choice3.json',
       'data/reading/multiple-choice-folder/multiple-choice4.json',
@@ -962,7 +1030,8 @@
       'data/reading/multiple-choice-folder/multiple-choice6.json',
       'data/reading/multiple-choice-folder/multiple-choice7.json',
       'data/reading/multiple-choice-folder/multiple-choice8.json',
-      'data/reading/multiple-choice-folder/multiple-choice9.json'
+      'data/reading/multiple-choice-folder/multiple-choice9.json',
+      'data/reading/multiple-choice-folder/multiple-choice10.json'
     ];
 
     // STATE
@@ -1008,12 +1077,27 @@
 
     // LOAD DATA
     async function loadAllPassages() {
+      const indicator = document.getElementById('passageIndicator');
+      indicator.textContent = 'Loading...';
+      indicator.style.color = '#ff9500'; // Orange while loading
+      
       const promises = DATA_FILES.map(file => 
         fetch(file).then(r => r.json()).catch(e => null)
       );
       const results = await Promise.all(promises);
       passages = results.filter(p => p !== null);
-      console.log(`✅ Loaded ${passages.length} passages`);
+      
+      // Update indicator with success/error state
+      if (passages.length === DATA_FILES.length) {
+        indicator.style.color = '#34c759'; // Green for success
+        console.log(`✅ Loaded ${passages.length}/${DATA_FILES.length} passages`);
+      } else if (passages.length > 0) {
+        indicator.style.color = '#ff9500'; // Orange for partial
+        console.warn(`⚠️ Loaded ${passages.length}/${DATA_FILES.length} passages`);
+      } else {
+        indicator.style.color = '#ff3b30'; // Red for error
+        console.error(`❌ Loaded ${passages.length}/${DATA_FILES.length} passages`);
+      }
     }
 
     function loadProgress() {
@@ -1035,6 +1119,11 @@
 
     // LOAD PASSAGE
     function loadPassage(index) {
+      if (passages.length === 0) {
+        showError('No passages loaded. Please check file paths.');
+        return;
+      }
+      
       if (index < 0 || index >= passages.length) return;
 
       currentPassageIndex = index;
@@ -1049,9 +1138,26 @@
       updateScoreDisplay();
     }
 
+    function showError(message) {
+      const passageContent = document.getElementById('passageContent');
+      passageContent.innerHTML = `
+        <div style="text-align: center; padding: 3rem 1rem; color: #fb923c;">
+          <div style="font-size: 3rem; margin-bottom: 1rem;">⚠️</div>
+          <div style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.75rem;">Error Loading Data</div>
+          <div style="font-size: 0.875rem; color: #8e8e93; max-width: 400px; margin: 0 auto;">
+            ${message}
+          </div>
+          <div style="font-size: 0.75rem; color: #636366; margin-top: 1rem;">
+            Files loaded: ${passages.length}/10
+          </div>
+        </div>
+      `;
+    }
+
     function updatePassageIndicator() {
-      document.getElementById('passageIndicator').textContent = 
-        `${currentPassageIndex + 1}/${passages.length}`;
+      const indicator = document.getElementById('passageIndicator');
+      indicator.textContent = `${currentPassageIndex + 1}/${passages.length}`;
+      indicator.style.color = '#8e8e93'; // Reset to default gray
       document.getElementById('prevPassageBtn').disabled = currentPassageIndex === 0;
       document.getElementById('nextPassageBtn').disabled = currentPassageIndex >= passages.length - 1;
     }
@@ -1059,6 +1165,11 @@
     // RENDER PASSAGE
     function renderPassage() {
       const passage = passages[currentPassageIndex];
+      if (!passage) {
+        showError('Passage data not available');
+        return;
+      }
+      
       const container = document.getElementById('passageContent');
 
       let html = `
@@ -1091,6 +1202,7 @@
     // RENDER QUESTIONS
     function renderQuestions() {
       const passage = passages[currentPassageIndex];
+      if (!passage) return;
       
       if (mode === 'single') {
         renderQuestionsSingle(passage);
@@ -1100,6 +1212,8 @@
     }
 
     function renderQuestionsSingle(passage) {
+      if (!passage || !passage.cards) return;
+      
       const trackContainer = document.getElementById('questionTrack');
       const navContainer = document.getElementById('questionNav');
 
@@ -1160,6 +1274,8 @@
     }
 
     function renderQuestionsContinuous(passage) {
+      if (!passage || !passage.cards) return;
+      
       const container = document.getElementById('questionsContinuous');
       let html = '';
 
@@ -1245,6 +1361,8 @@
     // SWIPE HANDLING
     function updateQuestionPosition() {
       const passage = passages[currentPassageIndex];
+      if (!passage || !passage.cards) return;
+      
       const track = document.getElementById('questionTrack');
       const translateX = -currentQuestionIndex * (100 / passage.cards.length);
       track.style.transform = `translateX(${translateX}%)`;
@@ -1252,6 +1370,7 @@
 
     function goToQuestion(index) {
       const passage = passages[currentPassageIndex];
+      if (!passage || !passage.cards) return;
       if (index < 0 || index >= passage.cards.length) return;
       
       currentQuestionIndex = index;
@@ -1268,8 +1387,10 @@
     function handleSwipeMove(e) {
       if (!isDragging || mode !== 'single') return;
       
-      e.preventDefault();
       const passage = passages[currentPassageIndex];
+      if (!passage || !passage.cards) return;
+      
+      e.preventDefault();
       const currentX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
       const deltaX = currentX - startX;
       const track = document.getElementById('questionTrack');
@@ -1282,8 +1403,10 @@
     function handleSwipeEnd(e) {
       if (!isDragging || mode !== 'single') return;
       
-      isDragging = false;
       const passage = passages[currentPassageIndex];
+      if (!passage || !passage.cards) return;
+      
+      isDragging = false;
       const track = document.getElementById('questionTrack');
       track.classList.remove('dragging');
       
@@ -1307,6 +1430,10 @@
     // CHECK ANSWERS
     function checkAnswers() {
       const passage = passages[currentPassageIndex];
+      if (!passage || !passage.cards) {
+        showToast('No passage loaded');
+        return;
+      }
       
       if (Object.keys(answers).length < passage.cards.length) {
         showToast('Please answer all questions');
@@ -1413,12 +1540,17 @@
 
     // HINT
     function showHint() {
+      const passage = passages[currentPassageIndex];
+      if (!passage || !passage.cards) {
+        showToast('No passage loaded');
+        return;
+      }
+      
       if (checked) {
         showToast('Already checked - see green highlights in text');
         return;
       }
 
-      const passage = passages[currentPassageIndex];
       const unanswered = [];
       
       passage.cards.forEach((card, i) => {
@@ -1449,6 +1581,11 @@
 
     function updateScoreDisplay() {
       const passage = passages[currentPassageIndex];
+      if (!passage || !passage.cards) {
+        document.getElementById('scoreNumber').textContent = '0/0';
+        return;
+      }
+      
       const answeredCount = Object.keys(answers).length;
       document.getElementById('scoreNumber').textContent = 
         `${answeredCount}/${passage.cards.length}`;

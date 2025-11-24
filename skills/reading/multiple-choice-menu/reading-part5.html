@@ -1638,7 +1638,7 @@
       container.innerHTML = html;
     }
 
-    // RENDER QUESTIONS
+// RENDER QUESTIONS
     function renderQuestions() {
       const passage = passages[currentPassageIndex];
       if (!passage) return;
@@ -1709,7 +1709,7 @@
       trackContainer.innerHTML = trackHTML;
       navContainer.innerHTML = navHTML;
       
-      updateQuestionPosition();
+      // ❌ REMOVED: updateQuestionPosition();
       renderNavigationCircles(passage);
     }
 
@@ -1784,15 +1784,8 @@
         
         // Use arrow function to properly capture index
         circle.addEventListener('click', () => {
-          if (mode === 'single') {
-            goToQuestion(i);
-          } else {
-            // In continuous mode, scroll to that question
-            const questionCard = document.getElementById(`question-${i}`);
-            if (questionCard) {
-              questionCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-          }
+          currentQuestionIndex = i;
+          renderNavigationCircles(passage);
         });
         
         circlesNav.appendChild(circle);
@@ -1844,83 +1837,17 @@
       }
     }
 
-    // SWIPE HANDLING
-    function updateQuestionPosition() {
-      const passage = passages[currentPassageIndex];
-      if (!passage || !passage.cards) return;
-      
-      const track = document.getElementById('questionTrack');
-      const totalQuestions = passage.cards.length;
-      const translateX = -currentQuestionIndex * (100 / totalQuestions);
-      track.style.transform = `translateX(${translateX}%)`;
-    }
-
+    // NAVIGATION - SIMPLIFIED (NO SWIPE/MOVEMENT)
     function goToQuestion(index) {
       const passage = passages[currentPassageIndex];
       if (!passage || !passage.cards) return;
       if (index < 0 || index >= passage.cards.length) return;
       
-      // Stop any dragging state
-      isDragging = false;
+      // Just update which question is active
       currentQuestionIndex = index;
       
-      const track = document.getElementById('questionTrack');
-      track.classList.remove('dragging');
-      
-      // Force immediate update without transition flicker
-      updateQuestionPosition();
-      
-      // Re-render to update all states
+      // Re-render to update circle highlights only
       renderNavigationCircles(passage);
-    }
-
-    function handleSwipeStart(e) {
-      isDragging = true;
-      startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
-      document.getElementById('questionTrack').classList.add('dragging');
-    }
-
-    function handleSwipeMove(e) {
-      if (!isDragging || mode !== 'single') return;
-      
-      const passage = passages[currentPassageIndex];
-      if (!passage || !passage.cards) return;
-      
-      e.preventDefault();
-      const currentX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
-      const deltaX = currentX - startX;
-      const track = document.getElementById('questionTrack');
-      const currentTranslate = -currentQuestionIndex * (100 / passage.cards.length);
-      const dragPercent = (deltaX / window.innerWidth) * 100;
-      
-      track.style.transform = `translateX(${currentTranslate + dragPercent}%)`;
-    }
-
-    function handleSwipeEnd(e) {
-      if (!isDragging || mode !== 'single') return;
-      
-      const passage = passages[currentPassageIndex];
-      if (!passage || !passage.cards) return;
-      
-      isDragging = false;
-      const track = document.getElementById('questionTrack');
-      track.classList.remove('dragging');
-      
-      const endX = e.type.includes('mouse') ? e.clientX : e.changedTouches[0].clientX;
-      const deltaX = endX - startX;
-      const threshold = 50;
-      
-      if (Math.abs(deltaX) > threshold) {
-        if (deltaX > 0 && currentQuestionIndex > 0) {
-          goToQuestion(currentQuestionIndex - 1);
-        } else if (deltaX < 0 && currentQuestionIndex < passage.cards.length - 1) {
-          goToQuestion(currentQuestionIndex + 1);
-        } else {
-          updateQuestionPosition();
-        }
-      } else {
-        updateQuestionPosition();
-      }
     }
 
     // CHECK ANSWERS
@@ -2174,16 +2101,27 @@
 
     // EVENT LISTENERS
     function setupEventListeners() {
-      const questionsPanel = document.getElementById('questionsPanel');
+      // ✅ REMOVED ALL SWIPE EVENT LISTENERS
       
-      // Touch/Mouse events for swiping
-      questionsPanel.addEventListener('touchstart', handleSwipeStart, { passive: false });
-      questionsPanel.addEventListener('touchmove', handleSwipeMove, { passive: false });
-      questionsPanel.addEventListener('touchend', handleSwipeEnd, { passive: false });
-      
-      questionsPanel.addEventListener('mousedown', handleSwipeStart);
-      document.addEventListener('mousemove', handleSwipeMove);
-      document.addEventListener('mouseup', handleSwipeEnd);
+      // Keyboard shortcuts
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeModal();
+        
+        if (mode === 'single' && !checked) {
+          const passage = passages[currentPassageIndex];
+          if (e.key === 'ArrowLeft' && currentQuestionIndex > 0) {
+            goToQuestion(currentQuestionIndex - 1);
+          } else if (e.key === 'ArrowRight' && currentQuestionIndex < passage.cards.length - 1) {
+            goToQuestion(currentQuestionIndex + 1);
+          } else if (e.key >= '1' && e.key <= '9') {
+            const index = parseInt(e.key) - 1;
+            if (index < passage.cards.length) goToQuestion(index);
+          }
+        }
+  
+        if (e.key === 'c' && !checked) checkAnswers();
+      });
+    }
 
       // Keyboard shortcuts
       document.addEventListener('keydown', (e) => {

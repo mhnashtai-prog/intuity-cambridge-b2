@@ -1706,7 +1706,7 @@
         const answer = answers[i];
 
         html += `
-          <div class="question-card">
+          <div class="question-card" id="question-${i}">
             <div class="question-header">
               <div class="question-number">Question ${i + 1}</div>
               <div class="question-progress">${i + 1}/${passage.cards.length}</div>
@@ -1750,21 +1750,36 @@
       const circlesNav = document.getElementById('questionCirclesNav');
       if (!circlesNav) return;
       
-      let circlesHTML = '';
+      circlesNav.innerHTML = ''; // Clear first
+      
       passage.cards.forEach((card, i) => {
         const answer = answers[i];
-        let circleClass = 'q-circle';
+        const circle = document.createElement('div');
+        circle.className = 'q-circle';
+        circle.textContent = i + 1;
         
         if (mode === 'single' && i === currentQuestionIndex) {
-          circleClass += ' active';
-        } else if (answer !== undefined) {
-          circleClass += ' answered';
+          circle.classList.add('active');
+        }
+        if (answer !== undefined) {
+          circle.classList.add('answered');
         }
         
-        circlesHTML += `<div class="${circleClass}" onclick="goToQuestion(${i})">${i + 1}</div>`;
+        // Use arrow function to properly capture index
+        circle.addEventListener('click', () => {
+          if (mode === 'single') {
+            goToQuestion(i);
+          } else {
+            // In continuous mode, scroll to that question
+            const questionCard = document.getElementById(`question-${i}`);
+            if (questionCard) {
+              questionCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }
+        });
+        
+        circlesNav.appendChild(circle);
       });
-      
-      circlesNav.innerHTML = circlesHTML;
     }
 
     // SELECT ANSWER
@@ -1818,7 +1833,8 @@
       if (!passage || !passage.cards) return;
       
       const track = document.getElementById('questionTrack');
-      const translateX = -currentQuestionIndex * (100 / passage.cards.length);
+      const totalQuestions = passage.cards.length;
+      const translateX = -currentQuestionIndex * (100 / totalQuestions);
       track.style.transform = `translateX(${translateX}%)`;
     }
 
@@ -1827,9 +1843,18 @@
       if (!passage || !passage.cards) return;
       if (index < 0 || index >= passage.cards.length) return;
       
+      // Stop any dragging state
+      isDragging = false;
       currentQuestionIndex = index;
-      document.getElementById('questionTrack').classList.remove('dragging');
-      renderQuestions();
+      
+      const track = document.getElementById('questionTrack');
+      track.classList.remove('dragging');
+      
+      // Force immediate update without transition flicker
+      updateQuestionPosition();
+      
+      // Re-render to update all states
+      renderNavigationCircles(passage);
     }
 
     function handleSwipeStart(e) {

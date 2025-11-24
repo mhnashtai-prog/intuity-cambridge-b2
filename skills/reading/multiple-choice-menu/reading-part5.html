@@ -636,44 +636,36 @@
       background: var(--intuity-gold);
     }
 
- /* SINGLE MODE - SHOW ONLY ONE QUESTION */
-.questions-single {
-  position: relative;
-  height: 100%;
-  overflow: hidden;  /* Keep hidden to show only active question */
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 1rem 1.25rem;
-}
+    /* SINGLE QUESTION MODE (SWIPEABLE) */
+    .questions-single {
+      position: relative;
+      height: 100%;
+      overflow: hidden;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 1rem 1.25rem;
+    }
 
-.question-track {
-  display: block;
-  height: 100%;
-  position: relative;
-}
+    .question-track {
+      display: flex;
+      height: 100%;
+      transition: transform 0.3s ease-out;
+      will-change: transform;
+    }
 
-.question-slide {
-  flex-shrink: 0;
-  width: 100%;
-  height: 100%;
-  padding: 1rem 0;
-  display: flex;
-  flex-direction: column;
-}
+    .question-track.dragging {
+      transition: none;
+    }
 
-.question-slide:last-child {
-  border-bottom: none;
-  margin-bottom: 0;
-}
+    .question-slide {
+      flex-shrink: 0;
+      width: 100%;
+      height: 100%;
+      padding: 1rem 0;
+      display: flex;
+      flex-direction: column;
+    }
 
-.question-slide:last-child {
-  border-bottom: none;
-  margin-bottom: 0;
-}
-.question-slide:last-child {
-  border-bottom: none;
-  margin-bottom: 0;
-}
     .question-header {
       display: flex;
       justify-content: space-between;
@@ -1658,70 +1650,147 @@
       }
     }
 
-function renderQuestionsSingle(passage) {
-  if (!passage || !passage.cards) return;
-  
-  const trackContainer = document.getElementById('questionTrack');
-  const navContainer = document.getElementById('questionNav');
-
-  let trackHTML = '';
-  let navHTML = '';
-
-  passage.cards.forEach((card, i) => {
-    const answer = answers[i];
-    const isCorrect = checked && answer === card.answer;
-    
-    // ✅ Add 'active' class to current question
-    const activeClass = i === currentQuestionIndex ? 'active' : '';
-    
-    trackHTML += `
-  <div class="question-slide">  
-        <div class="question-header">
-          <div class="question-number">Question ${i + 1}</div>
-          <div class="question-progress">${i + 1}/${passage.cards.length}</div>
-        </div>
-        <div class="question-text">${card.question}</div>
-        <div class="choices">
-    `;
-
-    card.choices.forEach((choice, choiceIdx) => {
-      const isSelected = answer === choiceIdx;
-      const isCorrectChoice = choiceIdx === card.answer;
+    function renderQuestionsSingle(passage) {
+      if (!passage || !passage.cards) return;
       
-      let classes = 'choice';
-      if (checked) {
-        classes += ' disabled';
-        if (isSelected && !isCorrectChoice) classes += ' incorrect';
-        if (isCorrectChoice) classes += ' correct';
-      } else if (isSelected) {
-        classes += ' selected';
-      }
+      const trackContainer = document.getElementById('questionTrack');
+      const navContainer = document.getElementById('questionNav');
 
-      const letter = String.fromCharCode(65 + choiceIdx);
+      let trackHTML = '';
+      let navHTML = '';
 
-      trackHTML += `
-        <div class="${classes}" onclick="${checked ? '' : `selectAnswer(${i}, ${choiceIdx})`}">
-          <div class="choice-letter">${letter}</div>
-          <div>${choice}</div>
-        </div>
-      `;
-    });
+      passage.cards.forEach((card, i) => {
+        const answer = answers[i];
+        const isCorrect = checked && answer === card.answer;
+        
+        trackHTML += `
+          <div class="question-slide">
+            <div class="question-header">
+              <div class="question-number">Question ${i + 1}</div>
+              <div class="question-progress">${i + 1}/${passage.cards.length}</div>
+            </div>
+            <div class="question-text">${card.question}</div>
+            <div class="choices">
+        `;
 
-    trackHTML += '</div></div>';
+        card.choices.forEach((choice, choiceIdx) => {
+          const isSelected = answer === choiceIdx;
+          const isCorrectChoice = choiceIdx === card.answer;
+          
+          let classes = 'choice';
+          if (checked) {
+            classes += ' disabled';
+            if (isSelected && !isCorrectChoice) classes += ' incorrect';
+            if (isCorrectChoice) classes += ' correct';
+          } else if (isSelected) {
+            classes += ' selected';
+          }
 
-    // Navigation indicator
-    let indicatorClass = 'question-indicator';
-    if (i === currentQuestionIndex) indicatorClass += ' active';
-    else if (answer !== undefined) indicatorClass += ' answered';
-    
-    navHTML += `<div class="${indicatorClass}" onclick="goToQuestion(${i})"></div>`;
-  });
-  
- trackContainer.innerHTML = trackHTML;
-  navContainer.innerHTML = navHTML;
-  
-  renderNavigationCircles(passage);
-}
+          const letter = String.fromCharCode(65 + choiceIdx);
+
+          trackHTML += `
+            <div class="${classes}" onclick="${checked ? '' : `selectAnswer(${i}, ${choiceIdx})`}">
+              <div class="choice-letter">${letter}</div>
+              <div>${choice}</div>
+            </div>
+          `;
+        });
+
+        trackHTML += '</div></div>';
+
+        // Navigation indicator (kept for mobile fallback)
+        let indicatorClass = 'question-indicator';
+        if (i === currentQuestionIndex) indicatorClass += ' active';
+        else if (answer !== undefined) indicatorClass += ' answered';
+        
+        navHTML += `<div class="${indicatorClass}" onclick="goToQuestion(${i})"></div>`;
+      });
+
+      trackContainer.innerHTML = trackHTML;
+      navContainer.innerHTML = navHTML;
+      
+      // ❌ REMOVED: updateQuestionPosition();
+      renderNavigationCircles(passage);
+    }
+
+    function renderQuestionsContinuous(passage) {
+      if (!passage || !passage.cards) return;
+      
+      const container = document.getElementById('questionsContinuous');
+      let html = '';
+
+      passage.cards.forEach((card, i) => {
+        const answer = answers[i];
+
+        html += `
+          <div class="question-card" id="question-${i}">
+            <div class="question-header">
+              <div class="question-number">Question ${i + 1}</div>
+              <div class="question-progress">${i + 1}/${passage.cards.length}</div>
+            </div>
+            <div class="question-text">${card.question}</div>
+            <div class="choices">
+        `;
+
+        card.choices.forEach((choice, choiceIdx) => {
+          const isSelected = answer === choiceIdx;
+          const isCorrectChoice = choiceIdx === card.answer;
+          
+          let classes = 'choice';
+          if (checked) {
+            classes += ' disabled';
+            if (isSelected && !isCorrectChoice) classes += ' incorrect';
+            if (isCorrectChoice) classes += ' correct';
+          } else if (isSelected) {
+            classes += ' selected';
+          }
+
+          const letter = String.fromCharCode(65 + choiceIdx);
+
+          html += `
+            <div class="${classes}" onclick="${checked ? '' : `selectAnswer(${i}, ${choiceIdx})`}">
+              <div class="choice-letter">${letter}</div>
+              <div>${choice}</div>
+            </div>
+          `;
+        });
+
+        html += '</div></div>';
+      });
+
+      container.innerHTML = html;
+      renderNavigationCircles(passage);
+    }
+
+    // RENDER NAVIGATION CIRCLES - ESSAY WRITER STYLE
+    function renderNavigationCircles(passage) {
+      const circlesNav = document.getElementById('questionCirclesNav');
+      if (!circlesNav) return;
+      
+      circlesNav.innerHTML = ''; // Clear first
+      
+      passage.cards.forEach((card, i) => {
+        const answer = answers[i];
+        const circle = document.createElement('div');
+        circle.className = 'q-circle';
+        circle.textContent = i + 1;
+        
+        if (mode === 'single' && i === currentQuestionIndex) {
+          circle.classList.add('active');
+        }
+        if (answer !== undefined) {
+          circle.classList.add('answered');
+        }
+        
+        // Use arrow function to properly capture index
+        circle.addEventListener('click', () => {
+          currentQuestionIndex = i;
+          renderNavigationCircles(passage);
+        });
+        
+        circlesNav.appendChild(circle);
+      });
+    }
 
     // SELECT ANSWER
     function selectAnswer(questionIndex, choiceIndex) {

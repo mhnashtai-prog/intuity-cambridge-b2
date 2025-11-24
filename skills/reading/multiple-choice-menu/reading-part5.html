@@ -1434,697 +1434,666 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    // DATA FILES - All 10 passages with CORRECT PATHS
-    const DATA_FILES = [
-      '../../../data/reading/multiple-choice-folder/multiple-choice1.json',
-      '../../../data/reading/multiple-choice-folder/multiple-choice2.json',
-      '../../../data/reading/multiple-choice-folder/multiple-choice3.json',
-      '../../../data/reading/multiple-choice-folder/multiple-choice4.json',
-      '../../../data/reading/multiple-choice-folder/multiple-choice5.json',
-      '../../../data/reading/multiple-choice-folder/multiple-choice6.json',
-      '../../../data/reading/multiple-choice-folder/multiple-choice7.json',
-      '../../../data/reading/multiple-choice-folder/multiple-choice8.json',
-      '../../../data/reading/multiple-choice-folder/multiple-choice9.json',
-      '../../../data/reading/multiple-choice-folder/multiple-choice10.json'
+   // DATA FILES - All 10 passages with CORRECT PATHS
+const DATA_FILES = [
+  '../../../data/reading/multiple-choice-folder/multiple-choice1.json',
+  '../../../data/reading/multiple-choice-folder/multiple-choice2.json',
+  '../../../data/reading/multiple-choice-folder/multiple-choice3.json',
+  '../../../data/reading/multiple-choice-folder/multiple-choice4.json',
+  '../../../data/reading/multiple-choice-folder/multiple-choice5.json',
+  '../../../data/reading/multiple-choice-folder/multiple-choice6.json',
+  '../../../data/reading/multiple-choice-folder/multiple-choice7.json',
+  '../../../data/reading/multiple-choice-folder/multiple-choice8.json',
+  '../../../data/reading/multiple-choice-folder/multiple-choice9.json',
+  '../../../data/reading/multiple-choice-folder/multiple-choice10.json'
+];
+
+// STATE
+let passages = [];
+let currentPassageIndex = 0;
+let currentQuestionIndex = 0;
+let mode = 'single'; // 'single' or 'continuous'
+let answers = {};
+let checked = false;
+let scores = {};
+let questionsPanelCollapsed = false;
+
+// INITIALIZE
+async function init() {
+  try {
+    await loadAllPassages();
+    loadProgress();
+    loadPassage(0);
+    setupEventListeners();
+  } catch (error) {
+    console.error('Error initializing:', error);
+    showToast('Failed to load passages');
+  }
+}
+
+// LOAD DATA
+async function loadAllPassages() {
+  const indicator = document.getElementById('passageIndicator');
+  indicator.textContent = 'Loading...';
+  indicator.style.color = '#ff9500';
+  
+  const loadFile = async (baseName) => {
+    const pathVariations = [
+      `../../../data/reading/multiple-choice-folder/${baseName}`,
+      `../../data/reading/multiple-choice-folder/${baseName}`,
+      `data/reading/multiple-choice-folder/${baseName}`,
+      `/data/reading/multiple-choice-folder/${baseName}`,
+      `../../../datacentre/reading/${baseName}`,
+      `../../datacentre/reading/${baseName}`,
     ];
-
-    // STATE
-    let passages = [];
-    let currentPassageIndex = 0;
-    let currentQuestionIndex = 0;
-    let mode = 'single'; // 'single' or 'continuous'
-    let answers = {};
-    let checked = false;
-    let scores = {};
-    let questionsPanelCollapsed = false;
     
-    // Touch state
-    let startX = 0;
-    let isDragging = false;
-
-    // INITIALIZE
-    async function init() {
+    for (const path of pathVariations) {
       try {
-        await loadAllPassages();
-        loadProgress();
-        loadPassage(0);
-        setupEventListeners();
-      } catch (error) {
-        console.error('Error initializing:', error);
-        showToast('Failed to load passages');
-      }
-    }
-
-    // LOAD DATA
-    async function loadAllPassages() {
-      const indicator = document.getElementById('passageIndicator');
-      indicator.textContent = 'Loading...';
-      indicator.style.color = '#ff9500'; // Orange while loading
-      
-      // Try to load each file with fallback paths
-      const loadFile = async (baseName) => {
-        const pathVariations = [
-          `../../../data/reading/multiple-choice-folder/${baseName}`,
-          `../../data/reading/multiple-choice-folder/${baseName}`,
-          `data/reading/multiple-choice-folder/${baseName}`,
-          `/data/reading/multiple-choice-folder/${baseName}`,
-          `../../../datacentre/reading/${baseName}`,
-          `../../datacentre/reading/${baseName}`,
-        ];
-        
-        for (const path of pathVariations) {
-          try {
-            const response = await fetch(path);
-            if (response.ok) {
-              const data = await response.json();
-              console.log(`✅ Loaded ${baseName} from: ${path}`);
-              return data;
-            }
-          } catch (e) {
-            // Continue to next path
-          }
+        const response = await fetch(path);
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`✅ Loaded ${baseName} from: ${path}`);
+          return data;
         }
-        
-        console.error(`❌ Failed to load ${baseName} from any path`);
-        return null;
-      };
-      
-      const fileNames = [
-        'multiple-choice1.json',
-        'multiple-choice2.json',
-        'multiple-choice3.json',
-        'multiple-choice4.json',
-        'multiple-choice5.json',
-        'multiple-choice6.json',
-        'multiple-choice7.json',
-        'multiple-choice8.json',
-        'multiple-choice9.json',
-        'multiple-choice10.json'
-      ];
-      
-      const promises = fileNames.map(loadFile);
-      const results = await Promise.all(promises);
-      passages = results.filter(p => p !== null);
-      
-      // Update indicator with success/error state
-      if (passages.length === fileNames.length) {
-        indicator.style.color = '#34c759'; // Green for success
-        console.log(`✅ Loaded ${passages.length}/${fileNames.length} passages`);
-      } else if (passages.length > 0) {
-        indicator.style.color = '#ff9500'; // Orange for partial
-        console.warn(`⚠️ Loaded ${passages.length}/${fileNames.length} passages`);
-      } else {
-        indicator.style.color = '#ff3b30'; // Red for error
-        console.error(`❌ Loaded ${passages.length}/${fileNames.length} passages`);
-      }
-    }
-
-    function loadProgress() {
-      try {
-        const saved = localStorage.getItem('reading_ultimate_progress');
-        scores = saved ? JSON.parse(saved) : {};
       } catch (e) {
-        console.error('Error loading progress:', e);
+        // Continue to next path
       }
     }
+    
+    console.error(`❌ Failed to load ${baseName} from any path`);
+    return null;
+  };
+  
+  const fileNames = [
+    'multiple-choice1.json',
+    'multiple-choice2.json',
+    'multiple-choice3.json',
+    'multiple-choice4.json',
+    'multiple-choice5.json',
+    'multiple-choice6.json',
+    'multiple-choice7.json',
+    'multiple-choice8.json',
+    'multiple-choice9.json',
+    'multiple-choice10.json'
+  ];
+  
+  const promises = fileNames.map(loadFile);
+  const results = await Promise.all(promises);
+  passages = results.filter(p => p !== null);
+  
+  if (passages.length === fileNames.length) {
+    indicator.style.color = '#34c759';
+    console.log(`✅ Loaded ${passages.length}/${fileNames.length} passages`);
+  } else if (passages.length > 0) {
+    indicator.style.color = '#ff9500';
+    console.warn(`⚠️ Loaded ${passages.length}/${fileNames.length} passages`);
+  } else {
+    indicator.style.color = '#ff3b30';
+    console.error(`❌ Loaded ${passages.length}/${fileNames.length} passages`);
+  }
+}
 
-    function saveProgress() {
-      try {
-        localStorage.setItem('reading_ultimate_progress', JSON.stringify(scores));
-      } catch (e) {
-        console.error('Error saving progress:', e);
-      }
+function loadProgress() {
+  try {
+    const saved = localStorage.getItem('reading_ultimate_progress');
+    scores = saved ? JSON.parse(saved) : {};
+  } catch (e) {
+    console.error('Error loading progress:', e);
+  }
+}
+
+function saveProgress() {
+  try {
+    localStorage.setItem('reading_ultimate_progress', JSON.stringify(scores));
+  } catch (e) {
+    console.error('Error saving progress:', e);
+  }
+}
+
+// LOAD PASSAGE
+function loadPassage(index) {
+  if (passages.length === 0) {
+    showError('No passages loaded. Please check file paths.');
+    return;
+  }
+  
+  if (index < 0 || index >= passages.length) return;
+
+  currentPassageIndex = index;
+  currentQuestionIndex = 0;
+  answers = {};
+  checked = false;
+
+  updatePassageIndicator();
+  renderPassage();
+  renderQuestions();
+  updateButtons();
+  updateScoreDisplay();
+}
+
+function showError(message) {
+  const passageContent = document.getElementById('passageContent');
+  passageContent.innerHTML = `
+    <div style="text-align: center; padding: 3rem 1rem; color: #fb923c;">
+      <div style="font-size: 3rem; margin-bottom: 1rem;">⚠️</div>
+      <div style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.75rem;">Error Loading Data</div>
+      <div style="font-size: 0.875rem; color: #8e8e93; max-width: 400px; margin: 0 auto;">
+        ${message}
+      </div>
+      <div style="font-size: 0.75rem; color: #636366; margin-top: 1rem;">
+        Files loaded: ${passages.length}/10
+      </div>
+    </div>
+  `;
+}
+
+function updatePassageIndicator() {
+  const indicator = document.getElementById('passageIndicator');
+  indicator.textContent = `${currentPassageIndex + 1}/${passages.length}`;
+  indicator.style.color = '#8e8e93';
+  document.getElementById('prevPassageBtn').disabled = currentPassageIndex === 0;
+  document.getElementById('nextPassageBtn').disabled = currentPassageIndex >= passages.length - 1;
+}
+
+// RENDER PASSAGE
+function renderPassage() {
+  const passage = passages[currentPassageIndex];
+  if (!passage) {
+    showError('Passage data not available');
+    return;
+  }
+  
+  const container = document.getElementById('passageContent');
+
+  let html = `
+    <div class="passage-title">${passage.title}</div>
+    <div class="passage-subtitle">${passage.subtitle}</div>
+  `;
+
+  passage.cards.forEach((card, i) => {
+    let text = card.text;
+    
+    if (card.highlight) {
+      text = text.replace(
+        card.highlight,
+        `<span class="highlight-target" data-question="${i}">${card.highlight}</span>`
+      );
     }
 
-    // LOAD PASSAGE
-    function loadPassage(index) {
-      if (passages.length === 0) {
-        showError('No passages loaded. Please check file paths.');
-        return;
-      }
+    html += `
+      <div class="passage-card">
+        <div class="card-number">Part ${i + 1}</div>
+        <div class="passage-text">${text}</div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+// RENDER QUESTIONS - SIMPLIFIED
+function renderQuestions() {
+  const passage = passages[currentPassageIndex];
+  if (!passage) return;
+  
+  if (mode === 'single') {
+    renderQuestionsSingle(passage);
+  } else {
+    renderQuestionsContinuous(passage);
+  }
+}
+
+function renderQuestionsSingle(passage) {
+  if (!passage || !passage.cards) return;
+  
+  const trackContainer = document.getElementById('questionTrack');
+  const navContainer = document.getElementById('questionNav');
+  
+  // ✅ SIMPLE: Only render the CURRENT question
+  const i = currentQuestionIndex;
+  const card = passage.cards[i];
+  const answer = answers[i];
+  
+  let html = `
+    <div class="question-slide">
+      <div class="question-header">
+        <div class="question-number">Question ${i + 1}</div>
+        <div class="question-progress">${i + 1}/${passage.cards.length}</div>
+      </div>
+      <div class="question-text">${card.question}</div>
+      <div class="choices">
+  `;
+
+  card.choices.forEach((choice, choiceIdx) => {
+    const isSelected = answer === choiceIdx;
+    const isCorrectChoice = choiceIdx === card.answer;
+    
+    let classes = 'choice';
+    if (checked) {
+      classes += ' disabled';
+      if (isSelected && !isCorrectChoice) classes += ' incorrect';
+      if (isCorrectChoice) classes += ' correct';
+    } else if (isSelected) {
+      classes += ' selected';
+    }
+
+    const letter = String.fromCharCode(65 + choiceIdx);
+
+    html += `
+      <div class="${classes}" onclick="${checked ? '' : `selectAnswer(${i}, ${choiceIdx})`}">
+        <div class="choice-letter">${letter}</div>
+        <div>${choice}</div>
+      </div>
+    `;
+  });
+
+  html += '</div></div>';
+  trackContainer.innerHTML = html;
+  
+  // Render navigation dots
+  let navHTML = '';
+  passage.cards.forEach((card, idx) => {
+    let indicatorClass = 'question-indicator';
+    if (idx === currentQuestionIndex) indicatorClass += ' active';
+    else if (answers[idx] !== undefined) indicatorClass += ' answered';
+    navHTML += `<div class="${indicatorClass}" onclick="goToQuestion(${idx})"></div>`;
+  });
+  navContainer.innerHTML = navHTML;
+  
+  renderNavigationCircles(passage);
+}
+
+function renderQuestionsContinuous(passage) {
+  if (!passage || !passage.cards) return;
+  
+  const container = document.getElementById('questionsContinuous');
+  let html = '';
+
+  passage.cards.forEach((card, i) => {
+    const answer = answers[i];
+
+    html += `
+      <div class="question-card" id="question-${i}">
+        <div class="question-header">
+          <div class="question-number">Question ${i + 1}</div>
+          <div class="question-progress">${i + 1}/${passage.cards.length}</div>
+        </div>
+        <div class="question-text">${card.question}</div>
+        <div class="choices">
+    `;
+
+    card.choices.forEach((choice, choiceIdx) => {
+      const isSelected = answer === choiceIdx;
+      const isCorrectChoice = choiceIdx === card.answer;
       
-      if (index < 0 || index >= passages.length) return;
+      let classes = 'choice';
+      if (checked) {
+        classes += ' disabled';
+        if (isSelected && !isCorrectChoice) classes += ' incorrect';
+        if (isCorrectChoice) classes += ' correct';
+      } else if (isSelected) {
+        classes += ' selected';
+      }
 
-      currentPassageIndex = index;
-      currentQuestionIndex = 0;
-      answers = {};
-      checked = false;
+      const letter = String.fromCharCode(65 + choiceIdx);
 
-      updatePassageIndicator();
-      renderPassage();
-      renderQuestions();
-      updateButtons();
-      updateScoreDisplay();
-    }
-
-    function showError(message) {
-      const passageContent = document.getElementById('passageContent');
-      passageContent.innerHTML = `
-        <div style="text-align: center; padding: 3rem 1rem; color: #fb923c;">
-          <div style="font-size: 3rem; margin-bottom: 1rem;">⚠️</div>
-          <div style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.75rem;">Error Loading Data</div>
-          <div style="font-size: 0.875rem; color: #8e8e93; max-width: 400px; margin: 0 auto;">
-            ${message}
-          </div>
-          <div style="font-size: 0.75rem; color: #636366; margin-top: 1rem;">
-            Files loaded: ${passages.length}/10
-          </div>
+      html += `
+        <div class="${classes}" onclick="${checked ? '' : `selectAnswer(${i}, ${choiceIdx})`}">
+          <div class="choice-letter">${letter}</div>
+          <div>${choice}</div>
         </div>
       `;
-    }
+    });
 
-    function updatePassageIndicator() {
-      const indicator = document.getElementById('passageIndicator');
-      indicator.textContent = `${currentPassageIndex + 1}/${passages.length}`;
-      indicator.style.color = '#8e8e93'; // Reset to default gray
-      document.getElementById('prevPassageBtn').disabled = currentPassageIndex === 0;
-      document.getElementById('nextPassageBtn').disabled = currentPassageIndex >= passages.length - 1;
-    }
+    html += '</div></div>';
+  });
 
-    // RENDER PASSAGE
-    function renderPassage() {
-      const passage = passages[currentPassageIndex];
-      if (!passage) {
-        showError('Passage data not available');
-        return;
+  container.innerHTML = html;
+  renderNavigationCircles(passage);
+}
+
+// RENDER NAVIGATION CIRCLES
+function renderNavigationCircles(passage) {
+  const circlesNav = document.getElementById('questionCirclesNav');
+  if (!circlesNav) return;
+  
+  circlesNav.innerHTML = '';
+  
+  passage.cards.forEach((card, i) => {
+    const answer = answers[i];
+    const circle = document.createElement('div');
+    circle.className = 'q-circle';
+    circle.textContent = i + 1;
+    
+    if (mode === 'single' && i === currentQuestionIndex) {
+      circle.classList.add('active');
+    }
+    if (answer !== undefined) {
+      circle.classList.add('answered');
+    }
+    
+    circle.onclick = () => goToQuestion(i);
+    
+    circlesNav.appendChild(circle);
+  });
+}
+
+// SELECT ANSWER
+function selectAnswer(questionIndex, choiceIndex) {
+  if (checked) return;
+  
+  answers[questionIndex] = choiceIndex;
+  renderQuestions();
+  updateScoreDisplay();
+}
+
+// TOGGLE MODE
+function toggleMode() {
+  mode = mode === 'single' ? 'continuous' : 'single';
+  
+  const toggle = document.getElementById('modeToggle');
+  toggle.classList.toggle('active', mode === 'continuous');
+
+  document.getElementById('questionsSingle').style.display = 
+    mode === 'single' ? 'block' : 'none';
+  document.getElementById('questionsContinuous').style.display = 
+    mode === 'continuous' ? 'block' : 'none';
+
+  renderQuestions();
+  showToast(`Switched to ${mode === 'single' ? 'single' : 'continuous'} mode`);
+}
+
+// TOGGLE QUESTIONS PANEL
+function toggleQuestionsPanel() {
+  questionsPanelCollapsed = !questionsPanelCollapsed;
+  const panel = document.getElementById('questionsPanel');
+  const divider = document.getElementById('divider');
+  const icon = document.getElementById('collapseIcon');
+  const text = document.getElementById('collapseText');
+
+  panel.classList.toggle('collapsed', questionsPanelCollapsed);
+  divider.classList.toggle('collapsed', questionsPanelCollapsed);
+  
+  if (questionsPanelCollapsed) {
+    icon.textContent = '▲';
+    text.textContent = 'Show Questions';
+  } else {
+    icon.textContent = '▼';
+    text.textContent = 'Hide Questions';
+  }
+}
+
+// ✅ SIMPLE NAVIGATION - Just show the question clicked
+function goToQuestion(index) {
+  const passage = passages[currentPassageIndex];
+  if (!passage || !passage.cards) return;
+  if (index < 0 || index >= passage.cards.length) return;
+  
+  currentQuestionIndex = index;
+  renderQuestions();
+}
+
+// CHECK ANSWERS
+function checkAnswers() {
+  const passage = passages[currentPassageIndex];
+  if (!passage || !passage.cards) {
+    showToast('No passage loaded');
+    return;
+  }
+  
+  if (Object.keys(answers).length < passage.cards.length) {
+    showToast('Please answer all questions');
+    return;
+  }
+
+  checked = true;
+  highlightEvidence();
+  renderQuestions();
+  updateButtons();
+  calculateAndShowResults();
+}
+
+function highlightEvidence() {
+  const passage = passages[currentPassageIndex];
+  let highlightCount = 0;
+  
+  passage.cards.forEach((card, i) => {
+    if (card.highlight) {
+      const targets = document.querySelectorAll(`[data-question="${i}"]`);
+      
+      if (targets.length === 0) {
+        console.warn(`⚠️ No highlight target found for Q${i + 1}`);
       }
       
-      const container = document.getElementById('passageContent');
-
-      let html = `
-        <div class="passage-title">${passage.title}</div>
-        <div class="passage-subtitle">${passage.subtitle}</div>
-      `;
-
-      passage.cards.forEach((card, i) => {
-        let text = card.text;
+      targets.forEach(target => {
+        const evidenceSpan = document.createElement('span');
+        evidenceSpan.className = 'evidence pulse';
         
-        // Add data attribute for evidence highlighting
-        if (card.highlight) {
-          text = text.replace(
-            card.highlight,
-            `<span class="highlight-target" data-question="${i}">${card.highlight}</span>`
-          );
-        }
-
-        html += `
-          <div class="passage-card">
-            <div class="card-number">Part ${i + 1}</div>
-            <div class="passage-text">${text}</div>
-          </div>
+        const studentAnswer = answers[i];
+        const wasCorrect = studentAnswer === card.answer;
+        evidenceSpan.title = `Q${i + 1}: Correct answer is here${wasCorrect ? ' ✓' : ''}`;
+        
+        evidenceSpan.innerHTML = `
+          <span style="
+            display: inline-block;
+            background: rgba(132, 204, 22, 0.9);
+            color: #000;
+            font-size: 0.625rem;
+            font-weight: 700;
+            padding: 0.125rem 0.25rem;
+            border-radius: 0.25rem;
+            margin-right: 0.25rem;
+            vertical-align: middle;
+          ">Q${i + 1}</span>${target.innerHTML}
         `;
-      });
-
-      container.innerHTML = html;
-    }
-
-// RENDER QUESTIONS
-    function renderQuestions() {
-      const passage = passages[currentPassageIndex];
-      if (!passage) return;
-      
-      if (mode === 'single') {
-        renderQuestionsSingle(passage);
-      } else {
-        renderQuestionsContinuous(passage);
-      }
-    }
-
-    function renderQuestionsSingle(passage) {
-      if (!passage || !passage.cards) return;
-      
-      const trackContainer = document.getElementById('questionTrack');
-      const navContainer = document.getElementById('questionNav');
-
-      let trackHTML = '';
-      let navHTML = '';
-
-      passage.cards.forEach((card, i) => {
-        const answer = answers[i];
-        const isCorrect = checked && answer === card.answer;
         
-        trackHTML += `
-          <div class="question-slide">
-            <div class="question-header">
-              <div class="question-number">Question ${i + 1}</div>
-              <div class="question-progress">${i + 1}/${passage.cards.length}</div>
-            </div>
-            <div class="question-text">${card.question}</div>
-            <div class="choices">
-        `;
-
-        card.choices.forEach((choice, choiceIdx) => {
-          const isSelected = answer === choiceIdx;
-          const isCorrectChoice = choiceIdx === card.answer;
-          
-          let classes = 'choice';
-          if (checked) {
-            classes += ' disabled';
-            if (isSelected && !isCorrectChoice) classes += ' incorrect';
-            if (isCorrectChoice) classes += ' correct';
-          } else if (isSelected) {
-            classes += ' selected';
-          }
-
-          const letter = String.fromCharCode(65 + choiceIdx);
-
-          trackHTML += `
-            <div class="${classes}" onclick="${checked ? '' : `selectAnswer(${i}, ${choiceIdx})`}">
-              <div class="choice-letter">${letter}</div>
-              <div>${choice}</div>
-            </div>
-          `;
-        });
-
-        trackHTML += '</div></div>';
-
-        // Navigation indicator (kept for mobile fallback)
-        let indicatorClass = 'question-indicator';
-        if (i === currentQuestionIndex) indicatorClass += ' active';
-        else if (answer !== undefined) indicatorClass += ' answered';
-        
-        navHTML += `<div class="${indicatorClass}" onclick="goToQuestion(${i})"></div>`;
-      });
-
-      trackContainer.innerHTML = trackHTML;
-      navContainer.innerHTML = navHTML;
-      
-      // ❌ REMOVED: updateQuestionPosition();
-      renderNavigationCircles(passage);
-    }
-
-    function renderQuestionsContinuous(passage) {
-      if (!passage || !passage.cards) return;
-      
-      const container = document.getElementById('questionsContinuous');
-      let html = '';
-
-      passage.cards.forEach((card, i) => {
-        const answer = answers[i];
-
-        html += `
-          <div class="question-card" id="question-${i}">
-            <div class="question-header">
-              <div class="question-number">Question ${i + 1}</div>
-              <div class="question-progress">${i + 1}/${passage.cards.length}</div>
-            </div>
-            <div class="question-text">${card.question}</div>
-            <div class="choices">
-        `;
-
-        card.choices.forEach((choice, choiceIdx) => {
-          const isSelected = answer === choiceIdx;
-          const isCorrectChoice = choiceIdx === card.answer;
-          
-          let classes = 'choice';
-          if (checked) {
-            classes += ' disabled';
-            if (isSelected && !isCorrectChoice) classes += ' incorrect';
-            if (isCorrectChoice) classes += ' correct';
-          } else if (isSelected) {
-            classes += ' selected';
-          }
-
-          const letter = String.fromCharCode(65 + choiceIdx);
-
-          html += `
-            <div class="${classes}" onclick="${checked ? '' : `selectAnswer(${i}, ${choiceIdx})`}">
-              <div class="choice-letter">${letter}</div>
-              <div>${choice}</div>
-            </div>
-          `;
-        });
-
-        html += '</div></div>';
-      });
-
-      container.innerHTML = html;
-      renderNavigationCircles(passage);
-    }
-
-    // RENDER NAVIGATION CIRCLES - ESSAY WRITER STYLE
-    function renderNavigationCircles(passage) {
-      const circlesNav = document.getElementById('questionCirclesNav');
-      if (!circlesNav) return;
-      
-      circlesNav.innerHTML = ''; // Clear first
-      
-      passage.cards.forEach((card, i) => {
-        const answer = answers[i];
-        const circle = document.createElement('div');
-        circle.className = 'q-circle';
-        circle.textContent = i + 1;
-        
-        if (mode === 'single' && i === currentQuestionIndex) {
-          circle.classList.add('active');
-        }
-        if (answer !== undefined) {
-          circle.classList.add('answered');
-        }
-        
-        // Use arrow function to properly capture index
-        circle.addEventListener('click', () => {
-          currentQuestionIndex = i;
-          renderNavigationCircles(passage);
-        });
-        
-        circlesNav.appendChild(circle);
+        target.parentNode.replaceChild(evidenceSpan, target);
+        highlightCount++;
       });
     }
+  });
+  
+  console.log(`✅ Highlighted ${highlightCount} evidence sections in passage`);
+  showToast(`Green highlights show where answers are in the text`);
+  
+  setTimeout(() => {
+    document.getElementById('passagePanel').scrollTop = 0;
+  }, 100);
+}
 
-    // SELECT ANSWER
-    function selectAnswer(questionIndex, choiceIndex) {
-      if (checked) return;
-      
-      answers[questionIndex] = choiceIndex;
-      renderQuestions();
-      updateScoreDisplay();
-    }
+function calculateAndShowResults() {
+  const passage = passages[currentPassageIndex];
+  
+  let correct = 0;
+  passage.cards.forEach((card, i) => {
+    if (answers[i] === card.answer) correct++;
+  });
 
-    // TOGGLE MODE
-    function toggleMode() {
-      mode = mode === 'single' ? 'continuous' : 'single';
-      
-      const toggle = document.getElementById('modeToggle');
-      toggle.classList.toggle('active', mode === 'continuous');
+  const total = passage.cards.length;
+  const percentage = Math.round((correct / total) * 100);
+  const wrong = total - correct;
 
-      document.getElementById('questionsSingle').style.display = 
-        mode === 'single' ? 'block' : 'none';
-      document.getElementById('questionsContinuous').style.display = 
-        mode === 'continuous' ? 'block' : 'none';
+  const existingScore = scores[`passage${currentPassageIndex}`];
+  scores[`passage${currentPassageIndex}`] = {
+    correct,
+    total,
+    percentage,
+    bestPercentage: Math.max(percentage, existingScore?.bestPercentage || 0),
+    timestamp: new Date().toISOString()
+  };
+  saveProgress();
 
-      renderQuestions();
-      showToast(`Switched to ${mode === 'single' ? 'single' : 'continuous'} mode`);
-    }
+  showResultsModal(correct, wrong, total, percentage);
+}
 
-    // TOGGLE QUESTIONS PANEL
-    function toggleQuestionsPanel() {
-      questionsPanelCollapsed = !questionsPanelCollapsed;
-      const panel = document.getElementById('questionsPanel');
-      const divider = document.getElementById('divider');
-      const icon = document.getElementById('collapseIcon');
-      const text = document.getElementById('collapseText');
+function showResultsModal(correct, wrong, total, percentage) {
+  const passage = passages[currentPassageIndex];
+  
+  document.getElementById('modalSubtitle').textContent = passage.title;
+  document.getElementById('scoreText').textContent = `${correct}/${total}`;
+  document.getElementById('scorePercentage').textContent = `${percentage}%`;
+  document.getElementById('correctStat').textContent = correct;
+  document.getElementById('wrongStat').textContent = wrong;
+  
+  const completedCount = Object.keys(scores).length;
+  document.getElementById('completedStat').textContent = `${completedCount}/${passages.length}`;
 
-      panel.classList.toggle('collapsed', questionsPanelCollapsed);
-      divider.classList.toggle('collapsed', questionsPanelCollapsed);
-      
-      if (questionsPanelCollapsed) {
-        icon.textContent = '▲';
-        text.textContent = 'Show Questions';
-      } else {
-        icon.textContent = '▼';
-        text.textContent = 'Hide Questions';
-      }
-    }
+  const circle = document.getElementById('scoreCircle');
+  circle.style.setProperty('--score', percentage);
 
-    // NAVIGATION - SIMPLIFIED (NO SWIPE/MOVEMENT)
-    function goToQuestion(index) {
+  document.getElementById('resultsModal').classList.add('active');
+
+  if (navigator.vibrate) {
+    if (percentage === 100) navigator.vibrate([100, 50, 100]);
+    else navigator.vibrate(50);
+  }
+}
+
+// RESET ALL ANSWERS
+function resetAllAnswers() {
+  const confirmReset = confirm('Are you sure you want to clear all your answers and start over?');
+  
+  if (!confirmReset) return;
+  
+  answers = {};
+  checked = false;
+  currentQuestionIndex = 0;
+  
+  const evidenceSpans = document.querySelectorAll('.evidence');
+  evidenceSpans.forEach(span => {
+    const textNode = document.createTextNode(span.textContent.replace(/Q\d+/, '').trim());
+    span.parentNode.replaceChild(textNode, span);
+  });
+  
+  renderPassage();
+  renderQuestions();
+  updateButtons();
+  updateScoreDisplay();
+  goToQuestion(0);
+  
+  showToast('All answers cleared - starting fresh! 🔄');
+  
+  if (navigator.vibrate) {
+    navigator.vibrate(50);
+  }
+}
+
+// NAVIGATION
+function navigatePassage(direction) {
+  const newIndex = currentPassageIndex + direction;
+  if (newIndex >= 0 && newIndex < passages.length) {
+    loadPassage(newIndex);
+    showToast(`Passage ${newIndex + 1} of ${passages.length}`);
+  }
+}
+
+function nextPassage() {
+  if (currentPassageIndex < passages.length - 1) {
+    loadPassage(currentPassageIndex + 1);
+  } else {
+    showToast('You completed all passages! 🎉');
+  }
+}
+
+function nextPassageFromModal() {
+  closeModal();
+  nextPassage();
+}
+
+// HINT
+function showHint() {
+  const passage = passages[currentPassageIndex];
+  if (!passage || !passage.cards) {
+    showToast('No passage loaded');
+    return;
+  }
+  
+  if (checked) {
+    showToast('Already checked - see green highlights in text');
+    return;
+  }
+
+  const unanswered = [];
+  
+  passage.cards.forEach((card, i) => {
+    if (answers[i] === undefined) unanswered.push(i);
+  });
+
+  if (unanswered.length === 0) {
+    showToast('All questions answered!');
+    return;
+  }
+
+  const randomQ = unanswered[Math.floor(Math.random() * unanswered.length)];
+  
+  if (mode === 'single') {
+    goToQuestion(randomQ);
+    showToast(`Showing question ${randomQ + 1}`);
+  } else {
+    showToast(`Check question ${randomQ + 1}`);
+  }
+}
+
+// UPDATE BUTTONS
+function updateButtons() {
+  const hasAnswers = Object.keys(answers).length > 0;
+  
+  document.getElementById('checkBtn').style.display = checked ? 'none' : 'flex';
+  document.getElementById('nextBtn').style.display = checked ? 'flex' : 'none';
+  document.getElementById('hintBtn').disabled = checked;
+  document.getElementById('resetBtn').disabled = checked || !hasAnswers;
+}
+
+function updateScoreDisplay() {
+  const passage = passages[currentPassageIndex];
+  if (!passage || !passage.cards) {
+    document.getElementById('scoreNumber').textContent = '0/0';
+    return;
+  }
+  
+  const answeredCount = Object.keys(answers).length;
+  document.getElementById('scoreNumber').textContent = 
+    `${answeredCount}/${passage.cards.length}`;
+}
+
+// MODAL
+function closeModal(event) {
+  if (event && !event.target.classList.contains('modal-overlay')) return;
+  document.getElementById('resultsModal').classList.remove('active');
+}
+
+// TOAST
+function showToast(message, duration = 2000) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), duration);
+}
+
+// EVENT LISTENERS
+function setupEventListeners() {
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeModal();
+    
+    if (mode === 'single' && !checked) {
       const passage = passages[currentPassageIndex];
-      if (!passage || !passage.cards) return;
-      if (index < 0 || index >= passage.cards.length) return;
-      
-      // Just update which question is active
-      currentQuestionIndex = index;
-      
-      // Re-render to update circle highlights only
-      renderNavigationCircles(passage);
-    }
-
-    // CHECK ANSWERS
-    function checkAnswers() {
-      const passage = passages[currentPassageIndex];
-      if (!passage || !passage.cards) {
-        showToast('No passage loaded');
-        return;
-      }
-      
-      if (Object.keys(answers).length < passage.cards.length) {
-        showToast('Please answer all questions');
-        return;
-      }
-
-      checked = true;
-      highlightEvidence();
-      renderQuestions();
-      updateButtons();
-      calculateAndShowResults();
-    }
-
-    function highlightEvidence() {
-      const passage = passages[currentPassageIndex];
-      let highlightCount = 0;
-      
-      passage.cards.forEach((card, i) => {
-        if (card.highlight) {
-          const targets = document.querySelectorAll(`[data-question="${i}"]`);
-          
-          if (targets.length === 0) {
-            console.warn(`⚠️ No highlight target found for Q${i + 1}`);
-          }
-          
-          targets.forEach(target => {
-            const evidenceSpan = document.createElement('span');
-            evidenceSpan.className = 'evidence pulse';
-            
-            const studentAnswer = answers[i];
-            const wasCorrect = studentAnswer === card.answer;
-            evidenceSpan.title = `Q${i + 1}: Correct answer is here${wasCorrect ? ' ✓' : ''}`;
-            
-            evidenceSpan.innerHTML = `
-              <span style="
-                display: inline-block;
-                background: rgba(132, 204, 22, 0.9);
-                color: #000;
-                font-size: 0.625rem;
-                font-weight: 700;
-                padding: 0.125rem 0.25rem;
-                border-radius: 0.25rem;
-                margin-right: 0.25rem;
-                vertical-align: middle;
-              ">Q${i + 1}</span>${target.innerHTML}
-            `;
-            
-            target.parentNode.replaceChild(evidenceSpan, target);
-            highlightCount++;
-          });
-        }
-      });
-      
-      console.log(`✅ Highlighted ${highlightCount} evidence sections in passage`);
-      showToast(`Green highlights show where answers are in the text`);
-      
-      setTimeout(() => {
-        document.getElementById('passagePanel').scrollTop = 0;
-      }, 100);
-    }
-
-    function calculateAndShowResults() {
-      const passage = passages[currentPassageIndex];
-      
-      let correct = 0;
-      passage.cards.forEach((card, i) => {
-        if (answers[i] === card.answer) correct++;
-      });
-
-      const total = passage.cards.length;
-      const percentage = Math.round((correct / total) * 100);
-      const wrong = total - correct;
-
-      const existingScore = scores[`passage${currentPassageIndex}`];
-      scores[`passage${currentPassageIndex}`] = {
-        correct,
-        total,
-        percentage,
-        bestPercentage: Math.max(percentage, existingScore?.bestPercentage || 0),
-        timestamp: new Date().toISOString()
-      };
-      saveProgress();
-
-      showResultsModal(correct, wrong, total, percentage);
-    }
-
-    function showResultsModal(correct, wrong, total, percentage) {
-      const passage = passages[currentPassageIndex];
-      
-      document.getElementById('modalSubtitle').textContent = passage.title;
-      document.getElementById('scoreText').textContent = `${correct}/${total}`;
-      document.getElementById('scorePercentage').textContent = `${percentage}%`;
-      document.getElementById('correctStat').textContent = correct;
-      document.getElementById('wrongStat').textContent = wrong;
-      
-      const completedCount = Object.keys(scores).length;
-      document.getElementById('completedStat').textContent = `${completedCount}/${passages.length}`;
-
-      const circle = document.getElementById('scoreCircle');
-      circle.style.setProperty('--score', percentage);
-
-      document.getElementById('resultsModal').classList.add('active');
-
-      if (navigator.vibrate) {
-        if (percentage === 100) navigator.vibrate([100, 50, 100]);
-        else navigator.vibrate(50);
+      if (e.key === 'ArrowLeft' && currentQuestionIndex > 0) {
+        goToQuestion(currentQuestionIndex - 1);
+      } else if (e.key === 'ArrowRight' && currentQuestionIndex < passage.cards.length - 1) {
+        goToQuestion(currentQuestionIndex + 1);
+      } else if (e.key >= '1' && e.key <= '9') {
+        const index = parseInt(e.key) - 1;
+        if (index < passage.cards.length) goToQuestion(index);
       }
     }
+    
+    if (e.key === 'c' && !checked) checkAnswers();
+  });
+}
 
-    // RESET ALL ANSWERS
-    function resetAllAnswers() {
-      // Confirmation dialog
-      const confirmReset = confirm('Are you sure you want to clear all your answers and start over?');
-      
-      if (!confirmReset) return;
-      
-      // Clear all state
-      answers = {};
-      checked = false;
-      currentQuestionIndex = 0;
-      
-      // Remove all evidence highlights from passage
-      const evidenceSpans = document.querySelectorAll('.evidence');
-      evidenceSpans.forEach(span => {
-        const textNode = document.createTextNode(span.textContent.replace(/Q\d+/, '').trim());
-        span.parentNode.replaceChild(textNode, span);
-      });
-      
-      // Reset passage to original state
-      renderPassage();
-      
-      // Re-render questions to clear selections
-      renderQuestions();
-      
-      // Reset UI
-      updateButtons();
-      updateScoreDisplay();
-      
-      // Go back to first question
-      goToQuestion(0);
-      
-      // Show confirmation
-      showToast('All answers cleared - starting fresh! 🔄');
-      
-      // Optional: Haptic feedback on mobile
-      if (navigator.vibrate) {
-        navigator.vibrate(50);
-      }
-    }
-
-    // NAVIGATION
-    function navigatePassage(direction) {
-      const newIndex = currentPassageIndex + direction;
-      if (newIndex >= 0 && newIndex < passages.length) {
-        loadPassage(newIndex);
-        showToast(`Passage ${newIndex + 1} of ${passages.length}`);
-      }
-    }
-
-    function nextPassage() {
-      if (currentPassageIndex < passages.length - 1) {
-        loadPassage(currentPassageIndex + 1);
-      } else {
-        showToast('You completed all passages! 🎉');
-      }
-    }
-
-    function nextPassageFromModal() {
-      closeModal();
-      nextPassage();
-    }
-
-    // HINT
-    function showHint() {
-      const passage = passages[currentPassageIndex];
-      if (!passage || !passage.cards) {
-        showToast('No passage loaded');
-        return;
-      }
-      
-      if (checked) {
-        showToast('Already checked - see green highlights in text');
-        return;
-      }
-
-      const unanswered = [];
-      
-      passage.cards.forEach((card, i) => {
-        if (answers[i] === undefined) unanswered.push(i);
-      });
-
-      if (unanswered.length === 0) {
-        showToast('All questions answered!');
-        return;
-      }
-
-      const randomQ = unanswered[Math.floor(Math.random() * unanswered.length)];
-      
-      if (mode === 'single') {
-        goToQuestion(randomQ);
-        showToast(`Showing question ${randomQ + 1}`);
-      } else {
-        showToast(`Check question ${randomQ + 1}`);
-      }
-    }
-
-    // UPDATE BUTTONS
-    function updateButtons() {
-      const hasAnswers = Object.keys(answers).length > 0;
-      
-      document.getElementById('checkBtn').style.display = checked ? 'none' : 'flex';
-      document.getElementById('nextBtn').style.display = checked ? 'flex' : 'none';
-      document.getElementById('hintBtn').disabled = checked;
-      document.getElementById('resetBtn').disabled = checked || !hasAnswers;
-    }
-
-    function updateScoreDisplay() {
-      const passage = passages[currentPassageIndex];
-      if (!passage || !passage.cards) {
-        document.getElementById('scoreNumber').textContent = '0/0';
-        return;
-      }
-      
-      const answeredCount = Object.keys(answers).length;
-      document.getElementById('scoreNumber').textContent = 
-        `${answeredCount}/${passage.cards.length}`;
-    }
-
-    // MODAL
-    function closeModal(event) {
-      if (event && !event.target.classList.contains('modal-overlay')) return;
-      document.getElementById('resultsModal').classList.remove('active');
-    }
-
-    // TOAST
-    function showToast(message, duration = 2000) {
-      const toast = document.getElementById('toast');
-      toast.textContent = message;
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), duration);
-    }
-
- // EVENT LISTENERS
-    function setupEventListeners() {
-      // ✅ REMOVED ALL SWIPE EVENT LISTENERS
-      
-      // Keyboard shortcuts
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeModal();
-        
-        if (mode === 'single' && !checked) {
-          const passage = passages[currentPassageIndex];
-          if (e.key === 'ArrowLeft' && currentQuestionIndex > 0) {
-            goToQuestion(currentQuestionIndex - 1);
-          } else if (e.key === 'ArrowRight' && currentQuestionIndex < passage.cards.length - 1) {
-            goToQuestion(currentQuestionIndex + 1);
-          } else if (e.key >= '1' && e.key <= '9') {
-            const index = parseInt(e.key) - 1;
-            if (index < passage.cards.length) goToQuestion(index);
-          }
-        }
-        
-        if (e.key === 'c' && !checked) checkAnswers();
-      });
-    }
-
-    // START
-    init();
-  </script>
+// START
+init();
+ </script>
 </body>
 </html>
+    

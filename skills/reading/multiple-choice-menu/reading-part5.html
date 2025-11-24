@@ -1451,8 +1451,7 @@
   <!-- TOAST -->
   <div class="toast" id="toast"></div>
 
-  <script>
-// DATA FILES - All 10 passages with CORRECT PATHS
+ // DATA FILES - All 10 passages with CORRECT PATHS
 const DATA_FILES = [
   '../../../data/reading/multiple-choice-folder/multiple-choice1.json',
   '../../../data/reading/multiple-choice-folder/multiple-choice2.json',
@@ -1476,6 +1475,15 @@ let checked = false;
 let scores = {};
 let questionsPanelCollapsed = false;
 
+// SWIPE STATE
+let swipeState = {
+  startX: 0,
+  startY: 0,
+  currentX: 0,
+  isDragging: false,
+  minSwipeDistance: 50
+};
+
 // INITIALIZE
 async function init() {
   try {
@@ -1483,6 +1491,7 @@ async function init() {
     loadProgress();
     loadPassage(0);
     setupEventListeners();
+    setupSwipeListeners();
   } catch (error) {
     console.error('Error initializing:', error);
     showToast('Failed to load passages');
@@ -1587,7 +1596,7 @@ function loadPassage(index) {
   renderQuestions();
   updateButtons();
   updateScoreDisplay();
-  updateQuestionCounter(); // ✅ NEW
+  updateQuestionCounter();
 }
 
 function showError(message) {
@@ -1614,7 +1623,6 @@ function updatePassageIndicator() {
   document.getElementById('nextPassageBtn').disabled = currentPassageIndex >= passages.length - 1;
 }
 
-// ✅ NEW FUNCTION: Update question counter in header
 function updateQuestionCounter() {
   const counter = document.getElementById('questionCounter');
   if (!counter) return;
@@ -1676,7 +1684,7 @@ function renderQuestions() {
     renderQuestionsContinuous(passage);
   }
   
-  updateQuestionCounter(); // ✅ Update counter after rendering
+  updateQuestionCounter();
 }
 
 function renderQuestionsSingle(passage) {
@@ -1685,46 +1693,52 @@ function renderQuestionsSingle(passage) {
   const trackContainer = document.getElementById('questionTrack');
   const navContainer = document.getElementById('questionNav');
   
-  // Only render the CURRENT question
-  const i = currentQuestionIndex;
-  const card = passage.cards[i];
-  const answer = answers[i];
-  
-  let html = `
-    <div class="question-slide">
-      <div class="question-header">
-        <div class="question-number">Question ${i + 1}</div>
-        <div class="question-progress">${i + 1}/${passage.cards.length}</div>
-      </div>
-      <div class="question-text">${card.question}</div>
-      <div class="choices">
-  `;
-
-  card.choices.forEach((choice, choiceIdx) => {
-    const isSelected = answer === choiceIdx;
-    const isCorrectChoice = choiceIdx === card.answer;
+  // Render ALL questions as slides, positioned off-screen
+  let html = '';
+  passage.cards.forEach((i, idx) => {
+    const card = passage.cards[idx];
+    const answer = answers[idx];
     
-    let classes = 'choice';
-    if (checked) {
-      classes += ' disabled';
-      if (isSelected && !isCorrectChoice) classes += ' incorrect';
-      if (isCorrectChoice) classes += ' correct';
-    } else if (isSelected) {
-      classes += ' selected';
-    }
-
-    const letter = String.fromCharCode(65 + choiceIdx);
-
     html += `
-      <div class="${classes}" onclick="${checked ? '' : `selectAnswer(${i}, ${choiceIdx})`}">
-        <div class="choice-letter">${letter}</div>
-        <div>${choice}</div>
-      </div>
+      <div class="question-slide">
+        <div class="question-header">
+          <div class="question-number">Question ${idx + 1}</div>
+          <div class="question-progress">${idx + 1}/${passage.cards.length}</div>
+        </div>
+        <div class="question-text">${card.question}</div>
+        <div class="choices">
     `;
+
+    card.choices.forEach((choice, choiceIdx) => {
+      const isSelected = answer === choiceIdx;
+      const isCorrectChoice = choiceIdx === card.answer;
+      
+      let classes = 'choice';
+      if (checked) {
+        classes += ' disabled';
+        if (isSelected && !isCorrectChoice) classes += ' incorrect';
+        if (isCorrectChoice) classes += ' correct';
+      } else if (isSelected) {
+        classes += ' selected';
+      }
+
+      const letter = String.fromCharCode(65 + choiceIdx);
+
+      html += `
+        <div class="${classes}" onclick="${checked ? '' : `selectAnswer(${idx}, ${choiceIdx})`}">
+          <div class="choice-letter">${letter}</div>
+          <div>${choice}</div>
+        </div>
+      `;
+    });
+
+    html += '</div></div>';
   });
 
-  html += '</div></div>';
   trackContainer.innerHTML = html;
+  
+  // Position track to current question
+  updateTrackPosition();
   
   // Render navigation dots
   let navHTML = '';
@@ -1737,6 +1751,14 @@ function renderQuestionsSingle(passage) {
   navContainer.innerHTML = navHTML;
   
   renderNavigationCircles(passage);
+}
+
+function updateTrackPosition() {
+  const track = document.getElementById('questionTrack');
+  if (!track) return;
+  
+  const offset = -currentQuestionIndex * 100;
+  track.style.transform = `translateX(${offset}%)`;
 }
 
 function renderQuestionsContinuous(passage) {
@@ -1859,7 +1881,7 @@ function toggleQuestionsPanel() {
   }
 }
 
-// SIMPLE NAVIGATION - Just show the question clicked
+// NAVIGATION - With swipe support
 function goToQuestion(index) {
   const passage = passages[currentPassageIndex];
   if (!passage || !passage.cards) return;
@@ -2104,6 +2126,76 @@ function showToast(message, duration = 2000) {
   toast.textContent = message;
   toast.classList.add('show');
   setTimeout(() => toast.classList.remove('show'), duration);
+}
+
+// SWIPE EVENT HANDLERS
+function setupSwipeListeners() {
+  const track = document.getElementById('questionTrack');
+  if (!track) return;
+
+  track.addEventListener('touchstart', handleSwipeStart, false);
+  track.addEventListener('touchmove', handleSwipeMove, false);
+  track.addEventListener('touchend', handleSwipeEnd, false);
+  
+  track.addEventListener('mousedown', handleSwipeStart, false);
+  track.addEventListener('mousemove', handleSwipeMove, false);
+  track.addEventListener('mouseup', handleSwipeEnd, false);
+  track.addEventListener('mouseleave', handleSwipeEnd, false);
+}
+
+function handleSwipeStart(e) {
+  if (checked || mode !== 'single') return;
+  
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  
+  swipeState.startX = clientX;
+  swipeState.startY = clientY;
+  swipeState.currentX = clientX;
+  swipeState.isDragging = true;
+  
+  const track = document.getElementById('questionTrack');
+  track.classList.add('dragging');
+}
+
+function handleSwipeMove(e) {
+  if (!swipeState.isDragging || checked || mode !== 'single') return;
+  
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  swipeState.currentX = clientX;
+  
+  const deltaX = swipeState.currentX - swipeState.startX;
+  const track = document.getElementById('questionTrack');
+  const offset = -currentQuestionIndex * 100;
+  const movePercent = (deltaX / track.offsetWidth) * 100;
+  
+  track.style.transform = `translateX(${offset + movePercent}%)`;
+}
+
+function handleSwipeEnd(e) {
+  if (!swipeState.isDragging) return;
+  
+  swipeState.isDragging = false;
+  const track = document.getElementById('questionTrack');
+  track.classList.remove('dragging');
+  
+  const deltaX = swipeState.currentX - swipeState.startX;
+  const passage = passages[currentPassageIndex];
+  
+  if (!passage || !passage.cards) return;
+  
+  // Swipe right (previous question)
+  if (deltaX > swipeState.minSwipeDistance && currentQuestionIndex > 0) {
+    goToQuestion(currentQuestionIndex - 1);
+  }
+  // Swipe left (next question)
+  else if (deltaX < -swipeState.minSwipeDistance && currentQuestionIndex < passage.cards.length - 1) {
+    goToQuestion(currentQuestionIndex + 1);
+  }
+  // Return to current position if swipe was too small
+  else {
+    updateTrackPosition();
+  }
 }
 
 // EVENT LISTENERS

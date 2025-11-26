@@ -646,8 +646,9 @@
       padding: 1rem 1.25rem;
     }
 
-    .question-track {
+  .question-track {
       display: flex;
+      flex-direction: column;
       height: 100%;
       transition: transform 0.3s ease-out;
       will-change: transform;
@@ -660,7 +661,7 @@
     .question-slide {
       flex-shrink: 0;
       width: 100%;
-      height: 100%;
+      min-height: 100%;
       padding: 1rem 0;
       display: flex;
       flex-direction: column;
@@ -1451,8 +1452,8 @@
   <!-- TOAST -->
   <div class="toast" id="toast"></div>
 
-  <script>
-// DATA FILES - All 10 passages with CORRECT PATHS
+ <script>
+ // DATA FILES - All 10 passages with CORRECT PATHS
 const DATA_FILES = [
   '../../../data/reading/multiple-choice-folder/multiple-choice1.json',
   '../../../data/reading/multiple-choice-folder/multiple-choice2.json',
@@ -1470,7 +1471,7 @@ const DATA_FILES = [
 let passages = [];
 let currentPassageIndex = 0;
 let currentQuestionIndex = 0;
-let mode = 'single'; // 'single' or 'continuous'
+let mode = 'single';
 let answers = {};
 let checked = false;
 let scores = {};
@@ -1587,7 +1588,7 @@ function loadPassage(index) {
   renderQuestions();
   updateButtons();
   updateScoreDisplay();
-  updateQuestionCounter(); // ✅ NEW
+  updateQuestionCounter();
 }
 
 function showError(message) {
@@ -1614,7 +1615,6 @@ function updatePassageIndicator() {
   document.getElementById('nextPassageBtn').disabled = currentPassageIndex >= passages.length - 1;
 }
 
-// ✅ NEW FUNCTION: Update question counter in header
 function updateQuestionCounter() {
   const counter = document.getElementById('questionCounter');
   if (!counter) return;
@@ -1665,7 +1665,7 @@ function renderPassage() {
   container.innerHTML = html;
 }
 
-// RENDER QUESTIONS - SIMPLIFIED
+// RENDER QUESTIONS
 function renderQuestions() {
   const passage = passages[currentPassageIndex];
   if (!passage) return;
@@ -1676,55 +1676,63 @@ function renderQuestions() {
     renderQuestionsContinuous(passage);
   }
   
-  updateQuestionCounter(); // ✅ Update counter after rendering
+  updateQuestionCounter();
 }
 
+// ✅ FIXED: Render ALL slides, then position to current
 function renderQuestionsSingle(passage) {
   if (!passage || !passage.cards) return;
   
   const trackContainer = document.getElementById('questionTrack');
   const navContainer = document.getElementById('questionNav');
   
-  // Only render the CURRENT question
-  const i = currentQuestionIndex;
-  const card = passage.cards[i];
-  const answer = answers[i];
-  
-  let html = `
-    <div class="question-slide">
-      <div class="question-header">
-        <div class="question-number">Question ${i + 1}</div>
-        <div class="question-progress">${i + 1}/${passage.cards.length}</div>
-      </div>
-      <div class="question-text">${card.question}</div>
-      <div class="choices">
-  `;
-
-  card.choices.forEach((choice, choiceIdx) => {
-    const isSelected = answer === choiceIdx;
-    const isCorrectChoice = choiceIdx === card.answer;
+  // ✅ BUILD ALL SLIDES (not just current one)
+  let html = '';
+  passage.cards.forEach((card, idx) => {
+    const answer = answers[idx];
     
-    let classes = 'choice';
-    if (checked) {
-      classes += ' disabled';
-      if (isSelected && !isCorrectChoice) classes += ' incorrect';
-      if (isCorrectChoice) classes += ' correct';
-    } else if (isSelected) {
-      classes += ' selected';
-    }
-
-    const letter = String.fromCharCode(65 + choiceIdx);
-
     html += `
-      <div class="${classes}" onclick="${checked ? '' : `selectAnswer(${i}, ${choiceIdx})`}">
-        <div class="choice-letter">${letter}</div>
-        <div>${choice}</div>
-      </div>
+      <div class="question-slide">
+        <div class="question-header">
+          <div class="question-number">Question ${idx + 1}</div>
+          <div class="question-progress">${idx + 1}/${passage.cards.length}</div>
+        </div>
+        <div class="question-text">${card.question}</div>
+        <div class="choices">
     `;
+
+    card.choices.forEach((choice, choiceIdx) => {
+      const isSelected = answer === choiceIdx;
+      const isCorrectChoice = choiceIdx === card.answer;
+      
+      let classes = 'choice';
+      if (checked) {
+        classes += ' disabled';
+        if (isSelected && !isCorrectChoice) classes += ' incorrect';
+        if (isCorrectChoice) classes += ' correct';
+      } else if (isSelected) {
+        classes += ' selected';
+      }
+
+      const letter = String.fromCharCode(65 + choiceIdx);
+
+      html += `
+        <div class="${classes}" onclick="${checked ? '' : `selectAnswer(${idx}, ${choiceIdx})`}">
+          <div class="choice-letter">${letter}</div>
+          <div>${choice}</div>
+        </div>
+      `;
+    });
+
+    html += '</div></div>';
   });
 
-  html += '</div></div>';
   trackContainer.innerHTML = html;
+  
+  // ✅ Position track to show current question
+  requestAnimationFrame(() => {
+    updateTrackPosition();
+  });
   
   // Render navigation dots
   let navHTML = '';
@@ -1737,6 +1745,15 @@ function renderQuestionsSingle(passage) {
   navContainer.innerHTML = navHTML;
   
   renderNavigationCircles(passage);
+}
+
+// ✅ NEW FUNCTION: Update track position
+function updateTrackPosition() {
+  const track = document.getElementById('questionTrack');
+  if (!track) return;
+  
+  const offset = -currentQuestionIndex * 100;
+  track.style.transform = `translateY(${offset}%)`;
 }
 
 function renderQuestionsContinuous(passage) {
@@ -1793,6 +1810,13 @@ function renderNavigationCircles(passage) {
   const circlesNav = document.getElementById('questionCirclesNav');
   if (!circlesNav) return;
   
+  // Hide circles in continuous mode
+  if (mode === 'continuous') {
+    circlesNav.style.display = 'none';
+    return;
+  }
+  
+  circlesNav.style.display = 'flex';
   circlesNav.innerHTML = '';
   
   passage.cards.forEach((card, i) => {
@@ -1801,7 +1825,7 @@ function renderNavigationCircles(passage) {
     circle.className = 'q-circle';
     circle.textContent = i + 1;
     
-    if (mode === 'single' && i === currentQuestionIndex) {
+    if (i === currentQuestionIndex) {
       circle.classList.add('active');
     }
     if (answer !== undefined) {
@@ -1859,7 +1883,7 @@ function toggleQuestionsPanel() {
   }
 }
 
-// SIMPLE NAVIGATION - Just show the question clicked
+// ✅ FIXED: Update index then re-render (which repositions track)
 function goToQuestion(index) {
   const passage = passages[currentPassageIndex];
   if (!passage || !passage.cards) return;
@@ -2129,7 +2153,7 @@ function setupEventListeners() {
 
 // START
 init();
- </script>
+</script>
 </body>
 </html>
     

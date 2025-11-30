@@ -1525,6 +1525,7 @@
     }
 
     // Render ideas tab - SHOW ALL 18 SKELETONS
+   // Render ideas tab - CONTEXT-AWARE DISPLAY
     function renderIdeasTab(container) {
       container.innerHTML = '';
       
@@ -1533,34 +1534,142 @@
         return;
       }
 
+      // READ MODE + Full Text → Show matched essay plan only
+      if (currentMode === 'read' && viewMode === 'full' && selectedQuestion) {
+        const essayPlan = ideasData.opinion[selectedQuestion.id];
+        if (essayPlan) {
+          renderSingleCompletePlan(essayPlan, container);
+          return;
+        }
+      }
+
+      // READ MODE + Paragraph → Show current stage notes from matched plan
+      if (currentMode === 'read' && viewMode === 'paragraph' && selectedQuestion) {
+        const essayPlan = ideasData.opinion[selectedQuestion.id];
+        if (essayPlan && essayPlan.skeleton && essayPlan.skeleton[currentStage]) {
+          renderSingleStagePlan(essayPlan, essayPlan.skeleton[currentStage], container);
+          return;
+        }
+      }
+
+      // WRITE MODE + Paragraph → Show current stage notes from ALL plans
+      if (currentMode === 'write' && viewMode === 'paragraph') {
+        renderAllPlansCurrentStage(container);
+        return;
+      }
+
+      // WRITE MODE + Full Text → Show all 18 plans (default)
+      renderAllCompletePlans(container);
+    }
+
+    // Render a single complete essay plan (READ mode, Full Text)
+    function renderSingleCompletePlan(essayPlan, container) {
+      const wrapper = document.createElement('div');
+      wrapper.style.maxHeight = '65vh';
+      wrapper.style.overflowY = 'auto';
+      wrapper.style.paddingRight = '0.5rem';
+      
+      let html = `
+        <div class="skeleton-card" style="margin-bottom: 1rem;">
+          <div class="skeleton-topic">${essayPlan.topic || 'Essay Plan'}</div>
+      `;
+      
+      if (essayPlan.skeleton) {
+        essayPlan.skeleton.forEach(section => {
+          html += `<div class="skeleton-title">${section.title}</div>`;
+          if (section.notes) {
+            section.notes.forEach(note => {
+              html += formatNote(note, currentMode === 'write');
+            });
+          }
+        });
+      }
+      
+      if (essayPlan.magic_verbs) {
+        html += renderMagicVerbs(essayPlan.magic_verbs);
+      }
+      
+      html += '</div>';
+      wrapper.innerHTML = html;
+      container.appendChild(wrapper);
+    }
+
+    // Render single stage from a plan (READ mode, Paragraph)
+    function renderSingleStagePlan(essayPlan, section, container) {
+      let html = `
+        <div style="text-align: center; margin-bottom: 1.5rem;">
+          <div style="font-size: 0.75rem; color: #ff9500; text-transform: uppercase; font-weight: 600; margin-bottom: 0.5rem;">
+            ${essayPlan.topic || 'Essay Plan'}
+          </div>
+          <div style="font-size: 1.125rem; font-weight: 700; color: #C9A961; font-family: 'Space Grotesk', sans-serif;">
+            ${section.title}
+          </div>
+        </div>
+        <div class="skeleton-card">
+      `;
+      
+      if (section.notes) {
+        section.notes.forEach(note => {
+          html += formatNote(note, currentMode === 'write');
+        });
+      }
+      
+      html += '</div>';
+      
+      if (essayPlan.magic_verbs) {
+        html += renderMagicVerbs(essayPlan.magic_verbs);
+      }
+      
+      container.innerHTML = html;
+    }
+
+    // Render current stage notes from ALL plans (WRITE mode, Paragraph)
+    function renderAllPlansCurrentStage(container) {
+      const skeletonGrid = document.createElement('div');
+      skeletonGrid.className = 'skeleton-grid';
+      
+      Object.entries(ideasData.opinion).forEach(([id, essayPlan]) => {
+        if (!essayPlan.skeleton || !essayPlan.skeleton[currentStage]) return;
+        
+        const section = essayPlan.skeleton[currentStage];
+        const card = document.createElement('div');
+        card.className = 'skeleton-card';
+        
+        let html = `
+          <div class="skeleton-topic">${essayPlan.topic || 'Essay Plan'}</div>
+          <div class="skeleton-title">${section.title}</div>
+        `;
+        
+        if (section.notes) {
+          section.notes.forEach(note => {
+            html += formatNote(note, true);
+          });
+        }
+        
+        card.innerHTML = html;
+        skeletonGrid.appendChild(card);
+      });
+      
+      container.appendChild(skeletonGrid);
+    }
+
+    // Render all complete plans (WRITE mode, Full Text)
+    function renderAllCompletePlans(container) {
       const skeletonGrid = document.createElement('div');
       skeletonGrid.className = 'skeleton-grid';
 
-      // Render ALL essay skeletons
       Object.entries(ideasData.opinion).forEach(([id, essayPlan]) => {
         const card = document.createElement('div');
         card.className = 'skeleton-card';
         
         let html = `<div class="skeleton-topic">${essayPlan.topic || 'Essay Plan'}</div>`;
         
-        if (essayPlan.skeleton && essayPlan.skeleton.length > 0) {
+        if (essayPlan.skeleton) {
           essayPlan.skeleton.forEach(section => {
             html += `<div class="skeleton-title">${section.title}</div>`;
-            
-            if (section.notes && section.notes.length > 0) {
+            if (section.notes) {
               section.notes.forEach(note => {
-                html += `
-                  <div class="note-line">
-                    <span class="note-marker">${note.marker}</span>
-                    <div>
-                      <div class="note-text">
-                        ${note.text}
-                        ${note.verb ? `<span class="magic-verb">${note.verb}</span>` : ''}
-                      </div>
-                      ${note.sub ? `<div class="note-sub">${note.sub}</div>` : ''}
-                    </div>
-                  </div>
-                `;
+                html += formatNote(note, currentMode === 'write');
               });
             }
           });
@@ -1571,6 +1680,69 @@
       });
       
       container.appendChild(skeletonGrid);
+    }
+
+    // Format a single note with optional click-to-insert
+    function formatNote(note, allowInsert) {
+      const insertBtn = allowInsert ? 
+        `<button onclick="insertNoteText('${note.text.replace(/'/g, "\\'")}')" 
+                style="background: rgba(201, 169, 97, 0.2); border: 1px solid rgba(201, 169, 97, 0.4); border-radius: 0.375rem; padding: 0.125rem 0.375rem; font-size: 0.625rem; color: #C9A961; cursor: pointer; margin-left: 0.5rem; font-weight: 600;">
+          📋 Insert
+        </button>` : '';
+      
+      return `
+        <div class="note-line">
+          <span class="note-marker">${note.marker}</span>
+          <div>
+            <div class="note-text">
+              ${note.text}
+              ${note.verb ? `<span class="magic-verb">${note.verb}</span>` : ''}
+              ${insertBtn}
+            </div>
+            ${note.sub ? `<div class="note-sub">${note.sub}</div>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    // Render magic verbs section
+    function renderMagicVerbs(verbs) {
+      if (!verbs || verbs.length === 0) return '';
+      
+      return `
+        <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid rgba(84, 84, 88, 0.3);">
+          <div style="font-size: 0.75rem; color: #C9A961; text-transform: uppercase; font-weight: 700; margin-bottom: 0.75rem;">
+            ✨ Magic Verbs
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+            ${verbs.map(verb => `
+              <span style="background: rgba(201, 169, 97, 0.15); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 0.5rem; padding: 0.375rem 0.75rem; font-size: 0.75rem; color: #C9A961; font-weight: 600;">
+                ${verb}
+              </span>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // Insert note text into textarea (WRITE mode only)
+    function insertNoteText(text) {
+      if (currentMode !== 'write' || viewMode !== 'paragraph') return;
+      
+      const textarea = document.getElementById('textarea');
+      if (!textarea) return;
+      
+      const cursorPos = textarea.selectionStart;
+      const textBefore = textarea.value.substring(0, cursorPos);
+      const textAfter = textarea.value.substring(cursorPos);
+      
+      // Add note as a prompt/reminder
+      const insertion = `[💡 ${text}] `;
+      textarea.value = textBefore + insertion + textAfter;
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = cursorPos + insertion.length;
+      
+      handleInput();
     }
 // Render samples tab
 function renderSamplesTab(container) {

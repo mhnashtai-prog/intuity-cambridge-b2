@@ -248,7 +248,7 @@
             margin: 0 auto;
         }
 
-        /* PASSAGE TEXT - Cambridge Style */
+        /* PASSAGE TEXT */
         .passage-text {
             font-size: 1rem;
             line-height: 1.8;
@@ -303,6 +303,17 @@
 
         .gap-number.checked {
             cursor: default;
+        }
+
+        /* EVIDENCE HIGHLIGHTING - ALWAYS SHOWS AFTER CHECKING */
+        .evidence-sentence {
+            background: rgba(132, 204, 22, 0.25);
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            border-left: 3px solid var(--lime);
+            margin: 0.5rem 0;
+            display: block;
+            line-height: 1.8;
         }
 
         /* SENTENCE SELECTION MODAL */
@@ -448,7 +459,7 @@
             color: rgba(255, 255, 255, 0.92);
         }
 
-        /* BOTTOM BAR */
+        /* BOTTOM BAR WITH NAVIGATION */
         .bottom-bar {
             background: rgba(28, 28, 30, 0.95);
             backdrop-filter: blur(40px);
@@ -521,6 +532,11 @@
         .bottom-btn.reset:hover:not(:disabled) {
             background: rgba(255, 59, 48, 0.25);
             border-color: rgba(255, 59, 48, 0.5);
+        }
+
+        .bottom-btn.nav {
+            max-width: 3rem;
+            flex: 0;
         }
 
         /* RESULTS MODAL */
@@ -798,10 +814,11 @@
         </div>
     </div>
 
-    <!-- BOTTOM BAR -->
+    <!-- BOTTOM BAR WITH NAVIGATION -->
     <div class="bottom-bar">
         <button class="bottom-btn reset" onclick="resetAllAnswers()">Reset</button>
-        <button class="bottom-btn" onclick="showHint()">Hint</button>
+        <button class="bottom-btn nav" onclick="navigateGap(-1)" id="prevGapBtn">←</button>
+        <button class="bottom-btn nav" onclick="navigateGap(1)" id="nextGapBtn">→</button>
         <button class="bottom-btn primary" id="checkBtn" onclick="checkAnswers()">Check Answers</button>
     </div>
 
@@ -859,6 +876,7 @@
         let userAnswers = {};
         let checked = false;
         let currentGap = null;
+        let gapSentences = {}; // Store which sentence is for which gap
 
         // LOAD PASSAGE DATA FROM JSON
         async function loadPassage() {
@@ -888,6 +906,12 @@
                 }
 
                 currentPassage = data;
+                
+                // Build gapSentences map for evidence highlighting
+                data.answers.forEach((answerIndex, gapIndex) => {
+                    gapSentences[gapIndex + 1] = data.options[answerIndex - 1];
+                });
+                
                 renderPassage();
 
             } catch (error) {
@@ -910,11 +934,57 @@
                 html = html.replace(gapPlaceholder, gapHTML);
             }
             
+            // EVIDENCE HIGHLIGHTING - ALWAYS SHOW AFTER CHECKING (regardless of correct/wrong)
+            if (checked) {
+                for (let gapNum = 1; gapNum <= 6; gapNum++) {
+                    const sentence = gapSentences[gapNum];
+                    if (sentence) {
+                        // Wrap the sentence in evidence styling
+                        const evidenceHTML = `<span class="evidence-sentence">${sentence}</span>`;
+                        html = html.replace(
+                            new RegExp(`(<span class="gap-number"[^>]*data-gap="${gapNum}"[^>]*>[^<]*</span>)`),
+                            `$1 ${evidenceHTML}`
+                        );
+                    }
+                }
+            }
+            
             // Convert to paragraphs
             html = html.replace(/\n\n/g, '</p><p>');
             html = '<p>' + html + '</p>';
             
             document.getElementById('passageText').innerHTML = html;
+            updateNavigationButtons();
+        }
+
+        // NAVIGATE BETWEEN GAPS
+        function navigateGap(direction) {
+            const gaps = [1, 2, 3, 4, 5, 6];
+            
+            if (currentGap === null) {
+                // Find first unanswered gap
+                for (let gap of gaps) {
+                    if (!userAnswers[gap]) {
+                        openGapModal(gap);
+                        return;
+                    }
+                }
+                // All answered, go to first
+                openGapModal(1);
+                return;
+            }
+            
+            let newGap = currentGap + direction;
+            if (newGap < 1) newGap = 6;
+            if (newGap > 6) newGap = 1;
+            
+            openGapModal(newGap);
+        }
+
+        function updateNavigationButtons() {
+            // Always enable navigation buttons
+            document.getElementById('prevGapBtn').disabled = false;
+            document.getElementById('nextGapBtn').disabled = false;
         }
 
         // OPEN GAP MODAL
@@ -984,6 +1054,14 @@
             updateScoreDisplay();
             closeSentenceModal();
             
+            // Auto-navigate to next unanswered gap
+            for (let i = currentGap + 1; i <= 6; i++) {
+                if (!userAnswers[i]) {
+                    setTimeout(() => openGapModal(i), 300);
+                    return;
+                }
+            }
+            
             console.log('✅ Placed:', letter, 'in gap', 36 + currentGap);
         }
 
@@ -1039,7 +1117,10 @@
                 }
             }
 
+            // Re-render passage with evidence highlighting
+            renderPassage();
             showResultsModal(correct);
+            showToast('Green sentences show the correct answers in context!');
         }
 
         // SHOW RESULTS MODAL
@@ -1090,37 +1171,8 @@
 
             updateScoreDisplay();
             closeResultsModal();
+            renderPassage(); // Re-render without evidence
             showToast('All answers cleared!');
-        }
-
-        // SHOW HINT
-        function showHint() {
-            if (checked) {
-                showToast('Already checked - review your answers!');
-                return;
-            }
-
-            const emptyGaps = [];
-            for (let i = 1; i <= 6; i++) {
-                if (!userAnswers[i]) emptyGaps.push(i);
-            }
-
-            if (emptyGaps.length === 0) {
-                showToast('All gaps filled! Click Check Answers.');
-                return;
-            }
-
-            const randomGap = emptyGaps[Math.floor(Math.random() * emptyGaps.length)];
-            const gapEl = document.querySelector(`[data-gap="${randomGap}"]`);
-            gapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            
-            // Highlight briefly
-            gapEl.style.boxShadow = '0 0 0 3px rgba(125, 211, 252, 0.4)';
-            setTimeout(() => {
-                gapEl.style.boxShadow = '';
-            }, 2000);
-            
-            showToast(`💡 Try gap ${36 + randomGap} - look for pronouns and linking words!`);
         }
 
         // SHOW TOAST

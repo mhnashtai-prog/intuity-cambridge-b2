@@ -170,6 +170,48 @@
       font-weight: 700;
     }
 
+    .passage-selector {
+      display: flex;
+      gap: 0.375rem;
+      align-items: center;
+    }
+
+    .passage-nav-btn {
+      width: 1.75rem;
+      height: 1.75rem;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border);
+      color: var(--intuity-gold);
+      font-size: 0.875rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .passage-nav-btn:active {
+      transform: scale(0.9);
+    }
+
+    .passage-nav-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .passage-nav-btn:hover:not(:disabled) {
+      background: rgba(201, 169, 97, 0.2);
+      border-color: rgba(201, 169, 97, 0.4);
+    }
+
+    .passage-indicator {
+      font-size: 0.6875rem;
+      color: #8e8e93;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+  
     /* PAGE WRAPPER */
     .page-wrapper {
       position: fixed;
@@ -854,10 +896,18 @@
 
   <!-- TOP BAR -->
   <div class="top-bar">
-    <a href="index.html" class="back-btn">←</a>
+    <a href="../../../index.html?openModal=reading" class="back-btn">←</a>
     <div class="brand">INTUITY Reading Part 7</div>
+    
+    <!-- PASSAGE SELECTOR -->
+    <div class="passage-selector">
+      <button class="passage-nav-btn" id="prevPassageBtn" onclick="navigatePassage(-1)">←</button>
+      <div class="passage-indicator" id="passageIndicator">1/10</div>
+      <button class="passage-nav-btn" id="nextPassageBtn" onclick="navigatePassage(1)">→</button>
+    </div>
+    
     <div class="score-display">
-      <span class="score-number" id="scoreNumber">0/10</span>
+      <span class="score-number" id="scoreNumber">0/14</span>
     </div>
   </div>
 
@@ -948,51 +998,72 @@
   <script>
     // STATE
     let currentData = null;
+    let currentPassageIndex = 0;
     let answers = {};
     let checked = false;
     let openDropdown = null;
 
     // LOAD DATA
-async function loadData(testNumber = "1") {
-  try {
-    const base = `/skills/reading/multiple-matching-menu/data/multiple-matching-text${testNumber}.json`;
-
-    const paths = [
-      base,
-      `.${base}`,
-      `..${base}`
-    ];
-
-    let loaded = null;
-
-    for (const path of paths) {
+    async function loadData(testNumber = "1") {
       try {
-        const response = await fetch(path);
-        if (response.ok) {
-          loaded = await response.json();
-          console.log("Loaded:", path);
-          break;
+        const base = `/skills/reading/multiple-matching-menu/data/multiple-matching-text${testNumber}.json`;
+
+        const paths = [
+          base,
+          `.${base}`,
+          `..${base}`
+        ];
+
+        let loaded = null;
+
+        for (const path of paths) {
+          try {
+            const response = await fetch(path);
+            if (response.ok) {
+              loaded = await response.json();
+              console.log("✅ Loaded:", path);
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
         }
-      } catch (e) {
-        continue;
+
+        if (!loaded) throw new Error("Could not load test " + testNumber);
+
+        currentData = loaded;
+        answers = {};
+        checked = false;
+
+        renderPage();
+        updatePassageIndicator();
+        updateScoreDisplay();
+
+      } catch (err) {
+        console.error(err);
+        document.getElementById('passageTitle').textContent = "Error loading data";
+      }
+    }
+    
+    // NAVIGATE PASSAGE
+    function navigatePassage(direction) {
+      const newIndex = currentPassageIndex + direction;
+      if (newIndex >= 0 && newIndex < 10) {
+        currentPassageIndex = newIndex;
+        loadData(currentPassageIndex + 1);
+        showToast(`Test ${currentPassageIndex + 1} of 10`);
       }
     }
 
-    if (!loaded) throw new Error("Could not load test " + testNumber);
-
-    currentData = loaded;
-    answers = {};
-    checked = false;
-
-    renderPage();
-    updateScoreDisplay();
-
-  } catch (err) {
-    console.error(err);
-    document.getElementById('passageTitle').textContent = "Error loading data";
-  }
-}
-
+    // UPDATE PASSAGE INDICATOR
+    function updatePassageIndicator() {
+      const indicator = document.getElementById('passageIndicator');
+      indicator.textContent = `${currentPassageIndex + 1}/10`;
+      
+      document.getElementById('prevPassageBtn').disabled = currentPassageIndex === 0;
+      document.getElementById('nextPassageBtn').disabled = currentPassageIndex >= 9;
+    }
+    
     // RENDER PAGE
     function renderPage() {
       document.getElementById('passageTitle').textContent = currentData.title;

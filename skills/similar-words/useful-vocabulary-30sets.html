@@ -1052,14 +1052,14 @@
       <div class="content-header-wrapper">
         <div class="question-nav-dots" id="questionNavDots"></div>
         <div class="mode-toggle-container">
-          <span class="mode-toggle-label">Full</span>
-          <div class="mode-toggle-switch" id="modeToggleSwitch" onclick="toggleMode()" role="switch" aria-checked="false" aria-label="Toggle between full exercise and single set mode"></div>
-          <span class="mode-toggle-label">Single</span>
+          <span class="mode-toggle-label">Set-by-Set</span>
+          <div class="mode-toggle-switch active" id="modeToggleSwitch" onclick="toggleMode()" role="switch" aria-checked="true" aria-label="Toggle between set-by-set and full test mode"></div>
+          <span class="mode-toggle-label">Full Test</span>
         </div>
       </div>
       
-      <div id="guidedContainer" class="hidden"></div>
-      <div id="classicContainer">
+      <div id="guidedContainer"></div>
+      <div id="classicContainer" class="hidden">
         <div class="loading-state">
           <div class="loading-spinner"></div>
           <div>Loading quiz...</div>
@@ -1076,7 +1076,7 @@
       <button onclick="showHint()" id="hintBtn" aria-label="Get a hint">Hint</button>
       <button onclick="showKey()" id="keyBtn" disabled aria-label="Show answer key" aria-pressed="false">Key</button>
       <button onclick="clearAnswers()" aria-label="Clear all answers">Clear</button>
-      <button class="primary" onclick="submitOrCheckSet()" id="submitBtn" aria-label="Submit for scoring">Submit</button>
+      <button class="primary" onclick="submitOrCheckSet()" id="submitBtn" aria-label="Check set">Check Set</button>
     </div>
   </div>
 
@@ -1126,7 +1126,7 @@
     let currentSet = 0;
     let answers = {};
     let selectedWord = null;
-    let currentMode = 'classic';
+    let currentMode = 'guided'; // DEFAULT: Set-by-set checking mode
     let showingResults = false;
     let keyVisible = false;
     let testScores = {};
@@ -1292,7 +1292,7 @@
     }
 
     function showLoadingState() {
-      const container = document.getElementById('classicContainer');
+      const container = currentMode === 'guided' ? document.getElementById('guidedContainer') : document.getElementById('classicContainer');
       container.innerHTML = `
         <div class="loading-state">
           <div class="loading-spinner"></div>
@@ -1302,7 +1302,7 @@
     }
 
     function showError(message) {
-      const container = document.getElementById('classicContainer');
+      const container = currentMode === 'guided' ? document.getElementById('guidedContainer') : document.getElementById('classicContainer');
       container.innerHTML = `
         <div class="error-state">
           <div style="font-size: 3rem; margin-bottom: 1rem;">⚠</div>
@@ -1537,23 +1537,27 @@
     function toggleMode() {
       const toggleSwitch = document.getElementById('modeToggleSwitch');
       
-      if (currentMode === 'classic') {
-        currentMode = 'guided';
-        toggleSwitch.classList.add('active');
-        toggleSwitch.setAttribute('aria-checked', 'true');
-        document.getElementById('classicContainer').classList.add('hidden');
-        document.getElementById('guidedContainer').classList.remove('hidden');
-        renderGuidedMode();
-      } else {
+      if (currentMode === 'guided') {
+        // Switch to classic (full test mode)
         currentMode = 'classic';
         toggleSwitch.classList.remove('active');
         toggleSwitch.setAttribute('aria-checked', 'false');
         document.getElementById('guidedContainer').classList.add('hidden');
         document.getElementById('classicContainer').classList.remove('hidden');
         renderClassicMode();
+        showToast('Switched to Full Test mode');
+      } else {
+        // Switch to guided (set-by-set mode)
+        currentMode = 'guided';
+        toggleSwitch.classList.add('active');
+        toggleSwitch.setAttribute('aria-checked', 'true');
+        document.getElementById('classicContainer').classList.add('hidden');
+        document.getElementById('guidedContainer').classList.remove('hidden');
+        renderGuidedMode();
+        showToast('Switched to Set-by-Set mode');
       }
       updateExternalNav();
-      showToast(`Switched to ${currentMode === 'classic' ? 'Full exercise' : 'Single set'} mode`);
+      updateFooter();
     }
 
     // Classic Mode Rendering
@@ -1966,7 +1970,7 @@
     }
 
     function showKey() {
-      if (!showingResults) {
+      if (!showingResults && !isCurrentSetLocked()) {
         showToast('Submit first to enable Key');
         return;
       }

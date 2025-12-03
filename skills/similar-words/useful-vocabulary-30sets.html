@@ -1133,8 +1133,7 @@
     let storageKey = '';
     let SETS_PER_TEST = 5;
     let shuffledSets = {}; // Store shuffled word mappings per set
-    let setScores = {}; // Store individual set scores
-    let currentSetLocked = false; // Track if current set is locked after checking
+    let setScores = {}; // Store individual set scores - THIS is the source of truth
 
     // Fisher-Yates shuffle algorithm
     function shuffleArray(array) {
@@ -1327,8 +1326,7 @@
       selectedWord = null;
       showingResults = false;
       keyVisible = false;
-      setScores = {}; // Reset set scores
-      currentSetLocked = false;
+      setScores = {}; // Reset set scores for new test
       
       createQuestionNavDots();
       
@@ -1651,6 +1649,7 @@
       const set = quizData.sets[actualSetIdx];
       const shuffleData = shuffleSetWords(actualSetIdx);
       const container = document.getElementById('guidedContainer');
+      const isLocked = isCurrentSetLocked();
       
       let html = '<div class="guided-container">';
       
@@ -1682,10 +1681,10 @@
         
         const isSelected = selectedWord && selectedWord.setIdx === actualSetIdx && selectedWord.wordIdx === wordIdx;
         let classes = 'word-chip';
-        if (isUsed && !currentSetLocked) classes += ' used';
-        if (isSelected && !currentSetLocked) classes += ' selected';
+        if (isUsed && !isLocked) classes += ' used';
+        if (isSelected && !isLocked) classes += ' selected';
         
-        const disabled = (isUsed && !currentSetLocked) || currentSetLocked;
+        const disabled = (isUsed && !isLocked) || isLocked;
         
         html += `<button class="${classes}" onclick="handleWordClick(${actualSetIdx}, ${wordIdx})" ${disabled ? 'disabled' : ''}>${sanitizeText(word)}</button>`;
       });
@@ -1702,7 +1701,7 @@
         
         let blankHtml = '';
         
-        if (currentSetLocked) {
+        if (isLocked) {
           const correctWord = shuffleData.words[shuffledCorrectIdx];
           if (answer !== undefined) {
             const userWord = shuffleData.words[answer];
@@ -1737,7 +1736,7 @@
       if (!quizData || showingResults) return;
       
       // Prevent changes if set is locked
-      if (currentMode === 'guided' && currentSetLocked) {
+      if (isCurrentSetLocked()) {
         showToast('Set is locked. Use "Retry Set" to practice again.');
         return;
       }
@@ -1761,7 +1760,7 @@
       if (!quizData || showingResults) return;
       
       // Prevent changes if set is locked
-      if (currentMode === 'guided' && currentSetLocked) {
+      if (isCurrentSetLocked()) {
         showToast('Set is locked. Use "Retry Set" to practice again.');
         return;
       }
@@ -1795,10 +1794,6 @@
     function navigatePrevSet() {
       if (currentSet > 0) {
         currentSet--;
-        const startSet = currentTest * SETS_PER_TEST;
-        const actualSetIdx = startSet + currentSet;
-        // Sync locked state with whether set has been scored
-        currentSetLocked = setScores[actualSetIdx] !== undefined;
         renderGuidedMode();
         createQuestionNavDots();
         updateFooter();
@@ -1810,9 +1805,6 @@
       const endSet = Math.min(startSet + SETS_PER_TEST, quizData.sets.length);
       if (currentSet < endSet - startSet - 1) {
         currentSet++;
-        const actualSetIdx = startSet + currentSet;
-        // Sync locked state with whether set has been scored
-        currentSetLocked = setScores[actualSetIdx] !== undefined;
         renderGuidedMode();
         createQuestionNavDots();
         updateFooter();
@@ -1821,10 +1813,6 @@
 
     function jumpToSet(setIndex) {
       currentSet = setIndex;
-      const startSet = currentTest * SETS_PER_TEST;
-      const actualSetIdx = startSet + currentSet;
-      // Sync locked state with whether set has been scored
-      currentSetLocked = setScores[actualSetIdx] !== undefined;
       renderGuidedMode();
       createQuestionNavDots();
       updateFooter();
@@ -1840,6 +1828,14 @@
         renderClassicMode();
       }
       createQuestionNavDots();
+    }
+
+    // Helper to check if current set is locked (has been scored)
+    function isCurrentSetLocked() {
+      if (currentMode !== 'guided') return false;
+      const startSet = currentTest * SETS_PER_TEST;
+      const actualSetIdx = startSet + currentSet;
+      return setScores[actualSetIdx] !== undefined;
     }
 
     function submitOrCheckSet() {
@@ -1868,17 +1864,17 @@
         });
         
         const setIsComplete = answered === set.sentences.length;
-        const setHasScore = setScores[actualSetIdx] !== undefined;
+        const isLocked = isCurrentSetLocked();
         
         // Update button text based on state
-        if (currentSetLocked || setHasScore) {
+        if (isLocked) {
           submitBtn.textContent = 'View Results';
         } else {
           submitBtn.textContent = 'Check Set';
         }
         
         // Show footer if set is complete (all answered) OR if set has been checked before
-        if (setIsComplete || currentSetLocked || setHasScore) {
+        if (setIsComplete || isLocked) {
           footer.classList.add('visible');
         } else {
           footer.classList.remove('visible');
@@ -1990,7 +1986,7 @@
         return;
       }
       
-      if (currentMode === 'guided' && currentSetLocked) {
+      if (isCurrentSetLocked()) {
         showToast('Use "Retry Set" to practice this set again');
         return;
       }
@@ -2057,8 +2053,8 @@
       const actualSetIdx = startSet + currentSet;
       const set = quizData.sets[actualSetIdx];
       
-      // If already locked, just show the modal again
-      if (currentSetLocked && setScores[actualSetIdx]) {
+      // If already has a score, just show the modal again
+      if (setScores[actualSetIdx]) {
         const score = setScores[actualSetIdx];
         showSetResultsModal(score.correct, score.total, score.percentage, actualSetIdx);
         return;
@@ -2083,7 +2079,7 @@
       
       const percentage = Math.round((correct / total) * 100);
       
-      // Store set score
+      // Store set score - this locks the set
       setScores[actualSetIdx] = {
         correct,
         total,
@@ -2091,7 +2087,6 @@
         timestamp: new Date().toISOString()
       };
       
-      currentSetLocked = true;
       renderGuidedMode();
       updateFooter();
       
@@ -2110,10 +2105,12 @@
         delete answers[`${actualSetIdx}-${sentIdx}`];
       });
       
+      // Remove the score to unlock the set
+      delete setScores[actualSetIdx];
+      
       // Reshuffle words for this set
       delete shuffledSets[actualSetIdx];
       
-      currentSetLocked = false;
       selectedWord = null;
       
       renderGuidedMode();

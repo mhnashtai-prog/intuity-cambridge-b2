@@ -278,46 +278,6 @@
     }
 
     /* TEXT NAVIGATION CIRCLES */
-    .text-circles-nav {
-      display: flex;
-      gap: 0.5rem;
-      justify-content: center;
-      margin-top: 1rem;
-    }
-
-    .text-circle {
-      width: 2.25rem;
-      height: 2.25rem;
-      border-radius: 50%;
-      background: rgba(99, 99, 102, 0.2);
-      border: 1px solid rgba(99, 99, 102, 0.3);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.875rem;
-      font-weight: 700;
-      color: #8e8e93;
-      cursor: pointer;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      position: relative;
-    }
-
-    .text-circle:hover {
-      transform: scale(1.1);
-      border-color: rgba(201, 169, 97, 0.4);
-      background: rgba(201, 169, 97, 0.15);
-    }
-
-    .text-circle:active {
-      transform: scale(0.95);
-    }
-
-    .text-circle.has-answers {
-      background: rgba(201, 169, 97, 0.2);
-      border-color: rgba(201, 169, 97, 0.4);
-      color: var(--intuity-gold);
-    }
-
     /* STATEMENTS PANEL - CENTER STAGE */
     .statements-panel {
       flex: 1;
@@ -650,6 +610,11 @@
       border-color: rgba(255, 59, 48, 0.5);
     }
 
+    .bottom-btn.nav {
+      max-width: 3rem;
+      flex: 0;
+    }
+
     /* RESULTS MODAL */
     .results-modal {
       position: fixed;
@@ -923,11 +888,6 @@
           You are going to read several texts. For questions 22-35, choose from the texts (A-E). 
           The texts may be chosen more than once.
         </p>
-        
-        <!-- TEXT NAVIGATION CIRCLES -->
-        <div class="text-circles-nav" id="textCirclesNav">
-          <!-- Circles will be loaded here -->
-        </div>
       </div>
 
       <!-- STATEMENTS PANEL - CENTER STAGE -->
@@ -940,7 +900,8 @@
       <!-- BOTTOM BAR -->
       <div class="bottom-bar">
         <button class="bottom-btn reset" onclick="resetAllAnswers()">Reset</button>
-        <button class="bottom-btn" onclick="showHint()">Hint</button>
+        <button class="bottom-btn nav" onclick="navigateStatement(-1)" id="prevStmtBtn">←</button>
+        <button class="bottom-btn nav" onclick="navigateStatement(1)" id="nextStmtBtn">→</button>
         <button class="bottom-btn primary" id="checkBtn" onclick="checkAnswers()">Check Answers</button>
       </div>
 
@@ -1069,44 +1030,7 @@
       document.getElementById('passageTitle').textContent = currentData.title;
       document.getElementById('instructions').textContent = currentData.instructions;
       
-      renderTextCircles();
       renderStatements();
-    }
-
-    // RENDER TEXT CIRCLES
-    function renderTextCircles() {
-      const container = document.getElementById('textCirclesNav');
-      container.innerHTML = '';
-      
-      currentData.texts.forEach((text, index) => {
-        const letter = String.fromCharCode(65 + index);
-        const circle = document.createElement('div');
-        circle.className = 'text-circle';
-        circle.textContent = letter;
-        circle.onclick = () => openTextModal(index);
-        container.appendChild(circle);
-      });
-      
-      updateTextCircles();
-    }
-
-    // UPDATE TEXT CIRCLES (show which have answers)
-    function updateTextCircles() {
-      const letterCounts = {};
-      Object.values(answers).forEach(letter => {
-        letterCounts[letter] = (letterCounts[letter] || 0) + 1;
-      });
-      
-      document.querySelectorAll('.text-circle').forEach((circle, index) => {
-        const letter = String.fromCharCode(65 + index);
-        if (letterCounts[letter]) {
-          circle.classList.add('has-answers');
-          circle.title = `${letterCounts[letter]} answer(s) selected`;
-        } else {
-          circle.classList.remove('has-answers');
-          circle.title = '';
-        }
-      });
     }
 
     // RENDER STATEMENTS
@@ -1201,7 +1125,6 @@
       const container = document.getElementById(`dropdown-menu-${statementIndex}`);
       container.innerHTML = renderDropdownOptions(statementIndex);
       
-      updateTextCircles();
       updateScoreDisplay();
       
       console.log('✅ Selected:', letter, 'for statement', statementIndex);
@@ -1318,35 +1241,28 @@
         btn.classList.remove('selected', 'correct', 'incorrect');
       });
 
-      updateTextCircles();
       updateScoreDisplay();
       closeResultsModal();
       showToast('All answers cleared!');
     }
 
-    // SHOW HINT
-    function showHint() {
-      if (checked) {
-        showToast('Already checked - click text circles to see evidence!');
-        return;
-      }
-
-      const unanswered = [];
-      currentData.statements.forEach((stmt, i) => {
-        if (!answers[i]) unanswered.push(i);
-      });
-
-      if (unanswered.length === 0) {
-        showToast('All questions answered!');
-        return;
-      }
-
-      const randomIndex = unanswered[Math.floor(Math.random() * unanswered.length)];
-      const correctLetter = currentData.statements[randomIndex].answer;
-      const textIndex = correctLetter.charCodeAt(0) - 65;
+    // NAVIGATE BETWEEN STATEMENTS
+    function navigateStatement(direction) {
+      const firstUnanswered = currentData.statements.findIndex((stmt, i) => !answers[i]);
       
-      openTextModal(textIndex);
-      showToast(`💡 Check text ${correctLetter} for question ${22 + randomIndex}`);
+      if (firstUnanswered !== -1) {
+        // Scroll to first unanswered statement
+        const statementCard = document.querySelectorAll('.statement-card')[firstUnanswered];
+        if (statementCard) {
+          statementCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          statementCard.style.transform = 'scale(1.02)';
+          setTimeout(() => {
+            statementCard.style.transform = '';
+          }, 300);
+        }
+      } else {
+        showToast('All statements answered!');
+      }
     }
 
     // UPDATE SCORE DISPLAY

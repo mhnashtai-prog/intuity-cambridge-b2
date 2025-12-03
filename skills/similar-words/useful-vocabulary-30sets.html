@@ -1076,7 +1076,7 @@
       <button onclick="showHint()" id="hintBtn" aria-label="Get a hint">Hint</button>
       <button onclick="showKey()" id="keyBtn" disabled aria-label="Show answer key" aria-pressed="false">Key</button>
       <button onclick="clearAnswers()" aria-label="Clear all answers">Clear</button>
-      <button class="primary" onclick="submitAndScore()" id="submitBtn" aria-label="Submit for scoring">Submit</button>
+      <button class="primary" onclick="submitOrCheckSet()" id="submitBtn" aria-label="Submit for scoring">Submit</button>
     </div>
   </div>
 
@@ -1133,6 +1133,8 @@
     let storageKey = '';
     let SETS_PER_TEST = 5;
     let shuffledSets = {}; // Store shuffled word mappings per set
+    let setScores = {}; // Store individual set scores
+    let currentSetLocked = false; // Track if current set is locked after checking
 
     // Fisher-Yates shuffle algorithm
     function shuffleArray(array) {
@@ -1325,6 +1327,8 @@
       selectedWord = null;
       showingResults = false;
       keyVisible = false;
+      setScores = {}; // Reset set scores
+      currentSetLocked = false;
       
       createQuestionNavDots();
       
@@ -1657,7 +1661,8 @@
         const setHasAnswers = quizData.sets[i].sentences.some((_, sentIdx) => 
           answers[`${i}-${sentIdx}`] !== undefined
         );
-        html += `<div class="question-dot ${isCurrent ? 'current' : ''} ${setHasAnswers ? 'answered' : ''}" onclick="jumpToSet(${i - startSet})" tabindex="0" role="button" aria-label="Set ${quizData.sets[i].setNumber}">${i - startSet + 1}</div>`;
+        const setCompleted = setScores[i] !== undefined;
+        html += `<div class="question-dot ${isCurrent ? 'current' : ''} ${setCompleted ? 'answered' : setHasAnswers ? 'answered' : ''}" onclick="jumpToSet(${i - startSet})" tabindex="0" role="button" aria-label="Set ${quizData.sets[i].setNumber}">${i - startSet + 1}</div>`;
       }
       html += '</div>';
       
@@ -1677,10 +1682,12 @@
         
         const isSelected = selectedWord && selectedWord.setIdx === actualSetIdx && selectedWord.wordIdx === wordIdx;
         let classes = 'word-chip';
-        if (isUsed && !showingResults) classes += ' used';
-        if (isSelected) classes += ' selected';
+        if (isUsed && !currentSetLocked) classes += ' used';
+        if (isSelected && !currentSetLocked) classes += ' selected';
         
-        html += `<button class="${classes}" onclick="handleWordClick(${actualSetIdx}, ${wordIdx})" ${isUsed && !showingResults ? 'disabled' : ''}>${sanitizeText(word)}</button>`;
+        const disabled = (isUsed && !currentSetLocked) || currentSetLocked;
+        
+        html += `<button class="${classes}" onclick="handleWordClick(${actualSetIdx}, ${wordIdx})" ${disabled ? 'disabled' : ''}>${sanitizeText(word)}</button>`;
       });
       html += '</div>';
       
@@ -1695,7 +1702,7 @@
         
         let blankHtml = '';
         
-        if (showingResults) {
+        if (currentSetLocked) {
           const correctWord = shuffleData.words[shuffledCorrectIdx];
           if (answer !== undefined) {
             const userWord = shuffleData.words[answer];
@@ -1729,6 +1736,12 @@
     function handleWordClick(setIdx, wordIdx) {
       if (!quizData || showingResults) return;
       
+      // Prevent changes if set is locked
+      if (currentMode === 'guided' && currentSetLocked) {
+        showToast('Set is locked. Use "Retry Set" to practice again.');
+        return;
+      }
+      
       const set = quizData.sets[setIdx];
       let isUsed = false;
       set.sentences.forEach((_, sentIdx) => {
@@ -1746,6 +1759,12 @@
 
     function handleBlankClick(setIdx, sentIdx) {
       if (!quizData || showingResults) return;
+      
+      // Prevent changes if set is locked
+      if (currentMode === 'guided' && currentSetLocked) {
+        showToast('Set is locked. Use "Retry Set" to practice again.');
+        return;
+      }
       
       const key = `${setIdx}-${sentIdx}`;
       
@@ -1776,8 +1795,10 @@
     function navigatePrevSet() {
       if (currentSet > 0) {
         currentSet--;
+        currentSetLocked = false; // Unlock when navigating
         renderGuidedMode();
         createQuestionNavDots();
+        updateFooter();
       }
     }
 
@@ -1786,15 +1807,19 @@
       const endSet = Math.min(startSet + SETS_PER_TEST, quizData.sets.length);
       if (currentSet < endSet - startSet - 1) {
         currentSet++;
+        currentSetLocked = false; // Unlock when navigating
         renderGuidedMode();
         createQuestionNavDots();
+        updateFooter();
       }
     }
 
     function jumpToSet(setIndex) {
       currentSet = setIndex;
+      currentSetLocked = false; // Unlock when jumping
       renderGuidedMode();
       createQuestionNavDots();
+      updateFooter();
     }
 
     function jumpToQuestion(setIdx, sentIdx) {
@@ -1809,32 +1834,70 @@
       createQuestionNavDots();
     }
 
-    // Footer Management
+    function submitOrCheckSet() {
+      if (currentMode === 'guided') {
+        checkCurrentSet();
+      } else {
+        submitAndScore();
+      }
+    }
+
     function updateFooter() {
       if (!quizData) return;
       
-      const startSet = currentTest * SETS_PER_TEST;
-      const endSet = Math.min(startSet + SETS_PER_TEST, quizData.sets.length);
-      
-      let answered = 0;
-      let total = 0;
-      
-      for (let setIdx = startSet; setIdx < endSet; setIdx++) {
-        const set = quizData.sets[setIdx];
-        set.sentences.forEach((_, sentIdx) => {
-          total++;
-          if (answers[`${setIdx}-${sentIdx}`] !== undefined) answered++;
-        });
-      }
-      
       const footer = document.getElementById('footer');
+      const submitBtn = document.getElementById('submitBtn');
       
-      if (answered === total && !showingResults) {
-        footer.classList.add('visible');
-      } else if (showingResults) {
-        footer.classList.add('visible');
+      if (currentMode === 'guided') {
+        // Guided mode: Check individual sets
+        const startSet = currentTest * SETS_PER_TEST;
+        const actualSetIdx = startSet + currentSet;
+        const set = quizData.sets[actualSetIdx];
+        
+        let answered = 0;
+        set.sentences.forEach((_, sentIdx) => {
+          if (answers[`${actualSetIdx}-${sentIdx}`] !== undefined) answered++;
+        });
+        
+        // Update button text
+        if (currentSetLocked) {
+          submitBtn.textContent = 'View Results';
+        } else {
+          submitBtn.textContent = 'Check Set';
+        }
+        
+        if (answered === set.sentences.length && !currentSetLocked) {
+          footer.classList.add('visible');
+        } else if (currentSetLocked) {
+          footer.classList.add('visible');
+        } else {
+          footer.classList.remove('visible');
+        }
       } else {
-        footer.classList.remove('visible');
+        // Classic mode: Check all sets at once
+        submitBtn.textContent = 'Submit';
+        
+        const startSet = currentTest * SETS_PER_TEST;
+        const endSet = Math.min(startSet + SETS_PER_TEST, quizData.sets.length);
+        
+        let answered = 0;
+        let total = 0;
+        
+        for (let setIdx = startSet; setIdx < endSet; setIdx++) {
+          const set = quizData.sets[setIdx];
+          set.sentences.forEach((_, sentIdx) => {
+            total++;
+            if (answers[`${setIdx}-${sentIdx}`] !== undefined) answered++;
+          });
+        }
+        
+        if (answered === total && !showingResults) {
+          footer.classList.add('visible');
+        } else if (showingResults) {
+          footer.classList.add('visible');
+        } else {
+          footer.classList.remove('visible');
+        }
       }
       
       updateTestInfo();
@@ -1917,13 +1980,31 @@
         return;
       }
       
+      if (currentMode === 'guided' && currentSetLocked) {
+        showToast('Use "Retry Set" to practice this set again');
+        return;
+      }
+      
       if (Object.keys(answers).length === 0) {
         showToast('Nothing to clear');
         return;
       }
       
       if (confirm('Clear all answers?')) {
-        answers = {};
+        if (currentMode === 'guided') {
+          // Only clear current set in guided mode
+          const startSet = currentTest * SETS_PER_TEST;
+          const actualSetIdx = startSet + currentSet;
+          const set = quizData.sets[actualSetIdx];
+          
+          set.sentences.forEach((_, sentIdx) => {
+            delete answers[`${actualSetIdx}-${sentIdx}`];
+          });
+        } else {
+          // Clear all in classic mode
+          answers = {};
+        }
+        
         selectedWord = null;
         if (currentMode === 'guided') renderGuidedMode();
         else renderClassicMode();
@@ -1957,6 +2038,148 @@
       }
       
       return { correct, total };
+    }
+
+    function checkCurrentSet() {
+      if (!quizData || currentMode !== 'guided') return;
+      
+      const startSet = currentTest * SETS_PER_TEST;
+      const actualSetIdx = startSet + currentSet;
+      const set = quizData.sets[actualSetIdx];
+      
+      // If already locked, just show the modal again
+      if (currentSetLocked && setScores[actualSetIdx]) {
+        const score = setScores[actualSetIdx];
+        showSetResultsModal(score.correct, score.total, score.percentage, actualSetIdx);
+        return;
+      }
+      
+      let correct = 0;
+      let total = 0;
+      
+      set.sentences.forEach((sentence, sentIdx) => {
+        const key = `${actualSetIdx}-${sentIdx}`;
+        if (answers[key] !== undefined) {
+          total++;
+          const shuffledCorrectIdx = getShuffledCorrectIndex(actualSetIdx, sentence.correct);
+          if (answers[key] === shuffledCorrectIdx) correct++;
+        }
+      });
+      
+      if (total < set.sentences.length) {
+        showToast('Please answer all questions in this set');
+        return;
+      }
+      
+      const percentage = Math.round((correct / total) * 100);
+      
+      // Store set score
+      setScores[actualSetIdx] = {
+        correct,
+        total,
+        percentage,
+        timestamp: new Date().toISOString()
+      };
+      
+      currentSetLocked = true;
+      renderGuidedMode();
+      updateFooter();
+      
+      setTimeout(() => showSetResultsModal(correct, total, percentage, actualSetIdx), 200);
+    }
+
+    function retryCurrentSet() {
+      if (!quizData || currentMode !== 'guided') return;
+      
+      const startSet = currentTest * SETS_PER_TEST;
+      const actualSetIdx = startSet + currentSet;
+      const set = quizData.sets[actualSetIdx];
+      
+      // Clear answers for this set
+      set.sentences.forEach((_, sentIdx) => {
+        delete answers[`${actualSetIdx}-${sentIdx}`];
+      });
+      
+      // Reshuffle words for this set
+      delete shuffledSets[actualSetIdx];
+      
+      currentSetLocked = false;
+      selectedWord = null;
+      
+      renderGuidedMode();
+      createQuestionNavDots();
+      updateFooter();
+      
+      showToast('Set reset - try again!');
+    }
+
+    function showSetResultsModal(correct, total, percentage, setIdx) {
+      const set = quizData.sets[setIdx];
+      const shuffleData = shuffleSetWords(setIdx);
+      
+      const modal = document.getElementById('scoreModal');
+      const title = document.getElementById('scoreModalTitle');
+      const subtitle = document.getElementById('modalSubtitle');
+      
+      title.textContent = `Set ${set.setNumber} Results`;
+      subtitle.textContent = `${set.topic}`;
+      
+      document.getElementById('scoreNumber').textContent = `${correct}/${total}`;
+      document.getElementById('answeredStat').textContent = `${total}/${total}`;
+      
+      // Count completed sets
+      const startSet = currentTest * SETS_PER_TEST;
+      const endSet = Math.min(startSet + SETS_PER_TEST, quizData.sets.length);
+      let completedSets = 0;
+      for (let i = startSet; i < endSet; i++) {
+        if (setScores[i]) completedSets++;
+      }
+      document.getElementById('testsDoneStat').textContent = `${completedSets}/${endSet - startSet} sets`;
+      
+      const answersDisplay = document.getElementById('answersDisplay');
+      let html = '';
+      
+      if (percentage === 100) {
+        html += '<div style="text-align: center; padding: 1.5rem; font-size: 1.375rem; color: #84cc16; font-weight: 600;">Perfect! ⭐</div>';
+      } else if (percentage >= 80) {
+        html += '<div style="text-align: center; padding: 1.5rem; font-size: 1.25rem; color: #86efac; font-weight: 600;">Excellent Work!</div>';
+      } else if (percentage >= 60) {
+        html += '<div style="text-align: center; padding: 1.5rem; color: #7dd3fc; font-weight: 500;">Good Job!</div>';
+      } else {
+        html += '<div style="text-align: center; padding: 1.5rem; color: #fb923c; font-weight: 500;">Keep Practicing</div>';
+      }
+      
+      set.sentences.forEach((sentence, sentIdx) => {
+        const key = `${setIdx}-${sentIdx}`;
+        const userAnswer = answers[key];
+        const shuffledCorrectIdx = getShuffledCorrectIndex(setIdx, sentence.correct);
+        const isCorrect = userAnswer === shuffledCorrectIdx;
+        const userWord = userAnswer !== undefined ? shuffleData.words[userAnswer] : '?';
+        const correctWord = shuffleData.words[shuffledCorrectIdx];
+        
+        html += `
+          <div class="answer-item ${isCorrect ? 'correct' : 'incorrect'}" style="animation-delay: ${sentIdx * 30}ms">
+            <span>Q${sentIdx + 1}: <strong>${sanitizeText(userWord)}</strong></span>
+            ${!isCorrect ? `<span style="color: #84cc16;">→ ${sanitizeText(correctWord)}</span>` : '<span style="color: #84cc16;">✓</span>'}
+          </div>
+        `;
+      });
+      
+      answersDisplay.innerHTML = html;
+      
+      // Update modal footer buttons for set mode
+      const modalFooter = document.querySelector('.modal-footer');
+      const hasMoreSets = currentSet < (endSet - startSet - 1);
+      
+      modalFooter.innerHTML = `
+        <button class="modal-btn modal-btn-secondary" onclick="retryCurrentSet(); closeModal();">Retry Set</button>
+        ${hasMoreSets 
+          ? '<button class="modal-btn modal-btn-primary" onclick="closeModal(); navigateNextSet();">Next Set →</button>'
+          : '<button class="modal-btn modal-btn-primary" onclick="closeModal();">Close</button>'
+        }
+      `;
+      
+      modal.classList.add('active');
     }
 
     function submitAndScore() {
@@ -2074,6 +2297,13 @@
 
     function closeModal() {
       document.getElementById('scoreModal').classList.remove('active');
+      
+      // Restore default modal footer buttons for classic mode
+      const modalFooter = document.querySelector('.modal-footer');
+      modalFooter.innerHTML = `
+        <button class="modal-btn modal-btn-secondary" onclick="closeModal()">Close</button>
+        <button class="modal-btn modal-btn-primary" onclick="nextTestModal()">Next Test</button>
+      `;
     }
 
     function nextTestModal() {

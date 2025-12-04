@@ -99,6 +99,51 @@
       letter-spacing: -0.01em;
     }
     
+    .dataset-select {
+      background: rgba(48, 48, 51, 0.6);
+      border: 1px solid rgba(84, 84, 88, 0.3);
+      color: #e5e5e7;
+      padding: 0.375rem 1.75rem 0.375rem 0.625rem;
+      border-radius: 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23C9A961' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.5rem center;
+      min-width: 150px;
+      max-width: 180px;
+      letter-spacing: -0.01em;
+    }
+    
+    .dataset-select:hover {
+      background: rgba(71, 85, 105, 0.3);
+      border-color: rgba(142, 142, 147, 0.5);
+    }
+    
+    .dataset-select:focus {
+      outline: 2px solid #C9A961;
+      outline-offset: 2px;
+      border-color: #C9A961;
+    }
+    
+    .dataset-select option {
+      background: #1c1c1e;
+      color: #e5e5e7;
+      padding: 0.5rem;
+    }
+    
+    @media (max-width: 768px) {
+      .dataset-select {
+        min-width: 120px;
+        max-width: 140px;
+        font-size: 0.6875rem;
+        padding: 0.3rem 1.5rem 0.3rem 0.5rem;
+      }
+    }
+    
     .test-nav { 
       display: flex; 
       align-items: center; 
@@ -687,7 +732,14 @@
     <div class="nav-center">
       <div class="nav-title">INTUITY</div>
     </div>
-    <div class="nav-right"></div>
+    <div class="nav-right">
+      <select id="datasetSelect" class="dataset-select" onchange="changeDataset()" aria-label="Select collocation dataset">
+        <option value="collocations-b2.json">B2 Original (30 Sets)</option>
+        <option value="british-collocation-pairs.json">British Pairs (23)</option>
+        <option value="custom1.json" disabled>Custom 1 (TBA)</option>
+        <option value="custom2.json" disabled>Custom 2 (TBA)</option>
+      </select>
+    </div>
   </div>
 
   <div class="container">
@@ -792,13 +844,38 @@
     }
     
     // Data loading
-    async function loadCollocationData() {
+    async function loadCollocationData(filename = 'collocations-b2.json') {
       try {
-        const response = await fetch('../../datacentre/collocations-b2.json');
+        document.getElementById('contentContainer').innerHTML = `
+          <div class="loading-state">
+            <div class="loading-spinner"></div>
+            <div>Loading collocations...</div>
+          </div>
+        `;
+        
+        const response = await fetch('../../datacentre/' + filename);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        collocationData = await response.json();
+        let rawData = await response.json();
+        
+        // Convert british-collocation-pairs.json format if needed
+        if (rawData.tests && !rawData.sets) {
+          collocationData = convertBritishPairsFormat(rawData);
+        } else {
+          collocationData = rawData;
+        }
+        
         SETS_PER_TEST = collocationData.setsPerTest || 6;
+        
+        // Update storage key based on dataset
+        storageKey = 'collocation_progress_' + filename.replace('.json', '');
+        
+        // Clear current progress when switching datasets
+        setScores = {};
+        testScores = {};
+        
         loadProgress();
+        currentTest = 0;
+        currentSet = 0;
         createDots();
         loadSet(0, 0);
         updateNavButtons();
@@ -806,6 +883,50 @@
         console.error('Error loading data:', error);
         showError('Could not load collocations. Please check the file path.');
       }
+    }
+    
+    // Convert British Pairs format to match our expected format
+    function convertBritishPairsFormat(rawData) {
+      const sets = [];
+      let setNumber = 1;
+      
+      rawData.tests.forEach(test => {
+        const pairs = test.pairs.map(pair => ({
+          left: pair[0],
+          right: pair[1],
+          example: `${pair[0]} ${pair[1]}` // No examples in original, so create simple placeholder
+        }));
+        
+        sets.push({
+          setNumber: setNumber++,
+          topic: `Test ${test.testNumber} - British Collocations`,
+          pairs: pairs
+        });
+      });
+      
+      return {
+        title: rawData.title || "British Collocations",
+        level: rawData.level || "B2",
+        description: rawData.description || "",
+        sets: sets,
+        setsPerTest: 1 // British format has 10 pairs per test, we'll treat each as one set
+      };
+    }
+    
+    // Change dataset
+    function changeDataset() {
+      const select = document.getElementById('datasetSelect');
+      const filename = select.value;
+      
+      if (select.options[select.selectedIndex].disabled) {
+        showToast('This dataset slot is available for your custom JSON files!');
+        // Reset to first option
+        select.selectedIndex = 0;
+        return;
+      }
+      
+      loadCollocationData(filename);
+      showToast('Loading new dataset...');
     }
     
     function showError(message) {

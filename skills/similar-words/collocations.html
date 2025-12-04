@@ -1,1 +1,1252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>INTUITY - Collocations Matcher</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+      background: #0d0d0d;
+      background-image: radial-gradient(circle at 20% 50%, rgba(201, 169, 97, 0.04) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 80%, rgba(201, 169, 97, 0.03) 0%, transparent 50%);
+      min-height: 100vh;
+      color: #e5e5e5;
+      padding: 1rem;
+      position: relative;
+    }
+    
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' /%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.01'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 1;
+    }
+    
+    .top-nav {
+      max-width: 62rem;
+      margin: 0 auto 0.75rem;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      padding: 0 0.5rem;
+      gap: 1rem;
+      position: relative;
+      z-index: 10;
+    }
+    
+    .nav-left { justify-self: start; }
+    .nav-center { justify-self: center; }
+    .nav-right { justify-self: end; }
+    
+    .nav-link {
+      color: #8e8e93;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.8125rem;
+      font-weight: 400;
+      transition: color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      text-decoration: none;
+      letter-spacing: -0.01em;
+    }
+    
+    .nav-link:hover { color: #d1d1d6; }
+    .nav-link:focus { outline: 2px solid #C9A961; outline-offset: 3px; border-radius: 4px; }
+    
+    .nav-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #C9A961;
+      letter-spacing: -0.04em;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+    }
+    
+    .container { 
+      max-width: 62rem; 
+      margin: 0 auto; 
+      padding: 0 1rem 5rem 1rem;
+      position: relative;
+      z-index: 2;
+    }
+    
+    @media (max-width: 640px) {
+      .container { padding: 0 0.5rem 5rem 0.5rem; }
+    }
+    
+    .header { 
+      text-align: center; 
+      margin-bottom: 2rem;
+      padding-top: 0;
+    }
+    
+    .header .subtitle { 
+      font-size: 0.75rem; 
+      color: #8e8e93;
+      font-weight: 400;
+      letter-spacing: -0.01em;
+    }
+    
+    .test-nav { 
+      display: flex; 
+      align-items: center; 
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    
+    .nav-arrow {
+      width: 2rem;
+      height: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #8e8e93;
+      cursor: pointer;
+      background: none;
+      border: none;
+      font-size: 1.25rem;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border-radius: 0.5rem;
+    }
+    
+    .nav-arrow:hover:not(:disabled) {
+      color: #f5f5f7;
+      background: rgba(71, 85, 105, 0.3);
+      transform: scale(1.1);
+    }
+    
+    .nav-arrow:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+      color: #475569;
+    }
+    
+    .nav-arrow:focus { outline: 2px solid #C9A961; outline-offset: 2px; }
+    
+    .dots-container { 
+      display: flex; 
+      gap: 0.625rem; 
+      flex-wrap: wrap;
+      max-width: 36rem;
+      justify-content: center;
+    }
+    
+    .dot-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.125rem;
+    }
+    
+    .trophy {
+      width: 0.75rem;
+      height: 0.75rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    
+    .trophy.visible { opacity: 1; }
+    
+    .test-dot { 
+      width: 0.875rem; 
+      height: 0.875rem; 
+      border-radius: 50%; 
+      background: rgba(99, 99, 102, 0.3);
+      cursor: pointer; 
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      border: none;
+      position: relative;
+    }
+    
+    .test-dot:hover { 
+      transform: scale(1.5);
+      background: rgba(142, 142, 147, 0.5);
+    }
+    
+    .test-dot:focus { outline: 2px solid #C9A961; outline-offset: 3px; }
+    
+    .test-dot.perfect {
+      background: linear-gradient(135deg, #84cc16 0%, #65a30d 100%);
+      box-shadow: 0 0 12px rgba(132, 204, 22, 0.5), 0 0 24px rgba(132, 204, 22, 0.2);
+    }
+    
+    .test-dot.excellent {
+      background: linear-gradient(135deg, #86efac 0%, #4ade80 100%);
+      box-shadow: 0 0 8px rgba(134, 239, 172, 0.3);
+    }
+    
+    .test-dot.current { 
+      box-shadow: 0 0 0 3px rgba(201, 169, 97, 0.5);
+      transform: scale(1.6);
+      background: #C9A961;
+    }
+    
+    .test-info { 
+      text-align: center;
+      font-size: 0.8125rem;
+      color: #636366;
+      margin-bottom: 0.5rem;
+      font-weight: 400;
+      letter-spacing: -0.01em;
+    }
+    
+    .content-container {
+      background: rgba(28, 28, 30, 0.6);
+      backdrop-filter: blur(40px) saturate(150%);
+      -webkit-backdrop-filter: blur(40px) saturate(150%);
+      border-radius: 1.25rem;
+      border: 1px solid rgba(84, 84, 88, 0.25);
+      padding: 2rem 1.5rem;
+      min-height: 500px;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    .set-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    
+    .set-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #f5f5f7;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.02em;
+    }
+    
+    .set-topic {
+      font-size: 0.875rem;
+      color: #C9A961;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    
+    .progress-bar {
+      background: rgba(99, 99, 102, 0.2);
+      height: 0.5rem;
+      border-radius: 0.25rem;
+      overflow: hidden;
+      margin-bottom: 2rem;
+    }
+    
+    .progress-fill {
+      background: linear-gradient(90deg, #C9A961 0%, #d4b76f 100%);
+      height: 100%;
+      width: 0%;
+      transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 10px rgba(201, 169, 97, 0.5);
+    }
+    
+    .matching-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      margin-bottom: 2rem;
+    }
+    
+    @media (max-width: 640px) {
+      .matching-grid {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+      }
+    }
+    
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    
+    .column-label {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      color: #636366;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      text-align: center;
+      margin-bottom: 0.5rem;
+    }
+    
+    .card {
+      background: rgba(48, 48, 51, 0.4);
+      border: 2px solid rgba(84, 84, 88, 0.3);
+      border-radius: 0.75rem;
+      padding: 1rem 1.25rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      font-size: 0.9375rem;
+      font-weight: 500;
+      color: #e5e5e7;
+      position: relative;
+      min-height: 3.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .card:hover:not(.matched):not(.locked) {
+      background: rgba(71, 85, 105, 0.3);
+      border-color: rgba(142, 142, 147, 0.5);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    
+    .card.selected {
+      background: rgba(201, 169, 97, 0.25);
+      border-color: #C9A961;
+      box-shadow: 0 0 0 3px rgba(201, 169, 97, 0.3);
+      transform: scale(1.02);
+    }
+    
+    .card.matched {
+      background: rgba(132, 204, 22, 0.15);
+      border-color: #84cc16;
+      color: #84cc16;
+      cursor: default;
+      animation: matchSuccess 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .card.locked {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .card.wrong {
+      animation: shake 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+      background: rgba(239, 68, 68, 0.15);
+      border-color: #ef4444;
+    }
+    
+    @keyframes matchSuccess {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+    
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-10px); }
+      75% { transform: translateX(10px); }
+    }
+    
+    .checkmark {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      color: #84cc16;
+      font-size: 1rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    
+    .card.matched .checkmark {
+      opacity: 1;
+    }
+    
+    .external-nav {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+      padding: 0 1rem;
+    }
+    
+    .external-nav-arrow {
+      background: rgba(99, 99, 102, 0.25);
+      border: 1px solid rgba(99, 99, 102, 0.2);
+      color: #aeaeb2;
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.75rem;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      letter-spacing: -0.01em;
+      min-width: 140px;
+    }
+    
+    .external-nav-arrow:hover:not(:disabled) {
+      background: rgba(201, 169, 97, 0.25);
+      border-color: rgba(201, 169, 97, 0.3);
+      color: #C9A961;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(201, 169, 97, 0.2);
+    }
+    
+    .external-nav-arrow:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    
+    .external-nav-arrow:active:not(:disabled) { transform: scale(0.96); }
+    .external-nav-arrow:focus { outline: 2px solid #C9A961; outline-offset: 2px; }
+    
+    .footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 1.25rem 1rem;
+      background: rgba(28, 28, 30, 0.95);
+      backdrop-filter: blur(40px) saturate(180%);
+      -webkit-backdrop-filter: blur(40px) saturate(180%);
+      border-top: 1px solid rgba(84, 84, 88, 0.3);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      gap: 1rem;
+      font-size: 0.875rem;
+      flex-wrap: wrap;
+      z-index: 900;
+      opacity: 0;
+      transform: translateY(100%);
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
+    }
+    
+    .footer.visible {
+      display: flex;
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    .footer button {
+      color: #aeaeb2;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      font-weight: 500;
+      padding: 0.625rem 1.125rem;
+      border-radius: 0.625rem;
+      font-size: 0.875rem;
+      letter-spacing: -0.01em;
+    }
+    
+    .footer button:hover { 
+      color: #e5e5e7;
+      background: rgba(99, 99, 102, 0.2);
+      transform: translateY(-1px);
+    }
+    
+    .footer button:active { transform: translateY(0) scale(0.96); }
+    .footer button:focus { outline: 2px solid #C9A961; outline-offset: 2px; }
+    
+    .footer button.primary {
+      background: rgba(201, 169, 97, 0.25);
+      color: #C9A961;
+      font-weight: 600;
+      box-shadow: 0 2px 12px rgba(201, 169, 97, 0.2);
+    }
+    
+    .footer button.primary:hover {
+      background: rgba(201, 169, 97, 0.35);
+      box-shadow: 0 4px 16px rgba(201, 169, 97, 0.3);
+      transform: translateY(-2px);
+    }
+    
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      opacity: 0;
+      transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .modal-overlay.active {
+      display: flex;
+      opacity: 1;
+    }
+    
+    .modal {
+      background: rgba(28, 28, 30, 0.98);
+      backdrop-filter: blur(60px) saturate(180%);
+      -webkit-backdrop-filter: blur(60px) saturate(180%);
+      border: 1px solid rgba(84, 84, 88, 0.4);
+      border-radius: 1.25rem;
+      padding: 2.5rem;
+      max-width: 600px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 8px 24px rgba(0, 0, 0, 0.4);
+      transform: scale(0.95) translateY(20px);
+      transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .modal-overlay.active .modal {
+      transform: scale(1) translateY(0);
+    }
+    
+    .modal-header { text-align: center; margin-bottom: 2rem; }
+    
+    .modal-title { 
+      font-size: 1.75rem; 
+      font-weight: 600; 
+      color: #f5f5f7; 
+      letter-spacing: -0.02em;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+      margin-bottom: 0.5rem;
+    }
+    
+    .modal-subtitle { 
+      font-size: 0.9375rem; 
+      color: #8e8e93; 
+      font-weight: 400;
+      letter-spacing: -0.01em;
+    }
+    
+    .score-display {
+      text-align: center;
+      padding: 2rem 1rem;
+      background: rgba(48, 48, 51, 0.4);
+      border-radius: 1rem;
+      margin-bottom: 1.5rem;
+      border: 1px solid rgba(84, 84, 88, 0.2);
+    }
+    
+    .score-number {
+      font-size: 3.5rem;
+      font-weight: 700;
+      color: #C9A961;
+      letter-spacing: -0.03em;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+    }
+    
+    .score-label {
+      font-size: 0.875rem;
+      color: #8e8e93;
+      margin-top: 0.5rem;
+    }
+    
+    .examples-section {
+      margin-top: 1.5rem;
+      background: rgba(48, 48, 51, 0.3);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      max-height: 400px;
+      overflow-y: auto;
+      border: 1px solid rgba(84, 84, 88, 0.2);
+    }
+    
+    .examples-title {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #C9A961;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+    
+    .example-item {
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+      background: rgba(99, 99, 102, 0.15);
+      border-radius: 0.625rem;
+      border-left: 3px solid #84cc16;
+    }
+    
+    .example-collocation {
+      font-weight: 600;
+      color: #C9A961;
+      margin-bottom: 0.5rem;
+      font-size: 0.9375rem;
+    }
+    
+    .example-sentence {
+      color: #d1d1d6;
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+    
+    .modal-footer { display: flex; gap: 1rem; margin-top: 1.5rem; }
+    
+    .modal-btn {
+      flex: 1;
+      padding: 0.875rem;
+      border: none;
+      border-radius: 0.75rem;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      letter-spacing: -0.01em;
+    }
+    
+    .modal-btn:active { transform: scale(0.96); }
+    .modal-btn:focus { outline: 2px solid #C9A961; outline-offset: 2px; }
+    
+    .modal-btn-primary { 
+      background: rgba(201, 169, 97, 0.28); 
+      color: #C9A961; 
+      border: 1px solid rgba(201, 169, 97, 0.4);
+      box-shadow: 0 2px 12px rgba(201, 169, 97, 0.25);
+    }
+    
+    .modal-btn-primary:hover {
+      background: rgba(201, 169, 97, 0.38);
+      box-shadow: 0 4px 16px rgba(201, 169, 97, 0.35);
+      transform: translateY(-1px);
+    }
+    
+    .modal-btn-secondary { 
+      background: rgba(99, 99, 102, 0.25); 
+      color: #aeaeb2; 
+      border: 1px solid rgba(99, 99, 102, 0.2);
+    }
+    
+    .modal-btn-secondary:hover {
+      background: rgba(99, 99, 102, 0.35);
+      color: #e5e5e7;
+      transform: translateY(-1px);
+    }
+    
+    .toast {
+      position: fixed;
+      bottom: 6rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: rgba(28, 28, 30, 0.98);
+      backdrop-filter: blur(40px) saturate(180%);
+      -webkit-backdrop-filter: blur(40px) saturate(180%);
+      color: #e5e5e7;
+      padding: 0.875rem 1.5rem;
+      border-radius: 0.875rem;
+      border: 1px solid rgba(84, 84, 88, 0.4);
+      font-size: 0.875rem;
+      z-index: 1100;
+      opacity: 0;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      pointer-events: none;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      font-weight: 500;
+      letter-spacing: -0.01em;
+    }
+    
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    
+    .loading-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 400px;
+      color: #8e8e93;
+    }
+    
+    .loading-spinner {
+      display: inline-block;
+      width: 2rem;
+      height: 2rem;
+      border: 2px solid rgba(142, 142, 147, 0.3);
+      border-top-color: #C9A961;
+      border-radius: 50%;
+      animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      margin-bottom: 1rem;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="top-nav">
+    <div class="nav-left">
+      <a href="../../index.html?openModal=vocabulary" class="nav-link">← Back</a>
+    </div>
+    <div class="nav-center">
+      <div class="nav-title">INTUITY</div>
+    </div>
+    <div class="nav-right"></div>
+  </div>
 
+  <div class="container">
+    <div class="header">
+      <p class="subtitle">Collocation Matcher · B2 Level</p>
+    </div>
+
+    <div class="test-nav">
+      <button class="nav-arrow" id="prevTestBtn" onclick="navigateTest(-1)" aria-label="Previous test">←</button>
+      <div class="dots-container" id="dotsContainer" role="navigation" aria-label="Test selection"></div>
+      <button class="nav-arrow" id="nextTestBtn" onclick="navigateTest(1)" aria-label="Next test">→</button>
+    </div>
+
+    <div class="test-info" id="testInfo" role="status" aria-live="polite">Loading...</div>
+
+    <div class="content-container" id="contentContainer">
+      <div class="loading-state">
+        <div class="loading-spinner"></div>
+        <div>Loading collocations...</div>
+      </div>
+    </div>
+
+    <div class="external-nav">
+      <button class="external-nav-arrow" id="prevSetBtn" onclick="navigatePrevSet()" aria-label="Previous set">← Previous Set</button>
+      <button class="external-nav-arrow" id="nextSetBtn" onclick="navigateNextSet()" aria-label="Next set">Next Set →</button>
+    </div>
+
+    <div class="footer" id="footer" role="toolbar">
+      <button onclick="shuffleRight()" aria-label="Shuffle right column">Shuffle</button>
+      <button onclick="resetSet()" aria-label="Reset current set">Reset</button>
+      <button class="primary" onclick="checkSet()" id="checkBtn" aria-label="Check answers">Check Set</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="resultsModal" role="dialog" aria-labelledby="resultsModalTitle" aria-modal="true">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="resultsModalTitle">Set Complete!</h2>
+        <div class="modal-subtitle" id="resultsModalSubtitle"></div>
+      </div>
+      <div class="score-display">
+        <div class="score-number" id="scoreNumber">6/6</div>
+        <div class="score-label">Matched Correctly</div>
+      </div>
+      <div class="examples-section">
+        <div class="examples-title">Example Sentences</div>
+        <div id="examplesDisplay"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn modal-btn-secondary" onclick="retrySet()">Retry Set</button>
+        <button class="modal-btn modal-btn-primary" onclick="closeModal()">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="alert" aria-live="polite"></div>
+
+  <script>
+    // Global state
+    let collocationData = null;
+    let currentTest = 0;
+    let currentSet = 0;
+    let SETS_PER_TEST = 6;
+    let selectedLeft = null;
+    let selectedRight = null;
+    let matches = {};
+    let setScores = {};
+    let testScores = {};
+    let storageKey = 'collocation_progress';
+    
+    // Utility functions
+    function showToast(message, duration = 2500) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), duration);
+    }
+    
+    function loadProgress() {
+      try {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+          const data = JSON.parse(saved);
+          testScores = data.testScores || {};
+          setScores = data.setScores || {};
+        }
+      } catch (e) {
+        console.error('Error loading progress:', e);
+      }
+    }
+    
+    function saveProgress() {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify({
+          testScores,
+          setScores,
+          timestamp: new Date().toISOString()
+        }));
+      } catch (e) {
+        console.error('Error saving progress:', e);
+      }
+    }
+    
+    // Data loading
+    async function loadCollocationData() {
+      try {
+        const response = await fetch('../../datacentre/collocations-b2.json');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        collocationData = await response.json();
+        SETS_PER_TEST = collocationData.setsPerTest || 6;
+        loadProgress();
+        createDots();
+        loadSet(0, 0);
+        updateNavButtons();
+      } catch (error) {
+        console.error('Error loading data:', error);
+        showError('Could not load collocations. Please check the file path.');
+      }
+    }
+    
+    function showError(message) {
+      document.getElementById('contentContainer').innerHTML = `
+        <div style="text-align: center; padding: 3rem; color: #ef4444;">
+          <div style="font-size: 3rem; margin-bottom: 1rem;">⚠</div>
+          <div style="font-size: 1.125rem; margin-bottom: 1rem;">${message}</div>
+          <button onclick="location.reload()" class="modal-btn modal-btn-primary" style="max-width: 200px; margin: 0 auto;">Reload</button>
+        </div>
+      `;
+    }
+    
+    // Set rendering
+    function loadSet(testIdx, setIdx) {
+      if (!collocationData) return;
+      
+      currentTest = testIdx;
+      currentSet = setIdx;
+      matches = {};
+      selectedLeft = null;
+      selectedRight = null;
+      
+      const startSet = currentTest * SETS_PER_TEST;
+      const actualSetIdx = startSet + currentSet;
+      const set = collocationData.sets[actualSetIdx];
+      
+      if (!set) return;
+      
+      const isLocked = setScores[actualSetIdx] !== undefined;
+      
+      // Shuffle right column
+      const rightItems = [...set.pairs.map((p, i) => ({ text: p.right, originalIndex: i }))];
+      shuffleArray(rightItems);
+      
+      let html = `
+        <div class="set-header">
+          <div class="set-title">Set ${set.setNumber}</div>
+          <div class="set-topic">${set.topic}</div>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+        </div>
+        <div class="matching-grid">
+          <div class="column">
+            <div class="column-label">Match these...</div>
+            ${set.pairs.map((pair, idx) => `
+              <div class="card ${isLocked ? 'locked matched' : ''}" 
+                   data-index="${idx}" 
+                   data-side="left" 
+                   onclick="${isLocked ? '' : 'selectCard(\'left\', ' + idx + ')'}"
+                   ${isLocked ? 'style="cursor: not-allowed;"' : ''}>
+                ${pair.left}
+                ${isLocked ? '<span class="checkmark">✓</span>' : ''}
+              </div>
+            `).join('')}
+          </div>
+          <div class="column">
+            <div class="column-label">...with these</div>
+            ${rightItems.map((item, displayIdx) => `
+              <div class="card ${isLocked ? 'locked matched' : ''}" 
+                   data-index="${item.originalIndex}" 
+                   data-side="right" 
+                   onclick="${isLocked ? '' : 'selectCard(\'right\', ' + item.originalIndex + ')'}"
+                   ${isLocked ? 'style="cursor: not-allowed;"' : ''}>
+                ${item.text}
+                ${isLocked ? '<span class="checkmark">✓</span>' : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+      
+      document.getElementById('contentContainer').innerHTML = html;
+      updateTestInfo();
+      updateFooter();
+      updateExternalNav();
+      createDots();
+    }
+    
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+    
+    // Card selection
+    function selectCard(side, index) {
+      const startSet = currentTest * SETS_PER_TEST;
+      const actualSetIdx = startSet + currentSet;
+      
+      if (setScores[actualSetIdx]) {
+        showToast('Set is locked. Use "Retry Set" to practice again.');
+        return;
+      }
+      
+      if (side === 'left') {
+        // Check if already matched
+        if (matches[index] !== undefined) {
+          showToast('Already matched!');
+          return;
+        }
+        
+        selectedLeft = index;
+        updateCardSelection();
+        
+        // Auto-check if both selected
+        if (selectedRight !== null) {
+          checkMatch();
+        }
+      } else {
+        // Check if already used
+        const alreadyUsed = Object.values(matches).includes(index);
+        if (alreadyUsed) {
+          showToast('Already used!');
+          return;
+        }
+        
+        selectedRight = index;
+        updateCardSelection();
+        
+        // Auto-check if both selected
+        if (selectedLeft !== null) {
+          checkMatch();
+        }
+      }
+    }
+    
+    function updateCardSelection() {
+      document.querySelectorAll('.card').forEach(card => {
+        const side = card.getAttribute('data-side');
+        const index = parseInt(card.getAttribute('data-index'));
+        
+        card.classList.remove('selected');
+        
+        if (side === 'left' && selectedLeft === index) {
+          card.classList.add('selected');
+        }
+        if (side === 'right' && selectedRight === index) {
+          card.classList.add('selected');
+        }
+        
+        // Show matched state
+        if (side === 'left' && matches[index] !== undefined) {
+          card.classList.add('matched');
+          if (!card.querySelector('.checkmark')) {
+            card.innerHTML += '<span class="checkmark">✓</span>';
+          }
+        }
+        if (side === 'right' && Object.values(matches).includes(index)) {
+          card.classList.add('matched');
+          if (!card.querySelector('.checkmark')) {
+            card.innerHTML += '<span class="checkmark">✓</span>';
+          }
+        }
+      });
+    }
+    
+    function checkMatch() {
+      const startSet = currentTest * SETS_PER_TEST;
+      const actualSetIdx = startSet + currentSet;
+      const set = collocationData.sets[actualSetIdx];
+      
+      const correctMatch = set.pairs[selectedLeft].right;
+      const selectedRightText = set.pairs[selectedRight].right;
+      
+      if (correctMatch === selectedRightText) {
+        // Correct match!
+        matches[selectedLeft] = selectedRight;
+        showToast('✓ Correct!', 1500);
+        setTimeout(() => {
+          updateCardSelection();
+          updateProgress();
+          
+          // Check if all matched
+          if (Object.keys(matches).length === set.pairs.length) {
+            setTimeout(() => updateFooter(), 300);
+          }
+        }, 300);
+      } else {
+        // Wrong match
+        showToast('✗ Try again', 1500);
+        document.querySelectorAll('.card.selected').forEach(card => {
+          card.classList.add('wrong');
+          setTimeout(() => card.classList.remove('wrong'), 500);
+        });
+      }
+      
+      selectedLeft = null;
+      selectedRight = null;
+      
+      setTimeout(() => updateCardSelection(), 300);
+    }
+    
+    function updateProgress() {
+      const startSet = currentTest * SETS_PER_TEST;
+      const actualSetIdx = startSet + currentSet;
+      const set = collocationData.sets[actualSetIdx];
+      
+      const percentage = (Object.keys(matches).length / set.pairs.length) * 100;
+      document.getElementById('progressFill').style.width = percentage + '%';
+    }
+    
+    // Actions
+    function shuffleRight() {
+      const startSet = currentTest * SETS_PER_TEST;
+      const actualSetIdx = startSet + currentSet;
+      
+      if (setScores[actualSetIdx]) {
+        showToast('Set is locked. Use "Retry Set" to shuffle again.');
+        return;
+      }
+      
+      loadSet(currentTest, currentSet);
+      showToast('Shuffled!');
+    }
+    
+    function resetSet() {
+      const startSet = currentTest * SETS_PER_TEST;
+      const actualSetIdx = startSet + currentSet;
+      
+      if (setScores[actualSetIdx]) {
+        showToast('Use "Retry Set" from the results to unlock.');
+        return;
+      }
+      
+      matches = {};
+      selectedLeft = null;
+      selectedRight = null;
+      loadSet(currentTest, currentSet);
+      showToast('Reset!');
+    }
+    
+    function checkSet() {
+      const startSet = currentTest * SETS_PER_TEST;
+      const actualSetIdx = startSet + currentSet;
+      const set = collocationData.sets[actualSetIdx];
+      
+      if (Object.keys(matches).length < set.pairs.length) {
+        showToast('Please match all pairs first!');
+        return;
+      }
+      
+      // All matched - show results
+      setScores[actualSetIdx] = {
+        completed: true,
+        timestamp: new Date().toISOString()
+      };
+      
+      saveProgress();
+      showResultsModal();
+    }
+    
+    function showResultsModal() {
+      const startSet = currentTest * SETS_PER_TEST;
+      const actualSetIdx = startSet + currentSet;
+      const set = collocationData.sets[actualSetIdx];
+      
+      document.getElementById('resultsModalTitle').textContent = `Set ${set.setNumber} Complete!`;
+      document.getElementById('resultsModalSubtitle').textContent = set.topic;
+      document.getElementById('scoreNumber').textContent = `${set.pairs.length}/${set.pairs.length}`;
+      
+      let examplesHtml = '';
+      set.pairs.forEach(pair => {
+        examplesHtml += `
+          <div class="example-item">
+            <div class="example-collocation">${pair.left} ${pair.right}</div>
+            <div class="example-sentence">${pair.example}</div>
+          </div>
+        `;
+      });
+      
+      document.getElementById('examplesDisplay').innerHTML = examplesHtml;
+      document.getElementById('resultsModal').classList.add('active');
+    }
+    
+    function closeModal() {
+      document.getElementById('resultsModal').classList.remove('active');
+    }
+    
+    function retrySet() {
+      const startSet = currentTest * SETS_PER_TEST;
+      const actualSetIdx = startSet + currentSet;
+      
+      delete setScores[actualSetIdx];
+      saveProgress();
+      
+      matches = {};
+      selectedLeft = null;
+      selectedRight = null;
+      
+      closeModal();
+      loadSet(currentTest, currentSet);
+      showToast('Set reset - try again!');
+    }
+    
+    // Navigation
+    function navigateTest(direction) {
+      if (!collocationData) return;
+      const totalTests = Math.ceil(collocationData.sets.length / SETS_PER_TEST);
+      const newIndex = currentTest + direction;
+      if (newIndex >= 0 && newIndex < totalTests) {
+        loadSet(newIndex, 0);
+      }
+    }
+    
+    function navigatePrevSet() {
+      if (currentSet > 0) {
+        loadSet(currentTest, currentSet - 1);
+      }
+    }
+    
+    function navigateNextSet() {
+      const startSet = currentTest * SETS_PER_TEST;
+      const endSet = Math.min(startSet + SETS_PER_TEST, collocationData.sets.length);
+      if (currentSet < endSet - startSet - 1) {
+        loadSet(currentTest, currentSet + 1);
+      }
+    }
+    
+    function updateExternalNav() {
+      if (!collocationData) return;
+      
+      const startSet = currentTest * SETS_PER_TEST;
+      const endSet = Math.min(startSet + SETS_PER_TEST, collocationData.sets.length);
+      
+      document.getElementById('prevSetBtn').disabled = currentSet === 0;
+      document.getElementById('nextSetBtn').disabled = currentSet >= (endSet - startSet - 1);
+    }
+    
+    function updateNavButtons() {
+      if (!collocationData) return;
+      const totalTests = Math.ceil(collocationData.sets.length / SETS_PER_TEST);
+      document.getElementById('prevTestBtn').disabled = currentTest === 0;
+      document.getElementById('nextTestBtn').disabled = currentTest >= totalTests - 1;
+    }
+    
+    function updateTestInfo() {
+      if (!collocationData) return;
+      
+      const totalTests = Math.ceil(collocationData.sets.length / SETS_PER_TEST);
+      const startSet = currentTest * SETS_PER_TEST;
+      const actualSetIdx = startSet + currentSet;
+      const set = collocationData.sets[actualSetIdx];
+      
+      document.getElementById('testInfo').textContent = 
+        `Collocations • Test ${currentTest + 1} of ${totalTests} • Set ${set.setNumber}`;
+    }
+    
+    function updateFooter() {
+      const startSet = currentTest * SETS_PER_TEST;
+      const actualSetIdx = startSet + currentSet;
+      const set = collocationData.sets[actualSetIdx];
+      const footer = document.getElementById('footer');
+      const checkBtn = document.getElementById('checkBtn');
+      
+      const isLocked = setScores[actualSetIdx] !== undefined;
+      const allMatched = Object.keys(matches).length === set.pairs.length;
+      
+      if (isLocked) {
+        checkBtn.textContent = 'View Results';
+        checkBtn.onclick = showResultsModal;
+        footer.classList.add('visible');
+      } else if (allMatched) {
+        checkBtn.textContent = 'Check Set';
+        checkBtn.onclick = checkSet;
+        footer.classList.add('visible');
+      } else {
+        footer.classList.remove('visible');
+      }
+    }
+    
+    // Progress dots
+    function createDots() {
+      if (!collocationData) return;
+      
+      const container = document.getElementById('dotsContainer');
+      container.innerHTML = '';
+      
+      const totalTests = Math.ceil(collocationData.sets.length / SETS_PER_TEST);
+      
+      for (let i = 0; i < totalTests; i++) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'dot-wrapper';
+        
+        // Check if test is complete
+        const startSet = i * SETS_PER_TEST;
+        const endSet = Math.min(startSet + SETS_PER_TEST, collocationData.sets.length);
+        let completedSets = 0;
+        
+        for (let s = startSet; s < endSet; s++) {
+          if (setScores[s]) completedSets++;
+        }
+        
+        const totalSets = endSet - startSet;
+        const isPerfect = completedSets === totalSets;
+        
+        if (isPerfect) {
+          const trophy = document.createElement('div');
+          trophy.className = 'trophy visible';
+          trophy.textContent = '⭐';
+          wrapper.appendChild(trophy);
+        }
+        
+        const dot = document.createElement('button');
+        dot.className = 'test-dot';
+        dot.setAttribute('aria-label', `Test ${i + 1}`);
+        
+        if (i === currentTest) {
+          dot.classList.add('current');
+          dot.setAttribute('aria-current', 'true');
+        }
+        
+        if (isPerfect) {
+          dot.classList.add('perfect');
+        } else if (completedSets > 0) {
+          dot.classList.add('excellent');
+        }
+        
+        dot.onclick = () => loadSet(i, 0);
+        wrapper.appendChild(dot);
+        container.appendChild(wrapper);
+      }
+    }
+    
+    // Initialize
+    window.addEventListener('load', loadCollocationData);
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeModal();
+      }
+      if (e.key === 'ArrowLeft' && !document.querySelector('.modal-overlay.active')) {
+        navigatePrevSet();
+      }
+      if (e.key === 'ArrowRight' && !document.querySelector('.modal-overlay.active')) {
+        navigateNextSet();
+      }
+    });
+  </script>
+</body>
+</html>

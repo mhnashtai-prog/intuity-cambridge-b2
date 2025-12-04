@@ -1172,10 +1172,9 @@
     // PART 3/5 BEGINS HERE - JavaScript Setup & Data Loading
 // Configuration - NO HARD-CODED DATA
     const DATASETS = [
-      { name: 'Phrasal Verbs', path: '../../datacentre/phrasal-verbs.json' },
       { name: 'Similar Words', path: '../../datacentre/datasm-02.json' },
-      { name: 'B2 Collocations', path: '../../datacentre/data-collocations-gapfill.json' } 
-
+      { name: 'B2 Collocations', path: '../../datacentre/data-collocations-gapfill.json' },
+      { name: 'Phrasal Verbs', path: '../../datacentre/data-phrasal-verbs.json' }
     ];
 
     // Global state variables
@@ -1213,6 +1212,12 @@
       if (shuffledSets[setIdx]) return shuffledSets[setIdx];
       
       const set = quizData.sets[setIdx];
+      
+      // Skip shuffling for phrasal verb mode (uses verb-particle system, not word bank)
+      if (quizData.phrasalVerbMode || !set.words) {
+        return null;
+      }
+      
       const originalWords = [...set.words];
       const shuffledWords = shuffleArray(originalWords);
       
@@ -1234,6 +1239,7 @@
     // Get the correct answer index after shuffling
     function getShuffledCorrectIndex(setIdx, originalCorrectIdx) {
       const shuffleData = shuffleSetWords(setIdx);
+      if (!shuffleData) return originalCorrectIdx; // Phrasal verb mode - no shuffling
       return shuffleData.indexMap[originalCorrectIdx];
     }
     
@@ -1706,7 +1712,7 @@
         if (isPhrasalVerbMode) {
           // Render verb-particle bank for phrasal verbs
           html += renderVerbParticleBank(set, setIdx, showingResults);
-        } else {
+        } else if (shuffleData) {
           // Word bank (shuffled)
           html += '<div class="word-bank">';
           shuffleData.words.forEach((word, wordIdx) => {
@@ -1765,7 +1771,7 @@
             } else {
               blankHtml = `<span class="blank" onclick="handleBlankClick(${setIdx}, ${sentIdx})">_____</span>`;
             }
-          } else {
+          } else if (shuffleData) {
             // Normal word mode
             const shuffledCorrectIdx = getShuffledCorrectIndex(setIdx, sentence.correct);
             isCorrect = answer === shuffledCorrectIdx;
@@ -1842,7 +1848,7 @@
       if (isPhrasalVerbMode) {
         // Render verb-particle bank for phrasal verbs
         html += renderVerbParticleBank(set, actualSetIdx, isLocked);
-      } else {
+      } else if (shuffleData) {
         // Render normal word bank (shuffled)
         html += '<div class="word-bank">';
         shuffleData.words.forEach((word, wordIdx) => {
@@ -1904,7 +1910,7 @@
           } else {
             blankHtml = `<span class="blank" onclick="handleBlankClick(${actualSetIdx}, ${sentIdx})">_____</span>`;
           }
-        } else {
+        } else if (shuffleData) {
           // Normal word mode
           const shuffledCorrectIdx = getShuffledCorrectIndex(actualSetIdx, sentence.correct);
           isCorrect = answer === shuffledCorrectIdx;
@@ -2446,7 +2452,7 @@
             userWord = userAnswer.text;
             isCorrect = (userAnswer.verb === sentence.verb && userAnswer.particleIdx === sentence.correct);
           }
-        } else {
+        } else if (shuffleData) {
           // Normal word mode
           const shuffledCorrectIdx = getShuffledCorrectIndex(setIdx, sentence.correct);
           correctWord = shuffleData.words[shuffledCorrectIdx];
@@ -2564,6 +2570,8 @@
       const endSet = Math.min(startSet + SETS_PER_TEST, quizData.sets.length);
       
       let qNum = 1;
+      const isPhrasalVerbMode = quizData.phrasalVerbMode || false;
+      
       for (let setIdx = startSet; setIdx < endSet; setIdx++) {
         const set = quizData.sets[setIdx];
         const shuffleData = shuffleSetWords(setIdx);
@@ -2571,10 +2579,24 @@
         set.sentences.forEach((sentence, sentIdx) => {
           const key = `${setIdx}-${sentIdx}`;
           const userAnswer = answers[key];
-          const shuffledCorrectIdx = getShuffledCorrectIndex(setIdx, sentence.correct);
-          const isCorrect = userAnswer === shuffledCorrectIdx;
-          const userWord = userAnswer !== undefined ? shuffleData.words[userAnswer] : '?';
-          const correctWord = shuffleData.words[shuffledCorrectIdx];
+          let isCorrect = false;
+          let userWord = '?';
+          let correctWord = '';
+          
+          if (isPhrasalVerbMode) {
+            // Phrasal verb mode
+            correctWord = sentence.answer;
+            if (userAnswer) {
+              userWord = userAnswer.text;
+              isCorrect = (userAnswer.verb === sentence.verb && userAnswer.particleIdx === sentence.correct);
+            }
+          } else if (shuffleData) {
+            // Normal word mode
+            const shuffledCorrectIdx = getShuffledCorrectIndex(setIdx, sentence.correct);
+            isCorrect = userAnswer === shuffledCorrectIdx;
+            userWord = userAnswer !== undefined ? shuffleData.words[userAnswer] : '?';
+            correctWord = shuffleData.words[shuffledCorrectIdx];
+          }
           
           html += `
             <div class="answer-item ${isCorrect ? 'correct' : 'incorrect'}" style="animation-delay: ${(qNum - 1) * 30}ms">

@@ -2,10 +2,6 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>INTUITY - Review Master</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -870,7 +866,7 @@
       .review-title-small {
         font-size: 1rem;
       }
-      
+
       .review-subtitle {
         font-size: 0.65rem;
       }
@@ -1032,130 +1028,162 @@
   </div>
 
   <script>
-    // State
-    let currentMode = 'paragraphs';
-    let currentParagraph = 0;
-    let currentReviewIndex = 0;
-    let showXRay = false;
+   // State
+let currentMode = 'paragraphs';
+let currentParagraph = 0;
+let currentReviewIndex = 0;
+let currentStyle = 'default'; // NEW: Track current style
+let showXRay = false;
 
-    let questionsData = [];
-    let samplesData = [];
-    let ideasData = {};
+let questionsData = [];
+let samplesData = [];
+let ideasData = {};
 
-    // Initialize
-    async function init() {
-      try {
-        const [questionsRes, samplesRes, ideasRes] = await Promise.all([
-          fetch('data/review-questions.json'),
-          fetch('data/samples.json'),
-          fetch('data/ideas.json')
-        ]);
+// Initialize
+async function init() {
+  try {
+    const [questionsRes, samplesRes, ideasRes] = await Promise.all([
+      fetch('data/review-questions.json'),
+      fetch('data/samples.json'),
+      fetch('data/ideas.json')
+    ]);
 
-        const questions = await questionsRes.json();
-        const samples = await samplesRes.json();
-        const ideas = await ideasRes.json();
+    const questions = await questionsRes.json();
+    const samples = await samplesRes.json();
+    const ideas = await ideasRes.json();
 
-        questionsData = questions.questions || [];
-        samplesData = samples.opinion || [];
-        ideasData = ideas.reviews || {};
+    questionsData = questions.questions || [];
+    samplesData = samples.opinion || [];
+    ideasData = ideas.reviews || {};
 
-        // Check for review ID in URL parameter
-        const urlParams = new URLSearchParams(window.location.search);
-        const reviewId = urlParams.get('question');
-        
-        if (reviewId && samplesData.length > 0) {
-          const index = samplesData.findIndex(review => review.id === reviewId);
-          if (index !== -1) {
-            currentReviewIndex = index;
-          }
-        }
-
-        updateUI();
-        render();
-      } catch (error) {
-        console.error('Error loading data:', error);
-        document.getElementById('contentInner').innerHTML = '<div class="loading">Error loading data</div>';
+    // Check for review ID in URL parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const reviewId = urlParams.get('question');
+    
+    if (reviewId && samplesData.length > 0) {
+      const index = samplesData.findIndex(review => review.id === reviewId);
+      if (index !== -1) {
+        currentReviewIndex = index;
       }
     }
 
-    function toggleMode() {
-      currentMode = currentMode === 'paragraphs' ? 'full' : 'paragraphs';
-      updateUI();
-      render();
+    updateUI();
+    render();
+  } catch (error) {
+    console.error('Error loading data:', error);
+    document.getElementById('contentInner').innerHTML = '<div class="loading">Error loading data</div>';
+  }
+}
+
+// NEW: Select style function
+function selectStyle(styleName) {
+  currentStyle = styleName;
+  
+  // Update active style button
+  document.querySelectorAll('.style-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  event.target.closest('.style-btn').classList.add('active');
+  
+  render();
+}
+
+function toggleMode() {
+  currentMode = currentMode === 'paragraphs' ? 'full' : 'paragraphs';
+  updateUI();
+  render();
+}
+
+function toggleXRay() {
+  showXRay = !showXRay;
+  document.getElementById('xrayBtn').textContent = showXRay ? 'Normal' : 'X-Ray';
+  render();
+}
+
+function goToStage(index) {
+  currentParagraph = index;
+  updateStageDots();
+  render();
+}
+
+function prevReview() {
+  if (currentReviewIndex > 0) {
+    currentReviewIndex--;
+    currentParagraph = 0;
+    currentStyle = 'default'; // Reset to default style
+    updateStyleButtons();
+    updateUI();
+    render();
+  }
+}
+
+function nextReview() {
+  if (currentReviewIndex < samplesData.length - 1) {
+    currentReviewIndex++;
+    currentParagraph = 0;
+    currentStyle = 'default'; // Reset to default style
+    updateStyleButtons();
+    updateUI();
+    render();
+  }
+}
+
+// NEW: Update style buttons
+function updateStyleButtons() {
+  document.querySelectorAll('.style-btn').forEach(btn => {
+    btn.classList.remove('active');
+    if (btn.textContent.toLowerCase().includes(currentStyle)) {
+      btn.classList.add('active');
     }
+  });
+}
 
-    function toggleXRay() {
-      showXRay = !showXRay;
-      document.getElementById('xrayBtn').textContent = showXRay ? 'Normal' : 'X-Ray';
-      render();
-    }
+function updateUI() {
+  // Update toggle knob position
+  const modeKnob = document.getElementById('modeKnob');
+  modeKnob.style.left = currentMode === 'full' ? '26px' : '2px';
 
-    function goToStage(index) {
-      currentParagraph = index;
-      updateStageDots();
-      render();
-    }
+  // Update toggle labels
+  document.getElementById('paragraphsLabel').className = 'toggle-label ' + (currentMode === 'paragraphs' ? 'active' : 'inactive');
+  document.getElementById('fullTextLabel').className = 'toggle-label ' + (currentMode === 'full' ? 'active' : 'inactive');
 
-    function prevReview() {
-      if (currentReviewIndex > 0) {
-        currentReviewIndex--;
-        currentParagraph = 0;
-        updateUI();
-        render();
-      }
-    }
+  // Show/hide stage dots (only in paragraph mode)
+  const showDots = currentMode === 'paragraphs' && samplesData.length > 0;
+  document.getElementById('stageDots').className = 'stage-dots-section' + (showDots ? '' : ' hidden');
 
-    function nextReview() {
-      if (currentReviewIndex < samplesData.length - 1) {
-        currentReviewIndex++;
-        currentParagraph = 0;
-        updateUI();
-        render();
-      }
-    }
+  // Show/hide style selector
+  const showStyles = samplesData.length > 0;
+  document.getElementById('styleSelector').className = 'style-selector' + (showStyles ? '' : ' hidden');
 
-    function updateUI() {
-      // Update toggle knob position
-      const modeKnob = document.getElementById('modeKnob');
-      modeKnob.style.left = currentMode === 'full' ? '26px' : '2px';
+  // Show/hide X-Ray button (always show when review is loaded)
+  const showXRayBtn = samplesData.length > 0;
+  document.getElementById('xrayBtn').className = 'xray-btn' + (showXRayBtn ? '' : ' hidden');
 
-      // Update toggle labels
-      document.getElementById('paragraphsLabel').className = 'toggle-label ' + (currentMode === 'paragraphs' ? 'active' : 'inactive');
-      document.getElementById('fullTextLabel').className = 'toggle-label ' + (currentMode === 'full' ? 'active' : 'inactive');
+  // Show/hide navigation footer
+  const showNav = samplesData.length > 0;
+  document.getElementById('navFooter').className = 'nav-footer' + (showNav ? '' : ' hidden');
 
-      // Show/hide stage dots (only in paragraph mode)
-      const showDots = currentMode === 'paragraphs' && samplesData.length > 0;
-      document.getElementById('stageDots').className = 'stage-dots-section' + (showDots ? '' : ' hidden');
+  // Update navigation buttons
+  document.getElementById('prevBtn').disabled = currentReviewIndex === 0;
+  document.getElementById('nextBtn').disabled = currentReviewIndex === samplesData.length - 1;
+  document.getElementById('navInfo').textContent = `Review ${currentReviewIndex + 1} of ${samplesData.length}`;
 
-      // Show/hide X-Ray button (always show when review is loaded)
-      const showXRayBtn = samplesData.length > 0;
-      document.getElementById('xrayBtn').className = 'xray-btn' + (showXRayBtn ? '' : ' hidden');
+  updateStageDots();
+}
 
-      // Show/hide navigation footer
-      const showNav = samplesData.length > 0;
-      document.getElementById('navFooter').className = 'nav-footer' + (showNav ? '' : ' hidden');
+function updateStageDots() {
+  const dots = document.querySelectorAll('.stage-dot-wrapper');
+  dots.forEach((wrapper, i) => {
+    wrapper.className = 'stage-dot-wrapper' + (i === currentParagraph ? ' current' : '');
+  });
+}
 
-      // Update navigation buttons
-      document.getElementById('prevBtn').disabled = currentReviewIndex === 0;
-      document.getElementById('nextBtn').disabled = currentReviewIndex === samplesData.length - 1;
-      document.getElementById('navInfo').textContent = `Review ${currentReviewIndex + 1} of ${samplesData.length}`;
-
-      updateStageDots();
-    }
-
-    function updateStageDots() {
-      const dots = document.querySelectorAll('.stage-dot-wrapper');
-      dots.forEach((wrapper, i) => {
-        wrapper.className = 'stage-dot-wrapper' + (i === currentParagraph ? ' current' : '');
-      });
-    }
-
-    function extractParagraphs(htmlAnswer) {
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = htmlAnswer;
-      const paragraphs = Array.from(tempDiv.querySelectorAll('p'));
-      return paragraphs.map(p => p.innerHTML);
-    }
+function extractParagraphs(htmlAnswer) {
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = htmlAnswer;
+  const paragraphs = Array.from(tempDiv.querySelectorAll('p'));
+  return paragraphs.map(p => p.innerHTML);
+}
 
 function render() {
   const container = document.getElementById('contentInner');
@@ -1166,7 +1194,9 @@ function render() {
     return;
   }
 
-  const paragraphs = extractParagraphs(currentSample.answer);
+  // FIXED: Get the styled content from the styles object
+  const styledContent = currentSample.styles[currentStyle] || currentSample.styles['default'];
+  const paragraphs = extractParagraphs(styledContent);
 
   // Paragraph Mode
   if (currentMode === 'paragraphs') {
@@ -1178,7 +1208,6 @@ function render() {
 
     const labels = ['Introduction', 'Feature 1', 'Feature 2', 'Recommendation'];
     
-    // ✅ Always include full HTML with spans, toggle xray-active class
     container.innerHTML = `
       <div class="review-title-small">${currentSample.title}</div>
       <div class="review-subtitle">${labels[currentParagraph]}</div>
@@ -1202,928 +1231,111 @@ function render() {
   }
 }
 
-   // Modal Functions
-    function openQuestionModal() {
-      const currentSample = samplesData[currentReviewIndex];
-      if (!currentSample) return;
+// Modal Functions
+function openQuestionModal() {
+  const currentSample = samplesData[currentReviewIndex];
+  if (!currentSample) return;
 
-      // Find matching question
-      const question = questionsData.find(q => q.id === currentSample.id);
-      if (!question) {
-        alert('Question not found for this review');
-        return;
-      }
+  const question = questionsData.find(q => q.id === currentSample.id);
+  if (!question) {
+    alert('Question not found for this review');
+    return;
+  }
 
-      const modalBody = document.getElementById('questionModalBody');
+  const modalBody = document.getElementById('questionModalBody');
+  
+  let html = `
+    <div class="question-modal-context">
+      <div class="question-modal-label">Context</div>
+      <div class="question-modal-text">${question.context}</div>
+    </div>
+
+    <div class="question-modal-main">
+      <div class="question-modal-label">Question</div>
+      <div class="question-modal-main-text">${question.question}</div>
+    </div>
+
+    <div class="question-modal-points">
+      <div class="question-modal-points-label">
+        <span>✍️</span>
+        <span>Write about:</span>
+      </div>
+  `;
+
+  question.keyPoints.forEach(point => {
+    html += `
+      <div class="question-modal-point">
+        <div class="question-modal-bullet"></div>
+        <span>${point}</span>
+      </div>
+    `;
+  });
+
+  html += '</div>';
+  modalBody.innerHTML = html;
+  document.getElementById('questionModal').classList.add('active');
+}
+
+function openPlanModal() {
+  const currentSample = samplesData[currentReviewIndex];
+  if (!currentSample) return;
+
+  const plan = ideasData[currentSample.id];
+  if (!plan) {
+    alert('Review plan not found for this review');
+    return;
+  }
+
+  const modalBody = document.getElementById('planModalBody');
+  
+  let html = '<div class="skeleton-view">';
+  
+  html += `
+    <div class="skeleton-section">
+      <div class="skeleton-topic">${plan.topic || 'Review Plan'}</div>
+    </div>
+  `;
+  
+  if (plan.skeleton) {
+    plan.skeleton.forEach(section => {
+      html += `<div class="skeleton-section">`;
+      html += `<div class="skeleton-title">${section.title}</div>`;
       
-      let html = `
-        <div class="question-modal-context">
-          <div class="question-modal-label">Context</div>
-          <div class="question-modal-text">${question.context}</div>
-        </div>
-
-        <div class="question-modal-main">
-          <div class="question-modal-label">Question</div>
-          <div class="question-modal-main-text">${question.question}</div>
-        </div>
-
-        <div class="question-modal-points">
-          <div class="question-modal-points-label">
-            <span>✍️</span>
-            <span>Write about:</span>
-          </div>
-      `;
-
-      question.keyPoints.forEach(point => {
-        html += `
-          <div class="question-modal-point">
-            <div class="question-modal-bullet"></div>
-            <span>${point}</span>
-          </div>
-        `;
-      });
-
-      html += '</div>';
-      modalBody.innerHTML = html;
-      document.getElementById('questionModal').classList.add('active');
-    }
-
-    function openPlanModal() {
-      const currentSample = samplesData[currentReviewIndex];
-      if (!currentSample) return;
-
-      const plan = ideasData[currentSample.id];
-      if (!plan) {
-        alert('Review plan not found for this review');
-        return;
-      }
-
-      const modalBody = document.getElementById('planModalBody');
-      
-      let html = '<div class="skeleton-view">';
-      
-      // Topic and question
-      html += `
-        <div class="skeleton-section">
-          <div class="skeleton-topic">${plan.topic || 'Review Plan'}</div>
-        </div>
-      `;
-      
-      // Skeleton sections
-      if (plan.skeleton) {
-        plan.skeleton.forEach(section => {
-          html += `<div class="skeleton-section">`;
-          html += `<div class="skeleton-title">${section.title}</div>`;
-          
-          if (section.items) {
-            section.items.forEach(item => {
-              html += `<div class="skeleton-note">`;
-              html += `<span class="note-marker">${item.marker}</span>`;
-              html += `<div class="note-content">`;
-              html += `<span class="note-text">${item.text}</span>`;
-              html += `</div>`;
-              html += `</div>`;
-            });
-          }
-          
+      if (section.items) {
+        section.items.forEach(item => {
+          html += `<div class="skeleton-note">`;
+          html += `<span class="note-marker">${item.marker}</span>`;
+          html += `<div class="note-content">`;
+          html += `<span class="note-text">${item.text}</span>`;
+          html += `</div>`;
           html += `</div>`;
         });
       }
       
-      html += '</div>';
-      
-      modalBody.innerHTML = html;
-      document.getElementById('planModal').classList.add('active');
-    }
-
-    function closeModal(event, modalId) {
-      document.getElementById(modalId).classList.remove('active');
-    }
-
-    // Keyboard shortcuts
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        closeModal(null, 'questionModal');
-        closeModal(null, 'planModal');
-      }
+      html += `</div>`;
     });
+  }
+  
+  html += '</div>';
+  
+  modalBody.innerHTML = html;
+  document.getElementById('planModal').classList.add('active');
+}
 
-    // Initialize on load
-    init();
+function closeModal(event, modalId) {
+  document.getElementById(modalId).classList.remove('active');
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeModal(null, 'questionModal');
+    closeModal(null, 'planModal');
+  }
+});
+
+// Initialize on load
+init();
   </script>
 </body>
-</html>width, initial-scale=1.0">
-  <title>INTUITY - Review Master</title>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    
-    body {
-      font-family: 'DM Sans', sans-serif;
-      background: radial-gradient(circle at top, #1a1a1a 0, #050505 45%, #000 100%);
-      color: #e5e5e7;
-      min-height: 100vh;
-      position: relative;
-    }
-
-    body::before {
-      content: '';
-      position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: radial-gradient(circle at 30% 20%, rgba(201, 169, 97, 0.1) 0%, transparent 50%),
-                  radial-gradient(circle at 70% 80%, rgba(201, 169, 97, 0.08) 0%, transparent 45%);
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    .container {
-      position: relative;
-      z-index: 2;
-      max-width: 1100px;
-      width: 100%;
-      margin: 0 auto;
-      padding: 1rem;
-    }
-
-    .global-header {
-      background: rgba(28, 28, 30, 0.95);
-      backdrop-filter: blur(40px);
-      border-radius: 1rem;
-      padding: 1rem 1.5rem;
-      margin-bottom: 1rem;
-      text-align: center;
-      border-bottom: 1px solid rgba(84, 84, 88, 0.3);
-      position: relative;
-    }
-
-    .header-brand-logo {
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 1.6rem;
-      font-weight: 700;
-      background: linear-gradient(135deg, #C9A961 0%, rgba(255,255,255,0.85) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      text-transform: uppercase;
-    }
-
-    .header-subtitle {
-      font-size: 0.75rem;
-      color: #636366;
-      margin-top: 0.25rem;
-    }
-
-    .home-link {
-      color: #8e8e93;
-      text-decoration: none;
-      font-size: 0.8rem;
-      font-weight: 600;
-      padding: 0.4rem 0.85rem;
-      border-radius: 0.5rem;
-      transition: all 0.3s;
-      position: absolute;
-      right: 1.5rem;
-      top: 50%;
-      transform: translateY(-50%);
-    }
-
-    .home-link:hover {
-      color: #C9A961;
-      background: rgba(201, 169, 97, 0.1);
-    }
-
-    .toggle-navigation {
-      background: rgba(28, 28, 30, 0.8);
-      border-radius: 1rem;
-      padding: 1rem 1.5rem;
-      margin-bottom: 1rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 2rem;
-    }
-
-    .toggle-group {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      flex: 1;
-    }
-
-    .toggle-label {
-      font-size: 0.7rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      white-space: nowrap;
-      transition: color 0.3s;
-    }
-
-    .toggle-label.active {
-      color: #7dd3fc;
-    }
-
-    .toggle-label.inactive {
-      color: #636366;
-    }
-
-    .toggle-switch {
-      position: relative;
-      width: 48px;
-      height: 24px;
-      background: rgba(125, 211, 252, 0.2);
-      border-radius: 999px;
-      cursor: pointer;
-      border: 1px solid rgba(125, 211, 252, 0.3);
-      transition: all 0.3s;
-    }
-
-    .toggle-knob {
-      position: absolute;
-      top: 2px;
-      left: 2px;
-      width: 18px;
-      height: 18px;
-      background: #7dd3fc;
-      border-radius: 50%;
-      transition: all 0.3s;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-    }
-
-    .modal-buttons {
-      display: flex;
-      gap: 0.5rem;
-    }
-
-    .modal-btn {
-      background: rgba(0, 0, 0, 0.3);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 0.5rem;
-      padding: 0.5rem 1rem;
-      color: #C9A961;
-      font-size: 0.7rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      cursor: pointer;
-      transition: all 0.3s;
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-    }
-
-    .modal-btn:hover {
-      background: rgba(0, 0, 0, 0.5);
-      border-color: rgba(201, 169, 97, 0.3);
-      transform: translateY(-1px);
-    }
-
-    .unified-box {
-      background: rgba(20, 20, 22, 0.9);
-      backdrop-filter: blur(30px);
-      border-radius: 1.5rem;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      overflow: hidden;
-    }
-
-    .stage-dots-section {
-      padding: 0.85rem 1rem;
-      background: rgba(0, 0, 0, 0.2);
-      border-bottom: 1px solid rgba(84, 84, 88, 0.2);
-      display: flex;
-      justify-content: center;
-      gap: 1.5rem;
-    }
-
-    .stage-dots-section.hidden {
-      display: none;
-    }
-
-    .stage-dot-wrapper {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.3rem;
-      cursor: pointer;
-    }
-
-    .stage-dot {
-      width: 1rem;
-      height: 1rem;
-      border-radius: 50%;
-      background: rgba(99, 99, 102, 0.3);
-      border: 2px solid rgba(99, 99, 102, 0.3);
-      transition: all 0.3s;
-    }
-
-    .stage-dot-wrapper.current .stage-dot {
-      background: rgba(201, 169, 97, 0.3);
-      border-color: #C9A961;
-      transform: scale(1.3);
-      box-shadow: 0 0 0 4px rgba(201, 169, 97, 0.15);
-    }
-
-    .stage-dot-label {
-      font-size: 0.55rem;
-      font-weight: 700;
-      color: #636366;
-      text-transform: uppercase;
-      transition: all 0.3s;
-    }
-
-    .stage-dot-wrapper.current .stage-dot-label {
-      color: #C9A961;
-    }
-
-    .content-area {
-      position: relative;
-      padding: 3rem 2.5rem;
-      min-height: 500px;
-      background: linear-gradient(145deg, rgba(25, 25, 27, 0.8), rgba(15, 15, 17, 0.9));
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .content-inner {
-      width: 100%;
-      max-width: 900px;
-    }
-
-    .xray-btn {
-      position: absolute;
-      top: 1rem;
-      right: 1rem;
-      padding: 0.5rem 1rem;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(0, 0, 0, 0.5);
-      backdrop-filter: blur(10px);
-      color: #C9A961;
-      font-size: 0.7rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      cursor: pointer;
-      transition: all 0.3s;
-    }
-
-    .xray-btn:hover {
-      background: rgba(0, 0, 0, 0.7);
-      transform: translateY(-1px);
-    }
-
-    .xray-btn.hidden {
-      display: none;
-    }
-
-    .review-title-small {
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 1.5rem;
-      font-weight: 800;
-      color: #fef3c7;
-      margin-bottom: 0.5rem;
-      text-align: center;
-    }
-
-    .review-subtitle {
-      font-size: 0.8rem;
-      color: #9ca3af;
-      text-align: center;
-      margin-bottom: 2rem;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-    }
-
-    .paragraph-text, .full-text-view {
-      font-size: 1.4rem;
-      line-height: 1.75;
-      color: #e5e7eb;
-    }
-
-    .full-paragraph {
-      margin-bottom: 2rem;
-    }
-
-    .paragraph-text .discourse,
-    .paragraph-text .opinion,
-    .paragraph-text .vocabulary,
-    .full-text-view .discourse,
-    .full-text-view .opinion,
-    .full-text-view .vocabulary {
-      color: inherit;
-      font-weight: inherit;
-      border-bottom: none;
-      padding-bottom: 0;
-    }
-
-    .paragraph-text.xray-active .discourse,
-    .full-text-view.xray-active .discourse,
-    .paragraph-text.xray-active .opinion,
-    .full-text-view.xray-active .opinion,
-    .paragraph-text.xray-active .vocabulary,
-    .full-text-view.xray-active .vocabulary {
-      color: #7dd3fc !important;
-      font-weight: 600 !important;
-      border-bottom: 2px solid rgba(125, 211, 252, 0.4) !important;
-      padding-bottom: 2px !important;
-    }
-
-    .skeleton-view {
-      width: 100%;
-      max-height: 60vh;
-      overflow-y: auto;
-    }
-
-    .skeleton-section {
-      margin-bottom: 2rem;
-      padding: 1.5rem;
-      background: rgba(255, 255, 255, 0.02);
-      border-radius: 0.75rem;
-      border-left: 4px solid #C9A961;
-    }
-
-    .skeleton-topic {
-      font-size: 0.75rem;
-      color: #ff9500;
-      text-transform: uppercase;
-      margin-bottom: 0.5rem;
-      font-weight: 600;
-    }
-
-    .skeleton-title {
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 1rem;
-      font-weight: 800;
-      color: #C9A961;
-      margin-bottom: 1rem;
-      text-transform: uppercase;
-    }
-
-    .skeleton-note {
-      display: flex;
-      gap: 0.75rem;
-      margin-bottom: 0.75rem;
-      align-items: flex-start;
-    }
-
-    .note-marker {
-      color: #ff9500;
-      font-weight: 700;
-      font-size: 0.95rem;
-      min-width: 2rem;
-      text-align: center;
-      flex-shrink: 0;
-    }
-
-    .note-content {
-      flex: 1;
-    }
-
-    .note-text {
-      color: #9a9a9f;
-      font-weight: 600;
-      font-size: 0.875rem;
-    }
-
-    .nav-footer {
-      padding: 0.85rem 1rem;
-      background: rgba(0, 0, 0, 0.2);
-      border-top: 1px solid rgba(84, 84, 88, 0.2);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 1rem;
-    }
-
-    .nav-footer.hidden {
-      display: none;
-    }
-
-    .nav-btn {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(0, 0, 0, 0.3);
-      color: #C9A961;
-      font-size: 1.2rem;
-      cursor: pointer;
-      transition: all 0.3s;
-    }
-
-    .nav-btn:hover:not(:disabled) {
-      background: rgba(201, 169, 97, 0.15);
-      transform: scale(1.05);
-    }
-
-    .nav-btn:disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
-    }
-
-    .nav-info {
-      font-size: 0.7rem;
-      color: #8e8e93;
-    }
-
-    .loading {
-      text-align: center;
-      color: #8e8e93;
-      font-size: 1.125rem;
-    }
-
-    .modal-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.85);
-      backdrop-filter: blur(10px);
-      z-index: 1000;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 1rem;
-      animation: fadeIn 0.3s ease;
-    }
-
-    .modal-overlay.active {
-      display: flex;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-
-    .modal-content {
-      background: rgba(20, 20, 22, 0.95);
-      backdrop-filter: blur(30px);
-      border-radius: 1.5rem;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      max-width: 700px;
-      width: 100%;
-      max-height: 85vh;
-      overflow: hidden;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.9);
-      animation: slideUp 0.3s ease;
-    }
-
-    @keyframes slideUp {
-      from { transform: translateY(20px); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
-    }
-
-    .modal-header {
-      padding: 1.5rem 2rem;
-      background: rgba(0, 0, 0, 0.3);
-      border-bottom: 1px solid rgba(84, 84, 88, 0.2);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .modal-title {
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: #C9A961;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .modal-close {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 50%;
-      width: 32px;
-      height: 32px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #8e8e93;
-      font-size: 1.25rem;
-      cursor: pointer;
-      transition: all 0.3s;
-    }
-
-    .modal-close:hover {
-      background: rgba(255, 255, 255, 0.1);
-      color: #e5e5e7;
-    }
-
-    .modal-body {
-      padding: 2rem;
-      max-height: calc(85vh - 100px);
-      overflow-y: auto;
-    }
-
-    .question-modal-context {
-      background: rgba(0, 0, 0, 0.3);
-      border-left: 3px solid #636366;
-      border-radius: 0.75rem;
-      padding: 1rem 1.5rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .question-modal-label {
-      font-size: 0.625rem;
-      font-weight: 700;
-      color: #8e8e93;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      margin-bottom: 0.625rem;
-    }
-
-    .question-modal-text {
-      font-size: 0.875rem;
-      line-height: 1.65;
-      color: #aeaeb2;
-      font-style: italic;
-    }
-
-    .question-modal-main {
-      background: linear-gradient(145deg, rgba(201, 169, 97, 0.12), rgba(201, 169, 97, 0.05));
-      border-left: 4px solid #C9A961;
-      border-radius: 0.75rem;
-      padding: 1.5rem 1.75rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .question-modal-main-text {
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 1.125rem;
-      line-height: 1.5;
-      color: #fef3c7;
-      font-weight: 600;
-    }
-
-    .question-modal-points {
-      background: rgba(0, 0, 0, 0.2);
-      border-radius: 0.75rem;
-      padding: 1.25rem 1.5rem;
-    }
-
-    .question-modal-points-label {
-      font-size: 0.7rem;
-      font-weight: 700;
-      color: #8e8e93;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      margin-bottom: 0.875rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .question-modal-point {
-      display: flex;
-      align-items: center;
-      gap: 0.875rem;
-      font-size: 0.9rem;
-      color: #e5e5e7;
-      font-weight: 500;
-      margin-bottom: 0.625rem;
-    }
-
-    .question-modal-bullet {
-      width: 6px;
-      height: 6px;
-      background: #C9A961;
-      border-radius: 50%;
-      flex-shrink: 0;
-      box-shadow: 0 0 8px rgba(201, 169, 97, 0.4);
-    }
-
-    /* Styles Modal Specific */
-    .styles-intro {
-      background: linear-gradient(145deg, rgba(201, 169, 97, 0.08), rgba(201, 169, 97, 0.02));
-      border-left: 4px solid #C9A961;
-      border-radius: 0.75rem;
-      padding: 1.25rem 1.5rem;
-      margin-bottom: 2rem;
-    }
-
-    .styles-intro-text {
-      font-size: 0.95rem;
-      line-height: 1.6;
-      color: #d1d5db;
-      margin-bottom: 0.75rem;
-    }
-
-    .styles-intro-highlight {
-      font-size: 0.85rem;
-      color: #C9A961;
-      font-weight: 600;
-      font-style: italic;
-    }
-
-    .style-card {
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 0.875rem;
-      padding: 1.5rem;
-      margin-bottom: 1.25rem;
-      transition: all 0.3s;
-    }
-
-    .style-card:hover {
-      background: rgba(255, 255, 255, 0.04);
-      border-color: rgba(201, 169, 97, 0.3);
-      transform: translateY(-2px);
-    }
-
-    .style-card-header {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      margin-bottom: 0.875rem;
-    }
-
-    .style-icon {
-      font-size: 1.5rem;
-    }
-
-    .style-name {
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 1.125rem;
-      font-weight: 700;
-      color: #C9A961;
-    }
-
-    .style-description {
-      font-size: 0.875rem;
-      line-height: 1.6;
-      color: #9ca3af;
-      margin-bottom: 0.875rem;
-    }
-
-    .style-examples {
-      background: rgba(0, 0, 0, 0.3);
-      border-radius: 0.5rem;
-      padding: 0.875rem 1rem;
-    }
-
-    .style-examples-label {
-      font-size: 0.7rem;
-      font-weight: 700;
-      color: #8e8e93;
-      text-transform: uppercase;
-      margin-bottom: 0.5rem;
-    }
-
-    .style-example {
-      font-size: 0.85rem;
-      line-height: 1.5;
-      color: #d1d5db;
-      font-style: italic;
-      padding: 0.5rem 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    .style-example:last-child {
-      border-bottom: none;
-    }
-
-    .style-tip {
-      background: rgba(125, 211, 252, 0.08);
-      border-left: 3px solid #7dd3fc;
-      border-radius: 0.5rem;
-      padding: 1rem 1.25rem;
-      margin-top: 2rem;
-    }
-
-    .style-tip-title {
-      font-size: 0.8rem;
-      font-weight: 700;
-      color: #7dd3fc;
-      text-transform: uppercase;
-      margin-bottom: 0.5rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .style-tip-text {
-      font-size: 0.875rem;
-      line-height: 1.6;
-      color: #d1d5db;
-    }
-
-    /* Mobile Responsive */
-    @media (max-width: 768px) {
-      .container { padding: 0.375rem; }
-      .global-header { padding: 0.5rem 0.75rem; }
-      .header-brand-logo { font-size: 1.2rem; }
-      .header-subtitle { font-size: 0.625rem; }
-      .toggle-navigation { flex-direction: row; gap: 0.75rem; padding: 0.75rem 1rem; }
-      .toggle-group { flex: 1; gap: 0.5rem; }
-      .toggle-label { font-size: 0.55rem; }
-      .toggle-switch { width: 40px; height: 20px; }
-      .toggle-knob { width: 15px; height: 15px; }
-      .modal-buttons { gap: 0.375rem; }
-      .modal-btn { padding: 0.4rem 0.75rem; font-size: 0.6rem; gap: 0.3rem; }
-      .stage-dots-section { padding: 0.65rem 0.75rem; gap: 0.75rem; }
-      .stage-dot { width: 0.85rem; height: 0.85rem; }
-      .stage-dot-label { font-size: 0.5rem; }
-      .content-area { padding: 1.5rem 1rem; min-height: 350px; }
-      .xray-btn { top: 0.5rem; right: 0.5rem; padding: 0.4rem 0.75rem; font-size: 0.6rem; }
-      .paragraph-text, .full-text-view { font-size: 1rem; line-height: 1.65; }
-      .review-title-small { font-size: 1.125rem; }
-      .review-subtitle { font-size: 0.7rem; }
-      .nav-footer { padding: 0.65rem 0.75rem; }
-      .nav-btn { width: 36px; height: 36px; font-size: 1.125rem; }
-      .nav-info { font-size: 0.625rem; }
-      .skeleton-section { padding: 1.25rem 1rem; }
-      .skeleton-title { font-size: 0.875rem; }
-      .note-marker { font-size: 0.85rem; min-width: 1.5rem; }
-      .modal-content { max-height: 90vh; margin: 0.5rem; }
-      .modal-header { padding: 1rem 1.25rem; }
-      .modal-title { font-size: 1rem; }
-      .modal-body { padding: 1.5rem 1.25rem; max-height: calc(90vh - 80px); }
-      .question-modal-main-text { font-size: 1rem; }
-      .style-card { padding: 1.25rem; }
-      .style-name { font-size: 1rem; }
-    }
-
-    @media (max-width: 480px) {
-      .container { padding: 0.25rem; }
-      .toggle-navigation { padding: 0.65rem 0.75rem; gap: 0.5rem; }
-      .toggle-label { font-size: 0.5rem; }
-      .toggle-switch { width: 36px; height: 18px; }
-      .toggle-knob { width: 13px; height: 13px; }
-      .modal-btn { padding: 0.35rem 0.65rem; font-size: 0.55rem; }
-      .stage-dots-section { padding: 0.5rem 0.5rem; gap: 0.5rem; }
-      .stage-dot { width: 0.75rem; height: 0.75rem; }
-      .stage-dot-label { font-size: 0.45rem; }
-      .content-area { padding: 1.25rem 0.875rem; min-height: 300px; }
-      .xray-btn { padding: 0.35rem 0.65rem; font-size: 0.55rem; }
-      .paragraph-text, .full-text-view { font-size: 0.9375rem; line-height: 1.6; }
-      .review-title-small { font-size: 1rem; }
-      .review-subtitle { font-size: 0.65rem; }
-      .nav-btn { width: 32px; height: 32px; font-size: 1rem; }
-      .nav-info { font-size: 0.5625rem; }
-      .modal-header { padding: 0.875rem 1rem; }
-      .modal-body { padding: 1.25rem 1rem; }
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    
-    <div class="global-header">
-      <div class="header-brand-logo">INTUITY</div>
-      <div class="header-subtitle">Review Master</div>
-      <a href="../../../index.html?openModal=writing&submenu=reviews" class="home-link">← Reviews</a>
-    </div>
-
-    <div class="toggle-navigation">
-      <div class="toggle-group">
-        <span class="toggle-label" id="paragraphsLabel">💬 Paragraphs</span>
-        <div class="toggle-switch" id="modeToggle" onclick="toggleMode()">
-          <div class="toggle-knob" id="modeKnob"></div>
-        </div>
-        <span class="toggle-label" id="fullTextLabel">📄 Full Text</span>
-      </div>
-
-      <div class="modal-buttons">
-        <button class="modal-btn" onclick="openQuestionModal()">
-          <span>📋</span>
-          <span>Question</span>
-        </button>
-        <button class="modal-btn" onclick="openPlanModal()">
-          <span>💡</span>
-          <span>Plan</span>
-        </button>
-        <button class="modal-btn" onclick="openStylesModal()">
-          <span>🎨</span>
-          <span>Styles</span>
-        </button>
-      </div>
-    </div>
-
-    <div class="unified-box">
-      
-      <div class="stage-dots-section" id="stageDots">
-        <div class="stage-dot-wrapper current" onclick="goToStage(0)">
-          <div class="stage-dot"></div>
-          <span class="stage-dot-label">Intro</span>
-        </div>
-        <div class="stage-dot-wrapper" onclick="goToStage(1)">
-          <div class="stage-dot"></div>
-          <span class="stage-dot-label">Feature 1</span>
-        </div>
-        <div class="stage-dot-wrapper" onclick="goToStage(2)">
-          <div class="stage-dot"></div>
-          <span class="stage-dot-label">Feature 2</span>
-        </div>
-        <div class="stage-dot-wrapper" onclick="goToStage(3)">
-          <div class="stage-dot"></div>
-          <span class="stage-dot-label">Recomm.</span>
-        </div>
-      </div>
-
-      <div class="content-area">
-        <button class="xray-btn" id="xrayBtn" onclick="toggleXRay()
+</html>

@@ -1171,13 +1171,16 @@
   <script>
     // PART 3/5 BEGINS HERE - JavaScript Setup & Data Loading
 // Configuration - NO HARD-CODED DATA
-    const DATASETS = [
-            { name: 'Phrasal Verbs', path: '../../datacentre/phrasal-verbs-complete-set.json' },
+   const DATASETS = [
+      { 
+        name: 'Phrasal Verbs', 
+        path: '../../datacentre/phrasal-verbs-complete-set.json',
+        mixedPath: '../../datacentre/phrasal-verbs-mixed.json'  // ← ADD THIS LINE
+      },
       { name: 'Similar Words', path: '../../datacentre/datasm-02.json' },
       { name: 'B2 Collocations', path: '../../datacentre/data-collocations-gapfill.json' } 
-
-    ];
-
+];
+    
     // Global state variables
     let quizData = null;
     let currentDatasetIndex = 0;
@@ -1320,8 +1323,8 @@
     }
 
     function getStorageKey() {
-      return 'wc_progress_' + DATASETS[currentDatasetIndex].name.toLowerCase().replace(/\s+/g, '_');
-    }
+  return 'pv_progress_' + DATASETS[currentDatasetIndex].name.toLowerCase().replace(/\s+/g, '_');
+}
 
     function loadProgress() {
       try {
@@ -1385,33 +1388,61 @@
     }
 
     // Data Loading
-    async function loadQuizData() {
+ async function loadQuizData() {
+  try {
+    showLoadingState();
+    loadProgress();
+    
+    const dataset = DATASETS[currentDatasetIndex];
+    
+    // Load main file (high-frequency phrasal verbs)
+    const response = await fetch(dataset.path);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const baseData = await response.json();
+    
+    if (!baseData || !baseData.sets || !Array.isArray(baseData.sets)) {
+      throw new Error('Invalid data format');
+    }
+    
+    // Try to load optional mixed file (low-frequency verbs)
+    let mixedData = null;
+    if (dataset.mixedPath) {
       try {
-        showLoadingState();
-        loadProgress();
-        
-        const response = await fetch(DATASETS[currentDatasetIndex].path);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-        
-        if (!data || !data.sets || !Array.isArray(data.sets)) {
-          throw new Error('Invalid data format');
+        const mixedResponse = await fetch(dataset.mixedPath);
+        if (mixedResponse.ok) {
+          mixedData = await mixedResponse.json();
+          console.log('✓ Loaded mixed/low-frequency data');
         }
-        
-        quizData = data;
-        SETS_PER_TEST = data.setsPerTest || 5;
-        shuffledSets = {}; // Reset shuffled mappings
-        
-        updateDatasetButtonText();
-        createDots();
-        createQuestionNavDots();
-        loadTest(0);
-        
-      } catch (error) {
-        console.error('Error loading quiz data:', error);
-        showError(`Could not load quiz: ${error.message}`);
+      } catch (e) {
+        console.log('ℹ No mixed data file (this is optional)');
       }
     }
+    
+    // Merge datasets: high-frequency + low-frequency
+    if (mixedData && mixedData.sets) {
+      quizData = {
+        ...baseData,
+        sets: [...baseData.sets, ...mixedData.sets]
+      };
+      console.log(`✓ Loaded ${baseData.sets.length} high-freq + ${mixedData.sets.length} low-freq sets`);
+    } else {
+      quizData = baseData;
+      console.log(`✓ Loaded ${baseData.sets.length} sets`);
+    }
+    
+    SETS_PER_TEST = quizData.setsPerTest || 5;
+    shuffledSets = {}; // Reset shuffled mappings
+    
+    updateDatasetButtonText();
+    createDots();
+    createQuestionNavDots();
+    loadTest(0);
+    
+  } catch (error) {
+    console.error('Error loading quiz data:', error);
+    showError(`Could not load quiz: ${error.message}`);
+  }
+}
 
     function updateDatasetButtonText() {
       const buttons = document.querySelectorAll('.dataset-option');

@@ -86,7 +86,6 @@
       margin-bottom: 0.75rem;
     }
 
-    /* TIER 1: VERBS */
     .verb-tier {
       margin-bottom: 1rem;
       padding-bottom: 1rem;
@@ -111,7 +110,6 @@
       text-transform: uppercase;
     }
 
-    /* TIER 2: PARTICLES */
     .particle-tier {
       margin-top: 1rem;
     }
@@ -159,6 +157,7 @@
       gap: 0.5rem;
       flex-wrap: wrap;
       word-break: break-word;
+      margin-bottom: 1rem;
     }
     
     .sentence-prompt span {
@@ -166,9 +165,16 @@
       word-wrap: break-word;
       overflow-wrap: break-word;
     }
-    
-    .answer-input {
-      min-width: 200px;
+
+    .dropdown-container {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .dropdown {
+      min-width: 120px;
       padding: 0.5rem 0.75rem;
       background: rgba(28, 28, 30, 0.6);
       border: 1px solid rgba(201, 169, 97, 0.3);
@@ -178,27 +184,70 @@
       font-family: inherit;
       outline: none;
       transition: all 0.3s ease;
+      cursor: pointer;
     }
-    
-    .answer-input:focus {
+
+    .dropdown:focus {
       border-color: #C9A961;
       background: rgba(201, 169, 97, 0.08);
       box-shadow: 0 0 0 3px rgba(201, 169, 97, 0.15);
     }
 
-    /* CORRECT/INCORRECT STATES */
-    .answer-input.correct {
-      background: rgba(16, 185, 129, 0.15);
-      border-color: #10b981;
-      color: #10b981;
+    .dropdown.verb-dropdown {
+      background: rgba(201, 169, 97, 0.15);
+      border-color: rgba(201, 169, 97, 0.4);
+      color: #C9A961;
+      font-weight: 700;
+    }
+
+    .dropdown.particle-dropdown {
+      background: rgba(96, 165, 250, 0.15);
+      border-color: rgba(96, 165, 250, 0.3);
+      color: #60a5fa;
       font-weight: 600;
     }
 
-    .answer-input.incorrect {
+    .dropdown option {
+      background: #1c1c1e;
+      color: #e5e5e7;
+    }
+
+    /* CORRECT/INCORRECT STATES */
+    .dropdown.correct {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: #10b981;
+      color: #10b981;
+    }
+
+    .dropdown.incorrect {
       background: rgba(239, 68, 68, 0.15);
       border-color: #ef4444;
       color: #ef4444;
+    }
+
+    .feedback-message {
+      margin-top: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.5rem;
+      font-size: 0.8125rem;
       font-weight: 600;
+      display: none;
+    }
+
+    .feedback-message.show {
+      display: block;
+    }
+
+    .feedback-message.correct {
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      border: 1px solid #10b981;
+    }
+
+    .feedback-message.incorrect {
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+      border: 1px solid #ef4444;
     }
 
     /* ACTION BUTTONS */
@@ -286,8 +335,9 @@
         font-size: 0.8125rem;
         padding: 0.3125rem 0.625rem;
       }
-      .answer-input {
-        min-width: 180px;
+      .dropdown {
+        min-width: 100px;
+        font-size: 0.875rem;
       }
     }
   </style>
@@ -303,7 +353,6 @@
   <script>
     let allTests = [];
     let currentTest = 0;
-    let userAnswers = {};
     let isChecked = false;
     
     async function loadData() {
@@ -317,7 +366,6 @@
         const data = await response.json();
         console.log('Loaded data:', data);
         
-        // Transform sets into practice structure
         allTests = data.sets.map(set => ({
           title: set.topic,
           setNumber: set.setNumber,
@@ -370,7 +418,6 @@
     
     function loadTest(index) {
       currentTest = index;
-      userAnswers = {};
       isChecked = false;
       renderTestSelector();
       
@@ -381,7 +428,7 @@
       
       // TWO-TIER VERB + PARTICLE BANK
       html += '<div class="verb-particle-bank">';
-      html += '<div class="bank-title">Reference Bank:</div>';
+      html += '<div class="bank-title">Available Options:</div>';
       
       // TIER 1: VERBS
       html += '<div class="verb-tier">';
@@ -392,7 +439,7 @@
       html += '</div>';
       html += '</div>';
       
-      // TIER 2: PARTICLES (collect all unique particles)
+      // TIER 2: PARTICLES
       const allParticles = new Set();
       Object.values(test.verbs).forEach(particles => {
         particles.forEach(p => allParticles.add(p));
@@ -408,28 +455,35 @@
       
       html += '</div>';
       
-      // SENTENCES
+      // Get all verbs and particles for dropdowns
+      const verbs = Object.keys(test.verbs).sort();
+      const particles = Array.from(allParticles).sort();
+      
+      // SENTENCES WITH DROPDOWN SELECTORS
       test.sentences.forEach((sentence, idx) => {
-        const inputId = `input-${idx}`;
         const parts = sentence.text.split('_____');
+        const verbId = `verb-${idx}`;
+        const particleId = `particle-${idx}`;
+        const feedbackId = `feedback-${idx}`;
         
         html += `
           <div class="sentence-item">
             <div class="sentence-number">Question ${idx + 1}</div>
             <div class="sentence-prompt">
               ${parts[0] ? `<span>${parts[0]}</span>` : ''}
-              <input 
-                type="text" 
-                class="answer-input" 
-                id="${inputId}"
-                data-answer="${sentence.answer}"
-                placeholder="verb + particle"
-                autocomplete="off"
-                autocorrect="off"
-                spellcheck="false"
-                onkeypress="handleKeyPress(event, ${idx})">
+              <div class="dropdown-container">
+                <select class="dropdown verb-dropdown" id="${verbId}" data-answer="${sentence.answer}">
+                  <option value="">-- verb --</option>
+                  ${verbs.map(v => `<option value="${v}">${v}</option>`).join('')}
+                </select>
+                <select class="dropdown particle-dropdown" id="${particleId}">
+                  <option value="">-- particle --</option>
+                  ${particles.map(p => `<option value="${p}">${p}</option>`).join('')}
+                </select>
+              </div>
               <span>${parts[1] || ''}</span>
             </div>
+            <div class="feedback-message" id="${feedbackId}"></div>
           </div>
         `;
       });
@@ -443,20 +497,7 @@
       container.innerHTML = html;
     }
     
-    function handleKeyPress(event, index) {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        
-        // Move to next input if available
-        const nextInput = document.getElementById(`input-${index + 1}`);
-        if (nextInput) {
-          nextInput.focus();
-        }
-      }
-    }
-    
     function normalizeAnswer(answer) {
-      // Remove extra spaces, convert to lowercase
       return answer.toLowerCase().trim().replace(/\s+/g, ' ');
     }
     
@@ -466,25 +507,40 @@
       let total = test.sentences.length;
       
       test.sentences.forEach((sentence, idx) => {
-        const input = document.getElementById(`input-${idx}`);
-        const userAnswer = normalizeAnswer(input.value);
+        const verbSelect = document.getElementById(`verb-${idx}`);
+        const particleSelect = document.getElementById(`particle-${idx}`);
+        const feedback = document.getElementById(`feedback-${idx}`);
         
-        // FIX: Get correct answer from the data-answer attribute
-        const correctAnswer = normalizeAnswer(input.dataset.answer);
+        const selectedVerb = verbSelect.value;
+        const selectedParticle = particleSelect.value;
+        const userAnswer = selectedVerb && selectedParticle ? `${selectedVerb} ${selectedParticle}` : '';
         
-        // Also accept answer without space (e.g., "takeoff" for "take off")
-        const correctAnswerNoSpace = correctAnswer.replace(/ /g, '');
+        const correctAnswer = normalizeAnswer(verbSelect.dataset.answer);
+        const normalizedUserAnswer = normalizeAnswer(userAnswer);
         
-        if (userAnswer === correctAnswer || userAnswer === correctAnswerNoSpace) {
-          input.classList.add('correct');
-          input.classList.remove('incorrect');
+        feedback.classList.add('show');
+        
+        if (normalizedUserAnswer === correctAnswer) {
+          verbSelect.classList.add('correct');
+          verbSelect.classList.remove('incorrect');
+          particleSelect.classList.add('correct');
+          particleSelect.classList.remove('incorrect');
+          feedback.classList.add('correct');
+          feedback.classList.remove('incorrect');
+          feedback.textContent = '✓ Correct!';
           correct++;
         } else {
-          input.classList.add('incorrect');
-          input.classList.remove('correct');
+          verbSelect.classList.add('incorrect');
+          verbSelect.classList.remove('correct');
+          particleSelect.classList.add('incorrect');
+          particleSelect.classList.remove('correct');
+          feedback.classList.add('incorrect');
+          feedback.classList.remove('correct');
+          feedback.textContent = `✗ Incorrect. Answer: ${correctAnswer}`;
         }
         
-        input.readOnly = true;
+        verbSelect.disabled = true;
+        particleSelect.disabled = true;
       });
       
       isChecked = true;
@@ -505,38 +561,32 @@
       const buttons = document.querySelector('.action-buttons');
       buttons.innerHTML = `
         <button class="action-btn secondary" onclick="clearAnswers()">Clear & Retry</button>
-        <button class="action-btn" onclick="showAnswers()">Show Answers</button>
       `;
     }
     
-    function showAnswers() {
-      const test = allTests[currentTest];
-      
-      test.sentences.forEach((sentence, idx) => {
-        const input = document.getElementById(`input-${idx}`);
-        if (input.classList.contains('incorrect')) {
-          // FIX: Get correct answer from data-answer attribute
-          input.value = input.dataset.answer;
-          input.classList.remove('incorrect');
-          input.classList.add('correct');
-        }
-      });
-    }
-    
     function clearAnswers() {
-      // Remove score display if exists
+      // Remove score display
       const scoreDisplay = document.querySelector('.score-display');
       if (scoreDisplay) {
         scoreDisplay.remove();
       }
       
-      // Clear all inputs
+      // Clear all dropdowns and feedback
       const test = allTests[currentTest];
       test.sentences.forEach((sentence, idx) => {
-        const input = document.getElementById(`input-${idx}`);
-        input.value = '';
-        input.classList.remove('correct', 'incorrect');
-        input.readOnly = false;
+        const verbSelect = document.getElementById(`verb-${idx}`);
+        const particleSelect = document.getElementById(`particle-${idx}`);
+        const feedback = document.getElementById(`feedback-${idx}`);
+        
+        verbSelect.value = '';
+        particleSelect.value = '';
+        verbSelect.classList.remove('correct', 'incorrect');
+        particleSelect.classList.remove('correct', 'incorrect');
+        verbSelect.disabled = false;
+        particleSelect.disabled = false;
+        
+        feedback.classList.remove('show', 'correct', 'incorrect');
+        feedback.textContent = '';
       });
       
       isChecked = false;

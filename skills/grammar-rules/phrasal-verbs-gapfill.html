@@ -82,9 +82,10 @@
     }
     
     .verb-btn.active {
-      background: rgba(201, 169, 97, 0.35);
-      border-color: #C9A961;
-      box-shadow: 0 2px 8px rgba(201, 169, 97, 0.3);
+      background: rgba(132, 204, 22, 0.25);
+      border-color: #84cc16;
+      color: #84cc16;
+      box-shadow: 0 2px 8px rgba(132, 204, 22, 0.3);
       transform: scale(1.05);
     }
     
@@ -501,7 +502,7 @@
 
   <script>
     let quizData = null;
-    let currentTest = null;
+    let currentTest = null; // Will be set to 0 after loading
     let selectedParticle = null;
     let answers = {};
     let showingResults = false;
@@ -521,6 +522,9 @@
         }
         
         renderVerbSelector();
+        
+        // FIX ISSUE 2: Auto-load first test (index 0 = TAKE)
+        loadTest(0);
         
       } catch (error) {
         console.error('Error loading data:', error);
@@ -582,18 +586,15 @@
           button.classList.add('active');
         }
         button.textContent = btn.label;
-        button.onclick = () => loadTest(btn.index);
+        
+        // FIX ISSUE 3: Use event listener instead of onclick to prevent event bubbling
+        button.addEventListener('click', (e) => {
+          e.stopPropagation(); // Prevent event from bubbling
+          loadTest(btn.index);
+        });
+        
         container.appendChild(button);
       });
-      
-      if (currentTest === null) {
-        document.getElementById('contentContainer').innerHTML = `
-          <div class="empty-state">
-            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">👆</div>
-            <div>Select a verb or mixed test above to begin</div>
-          </div>
-        `;
-      }
     }
 
     function loadTest(testIdx) {
@@ -664,8 +665,7 @@
       html += '<div class="sentences">';
       testData.sentences.forEach((sentence, idx) => {
         const userAnswer = answers[idx];
-        const correctAnswer = sentence.answer.split(' ')[1];
-        const verbPart = sentence.verb;
+        const correctAnswer = sentence.answer.split(' ')[1]; // Extract particle only
         const isCorrect = userAnswer === correctAnswer;
         const parts = sentence.text.split('_____');
         
@@ -675,13 +675,13 @@
         html += `<div class="${numClass}">${idx + 1}</div>`;
         html += `<div class="sentence-text">`;
         html += parts[0];
-        html += `<span class="verb-part">${verbPart}</span> `;
         
+        // FIX ISSUE 1: Show full conjugated answer when checking
         if (showingResults) {
           if (userAnswer && !isCorrect) {
-            html += `<span class="blank incorrect">${userAnswer}</span>`;
+            html += `<span class="blank incorrect">${sentence.verb} ${userAnswer}</span>`;
           }
-          html += `<span class="blank correct">${correctAnswer}</span>`;
+          html += `<span class="blank correct">${sentence.answer}</span>`;
         } else if (userAnswer) {
           html += `<span class="blank filled" onclick="handleBlankClick(${idx})">${userAnswer}</span>`;
         } else {
@@ -757,7 +757,7 @@
       
       testData.sentences.forEach((sentence, idx) => {
         const userAnswer = answers[idx];
-        const correctAnswer = sentence.answer.split(' ')[1];
+        const correctAnswer = sentence.answer.split(' ')[1]; // Extract particle only
         if (userAnswer && userAnswer === correctAnswer) {
           correct++;
         }

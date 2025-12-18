@@ -23,25 +23,6 @@
       padding: 0 1rem;
     }
     
-    .header { 
-      text-align: center; 
-      margin-bottom: 2rem;
-    }
-    
-    .header h1 {
-      font-size: 2rem;
-      font-weight: 700;
-      color: #C9A961;
-      letter-spacing: -0.04em;
-      margin-bottom: 0.5rem;
-    }
-    
-    .header .subtitle { 
-      font-size: 0.875rem; 
-      color: #8e8e93;
-      font-weight: 400;
-    }
-    
     .content-container {
       background: rgba(28, 28, 30, 0.6);
       backdrop-filter: blur(40px) saturate(150%);
@@ -185,13 +166,6 @@
       opacity: 0.5;
     }
     
-    .empty-state {
-      text-align: center;
-      padding: 2rem;
-      color: #636366;
-      font-size: 0.875rem;
-    }
-    
     .sentences {
       display: flex;
       flex-direction: column;
@@ -233,14 +207,14 @@
       font-size: 0.875rem;
     }
     
-   .verb-part {
-  font-weight: 700;
-  color: #60a5fa;
-  background: rgba(96, 165, 250, 0.15);
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
-  border: 1px solid rgba(96, 165, 250, 0.3);
-}
+    .verb-part {
+      font-weight: 700;
+      color: #60a5fa;
+      background: rgba(96, 165, 250, 0.15);
+      padding: 0.125rem 0.375rem;
+      border-radius: 0.25rem;
+      border: 1px solid rgba(96, 165, 250, 0.3);
+    }
     
     .blank {
       display: inline-block;
@@ -468,7 +442,6 @@
 </head>
 <body>
   <div class="container">
-    
     <div class="content-container">
       <div class="verb-selector" id="verbSelector"></div>
       
@@ -502,7 +475,7 @@
 
   <script>
     let quizData = null;
-    let currentTest = null; // Will be set to 0 after loading
+    let currentTest = null;
     let selectedParticle = null;
     let answers = {};
     let showingResults = false;
@@ -522,8 +495,6 @@
         }
         
         renderVerbSelector();
-        
-        // FIX ISSUE 2: Auto-load first test (index 0 = TAKE)
         loadTest(0);
         
       } catch (error) {
@@ -569,6 +540,15 @@
       });
     }
 
+    function shuffleArray(array) {
+      const shuffled = [...array];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      return shuffled;
+    }
+
     function loadTest(testIdx) {
       if (!quizData || testIdx < 0 || testIdx >= quizData.tests.length) return;
       
@@ -576,6 +556,14 @@
       selectedParticle = null;
       answers = {};
       showingResults = false;
+      
+      // Shuffle particles and sentences for this test
+      const testData = quizData.tests[testIdx];
+      testData.shuffledParticles = shuffleArray(testData.particles);
+      testData.shuffledSentences = shuffleArray(testData.sentences.map((s, originalIdx) => ({
+        ...s,
+        originalIdx
+      })));
       
       renderVerbSelector();
       renderTest();
@@ -586,8 +574,9 @@
       if (!quizData || currentTest === null) return;
       
       const testData = quizData.tests[currentTest];
-      const answered = Object.keys(answers).length;
-      const total = testData.sentences.length;
+      const sentencesToDisplay = testData.shuffledSentences || testData.sentences.map((s, i) => ({...s, originalIdx: i}));
+      const answered = sentencesToDisplay.filter(s => answers[s.originalIdx] !== undefined).length;
+      const total = sentencesToDisplay.length;
       
       document.getElementById('progressInfo').style.display = 'flex';
       document.getElementById('progressText').textContent = `${answered}/${total} answered`;
@@ -595,14 +584,14 @@
       const dotsContainer = document.getElementById('progressDots');
       dotsContainer.innerHTML = '';
       
-      for (let i = 0; i < total; i++) {
+      sentencesToDisplay.forEach(s => {
         const dot = document.createElement('div');
         dot.className = 'progress-dot';
-        if (answers[i] !== undefined) {
+        if (answers[s.originalIdx] !== undefined) {
           dot.classList.add('answered');
         }
         dotsContainer.appendChild(dot);
-      }
+      });
     }
 
     function renderTest() {
@@ -617,7 +606,7 @@
       html += '<div class="reference-bank">';
       html += '<div class="bank-title">Particles</div>';
       
-      const allParticles = testData.particles;
+      const allParticles = testData.shuffledParticles || testData.particles;
       
       html += '<div class="particle-list">';
       allParticles.forEach(particle => {
@@ -630,9 +619,13 @@
       html += '</div>';
       html += '</div>';
       
-      // Sentences - VERB IS NOW INCLUDED IN SENTENCE TEXT
+      // Sentences with shuffled order
       html += '<div class="sentences">';
-      testData.sentences.forEach((sentence, idx) => {
+      const sentencesToDisplay = testData.shuffledSentences || testData.sentences.map((s, i) => ({...s, originalIdx: i}));
+      
+      sentencesToDisplay.forEach((sentenceData, displayIdx) => {
+        const sentence = sentenceData;
+        const idx = sentenceData.originalIdx !== undefined ? sentenceData.originalIdx : displayIdx;
         const userAnswer = answers[idx];
         const correctAnswer = sentence.answer;
         const isCorrect = userAnswer === correctAnswer;
@@ -640,7 +633,7 @@
         const numClass = userAnswer ? 'question-number answered' : 'question-number';
         
         html += `<div class="sentence-row">`;
-        html += `<div class="${numClass}">${idx + 1}</div>`;
+        html += `<div class="${numClass}">${displayIdx + 1}</div>`;
         html += `<div class="sentence-text">`;
         
         // Split on _____ and display with blank
@@ -652,10 +645,8 @@
         const lastWord = words[words.length - 1];
         const beforeVerb = words.slice(0, -1).join(' ');
         
-        // Check if last word is likely a verb (could be conjugated)
-        const verbRoot = testData.verb || sentence.verb || '';
-        const isVerb = lastWord.toLowerCase().includes(verbRoot.toLowerCase()) || 
-                       ['take', 'took', 'takes', 'taken', 'taking',
+        // Check if last word is likely a verb
+        const verbList = ['take', 'took', 'takes', 'taken', 'taking',
                         'go', 'goes', 'went', 'gone', 'going',
                         'look', 'looks', 'looked', 'looking',
                         'get', 'gets', 'got', 'getting', 'gotten',
@@ -676,7 +667,9 @@
                         'pick', 'picks', 'picked', 'picking',
                         'drop', 'drops', 'dropped', 'dropping',
                         'hold', 'holds', 'held', 'holding',
-                        'set', 'sets', 'setting'].includes(lastWord.toLowerCase());
+                        'set', 'sets', 'setting'];
+        
+        const isVerb = verbList.includes(lastWord.toLowerCase());
         
         if (isVerb && beforeVerb) {
           html += beforeVerb + ' <span class="verb-part">' + lastWord + '</span> ';
@@ -798,7 +791,6 @@
       document.getElementById('scoreNumber').textContent = `${score.correct}/${score.total}`;
       document.getElementById('scoreLabel').textContent = `${score.percentage}% Correct`;
       
-      // Show/hide next button
       const nextBtn = document.getElementById('nextTestBtn');
       if (currentTest < quizData.tests.length - 1) {
         nextBtn.style.display = 'block';

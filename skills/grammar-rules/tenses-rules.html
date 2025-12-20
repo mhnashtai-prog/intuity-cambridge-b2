@@ -562,14 +562,29 @@
     async function loadData() {
       try {
         const response = await fetch('../../data/grammar-rules/tenses-rules.json');
-        tensesData = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('📊 Raw data loaded:', data);
+        
+        // Convert object structure to array
+        tensesData = Array.isArray(data) ? data : Object.values(data);
+        console.log('✅ Transformed tensesData:', tensesData);
+        
         renderCategoryTabs();
         renderTenseTabs();
         renderContent();
       } catch (error) {
-        console.error('Error loading data:', error);
+        console.error('❌ Error loading data:', error);
         document.getElementById('contentContainer').innerHTML = 
-          '<div style="text-align: center; color: #fb923c; padding: 2rem;">Error loading tenses data.</div>';
+          `<div style="text-align: center; color: #fb923c; padding: 2rem;">
+            <div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div>
+            <div>Error loading tenses data</div>
+            <div style="font-size: 0.75rem; margin-top: 0.5rem;">${error.message}</div>
+          </div>`;
       }
     }
 
@@ -607,45 +622,65 @@
 
     function renderContent() {
       const container = document.getElementById('contentContainer');
+      
+      if (!tensesData || tensesData.length === 0) {
+        container.innerHTML = '<div style="text-align: center; color: #8e8e93; padding: 2rem;">Loading...</div>';
+        return;
+      }
+      
       const categoryKey = categories[currentCategory];
       const tenseKey = tenseTypes[currentTense];
       const tenseId = `${categoryKey}-${tenseKey}`;
       
+      console.log('🔍 Looking for tense:', tenseId);
+      
       const tense = tensesData.find(t => t.id === tenseId);
       
       if (!tense) {
-        container.innerHTML = '<div style="text-align: center; color: #8e8e93; padding: 2rem;">No data available</div>';
+        console.warn('⚠️ Tense not found:', tenseId);
+        console.log('📋 Available tenses:', tensesData.map(t => t.id));
+        container.innerHTML = `
+          <div style="text-align: center; color: #8e8e93; padding: 2rem;">
+            <div>No data available for ${categoryKey} ${tenseKey}</div>
+            <div style="font-size: 0.75rem; margin-top: 0.5rem;">Looking for: ${tenseId}</div>
+          </div>`;
         return;
       }
       
+      console.log('✅ Rendering tense:', tense.name);
+      
       let html = '<div class="content-area active"><div class="use-cases-container">';
       
-      tense.useCases.forEach((useCase, index) => {
-        html += `
-          <div class="use-case-item">
-            <div>
-              <span class="use-case-number">${index + 1}</span>
-              <span class="use-case-title">${useCase.title}</span>
+      if (!tense.useCases || tense.useCases.length === 0) {
+        html += '<div style="text-align: center; color: #8e8e93; padding: 2rem;">No use cases available</div>';
+      } else {
+        tense.useCases.forEach((useCase, index) => {
+          html += `
+            <div class="use-case-item">
+              <div>
+                <span class="use-case-number">${index + 1}</span>
+                <span class="use-case-title">${useCase.title || 'Use Case'}</span>
+              </div>
+              <div class="main-example">${useCase.mainExample || 'No example'}</div>
+              ${useCase.moreExamples && useCase.moreExamples.length > 0 ? `
+                <button class="more-examples-btn" onclick='showMoreExamples(${JSON.stringify(useCase).replace(/'/g, "&#39;")})'>
+                  → more examples
+                </button>
+              ` : ''}
+              ${useCase.timeMarkers && useCase.timeMarkers.length > 0 ? `
+                <div class="time-markers">
+                  ${useCase.timeMarkers.map(marker => `<span class="time-marker">${marker}</span>`).join('')}
+                </div>
+              ` : ''}
+              ${useCase.note ? `
+                <div class="pedagogical-note">
+                  <span class="note-icon">💡</span>${useCase.note}
+                </div>
+              ` : ''}
             </div>
-            <div class="main-example">${useCase.mainExample}</div>
-            ${useCase.moreExamples && useCase.moreExamples.length > 0 ? `
-              <button class="more-examples-btn" onclick='showMoreExamples(${JSON.stringify(useCase)})'>
-                → more examples
-              </button>
-            ` : ''}
-            ${useCase.timeMarkers && useCase.timeMarkers.length > 0 ? `
-              <div class="time-markers">
-                ${useCase.timeMarkers.map(marker => `<span class="time-marker">${marker}</span>`).join('')}
-              </div>
-            ` : ''}
-            ${useCase.note ? `
-              <div class="pedagogical-note">
-                <span class="note-icon">💡</span>${useCase.note}
-              </div>
-            ` : ''}
-          </div>
-        `;
-      });
+          `;
+        });
+      }
       
       html += '</div></div>';
       container.innerHTML = html;
@@ -668,12 +703,16 @@
       const header = document.getElementById('modalHeader');
       const content = document.getElementById('modalContent');
       
-      header.textContent = useCase.title;
+      header.textContent = useCase.title || 'Examples';
       
       let html = '';
-      useCase.moreExamples.forEach(example => {
-        html += `<div class="modal-example">${example}</div>`;
-      });
+      if (useCase.moreExamples && useCase.moreExamples.length > 0) {
+        useCase.moreExamples.forEach(example => {
+          html += `<div class="modal-example">${example}</div>`;
+        });
+      } else {
+        html = '<div style="text-align: center; color: #8e8e93;">No additional examples</div>';
+      }
       
       content.innerHTML = html;
       modal.classList.add('active');
@@ -688,34 +727,6 @@
     });
 
     loadData();
-  </script>
+</script>
 </body>
 </html>
-```
-
----
-
-## **WHAT I'VE ADDED** ✨
-
-✅ **Triple-toggle switch**: 📖 Rules | ✍️ Practice | 📝 Quiz  
-✅ **Category tabs**: PRESENT | PAST | FUTURE (top level)  
-✅ **Tense tabs**: Simple | Continuous | Perfect | Perfect Continuous (second level)  
-✅ **Matrix navigation**: Category switching updates tense tabs and content  
-✅ **Modal for examples**: "→ more examples" button opens popup  
-✅ **Time markers**: Blue chips for temporal indicators  
-✅ **Pedagogical notes**: 💡 icon with teaching tips  
-✅ **Iframe loading**: Practice/Quiz modes load respective HTML files  
-✅ **Exact styling match**: Matches conditionals-rules.html design  
-✅ **Responsive breakpoints**: Mobile-optimized  
-
----
-
-## **NAVIGATION STRUCTURE**
-```
-📖 Rules | ✍️ Practice | 📝 Quiz
-        ↓
-PRESENT | PAST | FUTURE
-        ↓
-Simple | Continuous | Perfect | Perfect Continuous
-        ↓
-Use Cases with Examples + Time Markers

@@ -172,21 +172,21 @@
       font-style: normal;
     }
 
-      .helper-word {
-  color: #60a5fa;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  font-style: normal;
-  margin-left: 0.5rem;
-  padding: 0.25rem 0.5rem;
-  background: rgba(96, 165, 250, 0.1);
-  border-radius: 0.375rem;
-  border: 1px solid rgba(96, 165, 250, 0.3);
-}
+    .helper-word {
+      color: #60a5fa;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      font-style: normal;
+      margin-left: 0.5rem;
+      padding: 0.25rem 0.5rem;
+      background: rgba(96, 165, 250, 0.1);
+      border-radius: 0.375rem;
+      border: 1px solid rgba(96, 165, 250, 0.3);
+    }
     
     .answer-input {
       display: inline-block;
-      min-width: 80px;
+      min-width: 60px;
       max-width: 180px;
       width: auto;
       padding: 0.25rem 0.5rem;
@@ -533,85 +533,166 @@
       return text.replace(regex, '<span class="main-verb">$&</span>');
     }
     
-   function renderTest() {
-  const test = allTests[currentTest];
-  const container = document.getElementById('contentContainer');
-  
-  let html = '<div class="sentences">';
-  
-  test.sentences.forEach((item, idx) => {
-    const inputId = `input-${idx}`;
-    const userAnswer = userAnswers[idx] || '';
-    
-    const match = item.text.match(/(.*?)_____ \(([^)]+)\)(.*)/);
-    
-    if (match) {
-      let beforeBlank = match[1];
-      const verbHint = match[2];
-      let afterBlank = match[3];
+    function renderTest() {
+      const test = allTests[currentTest];
+      const container = document.getElementById('contentContainer');
       
-      beforeBlank = highlightMainVerb(beforeBlank, item.highlightVerb);
+      let html = '<div class="sentences">';
       
-      const hasAnswer = userAnswer.trim() !== '';
-      const numClass = hasAnswer ? 'question-number answered' : 'question-number';
-      
-      html += `<div class="sentence-row">`;
-      html += `<div class="${numClass}">${idx + 1}</div>`;
-      html += `<div class="sentence-text">`;
-      html += beforeBlank;
-      
-      if (isChecked) {
-        const correctAnswer = normalizeAnswer(item.answer);
-        const alternative = item.alternativeAnswer ? normalizeAnswer(item.alternativeAnswer) : '';
-        const normalized = normalizeAnswer(userAnswer);
-        const isCorrect = normalized === correctAnswer || (alternative && normalized === alternative);
+      test.sentences.forEach((item, idx) => {
+        const inputId1 = `input-${idx}-1`;
+        const inputId2 = `input-${idx}-2`;
+        const userAnswer = userAnswers[idx] || '';
         
-        const inputClass = isCorrect ? 'answer-input correct' : 'answer-input incorrect';
-        html += `<input type="text" class="${inputClass}" value="${userAnswer}" readonly 
-                 style="width: ${Math.max(userAnswer.length * 8 + 20, 80)}px;" />`;
+        // Check if this is a causative (double blank) sentence
+        const isCausative = item.blanks === 2;
         
-        if (!isCorrect) {
-          html += `<span class="correct-answer">${item.answer}</span>`;
+        let match;
+        if (isCausative) {
+          // Match pattern: "text1 _____ text2 _____ (verb) text3"
+          match = item.text.match(/(.*?)_____(.*?)_____ \(([^)]+)\)(.*)/);
+        } else {
+          // Match pattern: "text1 _____ (verb) text2"
+          match = item.text.match(/(.*?)_____ \(([^)]+)\)(.*)/);
         }
-      } else {
-        html += `<input type="text" class="answer-input" id="${inputId}" value="${userAnswer}" 
-                 oninput="handleInput(${idx})" placeholder="..." 
-                 style="width: ${Math.max((userAnswer.length || 3) * 8 + 20, 80)}px;" />`;
+        
+        if (match) {
+          const hasAnswer = userAnswer.trim() !== '';
+          const numClass = hasAnswer ? 'question-number answered' : 'question-number';
+          
+          html += `<div class="sentence-row">`;
+          html += `<div class="${numClass}">${idx + 1}</div>`;
+          html += `<div class="sentence-text">`;
+          
+          if (isCausative) {
+            // CAUSATIVE: Two blanks
+            let beforeFirst = match[1];
+            let betweenBlanks = match[2];
+            const verbHint = match[3];
+            let afterSecond = match[4];
+            
+            beforeFirst = highlightMainVerb(beforeFirst, item.highlightVerb);
+            
+            html += beforeFirst;
+            
+            // Split user answer by " / " 
+            const parts = userAnswer.split(' / ');
+            const answer1 = parts[0] || '';
+            const answer2 = parts[1] || '';
+            
+            if (isChecked) {
+              const correctParts = item.answer.split(' / ');
+              const altParts = item.alternativeAnswer ? item.alternativeAnswer.split(' / ') : [];
+              
+              const normalized1 = normalizeAnswer(answer1);
+              const normalized2 = normalizeAnswer(answer2);
+              const correct1 = normalizeAnswer(correctParts[0] || '');
+              const correct2 = normalizeAnswer(correctParts[1] || '');
+              const alt1 = altParts[0] ? normalizeAnswer(altParts[0]) : '';
+              const alt2 = altParts[1] ? normalizeAnswer(altParts[1]) : '';
+              
+              const isCorrect = (normalized1 === correct1 || (alt1 && normalized1 === alt1)) &&
+                                (normalized2 === correct2 || (alt2 && normalized2 === alt2));
+              
+              const inputClass = isCorrect ? 'answer-input correct' : 'answer-input incorrect';
+              
+              html += `<input type="text" class="${inputClass}" value="${answer1}" readonly 
+                       style="width: ${Math.max(answer1.length * 8 + 20, 60)}px;" />`;
+              html += betweenBlanks;
+              html += `<input type="text" class="${inputClass}" value="${answer2}" readonly 
+                       style="width: ${Math.max(answer2.length * 8 + 20, 80)}px;" />`;
+              
+              if (!isCorrect) {
+                html += ` <span class="correct-answer">${item.answer}</span>`;
+              }
+            } else {
+              html += `<input type="text" class="answer-input" id="${inputId1}" value="${answer1}" 
+                       oninput="handleCausativeInput(${idx}, 1)" placeholder="..." 
+                       style="width: ${Math.max((answer1.length || 3) * 8 + 20, 60)}px;" />`;
+              html += betweenBlanks;
+              html += `<input type="text" class="answer-input" id="${inputId2}" value="${answer2}" 
+                       oninput="handleCausativeInput(${idx}, 2)" placeholder="..." 
+                       style="width: ${Math.max((answer2.length || 3) * 8 + 20, 80)}px;" />`;
+            }
+            
+            html += ` <span class="verb-hint">[${verbHint}]</span>`;
+            html += afterSecond;
+            
+          } else {
+            // REGULAR: Single blank
+            let beforeBlank = match[1];
+            const verbHint = match[2];
+            let afterBlank = match[3];
+            
+            beforeBlank = highlightMainVerb(beforeBlank, item.highlightVerb);
+            
+            html += beforeBlank;
+            
+            if (isChecked) {
+              const correctAnswer = normalizeAnswer(item.answer);
+              const alternative = item.alternativeAnswer ? normalizeAnswer(item.alternativeAnswer) : '';
+              const normalized = normalizeAnswer(userAnswer);
+              const isCorrect = normalized === correctAnswer || (alternative && normalized === alternative);
+              
+              const inputClass = isCorrect ? 'answer-input correct' : 'answer-input incorrect';
+              html += `<input type="text" class="${inputClass}" value="${userAnswer}" readonly 
+                       style="width: ${Math.max(userAnswer.length * 8 + 20, 80)}px;" />`;
+              
+              if (!isCorrect) {
+                html += `<span class="correct-answer">${item.answer}</span>`;
+              }
+            } else {
+              html += `<input type="text" class="answer-input" id="${inputId1}" value="${userAnswer}" 
+                       oninput="handleInput(${idx})" placeholder="..." 
+                       style="width: ${Math.max((userAnswer.length || 3) * 8 + 20, 80)}px;" />`;
+            }
+            
+            html += ` <span class="verb-hint">[${verbHint}]</span>`;
+            html += afterBlank;
+            
+            // Helper word for non-causative
+            if (item.helper) {
+              html += ` <span class="helper-word">[${item.helper}]</span>`;
+            }
+          }
+          
+          html += `</div>`;
+          html += `</div>`;
+        }
+      });
+      
+      html += '</div>';
+      
+      const answered = Object.keys(userAnswers).filter(k => userAnswers[k].trim()).length;
+      if (answered === test.sentences.length) {
+        html += '<div class="footer visible">';
+        html += '<button class="secondary" onclick="clearAnswers()" ' + (isChecked ? 'disabled' : '') + '>Clear</button>';
+        if (!isChecked) {
+          html += '<button class="primary" onclick="checkAnswers()">Submit</button>';
+        } else {
+          html += '<button class="results" onclick="showModal()">View Results</button>';
+        }
+        html += '</div>';
       }
       
-      html += ` <span class="verb-hint">[${verbHint}]</span>`;
-      html += afterBlank;
-      
-      // ✨ ADD HELPER WORD HERE ✨
-      if (item.helper) {
-        html += ` <span class="helper-word">[${item.helper}]</span>`;
-      }
-      
-      html += `</div>`;
-      html += `</div>`;
+      container.innerHTML = html;
     }
-  });
-  
-  html += '</div>';
-  
-  const answered = Object.keys(userAnswers).filter(k => userAnswers[k].trim()).length;
-  if (answered === test.sentences.length) {
-    html += '<div class="footer visible">';
-    html += '<button class="secondary" onclick="clearAnswers()" ' + (isChecked ? 'disabled' : '') + '>Clear</button>';
-    if (!isChecked) {
-      html += '<button class="primary" onclick="checkAnswers()">Submit</button>';
-    } else {
-      html += '<button class="results" onclick="showModal()">View Results</button>';
-    }
-    html += '</div>';
-  }
-  
-  container.innerHTML = html;
-}
     
     function handleInput(idx) {
-      const input = document.getElementById(`input-${idx}`);
+      const input = document.getElementById(`input-${idx}-1`);
       userAnswers[idx] = input.value;
+      updateProgressInfo();
+      renderTest();
+    }
+    
+    function handleCausativeInput(idx, blankNum) {
+      const input1 = document.getElementById(`input-${idx}-1`);
+      const input2 = document.getElementById(`input-${idx}-2`);
+      
+      // Combine both inputs with " / " separator
+      const combined = input1.value.trim() + ' / ' + input2.value.trim();
+      userAnswers[idx] = combined;
+      
       updateProgressInfo();
       renderTest();
     }
@@ -626,15 +707,38 @@
       let total = test.sentences.length;
       
       test.sentences.forEach((item, idx) => {
-        const userAnswer = normalizeAnswer(userAnswers[idx] || '');
-        const correctAnswer = normalizeAnswer(item.answer);
-        const alternativeAnswer = item.alternativeAnswer ? 
-          normalizeAnswer(item.alternativeAnswer) : '';
+        const userAnswer = userAnswers[idx] || '';
         
-        const isCorrect = userAnswer === correctAnswer || 
-                          (alternativeAnswer && userAnswer === alternativeAnswer);
-        
-        if (isCorrect) correct++;
+        if (item.blanks === 2) {
+          // Causative: split both user answer and correct answer
+          const userParts = userAnswer.split(' / ');
+          const correctParts = item.answer.split(' / ');
+          const altParts = item.alternativeAnswer ? item.alternativeAnswer.split(' / ') : [];
+          
+          const normalized1 = normalizeAnswer(userParts[0] || '');
+          const normalized2 = normalizeAnswer(userParts[1] || '');
+          const correct1 = normalizeAnswer(correctParts[0] || '');
+          const correct2 = normalizeAnswer(correctParts[1] || '');
+          const alt1 = altParts[0] ? normalizeAnswer(altParts[0]) : '';
+          const alt2 = altParts[1] ? normalizeAnswer(altParts[1]) : '';
+          
+          const isCorrect = (normalized1 === correct1 || (alt1 && normalized1 === alt1)) &&
+                            (normalized2 === correct2 || (alt2 && normalized2 === alt2));
+          
+          if (isCorrect) correct++;
+          
+        } else {
+          // Regular: single answer
+          const normalized = normalizeAnswer(userAnswer);
+          const correctAnswer = normalizeAnswer(item.answer);
+          const alternativeAnswer = item.alternativeAnswer ? 
+            normalizeAnswer(item.alternativeAnswer) : '';
+          
+          const isCorrect = normalized === correctAnswer || 
+                            (alternativeAnswer && normalized === alternativeAnswer);
+          
+          if (isCorrect) correct++;
+        }
       });
       
       isChecked = true;

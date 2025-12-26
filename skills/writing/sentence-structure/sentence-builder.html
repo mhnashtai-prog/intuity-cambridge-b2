@@ -207,28 +207,18 @@
       text-align: left;
     }
 
-    .sentence-part {
-      display: inline;
-      transition: all 0.3s ease;
+    .sentence-builder.empty {
+      display: none;
     }
 
     .part-core {
-      color: #fef3c7;
-      font-weight: 600;
+      font-weight: 700;
+      color: #e5e7eb;
     }
 
-    .part-new {
-      color: #10b981;
-      font-weight: 500;
-      text-decoration: underline;
-      text-decoration-color: rgba(16, 185, 129, 0.4);
-      text-decoration-thickness: 2px;
-      text-underline-offset: 3px;
-    }
-
-    .part-previous {
-      color: #9ca3af;
+    .part-addition {
       font-weight: 400;
+      color: #e5e7eb;
     }
 
     .explanation {
@@ -524,66 +514,50 @@ function renderStepIndicator() {
   }).join('');
 }
 
-function extractAdditions(stepData) {
-  // Extract text from <span class='highlight'> tags
-  const regex = /<span class='highlight'>([^<]+)<\/span>/g;
-  const matches = [];
-  let match;
-  
-  while ((match = regex.exec(stepData.text)) !== null) {
-    matches.push(match[1]);
-  }
-  
-  return matches;
-}
-
 function cleanText(text) {
   // Remove all HTML tags
   return text.replace(/<[^>]*>/g, '');
 }
 
-function buildSentenceHTML(stepData, stepIndex) {
+function buildSentenceHTML(stepData, stepIndex, example) {
   const cleanSentence = cleanText(stepData.text);
   
+  // For step 0 (incomplete), return empty
   if (stepIndex === 0) {
-    // First step: just show the core sentence
-    return `<span class="sentence-part part-core">${cleanSentence}</span>`;
+    return '';
   }
   
-  // For subsequent steps, we need to identify what's new
-  const example = getCurrentExample();
-  let html = '';
-  let remainingSentence = cleanSentence;
+  // Get the base/core sentence (from step 1 or step 0 if it's complete)
+  const coreStep = example.steps[0].status === 'incomplete' ? example.steps[1] : example.steps[0];
+  const coreSentence = cleanText(coreStep.text);
   
-  // Mark previous additions as old
-  for (let i = 1; i < stepIndex; i++) {
-    const prevAdditions = extractAdditions(example.steps[i]);
-    prevAdditions.forEach(addition => {
-      const regex = new RegExp(`(${addition.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'i');
-      remainingSentence = remainingSentence.replace(regex, (match) => {
-        return `<span class="sentence-part part-previous">${match}</span>`;
-      });
-    });
+  // If we're at the core step, just show it bold
+  if (stepIndex === 1 || (stepIndex === 0 && example.steps[0].status === 'complete')) {
+    return `<span class="part-core">${coreSentence}</span>`;
   }
   
-  // Mark current additions as new
-  const currentAdditions = extractAdditions(stepData);
-  currentAdditions.forEach(addition => {
-    const regex = new RegExp(`(${addition.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'i');
-    remainingSentence = remainingSentence.replace(regex, (match) => {
-      return `<span class="sentence-part part-new">${match}</span>`;
-    });
-  });
+  // For later steps, show core bold and additions normal
+  // Extract additions by comparing with core
+  let html = cleanSentence;
   
-  // Wrap remaining parts (core sentence) if not already wrapped
-  remainingSentence = remainingSentence.replace(/(?<!<span[^>]*>)([^<]+)(?![^<]*<\/span>)/g, (match) => {
-    if (match.trim()) {
-      return `<span class="sentence-part part-core">${match}</span>`;
-    }
-    return match;
-  });
+  // Replace core sentence with bolded version
+  html = html.replace(coreSentence, `<span class="part-core">${coreSentence}</span>`);
   
-  return remainingSentence;
+  // Wrap remaining text (additions) in normal style
+  // Split by the core sentence and wrap the parts
+  const parts = cleanSentence.split(coreSentence);
+  
+  if (parts.length === 2) {
+    const before = parts[0].trim();
+    const after = parts[1].trim();
+    
+    html = '';
+    if (before) html += `<span class="part-addition">${before} </span>`;
+    html += `<span class="part-core">${coreSentence}</span>`;
+    if (after) html += `<span class="part-addition"> ${after}</span>`;
+  }
+  
+  return html;
 }
 
 function renderContent() {
@@ -591,17 +565,21 @@ function renderContent() {
   const stepData = getCurrentStepData();
   const example = getCurrentExample();
   
-  // Get the base sentence (from step 0 or step 1, depending on if step 0 is incomplete)
+  // Get the base sentence for header
   const baseSentence = cleanText(example.steps[0].status === 'incomplete' 
     ? example.steps[1].text 
     : example.steps[0].text);
   
+  // Build sentence HTML
+  const sentenceHTML = buildSentenceHTML(stepData, currentStep, example);
+  const isEmpty = sentenceHTML === '';
+  
   area.innerHTML = `
     <div>
       <div class="core-sentence">${baseSentence}</div>
-      <div class="sentence-builder">${buildSentenceHTML(stepData, currentStep)}</div>
+      <div class="sentence-builder ${isEmpty ? 'empty' : ''}">${sentenceHTML}</div>
       
-      ${stepData.structure ? `
+      ${stepData.structure && !isEmpty ? `
         <div class="structure-tag">
           <span>📐</span>
           <span>${stepData.structure}</span>

@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
       --accent: #C9A961;
@@ -281,33 +281,37 @@
       text-align: center;
     }
 
-   .sentence-builder {
-  font-family: 'DM Sans', 'Inter', sans-serif;
-  font-size: 1.1rem;
-  line-height: 1.8;
-  /* Remove or comment out this line: */
-  /* color: #e5e7eb; */
-  max-width: 90%;
-  margin: 0 auto;
-  text-align: left;
-}
+    .sentence-builder {
+      font-family: 'DM Sans', 'Inter', sans-serif;
+      font-size: 1.1rem;
+      line-height: 1.8;
+      max-width: 90%;
+      margin: 0 auto;
+      text-align: left;
+    }
 
     .sentence-builder.empty {
       display: none;
     }
 
-    .sentence-builder { 
-    font-weight: 800 !important;
-    color: #fef3c7 !important;
-    text-shadow: 0 1px 8px rgba(254, 243, 199, 0.4) !important;
+    /* Core sentence parts - bright, bold, large */
+    .part-core {
+      font-weight: 800 !important;
+      color: #fef3c7 !important;
+      font-size: 1.1rem !important;
+      text-shadow: 0 1px 8px rgba(254, 243, 199, 0.4) !important;
+      letter-spacing: normal !important;
     }
 
+    /* Additional parts - slim, grey, smaller */
     .part-addition {
-     font-weight: 400 !important;
-     color: #b8bcc4 !important;
-     text-transform: none !important;
-     letter-spacing: normal !important;
-     transition: color 0.3s;
+      font-weight: 400 !important;
+      color: #9ca3af !important;
+      font-size: 0.95rem !important;
+      text-transform: none !important;
+      letter-spacing: normal !important;
+      text-shadow: none !important;
+      transition: color 0.3s;
     }
     
     .explanation {
@@ -550,6 +554,14 @@
         font-size: 1rem;
       }
 
+      .part-core {
+        font-size: 1rem !important;
+      }
+
+      .part-addition {
+        font-size: 0.9rem !important;
+      }
+
       .explanation {
         padding: 0.75rem 1rem;
         margin-top: 0.75rem;
@@ -616,9 +628,9 @@
 // ==================== STATE ====================
 let examples = [];
 let currentExampleIndex = 0;
-let currentStep = 1; // Start at step 1 (will show empty, then step 2 shows core+first addition)
+let currentStep = 1;
 let showExplanation = false;
-let mode = 'expanding'; // 'expanding' or 'deconstructing'
+let mode = 'expanding';
 
 // ==================== LOAD DATA ====================
 async function loadData() {
@@ -656,13 +668,8 @@ function getCurrentStepData() {
   const totalSteps = example.steps.length;
   
   if (mode === 'expanding') {
-    // Normal mode: step 1 is empty/core, step 2 is core+first, etc.
     return example.steps[currentStep];
   } else {
-    // Deconstructing mode: reverse the progression
-    // currentStep 1 = show last (most complex)
-    // currentStep 2 = show second-to-last
-    // etc.
     const reversedIndex = totalSteps - currentStep;
     return example.steps[Math.max(1, reversedIndex)];
   }
@@ -670,16 +677,7 @@ function getCurrentStepData() {
 
 function toggleMode() {
   mode = mode === 'expanding' ? 'deconstructing' : 'expanding';
-  
-  // Reset to appropriate starting position
-  if (mode === 'deconstructing') {
-    // Start at step 1, which in deconstructing mode shows the LAST/full sentence
-    currentStep = 1;
-  } else {
-    // Start at step 1, which in expanding mode shows empty
-    currentStep = 1;
-  }
-  
+  currentStep = 1;
   render();
 }
 
@@ -702,12 +700,10 @@ function updateModeLabels() {
 function renderStepIndicator() {
   const indicator = document.getElementById('stepIndicator');
   const example = getCurrentExample();
-  
-  // Show steps from 2 onwards (actual building steps with additions)
   const visibleSteps = example.steps.slice(2);
   
   indicator.innerHTML = visibleSteps.map((step, visualIndex) => {
-    const actualIndex = visualIndex + 2; // Map back to actual step index
+    const actualIndex = visualIndex + 2;
     let className = 'step-dot';
     if (actualIndex === currentStep) className += ' active';
     else if (actualIndex < currentStep) className += ' completed';
@@ -717,23 +713,17 @@ function renderStepIndicator() {
 }
 
 function cleanText(text) {
-  // Remove all HTML tags including span tags with highlight class
-  return text.replace(/<[^>]*>/g, '');
+  return text.replace(/<[^>]*>/g, '').trim();
 }
 
-function extractHighlightedParts(text) {
-  // Extract text that was inside <span class='highlight'> tags
-  const regex = /<span class='highlight'>([^<]*)<\/span>/g;
-  const matches = [];
-  let match;
-  while ((match = regex.exec(text)) !== null) {
-    matches.push(match[1]);
-  }
-  return matches;
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
 
 function buildSentenceHTML(stepData, stepIndex, example) {
-  // For step 0 (incomplete) and step 1 (bare core already in title), return empty
+  // For step 0 and step 1, return empty
   if (stepIndex <= 1) {
     return '';
   }
@@ -743,12 +733,12 @@ function buildSentenceHTML(stepData, stepIndex, example) {
   const coreSentence = cleanText(coreStep.text);
   const fullSentence = cleanText(stepData.text);
   
-  // Simple approach: find the core in the full sentence and style it differently
+  // Find the core in the full sentence (case-sensitive)
   const coreIndex = fullSentence.indexOf(coreSentence);
   
   if (coreIndex === -1) {
-    // Fallback: just show everything as normal text
-    return fullSentence;
+    // Fallback: wrap everything as core if we can't find it
+    return `<span class="part-core">${escapeHtml(fullSentence)}</span>`;
   }
   
   // Split the sentence into: before core, core, after core
@@ -757,17 +747,17 @@ function buildSentenceHTML(stepData, stepIndex, example) {
   
   let html = '';
   
-  // Add "before" part (additions before core) - USE CSS CLASSES
+  // Add "before" part (additions before core)
   if (before.trim()) {
-    html += `<span class="part-addition">${before}</span>`;
+    html += `<span class="part-addition">${escapeHtml(before)}</span>`;
   }
   
-  // Add core (bold and bright) - USE CSS CLASSES
-  html += `<span class="part-core">${coreSentence}</span>`;
+  // Add core (bold and bright)
+  html += `<span class="part-core">${escapeHtml(coreSentence)}</span>`;
   
-  // Add "after" part (additions after core) - USE CSS CLASSES
+  // Add "after" part (additions after core)
   if (after.trim()) {
-    html += `<span class="part-addition">${after}</span>`;
+    html += `<span class="part-addition">${escapeHtml(after)}</span>`;
   }
   
   return html;
@@ -844,14 +834,12 @@ function renderContent() {
 
 function renderBottomNav() {
   const nav = document.getElementById('bottomNav');
-  const isFirstStep = currentStep === 1; // Step 1 is our starting point
+  const isFirstStep = currentStep === 1;
   const isLastStep = currentStep === getCurrentExample().steps.length - 1;
   
-  // Button labels match toggle terminology for consistency
   const nextLabel = mode === 'expanding' ? 'Expand' : 'Deconstruct';
   const prevLabel = 'Previous';
   
-  // Don't show step navigation on last step (completion screen handles it)
   if (isLastStep && mode === 'expanding') {
     nav.innerHTML = `
       <button class="btn" onclick="copyText()">
@@ -873,7 +861,7 @@ function renderBottomNav() {
       <span>Copy</span>
     </button>
     
-    <button class="btn btn-primary" onclick="nextStep()" ${isLastStep ? 'disabled' : ''} class="${isLastStep ? 'btn-disabled' : ''}">
+    <button class="btn btn-primary ${isLastStep ? 'btn-disabled' : ''}" onclick="nextStep()" ${isLastStep ? 'disabled' : ''}>
       <span>${nextLabel}</span>
       <span>→</span>
     </button>
@@ -916,7 +904,7 @@ function nextStep() {
 }
 
 function previousStep() {
-  if (currentStep > 1) { // Don't go below step 1 (initial empty state)
+  if (currentStep > 1) {
     currentStep--;
     render();
   }
@@ -929,7 +917,7 @@ function goToStep(stepIndex) {
 
 function nextExample() {
   currentExampleIndex = (currentExampleIndex + 1) % examples.length;
-  currentStep = 1; // Start at step 1 (empty display) for new example
+  currentStep = 1;
   render();
 }
 

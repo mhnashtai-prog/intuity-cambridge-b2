@@ -757,7 +757,7 @@
   </div>
 
  <script>
-  // State variables
+ // State variables
 let currentMode = 'write';
 let viewMode = 'full';
 let currentStage = 0;
@@ -767,22 +767,20 @@ let selectedQuestion = null;
 let selectedSample = null;
 let showXRay = false;
 
-// Review data storage - 4 stages
+// Review data storage - 4 paragraphs
 let reviewData = ['', '', '', ''];
 
 // Data stores
-let supportingPhrasesData = {};
-let bodyPhrasesData = {};
-let conclusionPhrasesData = {};
+let phrasesData = {};
 let ideasData = {};
 let samplesData = {};
 let questionsData = {};
 
 const stageInfo = [
-  { name: 'INTRODUCTION', target: 50 },
-  { name: 'FEATURE 1', target: 55 },
+  { name: 'INTRODUCTION', target: 45 },
+  { name: 'FEATURE 1', target: 50 },
   { name: 'FEATURE 2', target: 45 },
-  { name: 'RECOMMENDATION', target: 40 }
+  { name: 'RECOMMENDATION', target: 45 }
 ];
 
 const stageNames = ['Introduction', 'Feature 1', 'Feature 2', 'Recommendation'];
@@ -830,6 +828,7 @@ async function loadAllJSON() {
   
   try {
     const results = await Promise.allSettled([
+      // Load all 4 phrase files
       fetch('data/introduction-phrases.json').then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}: introduction-phrases.json`);
         return r.json();
@@ -838,7 +837,7 @@ async function loadAllJSON() {
         if (!r.ok) throw new Error(`HTTP ${r.status}: body-phrases.json`);
         return r.json();
       }),
-       fetch('data/supporting-phrases.json').then(r => {
+      fetch('data/supporting-phrases.json').then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}: supporting-phrases.json`);
         return r.json();
       }),
@@ -860,59 +859,63 @@ async function loadAllJSON() {
       })
     ]);
     
-    // Handle each result
+    // FIXED: Merge all phrase files into one object
+    phrasesData = {};
+    
     if (results[0].status === 'fulfilled') {
-      supportingPhrasesData = results[0].value;
-      console.log('✅ Supporting phrases loaded');
+      phrasesData = { ...phrasesData, ...results[0].value };
+      console.log('✅ Introduction phrases loaded');
     } else {
-      console.error('❌ Failed to load supporting-phrases.json:', results[0].reason);
-      supportingPhrasesData = {};
+      console.error('❌ Failed to load introduction-phrases.json:', results[0].reason);
     }
     
     if (results[1].status === 'fulfilled') {
-      bodyPhrasesData = results[1].value;
+      phrasesData = { ...phrasesData, ...results[1].value };
       console.log('✅ Body phrases loaded');
     } else {
       console.error('❌ Failed to load body-phrases.json:', results[1].reason);
-      bodyPhrasesData = {};
     }
     
     if (results[2].status === 'fulfilled') {
-      conclusionPhrasesData = results[2].value;
-      console.log('✅ Conclusion phrases loaded');
+      phrasesData = { ...phrasesData, ...results[2].value };
+      console.log('✅ Supporting phrases loaded');
     } else {
-      console.error('❌ Failed to load conclusion-phrases.json:', results[2].reason);
-      conclusionPhrasesData = {};
+      console.error('❌ Failed to load supporting-phrases.json:', results[2].reason);
     }
     
     if (results[3].status === 'fulfilled') {
-      ideasData = results[3].value;
-      console.log('✅ Ideas loaded');
+      phrasesData = { ...phrasesData, ...results[3].value };
+      console.log('✅ Conclusion phrases loaded');
     } else {
-      console.error('❌ Failed to load ideas.json:', results[3].reason);
-      ideasData = {};
+      console.error('❌ Failed to load conclusion-phrases.json:', results[3].reason);
     }
     
     if (results[4].status === 'fulfilled') {
-      samplesData = results[4].value;
-      console.log('✅ Samples loaded:', samplesData);
+      ideasData = results[4].value;
+      console.log('✅ Ideas loaded');
     } else {
-      console.error('❌ Failed to load samples.json:', results[4].reason);
-      samplesData = {};
+      console.error('❌ Failed to load ideas.json:', results[4].reason);
+      ideasData = {};
     }
     
     if (results[5].status === 'fulfilled') {
-      questionsData = results[5].value;
+      samplesData = results[5].value;
+      console.log('✅ Samples loaded:', samplesData);
+    } else {
+      console.error('❌ Failed to load samples.json:', results[5].reason);
+      samplesData = {};
+    }
+    
+    if (results[6].status === 'fulfilled') {
+      questionsData = results[6].value;
       console.log('✅ Questions loaded:', questionsData);
     } else {
-      console.error('❌ Failed to load review-questions.json:', results[5].reason);
+      console.error('❌ Failed to load review-questions.json:', results[6].reason);
       questionsData = { questions: [] };
     }
     
     console.log('📊 Final data check:', {
-      supportingPhrases: Object.keys(supportingPhrasesData).length,
-      bodyPhrases: Object.keys(bodyPhrasesData).length,
-      conclusionPhrases: Object.keys(conclusionPhrasesData).length,
+      phrases: Object.keys(phrasesData).length,
       ideas: Object.keys(ideasData).length,
       samples: Object.keys(samplesData).length,
       samplesOpinion: samplesData.opinion?.length || 0,
@@ -939,9 +942,9 @@ function populateQuestionDropdown() {
     questionsData.questions.forEach((q, i) => {
       const option = document.createElement('option');
       option.value = q.id;
-      option.textContent = q.topic;
+      option.textContent = q.topic || q.question;
       dropdown.appendChild(option);
-      console.log(`  ${i + 1}. ${q.id} - ${q.topic}`);
+      console.log(`  ${i + 1}. ${q.id} - ${q.topic || q.question}`);
     });
   } else {
     const option = document.createElement('option');
@@ -963,9 +966,9 @@ function loadQuestionData(questionId) {
     console.log('Available questions:', questionsData.questions?.map(q => q.id));
     return;
   }
-  console.log('✅ Question found:', selectedQuestion.topic);
+  console.log('✅ Question found:', selectedQuestion.topic || selectedQuestion.question);
   
-  // Find the sample
+  // Find the sample - FIXED: Use samplesData.opinion instead of samplesData.reports
   console.log('🔍 Looking for sample with ID:', questionId);
   console.log('Available samples:', samplesData);
   
@@ -981,7 +984,7 @@ function loadQuestionData(questionId) {
       console.log('Using first available sample as fallback');
       selectedSample = samplesData.opinion[0];
     } else {
-      console.log('✅ Sample found:', selectedSample.title);
+      console.log('✅ Sample found:', selectedSample.title || selectedSample.id);
     }
   }
   
@@ -1039,12 +1042,14 @@ function toggleViewMode() {
 function toggleXRay() {
   showXRay = !showXRay;
   const xrayBtn = document.getElementById('xrayBtn');
-  if (showXRay) {
-    xrayBtn.style.background = 'rgba(201, 169, 97, 0.3)';
-    xrayBtn.style.borderColor = 'rgba(201, 169, 97, 0.5)';
-  } else {
-    xrayBtn.style.background = 'rgba(0, 0, 0, 0.5)';
-    xrayBtn.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+  if (xrayBtn) {
+    if (showXRay) {
+      xrayBtn.style.background = 'rgba(201, 169, 97, 0.3)';
+      xrayBtn.style.borderColor = 'rgba(201, 169, 97, 0.5)';
+    } else {
+      xrayBtn.style.background = 'rgba(0, 0, 0, 0.5)';
+      xrayBtn.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+    }
   }
   updateDisplay();
 }
@@ -1091,7 +1096,7 @@ function updateWriteDisplay() {
       return sum + (stage.trim() ? stage.trim().split(/\s+/).length : 0);
     }, 0);
     document.getElementById('currentWords').textContent = totalWords;
-    document.getElementById('targetWords').textContent = '190';
+    document.getElementById('targetWords').textContent = '185';
     document.getElementById('totalWords').textContent = totalWords;
     
   } else {
@@ -1144,12 +1149,16 @@ function updateReadDisplay() {
     return;
   }
   
+  // Try to get content from either styles.default or answer property
   let htmlContent = '';
   if (selectedSample.styles && selectedSample.styles.default) {
     htmlContent = selectedSample.styles.default;
-    console.log('✅ Sample content loaded, length:', htmlContent.length);
+    console.log('✅ Sample content loaded from styles.default, length:', htmlContent.length);
+  } else if (selectedSample.answer) {
+    htmlContent = selectedSample.answer;
+    console.log('✅ Sample content loaded from answer, length:', htmlContent.length);
   } else {
-    console.error('❌ No default style in sample');
+    console.error('❌ No content found in sample (checked styles.default and answer)');
     contentArea.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample content available.</p>';
     return;
   }
@@ -1185,7 +1194,7 @@ function updateReadDisplay() {
   const allText = paragraphs.join(' ').replace(/<[^>]*>/g, '');
   const words = allText.trim() ? allText.trim().split(/\s+/).length : 0;
   document.getElementById('currentWords').textContent = words;
-  document.getElementById('targetWords').textContent = '190';
+  document.getElementById('targetWords').textContent = '185';
 }
 
 function extractParagraphs(htmlAnswer) {
@@ -1300,10 +1309,28 @@ function updateNavigationButtons() {
   }
 }
 
+// FIXED: Better handling of empty states
 function openReferenceModal(tabName) {
   currentRefTab = tabName;
   const modalTitle = document.getElementById('modalTitle');
   const modalContentArea = document.getElementById('modalContentArea');
+  
+  // Check if question needs to be selected for context-dependent content
+  if ((tabName === 'ideas' || tabName === 'samples') && !selectedQuestion) {
+    modalTitle.textContent = '⚠️ Select a Question First';
+    modalContentArea.innerHTML = `
+      <div style="text-align: center; padding: 3rem 2rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">📋</div>
+        <p style="color: #C9A961; font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">
+          No Question Selected
+        </p>
+        <p style="color: #8e8e93; font-size: 0.9rem; line-height: 1.6;">
+          Please select a question from the dropdown menu above to view ${tabName === 'ideas' ? 'writing ideas' : 'sample reviews'}.
+        </p>
+      </div>`;
+    document.getElementById('modalOverlay').classList.add('show');
+    return;
+  }
   
   if (tabName === 'phrases') {
     modalTitle.textContent = '💬 Useful Phrases';
@@ -1319,25 +1346,30 @@ function openReferenceModal(tabName) {
   document.getElementById('modalOverlay').classList.add('show');
 }
 
+// FIXED: Better phrase generation with merged data
 function generatePhrasesHTML() {
-  let html = '';
-  
-  const allPhrases = {
-    ...supportingPhrasesData,
-    ...bodyPhrasesData,
-    ...conclusionPhrasesData
-  };
-  
-  if (Object.keys(allPhrases).length === 0) {
-    return '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No phrases loaded. Please check your data files.</p>';
+  if (Object.keys(phrasesData).length === 0) {
+    return `
+      <div style="text-align: center; padding: 3rem 2rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">📚</div>
+        <p style="color: #C9A961; font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">
+          No Phrases Loaded
+        </p>
+        <p style="color: #8e8e93; font-size: 0.9rem; line-height: 1.6;">
+          Please check that your phrase data files are available.
+        </p>
+      </div>`;
   }
   
-  Object.entries(allPhrases).forEach(([category, subcategories]) => {
+  let html = '';
+  
+  // Process all categories from merged phrasesData
+  Object.entries(phrasesData).forEach(([category, subcategories]) => {
     if (typeof subcategories === 'object' && !Array.isArray(subcategories)) {
       Object.entries(subcategories).forEach(([subcat, phrases]) => {
         if (Array.isArray(phrases) && phrases.length > 0) {
           html += `<div class="phrase-group">`;
-          html += `<div class="phrase-title">${formatTitle(subcat)}</div>`;
+          html += `<div class="phrase-title">${formatTitle(category)} - ${formatTitle(subcat)}</div>`;
           phrases.slice(0, 8).forEach(phrase => {
             html += `<div class="phrase-item">${phrase}</div>`;
           });
@@ -1347,17 +1379,36 @@ function generatePhrasesHTML() {
     }
   });
   
-  return html || '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No phrases available.</p>';
+  return html || `
+    <div style="text-align: center; padding: 3rem 2rem;">
+      <p style="color: #8e8e93;">No phrases available in the expected format.</p>
+    </div>`;
 }
 
+// FIXED: Use ideasData.reviews instead of ideasData.reports
 function generateIdeasHTML() {
   if (!selectedQuestion || !ideasData.reviews) {
-    return '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No ideas available. Please select a question first.</p>';
+    return `
+      <div style="text-align: center; padding: 3rem 2rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">💡</div>
+        <p style="color: #8e8e93; font-size: 0.9rem; line-height: 1.6;">
+          No ideas available. Please ensure a question is selected and ideas data is loaded.
+        </p>
+      </div>`;
   }
   
   const idea = ideasData.reviews[selectedQuestion.id];
   if (!idea || !idea.skeleton) {
-    return '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No ideas found for this topic.</p>';
+    return `
+      <div style="text-align: center; padding: 3rem 2rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
+        <p style="color: #C9A961; font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">
+          No Ideas Found
+        </p>
+        <p style="color: #8e8e93; font-size: 0.9rem; line-height: 1.6;">
+          No writing ideas are available for this topic yet.
+        </p>
+      </div>`;
   }
   
   let html = '<div style="margin-bottom: 1.5rem;">';
@@ -1378,14 +1429,27 @@ function generateIdeasHTML() {
 
 function generateSamplesHTML() {
   if (!selectedSample) {
-    return '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample available. Please select a question first.</p>';
+    return `
+      <div style="text-align: center; padding: 3rem 2rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">📄</div>
+        <p style="color: #8e8e93; font-size: 0.9rem; line-height: 1.6;">
+          No sample available. Please ensure a question is selected.
+        </p>
+      </div>`;
   }
   
   let html = '<div style="margin-bottom: 1.5rem;">';
-  html += `<div style="font-size: 1rem; color: #C9A961; font-weight: 600; margin-bottom: 1rem; text-align: center;">${selectedSample.title}</div>`;
+  html += `<div style="font-size: 1rem; color: #C9A961; font-weight: 600; margin-bottom: 1rem; text-align: center;">${selectedSample.title || selectedSample.id}</div>`;
   
-  if (selectedSample.styles && selectedSample.styles.default) {
-    html += `<div style="font-size: 0.9rem; line-height: 1.7; color: #e5e5e7;">${selectedSample.styles.default}</div>`;
+  // Try both styles.default and answer
+  const content = selectedSample.styles?.default || selectedSample.answer || '';
+  if (content) {
+    html += `<div style="font-size: 0.9rem; line-height: 1.7; color: #e5e5e7;">${content}</div>`;
+  } else {
+    html += `
+      <div style="text-align: center; padding: 2rem;">
+        <p style="color: #8e8e93;">No sample content available for this review.</p>
+      </div>`;
   }
   
   html += '</div>';
@@ -1414,8 +1478,9 @@ function saveReview() {
   const data = {
     type: 'review',
     question: selectedQuestion?.id,
+    questionText: selectedQuestion?.question || selectedQuestion?.topic,
     timestamp: new Date().toISOString(),
-    stages: reviewData
+    paragraphs: reviewData
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -1453,6 +1518,7 @@ function resetReview() {
   }
 }
 
+// Event listeners
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeReferenceModal();
@@ -1465,6 +1531,7 @@ document.getElementById('modalOverlay').addEventListener('click', (e) => {
   }
 });
 
+// Initialize the app
 init();
   </script>
 </body>

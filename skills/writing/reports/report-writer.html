@@ -833,7 +833,7 @@ async function loadAllJSON() {
   
   try {
     const results = await Promise.allSettled([
-      // Split phrases into 3 files like the review.html
+      // Load all 4 phrase files
       fetch('data/introduction-phrases.json').then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}: introduction-phrases.json`);
         return r.json();
@@ -842,9 +842,10 @@ async function loadAllJSON() {
         if (!r.ok) throw new Error(`HTTP ${r.status}: body-phrases.json`);
         return r.json();
       }),
-       fetch('data/supporting-phrases.json').then(r => {
+      fetch('data/supporting-phrases.json').then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}: supporting-phrases.json`);
         return r.json();
+      }),
       fetch('data/conclusion-phrases.json').then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}: conclusion-phrases.json`);
         return r.json();
@@ -862,36 +863,59 @@ async function loadAllJSON() {
         return r.json();
       })
     ]);
-    // Handle each result
+    
+    // FIXED: Merge all phrase files into one object
+    phrasesData = {};
+    
     if (results[0].status === 'fulfilled') {
-      phrasesData = results[0].value;
-      console.log('✅ Phrases loaded');
+      phrasesData = { ...phrasesData, ...results[0].value };
+      console.log('✅ Introduction phrases loaded');
     } else {
-      console.error('❌ Failed to load report-phrases.json:', results[0].reason);
-      phrasesData = {};
+      console.error('❌ Failed to load introduction-phrases.json:', results[0].reason);
     }
     
     if (results[1].status === 'fulfilled') {
-      ideasData = results[1].value;
-      console.log('✅ Ideas loaded');
+      phrasesData = { ...phrasesData, ...results[1].value };
+      console.log('✅ Body phrases loaded');
     } else {
-      console.error('❌ Failed to load report-ideas.json:', results[1].reason);
-      ideasData = {};
+      console.error('❌ Failed to load body-phrases.json:', results[1].reason);
     }
     
     if (results[2].status === 'fulfilled') {
-      samplesData = results[2].value;
-      console.log('✅ Samples loaded:', samplesData);
+      phrasesData = { ...phrasesData, ...results[2].value };
+      console.log('✅ Supporting phrases loaded');
     } else {
-      console.error('❌ Failed to load report-samples.json:', results[2].reason);
-      samplesData = {};
+      console.error('❌ Failed to load supporting-phrases.json:', results[2].reason);
     }
     
     if (results[3].status === 'fulfilled') {
-      questionsData = results[3].value;
+      phrasesData = { ...phrasesData, ...results[3].value };
+      console.log('✅ Conclusion phrases loaded');
+    } else {
+      console.error('❌ Failed to load conclusion-phrases.json:', results[3].reason);
+    }
+    
+    if (results[4].status === 'fulfilled') {
+      ideasData = results[4].value;
+      console.log('✅ Ideas loaded');
+    } else {
+      console.error('❌ Failed to load report-ideas.json:', results[4].reason);
+      ideasData = {};
+    }
+    
+    if (results[5].status === 'fulfilled') {
+      samplesData = results[5].value;
+      console.log('✅ Samples loaded:', samplesData);
+    } else {
+      console.error('❌ Failed to load report-samples.json:', results[5].reason);
+      samplesData = {};
+    }
+    
+    if (results[6].status === 'fulfilled') {
+      questionsData = results[6].value;
       console.log('✅ Questions loaded:', questionsData);
     } else {
-      console.error('❌ Failed to load report-questions.json:', results[3].reason);
+      console.error('❌ Failed to load report-questions.json:', results[6].reason);
       questionsData = { questions: [] };
     }
     
@@ -923,9 +947,9 @@ function populateQuestionDropdown() {
     questionsData.questions.forEach((q, i) => {
       const option = document.createElement('option');
       option.value = q.id;
-      option.textContent = q.topic;
+      option.textContent = q.topic || q.question;
       dropdown.appendChild(option);
-      console.log(`  ${i + 1}. ${q.id} - ${q.topic}`);
+      console.log(`  ${i + 1}. ${q.id} - ${q.topic || q.question}`);
     });
   } else {
     const option = document.createElement('option');
@@ -947,7 +971,7 @@ function loadQuestionData(questionId) {
     console.log('Available questions:', questionsData.questions?.map(q => q.id));
     return;
   }
-  console.log('✅ Question found:', selectedQuestion.topic);
+  console.log('✅ Question found:', selectedQuestion.topic || selectedQuestion.question);
   
   // Find the sample
   console.log('🔍 Looking for sample with ID:', questionId);
@@ -1290,10 +1314,28 @@ function updateNavigationButtons() {
   }
 }
 
+// FIXED: Better handling of empty states
 function openReferenceModal(tabName) {
   currentRefTab = tabName;
   const modalTitle = document.getElementById('modalTitle');
   const modalContentArea = document.getElementById('modalContentArea');
+  
+  // Check if question needs to be selected for context-dependent content
+  if ((tabName === 'ideas' || tabName === 'samples') && !selectedQuestion) {
+    modalTitle.textContent = '⚠️ Select a Question First';
+    modalContentArea.innerHTML = `
+      <div style="text-align: center; padding: 3rem 2rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">📋</div>
+        <p style="color: #C9A961; font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">
+          No Question Selected
+        </p>
+        <p style="color: #8e8e93; font-size: 0.9rem; line-height: 1.6;">
+          Please select a question from the dropdown menu above to view ${tabName === 'ideas' ? 'writing ideas' : 'sample reports'}.
+        </p>
+      </div>`;
+    document.getElementById('modalOverlay').classList.add('show');
+    return;
+  }
   
   if (tabName === 'phrases') {
     modalTitle.textContent = '💬 Useful Phrases';
@@ -1309,19 +1351,30 @@ function openReferenceModal(tabName) {
   document.getElementById('modalOverlay').classList.add('show');
 }
 
+// FIXED: Better phrase generation with merged data
 function generatePhrasesHTML() {
   if (Object.keys(phrasesData).length === 0) {
-    return '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No phrases loaded. Please check your data files.</p>';
+    return `
+      <div style="text-align: center; padding: 3rem 2rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">📚</div>
+        <p style="color: #C9A961; font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">
+          No Phrases Loaded
+        </p>
+        <p style="color: #8e8e93; font-size: 0.9rem; line-height: 1.6;">
+          Please check that your phrase data files are available.
+        </p>
+      </div>`;
   }
   
   let html = '';
   
+  // Process all categories from merged phrasesData
   Object.entries(phrasesData).forEach(([category, subcategories]) => {
     if (typeof subcategories === 'object' && !Array.isArray(subcategories)) {
       Object.entries(subcategories).forEach(([subcat, phrases]) => {
         if (Array.isArray(phrases) && phrases.length > 0) {
           html += `<div class="phrase-group">`;
-          html += `<div class="phrase-title">${formatTitle(subcat)}</div>`;
+          html += `<div class="phrase-title">${formatTitle(category)} - ${formatTitle(subcat)}</div>`;
           phrases.slice(0, 8).forEach(phrase => {
             html += `<div class="phrase-item">${phrase}</div>`;
           });
@@ -1331,17 +1384,35 @@ function generatePhrasesHTML() {
     }
   });
   
-  return html || '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No phrases available.</p>';
+  return html || `
+    <div style="text-align: center; padding: 3rem 2rem;">
+      <p style="color: #8e8e93;">No phrases available in the expected format.</p>
+    </div>`;
 }
 
 function generateIdeasHTML() {
   if (!selectedQuestion || !ideasData.reports) {
-    return '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No ideas available. Please select a question first.</p>';
+    return `
+      <div style="text-align: center; padding: 3rem 2rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">💡</div>
+        <p style="color: #8e8e93; font-size: 0.9rem; line-height: 1.6;">
+          No ideas available. Please ensure a question is selected and ideas data is loaded.
+        </p>
+      </div>`;
   }
   
   const idea = ideasData.reports[selectedQuestion.id];
   if (!idea || !idea.skeleton) {
-    return '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No ideas found for this topic.</p>';
+    return `
+      <div style="text-align: center; padding: 3rem 2rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
+        <p style="color: #C9A961; font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">
+          No Ideas Found
+        </p>
+        <p style="color: #8e8e93; font-size: 0.9rem; line-height: 1.6;">
+          No writing ideas are available for this topic yet.
+        </p>
+      </div>`;
   }
   
   let html = '<div style="margin-bottom: 1.5rem;">';
@@ -1362,7 +1433,13 @@ function generateIdeasHTML() {
 
 function generateSamplesHTML() {
   if (!selectedSample) {
-    return '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample available. Please select a question first.</p>';
+    return `
+      <div style="text-align: center; padding: 3rem 2rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">📄</div>
+        <p style="color: #8e8e93; font-size: 0.9rem; line-height: 1.6;">
+          No sample available. Please ensure a question is selected.
+        </p>
+      </div>`;
   }
   
   let html = '<div style="margin-bottom: 1.5rem;">';
@@ -1373,7 +1450,10 @@ function generateSamplesHTML() {
   if (content) {
     html += `<div style="font-size: 0.9rem; line-height: 1.7; color: #e5e5e7;">${content}</div>`;
   } else {
-    html += '<p style="color: #8e8e93; text-align: center; padding: 1rem;">No sample content available.</p>';
+    html += `
+      <div style="text-align: center; padding: 2rem;">
+        <p style="color: #8e8e93;">No sample content available for this report.</p>
+      </div>`;
   }
   
   html += '</div>';
@@ -1402,6 +1482,7 @@ function saveReport() {
   const data = {
     type: 'report',
     question: selectedQuestion?.id,
+    questionText: selectedQuestion?.question || selectedQuestion?.topic,
     timestamp: new Date().toISOString(),
     stages: reportData
   };
@@ -1441,6 +1522,7 @@ function resetReport() {
   }
 }
 
+// Event listeners
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeReferenceModal();
@@ -1453,6 +1535,7 @@ document.getElementById('modalOverlay').addEventListener('click', (e) => {
   }
 });
 
+// Initialize the app
 init();
   </script>
 </body>

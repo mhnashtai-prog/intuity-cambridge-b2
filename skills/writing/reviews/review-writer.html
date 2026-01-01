@@ -757,584 +757,711 @@
   </div>
 
  <script>
-    // State variables
-    let currentMode = 'write';
-    let viewMode = 'full';
-    let currentStage = 0;
-    let currentRefTab = 'phrases';
-    let currentQuestionIndex = 0;
-    let selectedQuestion = null;
-    let selectedSample = null;
-    let showXRay = false;
-    
-    // Review data storage - 4 stages
-    let reviewData = ['', '', '', ''];
-    
-    // Data stores
-    let supportingPhrasesData = {};
-    let bodyPhrasesData = {};
-    let conclusionPhrasesData = {};
-    let ideasData = {};
-    let samplesData = {};
-    let questionsData = {};
+  // State variables
+let currentMode = 'write';
+let viewMode = 'full';
+let currentStage = 0;
+let currentRefTab = 'phrases';
+let currentQuestionIndex = 0;
+let selectedQuestion = null;
+let selectedSample = null;
+let showXRay = false;
 
-    const stageInfo = [
-      { name: 'INTRODUCTION', target: 50 },
-      { name: 'FEATURE 1', target: 55 },
-      { name: 'FEATURE 2', target: 45 },
-      { name: 'RECOMMENDATION', target: 40 }
-    ];
-    
-    const stageNames = ['Introduction', 'Feature 1', 'Feature 2', 'Recommendation'];
+// Review data storage - 4 stages
+let reviewData = ['', '', '', ''];
 
-    // Initialize
-    async function init() {
-      try {
-        console.log('🚀 Review Writer initializing...');
-        await loadAllJSON();
-        populateQuestionDropdown();
-        
-        const urlParams = new URLSearchParams(window.location.search);
-        const initialMode = urlParams.get('mode') || 'write';
-        currentMode = initialMode;
-        
-        setupEventListeners();
-        updateDisplay();
-        console.log('✅ Initialization complete');
-      } catch (error) {
-        console.error('❌ Initialization error:', error);
-      }
+// Data stores
+let supportingPhrasesData = {};
+let bodyPhrasesData = {};
+let conclusionPhrasesData = {};
+let ideasData = {};
+let samplesData = {};
+let questionsData = {};
+
+const stageInfo = [
+  { name: 'INTRODUCTION', target: 50 },
+  { name: 'FEATURE 1', target: 55 },
+  { name: 'FEATURE 2', target: 45 },
+  { name: 'RECOMMENDATION', target: 40 }
+];
+
+const stageNames = ['Introduction', 'Feature 1', 'Feature 2', 'Recommendation'];
+
+// Initialize
+async function init() {
+  try {
+    console.log('🚀 Review Writer initializing...');
+    await loadAllJSON();
+    populateQuestionDropdown();
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialMode = urlParams.get('mode') || 'write';
+    currentMode = initialMode;
+    
+    setupEventListeners();
+    
+    // Auto-select first question if available
+    if (questionsData.questions && questionsData.questions.length > 0) {
+      const firstQuestion = questionsData.questions[0];
+      document.getElementById('questionDropdown').value = firstQuestion.id;
+      loadQuestionData(firstQuestion.id);
+    } else {
+      updateDisplay();
     }
+    
+    console.log('✅ Initialization complete');
+  } catch (error) {
+    console.error('❌ Initialization error:', error);
+  }
+}
 
-    function setupEventListeners() {
+function setupEventListeners() {
+  const textarea = document.getElementById('textarea');
+  if (textarea) {
+    textarea.addEventListener('input', handleInput);
+    textarea.addEventListener('paste', function() {
+      setTimeout(updateWordCount, 10);
+    });
+  }
+}
+
+async function loadAllJSON() {
+  console.log('📦 Loading JSON files...');
+  
+  try {
+    const results = await Promise.allSettled([
+      fetch('data/supporting-phrases.json').then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}: supporting-phrases.json`);
+        return r.json();
+      }),
+      fetch('data/body-phrases.json').then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}: body-phrases.json`);
+        return r.json();
+      }),
+      fetch('data/conclusion-phrases.json').then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}: conclusion-phrases.json`);
+        return r.json();
+      }),
+      fetch('data/ideas.json').then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}: ideas.json`);
+        return r.json();
+      }),
+      fetch('data/samples.json').then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}: samples.json`);
+        return r.json();
+      }),
+      fetch('data/review-questions.json').then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}: review-questions.json`);
+        return r.json();
+      })
+    ]);
+    
+    // Handle each result
+    if (results[0].status === 'fulfilled') {
+      supportingPhrasesData = results[0].value;
+      console.log('✅ Supporting phrases loaded');
+    } else {
+      console.error('❌ Failed to load supporting-phrases.json:', results[0].reason);
+      supportingPhrasesData = {};
+    }
+    
+    if (results[1].status === 'fulfilled') {
+      bodyPhrasesData = results[1].value;
+      console.log('✅ Body phrases loaded');
+    } else {
+      console.error('❌ Failed to load body-phrases.json:', results[1].reason);
+      bodyPhrasesData = {};
+    }
+    
+    if (results[2].status === 'fulfilled') {
+      conclusionPhrasesData = results[2].value;
+      console.log('✅ Conclusion phrases loaded');
+    } else {
+      console.error('❌ Failed to load conclusion-phrases.json:', results[2].reason);
+      conclusionPhrasesData = {};
+    }
+    
+    if (results[3].status === 'fulfilled') {
+      ideasData = results[3].value;
+      console.log('✅ Ideas loaded');
+    } else {
+      console.error('❌ Failed to load ideas.json:', results[3].reason);
+      ideasData = {};
+    }
+    
+    if (results[4].status === 'fulfilled') {
+      samplesData = results[4].value;
+      console.log('✅ Samples loaded:', samplesData);
+    } else {
+      console.error('❌ Failed to load samples.json:', results[4].reason);
+      samplesData = {};
+    }
+    
+    if (results[5].status === 'fulfilled') {
+      questionsData = results[5].value;
+      console.log('✅ Questions loaded:', questionsData);
+    } else {
+      console.error('❌ Failed to load review-questions.json:', results[5].reason);
+      questionsData = { questions: [] };
+    }
+    
+    console.log('📊 Final data check:', {
+      supportingPhrases: Object.keys(supportingPhrasesData).length,
+      bodyPhrases: Object.keys(bodyPhrasesData).length,
+      conclusionPhrases: Object.keys(conclusionPhrasesData).length,
+      ideas: Object.keys(ideasData).length,
+      samples: Object.keys(samplesData).length,
+      samplesOpinion: samplesData.opinion?.length || 0,
+      questions: questionsData.questions?.length || 0
+    });
+    
+  } catch (error) {
+    console.error('❌ Error loading JSON:', error);
+    questionsData = { questions: [] };
+  }
+}
+
+function populateQuestionDropdown() {
+  const dropdown = document.getElementById('questionDropdown');
+  if (!dropdown) {
+    console.error('❌ Dropdown element not found');
+    return;
+  }
+  
+  dropdown.innerHTML = '<option value="">Select a topic...</option>';
+  
+  if (questionsData.questions && questionsData.questions.length > 0) {
+    console.log('📝 Populating dropdown with', questionsData.questions.length, 'questions');
+    questionsData.questions.forEach((q, i) => {
+      const option = document.createElement('option');
+      option.value = q.id;
+      option.textContent = q.topic;
+      dropdown.appendChild(option);
+      console.log(`  ${i + 1}. ${q.id} - ${q.topic}`);
+    });
+  } else {
+    const option = document.createElement('option');
+    option.textContent = 'No questions available';
+    option.disabled = true;
+    dropdown.appendChild(option);
+    console.warn('⚠️ No questions available to populate dropdown');
+  }
+}
+
+function loadQuestionData(questionId) {
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('📥 Loading data for question ID:', questionId);
+  
+  // Find the question
+  selectedQuestion = questionsData.questions?.find(q => q.id === questionId);
+  if (!selectedQuestion) {
+    console.error('❌ Question not found:', questionId);
+    console.log('Available questions:', questionsData.questions?.map(q => q.id));
+    return;
+  }
+  console.log('✅ Question found:', selectedQuestion.topic);
+  
+  // Find the sample
+  console.log('🔍 Looking for sample with ID:', questionId);
+  console.log('Available samples:', samplesData);
+  
+  if (!samplesData.opinion) {
+    console.error('❌ samplesData.opinion is missing');
+    selectedSample = null;
+  } else {
+    console.log('📚 Available sample IDs:', samplesData.opinion.map(s => s.id));
+    selectedSample = samplesData.opinion.find(s => s.id === questionId);
+    
+    if (!selectedSample) {
+      console.warn('⚠️ No exact sample match for:', questionId);
+      console.log('Using first available sample as fallback');
+      selectedSample = samplesData.opinion[0];
+    } else {
+      console.log('✅ Sample found:', selectedSample.title);
+    }
+  }
+  
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  
+  // Update the display
+  updateDisplay();
+}
+
+function handleQuestionChange() {
+  const dropdown = document.getElementById('questionDropdown');
+  const selectedValue = dropdown.value;
+  
+  console.log('🔄 Dropdown changed to:', selectedValue);
+  
+  if (!selectedValue) {
+    console.log('⚪ Empty selection - clearing data');
+    selectedQuestion = null;
+    selectedSample = null;
+    updateDisplay();
+    return;
+  }
+  
+  // Update current index
+  currentQuestionIndex = questionsData.questions.findIndex(q => q.id === selectedValue);
+  console.log('📍 Current question index:', currentQuestionIndex);
+  
+  // Load the data
+  loadQuestionData(selectedValue);
+}
+
+function toggleViewMode() {
+  viewMode = viewMode === 'full' ? 'paragraph' : 'full';
+  
+  const toggleSwitch = document.getElementById('toggleSwitch');
+  const stageDotsContainer = document.getElementById('stageDotsContainer');
+  const paragraphLabel = document.getElementById('paragraphLabel');
+  const fullTextLabel = document.getElementById('fullTextLabel');
+
+  if (viewMode === 'full') {
+    toggleSwitch.classList.add('full');
+    stageDotsContainer.classList.add('hidden');
+    paragraphLabel.classList.remove('active');
+    fullTextLabel.classList.add('active');
+  } else {
+    toggleSwitch.classList.remove('full');
+    stageDotsContainer.classList.remove('hidden');
+    paragraphLabel.classList.add('active');
+    fullTextLabel.classList.remove('active');
+  }
+
+  updateDisplay();
+}
+
+function toggleXRay() {
+  showXRay = !showXRay;
+  const xrayBtn = document.getElementById('xrayBtn');
+  if (showXRay) {
+    xrayBtn.style.background = 'rgba(201, 169, 97, 0.3)';
+    xrayBtn.style.borderColor = 'rgba(201, 169, 97, 0.5)';
+  } else {
+    xrayBtn.style.background = 'rgba(0, 0, 0, 0.5)';
+    xrayBtn.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+  }
+  updateDisplay();
+}
+
+function updateDisplay() {
+  console.log('🖼️ Updating display - Mode:', currentMode, 'View:', viewMode);
+  
+  if (currentMode === 'write') {
+    updateWriteDisplay();
+  } else {
+    updateReadDisplay();
+  }
+  updateStageDots();
+  updateNavigationButtons();
+}
+
+function updateWriteDisplay() {
+  const contentArea = document.getElementById('contentArea');
+  const info = stageInfo[currentStage];
+  
+  if (viewMode === 'full') {
+    let fullReviewHTML = '<div class="sample-display" style="cursor: pointer;">';
+    
+    reviewData.forEach((paragraphText, idx) => {
+      const stageLabel = stageNames[idx] || `Paragraph ${idx + 1}`;
+      const content = paragraphText.trim() || `<em style="color: #636366;">[${stageLabel} not written yet]</em>`;
+      
+      fullReviewHTML += `
+        <p onclick="editParagraph(${idx})" 
+           style="margin-bottom: 2rem; padding: 1rem; border-radius: 0.5rem; transition: all 0.3s;"
+           onmouseover="this.style.background='rgba(201, 169, 97, 0.05)'; this.style.borderLeft='3px solid #C9A961';"
+           onmouseout="this.style.background='transparent'; this.style.borderLeft='none';">
+          ${content}
+        </p>
+      `;
+    });
+    
+    fullReviewHTML += '</div>';
+    fullReviewHTML += '<p style="text-align: center; color: #8e8e93; font-size: 0.75rem; margin-top: 1rem;">💡 Click any paragraph to edit it</p>';
+    
+    contentArea.innerHTML = fullReviewHTML;
+    
+    const totalWords = reviewData.reduce((sum, stage) => {
+      return sum + (stage.trim() ? stage.trim().split(/\s+/).length : 0);
+    }, 0);
+    document.getElementById('currentWords').textContent = totalWords;
+    document.getElementById('targetWords').textContent = '190';
+    document.getElementById('totalWords').textContent = totalWords;
+    
+  } else {
+    contentArea.innerHTML = `<textarea 
+      id="textarea" 
+      class="textarea" 
+      placeholder="Write your ${info.name.toLowerCase()} here..."
+    ></textarea>`;
+    
+    const newTextarea = document.getElementById('textarea');
+    newTextarea.value = reviewData[currentStage];
+    newTextarea.addEventListener('input', handleInput);
+    newTextarea.addEventListener('paste', function() {
+      setTimeout(updateWordCount, 10);
+    });
+    
+    document.getElementById('targetWords').textContent = info.target;
+    updateWordCount();
+  }
+}
+
+function editParagraph(index) {
+  if (viewMode === 'full') {
+    currentStage = index;
+    viewMode = 'paragraph';
+    
+    const toggleSwitch = document.getElementById('toggleSwitch');
+    const stageDotsContainer = document.getElementById('stageDotsContainer');
+    const paragraphLabel = document.getElementById('paragraphLabel');
+    const fullTextLabel = document.getElementById('fullTextLabel');
+    
+    toggleSwitch.classList.remove('full');
+    stageDotsContainer.classList.remove('hidden');
+    paragraphLabel.classList.add('active');
+    fullTextLabel.classList.remove('active');
+    
+    updateDisplay();
+  }
+}
+
+function updateReadDisplay() {
+  const contentArea = document.getElementById('contentArea');
+  
+  console.log('📖 updateReadDisplay called');
+  console.log('selectedSample:', selectedSample);
+  
+  if (!selectedSample) {
+    console.warn('⚠️ No sample selected');
+    contentArea.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample review available. Please select a question from the dropdown.</p>';
+    return;
+  }
+  
+  let htmlContent = '';
+  if (selectedSample.styles && selectedSample.styles.default) {
+    htmlContent = selectedSample.styles.default;
+    console.log('✅ Sample content loaded, length:', htmlContent.length);
+  } else {
+    console.error('❌ No default style in sample');
+    contentArea.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample content available.</p>';
+    return;
+  }
+  
+  const paragraphs = extractParagraphs(htmlContent);
+  console.log('📝 Extracted paragraphs:', paragraphs.length);
+
+  if (viewMode === 'full') {
+    let fullText = '';
+    paragraphs.forEach(p => {
+      if (p && p.trim()) {
+        fullText += `<p>${p}</p>`;
+      }
+    });
+    
+    const xrayClass = showXRay ? 'xray-active' : '';
+    contentArea.innerHTML = `<div class="sample-display ${xrayClass}">${fullText}</div>`;
+    console.log('✅ Full text displayed');
+  } else {
+    const paragraph = paragraphs[currentStage];
+    
+    if (!paragraph || !paragraph.trim()) {
+      console.warn('⚠️ No content for stage:', currentStage);
+      contentArea.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No content available for this stage.</p>';
+      return;
+    }
+    
+    const xrayClass = showXRay ? 'xray-active' : '';
+    contentArea.innerHTML = `<div class="sample-display ${xrayClass}"><p>${paragraph}</p></div>`;
+    console.log('✅ Paragraph displayed for stage:', currentStage);
+  }
+  
+  const allText = paragraphs.join(' ').replace(/<[^>]*>/g, '');
+  const words = allText.trim() ? allText.trim().split(/\s+/).length : 0;
+  document.getElementById('currentWords').textContent = words;
+  document.getElementById('targetWords').textContent = '190';
+}
+
+function extractParagraphs(htmlAnswer) {
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = htmlAnswer;
+  const paragraphs = Array.from(tempDiv.querySelectorAll('p')).map(p => p.innerHTML);
+  console.log('🔍 Extracted', paragraphs.length, 'paragraphs from HTML');
+  return paragraphs;
+}
+
+function updateStageDots() {
+  const dots = document.querySelectorAll('.stage-dot-wrapper');
+  
+  dots.forEach((wrapper, i) => {
+    wrapper.classList.remove('current', 'done');
+    
+    if (i === currentStage) {
+      wrapper.classList.add('current');
+    } else if (i < currentStage) {
+      wrapper.classList.add('done');
+    }
+  });
+}
+
+function jumpStage(index) {
+  if (viewMode === 'paragraph' && currentMode === 'write') {
+    const textarea = document.getElementById('textarea');
+    if (textarea) {
+      reviewData[currentStage] = textarea.value;
+    }
+    currentStage = index;
+    showXRay = false;
+    updateDisplay();
+  }
+}
+
+function updateWordCount() {
+  const textarea = document.getElementById('textarea');
+  if (!textarea) return;
+  
+  const text = textarea.value.trim();
+  const words = text ? text.split(/\s+/).length : 0;
+  
+  document.getElementById('currentWords').textContent = words;
+  
+  const totalWords = reviewData.reduce((sum, stage) => {
+    return sum + (stage.trim() ? stage.trim().split(/\s+/).length : 0);
+  }, 0);
+  document.getElementById('totalWords').textContent = totalWords;
+}
+
+function handleInput() {
+  const textarea = document.getElementById('textarea');
+  if (textarea && currentMode === 'write') {
+    reviewData[currentStage] = textarea.value;
+    updateWordCount();
+  }
+}
+
+function handleNextClick() {
+  if (viewMode === 'paragraph') {
+    nextStage();
+  }
+}
+
+function handlePrevClick() {
+  if (viewMode === 'paragraph') {
+    prevStage();
+  }
+}
+
+function nextStage() {
+  if (currentStage < 3) {
+    if (currentMode === 'write' && viewMode === 'paragraph') {
       const textarea = document.getElementById('textarea');
       if (textarea) {
-        textarea.addEventListener('input', handleInput);
-        textarea.addEventListener('paste', function() {
-          setTimeout(updateWordCount, 10);
-        });
-      }
-    }
-
-    async function loadAllJSON() {
-      console.log('📦 Loading JSON files...');
-      
-      try {
-        const results = await Promise.allSettled([
-          fetch('data/supporting-phrases.json').then(r => r.json()),
-          fetch('data/body-phrases.json').then(r => r.json()),
-          fetch('data/conclusion-phrases.json').then(r => r.json()),
-          fetch('data/ideas.json').then(r => r.json()),
-          fetch('data/samples.json').then(r => r.json()),
-          fetch('data/review-questions.json').then(r => r.json())
-        ]);
-        
-        supportingPhrasesData = results[0].status === 'fulfilled' ? results[0].value : {};
-        bodyPhrasesData = results[1].status === 'fulfilled' ? results[1].value : {};
-        conclusionPhrasesData = results[2].status === 'fulfilled' ? results[2].value : {};
-        ideasData = results[3].status === 'fulfilled' ? results[3].value : {};
-        samplesData = results[4].status === 'fulfilled' ? results[4].value : {};
-        questionsData = results[5].status === 'fulfilled' ? results[5].value : { questions: [] };
-        
-        console.log('✅ All JSON loaded');
-        console.log('📊 Data check:', {
-          supportingPhrases: Object.keys(supportingPhrasesData).length,
-          bodyPhrases: Object.keys(bodyPhrasesData).length,
-          conclusionPhrases: Object.keys(conclusionPhrasesData).length,
-          ideas: Object.keys(ideasData).length,
-          samples: Object.keys(samplesData).length,
-          questions: questionsData.questions?.length || 0
-        });
-        
-      } catch (error) {
-        console.error('❌ Error loading JSON:', error);
-        questionsData = { questions: [] };
-      }
-    }
-
-    function populateQuestionDropdown() {
-      const dropdown = document.getElementById('questionDropdown');
-      dropdown.innerHTML = '<option value="">Select a topic...</option>';
-      
-      if (questionsData.questions && questionsData.questions.length > 0) {
-        questionsData.questions.forEach((q, i) => {
-          const option = document.createElement('option');
-          option.value = q.id;
-          option.textContent = q.topic;
-          dropdown.appendChild(option);
-        });
-      } else {
-        const option = document.createElement('option');
-        option.textContent = 'No questions available';
-        dropdown.appendChild(option);
-      }
-    }
-
-    function loadQuestionData(questionId) {
-      console.log('📥 Loading data for:', questionId);
-      
-      selectedQuestion = questionsData.questions.find(q => q.id === questionId);
-      if (!selectedQuestion) {
-        console.error('❌ Question not found:', questionId);
-        return;
-      }
-      
-      selectedSample = samplesData.opinion?.find(s => s.id === questionId);
-      if (!selectedSample) {
-        console.warn('⚠️ No sample for:', questionId);
-        selectedSample = samplesData.opinion?.[0];
-      }
-      
-      console.log('✅ Loaded:', selectedQuestion.topic);
-      updateDisplay();
-    }
-
-    function handleQuestionChange() {
-      const dropdown = document.getElementById('questionDropdown');
-      const selectedValue = dropdown.value;
-      
-      if (!selectedValue) {
-        selectedQuestion = null;
-        selectedSample = null;
-        updateDisplay();
-        return;
-      }
-      
-      currentQuestionIndex = questionsData.questions.findIndex(q => q.id === selectedValue);
-      loadQuestionData(selectedValue);
-    }
-    
-    function toggleViewMode() {
-      viewMode = viewMode === 'full' ? 'paragraph' : 'full';
-      
-      const toggleSwitch = document.getElementById('toggleSwitch');
-      const stageDotsContainer = document.getElementById('stageDotsContainer');
-      const paragraphLabel = document.getElementById('paragraphLabel');
-      const fullTextLabel = document.getElementById('fullTextLabel');
-
-      if (viewMode === 'full') {
-        toggleSwitch.classList.add('full');
-        stageDotsContainer.classList.add('hidden');
-        paragraphLabel.classList.remove('active');
-        fullTextLabel.classList.add('active');
-      } else {
-        toggleSwitch.classList.remove('full');
-        stageDotsContainer.classList.remove('hidden');
-        paragraphLabel.classList.add('active');
-        fullTextLabel.classList.remove('active');
-      }
-
-      updateDisplay();
-    }
-
-    function toggleXRay() {
-      showXRay = !showXRay;
-      updateDisplay();
-    }
-
-    function updateDisplay() {
-      if (currentMode === 'write') {
-        updateWriteDisplay();
-      } else {
-        updateReadDisplay();
-      }
-      updateStageDots();
-      updateNavigationButtons();
-    }
-
-    function updateWriteDisplay() {
-      const contentArea = document.getElementById('contentArea');
-      const info = stageInfo[currentStage];
-      
-      if (viewMode === 'full') {
-        let fullReviewHTML = '<div class="sample-display" style="cursor: pointer;">';
-        
-        reviewData.forEach((paragraphText, idx) => {
-          const stageLabel = stageNames[idx] || `Paragraph ${idx + 1}`;
-          const content = paragraphText.trim() || `<em style="color: #636366;">[${stageLabel} not written yet]</em>`;
-          
-          fullReviewHTML += `
-            <p onclick="editParagraph(${idx})" 
-               style="margin-bottom: 2rem; padding: 1rem; border-radius: 0.5rem; transition: all 0.3s;"
-               onmouseover="this.style.background='rgba(201, 169, 97, 0.05)'; this.style.borderLeft='3px solid #C9A961';"
-               onmouseout="this.style.background='transparent'; this.style.borderLeft='none';">
-              ${content}
-            </p>
-          `;
-        });
-        
-        fullReviewHTML += '</div>';
-        fullReviewHTML += '<p style="text-align: center; color: #8e8e93; font-size: 0.75rem; margin-top: 1rem;">💡 Click any paragraph to edit it</p>';
-        
-        contentArea.innerHTML = fullReviewHTML;
-        
-        const totalWords = reviewData.reduce((sum, stage) => {
-          return sum + (stage.trim() ? stage.trim().split(/\s+/).length : 0);
-        }, 0);
-        document.getElementById('currentWords').textContent = totalWords;
-        document.getElementById('targetWords').textContent = '190';
-        document.getElementById('totalWords').textContent = totalWords;
-        
-      } else {
-        contentArea.innerHTML = `<textarea 
-          id="textarea" 
-          class="textarea" 
-          placeholder="Write your ${info.name.toLowerCase()} here..."
-        ></textarea>`;
-        
-        const newTextarea = document.getElementById('textarea');
-        newTextarea.value = reviewData[currentStage];
-        newTextarea.addEventListener('input', handleInput);
-        newTextarea.addEventListener('paste', function() {
-          setTimeout(updateWordCount, 10);
-        });
-        
-        document.getElementById('targetWords').textContent = info.target;
-        updateWordCount();
-      }
-    }
-
-    function editParagraph(index) {
-      if (viewMode === 'full') {
-        currentStage = index;
-        viewMode = 'paragraph';
-        
-        const toggleSwitch = document.getElementById('toggleSwitch');
-        const stageDotsContainer = document.getElementById('stageDotsContainer');
-        const paragraphLabel = document.getElementById('paragraphLabel');
-        const fullTextLabel = document.getElementById('fullTextLabel');
-        
-        toggleSwitch.classList.remove('full');
-        stageDotsContainer.classList.remove('hidden');
-        paragraphLabel.classList.add('active');
-        fullTextLabel.classList.remove('active');
-        
-        updateDisplay();
-      }
-    }
-
-    function updateReadDisplay() {
-      const contentArea = document.getElementById('contentArea');
-      
-      if (!selectedSample) {
-        contentArea.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample review available. Please select a question.</p>';
-        return;
-      }
-      
-      let htmlContent = '';
-      if (selectedSample.styles && selectedSample.styles.default) {
-        htmlContent = selectedSample.styles.default;
-      } else {
-        contentArea.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample content available.</p>';
-        return;
-      }
-      
-      const paragraphs = extractParagraphs(htmlContent);
-
-      if (viewMode === 'full') {
-        let fullText = '';
-        paragraphs.forEach(p => {
-          if (p && p.trim()) {
-            fullText += `<p>${p}</p>`;
-          }
-        });
-        
-        const xrayClass = showXRay ? 'xray-active' : '';
-        contentArea.innerHTML = `<div class="sample-display ${xrayClass}">${fullText}</div>`;
-      } else {
-        const paragraph = paragraphs[currentStage];
-        
-        if (!paragraph || !paragraph.trim()) {
-          contentArea.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No content available for this stage.</p>';
-          return;
-        }
-        
-        const xrayClass = showXRay ? 'xray-active' : '';
-        contentArea.innerHTML = `<div class="sample-display ${xrayClass}"><p>${paragraph}</p></div>`;
-      }
-      
-      const allText = paragraphs.join(' ').replace(/<[^>]*>/g, '');
-      const words = allText.trim() ? allText.trim().split(/\s+/).length : 0;
-      document.getElementById('currentWords').textContent = words;
-      document.getElementById('targetWords').textContent = '190';
-    }
-    
-    function extractParagraphs(htmlAnswer) {
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = htmlAnswer;
-      return Array.from(tempDiv.querySelectorAll('p')).map(p => p.innerHTML);
-    }
-
-    function updateStageDots() {
-      const dots = document.querySelectorAll('.stage-dot-wrapper');
-      
-      dots.forEach((wrapper, i) => {
-        wrapper.classList.remove('current', 'done');
-        
-        if (i === currentStage) {
-          wrapper.classList.add('current');
-        } else if (i < currentStage) {
-          wrapper.classList.add('done');
-        }
-      });
-    }
-
-    function jumpStage(index) {
-      if (viewMode === 'paragraph' && currentMode === 'write') {
-        const textarea = document.getElementById('textarea');
-        if (textarea) {
-          reviewData[currentStage] = textarea.value;
-        }
-        currentStage = index;
-        showXRay = false;
-        updateDisplay();
-      }
-    }
-
-    function updateWordCount() {
-      const textarea = document.getElementById('textarea');
-      if (!textarea) return;
-      
-      const text = textarea.value.trim();
-      const words = text ? text.split(/\s+/).length : 0;
-      
-      document.getElementById('currentWords').textContent = words;
-      
-      const totalWords = reviewData.reduce((sum, stage) => {
-        return sum + (stage.trim() ? stage.trim().split(/\s+/).length : 0);
-      }, 0);
-      document.getElementById('totalWords').textContent = totalWords;
-    }
-
-    function handleInput() {
-      const textarea = document.getElementById('textarea');
-      if (textarea && currentMode === 'write') {
         reviewData[currentStage] = textarea.value;
-        updateWordCount();
       }
     }
+    currentStage++;
+    showXRay = false;
+    updateDisplay();
+  }
+}
 
-    function handleNextClick() {
-      if (viewMode === 'paragraph') {
-        nextStage();
+function prevStage() {
+  if (currentStage > 0) {
+    if (currentMode === 'write' && viewMode === 'paragraph') {
+      const textarea = document.getElementById('textarea');
+      if (textarea) {
+        reviewData[currentStage] = textarea.value;
       }
     }
+    currentStage--;
+    showXRay = false;
+    updateDisplay();
+  }
+}
 
-    function handlePrevClick() {
-      if (viewMode === 'paragraph') {
-        prevStage();
-      }
-    }
+function updateNavigationButtons() {
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  
+  if (viewMode === 'full') {
+    prevBtn.style.display = 'none';
+    nextBtn.style.display = 'none';
+  } else {
+    prevBtn.style.display = 'block';
+    nextBtn.style.display = 'block';
+    prevBtn.disabled = currentStage === 0;
+    nextBtn.disabled = currentStage === 3;
+  }
+}
 
-    function nextStage() {
-      if (currentStage < 3) {
-        if (currentMode === 'write' && viewMode === 'paragraph') {
-          const textarea = document.getElementById('textarea');
-          if (textarea) {
-            reviewData[currentStage] = textarea.value;
-          }
-        }
-        currentStage++;
-        showXRay = false;
-        updateDisplay();
-      }
-    }
+function openReferenceModal(tabName) {
+  currentRefTab = tabName;
+  const modalTitle = document.getElementById('modalTitle');
+  const modalContentArea = document.getElementById('modalContentArea');
+  
+  if (tabName === 'phrases') {
+    modalTitle.textContent = '💬 Useful Phrases';
+    modalContentArea.innerHTML = generatePhrasesHTML();
+  } else if (tabName === 'ideas') {
+    modalTitle.textContent = '💡 Writing Ideas';
+    modalContentArea.innerHTML = generateIdeasHTML();
+  } else if (tabName === 'samples') {
+    modalTitle.textContent = '📄 Sample Reviews';
+    modalContentArea.innerHTML = generateSamplesHTML();
+  }
+  
+  document.getElementById('modalOverlay').classList.add('show');
+}
 
-    function prevStage() {
-      if (currentStage > 0) {
-        if (currentMode === 'write' && viewMode === 'paragraph') {
-          const textarea = document.getElementById('textarea');
-          if (textarea) {
-            reviewData[currentStage] = textarea.value;
-          }
-        }
-        currentStage--;
-        showXRay = false;
-        updateDisplay();
-      }
-    }
-
-    function updateNavigationButtons() {
-      const prevBtn = document.getElementById('prevBtn');
-      const nextBtn = document.getElementById('nextBtn');
-      
-      if (viewMode === 'full') {
-        prevBtn.style.display = 'none';
-        nextBtn.style.display = 'none';
-      } else {
-        prevBtn.style.display = 'block';
-        nextBtn.style.display = 'block';
-        prevBtn.disabled = currentStage === 0;
-        nextBtn.disabled = currentStage === 3;
-      }
-    }
-
-    function openReferenceModal(tabName) {
-      currentRefTab = tabName;
-      const modalTitle = document.getElementById('modalTitle');
-      const modalContentArea = document.getElementById('modalContentArea');
-      
-      if (tabName === 'phrases') {
-        modalTitle.textContent = '💬 Useful Phrases';
-        modalContentArea.innerHTML = generatePhrasesHTML();
-      } else if (tabName === 'ideas') {
-        modalTitle.textContent = '💡 Writing Ideas';
-        modalContentArea.innerHTML = generateIdeasHTML();
-      } else if (tabName === 'samples') {
-        modalTitle.textContent = '📄 Sample Reviews';
-        modalContentArea.innerHTML = generateSamplesHTML();
-      }
-      
-      document.getElementById('modalOverlay').classList.add('show');
-    }
-
-    function generatePhrasesHTML() {
-      let html = '';
-      
-      const allPhrases = {
-        ...supportingPhrasesData,
-        ...bodyPhrasesData,
-        ...conclusionPhrasesData
-      };
-      
-      if (Object.keys(allPhrases).length === 0) {
-        return '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No phrases loaded. Please check your data files.</p>';
-      }
-      
-      Object.entries(allPhrases).forEach(([category, subcategories]) => {
-        if (typeof subcategories === 'object' && !Array.isArray(subcategories)) {
-          Object.entries(subcategories).forEach(([subcat, phrases]) => {
-            if (Array.isArray(phrases) && phrases.length > 0) {
-              html += `<div class="phrase-group">`;
-              html += `<div class="phrase-title">${formatTitle(subcat)}</div>`;
-              phrases.slice(0, 8).forEach(phrase => {
-                html += `<div class="phrase-item">${phrase}</div>`;
-              });
-              html += `</div>`;
-            }
+function generatePhrasesHTML() {
+  let html = '';
+  
+  const allPhrases = {
+    ...supportingPhrasesData,
+    ...bodyPhrasesData,
+    ...conclusionPhrasesData
+  };
+  
+  if (Object.keys(allPhrases).length === 0) {
+    return '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No phrases loaded. Please check your data files.</p>';
+  }
+  
+  Object.entries(allPhrases).forEach(([category, subcategories]) => {
+    if (typeof subcategories === 'object' && !Array.isArray(subcategories)) {
+      Object.entries(subcategories).forEach(([subcat, phrases]) => {
+        if (Array.isArray(phrases) && phrases.length > 0) {
+          html += `<div class="phrase-group">`;
+          html += `<div class="phrase-title">${formatTitle(subcat)}</div>`;
+          phrases.slice(0, 8).forEach(phrase => {
+            html += `<div class="phrase-item">${phrase}</div>`;
           });
+          html += `</div>`;
         }
       });
-      
-      return html || '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No phrases available.</p>';
     }
+  });
+  
+  return html || '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No phrases available.</p>';
+}
 
-    function generateIdeasHTML() {
-      if (!selectedQuestion || !ideasData.reviews) {
-        return '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No ideas available. Please select a question first.</p>';
-      }
-      
-      const idea = ideasData.reviews[selectedQuestion.id];
-      if (!idea || !idea.skeleton) {
-        return '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No ideas found for this topic.</p>';
-      }
-      
-      let html = '<div style="margin-bottom: 1.5rem;">';
-      html += `<div style="font-size: 1rem; color: #C9A961; font-weight: 600; margin-bottom: 1rem; text-align: center;">${idea.topic}</div>`;
-      
-      idea.skeleton.forEach(section => {
-        html += `<div class="phrase-group">`;
-        html += `<div class="phrase-title">${section.title}</div>`;
-        section.items.forEach(item => {
-          html += `<div class="phrase-item">${item.marker} ${item.text}</div>`;
-        });
-        html += `</div>`;
-      });
-      
-      html += '</div>';
-      return html;
-    }
-
-    function generateSamplesHTML() {
-      if (!selectedSample) {
-        return '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample available. Please select a question first.</p>';
-      }
-      
-      let html = '<div style="margin-bottom: 1.5rem;">';
-      html += `<div style="font-size: 1rem; color: #C9A961; font-weight: 600; margin-bottom: 1rem; text-align: center;">${selectedSample.title}</div>`;
-      
-      if (selectedSample.styles && selectedSample.styles.default) {
-        html += `<div style="font-size: 0.9rem; line-height: 1.7; color: #e5e5e7;">${selectedSample.styles.default}</div>`;
-      }
-      
-      html += '</div>';
-      return html;
-    }
-
-    function formatTitle(str) {
-      return str
-        .split('_')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ');
-    }
-
-    function closeReferenceModal() {
-      document.getElementById('modalOverlay').classList.remove('show');
-    }
-
-    function saveReview() {
-      if (currentMode === 'write' && viewMode === 'paragraph') {
-        const textarea = document.getElementById('textarea');
-        if (textarea) {
-          reviewData[currentStage] = textarea.value;
-        }
-      }
-      
-      const data = {
-        type: 'review',
-        question: selectedQuestion?.id,
-        timestamp: new Date().toISOString(),
-        stages: reviewData
-      };
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `review-${Date.now()}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-
-    function exportReview() {
-      if (currentMode === 'write' && viewMode === 'paragraph') {
-        const textarea = document.getElementById('textarea');
-        if (textarea) {
-          reviewData[currentStage] = textarea.value;
-        }
-      }
-      
-      const fullReview = reviewData.filter(s => s.trim()).join('\n\n');
-      const blob = new Blob([fullReview], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `review.txt`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-
-    function resetReview() {
-      if (confirm('Reset all content? This cannot be undone.')) {
-        reviewData = ['', '', '', ''];
-        currentStage = 0;
-        showXRay = false;
-        updateDisplay();
-      }
-    }
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        closeReferenceModal();
-      }
+function generateIdeasHTML() {
+  if (!selectedQuestion || !ideasData.reviews) {
+    return '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No ideas available. Please select a question first.</p>';
+  }
+  
+  const idea = ideasData.reviews[selectedQuestion.id];
+  if (!idea || !idea.skeleton) {
+    return '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No ideas found for this topic.</p>';
+  }
+  
+  let html = '<div style="margin-bottom: 1.5rem;">';
+  html += `<div style="font-size: 1rem; color: #C9A961; font-weight: 600; margin-bottom: 1rem; text-align: center;">${idea.topic}</div>`;
+  
+  idea.skeleton.forEach(section => {
+    html += `<div class="phrase-group">`;
+    html += `<div class="phrase-title">${section.title}</div>`;
+    section.items.forEach(item => {
+      html += `<div class="phrase-item">${item.marker} ${item.text}</div>`;
     });
+    html += `</div>`;
+  });
+  
+  html += '</div>';
+  return html;
+}
 
-    document.getElementById('modalOverlay').addEventListener('click', (e) => {
-      if (e.target.id === 'modalOverlay') {
-        closeReferenceModal();
-      }
-    });
+function generateSamplesHTML() {
+  if (!selectedSample) {
+    return '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample available. Please select a question first.</p>';
+  }
+  
+  let html = '<div style="margin-bottom: 1.5rem;">';
+  html += `<div style="font-size: 1rem; color: #C9A961; font-weight: 600; margin-bottom: 1rem; text-align: center;">${selectedSample.title}</div>`;
+  
+  if (selectedSample.styles && selectedSample.styles.default) {
+    html += `<div style="font-size: 0.9rem; line-height: 1.7; color: #e5e5e7;">${selectedSample.styles.default}</div>`;
+  }
+  
+  html += '</div>';
+  return html;
+}
 
-    init();
+function formatTitle(str) {
+  return str
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function closeReferenceModal() {
+  document.getElementById('modalOverlay').classList.remove('show');
+}
+
+function saveReview() {
+  if (currentMode === 'write' && viewMode === 'paragraph') {
+    const textarea = document.getElementById('textarea');
+    if (textarea) {
+      reviewData[currentStage] = textarea.value;
+    }
+  }
+  
+  const data = {
+    type: 'review',
+    question: selectedQuestion?.id,
+    timestamp: new Date().toISOString(),
+    stages: reviewData
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `review-${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportReview() {
+  if (currentMode === 'write' && viewMode === 'paragraph') {
+    const textarea = document.getElementById('textarea');
+    if (textarea) {
+      reviewData[currentStage] = textarea.value;
+    }
+  }
+  
+  const fullReview = reviewData.filter(s => s.trim()).join('\n\n');
+  const blob = new Blob([fullReview], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `review.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function resetReview() {
+  if (confirm('Reset all content? This cannot be undone.')) {
+    reviewData = ['', '', '', ''];
+    currentStage = 0;
+    showXRay = false;
+    updateDisplay();
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeReferenceModal();
+  }
+});
+
+document.getElementById('modalOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'modalOverlay') {
+    closeReferenceModal();
+  }
+});
+
+init();
   </script>
 </body>
 </html>

@@ -852,27 +852,26 @@
       }
     }
 
-    function populateQuestionDropdown() {
-      const dropdown = document.getElementById('questionDropdown');
-      dropdown.innerHTML = '';
-      
-      if (questionsData.questions && questionsData.questions.length > 0) {
-        questionsData.questions.forEach((q, i) => {
-          const option = document.createElement('option');
-          option.value = q.id;
-          option.textContent = q.topic;
-          dropdown.appendChild(option);
-        });
-        
-        currentQuestionIndex = 0;
-        dropdown.value = questionsData.questions[0].id;
-        loadQuestionData(questionsData.questions[0].id);
-      } else {
-        const option = document.createElement('option');
-        option.textContent = 'No questions available';
-        dropdown.appendChild(option);
-      }
-    }
+function populateQuestionDropdown() {
+  const dropdown = document.getElementById('questionDropdown');
+  dropdown.innerHTML = '<option value="">Select a topic...</option>';
+  
+  if (questionsData.questions && questionsData.questions.length > 0) {
+    questionsData.questions.forEach((q, i) => {
+      const option = document.createElement('option');
+      option.value = q.id;
+      option.textContent = q.topic;
+      dropdown.appendChild(option);
+    });
+    
+    // Don't auto-select anything - wait for user to choose
+    // This way the interface is ready but no data is loaded yet
+  } else {
+    const option = document.createElement('option');
+    option.textContent = 'No questions available';
+    dropdown.appendChild(option);
+  }
+}
 
     function loadQuestionData(questionId) {
       console.log('📥 Loading data for:', questionId);
@@ -893,14 +892,22 @@
       updateDisplay();
     }
 
-    function handleQuestionChange() {
-      const dropdown = document.getElementById('questionDropdown');
-      const selectedValue = dropdown.value;
-      
-      currentQuestionIndex = questionsData.questions.findIndex(q => q.id === selectedValue);
-      loadQuestionData(selectedValue);
-    }
-
+   function handleQuestionChange() {
+  const dropdown = document.getElementById('questionDropdown');
+  const selectedValue = dropdown.value;
+  
+  if (!selectedValue) {
+    // User selected placeholder - clear display
+    selectedQuestion = null;
+    selectedSample = null;
+    updateDisplay();
+    return;
+  }
+  
+  currentQuestionIndex = questionsData.questions.findIndex(q => q.id === selectedValue);
+  loadQuestionData(selectedValue);
+}
+    
     function toggleViewMode() {
       viewMode = viewMode === 'full' ? 'paragraph' : 'full';
       
@@ -1010,44 +1017,55 @@
       }
     }
 
-    function updateReadDisplay() {
-      const contentArea = document.getElementById('contentArea');
-      
-      if (!selectedSample) {
-        contentArea.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample review available. Please select a question.</p>';
-        return;
-      }
-      
-      const paragraphs = extractParagraphs(selectedSample.answer);
+   function updateReadDisplay() {
+  const contentArea = document.getElementById('contentArea');
+  
+  if (!selectedSample) {
+    contentArea.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample review available. Please select a question.</p>';
+    return;
+  }
+  
+  // FIX: Access the correct property - it's styles.default, not answer
+  let htmlContent = '';
+  if (selectedSample.styles && selectedSample.styles.default) {
+    htmlContent = selectedSample.styles.default;
+  } else if (selectedSample.answer) {
+    htmlContent = selectedSample.answer;
+  } else {
+    contentArea.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No sample content available.</p>';
+    return;
+  }
+  
+  const paragraphs = extractParagraphs(htmlContent);
 
-      if (viewMode === 'full') {
-        let fullText = '';
-        paragraphs.forEach(p => {
-          if (p && p.trim()) {
-            fullText += `<p>${p}</p>`;
-          }
-        });
-        
-        const xrayClass = showXRay ? 'xray-active' : '';
-        contentArea.innerHTML = `<div class="sample-display ${xrayClass}">${fullText}</div>`;
-      } else {
-        const paragraph = paragraphs[currentStage];
-        
-        if (!paragraph || !paragraph.trim()) {
-          contentArea.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No content available for this stage.</p>';
-          return;
-        }
-        
-        const xrayClass = showXRay ? 'xray-active' : '';
-        contentArea.innerHTML = `<div class="sample-display ${xrayClass}"><p>${paragraph}</p></div>`;
+  if (viewMode === 'full') {
+    let fullText = '';
+    paragraphs.forEach(p => {
+      if (p && p.trim()) {
+        fullText += `<p>${p}</p>`;
       }
-      
-      const allText = paragraphs.join(' ').replace(/<[^>]*>/g, '');
-      const words = allText.trim() ? allText.trim().split(/\s+/).length : 0;
-      document.getElementById('currentWords').textContent = words;
-      document.getElementById('targetWords').textContent = '190';
+    });
+    
+    const xrayClass = showXRay ? 'xray-active' : '';
+    contentArea.innerHTML = `<div class="sample-display ${xrayClass}">${fullText}</div>`;
+  } else {
+    const paragraph = paragraphs[currentStage];
+    
+    if (!paragraph || !paragraph.trim()) {
+      contentArea.innerHTML = '<p style="color: #8e8e93; text-align: center; padding: 2rem;">No content available for this stage.</p>';
+      return;
     }
-
+    
+    const xrayClass = showXRay ? 'xray-active' : '';
+    contentArea.innerHTML = `<div class="sample-display ${xrayClass}"><p>${paragraph}</p></div>`;
+  }
+  
+  const allText = paragraphs.join(' ').replace(/<[^>]*>/g, '');
+  const words = allText.trim() ? allText.trim().split(/\s+/).length : 0;
+  document.getElementById('currentWords').textContent = words;
+  document.getElementById('targetWords').textContent = '190';
+}
+    
     function extractParagraphs(htmlAnswer) {
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = htmlAnswer;

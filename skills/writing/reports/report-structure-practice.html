@@ -769,35 +769,10 @@ function scrollToSection(sectionKey, btnElement) {
   });
   btnElement.classList.add('active');
   
- // ==================== RENDER ====================
-function renderStructure(type, sectionKey = null) {
-  const container = document.getElementById('contentArea');
-  const structure = REPORT_STRUCTURES[type];
-  
-  if (!structure) {
-    container.innerHTML = '<div class="loading">Structure not found</div>';
-    return;
-  }
-
-  // If no section specified, show the first one
-  if (!sectionKey && structure.sections) {
-    sectionKey = Object.keys(structure.sections)[0];
-  }
-
-  let html = `
-    <h2 class="structure-title">${escapeHtml(structure.title)}</h2>
-    <p class="structure-purpose">${escapeHtml(structure.purpose)}</p>
-  `;
-
   // Render only the selected section
-  if (structure.sections && sectionKey && structure.sections[sectionKey]) {
-    html += renderSection(structure.sections[sectionKey]);
-  }
-
-  container.innerHTML = html;
+  renderStructure(currentType, sectionKey);
 }
-          
-    
+
     // ==================== TYPE SELECTOR ====================
     function buildTypeSelector() {
       const selector = document.getElementById('typeSelector');
@@ -826,12 +801,12 @@ function renderStructure(type, sectionKey = null) {
       // Rebuild paragraph navigation for new type
       buildParagraphNav();
       
-      // Render new structure
+      // Render new structure (first section by default)
       renderStructure(type);
     }
 
     // ==================== RENDER ====================
-    function renderStructure(type) {
+    function renderStructure(type, sectionKey = null) {
       const container = document.getElementById('contentArea');
       const structure = REPORT_STRUCTURES[type];
       
@@ -840,16 +815,19 @@ function renderStructure(type, sectionKey = null) {
         return;
       }
 
+      // If no section specified, show the first one
+      if (!sectionKey && structure.sections) {
+        sectionKey = Object.keys(structure.sections)[0];
+      }
+
       let html = `
         <h2 class="structure-title">${escapeHtml(structure.title)}</h2>
         <p class="structure-purpose">${escapeHtml(structure.purpose)}</p>
       `;
 
-      // Render each section
-      if (structure.sections) {
-        Object.entries(structure.sections).forEach(([key, section]) => {
-          html += renderSection(section);
-        });
+      // Render only the selected section
+      if (structure.sections && sectionKey && structure.sections[sectionKey]) {
+        html += renderSection(structure.sections[sectionKey]);
       }
 
       container.innerHTML = html;
@@ -866,8 +844,7 @@ function renderStructure(type, sectionKey = null) {
       `;
 
       if (section.phrases && Array.isArray(section.phrases)) {
-        section.phrases.forEach((phrase, idx) => {
-          // Highlight [...] placeholders
+        section.phrases.forEach((phrase) => {
           const highlightedPhrase = escapeHtml(phrase).replace(
             /\[([^\]]+)\]/g, 
             '<span class="phrase-highlight">[$1]</span>'
@@ -889,19 +866,12 @@ function renderStructure(type, sectionKey = null) {
 
       return html;
     }
-function escapeForJs(text) {
-  return String(text)
-    .replace(/\\/g, '\\\\')
-    .replace(/`/g, '\\`')
-    .replace(/\$/g, '\\$');
-}
 
     // ==================== ACTIONS ====================
     function copyPhrase(element, phrase) {
       navigator.clipboard.writeText(phrase).then(() => {
         showToast(`Copied: "${phrase.substring(0, 40)}${phrase.length > 40 ? '...' : ''}"`);
         
-        // Visual feedback
         element.style.background = 'rgba(16, 185, 129, 0.15)';
         element.style.borderLeftColor = '#10b981';
         
@@ -943,76 +913,11 @@ function escapeForJs(text) {
       });
     }
 
-    function printGuide() {
-      window.print();
-    }
-
-    // ==================== TOAST ====================
-    function showToast(message, success = true) {
-      const toast = document.getElementById('toast');
-      toast.textContent = message;
-      toast.style.background = success 
-        ? 'rgba(16, 185, 129, 0.95)' 
-        : 'rgba(239, 68, 68, 0.95)';
-      toast.classList.add('show');
-      
-      setTimeout(() => {
-        toast.classList.remove('show');
-      }, 2500);
-    }
-
-    // ==================== START ====================
-    init();
-  </script>
-</body>
-</html>).replace(/\\/g, '\\\\');
-    }
-
-    // ==================== ACTIONS ====================
-    function copyPhrase(element, phrase) {
-      navigator.clipboard.writeText(phrase).then(() => {
-        showToast(`Copied: "${phrase.substring(0, 40)}${phrase.length > 40 ? '...' : ''}"`);
-        
-        // Visual feedback
-        element.style.background = 'rgba(16, 185, 129, 0.15)';
-        element.style.borderLeftColor = '#10b981';
-        
-        setTimeout(() => {
-          element.style.background = '';
-          element.style.borderLeftColor = '';
-        }, 1000);
-      }).catch(err => {
-        console.error('Failed to copy:', err);
-        showToast('Failed to copy', false);
-      });
-    }
-
-    function copyAllPhrases() {
-      const structure = REPORT_STRUCTURES[currentType];
-      if (!structure) return;
-      
-      let text = `${structure.title}\n${'='.repeat(structure.title.length)}\n\n`;
-      text += `${structure.purpose}\n\n`;
-      
-      Object.entries(structure.sections).forEach(([key, section]) => {
-        text += `${section.label}\n`;
-        text += `${'-'.repeat(section.label.length)}\n`;
-        text += `${section.purpose}\n\n`;
-        
-        if (section.phrases) {
-          section.phrases.forEach(phrase => {
-            text += `• ${phrase}\n`;
-          });
-        }
-        text += '\n';
-      });
-
-      navigator.clipboard.writeText(text).then(() => {
-        showToast('All phrases copied to clipboard ✓');
-      }).catch(err => {
-        console.error('Failed to copy:', err);
-        showToast('Failed to copy to clipboard', false);
-      });
+    function copyPhraseFromElement(element) {
+      const phrase = element.getAttribute('data-phrase-text');
+      if (phrase) {
+        copyPhrase(element, phrase);
+      }
     }
 
     function printGuide() {

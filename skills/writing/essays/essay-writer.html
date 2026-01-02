@@ -910,7 +910,7 @@
   </div>
   <div class="stage-dot-wrapper" onclick="jumpStage(3)">
     <div class="stage-dot"></div>
-    <span class="stage-dot-label">Body 3</span>  <!-- ✅ Added! -->
+    <span class="stage-dot-label">Body 3</span>
   </div>
   <div class="stage-dot-wrapper" onclick="jumpStage(4)">
     <div class="stage-dot"></div>
@@ -965,6 +965,28 @@
           <button class="btn" onclick="exportEssay()">📥 Export</button>
           <button class="btn" onclick="resetEssay()">🔄 Reset</button>
         </div>
+
+        <!-- ✨ NEW: Keyboard shortcuts hint -->
+        <div style="grid-column: 1 / -1; text-align: center; padding-top: 0.5rem; border-top: 1px solid rgba(84, 84, 88, 0.15); width: 100%;">
+          <button 
+            onclick="showKeyboardShortcuts()"
+            style="
+              background: none;
+              border: none;
+              color: #636366;
+              font-size: 0.65rem;
+              cursor: pointer;
+              padding: 0.25rem 0.5rem;
+              border-radius: 0.25rem;
+              transition: all 0.3s;
+              font-family: 'DM Sans', sans-serif;
+            "
+            onmouseover="this.style.color='#C9A961'; this.style.background='rgba(201, 169, 97, 0.1)'"
+            onmouseout="this.style.color='#636366'; this.style.background='none'"
+          >
+            ⌨️ Keyboard Shortcuts
+          </button>
+        </div>
       </div>
 
     </div>
@@ -1008,12 +1030,34 @@
     // Initialize
     async function init() {
       try {
+        console.log('🚀 Essay Writer initializing...');
         await loadAllJSON();
         populateQuestionDropdown();
         
         // Get mode from URL parameter
         const urlParams = new URLSearchParams(window.location.search);
         const initialMode = urlParams.get('mode') || 'read';
+        
+        // ✨ NEW: Check for topic ID in URL parameter (e.g., ?id=technology-impact)
+        const topicId = urlParams.get('id');
+        
+        if (topicId && questionsData.questions) {
+          // Try to find and select the topic from URL
+          const matchingQuestion = questionsData.questions.find(q => q.id === topicId);
+          if (matchingQuestion) {
+            console.log(`📌 Loading topic from URL: ${topicId}`);
+            document.getElementById('questionDropdown').value = topicId;
+            loadQuestionData(topicId);
+          } else {
+            console.warn(`⚠️ Topic ID "${topicId}" not found, loading first topic`);
+            // Fallback to first question
+            if (questionsData.questions.length > 0) {
+              const firstQuestion = questionsData.questions[0];
+              document.getElementById('questionDropdown').value = firstQuestion.id;
+              loadQuestionData(firstQuestion.id);
+            }
+          }
+        }
         
         // Set mode WITHOUT showing mode tabs
         currentMode = initialMode;
@@ -1037,6 +1081,17 @@
         console.log('✅ Initialization complete - Mode:', currentMode);
       } catch (error) {
         console.error('❌ Initialization error:', error);
+        // ✨ NEW: Better error display
+        const contentArea = document.getElementById('contentArea');
+        if (contentArea) {
+          contentArea.innerHTML = `
+            <div style="text-align: center; padding: 3rem; color: #ff9500;">
+              <div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div>
+              <div style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Error Loading Data</div>
+              <div style="font-size: 0.875rem; color: #8e8e93;">Please check that all JSON files are available and try refreshing.</div>
+            </div>
+          `;
+        }
       }
     }
 
@@ -1249,6 +1304,9 @@
         newTextarea.addEventListener('paste', function() {
           setTimeout(updateWordCount, 10);
         });
+        
+        // ✨ NEW: Auto-focus textarea for immediate typing
+        newTextarea.focus();
         
         document.getElementById('targetWords').textContent = info.target;
         updateWordCount();
@@ -1762,8 +1820,16 @@ function extractParagraphs(htmlAnswer) {
         // In paragraph mode, show navigation buttons
         prevBtn.style.display = 'block';
         nextBtn.style.display = 'block';
+        
+        // ✨ ENHANCED: Visual feedback for disabled states (5 stages: 0-4)
         prevBtn.disabled = currentStage === 0;
         nextBtn.disabled = currentStage === 4;
+        
+        prevBtn.style.opacity = currentStage === 0 ? '0.3' : '1';
+        prevBtn.style.cursor = currentStage === 0 ? 'not-allowed' : 'pointer';
+        
+        nextBtn.style.opacity = currentStage === 4 ? '0.3' : '1';
+        nextBtn.style.cursor = currentStage === 4 ? 'not-allowed' : 'pointer';
       }
     }
 
@@ -1790,6 +1856,7 @@ function extractParagraphs(htmlAnswer) {
       a.download = `essay-${Date.now()}.json`;
       a.click();
       URL.revokeObjectURL(url);
+      console.log('💾 Saved via Save button');
     }
 
     function exportEssay() {
@@ -1809,6 +1876,7 @@ function extractParagraphs(htmlAnswer) {
       a.download = `essay.txt`;
       a.click();
       URL.revokeObjectURL(url);
+      console.log('📥 Exported via Export button');
     }
 
     function resetEssay() {
@@ -1820,10 +1888,98 @@ function extractParagraphs(htmlAnswer) {
       }
     }
 
-    // Close modal on Escape key
+    function showKeyboardShortcuts() {
+      const modalTitle = document.getElementById('modalTitle');
+      const modalContentArea = document.getElementById('modalContentArea');
+      
+      modalTitle.textContent = '⌨️ Keyboard Shortcuts';
+      modalContentArea.innerHTML = `
+        <div style="padding: 1rem;">
+          <div style="margin-bottom: 1.5rem;">
+            <div style="font-size: 0.75rem; color: #C9A961; font-weight: 700; text-transform: uppercase; margin-bottom: 0.75rem;">Navigation</div>
+            <div style="display: grid; gap: 0.5rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
+                <span style="color: #e5e5e7; font-size: 0.875rem;">Close Modal</span>
+                <kbd style="padding: 0.25rem 0.5rem; background: rgba(201, 169, 97, 0.2); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 0.25rem; font-size: 0.75rem; color: #C9A961;">ESC</kbd>
+              </div>
+            </div>
+          </div>
+          
+          <div style="margin-bottom: 1.5rem;">
+            <div style="font-size: 0.75rem; color: #C9A961; font-weight: 700; text-transform: uppercase; margin-bottom: 0.75rem;">Actions</div>
+            <div style="display: grid; gap: 0.5rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
+                <span style="color: #e5e5e7; font-size: 0.875rem;">Save Work</span>
+                <kbd style="padding: 0.25rem 0.5rem; background: rgba(201, 169, 97, 0.2); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 0.25rem; font-size: 0.75rem; color: #C9A961;">Ctrl/Cmd + S</kbd>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
+                <span style="color: #e5e5e7; font-size: 0.875rem;">Export Essay</span>
+                <kbd style="padding: 0.25rem 0.5rem; background: rgba(201, 169, 97, 0.2); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 0.25rem; font-size: 0.75rem; color: #C9A961;">Ctrl/Cmd + E</kbd>
+              </div>
+            </div>
+          </div>
+          
+          <div>
+            <div style="font-size: 0.75rem; color: #C9A961; font-weight: 700; text-transform: uppercase; margin-bottom: 0.75rem;">Help Panels</div>
+            <div style="display: grid; gap: 0.5rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
+                <span style="color: #e5e5e7; font-size: 0.875rem;">Open Phrases</span>
+                <kbd style="padding: 0.25rem 0.5rem; background: rgba(201, 169, 97, 0.2); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 0.25rem; font-size: 0.75rem; color: #C9A961;">Ctrl/Cmd + P</kbd>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
+                <span style="color: #e5e5e7; font-size: 0.875rem;">Open Ideas</span>
+                <kbd style="padding: 0.25rem 0.5rem; background: rgba(201, 169, 97, 0.2); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 0.25rem; font-size: 0.75rem; color: #C9A961;">Ctrl/Cmd + I</kbd>
+              </div>
+            </div>
+          </div>
+          
+          <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(125, 211, 252, 0.05); border-left: 3px solid #7dd3fc; border-radius: 0.5rem;">
+            <div style="font-size: 0.75rem; color: #7dd3fc; font-weight: 600; margin-bottom: 0.5rem;">💡 Pro Tip</div>
+            <div style="font-size: 0.8rem; color: #aeaeb2; line-height: 1.5;">
+              Use keyboard shortcuts to speed up your workflow. Press <kbd style="padding: 0.2rem 0.4rem; background: rgba(201, 169, 97, 0.15); border-radius: 0.2rem; font-size: 0.7rem;">Ctrl/Cmd + P</kbd> to quickly access useful phrases while writing!
+            </div>
+          </div>
+        </div>
+      `;
+      
+      document.getElementById('modalOverlay').classList.add('show');
+    }
+
+    // ============================================================================
+    // EVENT LISTENERS
+    // ============================================================================
     document.addEventListener('keydown', (e) => {
+      // ESC - Close modal
       if (e.key === 'Escape') {
         closeReferenceModal();
+      }
+      
+      // ✨ NEW: Ctrl/Cmd + S - Save work
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        saveEssay();
+        console.log('💾 Saved via keyboard shortcut');
+      }
+      
+      // ✨ NEW: Ctrl/Cmd + P - Open Phrases modal
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault();
+        openReferenceModal('phrases');
+        console.log('💬 Opened Phrases via keyboard shortcut');
+      }
+      
+      // ✨ NEW: Ctrl/Cmd + I - Open Ideas modal
+      if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+        e.preventDefault();
+        openReferenceModal('ideas');
+        console.log('💡 Opened Ideas via keyboard shortcut');
+      }
+      
+      // ✨ NEW: Ctrl/Cmd + E - Export essay
+      if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+        e.preventDefault();
+        exportEssay();
+        console.log('📥 Exported via keyboard shortcut');
       }
     });
 
@@ -1838,3 +1994,4 @@ function extractParagraphs(htmlAnswer) {
     init();
   </script>
 </body>
+</html>

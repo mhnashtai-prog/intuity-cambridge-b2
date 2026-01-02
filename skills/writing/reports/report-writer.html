@@ -823,854 +823,832 @@
 
   </div>
 
-  <script>
-    // ============================================================================
-    // STATE MANAGEMENT
-    // ============================================================================
-    let viewMode = 'stages'; // 'stages' or 'full'
-    let currentStage = 0;     // 0-3 for intro/f1/f2/rec
-    let reportData = ['', '', '', '', '']; // 4 paragraphs
-    let selectedQuestion = null;
-    let selectedSample = null;
-    let showXRay = true;      // X-Ray ON by default
-    let currentSampleStyle = 'default'; // 'default', 'alternative1', or 'alternative2'
+// ============================================================================
+// STATE MANAGEMENT
+// ============================================================================
+let viewMode = 'stages'; // 'stages' or 'full'
+let currentStage = 0;     // 0-4 for intro/current/problems/recomm/concl
+let reportData = ['', '', '', '', '']; // 5 sections
+let selectedQuestion = null;
+let selectedSample = null;
+let showXRay = true;      // X-Ray ON by default
+let currentSampleStyle = 'default'; // 'default', 'professional', or 'formal'
 
-    // Data stores
-    let phrasesData = {};
-    let ideasData = {};
-    let samplesData = {};
-    let questionsData = {};
+// Data stores
+let phrasesData = {};
+let ideasData = {};
+let samplesData = {};
+let questionsData = {};
 
-    const stageInfo = [
-      { name: 'INTRODUCTION', label: 'Intro', target: 45, placeholder: 'Write your introduction here...' },
-      { name: 'FEATURE 1', label: 'Feature 1', target: 50, placeholder: 'Describe the first main feature...' },
-      { name: 'FEATURE 2', label: 'Feature 2', target: 45, placeholder: 'Describe the second main feature...' },
-      { name: 'RECOMMENDATION', label: 'Recomm.', target: 50, placeholder: 'Give your recommendation...' }
-    ];
+const stageInfo = [
+  { name: 'INTRODUCTION', label: 'Intro', target: 40, placeholder: 'State the purpose of this report...' },
+  { name: 'CURRENT SITUATION', label: 'Current', target: 50, placeholder: 'Describe the current situation...' },
+  { name: 'PROBLEMS', label: 'Problems', target: 45, placeholder: 'Explain the main problems...' },
+  { name: 'RECOMMENDATIONS', label: 'Recomm.', target: 45, placeholder: 'Suggest improvements...' },
+  { name: 'CONCLUSION', label: 'Concl.', target: 30, placeholder: 'Summarize your findings...' }
+];
 
-    const stageNames = ['Introduction', 'Current Situation', 'Problems', 'Recommendations', 'Conclusion'];
+const stageNames = ['Introduction', 'Current Situation', 'Problems', 'Recommendations', 'Conclusion'];
 
-    // ============================================================================
-    // INITIALIZATION
-    // ============================================================================
-    async function init() {
-      try {
-        console.log('🚀 Report Writer initializing...');
-        await loadAllJSON();
-        populateQuestionDropdown();
-        
-        setupEventListeners();
-        
-        // ✨ NEW: Check for topic ID in URL parameter (e.g., ?id=tv-documentary)
-        const urlParams = new URLSearchParams(window.location.search);
-        const topicId = urlParams.get('id');
-        
-        if (topicId && questionsData.questions) {
-          // Try to find and select the topic from URL
-          const matchingQuestion = questionsData.questions.find(q => q.id === topicId);
-          if (matchingQuestion) {
-            console.log(`📌 Loading topic from URL: ${topicId}`);
-            document.getElementById('questionDropdown').value = topicId;
-            loadQuestionData(topicId);
-          } else {
-            console.warn(`⚠️ Topic ID "${topicId}" not found, loading first topic`);
-            // Fallback to first question
-            if (questionsData.questions.length > 0) {
-              const firstQuestion = questionsData.questions[0];
-              document.getElementById('questionDropdown').value = firstQuestion.id;
-              loadQuestionData(firstQuestion.id);
-            } else {
-              updateDisplay();
-            }
-          }
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+async function init() {
+  try {
+    console.log('🚀 Report Writer initializing...');
+    await loadAllJSON();
+    populateQuestionDropdown();
+    
+    setupEventListeners();
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const topicId = urlParams.get('id');
+    
+    if (topicId && questionsData.questions) {
+      const matchingQuestion = questionsData.questions.find(q => q.id === topicId);
+      if (matchingQuestion) {
+        console.log(`📌 Loading topic from URL: ${topicId}`);
+        document.getElementById('questionDropdown').value = topicId;
+        loadQuestionData(topicId);
+      } else {
+        console.warn(`⚠️ Topic ID "${topicId}" not found, loading first topic`);
+        if (questionsData.questions.length > 0) {
+          const firstQuestion = questionsData.questions[0];
+          document.getElementById('questionDropdown').value = firstQuestion.id;
+          loadQuestionData(firstQuestion.id);
         } else {
-          // No URL parameter - auto-select first question
-          if (questionsData.questions && questionsData.questions.length > 0) {
-            const firstQuestion = questionsData.questions[0];
-            document.getElementById('questionDropdown').value = firstQuestion.id;
-            loadQuestionData(firstQuestion.id);
-          } else {
-            updateDisplay();
-          }
-        }
-        
-        console.log('✅ Initialization complete');
-      } catch (error) {
-        console.error('❌ Initialization error:', error);
-        // ✨ NEW: Better error display
-        const contentArea = document.getElementById('contentArea');
-        if (contentArea) {
-          contentArea.innerHTML = `
-            <div style="text-align: center; padding: 3rem; color: #ff9500;">
-              <div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div>
-              <div style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Error Loading Data</div>
-              <div style="font-size: 0.875rem; color: #8e8e93;">Please check that all JSON files are available and try refreshing.</div>
-            </div>
-          `;
+          updateDisplay();
         }
       }
-    }
-
-    function setupEventListeners() {
-      const textarea = document.getElementById('textarea');
-      if (textarea) {
-        textarea.addEventListener('input', handleInput);
-        textarea.addEventListener('paste', function() {
-          setTimeout(updateWordCount, 10);
-        });
-      }
-    }
-
-    // ============================================================================
-    // DATA LOADING
-    // ============================================================================
-    async function loadAllJSON() {
-      console.log('📦 Loading JSON files...');
-      
-      try {
-        const results = await Promise.allSettled([
-          fetch('data/introduction-phrases.json').then(r => r.json()),
-          fetch('data/body-phrases.json').then(r => r.json()),
-          fetch('data/supporting-phrases.json').then(r => r.json()),
-          fetch('data/conclusion-phrases.json').then(r => r.json()),
-          fetch('data/report-ideas.json').then(r => r.json()),
-          fetch('data/report-samples.json').then(r => r.json()),
-          fetch('data/report-questions.json').then(r => r.json())
-        ]);
-        
-        // Merge all phrase files
-        phrasesData = {};
-        if (results[0].status === 'fulfilled') phrasesData = { ...phrasesData, ...results[0].value };
-        if (results[1].status === 'fulfilled') phrasesData = { ...phrasesData, ...results[1].value };
-        if (results[2].status === 'fulfilled') phrasesData = { ...phrasesData, ...results[2].value };
-        if (results[3].status === 'fulfilled') phrasesData = { ...phrasesData, ...results[3].value };
-        
-        if (results[4].status === 'fulfilled') ideasData = results[4].value;
-        if (results[5].status === 'fulfilled') samplesData = results[5].value;
-        if (results[6].status === 'fulfilled') questionsData = results[6].value;
-        
-        console.log('✅ All data loaded');
-      } catch (error) {
-        console.error('❌ Error loading JSON:', error);
-      }
-    }
-
-    function populateQuestionDropdown() {
-      const dropdown = document.getElementById('questionDropdown');
-      dropdown.innerHTML = '<option value="">Select a topic...</option>';
-      
+    } else {
       if (questionsData.questions && questionsData.questions.length > 0) {
-        questionsData.questions.forEach(q => {
-          const option = document.createElement('option');
-          option.value = q.id;
-          option.textContent = q.topic || q.question;
-          dropdown.appendChild(option);
-        });
-      }
-    }
-
-    function loadQuestionData(questionId) {
-      selectedQuestion = questionsData.questions?.find(q => q.id === questionId);
-      if (!selectedQuestion) return;
-      
-      selectedSample = samplesData.opinion?.find(s => s.id === questionId);
-      
-      updateDisplay();
-    }
-
-    function handleQuestionChange() {
-      const dropdown = document.getElementById('questionDropdown');
-      const selectedValue = dropdown.value;
-      
-      if (!selectedValue) {
-        selectedQuestion = null;
-        selectedSample = null;
-        updateDisplay();
-        return;
-      }
-      
-      loadQuestionData(selectedValue);
-    }
-
-    // ============================================================================
-    // VIEW MODE TOGGLE
-    // ============================================================================
-    function toggleViewMode() {
-      // Save current work before switching
-      if (viewMode === 'stages') {
-        const textarea = document.getElementById('textarea');
-        if (textarea) {
-          reportData[currentStage] = textarea.value;
-        }
-      }
-      
-      viewMode = viewMode === 'stages' ? 'full' : 'stages';
-      updateDisplay();
-    }
-
-    // ============================================================================
-    // DISPLAY UPDATE
-    // ============================================================================
-    function updateDisplay() {
-      const stageDotsContainer = document.getElementById('stageDotsContainer');
-      const toggleSwitch = document.getElementById('toggleSwitch');
-      const stagesLabel = document.getElementById('stagesLabel');
-      const fullLabel = document.getElementById('fullLabel');
-      const navGroup = document.getElementById('navGroup');
-      const currentWordCount = document.getElementById('currentWordCount');
-      const contentArea = document.getElementById('contentArea');
-      
-      if (viewMode === 'stages') {
-        // STAGES MODE
-        stageDotsContainer.classList.remove('hidden');
-        toggleSwitch.classList.remove('full');
-        stagesLabel.classList.add('active');
-        fullLabel.classList.remove('active');
-        navGroup.style.display = 'flex';
-        currentWordCount.style.display = 'inline';
-        
-        // Show textarea
-        const info = stageInfo[currentStage];
-        contentArea.innerHTML = `<textarea 
-          id="textarea" 
-          class="textarea" 
-          placeholder="${info.placeholder}"
-        ></textarea>`;
-        
-        const textarea = document.getElementById('textarea');
-        textarea.value = reportData[currentStage];
-        textarea.addEventListener('input', handleInput);
-        
-        // ✨ NEW: Auto-focus textarea for immediate typing
-        textarea.focus();
-        
-        document.getElementById('targetWords').textContent = info.target;
-        updateWordCount();
-        
+        const firstQuestion = questionsData.questions[0];
+        document.getElementById('questionDropdown').value = firstQuestion.id;
+        loadQuestionData(firstQuestion.id);
       } else {
-        // FULL MODE
-        stageDotsContainer.classList.add('hidden');
-        toggleSwitch.classList.add('full');
-        stagesLabel.classList.remove('active');
-        fullLabel.classList.add('active');
-        navGroup.style.display = 'none';
-        currentWordCount.style.display = 'none';
-        
-        // Show preview
-        renderFullPreview();
-        updateTotalWordCount();
-      }
-      
-      updateStageDots();
-      updateNavigationButtons();
-    }
-
-    function renderFullPreview() {
-      const contentArea = document.getElementById('contentArea');
-      
-      let html = '<div class="full-preview">';
-      
-      reportData.forEach((content, index) => {
-        const displayText = content.trim() 
-          ? content 
-          : `<em>[${stageNames[index]} not written yet]</em>`;
-        
-        html += `
-          <div class="preview-paragraph" onclick="editParagraph(${index})">
-            ${displayText}
-          </div>
-        `;
-      });
-      
-      html += '</div>';
-      html += '<p style="text-align: center; color: #8e8e93; font-size: 0.75rem; margin-top: 1rem;">💡 Click any paragraph to edit it</p>';
-      
-      contentArea.innerHTML = html;
-    }
-
-    function editParagraph(index) {
-      viewMode = 'stages';
-      currentStage = index;
-      updateDisplay();
-    }
-
-    // ============================================================================
-    // STAGE NAVIGATION
-    // ============================================================================
-    function jumpStage(index) {
-      if (viewMode === 'stages') {
-        const textarea = document.getElementById('textarea');
-        if (textarea) {
-          reportData[currentStage] = textarea.value;
-        }
-        currentStage = index;
         updateDisplay();
       }
     }
-
-    function handleNextClick() {
-      if (currentStage < 4) {
-        const textarea = document.getElementById('textarea');
-        if (textarea) {
-          reportData[currentStage] = textarea.value;
-        }
-        currentStage++;
-        updateDisplay();
-      }
-    }
-
-    function handlePrevClick() {
-      if (currentStage > 0) {
-        const textarea = document.getElementById('textarea');
-        if (textarea) {
-          reportData[currentStage] = textarea.value;
-        }
-        currentStage--;
-        updateDisplay();
-      }
-    }
-
-    function updateStageDots() {
-      const dots = document.querySelectorAll('.stage-dot-wrapper');
-      
-      dots.forEach((wrapper, i) => {
-        wrapper.classList.remove('current');
-        
-        if (i === currentStage && viewMode === 'stages') {
-          wrapper.classList.add('current');
-        }
-      });
-    }
-
-    function updateNavigationButtons() {
-      const prevBtn = document.getElementById('prevBtn');
-      const nextBtn = document.getElementById('nextBtn');
-      
-      if (viewMode === 'stages') {
-        // ✨ ENHANCED: Visual feedback for disabled states
-        prevBtn.disabled = currentStage === 0;
-        nextBtn.disabled = currentStage === 4;
-        
-        // Apply opacity styling
-        prevBtn.style.opacity = currentStage === 0 ? '0.3' : '1';
-        prevBtn.style.cursor = currentStage === 0 ? 'not-allowed' : 'pointer';
-        
-        nextBtn.style.opacity = currentStage === 4 ? '0.3' : '1';
-        nextBtn.style.cursor = currentStage === 4 ? 'not-allowed' : 'pointer';
-      }
-    }
-
-    // ============================================================================
-    // WORD COUNT
-    // ============================================================================
-    function handleInput() {
-      const textarea = document.getElementById('textarea');
-      if (textarea) {
-        reportData[currentStage] = textarea.value;
-        updateWordCount();
-      }
-    }
-
-    function updateWordCount() {
-      const textarea = document.getElementById('textarea');
-      if (!textarea) return;
-      
-      const text = textarea.value.trim();
-      const words = text ? text.split(/\s+/).length : 0;
-      
-      document.getElementById('currentWords').textContent = words;
-      updateTotalWordCount();
-    }
-
-    function updateTotalWordCount() {
-      const totalWords = reportData.reduce((sum, stage) => {
-        return sum + (stage.trim() ? stage.trim().split(/\s+/).length : 0);
-      }, 0);
-      document.getElementById('totalWords').textContent = totalWords;
-    }
-
-    // ============================================================================
-    // X-RAY TOGGLE
-    // ============================================================================
-    function toggleXRay() {
-      showXRay = !showXRay;
-      const xrayBtn = document.getElementById('xrayBtn');
-      
-      if (showXRay) {
-        xrayBtn.textContent = 'X-Ray';
-        xrayBtn.classList.add('active');
-      } else {
-        xrayBtn.textContent = 'Normal';
-        xrayBtn.classList.remove('active');
-      }
-    }
-
-    // ============================================================================
-    // MODAL SYSTEM
-    // ============================================================================
-    function openReferenceModal(type) {
-      const modalTitle = document.getElementById('modalTitle');
-      const modalContentArea = document.getElementById('modalContentArea');
-      
-      if ((type === 'ideas' || type === 'samples') && !selectedQuestion) {
-        modalTitle.textContent = '⚠️ Select a Question First';
-        modalContentArea.innerHTML = `
-          <div style="text-align: center; padding: 3rem 2rem;">
-            <div style="font-size: 3rem; margin-bottom: 1rem;">📋</div>
-            <p style="color: #C9A961; font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">
-              No Question Selected
-            </p>
-            <p style="color: #8e8e93; font-size: 0.9rem; line-height: 1.6;">
-              Please select a question from the dropdown menu above.
-            </p>
-          </div>`;
-        document.getElementById('modalOverlay').classList.add('show');
-        return;
-      }
-      
-      if (type === 'phrases') {
-        modalTitle.textContent = viewMode === 'stages' 
-          ? `💬 ${stageInfo[currentStage].name} Phrases`
-          : '💬 All Review Phrases';
-        modalContentArea.innerHTML = generatePhrasesHTML();
-      } else if (type === 'ideas') {
-        modalTitle.textContent = viewMode === 'stages'
-          ? `💡 ${stageNames[currentStage]} Ideas`
-          : '💡 Complete Review Plan';
-        modalContentArea.innerHTML = generateIdeasHTML();
-      } else if (type === 'samples') {
-        // Reset to default style when opening samples modal
-        currentSampleStyle = 'default';
-        
-        modalTitle.textContent = viewMode === 'stages'
-          ? `📄 Sample: ${stageNames[currentStage]}`
-          : '📄 Complete Sample Review';
-        modalContentArea.innerHTML = generateSamplesHTML();
-      }
-      
-      document.getElementById('modalOverlay').classList.add('show');
-    }
-
-    function generatePhrasesHTML() {
-      if (Object.keys(phrasesData).length === 0) {
-        return `<div style="text-align: center; padding: 2rem; color: #8e8e93;">No phrases loaded.</div>`;
-      }
-      
-      let html = '';
-      
-      // Context-aware phrase selection
-      let relevantCategories = {};
-      
-      if (viewMode === 'stages') {
-        // Show only relevant phrases for current stage
-        if (currentStage === 0) {
-          // Introduction
-          if (phrasesData.introduction_type_A) relevantCategories['Introduction Type A'] = phrasesData.introduction_type_A;
-          if (phrasesData.introduction_type_B) relevantCategories['Introduction Type B'] = phrasesData.introduction_type_B;
-        } else if (currentStage === 1) {
-          // Feature 1
-          if (phrasesData.introducing_features) relevantCategories['Introducing Features'] = phrasesData.introducing_features;
-          if (phrasesData.describing_details) relevantCategories['Describing Details'] = phrasesData.describing_details;
-          if (phrasesData.expressing_reasons) relevantCategories['Expressing Reasons'] = phrasesData.expressing_reasons;
-        } else if (currentStage === 2) {
-          // Feature 2
-          if (phrasesData.comparing_contrasting) relevantCategories['Comparing & Contrasting'] = phrasesData.comparing_contrasting;
-          if (phrasesData.balanced_view) relevantCategories['Balanced View'] = phrasesData.balanced_view;
-          if (phrasesData.personal_response) relevantCategories['Personal Response'] = phrasesData.personal_response;
-          if (phrasesData.famous_reputation) relevantCategories['Famous & Reputation'] = phrasesData.famous_reputation;
-        } else if (currentStage === 4) {
-          // Recommendation
-          if (phrasesData.strong_positive_recommendation) relevantCategories['Strong Positive'] = phrasesData.strong_positive_recommendation;
-          if (phrasesData.positive_with_conditions) relevantCategories['Positive with Conditions'] = phrasesData.positive_with_conditions;
-          if (phrasesData.lasting_impression) relevantCategories['Lasting Impression'] = phrasesData.lasting_impression;
-          if (phrasesData.final_summary) relevantCategories['Final Summary'] = phrasesData.final_summary;
-        }
-      } else {
-        // Full mode - show all
-        relevantCategories = phrasesData;
-      }
-      
-      Object.entries(relevantCategories).forEach(([category, subcategories]) => {
-        if (typeof subcategories === 'object' && !Array.isArray(subcategories)) {
-          Object.entries(subcategories).forEach(([subcat, phrases]) => {
-            if (Array.isArray(phrases) && phrases.length > 0) {
-              html += `<div class="phrase-group">`;
-              html += `<div class="phrase-title">${formatTitle(subcat)}</div>`;
-              phrases.slice(0, 8).forEach(phrase => {
-                html += `<div class="phrase-item" onclick="insertPhrase('${escapeHtml(phrase)}')">${phrase}</div>`;
-              });
-              html += `</div>`;
-            }
-          });
-        }
-      });
-      
-      return html || `<div style="text-align: center; padding: 2rem; color: #8e8e93;">No phrases available.</div>`;
-    }
-
-    function generateIdeasHTML() {
-      if (!selectedQuestion || !ideasData.reviews) {
-        return `<div style="text-align: center; padding: 2rem; color: #8e8e93;">No ideas available.</div>`;
-      }
-      
-      const idea = ideasData.reports[selectedQuestion.id];
-      if (!idea || !idea.skeleton) {
-        return `<div style="text-align: center; padding: 2rem; color: #8e8e93;">No ideas for this topic.</div>`;
-      }
-      
-      let html = '<div style="margin-bottom: 1.5rem;">';
-      html += `<div style="font-size: 1rem; color: #C9A961; font-weight: 600; margin-bottom: 1rem; text-align: center;">${idea.topic}</div>`;
-      
-      if (viewMode === 'stages') {
-        // Show only current stage
-        const section = idea.skeleton[currentStage];
-        html += `<div class="phrase-group">`;
-        html += `<div class="phrase-title">${section.title}</div>`;
-        section.items.forEach(item => {
-          html += `<div class="skeleton-item">`;
-          html += `<div class="skeleton-marker">${item.marker}</div>`;
-          html += `<div class="skeleton-text">${item.text}</div>`;
-          html += `</div>`;
-        });
-        html += `</div>`;
-      } else {
-        // Show all stages
-        idea.skeleton.forEach(section => {
-          html += `<div class="phrase-group">`;
-          html += `<div class="phrase-title">${section.title}</div>`;
-          section.items.forEach(item => {
-            html += `<div class="skeleton-item">`;
-            html += `<div class="skeleton-marker">${item.marker}</div>`;
-            html += `<div class="skeleton-text">${item.text}</div>`;
-            html += `</div>`;
-          });
-          html += `</div>`;
-        });
-      }
-      
-      html += '</div>';
-      return html;
-    }
-
-    function generateSamplesHTML() {
-      if (!selectedSample) {
-        return `<div style="text-align: center; padding: 2rem; color: #8e8e93;">No sample available.</div>`;
-      }
-      
-      const content = selectedSample.styles?.[currentSampleStyle] || selectedSample.styles?.default || selectedSample.answer || '';
-      if (!content) {
-        return `<div style="text-align: center; padding: 2rem; color: #8e8e93;">No content available.</div>`;
-      }
-      
-      const paragraphs = extractParagraphs(content);
-      
-      let html = '<div style="margin-bottom: 1.5rem;">';
-      
-      // Title
-      html += `<div style="font-size: 1rem; color: #C9A961; font-weight: 600; margin-bottom: 1rem; text-align: center;">${selectedSample.title}</div>`;
-      
-      // STYLE SELECTOR BUTTONS - Only visible in Samples modal!
-      html += `
-        <div class="sample-style-selector" style="
-          display: flex; 
-          gap: 0.5rem; 
-          justify-content: center; 
-          margin-bottom: 1.5rem;
-          padding-bottom: 1rem;
-          border-bottom: 1px solid rgba(84, 84, 88, 0.2);
-        ">
-          <button class="style-btn ${currentSampleStyle === 'default' ? 'active' : ''}" 
-                  onclick="switchSampleStyle('default')"
-                  style="
-                    padding: 0.5rem 1rem;
-                    background: ${currentSampleStyle === 'default' ? 'rgba(201, 169, 97, 0.2)' : 'rgba(0, 0, 0, 0.3)'};
-                    border: 1px solid ${currentSampleStyle === 'default' ? 'rgba(201, 169, 97, 0.5)' : 'rgba(255, 255, 255, 0.1)'};
-                    border-radius: 0.5rem;
-                    color: ${currentSampleStyle === 'default' ? '#C9A961' : '#8e8e93'};
-                    cursor: pointer;
-                    transition: all 0.3s;
-                    font-size: 0.75rem;
-                    font-weight: 600;
-                    font-family: 'DM Sans', sans-serif;
-                  "
-                  onmouseover="if('${currentSampleStyle}' !== 'default') { this.style.background='rgba(0, 0, 0, 0.5)'; this.style.borderColor='rgba(201, 169, 97, 0.3)'; }"
-                  onmouseout="if('${currentSampleStyle}' !== 'default') { this.style.background='rgba(0, 0, 0, 0.3)'; this.style.borderColor='rgba(255, 255, 255, 0.1)'; }">
-            📝 Default
-          </button>
-          <button class="style-btn ${currentSampleStyle === 'alternative1' ? 'active' : ''}" 
-                  onclick="switchSampleStyle('alternative1')"
-                  style="
-                    padding: 0.5rem 1rem;
-                    background: ${currentSampleStyle === 'alternative1' ? 'rgba(201, 169, 97, 0.2)' : 'rgba(0, 0, 0, 0.3)'};
-                    border: 1px solid ${currentSampleStyle === 'alternative1' ? 'rgba(201, 169, 97, 0.5)' : 'rgba(255, 255, 255, 0.1)'};
-                    border-radius: 0.5rem;
-                    color: ${currentSampleStyle === 'alternative1' ? '#C9A961' : '#8e8e93'};
-                    cursor: pointer;
-                    transition: all 0.3s;
-                    font-size: 0.75rem;
-                    font-weight: 600;
-                    font-family: 'DM Sans', sans-serif;
-                  "
-                  onmouseover="if('${currentSampleStyle}' !== 'alternative1') { this.style.background='rgba(0, 0, 0, 0.5)'; this.style.borderColor='rgba(201, 169, 97, 0.3)'; }"
-                  onmouseout="if('${currentSampleStyle}' !== 'alternative1') { this.style.background='rgba(0, 0, 0, 0.3)'; this.style.borderColor='rgba(255, 255, 255, 0.1)'; }">
-            🔄 Alternative 1
-          </button>
-          <button class="style-btn ${currentSampleStyle === 'alternative2' ? 'active' : ''}" 
-                  onclick="switchSampleStyle('alternative2')"
-                  style="
-                    padding: 0.5rem 1rem;
-                    background: ${currentSampleStyle === 'alternative2' ? 'rgba(201, 169, 97, 0.2)' : 'rgba(0, 0, 0, 0.3)'};
-                    border: 1px solid ${currentSampleStyle === 'alternative2' ? 'rgba(201, 169, 97, 0.5)' : 'rgba(255, 255, 255, 0.1)'};
-                    border-radius: 0.5rem;
-                    color: ${currentSampleStyle === 'alternative2' ? '#C9A961' : '#8e8e93'};
-                    cursor: pointer;
-                    transition: all 0.3s;
-                    font-size: 0.75rem;
-                    font-weight: 600;
-                    font-family: 'DM Sans', sans-serif;
-                  "
-                  onmouseover="if('${currentSampleStyle}' !== 'alternative2') { this.style.background='rgba(0, 0, 0, 0.5)'; this.style.borderColor='rgba(201, 169, 97, 0.3)'; }"
-                  onmouseout="if('${currentSampleStyle}' !== 'alternative2') { this.style.background='rgba(0, 0, 0, 0.3)'; this.style.borderColor='rgba(255, 255, 255, 0.1)'; }">
-            🔄 Alternative 2
-          </button>
+    
+    console.log('✅ Initialization complete');
+  } catch (error) {
+    console.error('❌ Initialization error:', error);
+    const contentArea = document.getElementById('contentArea');
+    if (contentArea) {
+      contentArea.innerHTML = `
+        <div style="text-align: center; padding: 3rem; color: #ff9500;">
+          <div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div>
+          <div style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Error Loading Data</div>
+          <div style="font-size: 0.875rem; color: #8e8e93;">Please check that all JSON files are available and try refreshing.</div>
         </div>
       `;
-      
-      const xrayClass = showXRay ? 'xray-active' : '';
-      
-      if (viewMode === 'stages') {
-        // Show only current paragraph
-        const paragraph = paragraphs[currentStage];
-        if (paragraph) {
-          html += `<div class="sample-display ${xrayClass}"><p>${paragraph}</p></div>`;
-        } else {
-          html += `<div style="text-align: center; padding: 2rem; color: #8e8e93;">No content for this paragraph in ${currentSampleStyle} style.</div>`;
-        }
-      } else {
-        // Show all paragraphs
-        html += `<div class="sample-display ${xrayClass}">`;
-        paragraphs.forEach(p => {
-          if (p && p.trim()) {
-            html += `<p>${p}</p>`;
-          }
-        });
-        html += '</div>';
-      }
-      
-      html += '</div>';
-      return html;
     }
+  }
+}
 
-    function extractParagraphs(htmlContent) {
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = htmlContent;
-      const paragraphs = Array.from(tempDiv.querySelectorAll('p'));
-      return paragraphs.map(p => p.innerHTML);
-    }
+function setupEventListeners() {
+  const textarea = document.getElementById('textarea');
+  if (textarea) {
+    textarea.addEventListener('input', handleInput);
+    textarea.addEventListener('paste', function() {
+      setTimeout(updateWordCount, 10);
+    });
+  }
+}
 
-    function closeReferenceModal() {
-      document.getElementById('modalOverlay').classList.remove('show');
-    }
+// ============================================================================
+// DATA LOADING
+// ============================================================================
+async function loadAllJSON() {
+  console.log('📦 Loading JSON files...');
+  
+  try {
+    const results = await Promise.allSettled([
+      fetch('data/introduction-phrases.json').then(r => r.json()),
+      fetch('data/body-phrases.json').then(r => r.json()),
+      fetch('data/supporting-phrases.json').then(r => r.json()),
+      fetch('data/conclusion-phrases.json').then(r => r.json()),
+      fetch('data/report-ideas.json').then(r => r.json()),
+      fetch('data/report-samples.json').then(r => r.json()),
+      fetch('data/report-questions.json').then(r => r.json())
+    ]);
+    
+    // Merge all phrase files
+    phrasesData = {};
+    if (results[0].status === 'fulfilled') phrasesData = { ...phrasesData, ...results[0].value };
+    if (results[1].status === 'fulfilled') phrasesData = { ...phrasesData, ...results[1].value };
+    if (results[2].status === 'fulfilled') phrasesData = { ...phrasesData, ...results[2].value };
+    if (results[3].status === 'fulfilled') phrasesData = { ...phrasesData, ...results[3].value };
+    
+    if (results[4].status === 'fulfilled') ideasData = results[4].value;
+    if (results[5].status === 'fulfilled') samplesData = results[5].value;
+    if (results[6].status === 'fulfilled') questionsData = results[6].value;
+    
+    console.log('✅ All data loaded');
+    console.log('📊 Phrases:', Object.keys(phrasesData));
+    console.log('💡 Ideas:', ideasData);
+    console.log('📄 Samples:', samplesData);
+  } catch (error) {
+    console.error('❌ Error loading JSON:', error);
+  }
+}
 
-    function switchSampleStyle(styleName) {
-      currentSampleStyle = styleName;
-      // Re-render the samples modal content with new style
-      document.getElementById('modalContentArea').innerHTML = generateSamplesHTML();
-    }
+function populateQuestionDropdown() {
+  const dropdown = document.getElementById('questionDropdown');
+  dropdown.innerHTML = '<option value="">Select a topic...</option>';
+  
+  if (questionsData.questions && questionsData.questions.length > 0) {
+    questionsData.questions.forEach(q => {
+      const option = document.createElement('option');
+      option.value = q.id;
+      option.textContent = q.context || q.question;
+      dropdown.appendChild(option);
+    });
+  }
+}
 
-    // ============================================================================
-    // UTILITY FUNCTIONS
-    // ============================================================================
-    function formatTitle(str) {
-      return str
-        .split('_')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ');
-    }
+function loadQuestionData(questionId) {
+  selectedQuestion = questionsData.questions?.find(q => q.id === questionId);
+  if (!selectedQuestion) return;
+  
+  selectedSample = samplesData.reports?.find(s => s.id === questionId);
+  
+  console.log('✅ Loaded question:', selectedQuestion.id);
+  console.log('✅ Loaded sample:', selectedSample?.id);
+  
+  updateDisplay();
+}
 
-    function escapeHtml(text) {
-      return text.replace(/'/g, "\\'");
-    }
+function handleQuestionChange() {
+  const dropdown = document.getElementById('questionDropdown');
+  const selectedValue = dropdown.value;
+  
+  if (!selectedValue) {
+    selectedQuestion = null;
+    selectedSample = null;
+    updateDisplay();
+    return;
+  }
+  
+  loadQuestionData(selectedValue);
+}
 
-    function insertPhrase(phraseText) {
-      if (viewMode !== 'stages') return;
-      
-      const textarea = document.getElementById('textarea');
-      if (!textarea) return;
-      
-      const cursorPos = textarea.selectionStart;
-      const textBefore = textarea.value.substring(0, cursorPos);
-      const textAfter = textarea.value.substring(cursorPos);
-      
-      textarea.value = textBefore + phraseText + ' ' + textAfter;
+// ============================================================================
+// VIEW MODE TOGGLE
+// ============================================================================
+function toggleViewMode() {
+  if (viewMode === 'stages') {
+    const textarea = document.getElementById('textarea');
+    if (textarea) {
       reportData[currentStage] = textarea.value;
-      
-      textarea.selectionStart = textarea.selectionEnd = cursorPos + phraseText.length + 1;
-      textarea.focus();
-      
-      updateWordCount();
-      closeReferenceModal();
     }
+  }
+  
+  viewMode = viewMode === 'stages' ? 'full' : 'stages';
+  updateDisplay();
+}
 
-    // ============================================================================
-    // SAVE/EXPORT FUNCTIONS
-    // ============================================================================
-    function saveReview() {
-      if (viewMode === 'stages') {
-        const textarea = document.getElementById('textarea');
-        if (textarea) {
-          reportData[currentStage] = textarea.value;
+// ============================================================================
+// DISPLAY UPDATE
+// ============================================================================
+function updateDisplay() {
+  const stageDotsContainer = document.getElementById('stageDotsContainer');
+  const toggleSwitch = document.getElementById('toggleSwitch');
+  const stagesLabel = document.getElementById('stagesLabel');
+  const fullLabel = document.getElementById('fullLabel');
+  const navGroup = document.getElementById('navGroup');
+  const currentWordCount = document.getElementById('currentWordCount');
+  const contentArea = document.getElementById('contentArea');
+  
+  if (viewMode === 'stages') {
+    stageDotsContainer.classList.remove('hidden');
+    toggleSwitch.classList.remove('full');
+    stagesLabel.classList.add('active');
+    fullLabel.classList.remove('active');
+    navGroup.style.display = 'flex';
+    currentWordCount.style.display = 'inline';
+    
+    const info = stageInfo[currentStage];
+    contentArea.innerHTML = `<textarea 
+      id="textarea" 
+      class="textarea" 
+      placeholder="${info.placeholder}"
+    ></textarea>`;
+    
+    const textarea = document.getElementById('textarea');
+    textarea.value = reportData[currentStage];
+    textarea.addEventListener('input', handleInput);
+    textarea.focus();
+    
+    document.getElementById('targetWords').textContent = info.target;
+    updateWordCount();
+    
+  } else {
+    stageDotsContainer.classList.add('hidden');
+    toggleSwitch.classList.add('full');
+    stagesLabel.classList.remove('active');
+    fullLabel.classList.add('active');
+    navGroup.style.display = 'none';
+    currentWordCount.style.display = 'none';
+    
+    renderFullPreview();
+    updateTotalWordCount();
+  }
+  
+  updateStageDots();
+  updateNavigationButtons();
+}
+
+function renderFullPreview() {
+  const contentArea = document.getElementById('contentArea');
+  
+  let html = '<div class="full-preview">';
+  
+  reportData.forEach((content, index) => {
+    const displayText = content.trim() 
+      ? content 
+      : `<em>[${stageNames[index]} not written yet]</em>`;
+    
+    html += `
+      <div class="preview-paragraph" onclick="editParagraph(${index})">
+        ${displayText}
+      </div>
+    `;
+  });
+  
+  html += '</div>';
+  html += '<p style="text-align: center; color: #8e8e93; font-size: 0.75rem; margin-top: 1rem;">💡 Click any paragraph to edit it</p>';
+  
+  contentArea.innerHTML = html;
+}
+
+function editParagraph(index) {
+  viewMode = 'stages';
+  currentStage = index;
+  updateDisplay();
+}
+
+// ============================================================================
+// STAGE NAVIGATION
+// ============================================================================
+function jumpStage(index) {
+  if (viewMode === 'stages') {
+    const textarea = document.getElementById('textarea');
+    if (textarea) {
+      reportData[currentStage] = textarea.value;
+    }
+    currentStage = index;
+    updateDisplay();
+  }
+}
+
+function handleNextClick() {
+  if (currentStage < 4) {
+    const textarea = document.getElementById('textarea');
+    if (textarea) {
+      reportData[currentStage] = textarea.value;
+    }
+    currentStage++;
+    updateDisplay();
+  }
+}
+
+function handlePrevClick() {
+  if (currentStage > 0) {
+    const textarea = document.getElementById('textarea');
+    if (textarea) {
+      reportData[currentStage] = textarea.value;
+    }
+    currentStage--;
+    updateDisplay();
+  }
+}
+
+function updateStageDots() {
+  const dots = document.querySelectorAll('.stage-dot-wrapper');
+  
+  dots.forEach((wrapper, i) => {
+    wrapper.classList.remove('current');
+    
+    if (i === currentStage && viewMode === 'stages') {
+      wrapper.classList.add('current');
+    }
+  });
+}
+
+function updateNavigationButtons() {
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  
+  if (viewMode === 'stages') {
+    prevBtn.disabled = currentStage === 0;
+    nextBtn.disabled = currentStage === 4;
+    
+    prevBtn.style.opacity = currentStage === 0 ? '0.3' : '1';
+    prevBtn.style.cursor = currentStage === 0 ? 'not-allowed' : 'pointer';
+    
+    nextBtn.style.opacity = currentStage === 4 ? '0.3' : '1';
+    nextBtn.style.cursor = currentStage === 4 ? 'not-allowed' : 'pointer';
+  }
+}
+
+// ============================================================================
+// WORD COUNT
+// ============================================================================
+function handleInput() {
+  const textarea = document.getElementById('textarea');
+  if (textarea) {
+    reportData[currentStage] = textarea.value;
+    updateWordCount();
+  }
+}
+
+function updateWordCount() {
+  const textarea = document.getElementById('textarea');
+  if (!textarea) return;
+  
+  const text = textarea.value.trim();
+  const words = text ? text.split(/\s+/).length : 0;
+  
+  document.getElementById('currentWords').textContent = words;
+  updateTotalWordCount();
+}
+
+function updateTotalWordCount() {
+  const totalWords = reportData.reduce((sum, stage) => {
+    return sum + (stage.trim() ? stage.trim().split(/\s+/).length : 0);
+  }, 0);
+  document.getElementById('totalWords').textContent = totalWords;
+}
+
+// ============================================================================
+// X-RAY TOGGLE
+// ============================================================================
+function toggleXRay() {
+  showXRay = !showXRay;
+  const xrayBtn = document.getElementById('xrayBtn');
+  
+  if (showXRay) {
+    xrayBtn.textContent = 'X-Ray';
+    xrayBtn.classList.add('active');
+  } else {
+    xrayBtn.textContent = 'Normal';
+    xrayBtn.classList.remove('active');
+  }
+}
+
+// ============================================================================
+// MODAL SYSTEM
+// ============================================================================
+function openReferenceModal(type) {
+  const modalTitle = document.getElementById('modalTitle');
+  const modalContentArea = document.getElementById('modalContentArea');
+  
+  if ((type === 'ideas' || type === 'samples') && !selectedQuestion) {
+    modalTitle.textContent = '⚠️ Select a Question First';
+    modalContentArea.innerHTML = `
+      <div style="text-align: center; padding: 3rem 2rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">📋</div>
+        <p style="color: #C9A961; font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">
+          No Question Selected
+        </p>
+        <p style="color: #8e8e93; font-size: 0.9rem; line-height: 1.6;">
+          Please select a question from the dropdown menu above.
+        </p>
+      </div>`;
+    document.getElementById('modalOverlay').classList.add('show');
+    return;
+  }
+  
+  if (type === 'phrases') {
+    modalTitle.textContent = viewMode === 'stages' 
+      ? `💬 ${stageInfo[currentStage].name} Phrases`
+      : '💬 All Report Phrases';
+    modalContentArea.innerHTML = generatePhrasesHTML();
+  } else if (type === 'ideas') {
+    modalTitle.textContent = viewMode === 'stages'
+      ? `💡 ${stageNames[currentStage]} Ideas`
+      : '💡 Complete Report Plan';
+    modalContentArea.innerHTML = generateIdeasHTML();
+  } else if (type === 'samples') {
+    currentSampleStyle = 'default';
+    
+    modalTitle.textContent = viewMode === 'stages'
+      ? `📄 Sample: ${stageNames[currentStage]}`
+      : '📄 Complete Sample Report';
+    modalContentArea.innerHTML = generateSamplesHTML();
+  }
+  
+  document.getElementById('modalOverlay').classList.add('show');
+}
+
+function generatePhrasesHTML() {
+  if (Object.keys(phrasesData).length === 0) {
+    return `<div style="text-align: center; padding: 2rem; color: #8e8e93;">No phrases loaded.</div>`;
+  }
+  
+  let html = '';
+  let relevantCategories = {};
+  
+  if (viewMode === 'stages') {
+    if (currentStage === 0) {
+      // Introduction
+      if (phrasesData.introduction_type_A) relevantCategories['Introduction Type A'] = phrasesData.introduction_type_A;
+      if (phrasesData.introduction_type_B) relevantCategories['Introduction Type B'] = phrasesData.introduction_type_B;
+    } else if (currentStage === 1) {
+      // Current Situation
+      if (phrasesData.general_view) relevantCategories['General View'] = phrasesData.general_view;
+      if (phrasesData.praising) relevantCategories['Positive Points'] = phrasesData.praising;
+      if (phrasesData.adding_support) relevantCategories['Adding Support'] = phrasesData.adding_support;
+    } else if (currentStage === 2) {
+      // Problems
+      if (phrasesData.criticising) relevantCategories['Criticising'] = phrasesData.criticising;
+      if (phrasesData.general_view) relevantCategories['General View'] = phrasesData.general_view;
+      if (phrasesData.balancing) relevantCategories['Balancing'] = phrasesData.balancing;
+    } else if (currentStage === 3) {
+      // Recommendations
+      if (phrasesData.recommendation_section_openers) relevantCategories['Moving to Solutions'] = phrasesData.recommendation_section_openers;
+      if (phrasesData.recommendation_language) relevantCategories['Recommendation Language'] = phrasesData.recommendation_language;
+    } else if (currentStage === 4) {
+      // Conclusion
+      if (phrasesData.conclusion) relevantCategories['Conclusion'] = phrasesData.conclusion;
+      if (phrasesData.final_recommendations) relevantCategories['Final Recommendations'] = phrasesData.final_recommendations;
+      if (phrasesData.closing_lines) relevantCategories['Closing Lines'] = phrasesData.closing_lines;
+    }
+  } else {
+    relevantCategories = phrasesData;
+  }
+  
+  Object.entries(relevantCategories).forEach(([category, subcategories]) => {
+    if (typeof subcategories === 'object' && !Array.isArray(subcategories)) {
+      Object.entries(subcategories).forEach(([subcat, phrases]) => {
+        if (Array.isArray(phrases) && phrases.length > 0) {
+          html += `<div class="phrase-group">`;
+          html += `<div class="phrase-title">${formatTitle(subcat)}</div>`;
+          phrases.slice(0, 8).forEach(phrase => {
+            html += `<div class="phrase-item" onclick="insertPhrase('${escapeHtml(phrase)}')">${phrase}</div>`;
+          });
+          html += `</div>`;
         }
-      }
-      
-      const data = {
-        type: 'report',
-        question: selectedQuestion?.id,
-        questionText: selectedQuestion?.question || selectedQuestion?.topic,
-        timestamp: new Date().toISOString(),
-        paragraphs: reviewData
-      };
-      
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `report-${Date.now()}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      });
     }
+  });
+  
+  return html || `<div style="text-align: center; padding: 2rem; color: #8e8e93;">No phrases available.</div>`;
+}
 
-    function exportReview() {
-      if (viewMode === 'stages') {
-        const textarea = document.getElementById('textarea');
-        if (textarea) {
-          reportData[currentStage] = textarea.value;
-        }
-      }
-      
-      const fullReview = reportData.filter(s => s.trim()).join('\n\n');
-      const blob = new Blob([fullReview], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `report.txt`;
-      a.click();
-      URL.revokeObjectURL(url);
+function generateIdeasHTML() {
+  if (!selectedQuestion || !ideasData.reports) {
+    return `<div style="text-align: center; padding: 2rem; color: #8e8e93;">No ideas available.</div>`;
+  }
+  
+  const idea = ideasData.reports[selectedQuestion.id];
+  if (!idea || !idea.skeleton) {
+    return `<div style="text-align: center; padding: 2rem; color: #8e8e93;">No ideas for this topic.</div>`;
+  }
+  
+  let html = '<div style="margin-bottom: 1.5rem;">';
+  html += `<div style="font-size: 1rem; color: #C9A961; font-weight: 600; margin-bottom: 1rem; text-align: center;">${idea.topic}</div>`;
+  
+  if (viewMode === 'stages') {
+    const section = idea.skeleton[currentStage];
+    html += `<div class="phrase-group">`;
+    html += `<div class="phrase-title">${section.title}</div>`;
+    section.items.forEach(item => {
+      html += `<div class="skeleton-item">`;
+      html += `<div class="skeleton-marker">${item.marker}</div>`;
+      html += `<div class="skeleton-text">${item.text}</div>`;
+      html += `</div>`;
+    });
+    html += `</div>`;
+  } else {
+    idea.skeleton.forEach(section => {
+      html += `<div class="phrase-group">`;
+      html += `<div class="phrase-title">${section.title}</div>`;
+      section.items.forEach(item => {
+        html += `<div class="skeleton-item">`;
+        html += `<div class="skeleton-marker">${item.marker}</div>`;
+        html += `<div class="skeleton-text">${item.text}</div>`;
+        html += `</div>`;
+      });
+      html += `</div>`;
+    });
+  }
+  
+  html += '</div>';
+  return html;
+}
+
+function generateSamplesHTML() {
+  if (!selectedSample) {
+    return `<div style="text-align: center; padding: 2rem; color: #8e8e93;">No sample available.</div>`;
+  }
+  
+  const content = selectedSample.styles?.[currentSampleStyle] || selectedSample.styles?.default || '';
+  if (!content) {
+    return `<div style="text-align: center; padding: 2rem; color: #8e8e93;">No content available.</div>`;
+  }
+  
+  const sections = extractReportSections(content);
+  
+  let html = '<div style="margin-bottom: 1.5rem;">';
+  html += `<div style="font-size: 1rem; color: #C9A961; font-weight: 600; margin-bottom: 1rem; text-align: center;">${selectedSample.title}</div>`;
+  
+  // Style selector buttons
+  html += `
+    <div class="sample-style-selector" style="
+      display: flex; 
+      gap: 0.5rem; 
+      justify-content: center; 
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid rgba(84, 84, 88, 0.2);
+    ">
+      <button class="style-btn ${currentSampleStyle === 'default' ? 'active' : ''}" 
+              onclick="switchSampleStyle('default')"
+              style="
+                padding: 0.5rem 1rem;
+                background: ${currentSampleStyle === 'default' ? 'rgba(201, 169, 97, 0.2)' : 'rgba(0, 0, 0, 0.3)'};
+                border: 1px solid ${currentSampleStyle === 'default' ? 'rgba(201, 169, 97, 0.5)' : 'rgba(255, 255, 255, 0.1)'};
+                border-radius: 0.5rem;
+                color: ${currentSampleStyle === 'default' ? '#C9A961' : '#8e8e93'};
+                cursor: pointer;
+                transition: all 0.3s;
+                font-size: 0.75rem;
+                font-weight: 600;
+                font-family: 'DM Sans', sans-serif;
+              "
+              onmouseover="if('${currentSampleStyle}' !== 'default') { this.style.background='rgba(0, 0, 0, 0.5)'; this.style.borderColor='rgba(201, 169, 97, 0.3)'; }"
+              onmouseout="if('${currentSampleStyle}' !== 'default') { this.style.background='rgba(0, 0, 0, 0.3)'; this.style.borderColor='rgba(255, 255, 255, 0.1)'; }">
+        📝 Default
+      </button>
+      <button class="style-btn ${currentSampleStyle === 'professional' ? 'active' : ''}" 
+              onclick="switchSampleStyle('professional')"
+              style="
+                padding: 0.5rem 1rem;
+                background: ${currentSampleStyle === 'professional' ? 'rgba(201, 169, 97, 0.2)' : 'rgba(0, 0, 0, 0.3)'};
+                border: 1px solid ${currentSampleStyle === 'professional' ? 'rgba(201, 169, 97, 0.5)' : 'rgba(255, 255, 255, 0.1)'};
+                border-radius: 0.5rem;
+                color: ${currentSampleStyle === 'professional' ? '#C9A961' : '#8e8e93'};
+                cursor: pointer;
+                transition: all 0.3s;
+                font-size: 0.75rem;
+                font-weight: 600;
+                font-family: 'DM Sans', sans-serif;
+              "
+              onmouseover="if('${currentSampleStyle}' !== 'professional') { this.style.background='rgba(0, 0, 0, 0.5)'; this.style.borderColor='rgba(201, 169, 97, 0.3)'; }"
+              onmouseout="if('${currentSampleStyle}' !== 'professional') { this.style.background='rgba(0, 0, 0, 0.3)'; this.style.borderColor='rgba(255, 255, 255, 0.1)'; }">
+        💼 Professional
+      </button>
+      <button class="style-btn ${currentSampleStyle === 'formal' ? 'active' : ''}" 
+              onclick="switchSampleStyle('formal')"
+              style="
+                padding: 0.5rem 1rem;
+                background: ${currentSampleStyle === 'formal' ? 'rgba(201, 169, 97, 0.2)' : 'rgba(0, 0, 0, 0.3)'};
+                border: 1px solid ${currentSampleStyle === 'formal' ? 'rgba(201, 169, 97, 0.5)' : 'rgba(255, 255, 255, 0.1)'};
+                border-radius: 0.5rem;
+                color: ${currentSampleStyle === 'formal' ? '#C9A961' : '#8e8e93'};
+                cursor: pointer;
+                transition: all 0.3s;
+                font-size: 0.75rem;
+                font-weight: 600;
+                font-family: 'DM Sans', sans-serif;
+              "
+              onmouseover="if('${currentSampleStyle}' !== 'formal') { this.style.background='rgba(0, 0, 0, 0.5)'; this.style.borderColor='rgba(201, 169, 97, 0.3)'; }"
+              onmouseout="if('${currentSampleStyle}' !== 'formal') { this.style.background='rgba(0, 0, 0, 0.3)'; this.style.borderColor='rgba(255, 255, 255, 0.1)'; }">
+        🎓 Formal
+      </button>
+    </div>
+  `;
+  
+  const xrayClass = showXRay ? 'xray-active' : '';
+  
+  if (viewMode === 'stages') {
+    const section = sections[currentStage];
+    if (section) {
+      html += `<div class="sample-display ${xrayClass}">${section}</div>`;
+    } else {
+      html += `<div style="text-align: center; padding: 2rem; color: #8e8e93;">No content for this section in ${currentSampleStyle} style.</div>`;
     }
-
-    function resetReview() {
-      if (confirm('Reset all content? This cannot be undone.')) {
-        reportData = ['', '', '', ''];
-        currentStage = 0;
-        updateDisplay();
+  } else {
+    html += `<div class="sample-display ${xrayClass}">`;
+    sections.forEach(section => {
+      if (section && section.trim()) {
+        html += section;
       }
-    }
+    });
+    html += '</div>';
+  }
+  
+  html += '</div>';
+  return html;
+}
 
-    function showKeyboardShortcuts() {
-      const modalTitle = document.getElementById('modalTitle');
-      const modalContentArea = document.getElementById('modalContentArea');
-      
-      modalTitle.textContent = '⌨️ Keyboard Shortcuts';
-      modalContentArea.innerHTML = `
-        <div style="padding: 1rem;">
-          <div style="margin-bottom: 1.5rem;">
-            <div style="font-size: 0.75rem; color: #C9A961; font-weight: 700; text-transform: uppercase; margin-bottom: 0.75rem;">Navigation</div>
-            <div style="display: grid; gap: 0.5rem;">
-              <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
-                <span style="color: #e5e5e7; font-size: 0.875rem;">Close Modal</span>
-                <kbd style="padding: 0.25rem 0.5rem; background: rgba(201, 169, 97, 0.2); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 0.25rem; font-size: 0.75rem; color: #C9A961;">ESC</kbd>
-              </div>
-            </div>
-          </div>
-          
-          <div style="margin-bottom: 1.5rem;">
-            <div style="font-size: 0.75rem; color: #C9A961; font-weight: 700; text-transform: uppercase; margin-bottom: 0.75rem;">Actions</div>
-            <div style="display: grid; gap: 0.5rem;">
-              <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
-                <span style="color: #e5e5e7; font-size: 0.875rem;">Save Work</span>
-                <kbd style="padding: 0.25rem 0.5rem; background: rgba(201, 169, 97, 0.2); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 0.25rem; font-size: 0.75rem; color: #C9A961;">Ctrl/Cmd + S</kbd>
-              </div>
-              <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
-                <span style="color: #e5e5e7; font-size: 0.875rem;">Export Review</span>
-                <kbd style="padding: 0.25rem 0.5rem; background: rgba(201, 169, 97, 0.2); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 0.25rem; font-size: 0.75rem; color: #C9A961;">Ctrl/Cmd + E</kbd>
-              </div>
-            </div>
-          </div>
-          
-          <div>
-            <div style="font-size: 0.75rem; color: #C9A961; font-weight: 700; text-transform: uppercase; margin-bottom: 0.75rem;">Help Panels</div>
-            <div style="display: grid; gap: 0.5rem;">
-              <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
-                <span style="color: #e5e5e7; font-size: 0.875rem;">Open Phrases</span>
-                <kbd style="padding: 0.25rem 0.5rem; background: rgba(201, 169, 97, 0.2); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 0.25rem; font-size: 0.75rem; color: #C9A961;">Ctrl/Cmd + P</kbd>
-              </div>
-              <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
-                <span style="color: #e5e5e7; font-size: 0.875rem;">Open Ideas</span>
-                <kbd style="padding: 0.25rem 0.5rem; background: rgba(201, 169, 97, 0.2); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 0.25rem; font-size: 0.75rem; color: #C9A961;">Ctrl/Cmd + I</kbd>
-              </div>
-            </div>
-          </div>
-          
-          <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(125, 211, 252, 0.05); border-left: 3px solid #7dd3fc; border-radius: 0.5rem;">
-            <div style="font-size: 0.75rem; color: #7dd3fc; font-weight: 600; margin-bottom: 0.5rem;">💡 Pro Tip</div>
-            <div style="font-size: 0.8rem; color: #aeaeb2; line-height: 1.5;">
-              Use keyboard shortcuts to speed up your workflow. Press <kbd style="padding: 0.2rem 0.4rem; background: rgba(201, 169, 97, 0.15); border-radius: 0.2rem; font-size: 0.7rem;">Ctrl/Cmd + P</kbd> to quickly access useful phrases while writing!
-            </div>
+function extractReportSections(htmlContent) {
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = htmlContent;
+  const sections = Array.from(tempDiv.querySelectorAll('.report-section'));
+  return sections.map(section => section.outerHTML);
+}
+
+function closeReferenceModal() {
+  document.getElementById('modalOverlay').classList.remove('show');
+}
+
+function switchSampleStyle(styleName) {
+  currentSampleStyle = styleName;
+  document.getElementById('modalContentArea').innerHTML = generateSamplesHTML();
+}
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+function formatTitle(str) {
+  return str
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function escapeHtml(text) {
+  return text.replace(/'/g, "\\'");
+}
+
+function insertPhrase(phraseText) {
+  if (viewMode !== 'stages') return;
+  
+  const textarea = document.getElementById('textarea');
+  if (!textarea) return;
+  
+  const cursorPos = textarea.selectionStart;
+  const textBefore = textarea.value.substring(0, cursorPos);
+  const textAfter = textarea.value.substring(cursorPos);
+  
+  textarea.value = textBefore + phraseText + ' ' + textAfter;
+  reportData[currentStage] = textarea.value;
+  
+  textarea.selectionStart = textarea.selectionEnd = cursorPos + phraseText.length + 1;
+  textarea.focus();
+  
+  updateWordCount();
+  closeReferenceModal();
+}
+
+// ============================================================================
+// SAVE/EXPORT FUNCTIONS
+// ============================================================================
+function saveReport() {
+  if (viewMode === 'stages') {
+    const textarea = document.getElementById('textarea');
+    if (textarea) {
+      reportData[currentStage] = textarea.value;
+    }
+  }
+  
+  const data = {
+    type: 'report',
+    question: selectedQuestion?.id,
+    questionText: selectedQuestion?.question || selectedQuestion?.context,
+    timestamp: new Date().toISOString(),
+    paragraphs: reportData
+  };
+  
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `report-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportReport() {
+  if (viewMode === 'stages') {
+    const textarea = document.getElementById('textarea');
+    if (textarea) {
+      reportData[currentStage] = textarea.value;
+    }
+  }
+  
+  const fullReport = reportData.filter(s => s.trim()).join('\n\n');
+  const blob = new Blob([fullReport], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `report-${new Date().toISOString().slice(0,10)}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function resetReport() {
+  if (confirm('Reset all content? This cannot be undone.')) {
+    reportData = ['', '', '', '', ''];
+    currentStage = 0;
+    updateDisplay();
+  }
+}
+
+function showKeyboardShortcuts() {
+  const modalTitle = document.getElementById('modalTitle');
+  const modalContentArea = document.getElementById('modalContentArea');
+  
+  modalTitle.textContent = '⌨️ Keyboard Shortcuts';
+  modalContentArea.innerHTML = `
+    <div style="padding: 1rem;">
+      <div style="margin-bottom: 1.5rem;">
+        <div style="font-size: 0.75rem; color: #C9A961; font-weight: 700; text-transform: uppercase; margin-bottom: 0.75rem;">Navigation</div>
+        <div style="display: grid; gap: 0.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
+            <span style="color: #e5e5e7; font-size: 0.875rem;">Close Modal</span>
+            <kbd style="padding: 0.25rem 0.5rem; background: rgba(201, 169, 97, 0.2); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 0.25rem; font-size: 0.75rem; color: #C9A961;">ESC</kbd>
           </div>
         </div>
-      `;
+      </div>
       
-      document.getElementById('modalOverlay').classList.add('show');
-    }
+      <div style="margin-bottom: 1.5rem;">
+        <div style="font-size: 0.75rem; color: #C9A961; font-weight: 700; text-transform: uppercase; margin-bottom: 0.75rem;">Actions</div>
+        <div style="display: grid; gap: 0.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
+            <span style="color: #e5e5e7; font-size: 0.875rem;">Save Work</span>
+            <kbd style="padding: 0.25rem 0.5rem; background: rgba(201, 169, 97, 0.2); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 0.25rem; font-size: 0.75rem; color: #C9A961;">Ctrl/Cmd + S</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
+            <span style="color: #e5e5e7; font-size: 0.875rem;">Export Report</span>
+            <kbd style="padding: 0.25rem 0.5rem; background: rgba(201, 169, 97, 0.2); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 0.25rem; font-size: 0.75rem; color: #C9A961;">Ctrl/Cmd + E</kbd>
+          </div>
+        </div>
+      </div>
+      
+      <div>
+        <div style="font-size: 0.75rem; color: #C9A961; font-weight: 700; text-transform: uppercase; margin-bottom: 0.75rem;">Help Panels</div>
+        <div style="display: grid; gap: 0.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
+            <span style="color: #e5e5e7; font-size: 0.875rem;">Open Phrases</span>
+            <kbd style="padding: 0.25rem 0.5rem; background: rgba(201, 169, 97, 0.2); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 0.25rem; font-size: 0.75rem; color: #C9A961;">Ctrl/Cmd + P</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
+            <span style="color: #e5e5e7; font-size: 0.875rem;">Open Ideas</span>
+            <kbd style="padding: 0.25rem 0.5rem; background: rgba(201, 169, 97, 0.2); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 0.25rem; font-size: 0.75rem; color: #C9A961;">Ctrl/Cmd + I</kbd>
+          </div>
+        </div>
+      </div>
+      
+      <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(125, 211, 252, 0.05); border-left: 3px solid #7dd3fc; border-radius: 0.5rem;">
+        <div style="font-size: 0.75rem; color: #7dd3fc; font-weight: 600; margin-bottom: 0.5rem;">💡 Pro Tip</div>
+        <div style="font-size: 0.8rem; color: #aeaeb2; line-height: 1.5;">
+          Use keyboard shortcuts to speed up your workflow. Press <kbd style="padding: 0.2rem 0.4rem; background: rgba(201, 169, 97, 0.15); border-radius: 0.2rem; font-size: 0.7rem;">Ctrl/Cmd + P</kbd> to quickly access useful phrases while writing!
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.getElementById('modalOverlay').classList.add('show');
+}
 
-    // ============================================================================
-    // EVENT LISTENERS
-    // ============================================================================
-    document.addEventListener('keydown', (e) => {
-      // ESC - Close modal
-      if (e.key === 'Escape') {
-        closeReferenceModal();
-      }
-      
-      // ✨ NEW: Ctrl/Cmd + S - Save work
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        saveReview();
-        console.log('💾 Saved via keyboard shortcut');
-      }
-      
-      // ✨ NEW: Ctrl/Cmd + P - Open Phrases modal
-      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
-        e.preventDefault();
-        openReferenceModal('phrases');
-        console.log('💬 Opened Phrases via keyboard shortcut');
-      }
-      
-      // ✨ NEW: Ctrl/Cmd + I - Open Ideas modal
-      if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
-        e.preventDefault();
-        openReferenceModal('ideas');
-        console.log('💡 Opened Ideas via keyboard shortcut');
-      }
-      
-      // ✨ NEW: Ctrl/Cmd + E - Export review
-      if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
-        e.preventDefault();
-        exportReview();
-        console.log('📥 Exported via keyboard shortcut');
-      }
-    });
+// ============================================================================
+// EVENT LISTENERS
+// ============================================================================
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeReferenceModal();
+  }
+  
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    saveReport();
+    console.log('💾 Saved via keyboard shortcut');
+  }
+  
+  if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+    e.preventDefault();
+    openReferenceModal('phrases');
+    console.log('💬 Opened Phrases via keyboard shortcut');
+  }
+  
+  if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+    e.preventDefault();
+    openReferenceModal('ideas');
+    console.log('💡 Opened Ideas via keyboard shortcut');
+  }
+  
+  if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+    e.preventDefault();
+    exportReport();
+    console.log('📥 Exported via keyboard shortcut');
+  }
+});
 
-    document.getElementById('modalOverlay').addEventListener('click', (e) => {
-      if (e.target.id === 'modalOverlay') {
-        closeReferenceModal();
-      }
-    });
+document.getElementById('modalOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'modalOverlay') {
+    closeReferenceModal();
+  }
+});
 
-    // ============================================================================
-    // INITIALIZE APP
-    // ============================================================================
-    init();
+// ============================================================================
+// INITIALIZE APP
+// ============================================================================
+init();
   </script>
 </body>
 </html>
+     

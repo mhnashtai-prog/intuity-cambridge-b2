@@ -202,10 +202,67 @@
       box-shadow: 0 0 0 3px rgba(201, 169, 97, 0.1);
     }
 
+    /* PARAGRAPH NAVIGATION */
+    .paragraph-nav {
+      padding: 0.85rem 1rem;
+      background: rgba(0, 0, 0, 0.15);
+      border-bottom: 1px solid rgba(84, 84, 88, 0.2);
+      display: flex;
+      gap: 0.5rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .paragraph-nav::-webkit-scrollbar {
+      display: none;
+    }
+
+    .para-btn {
+      flex-shrink: 0;
+      padding: 0.5rem 1rem;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(84, 84, 88, 0.3);
+      border-radius: 999px;
+      color: #8e8e93;
+      font-size: 0.7rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-family: 'DM Sans', sans-serif;
+      white-space: nowrap;
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .para-btn:hover {
+      background: rgba(201, 169, 97, 0.1);
+      border-color: rgba(201, 169, 97, 0.3);
+      color: #C9A961;
+      transform: translateY(-1px);
+    }
+
+    .para-btn:active {
+      transform: scale(0.95);
+    }
+
+    .para-btn.active {
+      background: rgba(201, 169, 97, 0.2);
+      border-color: #C9A961;
+      color: #C9A961;
+      box-shadow: 0 0 0 3px rgba(201, 169, 97, 0.1);
+    }
+
     /* CONTENT AREA */
     .content-area {
       padding: 2rem 1.5rem;
       min-height: 500px;
+      scroll-behavior: smooth;
     }
 
     .structure-title {
@@ -461,6 +518,15 @@
         font-size: 0.6rem;
       }
 
+      .para-btn {
+        padding: 0.4rem 0.75rem;
+        font-size: 0.6rem;
+      }
+
+      .para-btn span:first-child {
+        font-size: 0.9rem;
+      }
+
       .content-area {
         padding: 1.5rem 1.25rem;
         min-height: 400px;
@@ -569,6 +635,11 @@
         <!-- Buttons will be populated dynamically -->
       </div>
 
+      <!-- Paragraph Navigation -->
+      <div class="paragraph-nav" id="paragraphNav">
+        <!-- Paragraph buttons will be populated dynamically -->
+      </div>
+
       <!-- Content Area -->
       <div class="content-area" id="contentArea">
         <div class="loading">
@@ -607,17 +678,15 @@
       try {
         updateLoadingStatus('Loading structures data...');
         
-        // Try to load from JSON file first (preferred method)
+        // Load from JSON file
         const response = await fetch('data/report-structures.json');
         
-        if (response.ok) {
-          REPORT_STRUCTURES = await response.json();
-          console.log('✅ Report structures loaded from JSON');
-        } else {
-          // Fallback: try loading as JS module or use embedded data
-          console.warn('JSON not found, using fallback data');
-          REPORT_STRUCTURES = getFallbackData();
+        if (!response.ok) {
+          throw new Error(`Failed to load report-structures.json (${response.status})`);
         }
+        
+        REPORT_STRUCTURES = await response.json();
+        console.log('✅ Report structures loaded from JSON');
         
         // Get available types
         typeKeys = Object.keys(REPORT_STRUCTURES);
@@ -630,6 +699,9 @@
         
         // Build type selector buttons
         buildTypeSelector();
+        
+        // Build paragraph navigation
+        buildParagraphNav();
         
         // Render first structure
         renderStructure(currentType);
@@ -666,6 +738,57 @@
       return div.innerHTML;
     }
 
+    // ==================== PARAGRAPH NAVIGATION ====================
+    function buildParagraphNav() {
+      const nav = document.getElementById('paragraphNav');
+      nav.innerHTML = '';
+      
+      const structure = REPORT_STRUCTURES[currentType];
+      if (!structure || !structure.sections) return;
+      
+      const paragraphLabels = [
+        { key: 'introduction', icon: '📝', label: 'A: Introduction' },
+        { key: 'sources', icon: '📊', label: 'B: Sources' },
+        { key: 'general_praising_criticising', icon: '💬', label: 'C: General/Praise/Criticise' },
+        { key: 'recommendation', icon: '💡', label: 'D: Recommendation' },
+        { key: 'conclusion', icon: '✅', label: 'E: Conclusion' }
+      ];
+      
+      paragraphLabels.forEach((para, index) => {
+        if (structure.sections[para.key]) {
+          const btn = document.createElement('button');
+          btn.className = 'para-btn' + (index === 0 ? ' active' : '');
+          btn.setAttribute('data-section', para.key);
+          btn.innerHTML = `<span>${para.icon}</span><span>${para.label}</span>`;
+          btn.onclick = () => scrollToSection(para.key, btn);
+          nav.appendChild(btn);
+        }
+      });
+    }
+
+    function scrollToSection(sectionKey, btnElement) {
+      // Update active state
+      document.querySelectorAll('.para-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      btnElement.classList.add('active');
+      
+      // Find and scroll to section
+      const sectionCards = document.querySelectorAll('.section-card');
+      sectionCards.forEach((card, index) => {
+        const cardSectionKey = Object.keys(REPORT_STRUCTURES[currentType].sections)[index];
+        if (cardSectionKey === sectionKey) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          
+          // Add brief highlight effect
+          card.style.boxShadow = '0 0 0 3px rgba(201, 169, 97, 0.3), 8px 8px 16px rgba(0, 0, 0, 0.4)';
+          setTimeout(() => {
+            card.style.boxShadow = '';
+          }, 1500);
+        }
+      });
+    }
+
     // ==================== TYPE SELECTOR ====================
     function buildTypeSelector() {
       const selector = document.getElementById('typeSelector');
@@ -690,6 +813,9 @@
         btn.classList.remove('active');
       });
       btnElement.classList.add('active');
+      
+      // Rebuild paragraph navigation for new type
+      buildParagraphNav();
       
       // Render new structure
       renderStructure(type);
@@ -739,7 +865,7 @@
           );
           
           html += `
-            <div class="phrase-item" onclick="copyPhrase(this, '${escapeForJs(phrase)}')">
+            <div class="phrase-item" onclick="copyPhrase(this, \`${escapeForJs(phrase)}\`)">
               <span class="phrase-bullet">•</span>
               <span class="phrase-text">${highlightedPhrase}</span>
             </div>
@@ -756,8 +882,7 @@
     }
 
     function escapeForJs(text) {
-      return text.replace(/'/g, "\\'").replace(/"/g, '\\"');
-    }
+      return text.replace(/`/g, '\\`').replace(/\$/g, '\\
 
     // ==================== ACTIONS ====================
     function copyPhrase(element, phrase) {
@@ -824,195 +949,76 @@
       }, 2500);
     }
 
-    // ==================== FALLBACK DATA ====================
-    // This provides default data if JSON file is not found
-    function getFallbackData() {
-      return {
-        "educational": {
-          "title": "Educational Report",
-          "purpose": "Reports on educational facilities, programs, or learning initiatives within your organization.",
-          "sections": {
-            "introduction": {
-              "label": "Introduction",
-              "purpose": "State the purpose and scope of the report.",
-              "phrases": [
-                "The purpose of this report is to [assess/evaluate/examine] [topic].",
-                "This report aims to provide an overview of [subject].",
-                "The following report outlines [key findings/recommendations].",
-                "This document has been prepared to [inform/advise] [audience] about [topic]."
-              ]
-            },
-            "findings": {
-              "label": "Current Situation / Findings",
-              "purpose": "Present the current state and key observations.",
-              "phrases": [
-                "The current situation regarding [topic] can be summarised as follows.",
-                "An examination of the data reveals that [finding].",
-                "It has been observed that [observation].",
-                "The main issues identified include [issue 1], [issue 2], and [issue 3]."
-              ]
-            },
-            "recommendations": {
-              "label": "Recommendations",
-              "purpose": "Propose solutions and improvements.",
-              "phrases": [
-                "It is recommended that [action] be taken to address [issue].",
-                "The following measures should be considered: [measure 1], [measure 2].",
-                "To improve [aspect], it would be advisable to [suggestion].",
-                "Implementation of [solution] would result in [benefit]."
-              ]
-            },
-            "conclusion": {
-              "label": "Conclusion",
-              "purpose": "Summarise key points and next steps.",
-              "phrases": [
-                "In conclusion, [summary of main points].",
-                "To summarise, this report has highlighted [key issues].",
-                "The findings suggest that [conclusion].",
-                "Further action is required to [next step]."
-              ]
-            }
-          }
-        },
-        "community": {
-          "title": "Community Report",
-          "purpose": "Reports on community facilities, services, or local initiatives.",
-          "sections": {
-            "introduction": {
-              "label": "Introduction",
-              "purpose": "Introduce the community issue or initiative.",
-              "phrases": [
-                "This report addresses the issue of [topic] within our community.",
-                "The purpose of this report is to examine [community matter].",
-                "Following recent concerns about [issue], this report aims to [objective].",
-                "This document provides an assessment of [community facility/service]."
-              ]
-            },
-            "findings": {
-              "label": "Current Situation / Findings",
-              "purpose": "Describe the current state of community matters.",
-              "phrases": [
-                "A survey of local residents revealed that [finding].",
-                "The current facilities for [activity] are [description].",
-                "Community feedback indicates that [observation].",
-                "The main concerns raised by residents include [concern 1] and [concern 2]."
-              ]
-            },
-            "recommendations": {
-              "label": "Recommendations",
-              "purpose": "Suggest improvements for the community.",
-              "phrases": [
-                "To address these concerns, it is suggested that [action].",
-                "The community would benefit from [improvement].",
-                "Investment in [facility/service] would help to [benefit].",
-                "Local authorities should consider [recommendation]."
-              ]
-            },
-            "conclusion": {
-              "label": "Conclusion",
-              "purpose": "Wrap up community findings.",
-              "phrases": [
-                "In summary, [brief overview of situation].",
-                "Action on these recommendations would significantly improve [aspect].",
-                "The community stands to benefit greatly from [proposed changes].",
-                "With appropriate measures, [positive outcome] can be achieved."
-              ]
-            }
-          }
-        },
-        "workplace": {
-          "title": "Workplace Report",
-          "purpose": "Reports on workplace conditions, procedures, or organisational matters.",
-          "sections": {
-            "introduction": {
-              "label": "Introduction",
-              "purpose": "Establish the workplace context.",
-              "phrases": [
-                "This report has been prepared at the request of [manager/department].",
-                "The aim of this report is to evaluate [workplace aspect].",
-                "Following the recent [event/concern], this report examines [topic].",
-                "This document assesses the current state of [workplace matter]."
-              ]
-            },
-            "findings": {
-              "label": "Current Situation / Findings",
-              "purpose": "Present workplace observations.",
-              "phrases": [
-                "Staff feedback indicates that [finding].",
-                "Current procedures for [process] have proven to be [assessment].",
-                "An analysis of workplace data shows that [observation].",
-                "The following issues have been identified: [issue 1], [issue 2]."
-              ]
-            },
-            "recommendations": {
-              "label": "Recommendations",
-              "purpose": "Propose workplace improvements.",
-              "phrases": [
-                "To enhance [aspect], the following changes are recommended.",
-                "Staff would benefit from [improvement/training].",
-                "It is suggested that management consider [action].",
-                "Implementation of [solution] would lead to [benefit]."
-              ]
-            },
-            "conclusion": {
-              "label": "Conclusion",
-              "purpose": "Conclude workplace assessment.",
-              "phrases": [
-                "This report has identified several areas for improvement.",
-                "With the recommended changes, [positive outcome] can be expected.",
-                "Further consultation with staff may be beneficial before [action].",
-                "The proposed measures would contribute to [workplace goal]."
-              ]
-            }
-          }
-        },
-        "service": {
-          "title": "Service Evaluation Report",
-          "purpose": "Reports evaluating services, products, or customer experiences.",
-          "sections": {
-            "introduction": {
-              "label": "Introduction",
-              "purpose": "Introduce the service being evaluated.",
-              "phrases": [
-                "This report evaluates [service/product] provided by [organisation].",
-                "The purpose of this assessment is to determine [objective].",
-                "Following customer feedback, this report examines [service aspect].",
-                "This document provides a comprehensive review of [service]."
-              ]
-            },
-            "findings": {
-              "label": "Current Situation / Findings",
-              "purpose": "Present service evaluation findings.",
-              "phrases": [
-                "Customer satisfaction surveys indicate that [finding].",
-                "The quality of [service aspect] was found to be [assessment].",
-                "Users reported that [observation].",
-                "Key strengths identified include [strength 1], while areas for improvement include [weakness 1]."
-              ]
-            },
-            "recommendations": {
-              "label": "Recommendations",
-              "purpose": "Suggest service improvements.",
-              "phrases": [
-                "To improve customer satisfaction, [action] is recommended.",
-                "Service providers should consider [improvement].",
-                "Enhanced [aspect] would result in [benefit].",
-                "Investment in [area] would address current shortcomings."
-              ]
-            },
-            "conclusion": {
-              "label": "Conclusion",
-              "purpose": "Summarise service evaluation.",
-              "phrases": [
-                "Overall, the service [positive/negative assessment].",
-                "With the suggested improvements, [service] could [benefit].",
-                "This evaluation highlights both strengths and areas for development.",
-                "Continued monitoring of [aspect] is advisable."
-              ]
-            }
-          }
+    // ==================== START ====================
+    init();
+  </script>
+</body>
+</html>).replace(/\\/g, '\\\\');
+    }
+
+    // ==================== ACTIONS ====================
+    function copyPhrase(element, phrase) {
+      navigator.clipboard.writeText(phrase).then(() => {
+        showToast(`Copied: "${phrase.substring(0, 40)}${phrase.length > 40 ? '...' : ''}"`);
+        
+        // Visual feedback
+        element.style.background = 'rgba(16, 185, 129, 0.15)';
+        element.style.borderLeftColor = '#10b981';
+        
+        setTimeout(() => {
+          element.style.background = '';
+          element.style.borderLeftColor = '';
+        }, 1000);
+      }).catch(err => {
+        console.error('Failed to copy:', err);
+        showToast('Failed to copy', false);
+      });
+    }
+
+    function copyAllPhrases() {
+      const structure = REPORT_STRUCTURES[currentType];
+      if (!structure) return;
+      
+      let text = `${structure.title}\n${'='.repeat(structure.title.length)}\n\n`;
+      text += `${structure.purpose}\n\n`;
+      
+      Object.entries(structure.sections).forEach(([key, section]) => {
+        text += `${section.label}\n`;
+        text += `${'-'.repeat(section.label.length)}\n`;
+        text += `${section.purpose}\n\n`;
+        
+        if (section.phrases) {
+          section.phrases.forEach(phrase => {
+            text += `• ${phrase}\n`;
+          });
         }
-      };
+        text += '\n';
+      });
+
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('All phrases copied to clipboard ✓');
+      }).catch(err => {
+        console.error('Failed to copy:', err);
+        showToast('Failed to copy to clipboard', false);
+      });
+    }
+
+    function printGuide() {
+      window.print();
+    }
+
+    // ==================== TOAST ====================
+    function showToast(message, success = true) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.style.background = success 
+        ? 'rgba(16, 185, 129, 0.95)' 
+        : 'rgba(239, 68, 68, 0.95)';
+      toast.classList.add('show');
+      
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2500);
     }
 
     // ==================== START ====================

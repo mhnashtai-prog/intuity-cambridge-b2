@@ -1408,152 +1408,174 @@
 
     // ==================== NEW TEST MODE FUNCTIONS ====================
     
-    function startTest() {
-      if (!PRACTICE_QUESTIONS) {
-        showToast('Please load a topic first', 'error');
-        return;
-      }
-      
-      const questions = getFilteredQuestions();
-      
-      if (questions.length === 0) {
-        document.getElementById('testMode').innerHTML = `
-          <div style="padding: 3rem; text-align: center;">
-            <div style="font-size: 2rem; margin-bottom: 1rem;">📚</div>
-            <div style="font-size: 1rem; color: #f1f5f9; margin-bottom: 0.5rem;">No Test Questions Available</div>
-            <div style="font-size: 0.8125rem; color: #8e8e93;">Try different filter settings</div>
-          </div>
-        `;
-        return;
-      }
-      
-      testAnswers = {};
-      isTestChecked = false;
-      
-      document.getElementById('testQuestions').classList.remove('hidden');
-      document.getElementById('testResults').classList.add('hidden');
-      
-      renderTestQuestions();
-      updateTestProgress();
-    }
+ // ==================== NEW TEST MODE FUNCTIONS ====================
 
-    function renderTestQuestions() {
-      const questions = getFilteredQuestions();
-      const container = document.getElementById('testSentences');
-      container.innerHTML = '';
-      
-      questions.forEach((question, idx) => {
-        const row = document.createElement('div');
-        row.className = 'test-sentence-row';
-        
-        const userAnswer = testAnswers[idx] || '';
-        const hasAnswer = userAnswer.trim() !== '';
-        const numClass = hasAnswer ? 'question-number answered' : 'question-number';
-        
-        // Replace ___ with input field
-        const beforeBlank = question.sentence.substring(0, question.sentence.indexOf('___'));
-        const afterBlank = question.sentence.substring(question.sentence.indexOf('___') + 3);
-        
-        let sentenceHTML = '';
-        sentenceHTML += beforeBlank;
-        
-        if (isTestChecked) {
-          const isCorrect = normalizeAnswer(userAnswer) === normalizeAnswer(question.correct);
-          const inputClass = isCorrect ? 'test-answer-input correct' : 'test-answer-input incorrect';
-          sentenceHTML += `<input type="text" class="${inputClass}" value="${userAnswer}" readonly 
-                           style="width: ${Math.max(userAnswer.length * 9 + 30, 100)}px;" />`;
-          
-          if (!isCorrect) {
-            sentenceHTML += `<span class="correct-answer-display">${question.correct}</span>`;
-          }
-        } else {
-          sentenceHTML += `<input type="text" class="test-answer-input" id="test-input-${idx}" value="${userAnswer}" 
-                           oninput="handleTestInput(${idx})" placeholder="..." 
-                           style="width: ${Math.max((userAnswer.length || 5) * 9 + 30, 100)}px;" />`;
-        }
-        
-        sentenceHTML += afterBlank;
-        
-        row.innerHTML = `
-          <div class="${numClass}">${idx + 1}</div>
-          <div class="test-sentence-text">${sentenceHTML}</div>
-        `;
-        
-        container.appendChild(row);
+function startTest() {
+  if (!EXPRESSIONS_DATA) {
+    showToast('Please load a topic first', 'error');
+    return;
+  }
+  
+  // Generate test questions from expressions
+  let allExpressions = [];
+  
+  Object.entries(EXPRESSIONS_DATA).forEach(([key, category]) => {
+    if (filters.category === 'all' || filters.category === key) {
+      category.expressions.forEach(expr => {
+        allExpressions.push({
+          sentence: expr.example.replace(new RegExp(expr.phrase, 'gi'), '___'),
+          correct: expr.phrase,
+          phrase: expr.phrase
+        });
       });
     }
+  });
+  
+  if (allExpressions.length === 0) {
+    document.getElementById('testMode').innerHTML = `
+      <div style="padding: 3rem; text-align: center;">
+        <div style="font-size: 2rem; margin-bottom: 1rem;">📚</div>
+        <div style="font-size: 1rem; color: #f1f5f9; margin-bottom: 0.5rem;">No Test Questions Available</div>
+        <div style="font-size: 0.8125rem; color: #8e8e93;">Try different filter settings</div>
+      </div>
+    `;
+    return;
+  }
+  
+  testAnswers = {};
+  isTestChecked = false;
+  
+  document.getElementById('testQuestions').classList.remove('hidden');
+  document.getElementById('testResults').classList.add('hidden');
+  
+  renderTestQuestions(allExpressions);
+  updateTestProgress(allExpressions);
+}
 
-    function handleTestInput(idx) {
-      const input = document.getElementById(`test-input-${idx}`);
-      testAnswers[idx] = input.value;
-      
-      // Auto-resize input
-      input.style.width = Math.max((input.value.length || 5) * 9 + 30, 100) + 'px';
-      
-      updateTestProgress();
-      
-      // Enable/disable submit button
-      const questions = getFilteredQuestions();
-      const answered = Object.keys(testAnswers).filter(k => testAnswers[k].trim()).length;
-      document.getElementById('submitTestBtn').disabled = answered !== questions.length;
-    }
-
-    function updateTestProgress() {
-      const questions = getFilteredQuestions();
-      const answered = Object.keys(testAnswers).filter(k => testAnswers[k].trim()).length;
-      const total = questions.length;
-      
-      document.getElementById('testProgressText').textContent = `${answered}/${total} answered`;
-      
-      const dotsContainer = document.getElementById('testProgressDots');
-      dotsContainer.innerHTML = '';
-      
-      questions.forEach((_, idx) => {
-        const dot = document.createElement('div');
-        dot.className = 'progress-dot';
-        if (testAnswers[idx] && testAnswers[idx].trim()) {
-          dot.classList.add('answered');
-        }
-        dotsContainer.appendChild(dot);
-      });
-    }
-
-    function normalizeAnswer(answer) {
-      return (answer || '').toLowerCase().trim().replace(/\s+/g, ' ');
-    }
-
-    function clearTestAnswers() {
-      if (isTestChecked) return;
-      if (confirm('Clear all answers?')) {
-        testAnswers = {};
-        renderTestQuestions();
-        updateTestProgress();
-        document.getElementById('submitTestBtn').disabled = true;
+function renderTestQuestions(questions = null) {
+  if (!questions) {
+    // Regenerate questions from expressions
+    questions = [];
+    Object.entries(EXPRESSIONS_DATA).forEach(([key, category]) => {
+      if (filters.category === 'all' || filters.category === key) {
+        category.expressions.forEach(expr => {
+          questions.push({
+            sentence: expr.example.replace(new RegExp(expr.phrase, 'gi'), '___'),
+            correct: expr.phrase,
+            phrase: expr.phrase
+          });
+        });
       }
+    });
+  }
+  
+  const container = document.getElementById('testSentences');
+  container.innerHTML = '';
+  
+  questions.forEach((question, idx) => {
+    const row = document.createElement('div');
+    row.className = 'test-sentence-row';
+    
+    const userAnswer = testAnswers[idx] || '';
+    const hasAnswer = userAnswer.trim() !== '';
+    const numClass = hasAnswer ? 'question-number answered' : 'question-number';
+    
+    // Replace ___ with input field
+    const beforeBlank = question.sentence.substring(0, question.sentence.indexOf('___'));
+    const afterBlank = question.sentence.substring(question.sentence.indexOf('___') + 3);
+    
+    let sentenceHTML = '';
+    sentenceHTML += beforeBlank;
+    
+    if (isTestChecked) {
+      const isCorrect = normalizeAnswer(userAnswer) === normalizeAnswer(question.correct);
+      const inputClass = isCorrect ? 'test-answer-input correct' : 'test-answer-input incorrect';
+      sentenceHTML += `<input type="text" class="${inputClass}" value="${userAnswer}" readonly 
+                       style="width: ${Math.max(userAnswer.length * 9 + 30, 100)}px;" />`;
+      
+      if (!isCorrect) {
+        sentenceHTML += `<span class="correct-answer-display">${question.correct}</span>`;
+      }
+    } else {
+      sentenceHTML += `<input type="text" class="test-answer-input" id="test-input-${idx}" value="${userAnswer}" 
+                       oninput="handleTestInput(${idx})" placeholder="..." 
+                       style="width: ${Math.max((userAnswer.length || 5) * 9 + 30, 100)}px;" />`;
     }
+    
+    sentenceHTML += afterBlank;
+    
+    row.innerHTML = `
+      <div class="${numClass}">${idx + 1}</div>
+      <div class="test-sentence-text">${sentenceHTML}</div>
+    `;
+    
+    container.appendChild(row);
+  });
+  
+  // Store questions in a global variable for reference
+  window.currentTestQuestions = questions;
+}
 
-    function submitTest() {
-      const questions = getFilteredQuestions();
-      let correct = 0;
-      let total = questions.length;
-      
-      questions.forEach((question, idx) => {
-        const userAnswer = normalizeAnswer(testAnswers[idx] || '');
-        const correctAnswer = normalizeAnswer(question.correct);
-        
-        if (userAnswer === correctAnswer) correct++;
-      });
-      
-      isTestChecked = true;
-      renderTestQuestions();
-      
-      const percentage = Math.round((correct / total) * 100);
-      document.getElementById('modalSubtitle').textContent = `${currentTopic.replace('-', ' ')}`;
-      document.getElementById('scoreNumber').textContent = `${correct}/${total}`;
-      document.getElementById('scoreLabel').textContent = `${percentage}% Correct`;
-      
-      showModal();
+function handleTestInput(idx) {
+  const input = document.getElementById(`test-input-${idx}`);
+  testAnswers[idx] = input.value;
+  
+  // Auto-resize input
+  input.style.width = Math.max((input.value.length || 5) * 9 + 30, 100) + 'px';
+  
+  updateTestProgress();
+  
+  // Enable/disable submit button
+  const answered = Object.keys(testAnswers).filter(k => testAnswers[k].trim()).length;
+  document.getElementById('submitTestBtn').disabled = answered !== window.currentTestQuestions.length;
+}
+
+function updateTestProgress(questions = null) {
+  if (!questions) {
+    questions = window.currentTestQuestions || [];
+  }
+  
+  const answered = Object.keys(testAnswers).filter(k => testAnswers[k].trim()).length;
+  const total = questions.length;
+  
+  document.getElementById('testProgressText').textContent = `${answered}/${total} answered`;
+  
+  const dotsContainer = document.getElementById('testProgressDots');
+  dotsContainer.innerHTML = '';
+  
+  questions.forEach((_, idx) => {
+    const dot = document.createElement('div');
+    dot.className = 'progress-dot';
+    if (testAnswers[idx] && testAnswers[idx].trim()) {
+      dot.classList.add('answered');
     }
+    dotsContainer.appendChild(dot);
+  });
+}
+
+function submitTest() {
+  const questions = window.currentTestQuestions;
+  let correct = 0;
+  let total = questions.length;
+  
+  questions.forEach((question, idx) => {
+    const userAnswer = normalizeAnswer(testAnswers[idx] || '');
+    const correctAnswer = normalizeAnswer(question.correct);
+    
+    if (userAnswer === correctAnswer) correct++;
+  });
+  
+  isTestChecked = true;
+  renderTestQuestions();
+  
+  const percentage = Math.round((correct / total) * 100);
+  const topicName = currentTopic.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
+  document.getElementById('modalSubtitle').textContent = topicName;
+  document.getElementById('scoreNumber').textContent = `${correct}/${total}`;
+  document.getElementById('scoreLabel').textContent = `${percentage}% Correct`;
+  
+  showModal();
+}
 
     function retryTest() {
       closeModal();

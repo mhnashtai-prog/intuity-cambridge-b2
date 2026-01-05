@@ -907,7 +907,7 @@
       display: none;
     }
   </style>
-</hea<div class="container">
+<div class="container">
     
     <!-- HEADER -->
     <header class="global-header">
@@ -1408,7 +1408,7 @@
 
     // ==================== NEW TEST MODE FUNCTIONS ====================
     
- // ==================== NEW TEST MODE FUNCTIONS ====================
+   // ==================== NEW TEST MODE FUNCTIONS ====================
 
 function startTest() {
   if (!EXPRESSIONS_DATA) {
@@ -1459,29 +1459,10 @@ function renderTestQuestions(questions = null) {
     Object.entries(EXPRESSIONS_DATA).forEach(([key, category]) => {
       if (filters.category === 'all' || filters.category === key) {
         category.expressions.forEach(expr => {
-          // Get 3 wrong options from other expressions
-          const allOtherPhrases = [];
-          Object.values(EXPRESSIONS_DATA).forEach(cat => {
-            cat.expressions.forEach(e => {
-              if (e.phrase !== expr.phrase) {
-                allOtherPhrases.push(e.phrase);
-              }
-            });
-          });
-          
-          // Shuffle and get 3 wrong options
-          const wrongOptions = allOtherPhrases
-            .sort(() => Math.random() - 0.5)
-            .slice(0, 3);
-          
-          // Combine correct and wrong options, then shuffle
-          const options = [expr.phrase, ...wrongOptions].sort(() => Math.random() - 0.5);
-          
           questions.push({
             sentence: expr.example.replace(new RegExp(expr.phrase, 'gi'), '___'),
             correct: expr.phrase,
-            phrase: expr.phrase,
-            options: options
+            phrase: expr.phrase
           });
         });
       }
@@ -1494,51 +1475,40 @@ function renderTestQuestions(questions = null) {
   questions.forEach((question, idx) => {
     const row = document.createElement('div');
     row.className = 'test-sentence-row';
-    row.style.flexDirection = 'column';
-    row.style.alignItems = 'stretch';
     
     const userAnswer = testAnswers[idx] || '';
     const hasAnswer = userAnswer.trim() !== '';
     const numClass = hasAnswer ? 'question-number answered' : 'question-number';
     
-    // Create header with number and sentence
-    let headerHTML = '<div style="display: flex; gap: 0.75rem; margin-bottom: 1rem;">';
-    headerHTML += `<div class="${numClass}">${idx + 1}</div>`;
-    headerHTML += '<div class="test-sentence-text" style="flex: 1;">';
-    
+    // Replace ___ with input field
     const beforeBlank = question.sentence.substring(0, question.sentence.indexOf('___'));
     const afterBlank = question.sentence.substring(question.sentence.indexOf('___') + 3);
     
-    headerHTML += beforeBlank;
-    headerHTML += '<span style="display: inline-block; min-width: 100px; padding: 0.25rem 0.75rem; background: rgba(201, 169, 97, 0.15); border: 1px dashed rgba(201, 169, 97, 0.4); border-radius: 0.375rem; color: #C9A961; font-weight: 600;">___</span>';
-    headerHTML += afterBlank;
-    headerHTML += '</div></div>';
+    let sentenceHTML = '';
+    sentenceHTML += beforeBlank;
     
-    // Create options grid
-    let optionsHTML = '<div class="options-grid" style="grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">';
-    
-    question.options.forEach(option => {
-      const isSelected = userAnswer === option;
-      let btnClass = 'option-btn';
-      let disabled = '';
+    if (isTestChecked) {
+      const isCorrect = normalizeAnswer(userAnswer) === normalizeAnswer(question.correct);
+      const inputClass = isCorrect ? 'test-answer-input correct' : 'test-answer-input incorrect';
+      sentenceHTML += `<input type="text" class="${inputClass}" value="${userAnswer}" readonly 
+                       style="width: ${Math.max(userAnswer.length * 9 + 30, 100)}px;" />`;
       
-      if (isTestChecked) {
-        disabled = 'disabled';
-        if (option === question.correct) {
-          btnClass += ' correct';
-        } else if (isSelected && option !== question.correct) {
-          btnClass += ' incorrect';
-        }
-      } else if (isSelected) {
-        btnClass += ' selected';
+      if (!isCorrect) {
+        sentenceHTML += `<span class="correct-answer-display">${question.correct}</span>`;
       }
-      
-      optionsHTML += `<button class="${btnClass}" ${disabled} onclick="selectTestOption(${idx}, '${option.replace(/'/g, "\\'")}', this)" style="text-align: left;">${option}</button>`;
-    });
+    } else {
+      sentenceHTML += `<input type="text" class="test-answer-input" id="test-input-${idx}" value="${userAnswer}" 
+                       oninput="handleTestInput(${idx})" placeholder="..." 
+                       style="width: ${Math.max((userAnswer.length || 5) * 9 + 30, 100)}px;" />`;
+    }
     
-    optionsHTML += '</div>';
+    sentenceHTML += afterBlank;
     
-    row.innerHTML = headerHTML + optionsHTML;
+    row.innerHTML = `
+      <div class="${numClass}">${idx + 1}</div>
+      <div class="test-sentence-text">${sentenceHTML}</div>
+    `;
+    
     container.appendChild(row);
   });
   
@@ -1546,18 +1516,12 @@ function renderTestQuestions(questions = null) {
   window.currentTestQuestions = questions;
 }
 
-function selectTestOption(idx, option, btnElement) {
-  if (isTestChecked) return;
+function handleTestInput(idx) {
+  const input = document.getElementById(`test-input-${idx}`);
+  testAnswers[idx] = input.value;
   
-  // Remove selected class from all buttons in this question
-  const allButtons = btnElement.parentElement.querySelectorAll('.option-btn');
-  allButtons.forEach(btn => btn.classList.remove('selected'));
-  
-  // Add selected class to clicked button
-  btnElement.classList.add('selected');
-  
-  // Store answer
-  testAnswers[idx] = option;
+  // Auto-resize input
+  input.style.width = Math.max((input.value.length || 5) * 9 + 30, 100) + 'px';
   
   updateTestProgress();
   
@@ -1565,7 +1529,7 @@ function selectTestOption(idx, option, btnElement) {
   const answered = Object.keys(testAnswers).filter(k => testAnswers[k].trim()).length;
   document.getElementById('submitTestBtn').disabled = answered !== window.currentTestQuestions.length;
 }
-    
+
 function updateTestProgress(questions = null) {
   if (!questions) {
     questions = window.currentTestQuestions || [];
@@ -1612,7 +1576,6 @@ function submitTest() {
   
   showModal();
 }
-
     function retryTest() {
       closeModal();
       startTest();
@@ -1645,6 +1608,4 @@ function submitTest() {
     init();
   </script>
 </body>
-</html>d>
-  
-<body>
+</html>

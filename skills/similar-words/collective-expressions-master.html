@@ -1304,6 +1304,7 @@
       }
     };
 
+    // State management
     let currentTopic = 'adjectives';
     let EXPRESSIONS_DATA = null;
     let PRACTICE_QUESTIONS = null;
@@ -1315,67 +1316,100 @@
     let testAnswers = {};
     let isTestChecked = false;
     let shuffledQuestions = [];
-    
-    // Gallery state
     let galleryCards = [];
     let currentCardIndex = 0;
     let favorites = JSON.parse(localStorage.getItem('intuity_favorites') || '[]');
-
-    // Tooltip state
     let tooltipTimeout = null;
 
-async function loadTopicData(topic) {
-  try {
-    const config = TOPIC_CONFIG[topic];
-    if (!config) throw new Error(`Unknown topic: ${topic}`);
+    // ==========================================
+    // CORE DATA LOADING & MANAGEMENT
+    // ==========================================
 
-    const response = await fetch(config.file);
-    if (!response.ok) throw new Error(`Failed to load ${config.file}`);
-    
-    const data = await response.json();
-    
-    // Store the full data for inspection
-    console.log('Loaded data:', data);
-    console.log('data.expressions:', data.expressions);
-    
-    EXPRESSIONS_DATA = data.expressions;
-    PRACTICE_QUESTIONS = data.practiceQuestions;
-    
-    console.log('EXPRESSIONS_DATA after loading:', EXPRESSIONS_DATA);
-    console.log('Type:', typeof EXPRESSIONS_DATA, 'Is Array:', Array.isArray(EXPRESSIONS_DATA));
-    
-    showToast(`Loaded: ${topic.replace('-', ' ')}`, 'success');
-    return true;
-  } catch (error) {
-    console.error('Error loading topic data:', error);
-    showToast(`Error loading ${topic}`, 'error');
-    return false;
-  }
-}
-  
+    async function loadTopicData(topic) {
+      try {
+        const config = TOPIC_CONFIG[topic];
+        if (!config) throw new Error(`Unknown topic: ${topic}`);
+
+        const response = await fetch(config.file);
+        if (!response.ok) throw new Error(`Failed to load ${config.file}`);
+        
+        const data = await response.json();
+        EXPRESSIONS_DATA = data.expressions;
+        PRACTICE_QUESTIONS = data.practiceQuestions;
+        
+        showToast(`Loaded: ${topic.replace('-', ' ')}`, 'success');
+        return true;
+      } catch (error) {
+        console.error('Error loading topic data:', error);
+        showToast(`Error loading ${topic}`, 'error');
+        return false;
+      }
+    }
+
     async function selectTopic(topic) {
       currentTopic = topic;
       
+      // Update UI
       document.querySelectorAll('.topic-btn').forEach(btn => btn.classList.remove('active'));
       document.querySelector(`[data-topic="${topic}"]`).classList.add('active');
       
+      // Load data
       const loaded = await loadTopicData(topic);
       
       if (loaded) {
-        buildCategoryFilters();
         filters.category = 'all';
+        buildCategoryFilters();
         
+        // Refresh current mode
         if (currentMode === 'learn') {
           renderAllExpressions();
         } else if (currentMode === 'explore') {
           initGallery();
         } else if (currentMode === 'practice') {
+          buildCategoryNavButtons();
           startPractice();
         } else if (currentMode === 'test') {
           startTest();
         }
       }
     }
+
+    // ==========================================
+    // EXPRESSION LOOKUP - SIMPLIFIED
+    // ==========================================
+
+    function findExpressionByPhrase(phrase) {
+      if (!EXPRESSIONS_DATA) {
+        console.warn('EXPRESSIONS_DATA is null');
+        return null;
+      }
+      
+      const phraseLower = phrase.toLowerCase();
+      
+      // Iterate through all categories
+      for (const [categoryKey, categoryData] of Object.entries(EXPRESSIONS_DATA)) {
+        // Get expressions array from category
+        const expressions = categoryData.expressions;
+        
+        if (Array.isArray(expressions)) {
+          // Search for matching phrase
+          const found = expressions.find(expr => 
+            expr.phrase.toLowerCase() === phraseLower
+          );
+          
+          if (found) {
+            return found;
+          }
+        }
+      }
+      
+      console.warn('Expression not found:', phrase);
+      return null;
+    }
+
+    // ==========================================
+    // CATEGORY FILTERS
+    // ==========================================
 
     function buildCategoryFilters() {
       const container = document.getElementById('categoryFilters');
@@ -1405,55 +1439,50 @@ async function loadTopicData(topic) {
       container.innerHTML = html;
     }
 
-    async function init() {
-      await selectTopic('adjectives');
-    }
-
     function filterCategory(category) {
       filters.category = category;
       
+      // Update filter buttons
       document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-      event.target.classList.add('active');
+      if (event && event.target) event.target.classList.add('active');
       
-      document.querySelectorAll('.cat-nav-btn').forEach(btn => btn.classList.remove('active'));
+      // Update nav buttons
+      document.querySelectorAll('.cat-nav-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.textContent.toLowerCase().replace(' ', '-') === category) {
+          btn.classList.add('active');
+        }
+      });
       
-      if (currentMode === 'learn') {
-        renderAllExpressions();
-      } else if (currentMode === 'explore') {
-        initGallery();
-      } else if (currentMode === 'practice') {
-        startPractice();
-      } else if (currentMode === 'test') {
-        startTest();
+      // Refresh current mode
+      switch(currentMode) {
+        case 'learn':
+          renderAllExpressions();
+          break;
+        case 'explore':
+          initGallery();
+          break;
+        case 'practice':
+          startPractice();
+          break;
+        case 'test':
+          startTest();
+          break;
       }
     }
 
-    function getFilteredQuestions() {
-      if (!PRACTICE_QUESTIONS) return [];
-      let questions = PRACTICE_QUESTIONS;
-      
-      if (filters.category !== 'all') {
-        questions = questions.filter(q => q.category === filters.category);
-      }
-      
-      return questions;
-    }
-
-    function shuffleArray(array) {
-      const shuffled = [...array];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-      return shuffled;
-    }
+    // ==========================================
+    // MODE SWITCHING
+    // ==========================================
 
     function switchMode(mode) {
       currentMode = mode;
       
+      // Update tabs
       document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
       document.getElementById(`${mode}Tab`).classList.add('active');
       
+      // Hide all modes
       document.getElementById('learnMode').classList.add('hidden');
       document.getElementById('exploreMode').classList.add('hidden');
       document.getElementById('practiceMode').classList.add('hidden');
@@ -1461,22 +1490,31 @@ async function loadTopicData(topic) {
       document.getElementById('categoryQuickNav').classList.add('hidden');
    
       // Show selected mode
-      if (mode === 'learn') {
-        document.getElementById('learnMode').classList.remove('hidden');
-        renderAllExpressions();
-      } else if (mode === 'explore') {
-        document.getElementById('exploreMode').classList.remove('hidden');
-        initGallery();
-      } else if (mode === 'practice') {
-        document.getElementById('practiceMode').classList.remove('hidden');
-        document.getElementById('categoryQuickNav').classList.remove('hidden');
-        buildCategoryNavButtons();
-        startPractice();
-      } else if (mode === 'test') {
-        document.getElementById('testMode').classList.remove('hidden');
-        startTest();
+      switch(mode) {
+        case 'learn':
+          document.getElementById('learnMode').classList.remove('hidden');
+          renderAllExpressions();
+          break;
+        case 'explore':
+          document.getElementById('exploreMode').classList.remove('hidden');
+          initGallery();
+          break;
+        case 'practice':
+          document.getElementById('practiceMode').classList.remove('hidden');
+          document.getElementById('categoryQuickNav').classList.remove('hidden');
+          buildCategoryNavButtons();
+          startPractice();
+          break;
+        case 'test':
+          document.getElementById('testMode').classList.remove('hidden');
+          startTest();
+          break;
       }
     }
+
+    // ==========================================
+    // LEARN MODE
+    // ==========================================
 
     function renderAllExpressions() {
       if (!EXPRESSIONS_DATA) return;
@@ -1488,9 +1526,9 @@ async function loadTopicData(topic) {
       
       Object.entries(EXPRESSIONS_DATA).forEach(([key, category]) => {
         if (filters.category === 'all' || filters.category === key) {
-          category.expressions.forEach(expr => {
-            allExpressions.push(expr);
-          });
+          if (category.expressions) {
+            allExpressions.push(...category.expressions);
+          }
         }
       });
       
@@ -1520,7 +1558,10 @@ async function loadTopicData(topic) {
       });
     }
 
-    // GALLERY MODE FUNCTIONS
+    // ==========================================
+    // EXPLORE MODE (GALLERY)
+    // ==========================================
+
     function initGallery() {
       if (!EXPRESSIONS_DATA) return;
       
@@ -1529,9 +1570,9 @@ async function loadTopicData(topic) {
       
       Object.entries(EXPRESSIONS_DATA).forEach(([key, category]) => {
         if (filters.category === 'all' || filters.category === key) {
-          category.expressions.forEach(expr => {
-            galleryCards.push(expr);
-          });
+          if (category.expressions) {
+            galleryCards.push(...category.expressions);
+          }
         }
       });
       
@@ -1671,51 +1712,21 @@ async function loadTopicData(topic) {
       }
     }
 
-    // SWIPE GESTURE SUPPORT
-    let touchStartX = 0;
-    let touchEndX = 0;
+    // ==========================================
+    // PRACTICE MODE
+    // ==========================================
 
-    function handleGesture() {
-      const swipeThreshold = 50;
-      const diff = touchEndX - touchStartX;
+    function getFilteredQuestions() {
+      if (!PRACTICE_QUESTIONS) return [];
+      let questions = PRACTICE_QUESTIONS;
       
-      if (Math.abs(diff) > swipeThreshold) {
-        if (diff > 0) {
-          prevCard();
-        } else {
-          nextCard();
-        }
+      if (filters.category !== 'all') {
+        questions = questions.filter(q => q.category === filters.category);
       }
+      
+      return questions;
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-      const wrapper = document.getElementById('swipeWrapper');
-      
-      wrapper.addEventListener('touchstart', e => {
-        touchStartX = e.changedTouches[0].screenX;
-      });
-
-      wrapper.addEventListener('touchend', e => {
-        touchEndX = e.changedTouches[0].screenX;
-        handleGesture();
-      });
-    });
-
-    // KEYBOARD NAVIGATION
-    document.addEventListener('keydown', e => {
-      if (currentMode === 'explore') {
-        if (e.key === 'ArrowLeft') prevCard();
-        if (e.key === 'ArrowRight') nextCard();
-      }
-    });
-
-    function copyExpression(phrase) {
-      navigator.clipboard.writeText(phrase).then(() => {
-        showToast(`Copied: ${phrase}`, 'success');
-      });
-    }
-
-    // PRACTICE MODE FUNCTIONS
     function startPractice() {
       const questions = getFilteredQuestions();
       
@@ -1758,6 +1769,7 @@ async function loadTopicData(topic) {
         btn.textContent = option;
         btn.onclick = () => selectOption(option, btn);
         
+        // Tooltip on hover
         btn.onmouseenter = (e) => showTooltip(e, option);
         btn.onmouseleave = hideTooltip;
         
@@ -1773,92 +1785,6 @@ async function loadTopicData(topic) {
       updatePracticeNavigationButtons();
     }
 
-    function showTooltip(event, phrase) {
-      const expr = findExpressionByPhrase(phrase);
-      if (!expr) return;
-      
-      clearTimeout(tooltipTimeout);
-      
-      const tooltip = document.getElementById('vocabTooltip');
-      document.getElementById('tooltipWord').textContent = expr.phrase;
-      document.getElementById('tooltipMeaning').textContent = expr.meaning;
-      
-      if (expr.synonyms && expr.synonyms.length > 0) {
-        document.getElementById('tooltipSynonyms').textContent = `Similar: ${expr.synonyms.slice(0, 3).join(', ')}`;
-      } else {
-        document.getElementById('tooltipSynonyms').textContent = '';
-      }
-      
-      const rect = event.target.getBoundingClientRect();
-      tooltip.style.left = `${rect.left + rect.width / 2}px`;
-      tooltip.style.top = `${rect.top - 10}px`;
-      tooltip.style.transform = 'translate(-50%, -100%)';
-      
-      tooltipTimeout = setTimeout(() => {
-        tooltip.classList.add('show');
-      }, 300);
-    }
-
-    function hideTooltip() {
-      clearTimeout(tooltipTimeout);
-      document.getElementById('vocabTooltip').classList.remove('show');
-    }
-
-function findExpressionByPhrase(phrase) {
-  if (!EXPRESSIONS_DATA) {
-    console.warn('EXPRESSIONS_DATA is null');
-    return null;
-  }
-  
-  console.log('Searching for phrase:', phrase);
-  console.log('EXPRESSIONS_DATA structure:', Object.keys(EXPRESSIONS_DATA));
-  
-  // Search through all categories
-  for (const [categoryKey, categoryData] of Object.entries(EXPRESSIONS_DATA)) {
-    console.log('Checking category:', categoryKey, categoryData);
-    
-    // Handle nested structure: categoryData.expressions
-    const expressionsList = categoryData.expressions || categoryData;
-    
-    // Check if it's an array directly
-    if (Array.isArray(expressionsList)) {
-      const found = expressionsList.find(expr => {
-        // Try exact match first
-        if (expr.phrase === phrase) return true;
-        // Try case-insensitive match
-        if (expr.phrase.toLowerCase() === phrase.toLowerCase()) return true;
-        return false;
-      });
-      
-      if (found) {
-        console.log('Found expression:', found);
-        return found;
-      }
-    }
-    // Check if it's an object with nested categories (like your JSON structure)
-    else if (typeof expressionsList === 'object') {
-      for (const [subKey, subData] of Object.entries(expressionsList)) {
-        const subExpressions = subData.expressions || subData;
-        if (Array.isArray(subExpressions)) {
-          const found = subExpressions.find(expr => {
-            if (expr.phrase === phrase) return true;
-            if (expr.phrase.toLowerCase() === phrase.toLowerCase()) return true;
-            return false;
-          });
-          
-          if (found) {
-            console.log('Found expression in subcategory:', found);
-            return found;
-          }
-        }
-      }
-    }
-  }
-  
-  console.warn('Expression not found:', phrase);
-  return null;
-}
-  
     function selectOption(option, btnElement) {
       if (practiceAnswers[currentQuestion] !== null) return;
       
@@ -1955,7 +1881,10 @@ function findExpressionByPhrase(phrase) {
       counter.innerHTML = `<span class="current">${currentQuestion + 1}</span>/${total}`;
     }
 
-    // TEST MODE FUNCTIONS
+    // ==========================================
+    // TEST MODE
+    // ==========================================
+
     function startTest() {
       if (!EXPRESSIONS_DATA) return;
       
@@ -2023,7 +1952,7 @@ function findExpressionByPhrase(phrase) {
           btn.style.textAlign = 'left';
           btn.textContent = option;
           
-          // ADD HOVER TOOLTIPS HERE - THIS IS THE FIX!
+          // Tooltip on hover
           btn.onmouseenter = (e) => showTooltip(e, option);
           btn.onmouseleave = hideTooltip;
           
@@ -2089,6 +2018,63 @@ function findExpressionByPhrase(phrase) {
       startTest();
     }
 
+    // ==========================================
+    // TOOLTIP SYSTEM
+    // ==========================================
+
+    function showTooltip(event, phrase) {
+      const expr = findExpressionByPhrase(phrase);
+      if (!expr) {
+        console.warn('Tooltip: Expression not found for:', phrase);
+        return;
+      }
+      
+      clearTimeout(tooltipTimeout);
+      
+      const tooltip = document.getElementById('vocabTooltip');
+      document.getElementById('tooltipWord').textContent = expr.phrase;
+      document.getElementById('tooltipMeaning').textContent = expr.meaning;
+      
+      if (expr.synonyms && expr.synonyms.length > 0) {
+        document.getElementById('tooltipSynonyms').textContent = `Similar: ${expr.synonyms.slice(0, 3).join(', ')}`;
+      } else {
+        document.getElementById('tooltipSynonyms').textContent = '';
+      }
+      
+      const rect = event.target.getBoundingClientRect();
+      tooltip.style.left = `${rect.left + rect.width / 2}px`;
+      tooltip.style.top = `${rect.top - 10}px`;
+      tooltip.style.transform = 'translate(-50%, -100%)';
+      
+      tooltipTimeout = setTimeout(() => {
+        tooltip.classList.add('show');
+      }, 300);
+    }
+
+    function hideTooltip() {
+      clearTimeout(tooltipTimeout);
+      document.getElementById('vocabTooltip').classList.remove('show');
+    }
+
+    // ==========================================
+    // UTILITY FUNCTIONS
+    // ==========================================
+
+    function shuffleArray(array) {
+      const shuffled = [...array];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      return shuffled;
+    }
+
+    function copyExpression(phrase) {
+      navigator.clipboard.writeText(phrase).then(() => {
+        showToast(`Copied: ${phrase}`, 'success');
+      });
+    }
+
     function showModal() {
       document.getElementById('scoreModal').classList.add('active');
     }
@@ -2096,10 +2082,6 @@ function findExpressionByPhrase(phrase) {
     function closeModal() {
       document.getElementById('scoreModal').classList.remove('active');
     }
-
-    document.getElementById('scoreModal').addEventListener('click', function(e) {
-      if (e.target === this) closeModal();
-    });
 
     function showToast(message, type = 'success') {
       const toast = document.getElementById('toast');
@@ -2111,6 +2093,56 @@ function findExpressionByPhrase(phrase) {
         toast.classList.remove('show');
         setTimeout(() => toast.className = 'toast', 300);
       }, 2500);
+    }
+
+    // ==========================================
+    // EVENT LISTENERS
+    // ==========================================
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // Swipe gestures
+      const wrapper = document.getElementById('swipeWrapper');
+      let touchStartX = 0;
+      let touchEndX = 0;
+      
+      wrapper.addEventListener('touchstart', e => {
+        touchStartX = e.changedTouches[0].screenX;
+      });
+
+      wrapper.addEventListener('touchend', e => {
+        touchEndX = e.changedTouches[0].screenX;
+        const diff = touchEndX - touchStartX;
+        const swipeThreshold = 50;
+        
+        if (Math.abs(diff) > swipeThreshold) {
+          if (diff > 0) {
+            prevCard();
+          } else {
+            nextCard();
+          }
+        }
+      });
+
+      // Keyboard navigation
+      document.addEventListener('keydown', e => {
+        if (currentMode === 'explore') {
+          if (e.key === 'ArrowLeft') prevCard();
+          if (e.key === 'ArrowRight') nextCard();
+        }
+      });
+
+      // Modal click outside
+      document.getElementById('scoreModal').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+      });
+    });
+
+    // ==========================================
+    // INITIALIZE APP
+    // ==========================================
+
+    async function init() {
+      await selectTopic('adjectives');
     }
 
     init();

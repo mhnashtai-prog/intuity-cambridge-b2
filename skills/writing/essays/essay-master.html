@@ -1266,603 +1266,605 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    // ==================== STATE ====================
-    let currentMode = 'paragraphs';
-    let currentParagraph = 0;
-    let currentEssayIndex = 0;
-    let currentStyle = 'default';
-    let showXRay = false;
-    let phraseExplorerActive = false;
-
-    // Data stores
-    let questionsData = [];
-    let samplesData = [];
-    let ideasData = {};
-
-    // Phrase Explorer Database
-    let phraseDatabase = {};
-    let phraseDataLoaded = false;
-
-    // ==================== INITIALIZATION ====================
-    async function init() {
-      try {
-        updateLoadingStatus('Loading essay data...');
-        
-        // Load essay data (original paths preserved)
-        const [questionsRes, samplesRes, ideasRes] = await Promise.all([
-          fetch('data/essay-questions.json'),
-          fetch('data/samples.json'),
-          fetch('data/ideas.json')
-        ]);
-
-        const questions = await questionsRes.json();
-        const samples = await samplesRes.json();
-        const ideas = await ideasRes.json();
-
-        questionsData = questions.questions || [];
-        samplesData = samples.opinion || [];
-        ideasData = ideas.opinion || {};
-
-        // Check for essay ID in URL parameter
-        const urlParams = new URLSearchParams(window.location.search);
-        const essayId = urlParams.get('id');
-        
-        if (essayId && samplesData.length > 0) {
-          const index = samplesData.findIndex(essay => essay.id === essayId);
-          if (index !== -1) {
-            currentEssayIndex = index;
-          }
-        }
-
-        updateLoadingStatus('Loading phrase database...');
-        
-        // Load phrase data for the Phrase Explorer feature (original paths preserved)
-        await loadPhraseDatabase();
-
-        updateUI();
-        render();
-
-      } catch (error) {
-        console.error('Error loading data:', error);
-        document.getElementById('contentInner').innerHTML = '<div class="loading">Error loading data</div>';
-      }
-    }
-
-    function updateLoadingStatus(message) {
-      const status = document.getElementById('loadingStatus');
-      if (status) status.textContent = message;
-    }
-
-    // ==================== PHRASE DATABASE LOADING ====================
-    async function loadPhraseDatabase() {
-      try {
-        // Attempt to load all phrase JSON files (original paths preserved)
-        const phraseFiles = [
-          { path: 'data/phrases.json', source: 'General Phrases' },
-          { path: 'data/conclusion-phrases.json', source: 'Conclusion Phrases' },
-          { path: 'data/introduction-hooks.json', source: 'Introduction Hooks' },
-          { path: 'data/body-phrases.json', source: 'Body Phrases' }
-        ];
-
-        const results = await Promise.allSettled(
-          phraseFiles.map(f => fetch(f.path).then(r => r.ok ? r.json() : null))
-        );
-
-        results.forEach((result, index) => {
-          if (result.status === 'fulfilled' && result.value) {
-            const source = phraseFiles[index].source;
-            
-            // Handle introduction-hooks.json special structure
-            if (source === 'Introduction Hooks') {
-              if (result.value.hooks) {
-                buildPhraseDatabase(result.value.hooks, source);
-              }
-              if (result.value.shared) {
-                buildPhraseDatabase(result.value.shared, 'Shared Expressions');
-              }
-            } else {
-              buildPhraseDatabase(result.value, source);
-            }
-          }
-        });
-
-        const phraseCount = Object.keys(phraseDatabase).length;
-        phraseDataLoaded = phraseCount > 0;
-        
-        console.log(`✅ Phrase database loaded: ${phraseCount} phrases`);
-        
-        // Update phrase toggle button visibility
-        const toggleBtn = document.getElementById('phraseToggleBtn');
-        if (toggleBtn) {
-          toggleBtn.classList.toggle('hidden', !phraseDataLoaded);
-        }
-
-      } catch (error) {
-        console.warn('Phrase database loading error:', error);
-        phraseDataLoaded = false;
-      }
-    }
-
-    function buildPhraseDatabase(data, source) {
-      function processObject(obj, categoryPath = []) {
-        for (const key in obj) {
-          const value = obj[key];
-          
-          if (Array.isArray(value)) {
-            const category = [...categoryPath, key].join(' → ');
-            value.forEach(phrase => {
-              if (typeof phrase === 'string') {
-                addPhraseToDatabase(phrase, category, value);
-              }
-            });
-          } else if (typeof value === 'object' && value !== null) {
-            processObject(value, [...categoryPath, key]);
-          }
-        }
-      }
-
-      processObject(data, [source]);
-    }
-
-    function addPhraseToDatabase(phrase, category, allPhrasesInCategory) {
-      // Clean the phrase (remove trailing punctuation for matching)
-      const cleanPhrase = phrase.replace(/[.,;:!?]+$/, '').trim();
-      
-      // Skip very short phrases (less than 3 words) to avoid too many matches
-      if (cleanPhrase.split(/\s+/).length < 2) return;
-      
-      if (!phraseDatabase[cleanPhrase]) {
-        phraseDatabase[cleanPhrase] = {
-          category: category,
-          alternatives: []
-        };
-      }
-
-      // Add all other phrases from the same category as alternatives
-      allPhrasesInCategory.forEach(alt => {
-        if (typeof alt !== 'string') return;
-        const cleanAlt = alt.replace(/[.,;:!?]+$/, '').trim();
-        if (cleanAlt !== cleanPhrase && !phraseDatabase[cleanPhrase].alternatives.includes(cleanAlt)) {
-          phraseDatabase[cleanPhrase].alternatives.push(cleanAlt);
-        }
-      });
-    }
-
-    // ==================== PHRASE ENHANCEMENT ====================
-    function enhanceWithPhraseHints(htmlContent) {
-      if (!phraseDataLoaded || Object.keys(phraseDatabase).length === 0) {
-        return { html: htmlContent, count: 0 };
-      }
-
-      let enhanced = htmlContent;
-      let matchCount = 0;
-      const matchedPhrases = new Set();
-
-      // Sort phrases by length (longest first) to avoid partial matches
-      const sortedPhrases = Object.keys(phraseDatabase)
-        .filter(p => phraseDatabase[p].alternatives.length > 0)
-        .sort((a, b) => b.length - a.length);
-
-      sortedPhrases.forEach(phrase => {
-        // Create regex that matches the phrase (case-insensitive, whole words)
-        const escapedPhrase = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`(?<!<[^>]*)\\b(${escapedPhrase})\\b(?![^<]*>)`, 'gi');
-        
-        enhanced = enhanced.replace(regex, (match) => {
-          // Prevent double-enhancement
-          if (matchedPhrases.has(match.toLowerCase())) return match;
-          
-          matchedPhrases.add(match.toLowerCase());
-          matchCount++;
-          
-          const escapedPhraseForJs = phrase.replace(/'/g, "\\'").replace(/"/g, '\\"');
-          return `<span class="phrase-enhanced">${match}<button class="phrase-hint-btn" onclick="event.stopPropagation(); showAlternatives('${escapedPhraseForJs}')" title="${phraseDatabase[phrase].alternatives.length} alternatives">💡</button></span>`;
-        });
-      });
-
-      return { html: enhanced, count: matchCount };
-    }
-
-    // ==================== UI CONTROLS ====================
-    function selectStyle(styleName) {
-      currentStyle = styleName;
-      
-      document.querySelectorAll('.style-btn').forEach(btn => {
-        btn.classList.remove('active');
-      });
-      event.target.closest('.style-btn').classList.add('active');
-      
-      render();
-    }
-
-    function toggleMode() {
-      currentMode = currentMode === 'paragraphs' ? 'full' : 'paragraphs';
-      updateUI();
-      render();
-    }
-
-    function toggleXRay() {
-      showXRay = !showXRay;
-      document.getElementById('xrayBtn').textContent = showXRay ? 'Normal' : 'X-Ray';
-      render();
-    }
-
-    function togglePhraseExplorer() {
-      phraseExplorerActive = !phraseExplorerActive;
-      
-      const btn = document.getElementById('phraseToggleBtn');
-      btn.classList.toggle('active', phraseExplorerActive);
-      
-      const contentArea = document.querySelector('.content-area');
-      contentArea.classList.toggle('phrase-explorer-active', phraseExplorerActive);
-      
-      const status = document.getElementById('phraseStatus');
-      status.classList.toggle('visible', phraseExplorerActive);
-      
-      render();
-    }
-
-    function goToStage(index) {
-      currentParagraph = index;
-      updateStageDots();
-      render();
-    }
-
-    function prevEssay() {
-      if (currentEssayIndex > 0) {
-        currentEssayIndex--;
-        currentParagraph = 0;
-        currentStyle = 'default';
-        updateStyleButtons();
-        updateUI();
-        render();
-      }
-    }
-
-    function nextEssay() {
-      if (currentEssayIndex < samplesData.length - 1) {
-        currentEssayIndex++;
-        currentParagraph = 0;
-        currentStyle = 'default';
-        updateStyleButtons();
-        updateUI();
-        render();
-      }
-    }
-
-    function updateStyleButtons() {
-      document.querySelectorAll('.style-btn').forEach(btn => {
-        btn.classList.remove('active');
-        if (btn.textContent.toLowerCase().includes(currentStyle)) {
-          btn.classList.add('active');
-        }
-      });
-    }
-
-    function updateUI() {
-      const modeKnob = document.getElementById('modeKnob');
-      modeKnob.style.left = currentMode === 'full' ? '26px' : '2px';
-
-      document.getElementById('paragraphsLabel').className = 'toggle-label ' + (currentMode === 'paragraphs' ? 'active' : 'inactive');
-      document.getElementById('fullTextLabel').className = 'toggle-label ' + (currentMode === 'full' ? 'active' : 'inactive');
-
-      const showDots = currentMode === 'paragraphs' && samplesData.length > 0;
-      document.getElementById('stageDots').className = 'stage-dots-section' + (showDots ? '' : ' hidden');
-
-      const showStyles = samplesData.length > 0;
-      document.getElementById('styleSelector').className = 'style-selector' + (showStyles ? '' : ' hidden');
-
-      const showXRayBtn = samplesData.length > 0;
-      document.getElementById('xrayBtn').className = 'xray-btn' + (showXRayBtn ? '' : ' hidden');
-      
-      const showPhraseBtn = samplesData.length > 0 && phraseDataLoaded;
-      document.getElementById('phraseToggleBtn').className = 'phrase-toggle-btn' + (showPhraseBtn ? '' : ' hidden') + (phraseExplorerActive ? ' active' : '');
-
-      const showNav = samplesData.length > 0;
-      document.getElementById('navFooter').className = 'nav-footer' + (showNav ? '' : ' hidden');
-
-      document.getElementById('prevBtn').disabled = currentEssayIndex === 0;
-      document.getElementById('nextBtn').disabled = currentEssayIndex === samplesData.length - 1;
-      document.getElementById('navInfo').textContent = `Essay ${currentEssayIndex + 1} of ${samplesData.length}`;
-
-      updateStageDots();
-    }
-
-    function updateStageDots() {
-      const dots = document.querySelectorAll('.stage-dot-wrapper');
-      dots.forEach((wrapper, i) => {
-        wrapper.className = 'stage-dot-wrapper' + (i === currentParagraph ? ' current' : '');
-      });
-    }
-
-    function extractParagraphs(htmlAnswer) {
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = htmlAnswer;
-      const paragraphs = Array.from(tempDiv.querySelectorAll('p'));
-      return paragraphs.map(p => p.innerHTML);
-    }
-
-    // ==================== RENDER ====================
-    function render() {
-      const container = document.getElementById('contentInner');
-      const currentSample = samplesData[currentEssayIndex];
-      
-      if (!currentSample) {
-        container.innerHTML = '<div class="loading">No essay available</div>';
-        return;
-      }
-
-      const styledContent = currentSample.styles && currentSample.styles[currentStyle] 
-        ? currentSample.styles[currentStyle] 
-        : currentSample.answer;
-      const paragraphs = extractParagraphs(styledContent);
-
-      let contentHtml = '';
-      let phraseCount = 0;
-
-      if (currentMode === 'paragraphs') {
-        const paragraph = paragraphs[currentParagraph];
-        if (!paragraph) {
-          container.innerHTML = '<div class="loading">No content for this paragraph</div>';
-          return;
-        }
-
-        const labels = ['Introduction', 'Body Paragraph 1', 'Body Paragraph 2', 'Body Paragraph 3', 'Conclusion'];
-        
-        let paragraphContent = paragraph;
-        if (phraseExplorerActive) {
-          const enhanced = enhanceWithPhraseHints(paragraph);
-          paragraphContent = enhanced.html;
-          phraseCount = enhanced.count;
-        }
-        
-        contentHtml = `
-          <div class="essay-title-small">${currentSample.title}</div>
-          <div class="essay-subtitle">${labels[currentParagraph]}</div>
-          <div class="paragraph-text ${showXRay ? 'xray-active' : ''}">${paragraphContent}</div>
-        `;
-      } else {
-        let fullContent = '';
-        paragraphs.forEach(para => {
-          if (phraseExplorerActive) {
-            const enhanced = enhanceWithPhraseHints(para);
-            fullContent += `<div class="full-paragraph">${enhanced.html}</div>`;
-            phraseCount += enhanced.count;
-          } else {
-            fullContent += `<div class="full-paragraph">${para}</div>`;
-          }
-        });
-        
-        contentHtml = `
-          <div class="essay-title-small">${currentSample.title}</div>
-          <div class="essay-subtitle">Full Essay</div>
-          <div class="full-text-view ${showXRay ? 'xray-active' : ''}">${fullContent}</div>
-        `;
-      }
-
-      container.innerHTML = contentHtml;
-      
-      // Update phrase count display
-      const phraseCountEl = document.getElementById('phraseCount');
-      if (phraseCountEl) {
-        phraseCountEl.textContent = `${phraseCount} phrase${phraseCount !== 1 ? 's' : ''} detected`;
-      }
-    }
-
-    // ==================== PHRASE ALTERNATIVES MODAL ====================
-    function showAlternatives(phrase) {
-      const data = phraseDatabase[phrase];
-      
-      if (!data || !data.alternatives || data.alternatives.length === 0) {
-        console.warn('No alternatives found for:', phrase);
-        showToast('No alternatives available', false);
-        return;
-      }
-
-      const modalBody = document.getElementById('alternativesModalBody');
-      
-      let html = `
-        <div class="current-phrase-section">
-          <div class="current-phrase-label">Currently Used</div>
-          <div class="current-phrase-text">${escapeHtml(phrase)}</div>
-        </div>
-
-        <div class="alternatives-section">
-          <div class="alternatives-header">
-            <span>📚</span>
-            <span>${escapeHtml(data.category)}</span>
-            <span class="phrase-count">${data.alternatives.length} alternatives</span>
-          </div>
-      `;
-
-      data.alternatives.forEach(alt => {
-        const escapedAlt = alt.replace(/'/g, "\\'").replace(/"/g, '\\"');
-        html += `
-          <div class="alternative-item" onclick="copyAlternative('${escapedAlt}')">
-            <span class="alternative-text">${escapeHtml(alt)}</span>
-            <button class="copy-btn" onclick="event.stopPropagation(); copyAlternative('${escapedAlt}')">Copy</button>
-          </div>
-        `;
-      });
-
-      html += `</div>`;
-      
-      modalBody.innerHTML = html;
-      document.getElementById('alternativesModal').classList.add('active');
-    }
-
-    function closeAlternativesModal(event) {
-      if (!event || event.target.id === 'alternativesModal') {
-        document.getElementById('alternativesModal').classList.remove('active');
-      }
-    }
-
-    function copyAlternative(text) {
-      navigator.clipboard.writeText(text).then(() => {
-        showToast(`Copied: "${text}" ✓`);
-      }).catch(err => {
-        console.error('Failed to copy:', err);
-        showToast('Failed to copy', false);
-      });
-    }
-
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
-    // ==================== QUESTION & PLAN MODALS ====================
-    function openQuestionModal() {
-      const currentSample = samplesData[currentEssayIndex];
-      if (!currentSample) return;
-
-      const modalBody = document.getElementById('questionModalBody');
-      
-      let html = `
-        <div class="question-modal-main">
-          <div class="question-modal-label">Question</div>
-          <div class="question-modal-main-text">${currentSample.question}</div>
-        </div>
-
-        <div class="question-modal-points">
-          <div class="question-modal-points-label">
-            <span>✍️</span>
-            <span>Write about:</span>
-          </div>
-      `;
-
-      currentSample.writingPoints.forEach(point => {
-        html += `
-          <div class="question-modal-point">
-            <div class="question-modal-bullet"></div>
-            <span>${point}</span>
-          </div>
-        `;
-      });
-
-      html += '</div>';
-      modalBody.innerHTML = html;
-      document.getElementById('questionModal').classList.add('active');
-    }
-
-    function openPlanModal() {
-      const currentSample = samplesData[currentEssayIndex];
-      if (!currentSample) return;
-
-      const essayId = currentSample.id;
-      const plan = ideasData[essayId];
-      
-      if (!plan) {
-        showToast('Essay plan not available for this question yet.', false);
-        return;
-      }
-
-      const modalBody = document.getElementById('planModalBody');
-      
-      let html = '<div class="skeleton-view" style="width: 100%;">';
-      
-      html += `
-        <div class="skeleton-section" style="margin-bottom: 2rem; padding: 1.5rem; background: rgba(255, 255, 255, 0.02); border-radius: 0.75rem; border-left: 4px solid #C9A961;">
-          <div style="font-size: 0.75rem; color: #ff9500; text-transform: uppercase; margin-bottom: 0.5rem; font-weight: 600;">
-            ${plan.topic}
-          </div>
-          <div style="font-family: 'Space Grotesk', sans-serif; font-size: 1.1rem; color: #fef3c7; font-weight: 700; margin-bottom: 0.5rem;">
-            ${plan.question}
-          </div>
-        </div>
-      `;
-      
-      plan.skeleton.forEach(section => {
-        html += `
-          <div class="skeleton-section" style="margin-bottom: 2rem; padding: 1.5rem; background: rgba(255, 255, 255, 0.02); border-radius: 0.75rem; border-left: 4px solid #C9A961;">
-            <div style="font-family: 'Space Grotesk', sans-serif; font-size: 1rem; font-weight: 800; color: #C9A961; margin-bottom: 1rem; text-transform: uppercase;">
-              ${section.title}
-            </div>
-        `;
-        
-        section.notes.forEach(note => {
-          html += `
-            <div style="display: flex; gap: 0.75rem; margin-bottom: 0.75rem; align-items: flex-start;">
-              <div style="color: #ff9500; font-weight: 700; font-size: 0.95rem; min-width: 2rem; text-align: center; flex-shrink: 0;">
-                ${note.marker}
-              </div>
-              <div style="flex: 1;">
-                <div style="color: #9a9a9f; font-weight: 600; font-size: 0.875rem;">
-                  ${note.text}
-          `;
-          
-          if (note.verb) {
-            html += `
-              <span style="color: #87CEEB; font-size: 0.75rem; font-weight: 700; padding: 0.2rem 0.5rem; background: rgba(135, 206, 235, 0.15); border-radius: 0.375rem; margin-left: 0.5rem;">
-                ${note.verb}
-              </span>
-            `;
-          }
-          
-          html += `</div>`;
-          
-          if (note.sub) {
-            html += `
-              <div style="color: #6e6e73; font-size: 0.75rem; margin-top: 0.25rem; font-style: italic;">
-                ${note.sub}
-              </div>
-            `;
-          }
-          
-          html += `</div></div>`;
-        });
-        
-        html += `</div>`;
-      });
-      
-      if (plan.magic_verbs && plan.magic_verbs.length > 0) {
-        html += `
-          <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid rgba(84, 84, 88, 0.3);">
-            <div style="font-size: 0.75rem; color: #C9A961; text-transform: uppercase; margin-bottom: 0.75rem; font-weight: 700;">
-              🎯 Magic Verbs to Use
-            </div>
-            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
-        `;
-        
-        plan.magic_verbs.forEach(verb => {
-          html += `
-            <span style="background: rgba(201, 169, 97, 0.15); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 0.5rem; padding: 0.375rem 0.75rem; font-size: 0.75rem; color: #C9A961; font-weight: 600;">
-              ${verb}
-            </span>
-          `;
-        });
-        
-        html += `</div></div>`;
-      }
-      
-      html += '</div>';
-      modalBody.innerHTML = html;
-      document.getElementById('planModal').classList.add('active');
-    }
-
-    function closeModal(event, modalId) {
-      document.getElementById(modalId).classList.remove('active');
-    }
-
-    // ==================== TOAST NOTIFICATION ====================
-    function showToast(message, success = true) {
-      const toast = document.getElementById('toast');
-      toast.textContent = message;
-      toast.style.background = success 
-        ? 'rgba(16, 185, 129, 0.95)' 
-        : 'rgba(239, 68, 68, 0.95)';
-      toast.classList.add('show');
-      
-      setTimeout(() => {
-        toast.classList.remove('show');
-      }, 2500);
-    }
-
-    // ==================== READ ALOUD FEATURE ====================
+// ==================== STATE ====================
+let currentMode = 'paragraphs';
+let currentParagraph = 0;
+let currentEssayIndex = 0;
+let currentStyle = 'default';
+let showXRay = false;
+let phraseExplorerActive = false;
+
+// Data stores
+let questionsData = [];
+let samplesData = [];
+let ideasData = {};
+
+// Phrase Explorer Database
+let phraseDatabase = {};
+let phraseDataLoaded = false;
+
+// Read Aloud State
 let isReading = false;
 let currentUtterance = null;
+let resumeInterval = null;
 
+// ==================== INITIALIZATION ====================
+async function init() {
+  try {
+    updateLoadingStatus('Loading essay data...');
+    
+    // Load essay data (original paths preserved)
+    const [questionsRes, samplesRes, ideasRes] = await Promise.all([
+      fetch('data/essay-questions.json'),
+      fetch('data/samples.json'),
+      fetch('data/ideas.json')
+    ]);
+
+    const questions = await questionsRes.json();
+    const samples = await samplesRes.json();
+    const ideas = await ideasRes.json();
+
+    questionsData = questions.questions || [];
+    samplesData = samples.opinion || [];
+    ideasData = ideas.opinion || {};
+
+    // Check for essay ID in URL parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const essayId = urlParams.get('id');
+    
+    if (essayId && samplesData.length > 0) {
+      const index = samplesData.findIndex(essay => essay.id === essayId);
+      if (index !== -1) {
+        currentEssayIndex = index;
+      }
+    }
+
+    updateLoadingStatus('Loading phrase database...');
+    
+    // Load phrase data for the Phrase Explorer feature (original paths preserved)
+    await loadPhraseDatabase();
+
+    updateUI();
+    render();
+
+  } catch (error) {
+    console.error('Error loading data:', error);
+    document.getElementById('contentInner').innerHTML = '<div class="loading">Error loading data</div>';
+  }
+}
+
+function updateLoadingStatus(message) {
+  const status = document.getElementById('loadingStatus');
+  if (status) status.textContent = message;
+}
+
+// ==================== PHRASE DATABASE LOADING ====================
+async function loadPhraseDatabase() {
+  try {
+    // Attempt to load all phrase JSON files (original paths preserved)
+    const phraseFiles = [
+      { path: 'data/phrases.json', source: 'General Phrases' },
+      { path: 'data/conclusion-phrases.json', source: 'Conclusion Phrases' },
+      { path: 'data/introduction-hooks.json', source: 'Introduction Hooks' },
+      { path: 'data/body-phrases.json', source: 'Body Phrases' }
+    ];
+
+    const results = await Promise.allSettled(
+      phraseFiles.map(f => fetch(f.path).then(r => r.ok ? r.json() : null))
+    );
+
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled' && result.value) {
+        const source = phraseFiles[index].source;
+        
+        // Handle introduction-hooks.json special structure
+        if (source === 'Introduction Hooks') {
+          if (result.value.hooks) {
+            buildPhraseDatabase(result.value.hooks, source);
+          }
+          if (result.value.shared) {
+            buildPhraseDatabase(result.value.shared, 'Shared Expressions');
+          }
+        } else {
+          buildPhraseDatabase(result.value, source);
+        }
+      }
+    });
+
+    const phraseCount = Object.keys(phraseDatabase).length;
+    phraseDataLoaded = phraseCount > 0;
+    
+    console.log(`✅ Phrase database loaded: ${phraseCount} phrases`);
+    
+    // Update phrase toggle button visibility
+    const toggleBtn = document.getElementById('phraseToggleBtn');
+    if (toggleBtn) {
+      toggleBtn.classList.toggle('hidden', !phraseDataLoaded);
+    }
+
+  } catch (error) {
+    console.warn('Phrase database loading error:', error);
+    phraseDataLoaded = false;
+  }
+}
+
+function buildPhraseDatabase(data, source) {
+  function processObject(obj, categoryPath = []) {
+    for (const key in obj) {
+      const value = obj[key];
+      
+      if (Array.isArray(value)) {
+        const category = [...categoryPath, key].join(' → ');
+        value.forEach(phrase => {
+          if (typeof phrase === 'string') {
+            addPhraseToDatabase(phrase, category, value);
+          }
+        });
+      } else if (typeof value === 'object' && value !== null) {
+        processObject(value, [...categoryPath, key]);
+      }
+    }
+  }
+
+  processObject(data, [source]);
+}
+
+function addPhraseToDatabase(phrase, category, allPhrasesInCategory) {
+  // Clean the phrase (remove trailing punctuation for matching)
+  const cleanPhrase = phrase.replace(/[.,;:!?]+$/, '').trim();
+  
+  // Skip very short phrases (less than 3 words) to avoid too many matches
+  if (cleanPhrase.split(/\s+/).length < 2) return;
+  
+  if (!phraseDatabase[cleanPhrase]) {
+    phraseDatabase[cleanPhrase] = {
+      category: category,
+      alternatives: []
+    };
+  }
+
+  // Add all other phrases from the same category as alternatives
+  allPhrasesInCategory.forEach(alt => {
+    if (typeof alt !== 'string') return;
+    const cleanAlt = alt.replace(/[.,;:!?]+$/, '').trim();
+    if (cleanAlt !== cleanPhrase && !phraseDatabase[cleanPhrase].alternatives.includes(cleanAlt)) {
+      phraseDatabase[cleanPhrase].alternatives.push(cleanAlt);
+    }
+  });
+}
+
+// ==================== PHRASE ENHANCEMENT ====================
+function enhanceWithPhraseHints(htmlContent) {
+  if (!phraseDataLoaded || Object.keys(phraseDatabase).length === 0) {
+    return { html: htmlContent, count: 0 };
+  }
+
+  let enhanced = htmlContent;
+  let matchCount = 0;
+  const matchedPhrases = new Set();
+
+  // Sort phrases by length (longest first) to avoid partial matches
+  const sortedPhrases = Object.keys(phraseDatabase)
+    .filter(p => phraseDatabase[p].alternatives.length > 0)
+    .sort((a, b) => b.length - a.length);
+
+  sortedPhrases.forEach(phrase => {
+    // Create regex that matches the phrase (case-insensitive, whole words)
+    const escapedPhrase = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(?<!<[^>]*)\\b(${escapedPhrase})\\b(?![^<]*>)`, 'gi');
+    
+    enhanced = enhanced.replace(regex, (match) => {
+      // Prevent double-enhancement
+      if (matchedPhrases.has(match.toLowerCase())) return match;
+      
+      matchedPhrases.add(match.toLowerCase());
+      matchCount++;
+      
+      const escapedPhraseForJs = phrase.replace(/'/g, "\\'").replace(/"/g, '\\"');
+      return `<span class="phrase-enhanced">${match}<button class="phrase-hint-btn" onclick="event.stopPropagation(); showAlternatives('${escapedPhraseForJs}')" title="${phraseDatabase[phrase].alternatives.length} alternatives">💡</button></span>`;
+    });
+  });
+
+  return { html: enhanced, count: matchCount };
+}
+
+// ==================== UI CONTROLS ====================
+function selectStyle(styleName) {
+  currentStyle = styleName;
+  
+  document.querySelectorAll('.style-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  event.target.closest('.style-btn').classList.add('active');
+  
+  render();
+}
+
+function toggleMode() {
+  currentMode = currentMode === 'paragraphs' ? 'full' : 'paragraphs';
+  updateUI();
+  render();
+}
+
+function toggleXRay() {
+  showXRay = !showXRay;
+  document.getElementById('xrayBtn').textContent = showXRay ? 'Normal' : 'X-Ray';
+  render();
+}
+
+function togglePhraseExplorer() {
+  phraseExplorerActive = !phraseExplorerActive;
+  
+  const btn = document.getElementById('phraseToggleBtn');
+  btn.classList.toggle('active', phraseExplorerActive);
+  
+  const contentArea = document.querySelector('.content-area');
+  contentArea.classList.toggle('phrase-explorer-active', phraseExplorerActive);
+  
+  const status = document.getElementById('phraseStatus');
+  status.classList.toggle('visible', phraseExplorerActive);
+  
+  render();
+}
+
+function goToStage(index) {
+  currentParagraph = index;
+  updateStageDots();
+  render();
+}
+
+function prevEssay() {
+  if (currentEssayIndex > 0) {
+    currentEssayIndex--;
+    currentParagraph = 0;
+    currentStyle = 'default';
+    updateStyleButtons();
+    updateUI();
+    render();
+  }
+}
+
+function nextEssay() {
+  if (currentEssayIndex < samplesData.length - 1) {
+    currentEssayIndex++;
+    currentParagraph = 0;
+    currentStyle = 'default';
+    updateStyleButtons();
+    updateUI();
+    render();
+  }
+}
+
+function updateStyleButtons() {
+  document.querySelectorAll('.style-btn').forEach(btn => {
+    btn.classList.remove('active');
+    if (btn.textContent.toLowerCase().includes(currentStyle)) {
+      btn.classList.add('active');
+    }
+  });
+}
+
+function updateUI() {
+  const modeKnob = document.getElementById('modeKnob');
+  modeKnob.style.left = currentMode === 'full' ? '26px' : '2px';
+
+  document.getElementById('paragraphsLabel').className = 'toggle-label ' + (currentMode === 'paragraphs' ? 'active' : 'inactive');
+  document.getElementById('fullTextLabel').className = 'toggle-label ' + (currentMode === 'full' ? 'active' : 'inactive');
+
+  const showDots = currentMode === 'paragraphs' && samplesData.length > 0;
+  document.getElementById('stageDots').className = 'stage-dots-section' + (showDots ? '' : ' hidden');
+
+  const showStyles = samplesData.length > 0;
+  document.getElementById('styleSelector').className = 'style-selector' + (showStyles ? '' : ' hidden');
+
+  const showXRayBtn = samplesData.length > 0;
+  document.getElementById('xrayBtn').className = 'xray-btn' + (showXRayBtn ? '' : ' hidden');
+  
+  const showPhraseBtn = samplesData.length > 0 && phraseDataLoaded;
+  document.getElementById('phraseToggleBtn').className = 'phrase-toggle-btn' + (showPhraseBtn ? '' : ' hidden') + (phraseExplorerActive ? ' active' : '');
+
+  const showNav = samplesData.length > 0;
+  document.getElementById('navFooter').className = 'nav-footer' + (showNav ? '' : ' hidden');
+
+  document.getElementById('prevBtn').disabled = currentEssayIndex === 0;
+  document.getElementById('nextBtn').disabled = currentEssayIndex === samplesData.length - 1;
+  document.getElementById('navInfo').textContent = `Essay ${currentEssayIndex + 1} of ${samplesData.length}`;
+
+  updateStageDots();
+}
+
+function updateStageDots() {
+  const dots = document.querySelectorAll('.stage-dot-wrapper');
+  dots.forEach((wrapper, i) => {
+    wrapper.className = 'stage-dot-wrapper' + (i === currentParagraph ? ' current' : '');
+  });
+}
+
+function extractParagraphs(htmlAnswer) {
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = htmlAnswer;
+  const paragraphs = Array.from(tempDiv.querySelectorAll('p'));
+  return paragraphs.map(p => p.innerHTML);
+}
+
+// ==================== RENDER ====================
+function render() {
+  const container = document.getElementById('contentInner');
+  const currentSample = samplesData[currentEssayIndex];
+  
+  if (!currentSample) {
+    container.innerHTML = '<div class="loading">No essay available</div>';
+    return;
+  }
+
+  const styledContent = currentSample.styles && currentSample.styles[currentStyle] 
+    ? currentSample.styles[currentStyle] 
+    : currentSample.answer;
+  const paragraphs = extractParagraphs(styledContent);
+
+  let contentHtml = '';
+  let phraseCount = 0;
+
+  if (currentMode === 'paragraphs') {
+    const paragraph = paragraphs[currentParagraph];
+    if (!paragraph) {
+      container.innerHTML = '<div class="loading">No content for this paragraph</div>';
+      return;
+    }
+
+    const labels = ['Introduction', 'Body Paragraph 1', 'Body Paragraph 2', 'Body Paragraph 3', 'Conclusion'];
+    
+    let paragraphContent = paragraph;
+    if (phraseExplorerActive) {
+      const enhanced = enhanceWithPhraseHints(paragraph);
+      paragraphContent = enhanced.html;
+      phraseCount = enhanced.count;
+    }
+    
+    contentHtml = `
+      <div class="essay-title-small">${currentSample.title}</div>
+      <div class="essay-subtitle">${labels[currentParagraph]}</div>
+      <div class="paragraph-text ${showXRay ? 'xray-active' : ''}">${paragraphContent}</div>
+    `;
+  } else {
+    let fullContent = '';
+    paragraphs.forEach(para => {
+      if (phraseExplorerActive) {
+        const enhanced = enhanceWithPhraseHints(para);
+        fullContent += `<div class="full-paragraph">${enhanced.html}</div>`;
+        phraseCount += enhanced.count;
+      } else {
+        fullContent += `<div class="full-paragraph">${para}</div>`;
+      }
+    });
+    
+    contentHtml = `
+      <div class="essay-title-small">${currentSample.title}</div>
+      <div class="essay-subtitle">Full Essay</div>
+      <div class="full-text-view ${showXRay ? 'xray-active' : ''}">${fullContent}</div>
+    `;
+  }
+
+  container.innerHTML = contentHtml;
+  
+  // Update phrase count display
+  const phraseCountEl = document.getElementById('phraseCount');
+  if (phraseCountEl) {
+    phraseCountEl.textContent = `${phraseCount} phrase${phraseCount !== 1 ? 's' : ''} detected`;
+  }
+}
+
+// ==================== PHRASE ALTERNATIVES MODAL ====================
+function showAlternatives(phrase) {
+  const data = phraseDatabase[phrase];
+  
+  if (!data || !data.alternatives || data.alternatives.length === 0) {
+    console.warn('No alternatives found for:', phrase);
+    showToast('No alternatives available', false);
+    return;
+  }
+
+  const modalBody = document.getElementById('alternativesModalBody');
+  
+  let html = `
+    <div class="current-phrase-section">
+      <div class="current-phrase-label">Currently Used</div>
+      <div class="current-phrase-text">${escapeHtml(phrase)}</div>
+    </div>
+
+    <div class="alternatives-section">
+      <div class="alternatives-header">
+        <span>📚</span>
+        <span>${escapeHtml(data.category)}</span>
+        <span class="phrase-count">${data.alternatives.length} alternatives</span>
+      </div>
+  `;
+
+  data.alternatives.forEach(alt => {
+    const escapedAlt = alt.replace(/'/g, "\\'").replace(/"/g, '\\"');
+    html += `
+      <div class="alternative-item" onclick="copyAlternative('${escapedAlt}')">
+        <span class="alternative-text">${escapeHtml(alt)}</span>
+        <button class="copy-btn" onclick="event.stopPropagation(); copyAlternative('${escapedAlt}')">Copy</button>
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+  
+  modalBody.innerHTML = html;
+  document.getElementById('alternativesModal').classList.add('active');
+}
+
+function closeAlternativesModal(event) {
+  if (!event || event.target.id === 'alternativesModal') {
+    document.getElementById('alternativesModal').classList.remove('active');
+  }
+}
+
+function copyAlternative(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    showToast(`Copied: "${text}" ✓`);
+  }).catch(err => {
+    console.error('Failed to copy:', err);
+    showToast('Failed to copy', false);
+  });
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// ==================== QUESTION & PLAN MODALS ====================
+function openQuestionModal() {
+  const currentSample = samplesData[currentEssayIndex];
+  if (!currentSample) return;
+
+  const modalBody = document.getElementById('questionModalBody');
+  
+  let html = `
+    <div class="question-modal-main">
+      <div class="question-modal-label">Question</div>
+      <div class="question-modal-main-text">${currentSample.question}</div>
+    </div>
+
+    <div class="question-modal-points">
+      <div class="question-modal-points-label">
+        <span>✍️</span>
+        <span>Write about:</span>
+      </div>
+  `;
+
+  currentSample.writingPoints.forEach(point => {
+    html += `
+      <div class="question-modal-point">
+        <div class="question-modal-bullet"></div>
+        <span>${point}</span>
+      </div>
+    `;
+  });
+
+  html += '</div>';
+  modalBody.innerHTML = html;
+  document.getElementById('questionModal').classList.add('active');
+}
+
+function openPlanModal() {
+  const currentSample = samplesData[currentEssayIndex];
+  if (!currentSample) return;
+
+  const essayId = currentSample.id;
+  const plan = ideasData[essayId];
+  
+  if (!plan) {
+    showToast('Essay plan not available for this question yet.', false);
+    return;
+  }
+
+  const modalBody = document.getElementById('planModalBody');
+  
+  let html = '<div class="skeleton-view" style="width: 100%;">';
+  
+  html += `
+    <div class="skeleton-section" style="margin-bottom: 2rem; padding: 1.5rem; background: rgba(255, 255, 255, 0.02); border-radius: 0.75rem; border-left: 4px solid #C9A961;">
+      <div style="font-size: 0.75rem; color: #ff9500; text-transform: uppercase; margin-bottom: 0.5rem; font-weight: 600;">
+        ${plan.topic}
+      </div>
+      <div style="font-family: 'Space Grotesk', sans-serif; font-size: 1.1rem; color: #fef3c7; font-weight: 700; margin-bottom: 0.5rem;">
+        ${plan.question}
+      </div>
+    </div>
+  `;
+  
+  plan.skeleton.forEach(section => {
+    html += `
+      <div class="skeleton-section" style="margin-bottom: 2rem; padding: 1.5rem; background: rgba(255, 255, 255, 0.02); border-radius: 0.75rem; border-left: 4px solid #C9A961;">
+        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 1rem; font-weight: 800; color: #C9A961; margin-bottom: 1rem; text-transform: uppercase;">
+          ${section.title}
+        </div>
+    `;
+    
+    section.notes.forEach(note => {
+      html += `
+        <div style="display: flex; gap: 0.75rem; margin-bottom: 0.75rem; align-items: flex-start;">
+          <div style="color: #ff9500; font-weight: 700; font-size: 0.95rem; min-width: 2rem; text-align: center; flex-shrink: 0;">
+            ${note.marker}
+          </div>
+          <div style="flex: 1;">
+            <div style="color: #9a9a9f; font-weight: 600; font-size: 0.875rem;">
+              ${note.text}
+      `;
+      
+      if (note.verb) {
+        html += `
+          <span style="color: #87CEEB; font-size: 0.75rem; font-weight: 700; padding: 0.2rem 0.5rem; background: rgba(135, 206, 235, 0.15); border-radius: 0.375rem; margin-left: 0.5rem;">
+            ${note.verb}
+          </span>
+        `;
+      }
+      
+      html += `</div>`;
+      
+      if (note.sub) {
+        html += `
+          <div style="color: #6e6e73; font-size: 0.75rem; margin-top: 0.25rem; font-style: italic;">
+            ${note.sub}
+          </div>
+        `;
+      }
+      
+      html += `</div></div>`;
+    });
+    
+    html += `</div>`;
+  });
+  
+  if (plan.magic_verbs && plan.magic_verbs.length > 0) {
+    html += `
+      <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid rgba(84, 84, 88, 0.3);">
+        <div style="font-size: 0.75rem; color: #C9A961; text-transform: uppercase; margin-bottom: 0.75rem; font-weight: 700;">
+          🎯 Magic Verbs to Use
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+    `;
+    
+    plan.magic_verbs.forEach(verb => {
+      html += `
+        <span style="background: rgba(201, 169, 97, 0.15); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 0.5rem; padding: 0.375rem 0.75rem; font-size: 0.75rem; color: #C9A961; font-weight: 600;">
+          ${verb}
+        </span>
+      `;
+    });
+    
+    html += `</div></div>`;
+  }
+  
+  html += '</div>';
+  modalBody.innerHTML = html;
+  document.getElementById('planModal').classList.add('active');
+}
+
+function closeModal(event, modalId) {
+  document.getElementById(modalId).classList.remove('active');
+}
+
+// ==================== TOAST NOTIFICATION ====================
+function showToast(message, success = true) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.style.background = success 
+    ? 'rgba(16, 185, 129, 0.95)' 
+    : 'rgba(239, 68, 68, 0.95)';
+  toast.classList.add('show');
+  
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, 2500);
+}
+
+// ==================== READ ALOUD FEATURE (MOBILE-OPTIMIZED) ====================
 function toggleReadAloud() {
   if (isReading) {
     stopReading();
@@ -1872,59 +1874,115 @@ function toggleReadAloud() {
 }
 
 function startReading() {
-  const content = document.querySelector('.paragraph-text, .full-text-view');
-  if (!content) return;
+  // Clear any existing speech first (critical for mobile)
+  speechSynthesis.cancel();
   
-  // Get plain text (removes HTML tags)
-  const text = content.innerText;
-  
-  currentUtterance = new SpeechSynthesisUtterance(text);
-  currentUtterance.rate = 0.9; // Slightly slower for essays
-  currentUtterance.pitch = 1.0;
-  currentUtterance.volume = 1.0;
-  
-  // Try to use British English voice
-  const voices = speechSynthesis.getVoices();
-  const britishVoice = voices.find(voice => voice.lang === 'en-GB');
-  if (britishVoice) currentUtterance.voice = britishVoice;
-  
-  // Update UI when reading ends
-  currentUtterance.onend = () => {
-    stopReading();
-  };
-  
-  speechSynthesis.speak(currentUtterance);
-  isReading = true;
-  
-  // Update button appearance
-  const btn = document.getElementById('readAloudBtn');
-  btn.classList.add('active');
-  document.getElementById('readIcon').textContent = '⏸️';
-  document.getElementById('readLabel').textContent = 'Stop';
+  // Small delay to let mobile browser reset
+  setTimeout(() => {
+    const content = document.querySelector('.paragraph-text, .full-text-view');
+    if (!content) return;
+    
+    // Get plain text (removes HTML tags)
+    const text = content.innerText;
+    
+    // Break into sentences for better mobile handling
+    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+    let currentIndex = 0;
+    
+    function speakNextSentence() {
+      if (currentIndex >= sentences.length || !isReading) {
+        stopReading();
+        return;
+      }
+      
+      const utterance = new SpeechSynthesisUtterance(sentences[currentIndex]);
+      utterance.rate = 0.85; // Slower on mobile
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+      
+      // Wait for voices to load on mobile
+      const voices = speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        // Prefer local voices on mobile (more reliable)
+        const preferredVoice = voices.find(voice => 
+          voice.lang.startsWith('en') && voice.localService === true
+        ) || voices.find(voice => voice.lang.startsWith('en-GB')) || voices.find(voice => voice.lang.startsWith('en'));
+        
+        if (preferredVoice) utterance.voice = preferredVoice;
+      }
+      
+      utterance.onend = () => {
+        currentIndex++;
+        speakNextSentence();
+      };
+      
+      utterance.onerror = (e) => {
+        console.error('Speech error:', e);
+        stopReading();
+      };
+      
+      speechSynthesis.speak(utterance);
+    }
+    
+    isReading = true;
+    updateReadButtonUI(true);
+    speakNextSentence();
+    
+    // iOS Safari keep-alive (pauses after ~15 seconds)
+    resumeInterval = setInterval(() => {
+      if (speechSynthesis.paused && isReading) {
+        speechSynthesis.resume();
+      }
+    }, 10000);
+    
+  }, 150);
 }
 
 function stopReading() {
+  if (resumeInterval) {
+    clearInterval(resumeInterval);
+    resumeInterval = null;
+  }
+  
   speechSynthesis.cancel();
   isReading = false;
-  
-  // Reset button appearance
-  const btn = document.getElementById('readAloudBtn');
-  btn.classList.remove('active');
-  document.getElementById('readIcon').textContent = '🔊';
-  document.getElementById('readLabel').textContent = 'Read';
+  updateReadButtonUI(false);
 }
-  
-    // ==================== KEYBOARD SHORTCUTS ====================
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        closeModal(null, 'questionModal');
-        closeModal(null, 'planModal');
-        closeAlternativesModal();
-      }
-    });
 
-    // ==================== START ====================
-    init();
+function updateReadButtonUI(reading) {
+  const btn = document.getElementById('readAloudBtn');
+  const icon = document.getElementById('readIcon');
+  const label = document.getElementById('readLabel');
+  
+  if (reading) {
+    btn.classList.add('active');
+    icon.textContent = '⏸️';
+    label.textContent = 'Stop';
+  } else {
+    btn.classList.remove('active');
+    icon.textContent = '🔊';
+    label.textContent = 'Read';
+  }
+}
+
+// Load voices on page load (important for mobile)
+if (speechSynthesis.onvoiceschanged !== undefined) {
+  speechSynthesis.onvoiceschanged = () => {
+    console.log('Voices loaded:', speechSynthesis.getVoices().length);
+  };
+}
+
+// ==================== KEYBOARD SHORTCUTS ====================
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeModal(null, 'questionModal');
+    closeModal(null, 'planModal');
+    closeAlternativesModal();
+  }
+});
+
+// ==================== START ====================
+init();
   </script>
 </body>
 </html>

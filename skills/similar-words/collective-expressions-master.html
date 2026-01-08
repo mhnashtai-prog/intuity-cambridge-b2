@@ -1782,13 +1782,51 @@ function updateFavoriteButton() {
   }
 }
   
-// Speech settings (respects system defaults by default)
+// Speech settings - optimized for UK English
 let speechSettings = {
-  useSystemDefault: true, // Set to true to respect your phone settings
-  rate: 0.85,
+  useSystemDefault: false, // We'll select high-quality UK voices
+  rate: 0.9, // Slightly faster for better flow
   pitch: 1.0,
   volume: 1.0
 };
+
+function getBestUKVoice() {
+  const voices = speechSynthesis.getVoices();
+  
+  // Priority order for UK English voices (best quality first)
+  const voicePreferences = [
+    // iOS/Safari premium UK voices
+    v => v.name.includes('Daniel') && v.lang === 'en-GB',
+    v => v.name.includes('Kate') && v.lang === 'en-GB',
+    v => v.name.includes('Serena') && v.lang === 'en-GB',
+    v => v.name.includes('Oliver') && v.lang === 'en-GB',
+    
+    // Google/Chrome UK voices
+    v => v.name.includes('Google UK English Male'),
+    v => v.name.includes('Google UK English Female'),
+    v => v.name.includes('British English Male'),
+    v => v.name.includes('British English Female'),
+    
+    // General UK voices
+    v => v.lang === 'en-GB' && v.localService,
+    v => v.lang === 'en-GB',
+    
+    // Quality fallbacks
+    v => v.name.includes('Samantha') && v.lang === 'en-US',
+    v => v.lang.startsWith('en-') && v.localService,
+    v => v.lang.startsWith('en')
+  ];
+  
+  for (const preference of voicePreferences) {
+    const voice = voices.find(preference);
+    if (voice) {
+      console.log('Auto-selected voice:', voice.name, voice.lang);
+      return voice;
+    }
+  }
+  
+  return null;
+}
   
 function playAudio() {
   // Clear any existing speech first (critical for mobile)
@@ -1799,37 +1837,25 @@ function playAudio() {
     const currentExpr = galleryCards[currentCardIndex];
     const utterance = new SpeechSynthesisUtterance(currentExpr.phrase);
     
+    // Apply optimized settings
     utterance.rate = speechSettings.rate;
     utterance.pitch = speechSettings.pitch;
     utterance.volume = speechSettings.volume;
+    utterance.lang = 'en-GB'; // Force UK English
     
-    // Voice selection logic
-    if (!speechSettings.useSystemDefault) {
-      // Manual voice selection from dropdown
-      const voiceSelect = document.getElementById('voiceSelect');
-      const selectedVoiceName = voiceSelect.value;
-      
-      const voices = speechSynthesis.getVoices();
-      
-      if (selectedVoiceName && voices.length > 0) {
-        const selectedVoice = voices.find(voice => voice.name === selectedVoiceName);
-        if (selectedVoice) {
-          utterance.voice = selectedVoice;
-        }
-      } else if (voices.length > 0) {
-        // Fallback to preferred voice
-        const preferredVoice = voices.find(voice => 
-          voice.lang.startsWith('en') && voice.localService === true
-        ) || voices.find(voice => voice.lang.startsWith('en-GB')) 
-          || voices.find(voice => voice.lang.startsWith('en'));
-        
-        if (preferredVoice) utterance.voice = preferredVoice;
-      }
+    // Select best UK voice
+    const ukVoice = getBestUKVoice();
+    if (ukVoice) {
+      utterance.voice = ukVoice;
     }
-    // If useSystemDefault is true, don't set voice - uses your phone's configured voice
     
     utterance.onerror = (e) => {
       console.error('Speech error:', e);
+      showToast('Audio playback failed', 'error');
+    };
+    
+    utterance.onend = () => {
+      console.log('Audio playback completed');
     };
     
     speechSynthesis.speak(utterance);

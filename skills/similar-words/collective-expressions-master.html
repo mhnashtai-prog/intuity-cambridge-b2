@@ -1736,13 +1736,7 @@ function updateFavoriteButton() {
   }
 }
   
-// Speech settings - simple and optimized for UK English
-let speechSettings = {
-  rate: 0.9,
-  pitch: 1.0,
-  volume: 1.0
-};
-
+// Speech settings - optimized for both desktop and mobile
 function playAudio() {
   const currentExpr = galleryCards[currentCardIndex];
   if (!currentExpr) return;
@@ -1750,39 +1744,54 @@ function playAudio() {
   // Cancel any ongoing speech
   speechSynthesis.cancel();
   
+  // Detect if mobile device
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  
   // Create utterance
   const utterance = new SpeechSynthesisUtterance(currentExpr.phrase);
-  utterance.rate = speechSettings.rate;
-  utterance.pitch = speechSettings.pitch;
-  utterance.volume = speechSettings.volume;
+  
+  // Mobile devices need slower rate to avoid distortion
+  utterance.rate = isMobile ? 0.7 : 0.9;
+  utterance.pitch = 1.0;
+  utterance.volume = 1.0;
   utterance.lang = 'en-GB';
   
-  // Get available voices
-  const voices = speechSynthesis.getVoices();
-  
-  // Try to find Karen first, then any UK voice
-  const ukVoice = voices.find(v => v.name.includes('Karen') && v.lang === 'en-GB') ||
-                  voices.find(v => v.lang === 'en-GB') ||
-                  voices.find(v => v.lang.startsWith('en-GB'));
-  
-  if (ukVoice) {
-    utterance.voice = ukVoice;
-    console.log('🎙️ Using voice:', ukVoice.name);
-  } else {
-    console.warn('⚠️ No UK voice found');
-  }
-  
-  utterance.onerror = (e) => {
-    console.error('Speech error:', e);
-    showToast('Audio playback failed', 'error');
+  // Get available voices - must be done after a small delay on some browsers
+  const setVoiceAndSpeak = () => {
+    const voices = speechSynthesis.getVoices();
+    
+    if (voices.length === 0) {
+      // Voices not loaded yet, try again
+      setTimeout(setVoiceAndSpeak, 100);
+      return;
+    }
+    
+    // Try to find Karen first, then any UK voice
+    const ukVoice = voices.find(v => v.name.includes('Karen') && v.lang === 'en-GB') ||
+                    voices.find(v => v.lang === 'en-GB') ||
+                    voices.find(v => v.lang.startsWith('en-GB'));
+    
+    if (ukVoice) {
+      utterance.voice = ukVoice;
+      console.log('🎙️ Using voice:', ukVoice.name);
+    } else {
+      console.warn('⚠️ No UK voice found, using default');
+    }
+    
+    utterance.onerror = (e) => {
+      console.error('Speech error:', e);
+      showToast('Audio playback failed', 'error');
+    };
+    
+    utterance.onend = () => {
+      console.log('✅ Audio completed');
+    };
+    
+    // Speak
+    speechSynthesis.speak(utterance);
   };
   
-  utterance.onend = () => {
-    console.log('✅ Audio completed');
-  };
-  
-  // Speak
-  speechSynthesis.speak(utterance);
+  setVoiceAndSpeak();
 }
 
 function showRelated() {

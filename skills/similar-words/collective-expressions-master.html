@@ -1783,18 +1783,31 @@ function updateFavoriteButton() {
 }
   
 // Speech settings - optimized for UK English
+// ==================== READ ALOUD FEATURE (MOBILE-OPTIMIZED) ====================
+// Speech settings - optimized for UK English with better quality
 let speechSettings = {
   useSystemDefault: false, // We'll select high-quality UK voices
-  rate: 0.9, // Slightly faster for better flow
+  rate: 0.95, // Slightly slower for clarity
   pitch: 1.0,
   volume: 1.0
 };
 
+function toggleReadAloud() {
+  if (isReading) {
+    stopReading();
+  } else {
+    startReading();
+  }
+}
+
 function getBestUKVoice() {
   const voices = speechSynthesis.getVoices();
   
-  // Priority order for UK English voices (best quality first)
+  // Priority order for UK English voices (Karen first, then other premium options)
   const voicePreferences = [
+    // Karen - common high-quality UK voice
+    v => v.name.includes('Karen') && v.lang === 'en-GB',
+    
     // iOS/Safari premium UK voices
     v => v.name.includes('Daniel') && v.lang === 'en-GB',
     v => v.name.includes('Kate') && v.lang === 'en-GB',
@@ -1802,64 +1815,91 @@ function getBestUKVoice() {
     v => v.name.includes('Oliver') && v.lang === 'en-GB',
     
     // Google/Chrome UK voices
-    v => v.name.includes('Google UK English Male'),
     v => v.name.includes('Google UK English Female'),
-    v => v.name.includes('British English Male'),
+    v => v.name.includes('Google UK English Male'),
     v => v.name.includes('British English Female'),
+    v => v.name.includes('British English Male'),
     
-    // General UK voices
+    // Any premium local UK voice
     v => v.lang === 'en-GB' && v.localService,
-    v => v.lang === 'en-GB',
     
-    // Quality fallbacks
-    v => v.name.includes('Samantha') && v.lang === 'en-US',
-    v => v.lang.startsWith('en-') && v.localService,
-    v => v.lang.startsWith('en')
+    // Any UK voice
+    v => v.lang === 'en-GB'
   ];
   
   for (const preference of voicePreferences) {
     const voice = voices.find(preference);
     if (voice) {
-      console.log('Auto-selected voice:', voice.name, voice.lang);
+      console.log('🎙️ Selected voice:', voice.name, `(${voice.lang})`);
       return voice;
     }
   }
   
+  console.warn('⚠️ No UK voice found, using system default');
   return null;
 }
-  
-function playAudio() {
+
+function startReading() {
   // Clear any existing speech first (critical for mobile)
   speechSynthesis.cancel();
   
   // Small delay to let mobile browser reset
   setTimeout(() => {
-    const currentExpr = galleryCards[currentCardIndex];
-    const utterance = new SpeechSynthesisUtterance(currentExpr.phrase);
+    const content = document.querySelector('.paragraph-text, .full-text-view');
+    if (!content) return;
     
-    // Apply optimized settings
-    utterance.rate = speechSettings.rate;
-    utterance.pitch = speechSettings.pitch;
-    utterance.volume = speechSettings.volume;
-    utterance.lang = 'en-GB'; // Force UK English
+    // Get plain text (removes HTML tags)
+    const text = content.innerText;
     
-    // Select best UK voice
-    const ukVoice = getBestUKVoice();
-    if (ukVoice) {
-      utterance.voice = ukVoice;
+    // Break into sentences for better mobile handling
+    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+    let currentIndex = 0;
+    
+    function speakNextSentence() {
+      if (currentIndex >= sentences.length || !isReading) {
+        stopReading();
+        return;
+      }
+      
+      const utterance = new SpeechSynthesisUtterance(sentences[currentIndex]);
+      
+      // Apply optimized settings for UK accent
+      utterance.rate = speechSettings.rate;
+      utterance.pitch = speechSettings.pitch;
+      utterance.volume = speechSettings.volume;
+      utterance.lang = 'en-GB'; // Force UK English
+      
+      // Select best UK voice
+      const ukVoice = getBestUKVoice();
+      if (ukVoice) {
+        utterance.voice = ukVoice;
+      }
+      
+      utterance.onend = () => {
+        currentIndex++;
+        speakNextSentence();
+      };
+      
+      utterance.onerror = (e) => {
+        console.error('Speech error:', e);
+        stopReading();
+      };
+      
+      speechSynthesis.speak(utterance);
     }
     
-    utterance.onerror = (e) => {
-      console.error('Speech error:', e);
-      showToast('Audio playback failed', 'error');
-    };
+    isReading = true;
+    updateReadButtonUI(true);
+    speakNextSentence();
     
-    utterance.onend = () => {
-      console.log('Audio playback completed');
-    };
+    // iOS Safari keep-alive (pauses after ~15 seconds)
+    resumeInterval = setInterval(() => {
+      if (speechSynthesis.paused && isReading) {
+        speechSynthesis.resume();
+      }
+    }, 10000);
     
-    speechSynthesis.speak(utterance);
-  }, 100);
+  }, 150);
 }
   
   function populateVoiceList() {

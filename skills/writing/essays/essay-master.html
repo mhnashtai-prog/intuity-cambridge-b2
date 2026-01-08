@@ -1865,10 +1865,10 @@ function showToast(message, success = true) {
 }
     
 // ==================== READ ALOUD FEATURE (MOBILE-OPTIMIZED) ====================
-// Speech settings (respects system defaults by default)
+// Speech settings - optimized for UK English with better quality
 let speechSettings = {
-  useSystemDefault: true, // Set to true to respect your phone settings
-  rate: 0.9,
+  useSystemDefault: false, // We'll select high-quality UK voices
+  rate: 0.95, // Slightly slower for clarity
   pitch: 1.0,
   volume: 1.0
 };
@@ -1879,6 +1879,44 @@ function toggleReadAloud() {
   } else {
     startReading();
   }
+}
+
+function getBestUKVoice() {
+  const voices = speechSynthesis.getVoices();
+  
+  // Priority order for UK English voices (best quality first)
+  const voicePreferences = [
+    // iOS/Safari premium voices
+    v => v.name.includes('Daniel') && v.lang === 'en-GB', // UK male (premium)
+    v => v.name.includes('Kate') && v.lang === 'en-GB',   // UK female (premium)
+    v => v.name.includes('Serena') && v.lang === 'en-GB', // UK female (premium)
+    v => v.name.includes('Oliver') && v.lang === 'en-GB', // UK male (premium)
+    
+    // Google/Chrome UK voices
+    v => v.name.includes('Google UK English Male'),
+    v => v.name.includes('Google UK English Female'),
+    v => v.name.includes('British English Male'),
+    v => v.name.includes('British English Female'),
+    
+    // General UK voices
+    v => v.lang === 'en-GB' && v.localService,
+    v => v.lang === 'en-GB',
+    
+    // Fallback to quality English voices
+    v => v.name.includes('Samantha') && v.lang === 'en-US', // High quality fallback
+    v => v.lang.startsWith('en-') && v.localService,
+    v => v.lang.startsWith('en')
+  ];
+  
+  for (const preference of voicePreferences) {
+    const voice = voices.find(preference);
+    if (voice) {
+      console.log('Selected voice:', voice.name, voice.lang);
+      return voice;
+    }
+  }
+  
+  return null;
 }
 
 function startReading() {
@@ -1904,24 +1942,18 @@ function startReading() {
       }
       
       const utterance = new SpeechSynthesisUtterance(sentences[currentIndex]);
+      
+      // Apply optimized settings for UK accent
       utterance.rate = speechSettings.rate;
       utterance.pitch = speechSettings.pitch;
       utterance.volume = speechSettings.volume;
+      utterance.lang = 'en-GB'; // Force UK English
       
-      // Voice selection: Respect system default unless specifically overridden
-      if (!speechSettings.useSystemDefault) {
-        const voices = speechSynthesis.getVoices();
-        if (voices.length > 0) {
-          const preferredVoice = voices.find(voice => 
-            voice.lang.startsWith('en') && voice.localService === true
-          ) || voices.find(voice => voice.lang.startsWith('en-GB')) 
-            || voices.find(voice => voice.lang.startsWith('en-US'))
-            || voices.find(voice => voice.lang.startsWith('en'));
-          
-          if (preferredVoice) utterance.voice = preferredVoice;
-        }
+      // Select best UK voice
+      const ukVoice = getBestUKVoice();
+      if (ukVoice) {
+        utterance.voice = ukVoice;
       }
-      // If useSystemDefault is true, don't set voice - uses your phone's configured voice
       
       utterance.onend = () => {
         currentIndex++;

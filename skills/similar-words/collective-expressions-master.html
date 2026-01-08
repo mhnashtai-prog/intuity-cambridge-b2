@@ -1783,28 +1783,47 @@ function updateFavoriteButton() {
   }
 }
 function playAudio() {
-  const currentExpr = galleryCards[currentCardIndex];
-  const utterance = new SpeechSynthesisUtterance(currentExpr.phrase);
+  // Clear any existing speech first (critical for mobile)
+  speechSynthesis.cancel();
   
-  // Get selected voice
-  const voiceSelect = document.getElementById('voiceSelect');
-  const selectedVoiceName = voiceSelect.value;
-  
-  if (selectedVoiceName) {
+  // Small delay to let mobile browser reset
+  setTimeout(() => {
+    const currentExpr = galleryCards[currentCardIndex];
+    const utterance = new SpeechSynthesisUtterance(currentExpr.phrase);
+    
+    // Get selected voice
+    const voiceSelect = document.getElementById('voiceSelect');
+    const selectedVoiceName = voiceSelect.value;
+    
+    // Wait for voices to load on mobile
     const voices = speechSynthesis.getVoices();
-    const selectedVoice = voices.find(voice => voice.name === selectedVoiceName);
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
+    
+    if (selectedVoiceName && voices.length > 0) {
+      const selectedVoice = voices.find(voice => voice.name === selectedVoiceName);
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+    } else if (voices.length > 0) {
+      // Prefer local voices on mobile (more reliable)
+      const preferredVoice = voices.find(voice => 
+        voice.lang.startsWith('en') && voice.localService === true
+      ) || voices.find(voice => voice.lang.startsWith('en-GB')) || voices.find(voice => voice.lang.startsWith('en'));
+      
+      if (preferredVoice) utterance.voice = preferredVoice;
     }
-  }
-  
-  utterance.rate = 0.85;
-  utterance.pitch = 1.0;
-  utterance.volume = 1.0;
-  
-  speechSynthesis.speak(utterance);
+    
+    utterance.rate = 0.85;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+    
+    utterance.onerror = (e) => {
+      console.error('Speech error:', e);
+    };
+    
+    speechSynthesis.speak(utterance);
+  }, 100);
 }
-
+  
   function populateVoiceList() {
   const voiceSelect = document.getElementById('voiceSelect');
   const voices = speechSynthesis.getVoices();

@@ -513,7 +513,44 @@ body {
   justify-content: center;
   flex-wrap: wrap;
 }
+/* VOICE SELECTOR */
+.voice-selector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  font-size: 0.8125rem;
+  color: #8e8e93;
+}
 
+.voice-selector label {
+  font-weight: 500;
+}
+
+.voice-select {
+  padding: 0.375rem 0.75rem;
+  background: rgba(48, 48, 51, 0.6);
+  border: 1px solid rgba(84, 84, 88, 0.3);
+  border-radius: 0.5rem;
+  color: #e5e5e7;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+
+.voice-select:hover {
+  border-color: rgba(201, 169, 97, 0.5);
+  background: rgba(48, 48, 51, 0.8);
+}
+
+.voice-select:focus {
+  outline: none;
+  border-color: #C9A961;
+}
+    
 .action-btn {
   padding: 0.625rem 1rem;
   background: rgba(48, 48, 51, 0.6);
@@ -1127,7 +1164,7 @@ body {
         </button>
       </div>
 
-      <!-- CATEGORY NAVIGATION (Practice mode only) -->
+      <!-- CATEGORY NAVIGATION -->
       <div class="category-quick-nav hidden" id="categoryQuickNav">
         <div class="cat-nav-buttons" id="catNavButtons"></div>
         <div class="question-counter" id="questionCounter">0/0</div>
@@ -1164,9 +1201,17 @@ body {
             <span>Related</span>
           </button>
         </div>
+
+        <!-- VOICE SELECTOR -->
+        <div class="voice-selector">
+          <label for="voiceSelect">🎤 Voice:</label>
+          <select id="voiceSelect" class="voice-select">
+            <option value="">Default</option>
+          </select>
+        </div>
       </div>
-      
-        <!-- PRACTICE MODE -->
+
+      <!-- PRACTICE MODE -->
       <div id="practiceMode" class="practice-container hidden">
         <div class="practice-card">
           <div class="sentence-display" id="sentenceDisplay"></div>
@@ -1234,6 +1279,8 @@ body {
 
   <!-- TOAST -->
   <div class="toast" id="toast"></div>
+</body>
+  
 <script>
 const TOPIC_CONFIG = {
   'adjectives': {
@@ -1735,14 +1782,48 @@ function updateFavoriteButton() {
     btn.innerHTML = '<span>❤️</span><span>Save</span>';
   }
 }
-
 function playAudio() {
   const currentExpr = galleryCards[currentCardIndex];
   const utterance = new SpeechSynthesisUtterance(currentExpr.phrase);
-  utterance.lang = 'en-GB';
+  
+  // Get selected voice
+  const voiceSelect = document.getElementById('voiceSelect');
+  const selectedVoiceName = voiceSelect.value;
+  
+  if (selectedVoiceName) {
+    const voices = speechSynthesis.getVoices();
+    const selectedVoice = voices.find(voice => voice.name === selectedVoiceName);
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+    }
+  }
+  
   utterance.rate = 0.85;
+  utterance.pitch = 1.0;
+  utterance.volume = 1.0;
+  
   speechSynthesis.speak(utterance);
 }
+
+  function populateVoiceList() {
+  const voiceSelect = document.getElementById('voiceSelect');
+  const voices = speechSynthesis.getVoices();
+  
+  // Filter for English voices only
+  const englishVoices = voices.filter(voice => voice.lang.startsWith('en'));
+  
+  // Clear existing options except "Default"
+  voiceSelect.innerHTML = '<option value="">Default (British)</option>';
+  
+  // Add English voices
+  englishVoices.forEach(voice => {
+    const option = document.createElement('option');
+    option.value = voice.name;
+    option.textContent = `${voice.name} (${voice.lang})`;
+    voiceSelect.appendChild(option);
+  });
+}
+  
 
 function showRelated() {
   const currentExpr = galleryCards[currentCardIndex];
@@ -2179,6 +2260,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Populate voice list
+  if (speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = populateVoiceList;
+  }
+  populateVoiceList();
+  
   // Keyboard navigation
   document.addEventListener('keydown', e => {
     if (currentMode === 'explore') {

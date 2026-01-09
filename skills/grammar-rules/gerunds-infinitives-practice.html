@@ -356,246 +356,297 @@
     <button class="action-btn primary" onclick="checkAnswers()">Check</button>
   </div>
   
-  <script>
-    let allTests = [];
-    let currentTest = 0;
-    let isChecked = false;
-    let testScores = {};
+let allTests = [];
+let currentTest = 0;
+let isChecked = false;
+let testScores = {};
+
+// Load saved scores from localStorage on startup
+function loadSavedScores() {
+  try {
+    const saved = localStorage.getItem('gerunds_infinitives_practice_scores');
+    if (saved) {
+      testScores = JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('Error loading saved scores:', e);
+    testScores = {};
+  }
+}
+
+// Save scores to localStorage
+function saveScores() {
+  try {
+    localStorage.setItem('gerunds_infinitives_practice_scores', JSON.stringify(testScores));
+  } catch (e) {
+    console.error('Error saving scores:', e);
+  }
+}
+
+async function loadData() {
+  try {
+    const response = await fetch('../../data/grammar-rules/gerunds-infinitives-complete.json');
     
-    async function loadData() {
-      try {
-        const response = await fetch('../../data/grammar-rules/gerunds-infinitives-complete.json');
-        
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        
-        const data = await response.json();
-        allTests = data.practice.tests;
-        
-        // Load saved scores
-        const saved = localStorage.getItem('gerunds_infinitives_practice_progress');
-        if (saved) {
-          try {
-            testScores = JSON.parse(saved);
-          } catch (e) {
-            console.error('Error parsing saved scores:', e);
-            testScores = {};
-          }
-        }
-        
-        renderTestSelector();
-        loadTest(0);
-        
-      } catch (error) {
-        console.error('Error loading data:', error);
-        document.getElementById('contentContainer').innerHTML = `
-          <div class="error">
-            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⚠️</div>
-            <div>Failed to load exercises</div>
-            <div style="font-size: 0.6875rem; margin-top: 0.375rem;">${error.message}</div>
-          </div>
-        `;
-      }
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
     }
     
-    function saveProgress() {
-      try {
-        localStorage.setItem('gerunds_infinitives_practice_progress', JSON.stringify(testScores));
-      } catch (e) {
-        console.error('Error saving progress:', e);
-      }
-    }
+    const data = await response.json();
+    allTests = data.practice.tests;
     
-    function renderTestSelector() {
-      const selector = document.getElementById('testSelector');
-      selector.innerHTML = '';
-      
-      allTests.forEach((test, index) => {
-        const btn = document.createElement('button');
-        btn.className = 'test-btn' + (index === currentTest ? ' active' : '');
-        btn.textContent = test.title;
-        btn.onclick = () => loadTest(index);
-        selector.appendChild(btn);
-      });
-    }
+    loadSavedScores(); // Load saved scores
     
-    function loadTest(index) {
-      currentTest = index;
-      isChecked = false;
-      renderTestSelector();
-      
-      const test = allTests[index];
-      const container = document.getElementById('contentContainer');
-      
-      let html = '';
-      
-      test.transformations.forEach((item, idx) => {
-        const inputId = `input-${idx}`;
-        const feedbackId = `feedback-${idx}`;
-        
-        const parts = item.sentence2.split('_____');
-        
-        html += `
-          <div class="question-card">
-            <div class="q-number">Question ${idx + 1}</div>
-            <div class="sentence1">${item.sentence1}</div>
-            <div class="sentence2-wrapper">
-              <div class="keyword">${item.keyWord.toUpperCase()}</div>
-              <div class="sentence2">
-                <span class="sentence2-part">${parts[0]}</span><input 
-                  type="text" 
-                  class="answer-input" 
-                  id="${inputId}"
-                  data-answer="${item.answer}"
-                  data-alternatives='${JSON.stringify(item.alternativeAnswers || [])}'
-                  placeholder="..."
-                  oninput="autoExpandInput('${inputId}')"
-                  size="10"
-                /><span class="sentence2-part">${parts[1] || ''}</span>
-              </div>
-            </div>
-            <div class="feedback" id="${feedbackId}">
-              <div class="feedback-label"></div>
-              <div class="feedback-answer"></div>
-            </div>
-          </div>
-        `;
-      });
-      
-      container.innerHTML = html;
-      document.getElementById('actionBar').style.display = 'flex';
-    }
+    renderTestSelector();
+    loadTest(0);
     
-    function autoExpandInput(inputId) {
-      const input = document.getElementById(inputId);
-      const value = input.value.trim();
-      
-      if (value) {
-        const textWidth = value.length * 9;
-        input.style.width = Math.min(Math.max(textWidth + 20, 80), 200) + 'px';
+  } catch (error) {
+    console.error('Error loading data:', error);
+    document.getElementById('contentContainer').innerHTML = `
+      <div class="error">
+        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⚠️</div>
+        <div>Failed to load exercises</div>
+        <div style="font-size: 0.6875rem; margin-top: 0.375rem;">${error.message}</div>
+      </div>
+    `;
+  }
+}
+
+function saveProgress() {
+  saveScores(); // Use the unified saveScores function
+}
+
+function getScoreClass(percentage) {
+  if (percentage === 100) return 'perfect';
+  if (percentage >= 80) return 'excellent';
+  if (percentage >= 60) return 'good';
+  return '';
+}
+
+function renderTestSelector() {
+  const selector = document.getElementById('testSelector');
+  selector.innerHTML = '';
+  
+  allTests.forEach((test, index) => {
+    const btn = document.createElement('button');
+    btn.className = 'test-btn' + (index === currentTest ? ' active' : '');
+    
+    // Add score indicator
+    const score = testScores[`test${index}`];
+    if (score) {
+      const scoreClass = getScoreClass(score.percentage);
+      if (scoreClass === 'perfect') {
+        btn.textContent = `${test.title} ✓`;
+        btn.style.color = '#84cc16';
+      } else if (scoreClass === 'excellent') {
+        btn.textContent = `${test.title} ✓`;
+        btn.style.color = '#4ade80';
+      } else if (scoreClass === 'good') {
+        btn.textContent = `${test.title} ✓`;
+        btn.style.color = '#38bdf8';
       } else {
-        input.style.width = '80px';
+        btn.textContent = test.title;
       }
+    } else {
+      btn.textContent = test.title;
     }
     
-    function normalizeAnswer(answer) {
-      return answer.toLowerCase().trim().replace(/\s+/g, ' ');
-    }
+    btn.onclick = () => loadTest(index);
+    selector.appendChild(btn);
+  });
+}
+
+function loadTest(index) {
+  currentTest = index;
+  isChecked = false;
+  renderTestSelector();
+  
+  const test = allTests[index];
+  const container = document.getElementById('contentContainer');
+  
+  let html = '';
+  
+  test.transformations.forEach((item, idx) => {
+    const inputId = `input-${idx}`;
+    const feedbackId = `feedback-${idx}`;
     
-    function checkAnswers() {
-      const test = allTests[currentTest];
-      let correct = 0;
-      let total = test.transformations.length;
-      
-      test.transformations.forEach((item, idx) => {
-        const input = document.getElementById(`input-${idx}`);
-        const feedback = document.getElementById(`feedback-${idx}`);
-        const userAnswer = normalizeAnswer(input.value);
-        const correctAnswer = normalizeAnswer(input.dataset.answer);
-        const alternatives = JSON.parse(input.dataset.alternatives);
-        
-        const isCorrect = userAnswer === correctAnswer || 
-                          alternatives.some(alt => normalizeAnswer(alt) === userAnswer);
-        
-        feedback.classList.add('show');
-        
-        if (isCorrect) {
-          input.classList.add('correct');
-          feedback.classList.add('correct');
-          feedback.querySelector('.feedback-label').textContent = '✓ Correct';
-          correct++;
-        } else {
-          input.classList.add('incorrect');
-          feedback.classList.add('incorrect');
-          feedback.querySelector('.feedback-label').textContent = '✗ Incorrect';
-          feedback.querySelector('.feedback-answer').textContent = `Answer: "${input.dataset.answer}"`;
-        }
-        
-        input.readOnly = true;
-      });
-      
-      isChecked = true;
-      
-      const percentage = Math.round((correct / total) * 100);
-      
-      // Save score to localStorage
-      testScores[`test${currentTest}`] = {
-        correct,
-        total,
-        percentage,
-        timestamp: new Date().toISOString()
-      };
-      
-      saveProgress();
-      
-      const scoreHtml = `
-        <div class="score-banner">
-          <div class="score-text">${correct}/${total}</div>
-          <div class="score-label">${percentage}% Correct</div>
+    const parts = item.sentence2.split('_____');
+    
+    html += `
+      <div class="question-card">
+        <div class="q-number">Question ${idx + 1}</div>
+        <div class="sentence1">${item.sentence1}</div>
+        <div class="sentence2-wrapper">
+          <div class="keyword">${item.keyWord.toUpperCase()}</div>
+          <div class="sentence2">
+            <span class="sentence2-part">${parts[0]}</span><input 
+              type="text" 
+              class="answer-input" 
+              id="${inputId}"
+              data-answer="${item.answer}"
+              data-alternatives='${JSON.stringify(item.alternativeAnswers || [])}'
+              placeholder="..."
+              oninput="autoExpandInput('${inputId}')"
+              size="10"
+            /><span class="sentence2-part">${parts[1] || ''}</span>
+          </div>
         </div>
-      `;
-      
-      const container = document.getElementById('contentContainer');
-      container.insertAdjacentHTML('afterbegin', scoreHtml);
-      
-      const actionBar = document.getElementById('actionBar');
-      actionBar.innerHTML = `
-        <button class="action-btn secondary" onclick="clearAnswers()">Retry</button>
-        <button class="action-btn primary" onclick="showAnswers()">Answers</button>
-      `;
-      
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+        <div class="feedback" id="${feedbackId}">
+          <div class="feedback-label"></div>
+          <div class="feedback-answer"></div>
+        </div>
+      </div>
+    `;
+  });
+  
+  container.innerHTML = html;
+  document.getElementById('actionBar').style.display = 'flex';
+}
+
+function autoExpandInput(inputId) {
+  const input = document.getElementById(inputId);
+  const value = input.value.trim();
+  
+  if (value) {
+    const textWidth = value.length * 9;
+    input.style.width = Math.min(Math.max(textWidth + 20, 80), 200) + 'px';
+  } else {
+    input.style.width = '80px';
+  }
+}
+
+function normalizeAnswer(answer) {
+  return answer.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+function checkAnswers() {
+  const test = allTests[currentTest];
+  let correct = 0;
+  let total = test.transformations.length;
+  
+  test.transformations.forEach((item, idx) => {
+    const input = document.getElementById(`input-${idx}`);
+    const feedback = document.getElementById(`feedback-${idx}`);
+    const userAnswer = normalizeAnswer(input.value);
+    const correctAnswer = normalizeAnswer(input.dataset.answer);
+    const alternatives = JSON.parse(input.dataset.alternatives);
+    
+    const isCorrect = userAnswer === correctAnswer || 
+                      alternatives.some(alt => normalizeAnswer(alt) === userAnswer);
+    
+    feedback.classList.add('show');
+    
+    if (isCorrect) {
+      input.classList.add('correct');
+      feedback.classList.add('correct');
+      feedback.querySelector('.feedback-label').textContent = '✓ Correct';
+      correct++;
+    } else {
+      input.classList.add('incorrect');
+      feedback.classList.add('incorrect');
+      feedback.querySelector('.feedback-label').textContent = '✗ Incorrect';
+      feedback.querySelector('.feedback-answer').textContent = `Answer: "${input.dataset.answer}"`;
     }
     
-    function showAnswers() {
-      const test = allTests[currentTest];
-      
-      test.transformations.forEach((item, idx) => {
-        const input = document.getElementById(`input-${idx}`);
-        const feedback = document.getElementById(`feedback-${idx}`);
-        
-        if (input.classList.contains('incorrect')) {
-          input.value = input.dataset.answer;
-          input.classList.remove('incorrect');
-          input.classList.add('correct');
-          feedback.classList.remove('incorrect');
-          feedback.classList.add('correct');
-          feedback.querySelector('.feedback-label').textContent = '✓ Answer';
-          feedback.querySelector('.feedback-answer').textContent = '';
-          autoExpandInput(`input-${idx}`);
-        }
-      });
-    }
+    input.readOnly = true;
+  });
+  
+  isChecked = true;
+  
+  const percentage = Math.round((correct / total) * 100);
+  
+  // Save score to localStorage
+  testScores[`test${currentTest}`] = {
+    correct,
+    total,
+    percentage,
+    timestamp: new Date().toISOString()
+  };
+  
+  saveScores();
+  renderTestSelector(); // Update selector to show new score
+  
+  // Create score banner with emoji based on performance
+  let emoji = '🎯';
+  if (percentage === 100) emoji = '🌟';
+  else if (percentage >= 80) emoji = '✨';
+  else if (percentage >= 60) emoji = '👍';
+  
+  const scoreHtml = `
+    <div class="score-banner">
+      <div class="score-text">${emoji} ${correct}/${total}</div>
+      <div class="score-label">${percentage}% Correct</div>
+    </div>
+  `;
+  
+  const container = document.getElementById('contentContainer');
+  container.insertAdjacentHTML('afterbegin', scoreHtml);
+  
+  const actionBar = document.getElementById('actionBar');
+  actionBar.innerHTML = `
+    <button class="action-btn secondary" onclick="clearAnswers()">Retry</button>
+    <button class="action-btn primary" onclick="showAnswers()">Show All Answers</button>
+  `;
+  
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showAnswers() {
+  const test = allTests[currentTest];
+  
+  test.transformations.forEach((item, idx) => {
+    const input = document.getElementById(`input-${idx}`);
+    const feedback = document.getElementById(`feedback-${idx}`);
     
-    function clearAnswers() {
-      const scoreBanner = document.querySelector('.score-banner');
-      if (scoreBanner) scoreBanner.remove();
-      
-      const test = allTests[currentTest];
-      test.transformations.forEach((item, idx) => {
-        const input = document.getElementById(`input-${idx}`);
-        const feedback = document.getElementById(`feedback-${idx}`);
-        
-        input.value = '';
-        input.style.width = '80px';
-        input.classList.remove('correct', 'incorrect');
-        input.readOnly = false;
-        feedback.classList.remove('show', 'correct', 'incorrect');
-      });
-      
-      isChecked = false;
-      
-      const actionBar = document.getElementById('actionBar');
-      actionBar.innerHTML = `
-        <button class="action-btn secondary" onclick="clearAnswers()">Clear</button>
-        <button class="action-btn primary" onclick="checkAnswers()">Check</button>
-      `;
-      
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (input.classList.contains('incorrect')) {
+      input.value = input.dataset.answer;
+      input.classList.remove('incorrect');
+      input.classList.add('correct');
+      feedback.classList.remove('incorrect');
+      feedback.classList.add('correct');
+      feedback.querySelector('.feedback-label').textContent = '✓ Answer';
+      feedback.querySelector('.feedback-answer').textContent = '';
+      autoExpandInput(`input-${idx}`);
     }
+  });
+  
+  // Update button after showing answers
+  const actionBar = document.getElementById('actionBar');
+  actionBar.innerHTML = `
+    <button class="action-btn secondary" onclick="clearAnswers()">Retry</button>
+    <button class="action-btn primary" onclick="clearAnswers()" style="opacity: 0.5; cursor: default;">All Answers Shown</button>
+  `;
+}
+
+function clearAnswers() {
+  const scoreBanner = document.querySelector('.score-banner');
+  if (scoreBanner) scoreBanner.remove();
+  
+  const test = allTests[currentTest];
+  test.transformations.forEach((item, idx) => {
+    const input = document.getElementById(`input-${idx}`);
+    const feedback = document.getElementById(`feedback-${idx}`);
     
-    window.addEventListener('load', loadData);
+    input.value = '';
+    input.style.width = '80px';
+    input.classList.remove('correct', 'incorrect');
+    input.readOnly = false;
+    feedback.classList.remove('show', 'correct', 'incorrect');
+    feedback.querySelector('.feedback-label').textContent = '';
+    feedback.querySelector('.feedback-answer').textContent = '';
+  });
+  
+  isChecked = false;
+  
+  const actionBar = document.getElementById('actionBar');
+  actionBar.innerHTML = `
+    <button class="action-btn secondary" onclick="clearAnswers()">Clear</button>
+    <button class="action-btn primary" onclick="checkAnswers()">Check</button>
+  `;
+  
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+window.addEventListener('load', loadData);
   </script>
 </body>
 </html>

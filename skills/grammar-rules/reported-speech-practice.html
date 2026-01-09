@@ -356,210 +356,255 @@
     <button class="action-btn primary" onclick="checkAnswers()">Check</button>
   </div>
   
-  <script>
-    let allTests = [];
-    let currentTest = 0;
-    let isChecked = false;
+ let allTests = [];
+let currentTest = 0;
+let isChecked = false;
+let testScores = {};
+
+// Load saved scores from localStorage on startup
+function loadSavedScores() {
+  try {
+    const saved = localStorage.getItem('reported_speech_practice_scores');
+    if (saved) {
+      testScores = JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('Error loading saved scores:', e);
+  }
+}
+
+// Save scores to localStorage
+function saveScores() {
+  try {
+    localStorage.setItem('reported_speech_practice_scores', JSON.stringify(testScores));
+  } catch (e) {
+    console.error('Error saving scores:', e);
+  }
+}
+
+async function loadData() {
+  try {
+    const response = await fetch('../../data/grammar-rules/reported-speech-practice.json');
     
-    async function loadData() {
-      try {
-        const response = await fetch('../../data/grammar-rules/reported-speech-practice.json');
-        
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        
-        const data = await response.json();
-        allTests = data;
-        
-        renderTestSelector();
-        loadTest(0);
-        
-      } catch (error) {
-        console.error('Error loading data:', error);
-        document.getElementById('contentContainer').innerHTML = `
-          <div class="error">
-            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⚠️</div>
-            <div>Failed to load exercises</div>
-            <div style="font-size: 0.6875rem; margin-top: 0.375rem;">${error.message}</div>
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    
+    const data = await response.json();
+    allTests = data;
+    
+    loadSavedScores(); // Load saved scores
+    
+    renderTestSelector();
+    loadTest(0);
+    
+  } catch (error) {
+    console.error('Error loading data:', error);
+    document.getElementById('contentContainer').innerHTML = `
+      <div class="error">
+        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⚠️</div>
+        <div>Failed to load exercises</div>
+        <div style="font-size: 0.6875rem; margin-top: 0.375rem;">${error.message}</div>
+      </div>
+    `;
+  }
+}
+
+function renderTestSelector() {
+  const selector = document.getElementById('testSelector');
+  selector.innerHTML = '';
+  
+  allTests.forEach((test, index) => {
+    const btn = document.createElement('button');
+    btn.className = 'test-btn' + (index === currentTest ? ' active' : '');
+    btn.textContent = test.title;
+    
+    // Add score indicator if test has been completed
+    const scoreKey = `test${index}`;
+    if (testScores[scoreKey]) {
+      const score = testScores[scoreKey];
+      btn.textContent = `${test.title} (${score.percentage}%)`;
+    }
+    
+    btn.onclick = () => loadTest(index);
+    selector.appendChild(btn);
+  });
+}
+
+function loadTest(index) {
+  currentTest = index;
+  isChecked = false;
+  renderTestSelector();
+  
+  const test = allTests[index];
+  const container = document.getElementById('contentContainer');
+  
+  let html = '';
+  
+  test.examples.forEach((example, idx) => {
+    const inputId = `input-${idx}`;
+    const feedbackId = `feedback-${idx}`;
+    
+    html += `
+      <div class="question-card">
+        <div class="q-number">Question ${idx + 1}</div>
+        ${example.original ? `<div class="sentence1">${example.original}</div>` : ''}
+        <div class="sentence2-wrapper">
+          <div class="keyword">${example.keyword.toUpperCase()}</div>
+          <div class="sentence2">
+            ${example.before ? `<span class="sentence2-part">${example.before}</span>` : ''}<input 
+              type="text" 
+              class="answer-input" 
+              id="${inputId}"
+              data-answer="${example.answer || ''}"
+              placeholder="..."
+              oninput="autoExpandInput('${inputId}')"
+              size="10"
+            />${example.after ? `<span class="sentence2-part">${example.after}</span>` : ''}
           </div>
-        `;
-      }
-    }
-    
-    function renderTestSelector() {
-      const selector = document.getElementById('testSelector');
-      selector.innerHTML = '';
-      
-      allTests.forEach((test, index) => {
-        const btn = document.createElement('button');
-        btn.className = 'test-btn' + (index === currentTest ? ' active' : '');
-        btn.textContent = test.title;
-        btn.onclick = () => loadTest(index);
-        selector.appendChild(btn);
-      });
-    }
-    
-    function loadTest(index) {
-      currentTest = index;
-      isChecked = false;
-      renderTestSelector();
-      
-      const test = allTests[index];
-      const container = document.getElementById('contentContainer');
-      
-      let html = '';
-      
-      test.examples.forEach((example, idx) => {
-        const inputId = `input-${idx}`;
-        const feedbackId = `feedback-${idx}`;
-        
-        html += `
-          <div class="question-card">
-            <div class="q-number">Question ${idx + 1}</div>
-            ${example.original ? `<div class="sentence1">${example.original}</div>` : ''}
-            <div class="sentence2-wrapper">
-              <div class="keyword">${example.keyword.toUpperCase()}</div>
-              <div class="sentence2">
-                ${example.before ? `<span class="sentence2-part">${example.before}</span>` : ''}<input 
-                  type="text" 
-                  class="answer-input" 
-                  id="${inputId}"
-                  data-answer="${example.answer || ''}"
-                  placeholder="..."
-                  oninput="autoExpandInput('${inputId}')"
-                  size="10"
-                />${example.after ? `<span class="sentence2-part">${example.after}</span>` : ''}
-              </div>
-            </div>
-            <div class="feedback" id="${feedbackId}">
-              <div class="feedback-label"></div>
-              <div class="feedback-answer"></div>
-            </div>
-          </div>
-        `;
-      });
-      
-      container.innerHTML = html;
-      document.getElementById('actionBar').style.display = 'flex';
-    }
-    
-    function autoExpandInput(inputId) {
-      const input = document.getElementById(inputId);
-      const value = input.value.trim();
-      
-      if (value) {
-        const textWidth = value.length * 9;
-        input.style.width = Math.min(Math.max(textWidth + 20, 80), 300) + 'px';
-      } else {
-        input.style.width = '80px';
-      }
-    }
-    
-    function normalizeAnswer(answer) {
-      return answer.toLowerCase().trim().replace(/\s+/g, ' ');
-    }
-    
-    function checkAnswers() {
-      const test = allTests[currentTest];
-      let correct = 0;
-      let total = test.examples.length;
-      
-      test.examples.forEach((example, idx) => {
-        const input = document.getElementById(`input-${idx}`);
-        const feedback = document.getElementById(`feedback-${idx}`);
-        const userAnswer = normalizeAnswer(input.value);
-        const correctAnswer = normalizeAnswer(input.dataset.answer);
-        
-        const isCorrect = userAnswer === correctAnswer;
-        
-        feedback.classList.add('show');
-        
-        if (isCorrect) {
-          input.classList.add('correct');
-          feedback.classList.add('correct');
-          feedback.querySelector('.feedback-label').textContent = '✓ Correct';
-          correct++;
-        } else {
-          input.classList.add('incorrect');
-          feedback.classList.add('incorrect');
-          feedback.querySelector('.feedback-label').textContent = '✗ Incorrect';
-          feedback.querySelector('.feedback-answer').textContent = `Answer: "${input.dataset.answer}"`;
-        }
-        
-        input.readOnly = true;
-      });
-      
-      isChecked = true;
-      
-      const percentage = Math.round((correct / total) * 100);
-      const scoreHtml = `
-        <div class="score-banner">
-          <div class="score-text">${correct}/${total}</div>
-          <div class="score-label">${percentage}% Correct</div>
         </div>
-      `;
-      
-      const container = document.getElementById('contentContainer');
-      container.insertAdjacentHTML('afterbegin', scoreHtml);
-      
-      const actionBar = document.getElementById('actionBar');
-      actionBar.innerHTML = `
-        <button class="action-btn secondary" onclick="clearAnswers()">Retry</button>
-        <button class="action-btn primary" onclick="showAnswers()">Answers</button>
-      `;
-      
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+        <div class="feedback" id="${feedbackId}">
+          <div class="feedback-label"></div>
+          <div class="feedback-answer"></div>
+        </div>
+      </div>
+    `;
+  });
+  
+  container.innerHTML = html;
+  document.getElementById('actionBar').style.display = 'flex';
+}
+
+function autoExpandInput(inputId) {
+  const input = document.getElementById(inputId);
+  const value = input.value.trim();
+  
+  if (value) {
+    const textWidth = value.length * 9;
+    input.style.width = Math.min(Math.max(textWidth + 20, 80), 300) + 'px';
+  } else {
+    input.style.width = '80px';
+  }
+}
+
+function normalizeAnswer(answer) {
+  return answer.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+function checkAnswers() {
+  const test = allTests[currentTest];
+  let correct = 0;
+  let total = test.examples.length;
+  
+  test.examples.forEach((example, idx) => {
+    const input = document.getElementById(`input-${idx}`);
+    const feedback = document.getElementById(`feedback-${idx}`);
+    const userAnswer = normalizeAnswer(input.value);
+    const correctAnswer = normalizeAnswer(input.dataset.answer);
+    
+    const isCorrect = userAnswer === correctAnswer;
+    
+    feedback.classList.add('show');
+    
+    if (isCorrect) {
+      input.classList.add('correct');
+      feedback.classList.add('correct');
+      feedback.querySelector('.feedback-label').textContent = '✓ Correct';
+      correct++;
+    } else {
+      input.classList.add('incorrect');
+      feedback.classList.add('incorrect');
+      feedback.querySelector('.feedback-label').textContent = '✗ Incorrect';
+      feedback.querySelector('.feedback-answer').textContent = `Answer: "${input.dataset.answer}"`;
     }
     
-    function showAnswers() {
-      const test = allTests[currentTest];
-      
-      test.examples.forEach((example, idx) => {
-        const input = document.getElementById(`input-${idx}`);
-        const feedback = document.getElementById(`feedback-${idx}`);
-        
-        if (input.classList.contains('incorrect')) {
-          input.value = input.dataset.answer;
-          input.classList.remove('incorrect');
-          input.classList.add('correct');
-          feedback.classList.remove('incorrect');
-          feedback.classList.add('correct');
-          feedback.querySelector('.feedback-label').textContent = '✓ Answer';
-          feedback.querySelector('.feedback-answer').textContent = '';
-          autoExpandInput(`input-${idx}`);
-        }
-      });
-    }
+    input.readOnly = true;
+  });
+  
+  isChecked = true;
+  
+  const percentage = Math.round((correct / total) * 100);
+  
+  // Save score to localStorage
+  const scoreKey = `test${currentTest}`;
+  testScores[scoreKey] = {
+    correct,
+    total,
+    percentage,
+    timestamp: new Date().toISOString()
+  };
+  saveScores();
+  
+  const scoreHtml = `
+    <div class="score-banner">
+      <div class="score-text">${correct}/${total}</div>
+      <div class="score-label">${percentage}% Correct</div>
+    </div>
+  `;
+  
+  const container = document.getElementById('contentContainer');
+  container.insertAdjacentHTML('afterbegin', scoreHtml);
+  
+  const actionBar = document.getElementById('actionBar');
+  actionBar.innerHTML = `
+    <button class="action-btn secondary" onclick="clearAnswers()">Retry</button>
+    <button class="action-btn primary" onclick="showAnswers()">Answers</button>
+  `;
+  
+  // Update test selector to show new score
+  renderTestSelector();
+  
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showAnswers() {
+  const test = allTests[currentTest];
+  
+  test.examples.forEach((example, idx) => {
+    const input = document.getElementById(`input-${idx}`);
+    const feedback = document.getElementById(`feedback-${idx}`);
     
-    function clearAnswers() {
-      const scoreBanner = document.querySelector('.score-banner');
-      if (scoreBanner) scoreBanner.remove();
-      
-      const test = allTests[currentTest];
-      test.examples.forEach((example, idx) => {
-        const input = document.getElementById(`input-${idx}`);
-        const feedback = document.getElementById(`feedback-${idx}`);
-        
-        input.value = '';
-        input.style.width = '80px';
-        input.classList.remove('correct', 'incorrect');
-        input.readOnly = false;
-        feedback.classList.remove('show', 'correct', 'incorrect');
-      });
-      
-      isChecked = false;
-      
-      const actionBar = document.getElementById('actionBar');
-      actionBar.innerHTML = `
-        <button class="action-btn secondary" onclick="clearAnswers()">Clear</button>
-        <button class="action-btn primary" onclick="checkAnswers()">Check</button>
-      `;
-      
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (input.classList.contains('incorrect')) {
+      input.value = input.dataset.answer;
+      input.classList.remove('incorrect');
+      input.classList.add('correct');
+      feedback.classList.remove('incorrect');
+      feedback.classList.add('correct');
+      feedback.querySelector('.feedback-label').textContent = '✓ Answer';
+      feedback.querySelector('.feedback-answer').textContent = '';
+      autoExpandInput(`input-${idx}`);
     }
+  });
+}
+
+function clearAnswers() {
+  const scoreBanner = document.querySelector('.score-banner');
+  if (scoreBanner) scoreBanner.remove();
+  
+  const test = allTests[currentTest];
+  test.examples.forEach((example, idx) => {
+    const input = document.getElementById(`input-${idx}`);
+    const feedback = document.getElementById(`feedback-${idx}`);
     
-    window.addEventListener('load', loadData);
+    input.value = '';
+    input.style.width = '80px';
+    input.classList.remove('correct', 'incorrect');
+    input.readOnly = false;
+    feedback.classList.remove('show', 'correct', 'incorrect');
+  });
+  
+  isChecked = false;
+  
+  const actionBar = document.getElementById('actionBar');
+  actionBar.innerHTML = `
+    <button class="action-btn secondary" onclick="clearAnswers()">Clear</button>
+    <button class="action-btn primary" onclick="checkAnswers()">Check</button>
+  `;
+  
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+window.addEventListener('load', loadData);
   </script>
 </body>
 </html>

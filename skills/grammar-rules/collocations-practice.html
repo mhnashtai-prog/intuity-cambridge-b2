@@ -625,364 +625,373 @@
     </div>
   </div>
   
- <script>
-    let quizData = null;
-    let currentSet = 0;
-    let answers = {};
-    let selectedWord = null;
-    let currentMode = 'classic';
-    let showingResults = false;
-    let testScores = {};
+ let quizData = null;
+let currentSet = 0;
+let answers = {};
+let selectedWord = null;
+let currentMode = 'classic';
+let showingResults = false;
+let testScores = {};
+
+// Load saved scores from localStorage on startup
+function loadSavedScores() {
+  try {
+    const saved = localStorage.getItem('adverb_collocations_practice_scores');
+    if (saved) {
+      testScores = JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('Error loading saved scores:', e);
+    testScores = {};
+  }
+}
+
+// Save scores to localStorage
+function saveScores() {
+  try {
+    localStorage.setItem('adverb_collocations_practice_scores', JSON.stringify(testScores));
+  } catch (e) {
+    console.error('Error saving scores:', e);
+  }
+}
+
+async function loadData() {
+  try {
+    const response = await fetch('../../data/grammar-rules/collocations-practice.json');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     
-    async function loadData() {
-      try {
-        const response = await fetch('../../data/grammar-rules/collocations-practice.json');
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        
-        quizData = await response.json();
-        
-        const saved = localStorage.getItem('adverb_collocations_practice_progress');
-        if (saved) {
-          try {
-            testScores = JSON.parse(saved);
-          } catch (e) {
-            console.error('Error parsing saved scores:', e);
-            testScores = {};
-          }
-        }
-        
-        createDots();
-        createQuestionNavDots();
-        loadSet(0);
-        
-      } catch (error) {
-        console.error('Error:', error);
-        document.getElementById('classicContainer').innerHTML = `
-          <div class="error">Failed to load practice</div>
-        `;
-      }
+    quizData = await response.json();
+    
+    loadSavedScores(); // Load saved scores
+    
+    createDots();
+    createQuestionNavDots();
+    loadSet(0);
+    
+  } catch (error) {
+    console.error('Error:', error);
+    document.getElementById('classicContainer').innerHTML = `
+      <div class="error">Failed to load practice</div>
+    `;
+  }
+}
+
+function saveProgress() {
+  saveScores(); // Use the unified saveScores function
+}
+
+function createDots() {
+  if (!quizData) return;
+  
+  const container = document.getElementById('dotsContainer');
+  container.innerHTML = '';
+  
+  quizData.sets.forEach((set, idx) => {
+    const dot = document.createElement('button');
+    dot.className = 'test-dot';
+    if (idx === currentSet) dot.classList.add('current');
+    
+    const score = testScores[`set${idx}`];
+    if (score) {
+      if (score.percentage === 100) dot.classList.add('perfect');
+      else if (score.percentage >= 80) dot.classList.add('excellent');
+      else if (score.percentage >= 60) dot.classList.add('good');
     }
     
-    function saveProgress() {
-      try {
-        localStorage.setItem('adverb_collocations_practice_progress', JSON.stringify(testScores));
-      } catch (e) {
-        console.error('Save error:', e);
-      }
+    dot.onclick = () => loadSet(idx);
+    container.appendChild(dot);
+  });
+  
+  updateNavButtons();
+}
+
+function createQuestionNavDots() {
+  if (!quizData) return;
+  
+  const container = document.getElementById('questionNavDots');
+  container.innerHTML = '';
+  
+  const set = quizData.sets[currentSet];
+  set.sentences.forEach((_, sentIdx) => {
+    const dot = document.createElement('button');
+    dot.className = 'question-nav-dot';
+    
+    const key = `${currentSet}-${sentIdx}`;
+    if (answers[key] !== undefined) {
+      dot.classList.add('answered');
     }
     
-    function createDots() {
-      if (!quizData) return;
-      
-      const container = document.getElementById('dotsContainer');
-      container.innerHTML = '';
-      
-      quizData.sets.forEach((set, idx) => {
-        const dot = document.createElement('button');
-        dot.className = 'test-dot';
-        if (idx === currentSet) dot.classList.add('current');
-        
-        const score = testScores[`set${idx}`];
-        if (score) {
-          if (score.percentage === 100) dot.classList.add('perfect');
-          else if (score.percentage >= 80) dot.classList.add('excellent');
-          else if (score.percentage >= 60) dot.classList.add('good');
-        }
-        
-        dot.onclick = () => loadSet(idx);
-        container.appendChild(dot);
-      });
-      
-      updateNavButtons();
-    }
+    container.appendChild(dot);
+  });
+}
+
+function updateNavButtons() {
+  if (!quizData) return;
+  document.getElementById('prevTestBtn').disabled = currentSet === 0;
+  document.getElementById('nextTestBtn').disabled = currentSet >= quizData.sets.length - 1;
+}
+
+function updateTestInfo() {
+  if (!quizData) return;
+  
+  const set = quizData.sets[currentSet];
+  let answered = 0;
+  
+  set.sentences.forEach((_, sentIdx) => {
+    if (answers[`${currentSet}-${sentIdx}`] !== undefined) answered++;
+  });
+  
+  document.getElementById('testInfo').textContent = 
+    `Set ${set.setNumber}: ${set.title} • ${answered}/${set.sentences.length} answered`;
+}
+
+function loadSet(idx) {
+  if (!quizData || idx < 0 || idx >= quizData.sets.length) return;
+  
+  currentSet = idx;
+  answers = {};
+  selectedWord = null;
+  showingResults = false;
+  
+  createDots();
+  createQuestionNavDots();
+  
+  if (currentMode === 'guided') renderGuidedMode();
+  else renderClassicMode();
+  
+  updateTestInfo();
+  updateFooter();
+  updateExternalNav();
+}
+
+function navigateTest(direction) {
+  loadSet(currentSet + direction);
+}
+
+function toggleMode() {
+  const toggle = document.getElementById('modeToggle');
+  const classic = document.getElementById('classicContainer');
+  const guided = document.getElementById('guidedContainer');
+  
+  if (currentMode === 'classic') {
+    currentMode = 'guided';
+    toggle.classList.add('active');
+    classic.classList.add('hidden');
+    guided.classList.remove('hidden');
+    renderGuidedMode();
+  } else {
+    currentMode = 'classic';
+    toggle.classList.remove('active');
+    guided.classList.add('hidden');
+    classic.classList.remove('hidden');
+    renderClassicMode();
+  }
+  
+  updateExternalNav();
+}
+
+function updateExternalNav() {
+  const nav = document.getElementById('externalNav');
+  if (currentMode === 'guided') {
+    nav.classList.add('visible');
+    document.getElementById('prevSetBtn').disabled = false;
+    document.getElementById('nextSetBtn').disabled = false;
+  } else {
+    nav.classList.remove('visible');
+  }
+}
+
+function navigatePrevSet() {
+  if (currentSet > 0) loadSet(currentSet - 1);
+}
+
+function navigateNextSet() {
+  if (currentSet < quizData.sets.length - 1) loadSet(currentSet + 1);
+}
+
+function renderClassicMode() {
+  if (!quizData) return;
+  
+  const set = quizData.sets[currentSet];
+  const container = document.getElementById('classicContainer');
+  
+  let html = '<div class="set-container">';
+  html += `<div class="set-title">Set ${set.setNumber}: ${set.title}</div>`;
+  
+  html += '<div class="word-bank">';
+  set.words.forEach((word, wordIdx) => {
+    const isUsed = set.sentences.some((_, sentIdx) => 
+      answers[`${currentSet}-${sentIdx}`] === wordIdx
+    );
+    const isSelected = selectedWord && selectedWord.wordIdx === wordIdx;
     
-    function createQuestionNavDots() {
-      if (!quizData) return;
-      
-      const container = document.getElementById('questionNavDots');
-      container.innerHTML = '';
-      
-      const set = quizData.sets[currentSet];
-      set.sentences.forEach((_, sentIdx) => {
-        const dot = document.createElement('button');
-        dot.className = 'question-nav-dot';
-        
-        const key = `${currentSet}-${sentIdx}`;
-        if (answers[key] !== undefined) {
-          dot.classList.add('answered');
-        }
-        
-        container.appendChild(dot);
-      });
-    }
+    let classes = 'word-chip';
+    if (isUsed && !showingResults) classes += ' used';
+    if (isSelected) classes += ' selected';
     
-    function updateNavButtons() {
-      if (!quizData) return;
-      document.getElementById('prevTestBtn').disabled = currentSet === 0;
-      document.getElementById('nextTestBtn').disabled = currentSet >= quizData.sets.length - 1;
-    }
+    html += `<button class="${classes}" onclick="handleWordClick(${wordIdx})" ${isUsed && !showingResults ? 'disabled' : ''}>${word}</button>`;
+  });
+  html += '</div>';
+  
+  html += '<div class="sentences">';
+  set.sentences.forEach((sentence, sentIdx) => {
+    const key = `${currentSet}-${sentIdx}`;
+    const answer = answers[key];
+    const parts = sentence.text.split('_____');
     
-    function updateTestInfo() {
-      if (!quizData) return;
-      
-      const set = quizData.sets[currentSet];
-      let answered = 0;
-      
-      set.sentences.forEach((_, sentIdx) => {
-        if (answers[`${currentSet}-${sentIdx}`] !== undefined) answered++;
-      });
-      
-      document.getElementById('testInfo').textContent = 
-        `Set ${set.setNumber}: ${set.title} • ${answered}/${set.sentences.length} answered`;
-    }
+    let blankHtml = '';
     
-    function loadSet(idx) {
-      if (!quizData || idx < 0 || idx >= quizData.sets.length) return;
-      
-      currentSet = idx;
-      answers = {};
-      selectedWord = null;
-      showingResults = false;
-      
-      createDots();
-      createQuestionNavDots();
-      
-      if (currentMode === 'guided') renderGuidedMode();
-      else renderClassicMode();
-      
-      updateTestInfo();
-      updateFooter();
-      updateExternalNav();
-    }
-    
-    function navigateTest(direction) {
-      loadSet(currentSet + direction);
-    }
-    
-    function toggleMode() {
-      const toggle = document.getElementById('modeToggle');
-      const classic = document.getElementById('classicContainer');
-      const guided = document.getElementById('guidedContainer');
-      
-      if (currentMode === 'classic') {
-        currentMode = 'guided';
-        toggle.classList.add('active');
-        classic.classList.add('hidden');
-        guided.classList.remove('hidden');
-        renderGuidedMode();
-      } else {
-        currentMode = 'classic';
-        toggle.classList.remove('active');
-        guided.classList.add('hidden');
-        classic.classList.remove('hidden');
-        renderClassicMode();
-      }
-      
-      updateExternalNav();
-    }
-    
-    function updateExternalNav() {
-      const nav = document.getElementById('externalNav');
-      if (currentMode === 'guided') {
-        nav.classList.add('visible');
-        document.getElementById('prevSetBtn').disabled = false;
-        document.getElementById('nextSetBtn').disabled = false;
-      } else {
-        nav.classList.remove('visible');
-      }
-    }
-    
-    function navigatePrevSet() {
-      if (currentSet > 0) loadSet(currentSet - 1);
-    }
-    
-    function navigateNextSet() {
-      if (currentSet < quizData.sets.length - 1) loadSet(currentSet + 1);
-    }
-    
-    function renderClassicMode() {
-      if (!quizData) return;
-      
-      const set = quizData.sets[currentSet];
-      const container = document.getElementById('classicContainer');
-      
-      let html = '<div class="set-container">';
-      html += `<div class="set-title">Set ${set.setNumber}: ${set.title}</div>`;
-      
-      html += '<div class="word-bank">';
-      set.words.forEach((word, wordIdx) => {
-        const isUsed = set.sentences.some((_, sentIdx) => 
-          answers[`${currentSet}-${sentIdx}`] === wordIdx
-        );
-        const isSelected = selectedWord && selectedWord.wordIdx === wordIdx;
-        
-        let classes = 'word-chip';
-        if (isUsed && !showingResults) classes += ' used';
-        if (isSelected) classes += ' selected';
-        
-        html += `<button class="${classes}" onclick="handleWordClick(${wordIdx})" ${isUsed && !showingResults ? 'disabled' : ''}>${word}</button>`;
-      });
-      html += '</div>';
-      
-      html += '<div class="sentences">';
-      set.sentences.forEach((sentence, sentIdx) => {
-        const key = `${currentSet}-${sentIdx}`;
-        const answer = answers[key];
-        const parts = sentence.text.split('_____');
-        
-        let blankHtml = '';
-        
-        if (showingResults) {
-          const correctWord = set.words[sentence.correct];
-          if (answer !== undefined) {
-            const userWord = set.words[answer];
-            if (answer === sentence.correct) {
-              blankHtml = `<span class="blank correct">${userWord}</span>`;
-            } else {
-              blankHtml = `<span class="blank incorrect">${userWord}</span> <span class="blank correct">${correctWord}</span>`;
-            }
-          } else {
-            blankHtml = `<span class="blank correct">${correctWord}</span>`;
-          }
-        } else if (answer !== undefined) {
-          blankHtml = `<span class="blank filled" onclick="handleBlankClick(${sentIdx})">${set.words[answer]}</span>`;
+    if (showingResults) {
+      const correctWord = set.words[sentence.correct];
+      if (answer !== undefined) {
+        const userWord = set.words[answer];
+        if (answer === sentence.correct) {
+          blankHtml = `<span class="blank correct">${userWord}</span>`;
         } else {
-          blankHtml = `<span class="blank" onclick="handleBlankClick(${sentIdx})">_____</span>`;
+          blankHtml = `<span class="blank incorrect">${userWord}</span> <span class="blank correct">${correctWord}</span>`;
         }
-        
-        const numClass = answer !== undefined ? 'question-number answered' : 'question-number';
-        
-        html += `<div class="sentence-row"><div class="${numClass}">${sentIdx + 1}</div><div class="sentence-text">${parts[0]}${blankHtml}${parts[1] || ''}</div></div>`;
-      });
-      html += '</div></div>';
-      
-      container.innerHTML = html;
-      updateTestInfo();
-    }
-    
-    function renderGuidedMode() {
-      renderClassicMode();
-    }
-    
-    function handleWordClick(wordIdx) {
-      if (showingResults) return;
-      
-      const set = quizData.sets[currentSet];
-      const isUsed = set.sentences.some((_, sentIdx) => 
-        answers[`${currentSet}-${sentIdx}`] === wordIdx
-      );
-      
-      if (isUsed) return;
-      
-      selectedWord = { wordIdx };
-      renderClassicMode();
-    }
-    
-    function handleBlankClick(sentIdx) {
-      if (showingResults) return;
-      
-      const key = `${currentSet}-${sentIdx}`;
-      
-      if (answers[key] !== undefined) {
-        const wordIdx = answers[key];
-        delete answers[key];
-        selectedWord = { wordIdx };
-        renderClassicMode();
-        createQuestionNavDots();
-        updateTestInfo();
-        updateFooter();
-        return;
-      }
-      
-      if (selectedWord) {
-        answers[key] = selectedWord.wordIdx;
-        selectedWord = null;
-        renderClassicMode();
-        createQuestionNavDots();
-        updateTestInfo();
-        updateFooter();
-      }
-    }
-    
-    function updateFooter() {
-      if (!quizData) return;
-      
-      const set = quizData.sets[currentSet];
-      let answered = 0;
-      
-      set.sentences.forEach((_, sentIdx) => {
-        if (answers[`${currentSet}-${sentIdx}`] !== undefined) answered++;
-      });
-      
-      const footer = document.getElementById('footer');
-      
-      if (answered === set.sentences.length || showingResults) {
-        footer.classList.add('visible');
       } else {
-        footer.classList.remove('visible');
+        blankHtml = `<span class="blank correct">${correctWord}</span>`;
       }
+    } else if (answer !== undefined) {
+      blankHtml = `<span class="blank filled" onclick="handleBlankClick(${sentIdx})">${set.words[answer]}</span>`;
+    } else {
+      blankHtml = `<span class="blank" onclick="handleBlankClick(${sentIdx})">_____</span>`;
     }
     
-    function clearAnswers() {
-      if (showingResults) return;
-      
-      if (confirm('Clear all answers?')) {
-        answers = {};
-        selectedWord = null;
-        renderClassicMode();
-        createQuestionNavDots();
-        updateTestInfo();
-        updateFooter();
-      }
-    }
+    const numClass = answer !== undefined ? 'question-number answered' : 'question-number';
     
-    function submitAndScore() {
-      if (!quizData) return;
-      
-      const set = quizData.sets[currentSet];
-      let correct = 0;
-      let total = set.sentences.length;
-      
-      set.sentences.forEach((sentence, sentIdx) => {
-        const key = `${currentSet}-${sentIdx}`;
-        if (answers[key] === sentence.correct) correct++;
-      });
-      
-      const percentage = Math.round((correct / total) * 100);
-      
-      testScores[`set${currentSet}`] = {
-        correct,
-        total,
-        percentage,
-        timestamp: new Date().toISOString()
-      };
-      
-      saveProgress();
-      
-      showingResults = true;
-      renderClassicMode();
-      updateFooter();
-      createDots();
-      
-      document.getElementById('modalSubtitle').textContent = `Set ${set.setNumber}: ${set.title}`;
-      document.getElementById('scoreNumber').textContent = `${correct}/${total}`;
-      document.getElementById('scoreModal').classList.add('active');
-    }
-    
-    function closeModal() {
-      document.getElementById('scoreModal').classList.remove('active');
-    }
-    
-    function retryTest() {
-      closeModal();
-      loadSet(currentSet);
-    }
-    
-    window.addEventListener('load', loadData);
-    
-    document.getElementById('scoreModal').addEventListener('click', function(e) {
-      if (e.target === this) closeModal();
-    });
+    html += `<div class="sentence-row"><div class="${numClass}">${sentIdx + 1}</div><div class="sentence-text">${parts[0]}${blankHtml}${parts[1] || ''}</div></div>`;
+  });
+  html += '</div></div>';
+  
+  container.innerHTML = html;
+  updateTestInfo();
+}
+
+function renderGuidedMode() {
+  renderClassicMode();
+}
+
+function handleWordClick(wordIdx) {
+  if (showingResults) return;
+  
+  const set = quizData.sets[currentSet];
+  const isUsed = set.sentences.some((_, sentIdx) => 
+    answers[`${currentSet}-${sentIdx}`] === wordIdx
+  );
+  
+  if (isUsed) return;
+  
+  selectedWord = { wordIdx };
+  renderClassicMode();
+}
+
+function handleBlankClick(sentIdx) {
+  if (showingResults) return;
+  
+  const key = `${currentSet}-${sentIdx}`;
+  
+  if (answers[key] !== undefined) {
+    const wordIdx = answers[key];
+    delete answers[key];
+    selectedWord = { wordIdx };
+    renderClassicMode();
+    createQuestionNavDots();
+    updateTestInfo();
+    updateFooter();
+    return;
+  }
+  
+  if (selectedWord) {
+    answers[key] = selectedWord.wordIdx;
+    selectedWord = null;
+    renderClassicMode();
+    createQuestionNavDots();
+    updateTestInfo();
+    updateFooter();
+  }
+}
+
+function updateFooter() {
+  if (!quizData) return;
+  
+  const set = quizData.sets[currentSet];
+  let answered = 0;
+  
+  set.sentences.forEach((_, sentIdx) => {
+    if (answers[`${currentSet}-${sentIdx}`] !== undefined) answered++;
+  });
+  
+  const footer = document.getElementById('footer');
+  
+  if (answered === set.sentences.length || showingResults) {
+    footer.classList.add('visible');
+  } else {
+    footer.classList.remove('visible');
+  }
+}
+
+function clearAnswers() {
+  if (showingResults) return;
+  
+  if (confirm('Clear all answers?')) {
+    answers = {};
+    selectedWord = null;
+    renderClassicMode();
+    createQuestionNavDots();
+    updateTestInfo();
+    updateFooter();
+  }
+}
+
+function submitAndScore() {
+  if (!quizData) return;
+  
+  const set = quizData.sets[currentSet];
+  let correct = 0;
+  let total = set.sentences.length;
+  
+  set.sentences.forEach((sentence, sentIdx) => {
+    const key = `${currentSet}-${sentIdx}`;
+    if (answers[key] === sentence.correct) correct++;
+  });
+  
+  const percentage = Math.round((correct / total) * 100);
+  
+  testScores[`set${currentSet}`] = {
+    correct,
+    total,
+    percentage,
+    timestamp: new Date().toISOString()
+  };
+  
+  saveScores(); // Save to localStorage
+  
+  showingResults = true;
+  renderClassicMode();
+  updateFooter();
+  createDots();
+  
+  document.getElementById('modalSubtitle').textContent = `Set ${set.setNumber}: ${set.title}`;
+  document.getElementById('scoreNumber').textContent = `${correct}/${total}`;
+  document.getElementById('scoreModal').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('scoreModal').classList.remove('active');
+}
+
+function retryTest() {
+  closeModal();
+  loadSet(currentSet);
+}
+
+window.addEventListener('load', loadData);
+
+document.getElementById('scoreModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
   </script>
 </body>
 </html>

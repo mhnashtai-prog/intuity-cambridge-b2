@@ -349,6 +349,7 @@ function loadSavedScores() {
     }
   } catch (e) {
     console.error('Error loading saved scores:', e);
+    testScores = {};
   }
 }
 
@@ -389,6 +390,17 @@ async function loadData() {
   }
 }
 
+function saveProgress() {
+  saveScores(); // Use the unified saveScores function
+}
+
+function getScoreClass(percentage) {
+  if (percentage === 100) return 'perfect';
+  if (percentage >= 80) return 'excellent';
+  if (percentage >= 60) return 'good';
+  return '';
+}
+
 function renderTestSelector() {
   const selector = document.getElementById('testSelector');
   selector.innerHTML = '';
@@ -396,13 +408,25 @@ function renderTestSelector() {
   allTests.forEach((test, index) => {
     const btn = document.createElement('button');
     btn.className = 'test-btn' + (index === currentTest ? ' active' : '');
-    btn.textContent = test.title;
     
-    // Add score indicator if test has been completed
-    const scoreKey = `test${index}`;
-    if (testScores[scoreKey]) {
-      const score = testScores[scoreKey];
-      btn.textContent = `${test.title} (${score.percentage}%)`;
+    // Add score indicator
+    const score = testScores[`test${index}`];
+    if (score) {
+      const scoreClass = getScoreClass(score.percentage);
+      if (scoreClass === 'perfect') {
+        btn.textContent = `${test.title} ✓`;
+        btn.style.color = '#84cc16';
+      } else if (scoreClass === 'excellent') {
+        btn.textContent = `${test.title} ✓`;
+        btn.style.color = '#4ade80';
+      } else if (scoreClass === 'good') {
+        btn.textContent = `${test.title} ✓`;
+        btn.style.color = '#38bdf8';
+      } else {
+        btn.textContent = test.title;
+      }
+    } else {
+      btn.textContent = test.title;
     }
     
     btn.onclick = () => loadTest(index);
@@ -505,18 +529,25 @@ function checkAnswers() {
   const percentage = Math.round((correct / total) * 100);
   
   // Save score to localStorage
-  const scoreKey = `test${currentTest}`;
-  testScores[scoreKey] = {
+  testScores[`test${currentTest}`] = {
     correct,
     total,
     percentage,
     timestamp: new Date().toISOString()
   };
+  
   saveScores();
+  renderTestSelector(); // Update selector to show new score
+  
+  // Create score banner with emoji based on performance
+  let emoji = '🎯';
+  if (percentage === 100) emoji = '🌟';
+  else if (percentage >= 80) emoji = '✨';
+  else if (percentage >= 60) emoji = '👍';
   
   const scoreHtml = `
     <div class="score-banner">
-      <div class="score-text">${correct}/${total}</div>
+      <div class="score-text">${emoji} ${correct}/${total}</div>
       <div class="score-label">${percentage}% Correct</div>
     </div>
   `;
@@ -527,11 +558,8 @@ function checkAnswers() {
   const actionBar = document.getElementById('actionBar');
   actionBar.innerHTML = `
     <button class="action-btn secondary" onclick="clearAnswers()">Retry</button>
-    <button class="action-btn primary" onclick="showAnswers()">Answers</button>
+    <button class="action-btn primary" onclick="showAnswers()">Show All Answers</button>
   `;
-  
-  // Update test selector to show new score
-  renderTestSelector();
   
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -554,6 +582,13 @@ function showAnswers() {
       autoExpandInput(`input-${idx}`);
     }
   });
+  
+  // Update button after showing answers
+  const actionBar = document.getElementById('actionBar');
+  actionBar.innerHTML = `
+    <button class="action-btn secondary" onclick="clearAnswers()">Retry</button>
+    <button class="action-btn primary" onclick="clearAnswers()" style="opacity: 0.5; cursor: default;">All Answers Shown</button>
+  `;
 }
 
 function clearAnswers() {
@@ -570,6 +605,8 @@ function clearAnswers() {
     input.classList.remove('correct', 'incorrect');
     input.readOnly = false;
     feedback.classList.remove('show', 'correct', 'incorrect');
+    feedback.querySelector('.feedback-label').textContent = '';
+    feedback.querySelector('.feedback-answer').textContent = '';
   });
   
   isChecked = false;

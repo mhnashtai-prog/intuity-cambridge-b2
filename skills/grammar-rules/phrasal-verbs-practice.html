@@ -367,271 +367,295 @@
     <button class="action-btn primary" onclick="checkAnswers()">Check</button>
   </div>
   
- <script>
-    let allTests = [];
-    let currentTest = 0;
-    let isChecked = false;
-    let testScores = {};
+ let allTests = [];
+let currentTest = 0;
+let isChecked = false;
+let testScores = {};
+
+// Load saved scores from localStorage on startup
+function loadSavedScores() {
+  try {
+    const saved = localStorage.getItem('phrasal_verbs_practice_scores');
+    if (saved) {
+      testScores = JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('Error loading saved scores:', e);
+  }
+}
+
+// Save scores to localStorage
+function saveScores() {
+  try {
+    localStorage.setItem('phrasal_verbs_practice_scores', JSON.stringify(testScores));
+  } catch (e) {
+    console.error('Error saving scores:', e);
+  }
+}
+
+function toggleInstructions() {
+  const content = document.getElementById('instructionsContent');
+  content.classList.toggle('open');
+}
+
+async function loadData() {
+  try {
+    const response = await fetch('../../data/grammar-rules/phrasal-verbs-practice.json');
     
-    function toggleInstructions() {
-      const content = document.getElementById('instructionsContent');
-      content.classList.toggle('open');
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
     }
     
-    async function loadData() {
-      try {
-        const response = await fetch('../../data/grammar-rules/phrasal-verbs-practice.json');
-        
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        
-        const data = await response.json();
-        allTests = data.tests;
-        
-        // Load saved scores
-        const saved = localStorage.getItem('phrasal_verbs_practice_progress');
-        if (saved) {
-          testScores = JSON.parse(saved);
-        }
-        
-        renderTestSelector();
-        loadTest(0);
-        
-      } catch (error) {
-        console.error('Error loading data:', error);
-        document.getElementById('contentContainer').innerHTML = `
-          <div class="error">
-            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⚠️</div>
-            <div>Failed to load exercises</div>
-            <div style="font-size: 0.6875rem; margin-top: 0.375rem;">${error.message}</div>
+    const data = await response.json();
+    allTests = data.tests;
+    
+    loadSavedScores(); // Load saved scores
+    
+    renderTestSelector();
+    loadTest(0);
+    
+  } catch (error) {
+    console.error('Error loading data:', error);
+    document.getElementById('contentContainer').innerHTML = `
+      <div class="error">
+        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⚠️</div>
+        <div>Failed to load exercises</div>
+        <div style="font-size: 0.6875rem; margin-top: 0.375rem;">${error.message}</div>
+      </div>
+    `;
+  }
+}
+
+function renderTestSelector() {
+  const selector = document.getElementById('testSelector');
+  selector.innerHTML = '';
+  
+  allTests.forEach((test, index) => {
+    const btn = document.createElement('button');
+    btn.className = 'test-btn' + (index === currentTest ? ' active' : '');
+    btn.textContent = test.title;
+    
+    // Add score indicator if test has been completed
+    const scoreKey = `test${index}`;
+    if (testScores[scoreKey]) {
+      const score = testScores[scoreKey];
+      btn.textContent = `${test.title} (${score.percentage}%)`;
+    }
+    
+    btn.onclick = () => loadTest(index);
+    selector.appendChild(btn);
+  });
+}
+
+function loadTest(index) {
+  currentTest = index;
+  isChecked = false;
+  renderTestSelector();
+  
+  const test = allTests[index];
+  const container = document.getElementById('contentContainer');
+  
+  let html = '';
+  
+  // Compact question cards
+  test.transformations.forEach((item, idx) => {
+    const inputId = `input-${idx}`;
+    const feedbackId = `feedback-${idx}`;
+    const wordCountId = `wordcount-${idx}`;
+    
+    const parts = item.sentence2.split('_____');
+    
+    html += `
+      <div class="question-card">
+        <div class="q-number">Question ${idx + 1}</div>
+        <div class="sentence1">${item.sentence1}</div>
+        <div class="sentence2-wrapper">
+          <div class="keyword">${item.keyWord}</div>
+          <div class="sentence2">
+            <span class="sentence2-part">${parts[0]}</span><input 
+              type="text" 
+              class="answer-input" 
+              id="${inputId}"
+              data-answer="${item.answer}"
+              data-alternatives='${JSON.stringify(item.alternativeAnswers || [])}'
+              placeholder="..."
+              oninput="updateWordCount('${inputId}', '${wordCountId}')"
+              size="10"
+            /><span class="sentence2-part">${parts[1] || ''}</span>
           </div>
-        `;
-      }
-    }
-    
-    function renderTestSelector() {
-      const selector = document.getElementById('testSelector');
-      selector.innerHTML = '';
-      
-      allTests.forEach((test, index) => {
-        const btn = document.createElement('button');
-        btn.className = 'test-btn' + (index === currentTest ? ' active' : '');
-        btn.textContent = test.title;
-        btn.onclick = () => loadTest(index);
-        selector.appendChild(btn);
-      });
-    }
-    
-    function loadTest(index) {
-      currentTest = index;
-      isChecked = false;
-      renderTestSelector();
-      
-      const test = allTests[index];
-      const container = document.getElementById('contentContainer');
-      
-      let html = '';
-      
-      // Compact question cards
-      test.transformations.forEach((item, idx) => {
-        const inputId = `input-${idx}`;
-        const feedbackId = `feedback-${idx}`;
-        const wordCountId = `wordcount-${idx}`;
-        
-        const parts = item.sentence2.split('_____');
-        
-        html += `
-          <div class="question-card">
-            <div class="q-number">Question ${idx + 1}</div>
-            <div class="sentence1">${item.sentence1}</div>
-            <div class="sentence2-wrapper">
-              <div class="keyword">${item.keyWord}</div>
-              <div class="sentence2">
-                <span class="sentence2-part">${parts[0]}</span><input 
-                  type="text" 
-                  class="answer-input" 
-                  id="${inputId}"
-                  data-answer="${item.answer}"
-                  data-alternatives='${JSON.stringify(item.alternativeAnswers || [])}'
-                  placeholder="..."
-                  oninput="updateWordCount('${inputId}', '${wordCountId}')"
-                  size="10"
-                /><span class="sentence2-part">${parts[1] || ''}</span>
-              </div>
-              <div class="word-count" id="${wordCountId}"></div>
-            </div>
-            <div class="feedback" id="${feedbackId}">
-              <div class="feedback-label"></div>
-              <div class="feedback-answer"></div>
-            </div>
-          </div>
-        `;
-      });
-      
-      container.innerHTML = html;
-      document.getElementById('actionBar').style.display = 'flex';
-    }
-    
-    function updateWordCount(inputId, countId) {
-      const input = document.getElementById(inputId);
-      const countElement = document.getElementById(countId);
-      const value = input.value.trim();
-      
-      // Auto-expand input based on content
-      if (value) {
-        const textWidth = value.length * 9; // approximate character width
-        input.style.width = Math.min(Math.max(textWidth + 20, 80), 200) + 'px';
-      } else {
-        input.style.width = '80px';
-      }
-      
-      if (!value) {
-        countElement.textContent = '';
-        return;
-      }
-      
-      const wordCount = value.split(/\s+/).length;
-      countElement.textContent = `${wordCount} word${wordCount !== 1 ? 's' : ''}`;
-      
-      if (wordCount < 2 || wordCount > 5) {
-        countElement.classList.add('warning');
-      } else {
-        countElement.classList.remove('warning');
-      }
-    }
-    
-    function normalizeAnswer(answer) {
-      return answer.toLowerCase().trim().replace(/\s+/g, ' ');
-    }
-    
-    function checkAnswers() {
-      const test = allTests[currentTest];
-      let correct = 0;
-      let total = test.transformations.length;
-      
-      test.transformations.forEach((item, idx) => {
-        const input = document.getElementById(`input-${idx}`);
-        const feedback = document.getElementById(`feedback-${idx}`);
-        const userAnswer = normalizeAnswer(input.value);
-        const correctAnswer = normalizeAnswer(input.dataset.answer);
-        const alternatives = JSON.parse(input.dataset.alternatives);
-        
-        const wordCount = input.value.trim().split(/\s+/).length;
-        if (input.value.trim() && (wordCount < 2 || wordCount > 5)) {
-          input.classList.add('incorrect');
-          feedback.classList.add('show', 'incorrect');
-          feedback.querySelector('.feedback-label').textContent = '✗ Word count';
-          feedback.querySelector('.feedback-answer').textContent = `Use 2-5 words. Answer: "${correctAnswer}"`;
-          return;
-        }
-        
-        const isCorrect = userAnswer === correctAnswer || 
-                          alternatives.some(alt => normalizeAnswer(alt) === userAnswer);
-        
-        feedback.classList.add('show');
-        
-        if (isCorrect) {
-          input.classList.add('correct');
-          feedback.classList.add('correct');
-          feedback.querySelector('.feedback-label').textContent = '✓ Correct';
-          correct++;
-        } else {
-          input.classList.add('incorrect');
-          feedback.classList.add('incorrect');
-          feedback.querySelector('.feedback-label').textContent = '✗ Incorrect';
-          feedback.querySelector('.feedback-answer').textContent = `Answer: "${correctAnswer}"`;
-        }
-        
-        input.readOnly = true;
-      });
-      
-      isChecked = true;
-      
-      const percentage = Math.round((correct / total) * 100);
-      
-      // Save score to localStorage
-      testScores[`test${currentTest}`] = {
-        correct,
-        total,
-        percentage,
-        timestamp: new Date().toISOString()
-      };
-      
-      try {
-        localStorage.setItem('phrasal_verbs_practice_progress', JSON.stringify(testScores));
-      } catch (e) {
-        console.error('Error saving progress:', e);
-      }
-      
-      const scoreHtml = `
-        <div class="score-banner">
-          <div class="score-text">${correct}/${total}</div>
-          <div class="score-label">${percentage}% Correct</div>
+          <div class="word-count" id="${wordCountId}"></div>
         </div>
-      `;
-      
-      const container = document.getElementById('contentContainer');
-      container.insertAdjacentHTML('afterbegin', scoreHtml);
-      
-      const actionBar = document.getElementById('actionBar');
-      actionBar.innerHTML = `
-        <button class="action-btn secondary" onclick="clearAnswers()">Retry</button>
-        <button class="action-btn primary" onclick="showAnswers()">Answers</button>
-      `;
-      
-      // Scroll to top to see score
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+        <div class="feedback" id="${feedbackId}">
+          <div class="feedback-label"></div>
+          <div class="feedback-answer"></div>
+        </div>
+      </div>
+    `;
+  });
+  
+  container.innerHTML = html;
+  document.getElementById('actionBar').style.display = 'flex';
+}
+
+function updateWordCount(inputId, countId) {
+  const input = document.getElementById(inputId);
+  const countElement = document.getElementById(countId);
+  const value = input.value.trim();
+  
+  // Auto-expand input based on content
+  if (value) {
+    const textWidth = value.length * 9; // approximate character width
+    input.style.width = Math.min(Math.max(textWidth + 20, 80), 200) + 'px';
+  } else {
+    input.style.width = '80px';
+  }
+  
+  if (!value) {
+    countElement.textContent = '';
+    return;
+  }
+  
+  const wordCount = value.split(/\s+/).length;
+  countElement.textContent = `${wordCount} word${wordCount !== 1 ? 's' : ''}`;
+  
+  if (wordCount < 2 || wordCount > 5) {
+    countElement.classList.add('warning');
+  } else {
+    countElement.classList.remove('warning');
+  }
+}
+
+function normalizeAnswer(answer) {
+  return answer.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+function checkAnswers() {
+  const test = allTests[currentTest];
+  let correct = 0;
+  let total = test.transformations.length;
+  
+  test.transformations.forEach((item, idx) => {
+    const input = document.getElementById(`input-${idx}`);
+    const feedback = document.getElementById(`feedback-${idx}`);
+    const userAnswer = normalizeAnswer(input.value);
+    const correctAnswer = normalizeAnswer(input.dataset.answer);
+    const alternatives = JSON.parse(input.dataset.alternatives);
+    
+    const wordCount = input.value.trim().split(/\s+/).length;
+    if (input.value.trim() && (wordCount < 2 || wordCount > 5)) {
+      input.classList.add('incorrect');
+      feedback.classList.add('show', 'incorrect');
+      feedback.querySelector('.feedback-label').textContent = '✗ Word count';
+      feedback.querySelector('.feedback-answer').textContent = `Use 2-5 words. Answer: "${correctAnswer}"`;
+      return;
     }
     
-    function showAnswers() {
-      const test = allTests[currentTest];
-      
-      test.transformations.forEach((item, idx) => {
-        const input = document.getElementById(`input-${idx}`);
-        const feedback = document.getElementById(`feedback-${idx}`);
-        
-        if (input.classList.contains('incorrect')) {
-          input.value = input.dataset.answer;
-          input.classList.remove('incorrect');
-          input.classList.add('correct');
-          feedback.classList.remove('incorrect');
-          feedback.classList.add('correct');
-          feedback.querySelector('.feedback-label').textContent = '✓ Answer';
-          feedback.querySelector('.feedback-answer').textContent = '';
-        }
-      });
+    const isCorrect = userAnswer === correctAnswer || 
+                      alternatives.some(alt => normalizeAnswer(alt) === userAnswer);
+    
+    feedback.classList.add('show');
+    
+    if (isCorrect) {
+      input.classList.add('correct');
+      feedback.classList.add('correct');
+      feedback.querySelector('.feedback-label').textContent = '✓ Correct';
+      correct++;
+    } else {
+      input.classList.add('incorrect');
+      feedback.classList.add('incorrect');
+      feedback.querySelector('.feedback-label').textContent = '✗ Incorrect';
+      feedback.querySelector('.feedback-answer').textContent = `Answer: "${correctAnswer}"`;
     }
     
-    function clearAnswers() {
-      const scoreBanner = document.querySelector('.score-banner');
-      if (scoreBanner) scoreBanner.remove();
-      
-      const test = allTests[currentTest];
-      test.transformations.forEach((item, idx) => {
-        const input = document.getElementById(`input-${idx}`);
-        const feedback = document.getElementById(`feedback-${idx}`);
-        const wordCount = document.getElementById(`wordcount-${idx}`);
-        
-        input.value = '';
-        input.classList.remove('correct', 'incorrect');
-        input.readOnly = false;
-        feedback.classList.remove('show', 'correct', 'incorrect');
-        wordCount.textContent = '';
-      });
-      
-      isChecked = false;
-      
-      const actionBar = document.getElementById('actionBar');
-      actionBar.innerHTML = `
-        <button class="action-btn secondary" onclick="clearAnswers()">Clear</button>
-        <button class="action-btn primary" onclick="checkAnswers()">Check</button>
-      `;
-      
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+    input.readOnly = true;
+  });
+  
+  isChecked = true;
+  
+  const percentage = Math.round((correct / total) * 100);
+  
+  // Save score to localStorage
+  const scoreKey = `test${currentTest}`;
+  testScores[scoreKey] = {
+    correct,
+    total,
+    percentage,
+    timestamp: new Date().toISOString()
+  };
+  saveScores();
+  
+  const scoreHtml = `
+    <div class="score-banner">
+      <div class="score-text">${correct}/${total}</div>
+      <div class="score-label">${percentage}% Correct</div>
+    </div>
+  `;
+  
+  const container = document.getElementById('contentContainer');
+  container.insertAdjacentHTML('afterbegin', scoreHtml);
+  
+  const actionBar = document.getElementById('actionBar');
+  actionBar.innerHTML = `
+    <button class="action-btn secondary" onclick="clearAnswers()">Retry</button>
+    <button class="action-btn primary" onclick="showAnswers()">Answers</button>
+  `;
+  
+  // Update test selector to show new score
+  renderTestSelector();
+  
+  // Scroll to top to see score
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showAnswers() {
+  const test = allTests[currentTest];
+  
+  test.transformations.forEach((item, idx) => {
+    const input = document.getElementById(`input-${idx}`);
+    const feedback = document.getElementById(`feedback-${idx}`);
     
-    window.addEventListener('load', loadData);
+    if (input.classList.contains('incorrect')) {
+      input.value = input.dataset.answer;
+      input.classList.remove('incorrect');
+      input.classList.add('correct');
+      feedback.classList.remove('incorrect');
+      feedback.classList.add('correct');
+      feedback.querySelector('.feedback-label').textContent = '✓ Answer';
+      feedback.querySelector('.feedback-answer').textContent = '';
+    }
+  });
+}
+
+function clearAnswers() {
+  const scoreBanner = document.querySelector('.score-banner');
+  if (scoreBanner) scoreBanner.remove();
+  
+  const test = allTests[currentTest];
+  test.transformations.forEach((item, idx) => {
+    const input = document.getElementById(`input-${idx}`);
+    const feedback = document.getElementById(`feedback-${idx}`);
+    const wordCount = document.getElementById(`wordcount-${idx}`);
+    
+    input.value = '';
+    input.style.width = '80px';
+    input.classList.remove('correct', 'incorrect');
+    input.readOnly = false;
+    feedback.classList.remove('show', 'correct', 'incorrect');
+    wordCount.textContent = '';
+  });
+  
+  isChecked = false;
+  
+  const actionBar = document.getElementById('actionBar');
+  actionBar.innerHTML = `
+    <button class="action-btn secondary" onclick="clearAnswers()">Clear</button>
+    <button class="action-btn primary" onclick="checkAnswers()">Check</button>
+  `;
+  
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+window.addEventListener('load', loadData);
   </script>
 </body>
 </html>

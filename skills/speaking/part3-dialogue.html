@@ -1467,18 +1467,18 @@ async function continueDialogue() {
     // Highlight speaker
     highlightSpeaker(turn.speaker);
     
-    // Display text with discourse highlighting
-    await displayText(turn);
+    // Display text INSTANTLY (no typing effect during speech)
+    displayTextInstantly(turn);  // ← New function
     
     // Activate mind map node
     activateMindMapNode(currentTurn);
     
-    // Speak
+    // Speak (wait for it to finish)
     await speak(turn);
     
     // Wait between turns
     if (isPlaying && !isPaused) {
-      await wait(800);
+      await wait(1200);  // Longer pause between speakers (was 800)
     }
     
     currentTurn++;
@@ -1548,13 +1548,40 @@ function highlightSpeaker(speaker) {
 }
 
 // ==================== DISPLAY TEXT WITH DISCOURSE HIGHLIGHTING ====================
-async function displayText(turn) {
+// ==================== DISPLAY TEXT INSTANTLY ====================
+function displayTextInstantly(turn) {
   const speakerLabel = document.getElementById('speakerLabel');
   const textContent = document.getElementById('textContent');
   
   speakerLabel.textContent = turn.speaker;
   
   let html = turn.text;
+  
+  // Apply discourse highlighting
+  if (turn.discourseMarkers && turn.discourseMarkers.length > 0) {
+    turn.discourseMarkers.forEach(marker => {
+      const phrase = marker.phrase;
+      const category = marker.category;
+      const escapedPhrase = escapeRegex(phrase);
+      const regex = new RegExp(`\\b(${escapedPhrase})\\b`, 'gi');
+      
+      const categoryClass = `${category}-phrase`;
+      
+      if (phraseExplorerActive && PHRASE_ALTERNATIVES[phrase]) {
+        const escapedForJs = phrase.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        const altsJson = JSON.stringify(PHRASE_ALTERNATIVES[phrase]).replace(/"/g, '&quot;');
+        html = html.replace(regex, `<span class="${categoryClass}"><span class="phrase-enhanced">$1<button class="phrase-hint-btn" onclick="event.stopPropagation(); showAlternatives('${escapedForJs}', ${altsJson})">💡</button></span></span>`);
+      } else {
+        html = html.replace(regex, `<span class="${categoryClass}">$1</span>`);
+      }
+    });
+  }
+  
+  // Set instantly (no typing effect)
+  textContent.innerHTML = html;
+  textContent.classList.toggle('discourse-active', showDiscourse);
+  textContent.classList.toggle('phrase-explorer-active', phraseExplorerActive);
+}
   
   // Apply discourse highlighting if active
   if (turn.discourseMarkers && turn.discourseMarkers.length > 0) {
@@ -1590,7 +1617,7 @@ async function displayText(turn) {
   for (let i = 0; i < fullText.length; i++) {
     if (!isPlaying || isPaused) break;
     textContent.textContent = fullText.substring(0, i + 1);
-    await wait(15);
+    await wait(30);
   }
   
   // Set final HTML with all markup

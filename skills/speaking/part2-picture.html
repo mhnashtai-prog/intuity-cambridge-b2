@@ -77,6 +77,52 @@
       font-weight: 600;
     }
 
+    /* STYLE SELECTOR */
+    .style-selector {
+      display: flex;
+      justify-content: center;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .style-btn {
+      padding: 0.75rem 1.5rem;
+      background: rgba(28, 28, 30, 0.6);
+      backdrop-filter: blur(40px);
+      border: 1px solid rgba(84, 84, 88, 0.3);
+      border-radius: 999px;
+      color: #8e8e93;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-height: 44px;
+    }
+
+    .style-btn:hover {
+      background: rgba(28, 28, 30, 0.8);
+      border-color: rgba(201, 169, 97, 0.3);
+      color: #C9A961;
+    }
+
+    .style-btn.active {
+      background: rgba(28, 28, 30, 0.9);
+      border-color: rgba(201, 169, 97, 0.5);
+      color: #C9A961;
+      box-shadow: 0 0 0 1px rgba(201, 169, 97, 0.2) inset;
+    }
+
+    .style-btn.active:hover {
+      background: rgba(28, 28, 30, 0.95);
+      border-color: rgba(201, 169, 97, 0.6);
+    }
+
     /* COMPARISON QUESTION */
     .comparison-question {
       background: rgba(28, 28, 30, 0.6);
@@ -853,6 +899,15 @@
       .controls { flex-direction: column; gap: 0.75rem; }
       .control-btn { width: 100%; justify-content: center; }
       .picture-grid { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+      
+      /* Style selector mobile */
+      .style-selector {
+        gap: 0.5rem;
+      }
+      .style-btn {
+        padding: 0.625rem 1rem;
+        font-size: 0.75rem;
+      }
     }
   </style>
 </head>
@@ -865,6 +920,19 @@
       <p class="subtitle">
         Speaking Part 2 · <span class="subtitle-mode">Photo Comparison</span>
       </p>
+    </div>
+
+    <!-- Style Selector -->
+    <div class="style-selector">
+      <button class="style-btn active" data-style="default" id="styleDefault">
+        📝 DEFAULT
+      </button>
+      <button class="style-btn" data-style="alternative1" id="styleAlt1">
+        🎓 ALTERNATIVE 1
+      </button>
+      <button class="style-btn" data-style="alternative2" id="styleAlt2">
+        🔬 ALTERNATIVE 2
+      </button>
     </div>
 
     <div class="comparison-question" id="comparisonQuestion">
@@ -1023,11 +1091,12 @@ let timerInterval = null;
 let timeRemaining = 60;
 let showXRay = false;
 let phraseExplorerActive = false;
+let currentStyle = 'default'; // NEW: Track current style
 
 // LOAD DATA
 async function loadData() {
   try {
-    const response = await fetch('data/comparison-pairs.json');
+    const response = await fetch('data/comparison-pairs-complete.json');
     COMPARISON_PAIRS = await response.json();
     renderPictureGrid();
   } catch (error) {
@@ -1084,6 +1153,50 @@ function selectPicture(index) {
   updateTimer();
 }
 
+// SWITCH STYLE
+function switchStyle(style) {
+  // Stop any playing audio
+  if (isPlaying) {
+    speechSynthesis.cancel();
+    stopTimer();
+  }
+  
+  currentStyle = style;
+  currentSegment = 0;
+  isPlaying = false;
+  isPaused = false;
+  
+  // Update button states
+  document.querySelectorAll('.style-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.style === style);
+  });
+  
+  // Reset UI
+  document.getElementById('playBtn').disabled = false;
+  document.getElementById('pauseBtn').disabled = true;
+  document.getElementById('yourTurnBtn').style.display = 'none';
+  document.getElementById('yourTurnSection').classList.remove('active');
+  document.getElementById('karenAvatar').classList.remove('speaking');
+  
+  // Update speech text
+  if (currentData) {
+    document.getElementById('karenSpeech').textContent = `Press Play to hear Karen in ${getStyleName(style)} style...`;
+  }
+  
+  resetStructureSteps();
+  timeRemaining = 60;
+  updateTimer();
+}
+
+function getStyleName(style) {
+  const names = {
+    'default': 'DEFAULT',
+    'alternative1': 'ALTERNATIVE 1',
+    'alternative2': 'ALTERNATIVE 2'
+  };
+  return names[style] || 'DEFAULT';
+}
+
 // X-RAY TOGGLE
 document.getElementById('xrayBtn').addEventListener('click', function() {
   showXRay = !showXRay;
@@ -1103,8 +1216,10 @@ document.getElementById('phraseBtn').addEventListener('click', function() {
   
   // Re-render current segment to show/hide phrase buttons
   if (currentData && currentSegment > 0) {
-    const segment = currentData.model_comparison[currentSegment - 1];
-    renderSegment(segment);
+    const segments = currentData.styles[currentStyle];
+    if (segments && segments[currentSegment - 1]) {
+      renderSegment(segments[currentSegment - 1]);
+    }
   }
 });
 
@@ -1170,7 +1285,15 @@ async function startDescription() {
 
 // DESCRIBE CONTENT
 async function describeContent() {
-  const segments = currentData.model_comparison;
+  // Get segments from current style
+  const segments = currentData.styles[currentStyle];
+  
+  if (!segments) {
+    console.error(`Style "${currentStyle}" not found in data`);
+    document.getElementById('karenSpeech').textContent = 'Error: Style data not available';
+    stopDescription();
+    return;
+  }
   
   while (currentSegment < segments.length && isPlaying && !isPaused) {
     const segment = segments[currentSegment];
@@ -1411,6 +1534,11 @@ document.getElementById('startRecordingBtn').addEventListener('click', startReco
 document.getElementById('alternativesModal').addEventListener('click', function(e) {
   if (e.target.id === 'alternativesModal') closeAlternativesModal();
 });
+
+// STYLE SELECTOR BUTTONS
+document.getElementById('styleDefault').addEventListener('click', () => switchStyle('default'));
+document.getElementById('styleAlt1').addEventListener('click', () => switchStyle('alternative1'));
+document.getElementById('styleAlt2').addEventListener('click', () => switchStyle('alternative2'));
 
 // Load voices
 window.speechSynthesis.onvoiceschanged = () => {

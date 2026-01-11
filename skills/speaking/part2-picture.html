@@ -908,7 +908,106 @@
         padding: 0.625rem 1rem;
         font-size: 0.75rem;
       }
-    }
+    
+    /* Mode Toggle */
+.mode-and-action-buttons {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.mode-toggle {
+  display: flex;
+  gap: 0.5rem;
+  padding-right: 1rem;
+  border-right: 1px solid rgba(84, 84, 88, 0.3);
+}
+
+.mode-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.3s;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #8e8e93;
+}
+
+.mode-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(201, 169, 97, 0.3);
+  color: #C9A961;
+  transform: translateY(-1px);
+}
+
+.mode-btn.active {
+  background: rgba(201, 169, 97, 0.2);
+  border-color: rgba(201, 169, 97, 0.5);
+  color: #C9A961;
+  box-shadow: 0 0 12px rgba(201, 169, 97, 0.3);
+}
+
+/* READ MODE */
+.karen-read-mode {
+  display: none;
+}
+
+.karen-read-mode.active {
+  display: block;
+}
+
+.read-section {
+  margin-bottom: 2rem;
+}
+
+.read-section:last-child {
+  margin-bottom: 0;
+}
+
+.read-section-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #C9A961;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.read-section-text {
+  font-size: 1.125rem;
+  color: #e5e5e7;
+  line-height: 1.6;
+  font-style: italic;
+}
+
+.read-section-text.xray-active .comparison-phrase,
+.read-section-text.xray-active .contrast-phrase,
+.read-section-text.xray-active .speculation-phrase {
+  color: #7dd3fc !important;
+  font-weight: 600 !important;
+  border-bottom: 2px solid rgba(125, 211, 252, 0.4) !important;
+  padding-bottom: 2px !important;
+}
+
+.read-section-text.phrase-explorer-active .phrase-hint-btn {
+  display: inline-flex;
+}
+      
   </style>
 </head>
 <body>
@@ -964,23 +1063,39 @@
       <!-- Karen Section -->
       <div class="karen-section">
         
-        <!-- Action Buttons -->
-        <div class="action-buttons">
-          <button class="action-btn xray-btn" id="xrayBtn">
-            <span>🔬</span>
-            <span>X-Ray</span>
-          </button>
-          <button class="action-btn phrase-btn" id="phraseBtn">
-            <span>💡</span>
-            <span>Phrases</span>
-          </button>
-        </div>
-
+        <!-- Mode + Action Buttons -->
+<div class="mode-and-action-buttons">
+  <!-- Mode Toggle -->
+  <div class="mode-toggle">
+    <button class="mode-btn active" id="listenBtn">
+      <span>🔊</span>
+      <span>Listen</span>
+    </button>
+    <button class="mode-btn" id="readBtn">
+      <span>📖</span>
+      <span>Read</span>
+    </button>
+  </div>
+  
+  <!-- Action Buttons -->
+  <div class="action-buttons">
+    <button class="action-btn xray-btn" id="xrayBtn">
+      <span>🔬</span>
+      <span>X-Ray</span>
+    </button>
+    <button class="action-btn phrase-btn" id="phraseBtn">
+      <span>💡</span>
+      <span>Phrases</span>
+    </button>
+  </div>
+</div>
+        
         <div class="karen-status">
           <div class="karen-avatar" id="karenAvatar">👩</div>
           <div class="karen-info">
             <div class="karen-label">Karen's Model Comparison</div>
             <div class="karen-speech" id="karenSpeech">Select photos to begin...</div>
+            
           </div>
         </div>
       </div>
@@ -1081,6 +1196,7 @@
 
   <script>
 // STATE
+let currentMode = 'listen';
 let COMPARISON_PAIRS = [];
 let currentData = null;
 let currentSegment = 0;
@@ -1545,6 +1661,76 @@ window.speechSynthesis.onvoiceschanged = () => {
   console.log('Voices loaded');
 };
 
+    // MODE TOGGLE
+function switchMode(mode) {
+  currentMode = mode;
+  document.getElementById('listenBtn').classList.toggle('active', mode === 'listen');
+  document.getElementById('readBtn').classList.toggle('active', mode === 'read');
+  
+  if (isPlaying) {
+    speechSynthesis.cancel();
+    stopTimer();
+    isPlaying = false;
+    document.getElementById('karenAvatar').classList.remove('speaking');
+  }
+  
+  const karenSpeech = document.getElementById('karenSpeech');
+  const karenReadMode = document.getElementById('karenReadMode');
+  
+  if (mode === 'listen') {
+    karenSpeech.style.display = 'block';
+    karenReadMode.classList.remove('active');
+    document.getElementById('playBtn').disabled = false;
+  } else {
+    karenSpeech.style.display = 'none';
+    karenReadMode.classList.add('active');
+    document.getElementById('playBtn').disabled = true;
+    if (currentData) populateReadMode();
+  }
+}
+
+function populateReadMode() {
+  const segments = currentData.styles[currentStyle];
+  if (!segments) return;
+  
+  document.getElementById('readSimilarities').innerHTML = renderSegment(segments[0], true);
+  document.getElementById('readDifferences').innerHTML = renderSegment(segments[1], true);
+  document.getElementById('readAnswer').innerHTML = renderSegment(segments[2], true);
+  
+  ['readSimilarities', 'readDifferences', 'readAnswer'].forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.toggle('xray-active', showXRay);
+    el.classList.toggle('phrase-explorer-active', phraseExplorerActive);
+  });
+}
+
+function renderSegment(segment, returnHtml) {
+  let html = segment.text;
+  
+  if (segment.vocabulary) {
+    segment.vocabulary.forEach(vocab => {
+      const phrase = vocab.phrase;
+      const type = getDiscourseType(vocab.usage);
+      const escapedPhrase = escapeRegex(phrase);
+      const regex = new RegExp(`\\b(${escapedPhrase})\\b`, 'gi');
+      
+      if (phraseExplorerActive && vocab.alternatives) {
+        const escapedForJs = phrase.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        html = html.replace(regex, `<span class="${type}"><span class="phrase-enhanced">$1<button class="phrase-hint-btn" onclick="event.stopPropagation(); showAlternatives('${escapedForJs}', ${JSON.stringify(vocab.alternatives).replace(/"/g, '&quot;')})">💡</button></span></span>`);
+      } else {
+        html = html.replace(regex, `<span class="${type}">$1</span>`);
+      }
+    });
+  }
+  
+  if (returnHtml) return html;
+  document.getElementById('karenSpeech').innerHTML = html;
+}
+
+// Add event listeners
+document.getElementById('listenBtn').addEventListener('click', () => switchMode('listen'));
+document.getElementById('readBtn').addEventListener('click', () => switchMode('read'));
+    
 // INITIALIZE
 window.addEventListener('load', loadData);
   </script>

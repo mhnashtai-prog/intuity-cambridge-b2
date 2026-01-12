@@ -716,7 +716,7 @@
     let slides = [];
 
     // CONFIGURATION - Set JSON file path here
-    const JSON_FILE = './phrasal-verbs-rules.json'; // Change this to your JSON file
+    const JSON_FILE = './phrasal-verbs-complete-set.json'; // Your complete phrasal verbs JSON
 
     // INITIALIZE
     async function init() {
@@ -799,15 +799,34 @@
       const particles = grammarData.verbs[verb];
       slides = [];
       
-      particles.forEach(particle => {
+      // Find the set for this verb in the sets array
+      const verbSet = grammarData.sets ? grammarData.sets.find(set => 
+        set.focusVerbs && set.focusVerbs.includes(verb)
+      ) : null;
+      
+      particles.forEach((particle, index) => {
         const key = `${verb}_${particle.replace(/ /g, '_')}`;
         const pvData = grammarData.phrasalVerbs[key];
         
         if (pvData) {
+          // Try to find the sentence from the sets
+          let exampleSentence = null;
+          if (verbSet && verbSet.sentences) {
+            const sentence = verbSet.sentences[index];
+            if (sentence) {
+              exampleSentence = sentence.text.replace('_____', `<span class="highlight">${sentence.answer}</span>`);
+            }
+          }
+          
+          // Fallback to generated example if no sentence found
+          if (!exampleSentence) {
+            exampleSentence = generateExample(verb, particle, pvData.meaning);
+          }
+          
           slides.push({
             expression: `${verb} ${particle}`,
             meaning: pvData.meaning,
-            example: generateExample(verb, particle, pvData.meaning)
+            example: exampleSentence
           });
         }
       });
@@ -816,9 +835,10 @@
       buildListMode();
     }
 
-    // GENERATE EXAMPLE (placeholder - you can enhance this)
+    // GENERATE EXAMPLE (fallback)
     function generateExample(verb, particle, meaning) {
-      return `Example sentence for "${verb} ${particle}".`;
+      const phrasalVerb = `${verb} ${particle}`;
+      return `<span class="highlight">${phrasalVerb.charAt(0).toUpperCase() + phrasalVerb.slice(1)}</span> is used in context here.`;
     }
 
     // TOGGLE VIEW MODE
@@ -929,18 +949,22 @@
         document.getElementById('meaning').textContent = data.meaning || '';
         document.getElementById('meaning').style.display = data.meaning ? 'block' : 'none';
         
+        // Handle different display modes
         if (data.normal && data.inverted) {
+          // Two-part transformation display (for Inversion, etc.)
           document.getElementById('normalContainer').style.display = 'block';
           document.getElementById('arrow').style.display = 'block';
           document.getElementById('invertedContainer').style.display = 'block';
+          document.getElementById('invertedContainer').querySelector('.sentence-label').textContent = 'INVERTED';
           document.getElementById('normalSentence').innerHTML = data.normal;
           document.getElementById('invertedSentence').innerHTML = data.inverted;
         } else if (data.example) {
+          // Single example display (for Phrasal Verbs, etc.)
           document.getElementById('normalContainer').style.display = 'none';
           document.getElementById('arrow').style.display = 'none';
           document.getElementById('invertedContainer').style.display = 'block';
-          document.getElementById('invertedContainer').querySelector('.sentence-label').textContent = 'EXAMPLE';
-          document.getElementById('invertedSentence').textContent = data.example;
+          document.getElementById('invertedContainer').querySelector('.sentence-label').textContent = 'EXAMPLE IN CONTEXT';
+          document.getElementById('invertedSentence').innerHTML = data.example;
         }
         
         document.getElementById('current').textContent = currentIndex + 1;

@@ -696,7 +696,7 @@
 
   </div>
 
-  <script>
+ <script>
     // STATE
     let grammarData = null;
     let dataType = null;
@@ -712,6 +712,10 @@
 
     // CONFIGURATION - Set JSON file path here
     const JSON_FILE = './phrasal-verbs-complete-set.json';
+
+    // Define which verbs are "common" (shown individually) vs grouped into lists
+    const COMMON_VERBS = ['take', 'go', 'look', 'get', 'keep', 'put', 'turn', 'run'];
+    const VERBS_PER_LIST = 6; // How many verbs per list group
 
     // INITIALIZE
     async function init() {
@@ -762,38 +766,81 @@
       }
     }
 
-    // SETUP TWO-TIER (Phrasal Verbs style)
+    // SETUP TWO-TIER (Phrasal Verbs style) - WITH GROUPING
     function setupTwoTier() {
       const categorySelector = document.getElementById('categorySelector');
       categorySelector.classList.add('show');
       
-      // Create category buttons - lowercase, minimal style
-      Object.keys(grammarData.verbs).forEach((verb, index) => {
+      const allVerbs = Object.keys(grammarData.verbs);
+      const commonVerbs = allVerbs.filter(v => COMMON_VERBS.includes(v));
+      const lessCommonVerbs = allVerbs.filter(v => !COMMON_VERBS.includes(v));
+      
+      // Add common verbs as individual buttons
+      commonVerbs.forEach((verb, index) => {
         const btn = document.createElement('button');
         btn.className = 'category-btn';
         if (index === 0) {
           btn.classList.add('active');
           currentCategory = verb;
         }
-        btn.textContent = verb; // lowercase
-        btn.onclick = () => selectCategory(verb);
+        btn.textContent = verb;
+        btn.dataset.type = 'single';
+        btn.dataset.verbs = verb;
+        btn.onclick = () => selectCategory(verb, 'single');
         categorySelector.appendChild(btn);
       });
       
-      loadCategory(currentCategory);
+      // Group less common verbs into lists
+      const numLists = Math.ceil(lessCommonVerbs.length / VERBS_PER_LIST);
+      for (let i = 0; i < numLists; i++) {
+        const listVerbs = lessCommonVerbs.slice(i * VERBS_PER_LIST, (i + 1) * VERBS_PER_LIST);
+        const btn = document.createElement('button');
+        btn.className = 'category-btn';
+        btn.textContent = `list ${i + 1}`;
+        btn.dataset.type = 'list';
+        btn.dataset.verbs = listVerbs.join(',');
+        btn.onclick = () => selectCategory(listVerbs, 'list');
+        categorySelector.appendChild(btn);
+      }
+      
+      loadCategory(currentCategory, 'single');
     }
 
     // SELECT CATEGORY
-    function selectCategory(verb) {
-      currentCategory = verb;
-      currentIndex = 0;
-      
-      // Update button states
-      document.querySelectorAll('.category-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.textContent === verb); // compare lowercase
-      });
-      
-      loadCategory(verb);
+    function selectCategory(verbOrVerbs, type) {
+      if (type === 'single') {
+        currentCategory = verbOrVerbs;
+        currentIndex = 0;
+        
+        // Update button states
+        document.querySelectorAll('.category-btn').forEach(btn => {
+          if (btn.dataset.type === 'single') {
+            btn.classList.toggle('active', btn.textContent === verbOrVerbs);
+          } else {
+            btn.classList.remove('active');
+          }
+        });
+        
+        loadCategory(verbOrVerbs, 'single');
+      } else {
+        // List mode - load multiple verbs
+        currentCategory = verbOrVerbs;
+        currentIndex = 0;
+        
+        // Update button states
+        document.querySelectorAll('.category-btn').forEach(btn => {
+          if (btn.dataset.type === 'list') {
+            const btnVerbs = btn.dataset.verbs.split(',');
+            const isActive = verbOrVerbs.every(v => btnVerbs.includes(v)) && 
+                           btnVerbs.every(v => verbOrVerbs.includes(v));
+            btn.classList.toggle('active', isActive);
+          } else {
+            btn.classList.remove('active');
+          }
+        });
+        
+        loadCategory(verbOrVerbs, 'list');
+      }
       
       if (isPlaying) {
         pause();
@@ -801,50 +848,55 @@
     }
 
     // LOAD CATEGORY
-    function loadCategory(verb) {
-      const particles = grammarData.verbs[verb];
+    function loadCategory(verbOrVerbs, type) {
       slides = [];
       
-      particles.forEach((particle) => {
-        const key = `${verb}_${particle.replace(/ /g, '_')}`;
-        const pvData = grammarData.phrasalVerbs[key];
+      const verbsToLoad = type === 'single' ? [verbOrVerbs] : verbOrVerbs;
+      
+      verbsToLoad.forEach(verb => {
+        const particles = grammarData.verbs[verb];
         
-        if (pvData) {
-          // Find the correct sentence from ANY set that matches this verb + particle
-          let exampleSentence = null;
+        particles.forEach((particle) => {
+          const key = `${verb}_${particle.replace(/ /g, '_')}`;
+          const pvData = grammarData.phrasalVerbs[key];
           
-          if (grammarData.sets) {
-            // Search through all sets for a matching sentence
-            for (const set of grammarData.sets) {
-              if (set.sentences) {
-                const matchingSentence = set.sentences.find(s => {
-                  const answer = s.answer.toLowerCase();
-                  const searchKey = `${verb} ${particle}`.toLowerCase();
-                  return answer === searchKey;
-                });
-                
-                if (matchingSentence) {
-                  exampleSentence = matchingSentence.text.replace('_____', `<span class="highlight">${matchingSentence.answer}</span>`);
-                  break;
+          if (pvData) {
+            // Find the correct sentence from ANY set that matches this verb + particle
+            let exampleSentence = null;
+            
+            if (grammarData.sets) {
+              // Search through all sets for a matching sentence
+              for (const set of grammarData.sets) {
+                if (set.sentences) {
+                  const matchingSentence = set.sentences.find(s => {
+                    const answer = s.answer.toLowerCase();
+                    const searchKey = `${verb} ${particle}`.toLowerCase();
+                    return answer === searchKey;
+                  });
+                  
+                  if (matchingSentence) {
+                    exampleSentence = matchingSentence.text.replace('_____', `<span class="highlight">${matchingSentence.answer}</span>`);
+                    break;
+                  }
                 }
               }
             }
+            
+            // Fallback to generic example if no sentence found
+            if (!exampleSentence) {
+              exampleSentence = `Example: I will <span class="highlight">${verb} ${particle}</span> in this context.`;
+            }
+            
+            slides.push({
+              expression: `${verb} ${particle}`,
+              meaning: pvData.meaning,
+              example: exampleSentence
+            });
           }
-          
-          // Fallback to generic example if no sentence found
-          if (!exampleSentence) {
-            exampleSentence = `Example: I will <span class="highlight">${verb} ${particle}</span> in this context.`;
-          }
-          
-          slides.push({
-            expression: `${verb} ${particle}`,
-            meaning: pvData.meaning,
-            example: exampleSentence
-          });
-        }
+        });
       });
       
-      console.log(`Loaded ${slides.length} slides for verb: ${verb}`);
+      console.log(`Loaded ${slides.length} slides for: ${verbsToLoad.join(', ')}`);
       renderWatchSlide();
       buildListMode();
     }
@@ -1160,4 +1212,4 @@
   </script>
 </body>
 </html>
-          document.getElementByI
+         

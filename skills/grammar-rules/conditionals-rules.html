@@ -577,7 +577,7 @@
       .modal-card { padding: 2rem 1.5rem; min-height: 450px; }
       .sound-icon { top: 1rem; right: 1rem; width: 44px; height: 44px; font-size: 1.125rem; }
       .expression { font-size: 1rem; padding: 0.5rem 1rem; margin-bottom: 1.5rem; }
-      .example-sentence { font-size: 1.375rem; }
+      .example-item-watch { font-size: 1.125rem; }
       .control-btn { width: 48px; height: 48px; font-size: 1.125rem; }
       .control-btn.play { width: 64px; height: 64px; }
       .progress { left: 1rem; bottom: 1rem; font-size: 0.875rem; }
@@ -596,7 +596,7 @@
       .modal-card { padding: 1.5rem 1rem; min-height: 380px; }
       .sound-icon { top: 0.75rem; right: 0.75rem; width: 40px; height: 40px; font-size: 1rem; }
       .expression { font-size: 0.875rem; padding: 0.375rem 0.75rem; }
-      .example-sentence { font-size: 1.125rem; }
+      .example-item-watch { font-size: 1rem; }
       .control-btn { width: 44px; height: 44px; font-size: 1rem; }
       .control-btn.play { width: 56px; height: 56px; }
       .progress { left: 0.75rem; bottom: 0.75rem; font-size: 0.75rem; }
@@ -975,41 +975,58 @@
       }, 500);
     }
 
-    // SPEAK
+    // SPEAK (narrates title + all examples with pauses)
     function speak(data) {
       if (!('speechSynthesis' in window) || !soundEnabled) {
         speechFinished = true;
         return;
       }
       
+      console.log('Starting speech for:', data.title);
+      
       speechSynthesis.cancel();
       speechFinished = false;
       
-      const sentenceText = data.sentence.replace(/<[^>]*>/g, '');
-      const textToSpeak = `${data.title}. ${sentenceText}`;
+      // Build complete text
+      const allExamples = data.examples.map(ex => ex.replace(/<[^>]*>/g, '')).join('. ');
+      const textToSpeak = `${data.title}. ${allExamples}`;
+      
+      console.log('Speaking:', textToSpeak.substring(0, 100) + '...');
       
       setTimeout(() => {
-        currentUtterance = new SpeechSynthesisUtterance(textToSpeak);
-        currentUtterance.lang = 'en-GB';
-        currentUtterance.rate = 0.75;
-        currentUtterance.pitch = 1.0;
-        currentUtterance.volume = 1.0;
+        const utterance = new SpeechSynthesisUtterance(textToSpeak);
+        utterance.lang = 'en-GB';
+        utterance.rate = 0.85;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
 
         const voices = speechSynthesis.getVoices();
-        const ukVoice = voices.find(v => v.lang === 'en-GB');
-        if (ukVoice) currentUtterance.voice = ukVoice;
+        console.log('Available voices:', voices.length);
         
-        currentUtterance.onend = () => {
+        const ukVoice = voices.find(v => v.lang === 'en-GB' || v.lang.startsWith('en-GB'));
+        if (ukVoice) {
+          utterance.voice = ukVoice;
+          console.log('Using UK voice:', ukVoice.name);
+        } else {
+          console.log('No UK voice found, using default');
+        }
+        
+        utterance.onstart = () => {
+          console.log('Speech started');
+        };
+        
+        utterance.onend = () => {
+          console.log('Speech finished');
           speechFinished = true;
         };
         
-        currentUtterance.onerror = (error) => {
-          speechFinished = true;
+        utterance.onerror = (error) => {
           console.error('Speech error:', error);
+          speechFinished = true;
         };
         
-        speechSynthesis.speak(currentUtterance);
-      }, 1000);
+        speechSynthesis.speak(utterance);
+      }, 800);
     }
 
     // CONTROLS
@@ -1108,11 +1125,31 @@
     });
 
     window.speechSynthesis.onvoiceschanged = () => {
-      console.log('Voices loaded');
+      const voices = speechSynthesis.getVoices();
+      console.log('Voices loaded:', voices.length);
+      voices.forEach(v => {
+        if (v.lang.includes('en-GB')) {
+          console.log('UK voice found:', v.name);
+        }
+      });
     };
+
+    // Initialize speech on first user interaction (iOS fix)
+    let speechInitialized = false;
+    function initializeSpeech() {
+      if (!speechInitialized && 'speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance('');
+        speechSynthesis.speak(utterance);
+        speechInitialized = true;
+        console.log('Speech initialized');
+      }
+    }
 
     // START
     loadData();
+    
+    // Initialize speech on first click anywhere
+    document.addEventListener('click', initializeSpeech, { once: true });
   </script>
 </body>
 </html>

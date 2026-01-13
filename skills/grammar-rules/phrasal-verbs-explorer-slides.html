@@ -1050,6 +1050,7 @@
     }
 
     // SPEAK
+ // SPEAK
     function speak(data) {
       if (!('speechSynthesis' in window) || !soundEnabled) {
         speechFinished = true;
@@ -1087,22 +1088,63 @@
         currentUtterance.pitch = 1.0;
         currentUtterance.volume = 1.0;
 
-        const voices = speechSynthesis.getVoices();
-        const ukVoice = voices.find(v => v.lang === 'en-GB');
-        if (ukVoice) currentUtterance.voice = ukVoice;
+        // iOS-specific voice selection - wait for voices to load
+        const setVoice = () => {
+          const voices = speechSynthesis.getVoices();
+          console.log('Available voices:', voices.map(v => v.name));
+          
+          // Try to find Karen voice (iOS UK voice)
+          let selectedVoice = voices.find(v => v.name === 'Karen');
+          
+          // Fallback to any en-GB voice
+          if (!selectedVoice) {
+            selectedVoice = voices.find(v => v.lang === 'en-GB');
+          }
+          
+          // Fallback to any English voice
+          if (!selectedVoice) {
+            selectedVoice = voices.find(v => v.lang.startsWith('en-'));
+          }
+          
+          if (selectedVoice) {
+            currentUtterance.voice = selectedVoice;
+            console.log('Using voice:', selectedVoice.name);
+          }
+        };
+        
+        // Set voice immediately if available
+        if (speechSynthesis.getVoices().length > 0) {
+          setVoice();
+        } else {
+          // Wait for voices to load on iOS
+          speechSynthesis.addEventListener('voiceschanged', setVoice, { once: true });
+        }
         
         currentUtterance.onend = () => {
           speechFinished = true;
           console.log('Speech finished');
         };
         
-        currentUtterance.onerror = () => {
+        currentUtterance.onerror = (error) => {
           speechFinished = true;
-          console.error('Speech error');
+          console.error('Speech error:', error);
         };
         
+        // iOS requires interaction before speaking - trigger it
         speechSynthesis.speak(currentUtterance);
       }, 1000);
+    }
+
+    // Load voices on iOS - must be called early
+    if ('speechSynthesis' in window) {
+      // iOS needs this to trigger voice loading
+      speechSynthesis.getVoices();
+      
+      window.speechSynthesis.addEventListener('voiceschanged', () => {
+        const voices = speechSynthesis.getVoices();
+        console.log('Voices loaded:', voices.length);
+        console.log('Karen available:', voices.some(v => v.name === 'Karen'));
+      });
     }
 
     // REPEAT

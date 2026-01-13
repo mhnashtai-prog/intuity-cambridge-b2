@@ -128,10 +128,11 @@
       border-radius: 50%;
       transition: all 0.3s ease;
       box-shadow: 0 2px 8px rgba(201, 169, 97, 0.4);
+      transform: translateX(0);
     }
 
     .toggle-switch.active .toggle-slider {
-      transform: translateX(26px);
+      transform: translateX(26px) !important;
       background: #C9A961;
       box-shadow: 0 2px 8px rgba(201, 169, 97, 0.4);
     }
@@ -810,28 +811,35 @@
       const particles = grammarData.verbs[verb];
       slides = [];
       
-      // Find the set for this verb in the sets array
-      const verbSet = grammarData.sets ? grammarData.sets.find(set => 
-        set.focusVerbs && set.focusVerbs.includes(verb)
-      ) : null;
-      
-      particles.forEach((particle, index) => {
+      particles.forEach((particle) => {
         const key = `${verb}_${particle.replace(/ /g, '_')}`;
         const pvData = grammarData.phrasalVerbs[key];
         
         if (pvData) {
-          // Try to find the sentence from the sets
+          // Find the correct sentence from ANY set that matches this verb + particle
           let exampleSentence = null;
-          if (verbSet && verbSet.sentences) {
-            const sentence = verbSet.sentences[index];
-            if (sentence) {
-              exampleSentence = sentence.text.replace('_____', `<span class="highlight">${sentence.answer}</span>`);
+          
+          if (grammarData.sets) {
+            // Search through all sets for a matching sentence
+            for (const set of grammarData.sets) {
+              if (set.sentences) {
+                const matchingSentence = set.sentences.find(s => {
+                  const answer = s.answer.toLowerCase();
+                  const searchKey = `${verb} ${particle}`.toLowerCase();
+                  return answer === searchKey;
+                });
+                
+                if (matchingSentence) {
+                  exampleSentence = matchingSentence.text.replace('_____', `<span class="highlight">${matchingSentence.answer}</span>`);
+                  break;
+                }
+              }
             }
           }
           
-          // Fallback to generated example if no sentence found
+          // Fallback to generic example if no sentence found
           if (!exampleSentence) {
-            exampleSentence = generateExample(verb, particle, pvData.meaning);
+            exampleSentence = `Example: I will <span class="highlight">${verb} ${particle}</span> in this context.`;
           }
           
           slides.push({
@@ -842,14 +850,9 @@
         }
       });
       
+      console.log(`Loaded ${slides.length} slides for verb: ${verb}`);
       renderWatchSlide();
       buildListMode();
-    }
-
-    // GENERATE EXAMPLE (fallback)
-    function generateExample(verb, particle, meaning) {
-      const phrasalVerb = `${verb} ${particle}`;
-      return `<span class="highlight">${phrasalVerb.charAt(0).toUpperCase() + phrasalVerb.slice(1)}</span> is used in context here.`;
     }
 
     // TOGGLE VIEW MODE (Global function for onclick)

@@ -715,29 +715,26 @@ const JSON_FILE = '../../data/grammar-rules/phrasal-verbs-complete-set.json';
 
 // Define which verbs are "common" (shown individually) vs grouped into lists
 const COMMON_VERBS = ['take', 'go', 'look', 'get', 'keep', 'put', 'turn', 'run'];
-const VERBS_PER_LIST = 6; // How many verbs per list group
+const VERBS_PER_LIST = 6;
 
-// iOS voice loading - must happen early
+// iOS voice loading
 let voicesLoaded = false;
 if ('speechSynthesis' in window) {
-  // Force load voices on iOS - voices may not be ready immediately
   const loadVoices = () => {
     const voices = speechSynthesis.getVoices();
     if (voices.length > 0) {
       voicesLoaded = true;
-      console.log('Voices loaded:', voices.length);
+      console.log('Available voices:', voices.map(v => `${v.name} (${v.lang})`).join(', '));
     }
   };
   
-  // Try to load immediately
   loadVoices();
   
-  // iOS needs this event
   if (speechSynthesis.onvoiceschanged !== undefined) {
     speechSynthesis.onvoiceschanged = loadVoices;
   }
   
-  // User interaction trigger for iOS - required for speech to work
+  // iOS activation
   document.addEventListener('click', function enableVoices() {
     const utterance = new SpeechSynthesisUtterance('');
     utterance.volume = 0;
@@ -761,7 +758,6 @@ async function init() {
     grammarData = JSON.parse(text);
     console.log('JSON parsed successfully:', grammarData.title);
     
-    // Detect data type
     if (grammarData.verbs && grammarData.phrasalVerbs) {
       dataType = 'two-tier';
       setupTwoTier();
@@ -770,31 +766,28 @@ async function init() {
       setupOneTier();
     }
     
-    // Update subtitle
     document.getElementById('subtitle').textContent = `${grammarData.title} · ${grammarData.level}`;
-    
     setupToggle();
     
   } catch (error) {
     console.error('Error loading JSON:', error);
     document.getElementById('subtitle').textContent = 'Error: ' + error.message;
-    alert('Failed to load data. Please check:\n1. JSON file is in the same folder\n2. JSON file is named correctly: ' + JSON_FILE + '\n3. JSON syntax is valid\n\nError: ' + error.message);
+    alert('Failed to load data. Please check:\n1. JSON file path\n2. JSON syntax\n\nError: ' + error.message);
   }
 }
 
-// SETUP ONE-TIER (Inversion style)
+// SETUP ONE-TIER
 function setupOneTier() {
   slides = grammarData.items;
   renderWatchSlide();
   buildListMode();
   
-  // Hide arrow for one-tier (no transformation)
   if (grammarData.hideArrow) {
     document.getElementById('arrow').style.display = 'none';
   }
 }
 
-// SETUP TWO-TIER (Phrasal Verbs style) - WITH GROUPING
+// SETUP TWO-TIER
 function setupTwoTier() {
   const categorySelector = document.getElementById('categorySelector');
   categorySelector.classList.add('show');
@@ -803,7 +796,6 @@ function setupTwoTier() {
   const commonVerbs = allVerbs.filter(v => COMMON_VERBS.includes(v));
   const lessCommonVerbs = allVerbs.filter(v => !COMMON_VERBS.includes(v));
   
-  // Add common verbs as individual buttons
   commonVerbs.forEach((verb, index) => {
     const btn = document.createElement('button');
     btn.className = 'category-btn';
@@ -818,7 +810,6 @@ function setupTwoTier() {
     categorySelector.appendChild(btn);
   });
   
-  // Group less common verbs into lists
   const numLists = Math.ceil(lessCommonVerbs.length / VERBS_PER_LIST);
   for (let i = 0; i < numLists; i++) {
     const listVerbs = lessCommonVerbs.slice(i * VERBS_PER_LIST, (i + 1) * VERBS_PER_LIST);
@@ -836,11 +827,15 @@ function setupTwoTier() {
 
 // SELECT CATEGORY
 function selectCategory(verbOrVerbs, type) {
+  // FORCE STOP playback when switching categories
+  if (isPlaying) {
+    pause();
+  }
+  
   if (type === 'single') {
     currentCategory = verbOrVerbs;
     currentIndex = 0;
     
-    // Update button states
     document.querySelectorAll('.category-btn').forEach(btn => {
       if (btn.dataset.type === 'single') {
         btn.classList.toggle('active', btn.textContent === verbOrVerbs);
@@ -851,11 +846,9 @@ function selectCategory(verbOrVerbs, type) {
     
     loadCategory(verbOrVerbs, 'single');
   } else {
-    // List mode - load multiple verbs
     currentCategory = verbOrVerbs;
     currentIndex = 0;
     
-    // Update button states
     document.querySelectorAll('.category-btn').forEach(btn => {
       if (btn.dataset.type === 'list') {
         const btnVerbs = btn.dataset.verbs.split(',');
@@ -868,10 +861,6 @@ function selectCategory(verbOrVerbs, type) {
     });
     
     loadCategory(verbOrVerbs, 'list');
-  }
-  
-  if (isPlaying) {
-    pause();
   }
 }
 
@@ -889,11 +878,9 @@ function loadCategory(verbOrVerbs, type) {
       const pvData = grammarData.phrasalVerbs[key];
       
       if (pvData) {
-        // Find the correct sentence from ANY set that matches this verb + particle
         let exampleSentence = null;
         
         if (grammarData.sets) {
-          // Search through all sets for a matching sentence
           for (const set of grammarData.sets) {
             if (set.sentences) {
               const matchingSentence = set.sentences.find(s => {
@@ -910,7 +897,6 @@ function loadCategory(verbOrVerbs, type) {
           }
         }
         
-        // Fallback to generic example if no sentence found
         if (!exampleSentence) {
           exampleSentence = `Example: I will <span class="highlight">${verb} ${particle}</span> in this context.`;
         }
@@ -929,8 +915,16 @@ function loadCategory(verbOrVerbs, type) {
   buildListMode();
 }
 
-// TOGGLE VIEW MODE
+// TOGGLE VIEW MODE - FIXED
 function toggleViewMode() {
+  // FORCE STOP speech immediately
+  speechSynthesis.cancel();
+  speechFinished = true;
+  
+  if (isPlaying) {
+    pause();
+  }
+  
   viewMode = viewMode === 'watch' ? 'list' : 'watch';
   
   const toggle = document.getElementById('viewModeToggle');
@@ -939,25 +933,21 @@ function toggleViewMode() {
   const watchMode = document.getElementById('watchMode');
   const listMode = document.getElementById('listMode');
   
-  // Update toggle appearance
   if (viewMode === 'list') {
     toggle.classList.add('active');
   } else {
     toggle.classList.remove('active');
   }
   
-  // Update labels
   watchLabel.classList.toggle('active', viewMode === 'watch');
   listLabel.classList.toggle('active', viewMode === 'list');
   
-  // Update content visibility
   if (viewMode === 'watch') {
     watchMode.style.display = 'block';
     listMode.style.display = 'none';
   } else {
     watchMode.style.display = 'none';
     listMode.style.display = 'block';
-    if (isPlaying) pause();
   }
 }
 
@@ -982,7 +972,6 @@ function toggleSound() {
     soundIcon.classList.add('muted');
     soundEmoji.textContent = '🔇';
     soundIcon.title = 'Sound OFF - Click to enable';
-    // Stop any ongoing speech
     speechSynthesis.cancel();
     speechFinished = true;
   }
@@ -1050,7 +1039,6 @@ function renderWatchSlide() {
     document.getElementById('meaning').textContent = data.meaning || '';
     document.getElementById('meaning').style.display = data.meaning ? 'block' : 'none';
     
-    // Handle different display modes
     if (data.normal && data.inverted) {
       document.getElementById('normalContainer').style.display = 'block';
       document.getElementById('arrow').style.display = 'block';
@@ -1079,18 +1067,16 @@ function renderWatchSlide() {
   }, 500);
 }
 
-// SPEAK
+// SPEAK - FIXED FOR IPHONE
 function speak(data) {
   if (!('speechSynthesis' in window) || !soundEnabled) {
     speechFinished = true;
     return;
   }
   
-  // Cancel any ongoing speech
   speechSynthesis.cancel();
   speechFinished = false;
   
-  // Strip HTML tags helper function
   function stripHTML(html) {
     const tmp = document.createElement('div');
     tmp.innerHTML = html;
@@ -1111,39 +1097,46 @@ function speak(data) {
   
   currentUtterance = new SpeechSynthesisUtterance(textToSpeak);
   currentUtterance.lang = 'en-GB';
-  currentUtterance.rate = 0.75;
+  currentUtterance.rate = 0.85; // Slightly faster for clarity
   currentUtterance.pitch = 1.0;
   currentUtterance.volume = 1.0;
 
-  // Voice selection - wait for voices to load on iOS
-  const selectVoice = () => {
-    const voices = speechSynthesis.getVoices();
+  // IMPROVED VOICE SELECTION FOR IPHONE
+  const voices = speechSynthesis.getVoices();
+  console.log('Total voices available:', voices.length);
+  
+  if (voices.length > 0) {
+    // Priority order for iPhone voices
+    let selectedVoice = null;
     
-    if (voices.length === 0) {
-      console.log('No voices available yet');
-      return;
+    // Try British female voices first
+    selectedVoice = voices.find(v => 
+      v.lang.includes('en-GB') && 
+      (v.name.includes('Female') || v.name.includes('female'))
+    );
+    
+    // Try any British voice
+    if (!selectedVoice) {
+      selectedVoice = voices.find(v => v.lang.includes('en-GB'));
     }
     
-    // Try to find Kate or Serena (iOS UK voices)
-    let selectedVoice = voices.find(v => v.name === 'Kate' || v.name === 'Serena');
-    
-    // Fallback to any en-GB voice
+    // Try any UK English voice
     if (!selectedVoice) {
       selectedVoice = voices.find(v => v.lang === 'en-GB');
     }
     
-    // Fallback to any English voice
+    // Fallback to ANY English voice
     if (!selectedVoice) {
-      selectedVoice = voices.find(v => v.lang.startsWith('en-'));
+      selectedVoice = voices.find(v => v.lang.startsWith('en'));
     }
     
     if (selectedVoice) {
       currentUtterance.voice = selectedVoice;
-      console.log('Using voice:', selectedVoice.name);
+      console.log('Selected voice:', selectedVoice.name, '|', selectedVoice.lang);
+    } else {
+      console.log('Using default voice');
     }
-  };
-  
-  selectVoice();
+  }
   
   currentUtterance.onend = () => {
     speechFinished = true;
@@ -1155,14 +1148,16 @@ function speak(data) {
     console.error('Speech error:', error);
   };
   
-  // iOS sometimes needs a small delay
   setTimeout(() => {
     speechSynthesis.speak(currentUtterance);
-  }, 100);
+  }, 50);
 }
 
 // REPEAT
 function repeatSlide() {
+  if (isPlaying) {
+    pause();
+  }
   renderWatchSlide();
 }
 
@@ -1214,8 +1209,10 @@ function advanceSlide() {
   }
 }
 
-// PAUSE
+// PAUSE - FIXED
 function pause() {
+  console.log('PAUSE called - stopping everything');
+  
   isPlaying = false;
   document.getElementById('playBtn').textContent = '▶';
   document.getElementById('pauseBtn').disabled = true;
@@ -1225,16 +1222,43 @@ function pause() {
     playInterval = null;
   }
   
-  // Stop speech and mark as finished
-  speechSynthesis.cancel();
+  // FORCE stop speech synthesis
+  if (window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+  }
   speechFinished = true;
+  
+  console.log('Pause complete - speech stopped');
 }
 
 // BUTTON EVENT LISTENERS
-document.getElementById('repeatBtn').addEventListener('click', repeatSlide);
-document.getElementById('playBtn').addEventListener('click', togglePlay);
-document.getElementById('pauseBtn').addEventListener('click', pause);
-document.getElementById('soundIcon').addEventListener('click', toggleSound);
+document.getElementById('repeatBtn').addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  console.log('Repeat clicked');
+  repeatSlide();
+});
+
+document.getElementById('playBtn').addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  console.log('Play/Stop clicked');
+  togglePlay();
+});
+
+document.getElementById('pauseBtn').addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  console.log('Pause button clicked');
+  pause();
+});
+
+document.getElementById('soundIcon').addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  console.log('Sound icon clicked');
+  toggleSound();
+});
 
 // KEYBOARD
 document.addEventListener('keydown', (e) => {
@@ -1250,17 +1274,19 @@ document.addEventListener('keydown', (e) => {
       toggleSound();
     }
     if (e.key === 'ArrowRight' && currentIndex < slides.length - 1) {
+      if (isPlaying) pause();
       currentIndex++;
       renderWatchSlide();
     }
     if (e.key === 'ArrowLeft' && currentIndex > 0) {
+      if (isPlaying) pause();
       currentIndex--;
       renderWatchSlide();
     }
   }
 });
 
-// Load voices - iOS needs this
+// Load voices
 if ('speechSynthesis' in window) {
   window.speechSynthesis.onvoiceschanged = () => {
     const voices = speechSynthesis.getVoices();

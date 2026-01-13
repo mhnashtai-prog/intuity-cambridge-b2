@@ -697,560 +697,580 @@
   </div>
 
  <script>
-    // STATE
-    let grammarData = null;
-    let dataType = null;
-    let currentCategory = null;
-    let currentIndex = 0;
-    let isPlaying = false;
-    let playInterval = null;
-    let viewMode = 'watch';
-    let soundEnabled = true;
-    let currentUtterance = null;
-    let speechFinished = true;
-    let slides = [];
+// STATE
+let grammarData = null;
+let dataType = null;
+let currentCategory = null;
+let currentIndex = 0;
+let isPlaying = false;
+let playInterval = null;
+let viewMode = 'watch';
+let soundEnabled = true;
+let currentUtterance = null;
+let speechFinished = true;
+let slides = [];
 
-    // CONFIGURATION - Set JSON file path here
-    const JSON_FILE = '../../data/grammar-rules/phrasal-verbs-complete-set.json';
+// CONFIGURATION - Set JSON file path here
+const JSON_FILE = '../../data/grammar-rules/phrasal-verbs-complete-set.json';
 
-    // Define which verbs are "common" (shown individually) vs grouped into lists
-    const COMMON_VERBS = ['take', 'go', 'look', 'get', 'keep', 'put', 'turn', 'run'];
-    const VERBS_PER_LIST = 6; // How many verbs per list group
+// Define which verbs are "common" (shown individually) vs grouped into lists
+const COMMON_VERBS = ['take', 'go', 'look', 'get', 'keep', 'put', 'turn', 'run'];
+const VERBS_PER_LIST = 6; // How many verbs per list group
 
-    // INITIALIZE
-    async function init() {
-      try {
-        console.log('Attempting to load JSON from:', JSON_FILE);
-        const response = await fetch(JSON_FILE);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const text = await response.text();
-        console.log('JSON loaded, length:', text.length);
-        
-        grammarData = JSON.parse(text);
-        console.log('JSON parsed successfully:', grammarData.title);
-        
-        // Detect data type
-        if (grammarData.verbs && grammarData.phrasalVerbs) {
-          dataType = 'two-tier';
-          setupTwoTier();
-        } else if (grammarData.items) {
-          dataType = 'one-tier';
-          setupOneTier();
-        }
-        
-        // Update subtitle
-        document.getElementById('subtitle').textContent = `${grammarData.title} · ${grammarData.level}`;
-        
-        setupToggle();
-        
-      } catch (error) {
-        console.error('Error loading JSON:', error);
-        document.getElementById('subtitle').textContent = 'Error: ' + error.message;
-        alert('Failed to load data. Please check:\n1. JSON file is in the same folder\n2. JSON file is named correctly: ' + JSON_FILE + '\n3. JSON syntax is valid\n\nError: ' + error.message);
-      }
+// iOS voice loading - must happen early
+let voicesLoaded = false;
+if ('speechSynthesis' in window) {
+  // Force load voices on iOS - voices may not be ready immediately
+  const loadVoices = () => {
+    const voices = speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      voicesLoaded = true;
+      console.log('Voices loaded:', voices.length);
     }
+  };
+  
+  // Try to load immediately
+  loadVoices();
+  
+  // iOS needs this event
+  if (speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = loadVoices;
+  }
+  
+  // User interaction trigger for iOS - required for speech to work
+  document.addEventListener('click', function enableVoices() {
+    const utterance = new SpeechSynthesisUtterance('');
+    utterance.volume = 0;
+    speechSynthesis.speak(utterance);
+  }, { once: true });
+}
 
-    // SETUP ONE-TIER (Inversion style)
-    function setupOneTier() {
-      slides = grammarData.items;
-      renderWatchSlide();
-      buildListMode();
-      
-      // Hide arrow for one-tier (no transformation)
-      if (grammarData.hideArrow) {
-        document.getElementById('arrow').style.display = 'none';
-      }
+// INITIALIZE
+async function init() {
+  try {
+    console.log('Attempting to load JSON from:', JSON_FILE);
+    const response = await fetch(JSON_FILE);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
-
-    // SETUP TWO-TIER (Phrasal Verbs style) - WITH GROUPING
-    function setupTwoTier() {
-      const categorySelector = document.getElementById('categorySelector');
-      categorySelector.classList.add('show');
-      
-      const allVerbs = Object.keys(grammarData.verbs);
-      const commonVerbs = allVerbs.filter(v => COMMON_VERBS.includes(v));
-      const lessCommonVerbs = allVerbs.filter(v => !COMMON_VERBS.includes(v));
-      
-      // Add common verbs as individual buttons
-      commonVerbs.forEach((verb, index) => {
-        const btn = document.createElement('button');
-        btn.className = 'category-btn';
-        if (index === 0) {
-          btn.classList.add('active');
-          currentCategory = verb;
-        }
-        btn.textContent = verb;
-        btn.dataset.type = 'single';
-        btn.dataset.verbs = verb;
-        btn.onclick = () => selectCategory(verb, 'single');
-        categorySelector.appendChild(btn);
-      });
-      
-      // Group less common verbs into lists
-      const numLists = Math.ceil(lessCommonVerbs.length / VERBS_PER_LIST);
-      for (let i = 0; i < numLists; i++) {
-        const listVerbs = lessCommonVerbs.slice(i * VERBS_PER_LIST, (i + 1) * VERBS_PER_LIST);
-        const btn = document.createElement('button');
-        btn.className = 'category-btn';
-        btn.textContent = `list ${i + 1}`;
-        btn.dataset.type = 'list';
-        btn.dataset.verbs = listVerbs.join(',');
-        btn.onclick = () => selectCategory(listVerbs, 'list');
-        categorySelector.appendChild(btn);
-      }
-      
-      loadCategory(currentCategory, 'single');
+    
+    const text = await response.text();
+    console.log('JSON loaded, length:', text.length);
+    
+    grammarData = JSON.parse(text);
+    console.log('JSON parsed successfully:', grammarData.title);
+    
+    // Detect data type
+    if (grammarData.verbs && grammarData.phrasalVerbs) {
+      dataType = 'two-tier';
+      setupTwoTier();
+    } else if (grammarData.items) {
+      dataType = 'one-tier';
+      setupOneTier();
     }
+    
+    // Update subtitle
+    document.getElementById('subtitle').textContent = `${grammarData.title} · ${grammarData.level}`;
+    
+    setupToggle();
+    
+  } catch (error) {
+    console.error('Error loading JSON:', error);
+    document.getElementById('subtitle').textContent = 'Error: ' + error.message;
+    alert('Failed to load data. Please check:\n1. JSON file is in the same folder\n2. JSON file is named correctly: ' + JSON_FILE + '\n3. JSON syntax is valid\n\nError: ' + error.message);
+  }
+}
 
-    // SELECT CATEGORY
-    function selectCategory(verbOrVerbs, type) {
-      if (type === 'single') {
-        currentCategory = verbOrVerbs;
-        currentIndex = 0;
-        
-        // Update button states
-        document.querySelectorAll('.category-btn').forEach(btn => {
-          if (btn.dataset.type === 'single') {
-            btn.classList.toggle('active', btn.textContent === verbOrVerbs);
-          } else {
-            btn.classList.remove('active');
-          }
-        });
-        
-        loadCategory(verbOrVerbs, 'single');
+// SETUP ONE-TIER (Inversion style)
+function setupOneTier() {
+  slides = grammarData.items;
+  renderWatchSlide();
+  buildListMode();
+  
+  // Hide arrow for one-tier (no transformation)
+  if (grammarData.hideArrow) {
+    document.getElementById('arrow').style.display = 'none';
+  }
+}
+
+// SETUP TWO-TIER (Phrasal Verbs style) - WITH GROUPING
+function setupTwoTier() {
+  const categorySelector = document.getElementById('categorySelector');
+  categorySelector.classList.add('show');
+  
+  const allVerbs = Object.keys(grammarData.verbs);
+  const commonVerbs = allVerbs.filter(v => COMMON_VERBS.includes(v));
+  const lessCommonVerbs = allVerbs.filter(v => !COMMON_VERBS.includes(v));
+  
+  // Add common verbs as individual buttons
+  commonVerbs.forEach((verb, index) => {
+    const btn = document.createElement('button');
+    btn.className = 'category-btn';
+    if (index === 0) {
+      btn.classList.add('active');
+      currentCategory = verb;
+    }
+    btn.textContent = verb;
+    btn.dataset.type = 'single';
+    btn.dataset.verbs = verb;
+    btn.onclick = () => selectCategory(verb, 'single');
+    categorySelector.appendChild(btn);
+  });
+  
+  // Group less common verbs into lists
+  const numLists = Math.ceil(lessCommonVerbs.length / VERBS_PER_LIST);
+  for (let i = 0; i < numLists; i++) {
+    const listVerbs = lessCommonVerbs.slice(i * VERBS_PER_LIST, (i + 1) * VERBS_PER_LIST);
+    const btn = document.createElement('button');
+    btn.className = 'category-btn';
+    btn.textContent = `list ${i + 1}`;
+    btn.dataset.type = 'list';
+    btn.dataset.verbs = listVerbs.join(',');
+    btn.onclick = () => selectCategory(listVerbs, 'list');
+    categorySelector.appendChild(btn);
+  }
+  
+  loadCategory(currentCategory, 'single');
+}
+
+// SELECT CATEGORY
+function selectCategory(verbOrVerbs, type) {
+  if (type === 'single') {
+    currentCategory = verbOrVerbs;
+    currentIndex = 0;
+    
+    // Update button states
+    document.querySelectorAll('.category-btn').forEach(btn => {
+      if (btn.dataset.type === 'single') {
+        btn.classList.toggle('active', btn.textContent === verbOrVerbs);
       } else {
-        // List mode - load multiple verbs
-        currentCategory = verbOrVerbs;
-        currentIndex = 0;
-        
-        // Update button states
-        document.querySelectorAll('.category-btn').forEach(btn => {
-          if (btn.dataset.type === 'list') {
-            const btnVerbs = btn.dataset.verbs.split(',');
-            const isActive = verbOrVerbs.every(v => btnVerbs.includes(v)) && 
-                           btnVerbs.every(v => verbOrVerbs.includes(v));
-            btn.classList.toggle('active', isActive);
-          } else {
-            btn.classList.remove('active');
-          }
-        });
-        
-        loadCategory(verbOrVerbs, 'list');
-      }
-      
-      if (isPlaying) {
-        pause();
-      }
-    }
-
-    // LOAD CATEGORY
-    function loadCategory(verbOrVerbs, type) {
-      slides = [];
-      
-      const verbsToLoad = type === 'single' ? [verbOrVerbs] : verbOrVerbs;
-      
-      verbsToLoad.forEach(verb => {
-        const particles = grammarData.verbs[verb];
-        
-        particles.forEach((particle) => {
-          const key = `${verb}_${particle.replace(/ /g, '_')}`;
-          const pvData = grammarData.phrasalVerbs[key];
-          
-          if (pvData) {
-            // Find the correct sentence from ANY set that matches this verb + particle
-            let exampleSentence = null;
-            
-            if (grammarData.sets) {
-              // Search through all sets for a matching sentence
-              for (const set of grammarData.sets) {
-                if (set.sentences) {
-                  const matchingSentence = set.sentences.find(s => {
-                    const answer = s.answer.toLowerCase();
-                    const searchKey = `${verb} ${particle}`.toLowerCase();
-                    return answer === searchKey;
-                  });
-                  
-                  if (matchingSentence) {
-                    exampleSentence = matchingSentence.text.replace('_____', `<span class="highlight">${matchingSentence.answer}</span>`);
-                    break;
-                  }
-                }
-              }
-            }
-            
-            // Fallback to generic example if no sentence found
-            if (!exampleSentence) {
-              exampleSentence = `Example: I will <span class="highlight">${verb} ${particle}</span> in this context.`;
-            }
-            
-            slides.push({
-              expression: `${verb} ${particle}`,
-              meaning: pvData.meaning,
-              example: exampleSentence
-            });
-          }
-        });
-      });
-      
-      console.log(`Loaded ${slides.length} slides for: ${verbsToLoad.join(', ')}`);
-      renderWatchSlide();
-      buildListMode();
-    }
-
-    // TOGGLE VIEW MODE
-    function toggleViewMode() {
-      viewMode = viewMode === 'watch' ? 'list' : 'watch';
-      
-      const toggle = document.getElementById('viewModeToggle');
-      const watchLabel = document.getElementById('watchLabel');
-      const listLabel = document.getElementById('listLabel');
-      const watchMode = document.getElementById('watchMode');
-      const listMode = document.getElementById('listMode');
-      
-      // Update toggle appearance
-      if (viewMode === 'list') {
-        toggle.classList.add('active');
-      } else {
-        toggle.classList.remove('active');
-      }
-      
-      // Update labels
-      watchLabel.classList.toggle('active', viewMode === 'watch');
-      listLabel.classList.toggle('active', viewMode === 'list');
-      
-      // Update content visibility
-      if (viewMode === 'watch') {
-        watchMode.style.display = 'block';
-        listMode.style.display = 'none';
-      } else {
-        watchMode.style.display = 'none';
-        listMode.style.display = 'block';
-        if (isPlaying) pause();
-      }
-    }
-
-    // SETUP TOGGLE
-    function setupToggle() {
-      document.getElementById('viewModeToggle').addEventListener('click', toggleViewMode);
-    }
-
-    // TOGGLE SOUND
-    function toggleSound() {
-      soundEnabled = !soundEnabled;
-      const soundIcon = document.getElementById('soundIcon');
-      const soundEmoji = document.getElementById('soundEmoji');
-      
-      if (soundEnabled) {
-        soundIcon.classList.add('active');
-        soundIcon.classList.remove('muted');
-        soundEmoji.textContent = '🔊';
-        soundIcon.title = 'Sound ON - Click to mute';
-      } else {
-        soundIcon.classList.remove('active');
-        soundIcon.classList.add('muted');
-        soundEmoji.textContent = '🔇';
-        soundIcon.title = 'Sound OFF - Click to enable';
-        speechSynthesis.cancel();
-      }
-    }
-
-    // BUILD LIST MODE
-    function buildListMode() {
-      const container = document.getElementById('listContainer');
-      container.innerHTML = '';
-      
-      slides.forEach((data, index) => {
-        const item = document.createElement('div');
-        item.className = 'list-item';
-        
-        let html = `<div class="list-expression">${data.expression}</div>`;
-        
-        if (data.meaning) {
-          html += `<div class="list-meaning">${data.meaning}</div>`;
-        }
-        
-        if (data.normal && data.inverted) {
-          html += `
-            <div class="list-sentences">
-              <div class="list-sentence-row">
-                <div class="list-sentence-label">NORMAL</div>
-                <div class="list-sentence">${data.normal}</div>
-              </div>
-              <div class="list-arrow">↓</div>
-              <div class="list-sentence-row">
-                <div class="list-sentence-label">INVERTED</div>
-                <div class="list-sentence">${data.inverted}</div>
-              </div>
-            </div>
-          `;
-        } else if (data.example) {
-          html += `
-            <div class="list-sentences">
-              <div class="list-sentence-row">
-                <div class="list-sentence-label">EXAMPLE</div>
-                <div class="list-sentence">${data.example}</div>
-              </div>
-            </div>
-          `;
-        }
-        
-        item.innerHTML = html;
-        container.appendChild(item);
-      });
-    }
-
-    // RENDER WATCH SLIDE
-    function renderWatchSlide() {
-      if (slides.length === 0) return;
-      
-      const data = slides[currentIndex];
-      const content = document.getElementById('cardContent');
-      
-      speechSynthesis.cancel();
-      speechFinished = false;
-      
-      content.classList.remove('show');
-      
-      setTimeout(() => {
-        document.getElementById('expression').textContent = data.expression;
-        document.getElementById('meaning').textContent = data.meaning || '';
-        document.getElementById('meaning').style.display = data.meaning ? 'block' : 'none';
-        
-        // Handle different display modes
-        if (data.normal && data.inverted) {
-          document.getElementById('normalContainer').style.display = 'block';
-          document.getElementById('arrow').style.display = 'block';
-          document.getElementById('invertedContainer').style.display = 'block';
-          document.getElementById('invertedContainer').querySelector('.sentence-label').textContent = 'INVERTED';
-          document.getElementById('normalSentence').innerHTML = data.normal;
-          document.getElementById('invertedSentence').innerHTML = data.inverted;
-        } else if (data.example) {
-          document.getElementById('normalContainer').style.display = 'none';
-          document.getElementById('arrow').style.display = 'none';
-          document.getElementById('invertedContainer').style.display = 'block';
-          document.getElementById('invertedContainer').querySelector('.sentence-label').textContent = 'EXAMPLE IN CONTEXT';
-          document.getElementById('invertedSentence').innerHTML = data.example;
-        }
-        
-        document.getElementById('current').textContent = currentIndex + 1;
-        document.getElementById('total').textContent = slides.length;
-        
-        content.classList.add('show');
-        
-        if (soundEnabled) {
-          speak(data);
-        } else {
-          speechFinished = true;
-        }
-      }, 500);
-    }
-
-    // SPEAK
- // SPEAK
-    function speak(data) {
-      if (!('speechSynthesis' in window) || !soundEnabled) {
-        speechFinished = true;
-        return;
-      }
-      
-      speechSynthesis.cancel();
-      speechFinished = false;
-      
-      // Strip HTML tags helper function
-      function stripHTML(html) {
-        const tmp = document.createElement('div');
-        tmp.innerHTML = html;
-        return tmp.textContent || tmp.innerText || '';
-      }
-      
-      let textToSpeak = data.expression;
-      if (data.meaning) textToSpeak += `. ${data.meaning}`;
-      
-      if (data.normal && data.inverted) {
-        const normalText = stripHTML(data.normal);
-        const invertedText = stripHTML(data.inverted);
-        textToSpeak += `. ${normalText}. ${invertedText}`;
-      } else if (data.example) {
-        const cleanExample = stripHTML(data.example);
-        textToSpeak += `. ${cleanExample}`;
-      }
-      
-      console.log('Speaking text:', textToSpeak);
-      
-      setTimeout(() => {
-        currentUtterance = new SpeechSynthesisUtterance(textToSpeak);
-        currentUtterance.lang = 'en-GB';
-        currentUtterance.rate = 0.75;
-        currentUtterance.pitch = 1.0;
-        currentUtterance.volume = 1.0;
-
-        // iOS-specific voice selection - wait for voices to load
-        const setVoice = () => {
-          const voices = speechSynthesis.getVoices();
-          console.log('Available voices:', voices.map(v => v.name));
-          
-          // Try to find Karen voice (iOS UK voice)
-          let selectedVoice = voices.find(v => v.name === 'Karen');
-          
-          // Fallback to any en-GB voice
-          if (!selectedVoice) {
-            selectedVoice = voices.find(v => v.lang === 'en-GB');
-          }
-          
-          // Fallback to any English voice
-          if (!selectedVoice) {
-            selectedVoice = voices.find(v => v.lang.startsWith('en-'));
-          }
-          
-          if (selectedVoice) {
-            currentUtterance.voice = selectedVoice;
-            console.log('Using voice:', selectedVoice.name);
-          }
-        };
-        
-        // Set voice immediately if available
-        if (speechSynthesis.getVoices().length > 0) {
-          setVoice();
-        } else {
-          // Wait for voices to load on iOS
-          speechSynthesis.addEventListener('voiceschanged', setVoice, { once: true });
-        }
-        
-        currentUtterance.onend = () => {
-          speechFinished = true;
-          console.log('Speech finished');
-        };
-        
-        currentUtterance.onerror = (error) => {
-          speechFinished = true;
-          console.error('Speech error:', error);
-        };
-        
-        // iOS requires interaction before speaking - trigger it
-        speechSynthesis.speak(currentUtterance);
-      }, 1000);
-    }
-
-    // Load voices on iOS - must be called early
-    if ('speechSynthesis' in window) {
-      // iOS needs this to trigger voice loading
-      speechSynthesis.getVoices();
-      
-      window.speechSynthesis.addEventListener('voiceschanged', () => {
-        const voices = speechSynthesis.getVoices();
-        console.log('Voices loaded:', voices.length);
-        console.log('Karen available:', voices.some(v => v.name === 'Karen'));
-      });
-    }
-
-    // REPEAT
-    function repeatSlide() {
-      renderWatchSlide();
-    }
-
-    // TOGGLE PLAY
-    function togglePlay() {
-      if (isPlaying) {
-        pause();
-      } else {
-        play();
-      }
-    }
-
-    // PLAY
-    function play() {
-      isPlaying = true;
-      document.getElementById('playBtn').textContent = '■';
-      document.getElementById('pauseBtn').disabled = false;
-      
-      playInterval = setInterval(() => {
-        if (soundEnabled && !speechFinished) {
-          return;
-        }
-        
-        if (!soundEnabled) {
-          clearInterval(playInterval);
-          setTimeout(() => {
-            if (isPlaying) {
-              advanceSlide();
-              if (isPlaying) play();
-            }
-          }, 6000);
-          return;
-        }
-        
-        advanceSlide();
-        
-      }, 500);
-    }
-
-    // ADVANCE SLIDE
-    function advanceSlide() {
-      if (currentIndex < slides.length - 1) {
-        currentIndex++;
-        renderWatchSlide();
-      } else {
-        pause();
-        currentIndex = 0;
-        renderWatchSlide();
-      }
-    }
-
-    // PAUSE
-    function pause() {
-      isPlaying = false;
-      document.getElementById('playBtn').textContent = '▶';
-      document.getElementById('pauseBtn').disabled = true;
-      
-      if (playInterval) {
-        clearInterval(playInterval);
-        playInterval = null;
-      }
-      
-      speechSynthesis.cancel();
-    }
-
-    // BUTTON EVENT LISTENERS
-    document.getElementById('repeatBtn').addEventListener('click', repeatSlide);
-    document.getElementById('playBtn').addEventListener('click', togglePlay);
-    document.getElementById('pauseBtn').addEventListener('click', pause);
-    document.getElementById('soundIcon').addEventListener('click', toggleSound);
-
-    // KEYBOARD
-    document.addEventListener('keydown', (e) => {
-      if (viewMode === 'watch') {
-        if (e.key === ' ') {
-          e.preventDefault();
-          togglePlay();
-        }
-        if (e.key === 'r' || e.key === 'R') {
-          repeatSlide();
-        }
-        if (e.key === 's' || e.key === 'S') {
-          toggleSound();
-        }
-        if (e.key === 'ArrowRight' && currentIndex < slides.length - 1) {
-          currentIndex++;
-          renderWatchSlide();
-        }
-        if (e.key === 'ArrowLeft' && currentIndex > 0) {
-          currentIndex--;
-          renderWatchSlide();
-        }
+        btn.classList.remove('active');
       }
     });
+    
+    loadCategory(verbOrVerbs, 'single');
+  } else {
+    // List mode - load multiple verbs
+    currentCategory = verbOrVerbs;
+    currentIndex = 0;
+    
+    // Update button states
+    document.querySelectorAll('.category-btn').forEach(btn => {
+      if (btn.dataset.type === 'list') {
+        const btnVerbs = btn.dataset.verbs.split(',');
+        const isActive = verbOrVerbs.every(v => btnVerbs.includes(v)) && 
+                       btnVerbs.every(v => verbOrVerbs.includes(v));
+        btn.classList.toggle('active', isActive);
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+    
+    loadCategory(verbOrVerbs, 'list');
+  }
+  
+  if (isPlaying) {
+    pause();
+  }
+}
 
-    // Load voices
-    window.speechSynthesis.onvoiceschanged = () => {
-      console.log('Voices loaded');
-    };
+// LOAD CATEGORY
+function loadCategory(verbOrVerbs, type) {
+  slides = [];
+  
+  const verbsToLoad = type === 'single' ? [verbOrVerbs] : verbOrVerbs;
+  
+  verbsToLoad.forEach(verb => {
+    const particles = grammarData.verbs[verb];
+    
+    particles.forEach((particle) => {
+      const key = `${verb}_${particle.replace(/ /g, '_')}`;
+      const pvData = grammarData.phrasalVerbs[key];
+      
+      if (pvData) {
+        // Find the correct sentence from ANY set that matches this verb + particle
+        let exampleSentence = null;
+        
+        if (grammarData.sets) {
+          // Search through all sets for a matching sentence
+          for (const set of grammarData.sets) {
+            if (set.sentences) {
+              const matchingSentence = set.sentences.find(s => {
+                const answer = s.answer.toLowerCase();
+                const searchKey = `${verb} ${particle}`.toLowerCase();
+                return answer === searchKey;
+              });
+              
+              if (matchingSentence) {
+                exampleSentence = matchingSentence.text.replace('_____', `<span class="highlight">${matchingSentence.answer}</span>`);
+                break;
+              }
+            }
+          }
+        }
+        
+        // Fallback to generic example if no sentence found
+        if (!exampleSentence) {
+          exampleSentence = `Example: I will <span class="highlight">${verb} ${particle}</span> in this context.`;
+        }
+        
+        slides.push({
+          expression: `${verb} ${particle}`,
+          meaning: pvData.meaning,
+          example: exampleSentence
+        });
+      }
+    });
+  });
+  
+  console.log(`Loaded ${slides.length} slides for: ${verbsToLoad.join(', ')}`);
+  renderWatchSlide();
+  buildListMode();
+}
 
-    // START
-    init();
+// TOGGLE VIEW MODE
+function toggleViewMode() {
+  viewMode = viewMode === 'watch' ? 'list' : 'watch';
+  
+  const toggle = document.getElementById('viewModeToggle');
+  const watchLabel = document.getElementById('watchLabel');
+  const listLabel = document.getElementById('listLabel');
+  const watchMode = document.getElementById('watchMode');
+  const listMode = document.getElementById('listMode');
+  
+  // Update toggle appearance
+  if (viewMode === 'list') {
+    toggle.classList.add('active');
+  } else {
+    toggle.classList.remove('active');
+  }
+  
+  // Update labels
+  watchLabel.classList.toggle('active', viewMode === 'watch');
+  listLabel.classList.toggle('active', viewMode === 'list');
+  
+  // Update content visibility
+  if (viewMode === 'watch') {
+    watchMode.style.display = 'block';
+    listMode.style.display = 'none';
+  } else {
+    watchMode.style.display = 'none';
+    listMode.style.display = 'block';
+    if (isPlaying) pause();
+  }
+}
+
+// SETUP TOGGLE
+function setupToggle() {
+  document.getElementById('viewModeToggle').addEventListener('click', toggleViewMode);
+}
+
+// TOGGLE SOUND
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  const soundIcon = document.getElementById('soundIcon');
+  const soundEmoji = document.getElementById('soundEmoji');
+  
+  if (soundEnabled) {
+    soundIcon.classList.add('active');
+    soundIcon.classList.remove('muted');
+    soundEmoji.textContent = '🔊';
+    soundIcon.title = 'Sound ON - Click to mute';
+  } else {
+    soundIcon.classList.remove('active');
+    soundIcon.classList.add('muted');
+    soundEmoji.textContent = '🔇';
+    soundIcon.title = 'Sound OFF - Click to enable';
+    // Stop any ongoing speech
+    speechSynthesis.cancel();
+    speechFinished = true;
+  }
+}
+
+// BUILD LIST MODE
+function buildListMode() {
+  const container = document.getElementById('listContainer');
+  container.innerHTML = '';
+  
+  slides.forEach((data, index) => {
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    
+    let html = `<div class="list-expression">${data.expression}</div>`;
+    
+    if (data.meaning) {
+      html += `<div class="list-meaning">${data.meaning}</div>`;
+    }
+    
+    if (data.normal && data.inverted) {
+      html += `
+        <div class="list-sentences">
+          <div class="list-sentence-row">
+            <div class="list-sentence-label">NORMAL</div>
+            <div class="list-sentence">${data.normal}</div>
+          </div>
+          <div class="list-arrow">↓</div>
+          <div class="list-sentence-row">
+            <div class="list-sentence-label">INVERTED</div>
+            <div class="list-sentence">${data.inverted}</div>
+          </div>
+        </div>
+      `;
+    } else if (data.example) {
+      html += `
+        <div class="list-sentences">
+          <div class="list-sentence-row">
+            <div class="list-sentence-label">EXAMPLE</div>
+            <div class="list-sentence">${data.example}</div>
+          </div>
+        </div>
+      `;
+    }
+    
+    item.innerHTML = html;
+    container.appendChild(item);
+  });
+}
+
+// RENDER WATCH SLIDE
+function renderWatchSlide() {
+  if (slides.length === 0) return;
+  
+  const data = slides[currentIndex];
+  const content = document.getElementById('cardContent');
+  
+  speechSynthesis.cancel();
+  speechFinished = false;
+  
+  content.classList.remove('show');
+  
+  setTimeout(() => {
+    document.getElementById('expression').textContent = data.expression;
+    document.getElementById('meaning').textContent = data.meaning || '';
+    document.getElementById('meaning').style.display = data.meaning ? 'block' : 'none';
+    
+    // Handle different display modes
+    if (data.normal && data.inverted) {
+      document.getElementById('normalContainer').style.display = 'block';
+      document.getElementById('arrow').style.display = 'block';
+      document.getElementById('invertedContainer').style.display = 'block';
+      document.getElementById('invertedContainer').querySelector('.sentence-label').textContent = 'INVERTED';
+      document.getElementById('normalSentence').innerHTML = data.normal;
+      document.getElementById('invertedSentence').innerHTML = data.inverted;
+    } else if (data.example) {
+      document.getElementById('normalContainer').style.display = 'none';
+      document.getElementById('arrow').style.display = 'none';
+      document.getElementById('invertedContainer').style.display = 'block';
+      document.getElementById('invertedContainer').querySelector('.sentence-label').textContent = 'EXAMPLE IN CONTEXT';
+      document.getElementById('invertedSentence').innerHTML = data.example;
+    }
+    
+    document.getElementById('current').textContent = currentIndex + 1;
+    document.getElementById('total').textContent = slides.length;
+    
+    content.classList.add('show');
+    
+    if (soundEnabled) {
+      speak(data);
+    } else {
+      speechFinished = true;
+    }
+  }, 500);
+}
+
+// SPEAK
+function speak(data) {
+  if (!('speechSynthesis' in window) || !soundEnabled) {
+    speechFinished = true;
+    return;
+  }
+  
+  // Cancel any ongoing speech
+  speechSynthesis.cancel();
+  speechFinished = false;
+  
+  // Strip HTML tags helper function
+  function stripHTML(html) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || '';
+  }
+  
+  let textToSpeak = data.expression;
+  if (data.meaning) textToSpeak += `. ${data.meaning}`;
+  
+  if (data.normal && data.inverted) {
+    const normalText = stripHTML(data.normal);
+    const invertedText = stripHTML(data.inverted);
+    textToSpeak += `. ${normalText}. ${invertedText}`;
+  } else if (data.example) {
+    const cleanExample = stripHTML(data.example);
+    textToSpeak += `. ${cleanExample}`;
+  }
+  
+  currentUtterance = new SpeechSynthesisUtterance(textToSpeak);
+  currentUtterance.lang = 'en-GB';
+  currentUtterance.rate = 0.75;
+  currentUtterance.pitch = 1.0;
+  currentUtterance.volume = 1.0;
+
+  // Voice selection - wait for voices to load on iOS
+  const selectVoice = () => {
+    const voices = speechSynthesis.getVoices();
+    
+    if (voices.length === 0) {
+      console.log('No voices available yet');
+      return;
+    }
+    
+    // Try to find Kate or Serena (iOS UK voices)
+    let selectedVoice = voices.find(v => v.name === 'Kate' || v.name === 'Serena');
+    
+    // Fallback to any en-GB voice
+    if (!selectedVoice) {
+      selectedVoice = voices.find(v => v.lang === 'en-GB');
+    }
+    
+    // Fallback to any English voice
+    if (!selectedVoice) {
+      selectedVoice = voices.find(v => v.lang.startsWith('en-'));
+    }
+    
+    if (selectedVoice) {
+      currentUtterance.voice = selectedVoice;
+      console.log('Using voice:', selectedVoice.name);
+    }
+  };
+  
+  selectVoice();
+  
+  currentUtterance.onend = () => {
+    speechFinished = true;
+    console.log('Speech finished');
+  };
+  
+  currentUtterance.onerror = (error) => {
+    speechFinished = true;
+    console.error('Speech error:', error);
+  };
+  
+  // iOS sometimes needs a small delay
+  setTimeout(() => {
+    speechSynthesis.speak(currentUtterance);
+  }, 100);
+}
+
+// REPEAT
+function repeatSlide() {
+  renderWatchSlide();
+}
+
+// TOGGLE PLAY
+function togglePlay() {
+  if (isPlaying) {
+    pause();
+  } else {
+    play();
+  }
+}
+
+// PLAY
+function play() {
+  isPlaying = true;
+  document.getElementById('playBtn').textContent = '■';
+  document.getElementById('pauseBtn').disabled = false;
+  
+  playInterval = setInterval(() => {
+    if (soundEnabled && !speechFinished) {
+      return;
+    }
+    
+    if (!soundEnabled) {
+      clearInterval(playInterval);
+      setTimeout(() => {
+        if (isPlaying) {
+          advanceSlide();
+          if (isPlaying) play();
+        }
+      }, 6000);
+      return;
+    }
+    
+    advanceSlide();
+    
+  }, 500);
+}
+
+// ADVANCE SLIDE
+function advanceSlide() {
+  if (currentIndex < slides.length - 1) {
+    currentIndex++;
+    renderWatchSlide();
+  } else {
+    pause();
+    currentIndex = 0;
+    renderWatchSlide();
+  }
+}
+
+// PAUSE
+function pause() {
+  isPlaying = false;
+  document.getElementById('playBtn').textContent = '▶';
+  document.getElementById('pauseBtn').disabled = true;
+  
+  if (playInterval) {
+    clearInterval(playInterval);
+    playInterval = null;
+  }
+  
+  // Stop speech and mark as finished
+  speechSynthesis.cancel();
+  speechFinished = true;
+}
+
+// BUTTON EVENT LISTENERS
+document.getElementById('repeatBtn').addEventListener('click', repeatSlide);
+document.getElementById('playBtn').addEventListener('click', togglePlay);
+document.getElementById('pauseBtn').addEventListener('click', pause);
+document.getElementById('soundIcon').addEventListener('click', toggleSound);
+
+// KEYBOARD
+document.addEventListener('keydown', (e) => {
+  if (viewMode === 'watch') {
+    if (e.key === ' ') {
+      e.preventDefault();
+      togglePlay();
+    }
+    if (e.key === 'r' || e.key === 'R') {
+      repeatSlide();
+    }
+    if (e.key === 's' || e.key === 'S') {
+      toggleSound();
+    }
+    if (e.key === 'ArrowRight' && currentIndex < slides.length - 1) {
+      currentIndex++;
+      renderWatchSlide();
+    }
+    if (e.key === 'ArrowLeft' && currentIndex > 0) {
+      currentIndex--;
+      renderWatchSlide();
+    }
+  }
+});
+
+// Load voices - iOS needs this
+if ('speechSynthesis' in window) {
+  window.speechSynthesis.onvoiceschanged = () => {
+    const voices = speechSynthesis.getVoices();
+    console.log('Voices loaded:', voices.length);
+    voicesLoaded = true;
+  };
+}
+
+// START
+init();
   </script>
 </body>
 </html>

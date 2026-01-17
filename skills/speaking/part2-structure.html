@@ -866,9 +866,10 @@
 
   </div>
 
-  <script src="part2-structure.js"></script>
+   <script src="part2-structure.js"></script>
+  <script src="part2-logic.js"></script>
   <script>
- // ==========================================
+// ==========================================
 // STATE MANAGEMENT
 // ==========================================
 let currentCategory = 'comparing';
@@ -879,23 +880,10 @@ let showXRay = false;
 let isPlaying = false;
 let voicesLoaded = false;
 
-// ==========================================
-// DOM ELEMENTS
-// ==========================================
-const taskText = document.getElementById('taskText');
-const image1 = document.getElementById('image1');
-const image2 = document.getElementById('image2');
-const responseSection = document.getElementById('responseSection');
-const responseContent = document.getElementById('responseContent');
-const structurePanel = document.getElementById('structurePanel');
-const structureGrid = document.getElementById('structureGrid');
-const practicePrompt = document.getElementById('practicePrompt');
-const xrayBtn = document.getElementById('xrayBtn');
-const playBtn = document.getElementById('playBtn');
-const pauseBtn = document.getElementById('pauseBtn');
-const viewModeToggle = document.getElementById('viewModeToggle');
-const watchLabel = document.getElementById('watchLabel');
-const structureLabel = document.getElementById('structureLabel');
+// DOM elements will be initialized after DOM loads
+let taskText, image1, image2, responseSection, responseContent;
+let structurePanel, structureGrid, practicePrompt, xrayBtn;
+let playBtn, pauseBtn, viewModeToggle, watchLabel, structureLabel, imageSection;
 
 // ==========================================
 // CATEGORY & STYLE MANAGEMENT
@@ -937,11 +925,15 @@ function toggleViewMode() {
   structureLabel.classList.toggle('active', viewMode === 'structure');
   
   if (viewMode === 'watch') {
+    // Show watch mode
     responseSection.style.display = 'block';
     structurePanel.classList.remove('active');
+    imageSection.style.display = 'block';
   } else {
+    // Show structure mode
     responseSection.style.display = 'none';
     structurePanel.classList.add('active');
+    imageSection.style.display = 'none'; // HIDE IMAGES in structure mode
     renderStructure();
   }
 }
@@ -1162,6 +1154,9 @@ async function playAudio() {
     return;
   }
   
+  // Cancel any existing speech
+  speechSynthesis.cancel();
+  
   // Ensure voices are loaded
   await ensureVoicesLoaded();
   
@@ -1171,18 +1166,25 @@ async function playAudio() {
   playBtn.classList.add('speaking');
   
   console.log('=== Starting Audio Playback ===');
+  console.log('Category:', currentCategory);
+  console.log('Style:', currentStyle);
+  console.log('Sections to speak:', response.sections.length);
   
   for (const section of response.sections) {
     if (!isPlaying) break;
     
     // Strip HTML tags to get plain text
     const plainText = section.text.replace(/<[^>]*>/g, '');
-    console.log('Speaking:', plainText);
+    console.log('Speaking:', plainText.substring(0, 50) + '...');
     
     await speak(plainText);
-    await wait(800); // Pause between sections
+    
+    if (isPlaying) {
+      await wait(800); // Pause between sections
+    }
   }
   
+  console.log('=== Audio Playback Complete ===');
   stopAudio();
 }
 
@@ -1308,8 +1310,45 @@ function showPractice() {
 // EVENT LISTENERS - Wait for DOM to be ready
 // ==========================================
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('DOM ready - attaching event listeners');
+  console.log('DOM ready - initializing');
   
+  // CHECK IF DATA IS LOADED
+  if (typeof SPEAKING_DATA === 'undefined') {
+    console.error('❌ SPEAKING_DATA is not defined!');
+    console.error('Make sure part2-structure.js is loaded BEFORE part2-logic.js');
+    console.error('Check your HTML has: <script src="part2-structure.js"></script> FIRST');
+    return;
+  }
+  
+  console.log('✓ SPEAKING_DATA loaded successfully');
+  console.log('Available categories:', Object.keys(SPEAKING_DATA));
+  
+  // Initialize DOM elements
+  taskText = document.getElementById('taskText');
+  image1 = document.getElementById('image1');
+  image2 = document.getElementById('image2');
+  imageSection = document.querySelector('.image-section');
+  responseSection = document.getElementById('responseSection');
+  responseContent = document.getElementById('responseContent');
+  structurePanel = document.getElementById('structurePanel');
+  structureGrid = document.getElementById('structureGrid');
+  practicePrompt = document.getElementById('practicePrompt');
+  xrayBtn = document.getElementById('xrayBtn');
+  playBtn = document.getElementById('playBtn');
+  pauseBtn = document.getElementById('pauseBtn');
+  viewModeToggle = document.getElementById('viewModeToggle');
+  watchLabel = document.getElementById('watchLabel');
+  structureLabel = document.getElementById('structureLabel');
+  
+  // Verify all elements exist
+  if (!taskText || !image1 || !image2 || !responseContent) {
+    console.error('Critical DOM elements missing!');
+    return;
+  }
+  
+  console.log('✓ All DOM elements found');
+  
+  // Attach event listeners
   document.querySelectorAll('.category-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       console.log('Category clicked:', btn.dataset.category);
@@ -1324,37 +1363,29 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  const viewToggle = document.getElementById('viewModeToggle');
-  if (viewToggle) {
-    viewToggle.addEventListener('click', () => {
+  if (viewModeToggle) {
+    viewModeToggle.addEventListener('click', () => {
       console.log('View mode toggle clicked');
       toggleViewMode();
     });
-  } else {
-    console.error('viewModeToggle not found!');
   }
 
-  const xBtn = document.getElementById('xrayBtn');
-  if (xBtn) {
-    xBtn.addEventListener('click', () => {
+  if (xrayBtn) {
+    xrayBtn.addEventListener('click', () => {
       console.log('X-Ray clicked');
       toggleXRay();
     });
   }
 
-  const pBtn = document.getElementById('playBtn');
-  if (pBtn) {
-    pBtn.addEventListener('click', () => {
+  if (playBtn) {
+    playBtn.addEventListener('click', () => {
       console.log('Play button clicked');
       playAudio();
     });
-  } else {
-    console.error('playBtn not found!');
   }
 
-  const paBtn = document.getElementById('pauseBtn');
-  if (paBtn) {
-    paBtn.addEventListener('click', () => {
+  if (pauseBtn) {
+    pauseBtn.addEventListener('click', () => {
       console.log('Pause clicked');
       pauseAudio();
     });
@@ -1384,7 +1415,18 @@ document.addEventListener('DOMContentLoaded', function() {
   loadVoices();
   
   // Listen for voice changes (important for iOS)
-  window.speechSynthesis.onvoiceschanged = loadVoices;
+  if (window.speechSynthesis) {
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    
+    // Force load voices on iOS
+    setTimeout(() => {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        console.log('✓ Voices loaded via timeout:', voices.length);
+        voicesLoaded = true;
+      }
+    }, 100);
+  }
   
   // Render initial content
   renderContent();
@@ -1392,6 +1434,8 @@ document.addEventListener('DOMContentLoaded', function() {
   console.log('=== INTUITY Speaking Practice Initialized ===');
   console.log('Device: iPhone 11 Pro Max optimized');
   console.log('Preferred voices: Kate, Serena (UK)');
+  console.log('Current category:', currentCategory);
+  console.log('Current style:', currentStyle);
   
 });
   </script>

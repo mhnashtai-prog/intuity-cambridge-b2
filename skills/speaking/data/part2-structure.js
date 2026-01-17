@@ -1,5 +1,7 @@
-// Speaking Practice Data for INTUITY
-// Three categories: Comparing & Contrasting, Justifying & Explaining, Speculating
+// ==========================================
+// SPEAKING PRACTICE DATA FOR INTUITY
+// Part 2: Long Turn (Compare & Describe)
+// ==========================================
 
 const SPEAKING_DATA = {
   "comparing": {
@@ -38,8 +40,8 @@ const SPEAKING_DATA = {
     },
     "pairs": [
       {
-        "image1": "placeholder-commute-train.jpg",
-        "image2": "placeholder-cycling.jpg",
+        "image1": "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=600",
+        "image2": "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600",
         "responses": {
           "default": {
             "sections": [
@@ -147,8 +149,8 @@ const SPEAKING_DATA = {
     },
     "pairs": [
       {
-        "image1": "placeholder-commute-train.jpg",
-        "image2": "placeholder-cycling.jpg",
+        "image1": "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=600",
+        "image2": "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600",
         "responses": {
           "default": {
             "sections": [
@@ -282,8 +284,8 @@ const SPEAKING_DATA = {
     },
     "pairs": [
       {
-        "image1": "placeholder-commute-train.jpg",
-        "image2": "placeholder-cycling.jpg",
+        "image1": "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=600",
+        "image2": "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600",
         "responses": {
           "default": {
             "sections": [
@@ -356,3 +358,6 @@ const SPEAKING_DATA = {
     ]
   }
 };
+
+console.log('✓ part2-structure.js loaded successfully');
+console.log('Available categories:', Object.keys(SPEAKING_DATA));

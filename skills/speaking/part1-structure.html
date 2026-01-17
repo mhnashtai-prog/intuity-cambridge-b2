@@ -633,6 +633,13 @@
       </div>
     </div>
 
+    <!-- STYLE SELECTOR -->
+    <div class="style-selector" style="display: flex; justify-content: center; gap: 1.5rem; margin-bottom: 2rem;">
+      <button class="style-btn active" data-style="default" style="padding: 0; background: transparent; border: none; border-bottom: 2px solid transparent; color: #636366; font-size: 0.6875rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer; transition: all 0.3s ease; padding-bottom: 0.25rem;">Default</button>
+      <button class="style-btn" data-style="alternative1" style="padding: 0; background: transparent; border: none; border-bottom: 2px solid transparent; color: #636366; font-size: 0.6875rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer; transition: all 0.3s ease; padding-bottom: 0.25rem;">Alternative 1</button>
+      <button class="style-btn" data-style="alternative2" style="padding: 0; background: transparent; border: none; border-bottom: 2px solid transparent; color: #636366; font-size: 0.6875rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer; transition: all 0.3s ease; padding-bottom: 0.25rem;">Alternative 2</button>
+    </div>
+
     <!-- TOPIC SELECTOR -->
     <div class="topic-selector">
       <span class="topic-label-text">Topics:</span>
@@ -707,7 +714,14 @@
     
     async function loadData() {
       try {
-        const response = await fetch('data/part1-structure.json');
+        let response;
+        try {
+          response = await fetch('data/part1-structure.json');
+          if (!response.ok) throw new Error('Not in data folder');
+        } catch (e) {
+          response = await fetch('part1-structure.json');
+        }
+        
         PART1_DATA = await response.json();
         console.log('✓ Data loaded:', PART1_DATA);
         renderContent();
@@ -719,6 +733,7 @@
 
     // STATE
     let currentTopicIndex = 0;
+    let currentStyle = 'default';
     let viewMode = 'watch';
     let showXRay = false;
     let isPlaying = false;
@@ -743,6 +758,21 @@
         currentTopicIndex = parseInt(this.dataset.topic);
         
         document.querySelectorAll('.topic-btn').forEach(b => {
+          b.classList.remove('active');
+        });
+        this.classList.add('active');
+        
+        stopAudio();
+        renderContent();
+      });
+    });
+
+    // SWITCH STYLE
+    document.querySelectorAll('.style-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        currentStyle = this.dataset.style;
+        
+        document.querySelectorAll('.style-btn').forEach(b => {
           b.classList.remove('active');
         });
         this.classList.add('active');
@@ -796,11 +826,12 @@
       if (!PART1_DATA) return;
       
       const topic = PART1_DATA.topics[currentTopicIndex];
-      if (!topic || !topic.dialogue) return;
+      if (!topic || !topic.dialogues || !topic.dialogues[currentStyle]) return;
       
+      const dialogue = topic.dialogues[currentStyle];
       let html = '';
       
-      topic.dialogue.forEach(turn => {
+      dialogue.forEach(turn => {
         if (turn.speaker === 'interlocutor') {
           html += `
             <div class="response-block">
@@ -860,31 +891,86 @@
     function renderStructure() {
       if (!PART1_DATA || !PART1_DATA.phraseBank) return;
       
+      const phraseBank = PART1_DATA.phraseBank;
       let html = '';
       
-      html += `
-        <div class="structure-category">
-          <div class="structure-category-title">Discourse Markers</div>
-          <div class="structure-list">
-            ${PART1_DATA.phraseBank.discourse.map(phrase => 
-              `<div class="structure-item">${phrase}</div>`
-            ).join('')}
-          </div>
-        </div>
-      `;
-      
-      html += `
-        <div class="structure-category vocab-cat">
-          <div class="structure-category-title">Key Vocabulary</div>
-          <div class="structure-list">
-            ${PART1_DATA.phraseBank.vocabulary.map(phrase => 
-              `<div class="structure-item">${phrase}</div>`
-            ).join('')}
-          </div>
-        </div>
-      `;
+      // Render each section from phraseBank
+      Object.keys(phraseBank).forEach(key => {
+        const section = phraseBank[key];
+        
+        // PRO TIP (special case)
+        if (key === 'pro_tip') {
+          html += `
+            <div style="grid-column: 1 / -1;">
+              <div style="background: linear-gradient(135deg, rgba(201, 169, 97, 0.15) 0%, rgba(201, 169, 97, 0.05) 100%); border: 2px solid rgba(201, 169, 97, 0.3); border-radius: 1rem; padding: 1.25rem 1.5rem; display: flex; align-items: flex-start; gap: 1rem;">
+                <div style="font-size: 1.75rem; flex-shrink: 0;">${section.icon}</div>
+                <div style="flex: 1;">
+                  <div style="font-family: 'Space Grotesk', sans-serif; font-size: 0.8125rem; font-weight: 700; color: #C9A961; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">${section.label}</div>
+                  <div style="font-size: 0.9375rem; color: #e5e5e7; line-height: 1.6; font-weight: 500;">${section.text}</div>
+                </div>
+              </div>
+            </div>
+          `;
+          return;
+        }
+        
+        // KEY VOCABULARY (special case with emojis)
+        if (key === 'key_vocabulary') {
+          const colorClass = getColorClass(section.color);
+          html += `
+            <div class="structure-category vocab-cat" style="border-left-color: ${section.color};">
+              <div class="structure-category-title" style="color: ${section.color};">
+                ${section.icon} ${section.label}
+              </div>
+              <div class="structure-list">
+                ${section.items.map(item => `
+                  <div class="structure-item" style="display: flex; align-items: center; gap: 0.625rem;">
+                    <span style="font-size: 1.25rem; flex-shrink: 0;">${item.emoji}</span>
+                    <span>${item.text}</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+          return;
+        }
+        
+        // STEP CARDS (with sections)
+        if (section.sections) {
+          html += `
+            <div class="structure-category" style="border-left-color: ${section.color};">
+              <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 2px solid ${section.color}; padding-bottom: 0.75rem;">
+                ${section.stepNumber ? `<div style="width: 2rem; height: 2rem; border-radius: 50%; background: ${section.color}; color: #0d0d0d; display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', sans-serif; font-size: 0.9375rem; font-weight: 700; flex-shrink: 0;">${section.stepNumber}</div>` : ''}
+                <div style="font-size: 1.25rem; flex-shrink: 0;">${section.icon}</div>
+                <div class="structure-category-title" style="color: ${section.color}; margin: 0;">
+                  ${section.label}
+                </div>
+              </div>
+              ${section.sections.map(subsection => `
+                <div style="margin-bottom: 1rem;">
+                  <div style="font-size: 0.6875rem; color: #8e8e93; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.5rem;">${subsection.heading}</div>
+                  <div class="structure-list">
+                    ${subsection.phrases.map(phrase => `
+                      <div class="structure-item">${phrase}</div>
+                    `).join('')}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }
+      });
       
       structureGrid.innerHTML = html;
+    }
+    
+    function getColorClass(color) {
+      if (color === '#60a5fa') return 'blue';
+      if (color === '#f59e0b') return 'orange';
+      if (color === '#8b5cf6') return 'purple';
+      if (color === '#10b981') return 'green';
+      if (color === '#ec4899') return 'pink';
+      return 'blue';
     }
 
     // AUDIO CONTROLS - PLAY FULL DIALOGUE
@@ -892,14 +978,16 @@
       if (!PART1_DATA) return;
       
       const topic = PART1_DATA.topics[currentTopicIndex];
-      if (!topic || !topic.dialogue) return;
+      if (!topic || !topic.dialogues || !topic.dialogues[currentStyle]) return;
+      
+      const dialogue = topic.dialogues[currentStyle];
       
       stopAudio();
       isPlaying = true;
       playBtn.classList.add('speaking');
       
       // Play dialogue turn by turn
-      for (let turn of topic.dialogue) {
+      for (let turn of dialogue) {
         if (!isPlaying) break;
         
         await speak(turn.text, turn.speaker);

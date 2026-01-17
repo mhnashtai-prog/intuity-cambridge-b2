@@ -868,279 +868,459 @@
 
   <script src="part2-structure.js"></script>
   <script>
-    // STATE
-    let currentCategory = 'comparing';
-    let currentStyle = 'default';
-    let currentPairIndex = 0;
-    let viewMode = 'watch'; // 'watch' or 'structure'
-    let showXRay = false;
-    let isPlaying = false;
+   // ==========================================
+// STATE MANAGEMENT
+// ==========================================
+let currentCategory = 'comparing';
+let currentStyle = 'default';
+let currentPairIndex = 0;
+let viewMode = 'watch'; // 'watch' or 'structure'
+let showXRay = false;
+let isPlaying = false;
+let voicesLoaded = false;
 
-    // ELEMENTS
-    const taskText = document.getElementById('taskText');
-    const image1 = document.getElementById('image1');
-    const image2 = document.getElementById('image2');
-    const responseSection = document.getElementById('responseSection');
-    const responseContent = document.getElementById('responseContent');
-    const structurePanel = document.getElementById('structurePanel');
-    const structureGrid = document.getElementById('structureGrid');
-    const practicePrompt = document.getElementById('practicePrompt');
-    const xrayBtn = document.getElementById('xrayBtn');
-    const playBtn = document.getElementById('playBtn');
-    const pauseBtn = document.getElementById('pauseBtn');
-    const viewModeToggle = document.getElementById('viewModeToggle');
-    const watchLabel = document.getElementById('watchLabel');
-    const structureLabel = document.getElementById('structureLabel');
+// ==========================================
+// DOM ELEMENTS
+// ==========================================
+const taskText = document.getElementById('taskText');
+const image1 = document.getElementById('image1');
+const image2 = document.getElementById('image2');
+const responseSection = document.getElementById('responseSection');
+const responseContent = document.getElementById('responseContent');
+const structurePanel = document.getElementById('structurePanel');
+const structureGrid = document.getElementById('structureGrid');
+const practicePrompt = document.getElementById('practicePrompt');
+const xrayBtn = document.getElementById('xrayBtn');
+const playBtn = document.getElementById('playBtn');
+const pauseBtn = document.getElementById('pauseBtn');
+const viewModeToggle = document.getElementById('viewModeToggle');
+const watchLabel = document.getElementById('watchLabel');
+const structureLabel = document.getElementById('structureLabel');
 
-    // SWITCH CATEGORY
-    function switchCategory(category) {
-      currentCategory = category;
-      currentPairIndex = 0;
-      currentStyle = 'default';
-      
-      document.querySelectorAll('.category-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.category === category);
-      });
-      
-      document.querySelectorAll('.style-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.style === 'default');
-      });
-      
-      renderContent();
-    }
+// ==========================================
+// CATEGORY & STYLE MANAGEMENT
+// ==========================================
+function switchCategory(category) {
+  currentCategory = category;
+  currentPairIndex = 0;
+  currentStyle = 'default';
+  
+  document.querySelectorAll('.category-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.category === category);
+  });
+  
+  document.querySelectorAll('.style-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.style === 'default');
+  });
+  
+  renderContent();
+}
 
-    // SWITCH STYLE
-    function switchStyle(style) {
-      currentStyle = style;
-      
-      document.querySelectorAll('.style-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.style === style);
-      });
-      
-      renderResponse();
-    }
+function switchStyle(style) {
+  currentStyle = style;
+  
+  document.querySelectorAll('.style-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.style === style);
+  });
+  
+  renderResponse();
+}
 
-    // TOGGLE VIEW MODE
-    function toggleViewMode() {
-      viewMode = viewMode === 'watch' ? 'structure' : 'watch';
-      
-      viewModeToggle.classList.toggle('active', viewMode === 'structure');
-      watchLabel.classList.toggle('active', viewMode === 'watch');
-      structureLabel.classList.toggle('active', viewMode === 'structure');
-      
-      if (viewMode === 'watch') {
-        responseSection.style.display = 'block';
-        structurePanel.classList.remove('active');
-      } else {
-        responseSection.style.display = 'none';
-        structurePanel.classList.add('active');
-        renderStructure();
-      }
-    }
+// ==========================================
+// VIEW MODE TOGGLE
+// ==========================================
+function toggleViewMode() {
+  viewMode = viewMode === 'watch' ? 'structure' : 'watch';
+  
+  viewModeToggle.classList.toggle('active', viewMode === 'structure');
+  watchLabel.classList.toggle('active', viewMode === 'watch');
+  structureLabel.classList.toggle('active', viewMode === 'structure');
+  
+  if (viewMode === 'watch') {
+    responseSection.style.display = 'block';
+    structurePanel.classList.remove('active');
+  } else {
+    responseSection.style.display = 'none';
+    structurePanel.classList.add('active');
+    renderStructure();
+  }
+}
 
-    // TOGGLE X-RAY
-    function toggleXRay() {
-      showXRay = !showXRay;
-      xrayBtn.classList.toggle('active', showXRay);
-      responseContent.classList.toggle('xray-active', showXRay);
-    }
+// ==========================================
+// X-RAY MODE
+// ==========================================
+function toggleXRay() {
+  showXRay = !showXRay;
+  xrayBtn.classList.toggle('active', showXRay);
+  responseContent.classList.toggle('xray-active', showXRay);
+}
 
-    // RENDER CONTENT
-    function renderContent() {
-      const data = SPEAKING_DATA[currentCategory];
-      if (!data) return;
-      
-      const pair = data.pairs[currentPairIndex];
-      
-      taskText.textContent = data.task;
-      image1.src = pair.image1;
-      image2.src = pair.image2;
-      
-      renderResponse();
-    }
+// ==========================================
+// CONTENT RENDERING
+// ==========================================
+function renderContent() {
+  const data = SPEAKING_DATA[currentCategory];
+  if (!data) {
+    console.error('No data found for category:', currentCategory);
+    return;
+  }
+  
+  const pair = data.pairs[currentPairIndex];
+  
+  taskText.textContent = data.task;
+  image1.src = pair.image1;
+  image2.src = pair.image2;
+  
+  renderResponse();
+}
 
-    // RENDER RESPONSE
-    function renderResponse() {
-      const data = SPEAKING_DATA[currentCategory];
-      if (!data) return;
-      
-      const pair = data.pairs[currentPairIndex];
-      const response = pair.responses[currentStyle];
-      
-      let html = '';
-      
-      response.sections.forEach(section => {
-        html += `
-          <div class="response-block">
-            <div class="block-label">
-              ${section.icon} ${section.label}
-            </div>
-            <div class="block-text">
-              ${highlightPhrases(section.text, section.phrases)}
-            </div>
-          </div>
-        `;
-      });
-      
-      responseContent.innerHTML = html;
-    }
-
-    // HIGHLIGHT PHRASES
-    function highlightPhrases(text, phrases) {
-      let result = text;
-      
-      phrases.discourse.forEach(phrase => {
-        const regex = new RegExp(`(${escapeRegex(phrase)})`, 'gi');
-        result = result.replace(regex, '<span class="phrase discourse">$1</span>');
-      });
-      
-      phrases.vocabulary.forEach(phrase => {
-        const regex = new RegExp(`(${escapeRegex(phrase)})`, 'gi');
-        result = result.replace(regex, '<span class="phrase vocab">$1</span>');
-      });
-      
-      return result;
-    }
-
-    // ESCAPE REGEX
-    function escapeRegex(str) {
-      return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    }
-
-    // RENDER STRUCTURE
-    function renderStructure() {
-      const data = SPEAKING_DATA[currentCategory];
-      if (!data) return;
-      
-      let html = '';
-      
-      html += `
-        <div class="structure-category">
-          <div class="structure-category-title">Discourse Markers</div>
-          <div class="structure-list">
-            ${data.phraseBank.discourse.map(phrase => 
-              `<div class="structure-item">${phrase}</div>`
-            ).join('')}
-          </div>
+function renderResponse() {
+  const data = SPEAKING_DATA[currentCategory];
+  if (!data) {
+    console.error('No data found for category:', currentCategory);
+    return;
+  }
+  
+  const pair = data.pairs[currentPairIndex];
+  const response = pair.responses[currentStyle];
+  
+  let html = '';
+  
+  response.sections.forEach(section => {
+    html += `
+      <div class="response-block">
+        <div class="block-label">
+          ${section.icon} ${section.label}
         </div>
-      `;
-      
-      html += `
-        <div class="structure-category vocab-cat">
-          <div class="structure-category-title">Key Vocabulary</div>
-          <div class="structure-list">
-            ${data.phraseBank.vocabulary.map(phrase => 
-              `<div class="structure-item">${phrase}</div>`
-            ).join('')}
-          </div>
+        <div class="block-text">
+          ${highlightPhrases(section.text, section.phrases)}
         </div>
-      `;
-      
-      structureGrid.innerHTML = html;
+      </div>
+    `;
+  });
+  
+  responseContent.innerHTML = html;
+}
+
+function highlightPhrases(text, phrases) {
+  let result = text;
+  
+  // Highlight discourse markers
+  phrases.discourse.forEach(phrase => {
+    const regex = new RegExp(`(${escapeRegex(phrase)})`, 'gi');
+    result = result.replace(regex, '<span class="phrase discourse">$1</span>');
+  });
+  
+  // Highlight vocabulary
+  phrases.vocabulary.forEach(phrase => {
+    const regex = new RegExp(`(${escapeRegex(phrase)})`, 'gi');
+    result = result.replace(regex, '<span class="phrase vocab">$1</span>');
+  });
+  
+  return result;
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ==========================================
+// STRUCTURE PANEL RENDERING
+// ==========================================
+function renderStructure() {
+  const data = SPEAKING_DATA[currentCategory];
+  if (!data) {
+    console.error('No data found for category:', currentCategory);
+    return;
+  }
+  
+  console.log('Rendering structure for:', currentCategory);
+  console.log('Discourse markers:', data.phraseBank.discourse.length);
+  console.log('Vocabulary items:', data.phraseBank.vocabulary.length);
+  
+  let html = '';
+  
+  // Discourse Markers
+  html += `
+    <div class="structure-category">
+      <div class="structure-category-title">Discourse Markers</div>
+      <div class="structure-list">
+        ${data.phraseBank.discourse.map(phrase => 
+          `<div class="structure-item">${phrase}</div>`
+        ).join('')}
+      </div>
+    </div>
+  `;
+  
+  // Key Vocabulary
+  html += `
+    <div class="structure-category vocab-cat">
+      <div class="structure-category-title">Key Vocabulary</div>
+      <div class="structure-list">
+        ${data.phraseBank.vocabulary.map(phrase => 
+          `<div class="structure-item">${phrase}</div>`
+        ).join('')}
+      </div>
+    </div>
+  `;
+  
+  structureGrid.innerHTML = html;
+  console.log('Structure rendered successfully');
+}
+
+// ==========================================
+// VOICE SELECTION (iPhone 11 Pro Max optimized)
+// ==========================================
+function selectBestVoice() {
+  const voices = speechSynthesis.getVoices();
+  
+  console.log('=== Voice Selection ===');
+  console.log('Total voices available:', voices.length);
+  
+  // Priority list for iPhone voices (Kate and Serena are iOS UK voices)
+  const preferredVoices = [
+    'Kate',           // iOS British Female
+    'Serena',         // iOS British Female (alternative)
+    'Daniel',         // iOS British Male (fallback)
+    'Google UK English Female',
+    'Microsoft Hazel Desktop',
+    'Microsoft Susan Desktop'
+  ];
+  
+  // Log all available voices for debugging
+  voices.forEach((voice, index) => {
+    console.log(`${index + 1}. ${voice.name} (${voice.lang})`);
+  });
+  
+  // Try to find preferred voices first
+  for (const preferred of preferredVoices) {
+    const voice = voices.find(v => v.name === preferred);
+    if (voice) {
+      console.log('✓ Selected voice:', voice.name, '(' + voice.lang + ')');
+      return voice;
     }
+  }
+  
+  // Fallback: Find any British English female voice
+  const ukFemale = voices.find(v => 
+    v.lang.startsWith('en-GB') && 
+    (v.name.toLowerCase().includes('female') || 
+     v.name.toLowerCase().includes('woman') ||
+     v.name.toLowerCase().includes('kate') ||
+     v.name.toLowerCase().includes('serena'))
+  );
+  
+  if (ukFemale) {
+    console.log('✓ Selected UK female voice:', ukFemale.name);
+    return ukFemale;
+  }
+  
+  // Fallback: Any British English voice
+  const ukVoice = voices.find(v => v.lang.startsWith('en-GB'));
+  if (ukVoice) {
+    console.log('✓ Selected UK voice:', ukVoice.name);
+    return ukVoice;
+  }
+  
+  // Fallback: Any English voice
+  const enVoice = voices.find(v => v.lang.startsWith('en-'));
+  if (enVoice) {
+    console.log('⚠ Using fallback English voice:', enVoice.name);
+    return enVoice;
+  }
+  
+  console.log('⚠ Using default system voice');
+  return null;
+}
 
-    // PLAY AUDIO
-    async function playAudio() {
-      const data = SPEAKING_DATA[currentCategory];
-      if (!data) return;
-      
-      const pair = data.pairs[currentPairIndex];
-      const response = pair.responses[currentStyle];
-      
-      isPlaying = true;
-      playBtn.style.display = 'none';
-      pauseBtn.style.display = 'flex';
-      playBtn.classList.add('speaking');
-      
-      for (const section of response.sections) {
-        if (!isPlaying) break;
-        await speak(section.text.replace(/<[^>]*>/g, ''));
-        await wait(800);
-      }
-      
-      stopAudio();
+// ==========================================
+// SPEECH SYNTHESIS
+// ==========================================
+async function playAudio() {
+  const data = SPEAKING_DATA[currentCategory];
+  if (!data) {
+    console.error('No data for category:', currentCategory);
+    return;
+  }
+  
+  const pair = data.pairs[currentPairIndex];
+  const response = pair.responses[currentStyle];
+  
+  // Ensure voices are loaded
+  await ensureVoicesLoaded();
+  
+  isPlaying = true;
+  playBtn.style.display = 'none';
+  pauseBtn.style.display = 'flex';
+  playBtn.classList.add('speaking');
+  
+  console.log('=== Starting Audio Playback ===');
+  
+  for (const section of response.sections) {
+    if (!isPlaying) break;
+    
+    const plainText = section.text.replace(/<[^>]*>/g, '');
+    console.log('Speaking:', plainText);
+    
+    await speak(plainText);
+    await wait(800); // Pause between sections
+  }
+  
+  stopAudio();
+}
+
+function speak(text) {
+  return new Promise((resolve) => {
+    if (!isPlaying) {
+      resolve();
+      return;
     }
-
-    // PAUSE AUDIO
-    function pauseAudio() {
-      isPlaying = false;
-      speechSynthesis.cancel();
-      stopAudio();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-GB';
+    utterance.rate = 0.85;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+    
+    // Select the best available voice
+    const selectedVoice = selectBestVoice();
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
     }
-
-    // STOP AUDIO
-    function stopAudio() {
-      isPlaying = false;
-      playBtn.style.display = 'flex';
-      pauseBtn.style.display = 'none';
-      playBtn.classList.remove('speaking');
-    }
-
-    // REPLAY
-    function replay() {
-      speechSynthesis.cancel();
-      stopAudio();
-      playAudio();
-    }
-
-    // SPEAK
-    function speak(text) {
-      return new Promise((resolve) => {
-        if (!isPlaying) {
-          resolve();
-          return;
-        }
-        
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'en-GB';
-        utterance.rate = 0.85;
-        utterance.pitch = 1.0;
-        
-        const voices = speechSynthesis.getVoices();
-        const ukVoice = voices.find(v => v.lang === 'en-GB' && v.name.includes('Female'));
-        if (ukVoice) utterance.voice = ukVoice;
-        
-        utterance.onend = () => resolve();
-        utterance.onerror = () => resolve();
-        
-        speechSynthesis.speak(utterance);
-      });
-    }
-
-    // WAIT
-    function wait(ms) {
-      return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    // SHOW PRACTICE
-    function showPractice() {
-      practicePrompt.classList.add('active');
-      practicePrompt.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-
-    // EVENT LISTENERS
-    document.querySelectorAll('.category-btn').forEach(btn => {
-      btn.addEventListener('click', () => switchCategory(btn.dataset.category));
-    });
-
-    document.querySelectorAll('.style-btn').forEach(btn => {
-      btn.addEventListener('click', () => switchStyle(btn.dataset.style));
-    });
-
-    viewModeToggle.addEventListener('click', toggleViewMode);
-    xrayBtn.addEventListener('click', toggleXRay);
-    playBtn.addEventListener('click', playAudio);
-    pauseBtn.addEventListener('click', pauseAudio);
-    document.getElementById('replayBtn').addEventListener('click', replay);
-    document.getElementById('practiceBtn').addEventListener('click', showPractice);
-
-    // Load voices
-    window.speechSynthesis.onvoiceschanged = () => {
-      console.log('Voices loaded');
+    
+    utterance.onstart = () => {
+      console.log('▶ Speech started');
     };
+    
+    utterance.onend = () => {
+      console.log('■ Speech ended');
+      resolve();
+    };
+    
+    utterance.onerror = (event) => {
+      console.error('Speech error:', event.error);
+      resolve();
+    };
+    
+    speechSynthesis.speak(utterance);
+  });
+}
 
-    // INITIALIZE
-    renderContent();
+function pauseAudio() {
+  isPlaying = false;
+  speechSynthesis.cancel();
+  stopAudio();
+}
+
+function stopAudio() {
+  isPlaying = false;
+  playBtn.style.display = 'flex';
+  pauseBtn.style.display = 'none';
+  playBtn.classList.remove('speaking');
+  console.log('Audio playback stopped');
+}
+
+function replay() {
+  speechSynthesis.cancel();
+  stopAudio();
+  setTimeout(() => playAudio(), 100);
+}
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ==========================================
+// VOICE LOADING
+// ==========================================
+function ensureVoicesLoaded() {
+  return new Promise((resolve) => {
+    const voices = speechSynthesis.getVoices();
+    
+    if (voices.length > 0) {
+      if (!voicesLoaded) {
+        voicesLoaded = true;
+        console.log('✓ Voices already loaded:', voices.length);
+      }
+      resolve();
+    } else {
+      console.log('Waiting for voices to load...');
+      
+      const timeout = setTimeout(() => {
+        console.log('⚠ Voice loading timeout - proceeding anyway');
+        resolve();
+      }, 2000);
+      
+      speechSynthesis.onvoiceschanged = () => {
+        clearTimeout(timeout);
+        const loadedVoices = speechSynthesis.getVoices();
+        voicesLoaded = true;
+        console.log('✓ Voices loaded:', loadedVoices.length);
+        resolve();
+      };
+    }
+  });
+}
+
+function loadVoices() {
+  const voices = speechSynthesis.getVoices();
+  if (voices.length > 0 && !voicesLoaded) {
+    voicesLoaded = true;
+    console.log('=== Voice System Ready ===');
+    console.log('Total voices available:', voices.length);
+    
+    // Check for Kate and Serena specifically
+    const kate = voices.find(v => v.name === 'Kate');
+    const serena = voices.find(v => v.name === 'Serena');
+    
+    if (kate) console.log('✓ Kate (UK) voice found');
+    if (serena) console.log('✓ Serena (UK) voice found');
+    if (!kate && !serena) console.log('⚠ Kate/Serena not found - will use fallback');
+  }
+}
+
+// ==========================================
+// PRACTICE MODE
+// ==========================================
+function showPractice() {
+  practicePrompt.classList.add('active');
+  practicePrompt.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// ==========================================
+// EVENT LISTENERS
+// ==========================================
+document.querySelectorAll('.category-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchCategory(btn.dataset.category));
+});
+
+document.querySelectorAll('.style-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchStyle(btn.dataset.style));
+});
+
+viewModeToggle.addEventListener('click', toggleViewMode);
+xrayBtn.addEventListener('click', toggleXRay);
+playBtn.addEventListener('click', playAudio);
+pauseBtn.addEventListener('click', pauseAudio);
+document.getElementById('replayBtn').addEventListener('click', replay);
+document.getElementById('practiceBtn').addEventListener('click', showPractice);
+
+// ==========================================
+// INITIALIZATION
+// ==========================================
+
+// Load voices immediately
+loadVoices();
+
+// Listen for voice changes (important for iOS)
+window.speechSynthesis.onvoiceschanged = loadVoices;
+
+// Render initial content
+renderContent();
+
+console.log('=== INTUITY Speaking Practice Initialized ===');
+console.log('Device: iPhone 11 Pro Max optimized');
+console.log('Preferred voices: Kate, Serena (UK)');
   </script>
 </body>
 </html>

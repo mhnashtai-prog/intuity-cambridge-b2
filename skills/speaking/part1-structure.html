@@ -598,7 +598,7 @@
       <a href="speaking-practice-hub-main.html" class="back-link">← Back</a>
       <div class="header-center">
         <div class="brand">INTUITY</div>
-        <div class="subtitle">Speaking Practice</div>
+        <div class="subtitle">Speaking Practice · B2 First</div>
       </div>
     </div>
 
@@ -636,17 +636,17 @@
     <!-- TOPIC SELECTOR -->
     <div class="topic-selector">
       <span class="topic-label-text">Topics:</span>
-      <button class="topic-btn active" data-topic="0">Daily Habits</button>
-      <button class="topic-btn" data-topic="1">Home</button>
+      <button class="topic-btn active" data-topic="0">Home</button>
+      <button class="topic-btn" data-topic="1">Hometown</button>
       <button class="topic-btn" data-topic="2">Work/Study</button>
       <button class="topic-btn" data-topic="3">Hobbies</button>
-      <button class="topic-btn" data-topic="4">Future Plans</button>
+      <button class="topic-btn" data-topic="4">Travel</button>
     </div>
 
     <!-- TASK PROMPT -->
     <div class="task-prompt">
       <div class="task-label">Part 1 - Interview</div>
-      <div class="task-text" id="taskText">Tell me about your daily routine.</div>
+      <div class="task-text" id="taskText">Let's talk about where you live</div>
     </div>
 
     <!-- MAIN CONTAINER -->
@@ -670,10 +670,10 @@
 
         <!-- KAREN HEADER -->
         <div class="karen-header">
-          <div class="avatar">👩</div>
+          <div class="avatar">💬</div>
           <div class="karen-info">
-            <div class="karen-label">Karen's Model Answer</div>
-            <div class="karen-note">Listen and mirror the phrases</div>
+            <div class="karen-label">Interview Dialogue</div>
+            <div class="karen-note">Listen to the full conversation</div>
           </div>
         </div>
 
@@ -707,11 +707,13 @@
     
     async function loadData() {
       try {
-        const response = await fetch('data/part1-structure.json');
+        const response = await fetch('part1-structure.json');
         PART1_DATA = await response.json();
+        console.log('✓ Data loaded:', PART1_DATA);
         renderContent();
       } catch (error) {
         console.error('Error loading data:', error);
+        document.getElementById('taskText').textContent = 'Error: Could not load part1-structure.json';
       }
     }
 
@@ -720,6 +722,7 @@
     let viewMode = 'watch';
     let showXRay = false;
     let isPlaying = false;
+    let currentUtterance = null;
 
     // ELEMENTS
     const taskText = document.getElementById('taskText');
@@ -744,6 +747,7 @@
         });
         this.classList.add('active');
         
+        stopAudio();
         renderContent();
       });
     });
@@ -755,6 +759,8 @@
       this.classList.toggle('active', viewMode === 'structure');
       watchLabel.classList.toggle('active', viewMode === 'watch');
       structureLabel.classList.toggle('active', viewMode === 'structure');
+      
+      stopAudio();
       
       if (viewMode === 'watch') {
         responseSection.style.display = 'block';
@@ -785,41 +791,60 @@
       renderResponse();
     }
 
-    // RENDER RESPONSE
+    // RENDER RESPONSE WITH DIALOGUE
     function renderResponse() {
       if (!PART1_DATA) return;
       
       const topic = PART1_DATA.topics[currentTopicIndex];
-      if (!topic) return;
+      if (!topic || !topic.dialogue) return;
       
-      let html = `
-        <div class="response-block">
-          <div class="block-label">
-            💬 Sample Answer
-          </div>
-          <div class="block-text">
-            ${highlightPhrases(topic.answer, topic.phrases)}
-          </div>
-        </div>
-      `;
+      let html = '';
+      
+      topic.dialogue.forEach(turn => {
+        if (turn.speaker === 'interlocutor') {
+          html += `
+            <div class="response-block">
+              <div class="block-label">
+                👨‍💼 Examiner
+              </div>
+              <div class="block-text">
+                ${turn.text}
+              </div>
+            </div>
+          `;
+        } else if (turn.speaker === 'candidate') {
+          html += `
+            <div class="response-block">
+              <div class="block-label">
+                👩 Karen (Model Candidate)
+              </div>
+              <div class="block-text">
+                ${highlightPhrases(turn.text, turn.phrases)}
+              </div>
+            </div>
+          `;
+        }
+      });
       
       responseContent.innerHTML = html;
     }
 
     // HIGHLIGHT PHRASES
     function highlightPhrases(text, phrases) {
+      if (!phrases) return text;
+      
       let result = text;
       
-      if (phrases && phrases.discourse) {
+      if (phrases.discourse) {
         phrases.discourse.forEach(phrase => {
-          const regex = new RegExp(`\\b(${escapeRegex(phrase)})\\b`, 'gi');
+          const regex = new RegExp(`(${escapeRegex(phrase)})`, 'gi');
           result = result.replace(regex, '<span class="phrase discourse">$1</span>');
         });
       }
       
-      if (phrases && phrases.vocabulary) {
+      if (phrases.vocabulary) {
         phrases.vocabulary.forEach(phrase => {
-          const regex = new RegExp(`\\b(${escapeRegex(phrase)})\\b`, 'gi');
+          const regex = new RegExp(`(${escapeRegex(phrase)})`, 'gi');
           result = result.replace(regex, '<span class="phrase vocab">$1</span>');
         });
       }
@@ -862,62 +887,81 @@
       structureGrid.innerHTML = html;
     }
 
-    // AUDIO CONTROLS
+    // AUDIO CONTROLS - PLAY FULL DIALOGUE
     async function playAudio() {
       if (!PART1_DATA) return;
       
       const topic = PART1_DATA.topics[currentTopicIndex];
-      if (!topic) return;
-      
-      isPlaying = true;
-      playBtn.style.display = 'none';
-      pauseBtn.style.display = 'flex';
-      playBtn.classList.add('speaking');
-      
-      await speak(topic.answer);
+      if (!topic || !topic.dialogue) return;
       
       stopAudio();
-    }
-
-    function pauseAudio() {
-      isPlaying = false;
-      speechSynthesis.cancel();
+      isPlaying = true;
+      playBtn.classList.add('speaking');
+      
+      // Play dialogue turn by turn
+      for (let turn of topic.dialogue) {
+        if (!isPlaying) break;
+        
+        await speak(turn.text, turn.speaker);
+        
+        // Small pause between turns
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
       stopAudio();
     }
 
     function stopAudio() {
       isPlaying = false;
-      playBtn.style.display = 'flex';
-      pauseBtn.style.display = 'none';
+      speechSynthesis.cancel();
       playBtn.classList.remove('speaking');
+      if (currentUtterance) {
+        currentUtterance = null;
+      }
     }
 
     function replay() {
-      speechSynthesis.cancel();
       stopAudio();
       playAudio();
     }
 
-    function speak(text) {
+    function speak(text, speaker) {
       return new Promise((resolve) => {
         if (!isPlaying) {
           resolve();
           return;
         }
         
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'en-GB';
-        utterance.rate = 0.85;
-        utterance.pitch = 1.0;
+        currentUtterance = new SpeechSynthesisUtterance(text);
+        currentUtterance.lang = 'en-GB';
+        currentUtterance.rate = 0.9;
+        currentUtterance.pitch = speaker === 'interlocutor' ? 0.9 : 1.1;
         
         const voices = speechSynthesis.getVoices();
-        const ukVoice = voices.find(v => v.lang === 'en-GB' && v.name.includes('Female'));
-        if (ukVoice) utterance.voice = ukVoice;
+        let selectedVoice;
         
-        utterance.onend = () => resolve();
-        utterance.onerror = () => resolve();
+        if (speaker === 'interlocutor') {
+          // Male voice for examiner
+          selectedVoice = voices.find(v => v.lang.includes('en-GB') && v.name.includes('Male'));
+          if (!selectedVoice) {
+            selectedVoice = voices.find(v => v.lang.includes('en-') && v.name.includes('Male'));
+          }
+        } else {
+          // Female voice for candidate
+          selectedVoice = voices.find(v => v.lang.includes('en-GB') && v.name.includes('Female'));
+          if (!selectedVoice) {
+            selectedVoice = voices.find(v => v.lang.includes('en-') && v.name.includes('Female'));
+          }
+        }
         
-        speechSynthesis.speak(utterance);
+        if (selectedVoice) {
+          currentUtterance.voice = selectedVoice;
+        }
+        
+        currentUtterance.onend = () => resolve();
+        currentUtterance.onerror = () => resolve();
+        
+        speechSynthesis.speak(currentUtterance);
       });
     }
 
@@ -927,6 +971,7 @@
       if (currentTopicIndex > 0) {
         currentTopicIndex--;
         updateTopicButtons();
+        stopAudio();
         renderContent();
       }
     });
@@ -936,12 +981,13 @@
       if (currentTopicIndex < PART1_DATA.topics.length - 1) {
         currentTopicIndex++;
         updateTopicButtons();
+        stopAudio();
         renderContent();
       }
     });
 
     document.getElementById('practiceBtn').addEventListener('click', function() {
-      alert('Practice mode coming soon! For now, try speaking aloud mirroring Karen\'s response.');
+      alert('Practice mode coming soon! For now, try speaking aloud responding to the examiner\'s questions.');
     });
 
     function updateTopicButtons() {
@@ -952,13 +998,14 @@
 
     // EVENT LISTENERS
     playBtn.addEventListener('click', playAudio);
-    pauseBtn.addEventListener('click', pauseAudio);
     document.getElementById('replayBtn').addEventListener('click', replay);
 
     // Load voices
-    window.speechSynthesis.onvoiceschanged = () => {
-      console.log('Voices loaded');
-    };
+    if (speechSynthesis.onvoiceschanged !== undefined) {
+      speechSynthesis.onvoiceschanged = () => {
+        console.log('🔊 Voices loaded:', speechSynthesis.getVoices().length);
+      };
+    }
 
     // INITIALIZE
     loadData();

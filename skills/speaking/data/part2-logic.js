@@ -1,363 +1,556 @@
 // ==========================================
-// SPEAKING PRACTICE DATA FOR INTUITY
-// Part 2: Long Turn (Compare & Describe)
+// INTUITY SPEAKING PRACTICE - PART 2 LOGIC
+// iPhone 11 Pro Max Optimized
 // ==========================================
 
-const SPEAKING_DATA = {
-  "comparing": {
-    "task": "Compare and contrast these pictures.",
-    "phraseBank": {
-      "discourse": [
-        "I feel that",
-        "In many ways",
-        "As far as I can judge",
-        "To some extent",
-        "It seems to me",
-        "In many aspects",
-        "While",
-        "Whereas",
-        "By contrast",
-        "On the other hand",
-        "However",
-        "In comparison"
-      ],
-      "vocabulary": [
-        "similar",
-        "identical",
-        "very much alike",
-        "have in common",
-        "resemble each other",
-        "share similarities",
-        "differ",
-        "contrast",
-        "distinguish",
-        "commuting",
-        "travelling",
-        "cycling",
-        "public transport",
-        "eco-friendly"
-      ]
-    },
-    "pairs": [
-      {
-        "image1": "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=600",
-        "image2": "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600",
-        "responses": {
-          "default": {
-            "sections": [
-              {
-                "icon": "🔗",
-                "label": "Similarities",
-                "text": "I feel that in many ways the two pictures are similar. They both show people travelling.",
-                "phrases": {
-                  "discourse": ["I feel that", "in many ways"],
-                  "vocabulary": ["similar", "travelling"]
-                }
-              },
-              {
-                "icon": "⚡",
-                "label": "Difference",
-                "text": "While the first picture shows a woman commuting to work by train, the second shows a woman cycling to work.",
-                "phrases": {
-                  "discourse": ["While"],
-                  "vocabulary": ["commuting", "cycling"]
-                }
-              }
-            ]
-          },
-          "alternative1": {
-            "sections": [
-              {
-                "icon": "🔗",
-                "label": "Similarities",
-                "text": "As far as I can judge, to some extent the two pictures are identical. They both show people travelling.",
-                "phrases": {
-                  "discourse": ["As far as I can judge", "to some extent"],
-                  "vocabulary": ["identical", "travelling"]
-                }
-              },
-              {
-                "icon": "⚡",
-                "label": "Difference",
-                "text": "Whereas the first picture shows a woman commuting to work by train, the second shows a woman cycling to work.",
-                "phrases": {
-                  "discourse": ["Whereas"],
-                  "vocabulary": ["commuting", "cycling"]
-                }
-              }
-            ]
-          },
-          "alternative2": {
-            "sections": [
-              {
-                "icon": "🔗",
-                "label": "Similarities",
-                "text": "It seems to me that in many aspects the two pictures are very much alike. They both show people travelling.",
-                "phrases": {
-                  "discourse": ["It seems to me", "in many aspects"],
-                  "vocabulary": ["very much alike", "travelling"]
-                }
-              },
-              {
-                "icon": "⚡",
-                "label": "Difference",
-                "text": "The first picture shows a woman commuting to work by train. By contrast, the second shows a woman cycling to work.",
-                "phrases": {
-                  "discourse": ["By contrast"],
-                  "vocabulary": ["commuting", "cycling"]
-                }
-              }
-            ]
-          }
-        }
-      }
-    ]
-  },
+console.log('Loading part2-logic.js...');
 
-  "justifying": {
-    "task": "Which method of transport do you think is better for commuting? Why?",
-    "phraseBank": {
-      "discourse": [
-        "In my opinion",
-        "I believe that",
-        "From my perspective",
-        "It seems to me that",
-        "I would argue that",
-        "The main reason is that",
-        "This is because",
-        "What's more",
-        "Furthermore",
-        "Additionally",
-        "For instance",
-        "For example",
-        "That's why"
-      ],
-      "vocabulary": [
-        "eco-friendly",
-        "sustainable",
-        "environmentally conscious",
-        "carbon footprint",
-        "health benefits",
-        "physical exercise",
-        "cost-effective",
-        "convenient",
-        "reliable",
-        "efficient",
-        "flexible",
-        "stress-free"
-      ]
-    },
-    "pairs": [
-      {
-        "image1": "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=600",
-        "image2": "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600",
-        "responses": {
-          "default": {
-            "sections": [
-              {
-                "icon": "💡",
-                "label": "Opinion",
-                "text": "In my opinion, cycling is better for commuting if you live close to work.",
-                "phrases": {
-                  "discourse": ["In my opinion"],
-                  "vocabulary": ["cycling", "commuting"]
-                }
-              },
-              {
-                "icon": "✓",
-                "label": "Justification",
-                "text": "The main reason is that it's more eco-friendly and provides excellent health benefits. What's more, it's cost-effective compared to public transport.",
-                "phrases": {
-                  "discourse": ["The main reason is that", "What's more"],
-                  "vocabulary": ["eco-friendly", "health benefits", "cost-effective"]
-                }
-              },
-              {
-                "icon": "📌",
-                "label": "Example",
-                "text": "For instance, cycling to work helps you stay fit while reducing your carbon footprint. That's why I think it's the better option for short distances.",
-                "phrases": {
-                  "discourse": ["For instance", "That's why"],
-                  "vocabulary": ["stay fit", "carbon footprint"]
-                }
-              }
-            ]
-          },
-          "alternative1": {
-            "sections": [
-              {
-                "icon": "💡",
-                "label": "Opinion",
-                "text": "I believe that cycling is superior for commuting when the distance is manageable.",
-                "phrases": {
-                  "discourse": ["I believe that"],
-                  "vocabulary": ["cycling", "superior", "commuting"]
-                }
-              },
-              {
-                "icon": "✓",
-                "label": "Justification",
-                "text": "This is because it combines physical exercise with environmentally conscious transport. Furthermore, it's more flexible than relying on public transport schedules.",
-                "phrases": {
-                  "discourse": ["This is because", "Furthermore"],
-                  "vocabulary": ["physical exercise", "environmentally conscious", "flexible"]
-                }
-              },
-              {
-                "icon": "📌",
-                "label": "Example",
-                "text": "For example, you can avoid rush hour delays while getting your daily workout. That's why I'd recommend it for anyone living within cycling distance.",
-                "phrases": {
-                  "discourse": ["For example", "That's why"],
-                  "vocabulary": ["rush hour", "daily workout"]
-                }
-              }
-            ]
-          },
-          "alternative2": {
-            "sections": [
-              {
-                "icon": "💡",
-                "label": "Opinion",
-                "text": "From my perspective, cycling represents the better choice for local commuting.",
-                "phrases": {
-                  "discourse": ["From my perspective"],
-                  "vocabulary": ["cycling", "local commuting"]
-                }
-              },
-              {
-                "icon": "✓",
-                "label": "Justification",
-                "text": "I would argue that its sustainability and health advantages outweigh other options. Additionally, it offers a stress-free start to the working day.",
-                "phrases": {
-                  "discourse": ["I would argue that", "Additionally"],
-                  "vocabulary": ["sustainability", "health advantages", "stress-free"]
-                }
-              },
-              {
-                "icon": "📌",
-                "label": "Example",
-                "text": "It seems to me that the combination of saving money and staying healthy makes cycling ideal. That's why more people are choosing bikes over cars.",
-                "phrases": {
-                  "discourse": ["It seems to me that", "That's why"],
-                  "vocabulary": ["saving money", "staying healthy"]
-                }
-              }
-            ]
-          }
-        }
-      }
-    ]
-  },
+// ==========================================
+// STATE MANAGEMENT
+// ==========================================
+let currentCategory = 'comparing';
+let currentStyle = 'default';
+let currentPairIndex = 0;
+let viewMode = 'watch'; // 'watch' or 'structure'
+let showXRay = false;
+let isPlaying = false;
+let voicesLoaded = false;
 
-  "speculating": {
-    "task": "What might these people be thinking about during their journey?",
-    "phraseBank": {
-      "discourse": [
-        "I imagine that",
-        "I would guess that",
-        "It's possible that",
-        "Perhaps",
-        "Maybe",
-        "They might be",
-        "They could be",
-        "It's likely that",
-        "Probably",
-        "I suspect that",
-        "I'd say that",
-        "It seems probable that"
-      ],
-      "vocabulary": [
-        "reflecting on",
-        "contemplating",
-        "thinking about",
-        "planning ahead",
-        "worrying about",
-        "looking forward to",
-        "daydreaming",
-        "mentally preparing",
-        "reviewing",
-        "anticipating",
-        "considering",
-        "pondering"
-      ]
-    },
-    "pairs": [
-      {
-        "image1": "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=600",
-        "image2": "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600",
-        "responses": {
-          "default": {
-            "sections": [
-              {
-                "icon": "💭",
-                "label": "First Speculation",
-                "text": "I imagine that the woman on the train might be thinking about her upcoming meetings or planning ahead for the day.",
-                "phrases": {
-                  "discourse": ["I imagine that", "might be"],
-                  "vocabulary": ["thinking about", "planning ahead"]
-                }
-              },
-              {
-                "icon": "💭",
-                "label": "Second Speculation",
-                "text": "Perhaps the cyclist is enjoying the fresh air and mentally preparing for work. It's possible that she's also feeling good about making an eco-friendly choice.",
-                "phrases": {
-                  "discourse": ["Perhaps", "It's possible that"],
-                  "vocabulary": ["mentally preparing", "eco-friendly choice"]
-                }
-              }
-            ]
-          },
-          "alternative1": {
-            "sections": [
-              {
-                "icon": "💭",
-                "label": "First Speculation",
-                "text": "I would guess that the commuter on the train could be reviewing her schedule or worrying about being late.",
-                "phrases": {
-                  "discourse": ["I would guess that", "could be"],
-                  "vocabulary": ["reviewing", "worrying about"]
-                }
-              },
-              {
-                "icon": "💭",
-                "label": "Second Speculation",
-                "text": "It's likely that the cyclist is contemplating her day while enjoying the physical activity. I suspect that she's looking forward to arriving at work feeling energized.",
-                "phrases": {
-                  "discourse": ["It's likely that", "I suspect that"],
-                  "vocabulary": ["contemplating", "looking forward to", "energized"]
-                }
-              }
-            ]
-          },
-          "alternative2": {
-            "sections": [
-              {
-                "icon": "💭",
-                "label": "First Speculation",
-                "text": "I'd say that the train passenger is probably pondering work challenges or anticipating the day ahead.",
-                "phrases": {
-                  "discourse": ["I'd say that", "probably"],
-                  "vocabulary": ["pondering", "anticipating"]
-                }
-              },
-              {
-                "icon": "💭",
-                "label": "Second Speculation",
-                "text": "It seems probable that the cyclist is reflecting on the health benefits of her journey. Maybe she's also daydreaming while enjoying the scenery.",
-                "phrases": {
-                  "discourse": ["It seems probable that", "Maybe"],
-                  "vocabulary": ["reflecting on", "health benefits", "daydreaming"]
-                }
-              }
-            ]
-          }
-        }
-      }
-    ]
+// DOM elements (initialized after DOM loads)
+let taskText, image1, image2, responseSection, responseContent;
+let structurePanel, structureGrid, practicePrompt, xrayBtn;
+let playBtn, pauseBtn, viewModeToggle, watchLabel, structureLabel, imageSection;
+
+// ==========================================
+// CATEGORY & STYLE MANAGEMENT
+// ==========================================
+function switchCategory(category) {
+  console.log('Switching to category:', category);
+  currentCategory = category;
+  currentPairIndex = 0;
+  currentStyle = 'default';
+  
+  document.querySelectorAll('.category-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.category === category);
+  });
+  
+  document.querySelectorAll('.style-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.style === 'default');
+  });
+  
+  renderContent();
+}
+
+function switchStyle(style) {
+  console.log('Switching to style:', style);
+  currentStyle = style;
+  
+  document.querySelectorAll('.style-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.style === style);
+  });
+  
+  renderResponse();
+}
+
+// ==========================================
+// VIEW MODE TOGGLE
+// ==========================================
+function toggleViewMode() {
+  viewMode = viewMode === 'watch' ? 'structure' : 'watch';
+  console.log('View mode:', viewMode);
+  
+  viewModeToggle.classList.toggle('active', viewMode === 'structure');
+  watchLabel.classList.toggle('active', viewMode === 'watch');
+  structureLabel.classList.toggle('active', viewMode === 'structure');
+  
+  if (viewMode === 'watch') {
+    responseSection.style.display = 'block';
+    structurePanel.classList.remove('active');
+    imageSection.style.display = 'block';
+  } else {
+    responseSection.style.display = 'none';
+    structurePanel.classList.add('active');
+    imageSection.style.display = 'none';
+    renderStructure();
   }
-};
+}
 
-console.log('✓ part2-structure.js loaded successfully');
-console.log('Available categories:', Object.keys(SPEAKING_DATA));
+// ==========================================
+// X-RAY MODE
+// ==========================================
+function toggleXRay() {
+  showXRay = !showXRay;
+  console.log('X-Ray mode:', showXRay);
+  xrayBtn.classList.toggle('active', showXRay);
+  responseContent.classList.toggle('xray-active', showXRay);
+}
+
+// ==========================================
+// CONTENT RENDERING
+// ==========================================
+function renderContent() {
+  const data = SPEAKING_DATA[currentCategory];
+  if (!data) {
+    console.error('No data found for category:', currentCategory);
+    return;
+  }
+  
+  const pair = data.pairs[currentPairIndex];
+  
+  taskText.textContent = data.task;
+  image1.src = pair.image1;
+  image2.src = pair.image2;
+  
+  renderResponse();
+}
+
+function renderResponse() {
+  const data = SPEAKING_DATA[currentCategory];
+  if (!data) {
+    console.error('No data found for category:', currentCategory);
+    return;
+  }
+  
+  const pair = data.pairs[currentPairIndex];
+  const response = pair.responses[currentStyle];
+  
+  if (!response || !response.sections) {
+    console.error('Invalid response structure for style:', currentStyle);
+    return;
+  }
+  
+  let html = '';
+  
+  response.sections.forEach(section => {
+    html += `
+      <div class="response-block">
+        <div class="block-label">
+          ${section.icon} ${section.label}
+        </div>
+        <div class="block-text">
+          ${highlightPhrases(section.text, section.phrases)}
+        </div>
+      </div>
+    `;
+  });
+  
+  responseContent.innerHTML = html;
+  console.log('Response rendered for:', currentStyle);
+}
+
+function highlightPhrases(text, phrases) {
+  if (!phrases) return text;
+  
+  let result = text;
+  
+  // Highlight discourse markers
+  if (phrases.discourse && Array.isArray(phrases.discourse)) {
+    phrases.discourse.forEach(phrase => {
+      const regex = new RegExp(`\\b(${escapeRegex(phrase)})\\b`, 'gi');
+      result = result.replace(regex, '<span class="phrase discourse">$1</span>');
+    });
+  }
+  
+  // Highlight vocabulary
+  if (phrases.vocabulary && Array.isArray(phrases.vocabulary)) {
+    phrases.vocabulary.forEach(phrase => {
+      const regex = new RegExp(`\\b(${escapeRegex(phrase)})\\b`, 'gi');
+      result = result.replace(regex, '<span class="phrase vocab">$1</span>');
+    });
+  }
+  
+  return result;
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ==========================================
+// STRUCTURE PANEL RENDERING
+// ==========================================
+function renderStructure() {
+  const data = SPEAKING_DATA[currentCategory];
+  if (!data) {
+    console.error('No data found for category:', currentCategory);
+    return;
+  }
+  
+  console.log('Rendering structure for:', currentCategory);
+  console.log('Discourse markers:', data.phraseBank.discourse.length);
+  console.log('Vocabulary items:', data.phraseBank.vocabulary.length);
+  
+  let html = '';
+  
+  // Discourse Markers
+  html += `
+    <div class="structure-category">
+      <div class="structure-category-title">🔬 Discourse Markers</div>
+      <div class="structure-list">
+        ${data.phraseBank.discourse.map(phrase => 
+          `<div class="structure-item">${phrase}</div>`
+        ).join('')}
+      </div>
+    </div>
+  `;
+  
+  // Key Vocabulary
+  html += `
+    <div class="structure-category vocab-cat">
+      <div class="structure-category-title">💡 Key Vocabulary</div>
+      <div class="structure-list">
+        ${data.phraseBank.vocabulary.map(phrase => 
+          `<div class="structure-item">${phrase}</div>`
+        ).join('')}
+      </div>
+    </div>
+  `;
+  
+  structureGrid.innerHTML = html;
+  console.log('Structure rendered successfully');
+}
+
+// ==========================================
+// VOICE SELECTION (iPhone 11 Pro Max Optimized)
+// ==========================================
+function selectBestVoice() {
+  const voices = speechSynthesis.getVoices();
+  
+  console.log('=== Voice Selection ===');
+  console.log('Total voices available:', voices.length);
+  
+  // Priority list for iPhone voices
+  const preferredVoices = [
+    'Kate',           // iOS British Female
+    'Serena',         // iOS British Female (alternative)
+    'Daniel',         // iOS British Male (fallback)
+    'Google UK English Female',
+    'Microsoft Hazel Desktop',
+    'Microsoft Susan Desktop'
+  ];
+  
+  // Log available voices
+  voices.forEach((voice, index) => {
+    console.log(`${index + 1}. ${voice.name} (${voice.lang})`);
+  });
+  
+  // Try to find preferred voices
+  for (const preferred of preferredVoices) {
+    const voice = voices.find(v => v.name === preferred);
+    if (voice) {
+      console.log('✓ Selected voice:', voice.name, '(' + voice.lang + ')');
+      return voice;
+    }
+  }
+  
+  // Fallback: Find any British English female voice
+  const ukFemale = voices.find(v => 
+    v.lang.startsWith('en-GB') && 
+    (v.name.toLowerCase().includes('female') || 
+     v.name.toLowerCase().includes('woman') ||
+     v.name.toLowerCase().includes('kate') ||
+     v.name.toLowerCase().includes('serena'))
+  );
+  
+  if (ukFemale) {
+    console.log('✓ Selected UK female voice:', ukFemale.name);
+    return ukFemale;
+  }
+  
+  // Fallback: Any British English voice
+  const ukVoice = voices.find(v => v.lang.startsWith('en-GB'));
+  if (ukVoice) {
+    console.log('✓ Selected UK voice:', ukVoice.name);
+    return ukVoice;
+  }
+  
+  // Fallback: Any English voice
+  const enVoice = voices.find(v => v.lang.startsWith('en-'));
+  if (enVoice) {
+    console.log('⚠ Using fallback English voice:', enVoice.name);
+    return enVoice;
+  }
+  
+  console.log('⚠ Using default system voice');
+  return null;
+}
+
+// ==========================================
+// SPEECH SYNTHESIS
+// ==========================================
+async function playAudio() {
+  const data = SPEAKING_DATA[currentCategory];
+  if (!data) {
+    console.error('No data for category:', currentCategory);
+    return;
+  }
+  
+  const pair = data.pairs[currentPairIndex];
+  const response = pair.responses[currentStyle];
+  
+  if (!response || !response.sections) {
+    console.error('Invalid response structure');
+    return;
+  }
+  
+  // Cancel any existing speech
+  speechSynthesis.cancel();
+  
+  // Ensure voices are loaded
+  await ensureVoicesLoaded();
+  
+  isPlaying = true;
+  playBtn.style.display = 'none';
+  pauseBtn.style.display = 'flex';
+  playBtn.classList.add('speaking');
+  
+  console.log('=== Starting Audio Playback ===');
+  console.log('Category:', currentCategory);
+  console.log('Style:', currentStyle);
+  console.log('Sections to speak:', response.sections.length);
+  
+  for (const section of response.sections) {
+    if (!isPlaying) break;
+    
+    // Strip HTML tags to get plain text
+    const plainText = section.text.replace(/<[^>]*>/g, '');
+    console.log('Speaking:', plainText.substring(0, 50) + '...');
+    
+    await speak(plainText);
+    
+    if (isPlaying) {
+      await wait(800); // Pause between sections
+    }
+  }
+  
+  console.log('=== Audio Playback Complete ===');
+  stopAudio();
+}
+
+function speak(text) {
+  return new Promise((resolve) => {
+    if (!isPlaying) {
+      resolve();
+      return;
+    }
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-GB';
+    utterance.rate = 0.85;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+    
+    // Select the best available voice
+    const selectedVoice = selectBestVoice();
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+    }
+    
+    utterance.onstart = () => {
+      console.log('▶ Speech started');
+    };
+    
+    utterance.onend = () => {
+      console.log('■ Speech ended');
+      resolve();
+    };
+    
+    utterance.onerror = (event) => {
+      console.error('Speech error:', event.error);
+      resolve();
+    };
+    
+    speechSynthesis.speak(utterance);
+  });
+}
+
+function pauseAudio() {
+  isPlaying = false;
+  speechSynthesis.cancel();
+  stopAudio();
+}
+
+function stopAudio() {
+  isPlaying = false;
+  playBtn.style.display = 'flex';
+  pauseBtn.style.display = 'none';
+  playBtn.classList.remove('speaking');
+  console.log('Audio playback stopped');
+}
+
+function replay() {
+  speechSynthesis.cancel();
+  stopAudio();
+  setTimeout(() => playAudio(), 100);
+}
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ==========================================
+// VOICE LOADING
+// ==========================================
+function ensureVoicesLoaded() {
+  return new Promise((resolve) => {
+    const voices = speechSynthesis.getVoices();
+    
+    if (voices.length > 0) {
+      if (!voicesLoaded) {
+        voicesLoaded = true;
+        console.log('✓ Voices already loaded:', voices.length);
+      }
+      resolve();
+    } else {
+      console.log('Waiting for voices to load...');
+      
+      const timeout = setTimeout(() => {
+        console.log('⚠ Voice loading timeout - proceeding anyway');
+        resolve();
+      }, 2000);
+      
+      speechSynthesis.onvoiceschanged = () => {
+        clearTimeout(timeout);
+        const loadedVoices = speechSynthesis.getVoices();
+        voicesLoaded = true;
+        console.log('✓ Voices loaded:', loadedVoices.length);
+        resolve();
+      };
+    }
+  });
+}
+
+function loadVoices() {
+  const voices = speechSynthesis.getVoices();
+  if (voices.length > 0 && !voicesLoaded) {
+    voicesLoaded = true;
+    console.log('=== Voice System Ready ===');
+    console.log('Total voices available:', voices.length);
+    
+    // Check for Kate and Serena specifically
+    const kate = voices.find(v => v.name === 'Kate');
+    const serena = voices.find(v => v.name === 'Serena');
+    
+    if (kate) console.log('✓ Kate (UK) voice found');
+    if (serena) console.log('✓ Serena (UK) voice found');
+    if (!kate && !serena) console.log('⚠ Kate/Serena not found - will use fallback');
+  }
+}
+
+// ==========================================
+// PRACTICE MODE
+// ==========================================
+function showPractice() {
+  practicePrompt.classList.add('active');
+  practicePrompt.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// ==========================================
+// INITIALIZATION
+// ==========================================
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('DOM ready - initializing Part 2 logic');
+  
+  // CHECK IF DATA IS LOADED
+  if (typeof SPEAKING_DATA === 'undefined') {
+    console.error('❌ SPEAKING_DATA is not defined!');
+    console.error('Make sure part2-structure.js is loaded BEFORE part2-logic.js');
+    console.error('Check your HTML has: <script src="part2-structure.js"></script> FIRST');
+    return;
+  }
+  
+  console.log('✓ SPEAKING_DATA loaded successfully');
+  console.log('Available categories:', Object.keys(SPEAKING_DATA));
+  
+  // Initialize DOM elements
+  taskText = document.getElementById('taskText');
+  image1 = document.getElementById('image1');
+  image2 = document.getElementById('image2');
+  imageSection = document.querySelector('.image-section');
+  responseSection = document.getElementById('responseSection');
+  responseContent = document.getElementById('responseContent');
+  structurePanel = document.getElementById('structurePanel');
+  structureGrid = document.getElementById('structureGrid');
+  practicePrompt = document.getElementById('practicePrompt');
+  xrayBtn = document.getElementById('xrayBtn');
+  playBtn = document.getElementById('playBtn');
+  pauseBtn = document.getElementById('pauseBtn');
+  viewModeToggle = document.getElementById('viewModeToggle');
+  watchLabel = document.getElementById('watchLabel');
+  structureLabel = document.getElementById('structureLabel');
+  
+  // Verify all elements exist
+  if (!taskText || !image1 || !image2 || !responseContent) {
+    console.error('Critical DOM elements missing!');
+    return;
+  }
+  
+  console.log('✓ All DOM elements found');
+  
+  // Attach event listeners
+  document.querySelectorAll('.category-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      switchCategory(btn.dataset.category);
+    });
+  });
+
+  document.querySelectorAll('.style-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      switchStyle(btn.dataset.style);
+    });
+  });
+
+  if (viewModeToggle) {
+    viewModeToggle.addEventListener('click', toggleViewMode);
+  }
+
+  if (xrayBtn) {
+    xrayBtn.addEventListener('click', toggleXRay);
+  }
+
+  if (playBtn) {
+    playBtn.addEventListener('click', playAudio);
+  }
+
+  if (pauseBtn) {
+    pauseBtn.addEventListener('click', pauseAudio);
+  }
+
+  const replayBtn = document.getElementById('replayBtn');
+  if (replayBtn) {
+    replayBtn.addEventListener('click', replay);
+  }
+
+  const practiceBtn = document.getElementById('practiceBtn');
+  if (practiceBtn) {
+    practiceBtn.addEventListener('click', showPractice);
+  }
+
+  // Load voices immediately
+  loadVoices();
+  
+  // Listen for voice changes (important for iOS)
+  if (window.speechSynthesis) {
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    
+    // Force load voices on iOS
+    setTimeout(() => {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        console.log('✓ Voices loaded via timeout:', voices.length);
+        voicesLoaded = true;
+      }
+    }, 100);
+  }
+  
+  // Render initial content
+  renderContent();
+  
+  console.log('=== INTUITY Speaking Practice Initialized ===');
+  console.log('Device: iPhone 11 Pro Max optimized');
+  console.log('Preferred voices: Kate, Serena (UK)');
+  console.log('Current category:', currentCategory);
+  console.log('Current style:', currentStyle);
+});
+
+console.log('✓ part2-logic.js loaded successfully');

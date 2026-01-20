@@ -1268,7 +1268,7 @@
         if (!skeletonResponse.ok) {
           throw new Error(`Failed to load report-structures-skeleton.json (${skeletonResponse.status})`);
         }
-      
+        
         REPORT_STRUCTURES_LIST = await listResponse.json();
         REPORT_STRUCTURES_SLIDES = await slidesResponse.json();
         REPORT_STRUCTURES_SKELETON = await skeletonResponse.json();
@@ -1394,53 +1394,11 @@
       }
     }
 
+    // Legacy function - view toggle now handled by switchViewMode
     function setupViewToggle() {
-      const toggle = document.getElementById('viewToggle');
-      const listLabel = document.getElementById('listLabel');
-      const slidesLabel = document.getElementById('slidesLabel');
-      
-      toggle.addEventListener('click', function() {
-        viewMode = viewMode === 'list' ? 'slides' : 'list';
-        
-        this.classList.toggle('active', viewMode === 'slides');
-        listLabel.classList.toggle('active', viewMode === 'list');
-        slidesLabel.classList.toggle('active', viewMode === 'slides');
-        
-        document.getElementById('listView').classList.toggle('active', viewMode === 'list');
-        document.getElementById('slidesView').classList.toggle('active', viewMode === 'slides');
-        
-        // Show/hide slide controls bar
-        document.getElementById('slideControlsBar').style.display = viewMode === 'slides' ? 'flex' : 'none';
-        
-        // Update button visibility and text
-        document.getElementById('copyBtnText').textContent = viewMode === 'list' ? 'Copy All' : 'Copy Phrase';
-        document.getElementById('shuffleBtn').style.display = viewMode === 'slides' ? 'flex' : 'flex';
-        
-        // When switching to slides, load the current section
-        if (viewMode === 'slides') {
-          if (currentSectionKey === 'all') {
-            // If "All Sections" is selected, switch to first section for slides
-            const firstSection = Object.keys(REPORT_STRUCTURES[currentType].sections)[0];
-            loadSection(firstSection);
-          } else {
-            loadSection(currentSectionKey);
-          }
-        } else {
-          // When switching to list, show selected content
-          if (currentSectionKey === 'all') {
-            renderAllSections();
-          } else {
-            renderList(currentType, currentSectionKey);
-          }
-          
-          // Stop autoplay and cancel speech when leaving slides
-          if (isAutoPlaying) toggleAutoPlay();
-          if (window.speechSynthesis) {
-            window.speechSynthesis.cancel();
-          }
-          speechFinished = true;
-        }
-      });
+      // View mode switching is now handled by switchViewMode() function
+      // called directly from HTML onclick events
+      console.log('✅ View mode system initialized (3-mode buttons)');
     }
 
     // ==================== PARAGRAPH NAVIGATION ====================
@@ -1968,55 +1926,100 @@
     function initializeSkeleton() {
       // Generate the initial 10 slides (1 fixed + 9 random)
       skeletonSlides = [];
-      skeletonSlides[0] = REPORT_STRUCTURES_SKELETON[currentType].fixed_template;
+      
+      console.log('🦴 Initializing skeleton mode...');
+      console.log('Current type:', currentType);
+      console.log('Skeleton data:', REPORT_STRUCTURES_SKELETON);
+      
+      if (!REPORT_STRUCTURES_SKELETON[currentType]) {
+        console.error('❌ No skeleton data for type:', currentType);
+        return;
+      }
+      
+      const skeletonData = REPORT_STRUCTURES_SKELETON[currentType];
+      console.log('Skeleton data for type:', skeletonData);
+      
+      if (!skeletonData.fixed_template) {
+        console.error('❌ No fixed_template found in skeleton data');
+        return;
+      }
+      
+      skeletonSlides[0] = skeletonData.fixed_template;
+      console.log('✅ Fixed template loaded');
       
       // Generate 9 random reports
       for (let i = 1; i < 10; i++) {
-        skeletonSlides[i] = generateRandomReport();
+        try {
+          skeletonSlides[i] = generateRandomReport();
+          console.log(`✅ Random report ${i} generated`);
+        } catch (error) {
+          console.error(`❌ Error generating random report ${i}:`, error);
+        }
       }
       
       currentSkeletonIndex = 0;
+      console.log('✅ Skeleton initialization complete');
     }
 
     function generateRandomReport() {
-      const pools = REPORT_STRUCTURES_SKELETON[currentType].random_pools;
+      const skeletonData = REPORT_STRUCTURES_SKELETON[currentType];
+      
+      if (!skeletonData || !skeletonData.random_pools) {
+        console.error('❌ No random_pools found in skeleton data');
+        console.log('Available properties:', Object.keys(skeletonData || {}));
+        throw new Error('Missing random_pools in skeleton data');
+      }
+      
+      const pools = skeletonData.random_pools;
       const report = {};
       
       // Introduction = random aim + topic + method
-      const aim = pools.introduction.aims[Math.floor(Math.random() * pools.introduction.aims.length)];
-      const topic = pools.introduction.topics[Math.floor(Math.random() * pools.introduction.topics.length)];
-      const method = pools.introduction.methods[Math.floor(Math.random() * pools.introduction.methods.length)];
-      report.introduction = `${aim} ${topic}. ${method}`;
+      if (pools.introduction) {
+        const aim = pools.introduction.aims[Math.floor(Math.random() * pools.introduction.aims.length)];
+        const topic = pools.introduction.topics[Math.floor(Math.random() * pools.introduction.topics.length)];
+        const method = pools.introduction.methods[Math.floor(Math.random() * pools.introduction.methods.length)];
+        report.introduction = `${aim} ${topic}. ${method}`;
+      }
       
       // Neutral = random opening + assessment + reason
-      const neutralOpen = pools.neutral.opening[Math.floor(Math.random() * pools.neutral.opening.length)];
-      const assessment = pools.neutral.assessment[Math.floor(Math.random() * pools.neutral.assessment.length)];
-      const reason = pools.neutral.reason[Math.floor(Math.random() * pools.neutral.reason.length)];
-      report.neutral = `${neutralOpen} ${assessment}. ${reason}`;
+      if (pools.neutral) {
+        const neutralOpen = pools.neutral.opening[Math.floor(Math.random() * pools.neutral.opening.length)];
+        const assessment = pools.neutral.assessment[Math.floor(Math.random() * pools.neutral.assessment.length)];
+        const reason = pools.neutral.reason[Math.floor(Math.random() * pools.neutral.reason.length)];
+        report.neutral = `${neutralOpen} ${assessment}. ${reason}`;
+      }
       
       // Praising = random opening + subject + elaboration
-      const praiseOpen = pools.praising.opening[Math.floor(Math.random() * pools.praising.opening.length)];
-      const subject = pools.praising.subject[Math.floor(Math.random() * pools.praising.subject.length)];
-      const elaboration = pools.praising.elaboration[Math.floor(Math.random() * pools.praising.elaboration.length)];
-      report.praising = `${praiseOpen} ${subject}. ${elaboration}`;
+      if (pools.praising) {
+        const praiseOpen = pools.praising.opening[Math.floor(Math.random() * pools.praising.opening.length)];
+        const subject = pools.praising.subject[Math.floor(Math.random() * pools.praising.subject.length)];
+        const elaboration = pools.praising.elaboration[Math.floor(Math.random() * pools.praising.elaboration.length)];
+        report.praising = `${praiseOpen} ${subject}. ${elaboration}`;
+      }
       
       // Criticising = random opening + problem + impact
-      const critOpen = pools.criticising.opening[Math.floor(Math.random() * pools.criticising.opening.length)];
-      const problem = pools.criticising.problem[Math.floor(Math.random() * pools.criticising.problem.length)];
-      const impact = pools.criticising.impact[Math.floor(Math.random() * pools.criticising.impact.length)];
-      report.criticising = `${critOpen} ${problem}. ${impact}`;
+      if (pools.criticising) {
+        const critOpen = pools.criticising.opening[Math.floor(Math.random() * pools.criticising.opening.length)];
+        const problem = pools.criticising.problem[Math.floor(Math.random() * pools.criticising.problem.length)];
+        const impact = pools.criticising.impact[Math.floor(Math.random() * pools.criticising.impact.length)];
+        report.criticising = `${critOpen} ${problem}. ${impact}`;
+      }
       
       // Recommending = random opening + action + benefit
-      const recOpen = pools.recommending.opening[Math.floor(Math.random() * pools.recommending.opening.length)];
-      const action = pools.recommending.action[Math.floor(Math.random() * pools.recommending.action.length)];
-      const benefit = pools.recommending.benefit[Math.floor(Math.random() * pools.recommending.benefit.length)];
-      report.recommending = `${recOpen} ${action}. ${benefit}`;
+      if (pools.recommending) {
+        const recOpen = pools.recommending.opening[Math.floor(Math.random() * pools.recommending.opening.length)];
+        const action = pools.recommending.action[Math.floor(Math.random() * pools.recommending.action.length)];
+        const benefit = pools.recommending.benefit[Math.floor(Math.random() * pools.recommending.benefit.length)];
+        report.recommending = `${recOpen} ${action}. ${benefit}`;
+      }
       
       // Conclusion = random summary + priority + final
-      const summary = pools.conclusion.summary[Math.floor(Math.random() * pools.conclusion.summary.length)];
-      const priority = pools.conclusion.priority[Math.floor(Math.random() * pools.conclusion.priority.length)];
-      const final = pools.conclusion.final[Math.floor(Math.random() * pools.conclusion.final.length)];
-      report.conclusion = `${summary}. ${priority} ${final}`;
+      if (pools.conclusion) {
+        const summary = pools.conclusion.summary[Math.floor(Math.random() * pools.conclusion.summary.length)];
+        const priority = pools.conclusion.priority[Math.floor(Math.random() * pools.conclusion.priority.length)];
+        const final = pools.conclusion.final[Math.floor(Math.random() * pools.conclusion.final.length)];
+        report.conclusion = `${summary}. ${priority} ${final}`;
+      }
       
       return report;
     }

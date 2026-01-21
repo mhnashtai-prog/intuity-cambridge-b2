@@ -1065,6 +1065,49 @@
       text-shadow: 0 0 8px rgba(125, 211, 252, 0.2);
     }
 
+    /* ============ ENHANCED X-RAY: POSITIVE & NEGATIVE ============ */
+    /* Positive evaluation - Green */
+    .phrase-text .positive,
+    .phrase-display .positive,
+    .skeleton-section-text .positive {
+      color: inherit;
+      font-weight: inherit;
+      border-bottom: none;
+      padding-bottom: 0;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .phrase-text.xray-active .positive,
+    .phrase-display.xray-active .positive,
+    .skeleton-section-text.xray-active .positive {
+      color: #10b981 !important;
+      font-weight: 600 !important;
+      border-bottom: 2px solid rgba(16, 185, 129, 0.4) !important;
+      padding-bottom: 2px !important;
+      text-shadow: 0 0 8px rgba(16, 185, 129, 0.2);
+    }
+
+    /* Negative evaluation - Amber */
+    .phrase-text .negative,
+    .phrase-display .negative,
+    .skeleton-section-text .negative {
+      color: inherit;
+      font-weight: inherit;
+      border-bottom: none;
+      padding-bottom: 0;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .phrase-text.xray-active .negative,
+    .phrase-display.xray-active .negative,
+    .skeleton-section-text.xray-active .negative {
+      color: #f59e0b !important;
+      font-weight: 600 !important;
+      border-bottom: 2px solid rgba(245, 158, 11, 0.4) !important;
+      padding-bottom: 2px !important;
+      text-shadow: 0 0 8px rgba(245, 158, 11, 0.2);
+    }
+
     .skeleton-nav {
       display: flex;
       justify-content: center;
@@ -1687,27 +1730,76 @@
     };
 
     // X-Ray patterns to detect functional language
-    const XRAY_PATTERNS = {
-      discourse: [
-        'however', 'furthermore', 'moreover', 'nevertheless', 'therefore', 'consequently',
-        'in conclusion', 'to sum up', 'in summary', 'overall', 'on the whole', 
-        'taking everything into account', 'all things considered', 'on balance',
-        'similarly', 'in addition', 'for instance', 'for example', 'such as',
-        'by far', 'particularly', 'especially', 'notably'
-      ],
-      formal: [
-        'it is recommended that', 'it would be advisable', 'it must be stated',
-        'it should be emphasized', 'it is worth noting', 'it must be acknowledged',
-        'the purpose of this report', 'the aim of this report', 'this report aims to',
-        'feedback suggests', 'observations indicate', 'the findings', 'based on',
-        'according to', 'the evidence', 'survey results', 'respondents felt'
-      ],
-      recommend: [
-        'to improve', 'one simple way', 'it is recommended', 'if this change',
-        'another option', 'a practical step', 'it would be advisable', 'should consider',
-        'a priority should be', 'it would be beneficial', 'to address', 'to enhance'
-      ]
-    };
+    // X-Ray patterns - loaded from JSON
+    let XRAY_PATTERNS = null;
+    let xrayPatternsLoaded = false;
+
+    // Load X-Ray patterns from JSON
+    async function loadXRayPatterns() {
+      try {
+        const response = await fetch('data/xray-patterns.json');
+        if (!response.ok) {
+          console.warn('X-Ray patterns file not found, using fallback patterns');
+          return loadFallbackXRayPatterns();
+        }
+        
+        const patterns = await response.json();
+        
+        // Flatten all pattern categories into our format
+        XRAY_PATTERNS = {
+          discourse: [
+            ...(patterns.discourse_markers?.patterns || []),
+            ...(patterns.conclusion_phrases?.patterns || [])
+          ],
+          formal: [
+            ...(patterns.formal_introductions?.patterns || []),
+            ...(patterns.methodology_phrases?.patterns || []),
+            ...(patterns.neutral_assessment?.patterns || []),
+            ...(patterns.emphasis_phrases?.patterns || []),
+            ...(patterns.hedging_phrases?.patterns || [])
+          ],
+          recommend: [
+            ...(patterns.recommendation_phrases?.patterns || [])
+          ],
+          positive: [
+            ...(patterns.positive_evaluation?.patterns || [])
+          ],
+          negative: [
+            ...(patterns.negative_evaluation?.patterns || [])
+          ]
+        };
+        
+        xrayPatternsLoaded = true;
+        console.log('✅ X-Ray patterns loaded from JSON:', {
+          discourse: XRAY_PATTERNS.discourse.length,
+          formal: XRAY_PATTERNS.formal.length,
+          recommend: XRAY_PATTERNS.recommend.length,
+          positive: XRAY_PATTERNS.positive.length,
+          negative: XRAY_PATTERNS.negative.length
+        });
+        
+      } catch (error) {
+        console.error('Error loading X-Ray patterns:', error);
+        loadFallbackXRayPatterns();
+      }
+    }
+
+    function loadFallbackXRayPatterns() {
+      // Minimal fallback if JSON doesn't load
+      XRAY_PATTERNS = {
+        discourse: ['however', 'furthermore', 'in conclusion', 'overall', 'on the whole'],
+        formal: ['the aim of this report', 'based on', 'according to', 'it is recommended that'],
+        recommend: ['to improve', 'it would be advisable', 'a practical step'],
+        positive: ['worked really well', 'a definite strength'],
+        negative: ['a common complaint', 'one major issue']
+      };
+      xrayPatternsLoaded = true;
+      console.log('⚠️ Using fallback X-Ray patterns');
+    }
+
+    function escapeRegex(string) {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
 
     // ==================== INITIALIZATION ====================
     async function init() {
@@ -1740,6 +1832,9 @@
         
         updateLoadingStatus('Loading phrase database...');
         await loadPhraseDatabase();
+        
+        updateLoadingStatus('Loading X-Ray patterns...');
+        await loadXRayPatterns();
         
         typeKeys = Object.keys(REPORT_STRUCTURES_LIST);
         
@@ -1902,22 +1997,49 @@
     }
 
     function wrapXRayPatterns(text) {
+      if (!xrayPatternsLoaded || !XRAY_PATTERNS) return text;
+      
       let wrapped = text;
       
-      XRAY_PATTERNS.discourse.forEach(pattern => {
-        const regex = new RegExp(`\\b(${pattern})\\b`, 'gi');
-        wrapped = wrapped.replace(regex, '<span class="discourse">$1</span>');
-      });
+      // Wrap discourse markers (cyan)
+      if (XRAY_PATTERNS.discourse) {
+        XRAY_PATTERNS.discourse.forEach(pattern => {
+          const regex = new RegExp(`\\b(${escapeRegex(pattern)})\\b`, 'gi');
+          wrapped = wrapped.replace(regex, '<span class="discourse">$1</span>');
+        });
+      }
 
-      XRAY_PATTERNS.formal.forEach(pattern => {
-        const regex = new RegExp(`(${pattern})`, 'gi');
-        wrapped = wrapped.replace(regex, '<span class="formal">$1</span>');
-      });
+      // Wrap formal phrases (cyan)
+      if (XRAY_PATTERNS.formal) {
+        XRAY_PATTERNS.formal.forEach(pattern => {
+          const regex = new RegExp(`(${escapeRegex(pattern)})`, 'gi');
+          wrapped = wrapped.replace(regex, '<span class="formal">$1</span>');
+        });
+      }
 
-      XRAY_PATTERNS.recommend.forEach(pattern => {
-        const regex = new RegExp(`(${pattern})`, 'gi');
-        wrapped = wrapped.replace(regex, '<span class="recommend">$1</span>');
-      });
+      // Wrap recommendation phrases (cyan)
+      if (XRAY_PATTERNS.recommend) {
+        XRAY_PATTERNS.recommend.forEach(pattern => {
+          const regex = new RegExp(`(${escapeRegex(pattern)})`, 'gi');
+          wrapped = wrapped.replace(regex, '<span class="recommend">$1</span>');
+        });
+      }
+
+      // Wrap positive evaluation (green)
+      if (XRAY_PATTERNS.positive) {
+        XRAY_PATTERNS.positive.forEach(pattern => {
+          const regex = new RegExp(`(${escapeRegex(pattern)})`, 'gi');
+          wrapped = wrapped.replace(regex, '<span class="positive">$1</span>');
+        });
+      }
+
+      // Wrap negative evaluation (amber)
+      if (XRAY_PATTERNS.negative) {
+        XRAY_PATTERNS.negative.forEach(pattern => {
+          const regex = new RegExp(`(${escapeRegex(pattern)})`, 'gi');
+          wrapped = wrapped.replace(regex, '<span class="negative">$1</span>');
+        });
+      }
 
       return wrapped;
     }
@@ -2857,3 +2979,5 @@
     // ==================== START ====================
     init();
   </script>
+  </body>
+</html>

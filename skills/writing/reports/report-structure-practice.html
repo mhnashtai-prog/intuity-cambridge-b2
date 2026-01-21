@@ -1887,39 +1887,32 @@
     // ==================== PHRASE DATABASE LOADING ====================
     async function loadPhraseDatabase() {
       try {
-        const phraseFiles = [
-          { path: 'data/phrases.json', source: 'General Phrases' },
-          { path: 'data/conclusion-phrases.json', source: 'Conclusion Phrases' },
-          { path: 'data/introduction-hooks.json', source: 'Introduction Hooks' },
-          { path: 'data/body-phrases.json', source: 'Body Phrases' },
-          { path: 'data/report-phrases.json', source: 'Report Phrases' }
-        ];
-
-        const results = await Promise.allSettled(
-          phraseFiles.map(f => fetch(f.path).then(r => r.ok ? r.json() : null))
-        );
-
-        results.forEach((result, index) => {
-          if (result.status === 'fulfilled' && result.value) {
-            const source = phraseFiles[index].source;
-            
-            if (source === 'Introduction Hooks') {
-              if (result.value.hooks) {
-                buildPhraseDatabase(result.value.hooks, source);
-              }
-              if (result.value.shared) {
-                buildPhraseDatabase(result.value.shared, 'Shared Expressions');
-              }
-            } else {
-              buildPhraseDatabase(result.value, source);
+        // Extract phrases directly from the report structures we've already loaded
+        if (REPORT_STRUCTURES_LIST) {
+          Object.entries(REPORT_STRUCTURES_LIST).forEach(([reportType, structure]) => {
+            if (structure.sections) {
+              Object.entries(structure.sections).forEach(([sectionKey, section]) => {
+                const source = `${structure.title} - ${section.label}`;
+                
+                // Extract from phrases array
+                if (section.phrases && Array.isArray(section.phrases)) {
+                  buildPhraseDatabaseFromArray(section.phrases, source);
+                }
+                
+                // Extract from examples array
+                if (section.examples && Array.isArray(section.examples)) {
+                  const phrases = section.examples.map(ex => ex.text || ex);
+                  buildPhraseDatabaseFromArray(phrases, source);
+                }
+              });
             }
-          }
-        });
+          });
+        }
 
         const phraseCount = Object.keys(phraseDatabase).length;
         phraseDataLoaded = phraseCount > 0;
         
-        console.log(`✅ Phrase database loaded: ${phraseCount} phrases`);
+        console.log(`✅ Phrase database loaded: ${phraseCount} phrases from report structures`);
         
         const toggleBtn = document.getElementById('phraseToggleBtn');
         if (toggleBtn) {
@@ -1929,47 +1922,32 @@
       } catch (error) {
         console.warn('Phrase database loading error:', error);
         phraseDataLoaded = false;
-      }
-    }
-
-    function buildPhraseDatabase(data, source) {
-      function processObject(obj, categoryPath = []) {
-        for (const key in obj) {
-          const value = obj[key];
-          
-          if (Array.isArray(value)) {
-            const category = [...categoryPath, key].join(' → ');
-            value.forEach(phrase => {
-              if (typeof phrase === 'string') {
-                addPhraseToDatabase(phrase, category, value);
-              }
-            });
-          } else if (typeof value === 'object' && value !== null) {
-            processObject(value, [...categoryPath, key]);
-          }
+        const toggleBtn = document.getElementById('phraseToggleBtn');
+        if (toggleBtn) {
+          toggleBtn.classList.add('hidden');
         }
       }
-
-      processObject(data, [source]);
     }
 
-    function addPhraseToDatabase(phrase, category, allPhrasesInCategory) {
-      const cleanPhrase = phrase.replace(/[.,;:!?]+$/, '').trim();
-      
-      if (cleanPhrase.split(/\s+/).length < 2) return;
-      
-      if (!phraseDatabase[cleanPhrase]) {
-        phraseDatabase[cleanPhrase] = {
-          category: category,
-          alternatives: []
-        };
-      }
-
-      allPhrasesInCategory.forEach(alt => {
-        if (typeof alt !== 'string') return;
-        const cleanAlt = alt.replace(/[.,;:!?]+$/, '').trim();
-        if (cleanAlt !== cleanPhrase && !phraseDatabase[cleanPhrase].alternatives.includes(cleanAlt)) {
-          phraseDatabase[cleanPhrase].alternatives.push(cleanAlt);
+    function buildPhraseDatabaseFromArray(phrases, source) {
+      phrases.forEach(phrase => {
+        if (typeof phrase !== 'string') return;
+        
+        // Clean the phrase
+        const cleanPhrase = phrase
+          .replace(/\[([^\]]+)\]/g, '$1') // Remove brackets but keep content
+          .replace(/[.,;:!?]+$/, '') // Remove trailing punctuation
+          .trim();
+        
+        // Only include phrases with at least 2 words
+        if (cleanPhrase.split(/\s+/).length < 2) return;
+        
+        // Add to database with source
+        if (!phraseDatabase[cleanPhrase]) {
+          phraseDatabase[cleanPhrase] = {
+            category: source,
+            alternatives: []
+          };
         }
       });
     }
@@ -2979,5 +2957,3 @@
     // ==================== START ====================
     init();
   </script>
-  </body>
-</html>

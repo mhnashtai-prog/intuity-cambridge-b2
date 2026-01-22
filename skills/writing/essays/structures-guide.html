@@ -689,6 +689,7 @@
     let typeKeys = [];
     let currentSlideSet = 0;
     let TOTAL_SLIDE_SETS = 2;
+    let currentCardIndex = 0; // Track which card/section we're showing
 
     // Load JSON data from external file
     async function loadEssayData() {
@@ -751,6 +752,7 @@
 
     function switchMode(mode) {
       currentMode = mode;
+      currentCardIndex = 0; // Reset to first card when switching modes
       document.querySelectorAll('.triple-toggle')[1].querySelectorAll('.toggle-btn').forEach((btn, idx) => {
         btn.classList.remove('active', 'slides-active');
         if ((mode === 'cards' && idx === 0) || (mode === 'full' && idx === 1) || (mode === 'slides' && idx === 2)) {
@@ -792,7 +794,10 @@
       let html = '';
       if (currentMode === 'slides') {
         html = renderSlidesMode(structure);
+      } else if (currentMode === 'cards') {
+        html = renderCardsMode(structure);
       } else {
+        // Full mode - show all sections
         if (structure.sections) {
           const sectionEntries = Object.entries(structure.sections);
           let i = 0;
@@ -861,6 +866,67 @@
       
       html += '</div>';
       return html;
+    }
+
+    function renderCardsMode(structure) {
+      if (!structure || !structure.sections) return '';
+      
+      const sectionEntries = Object.entries(structure.sections);
+      const totalCards = sectionEntries.length;
+      
+      // Ensure currentCardIndex is within bounds
+      if (currentCardIndex >= totalCards) currentCardIndex = 0;
+      if (currentCardIndex < 0) currentCardIndex = totalCards - 1;
+      
+      const [key, section] = sectionEntries[currentCardIndex];
+      
+      // Check if we should combine with next section (intro + thesis)
+      let shouldCombine = false;
+      let nextSection = null;
+      if ((key.includes('introduction') || key.includes('context')) && 
+          currentCardIndex + 1 < totalCards) {
+        const [nextKey, nextSec] = sectionEntries[currentCardIndex + 1];
+        if (nextKey.includes('thesis') || nextKey.includes('statement')) {
+          shouldCombine = true;
+          nextSection = nextSec;
+        }
+      }
+      
+      // Render the card content
+      let html = '<div class="cards-wrapper">';
+      
+      if (shouldCombine) {
+        html += renderCombinedSection(section, nextSection);
+      } else {
+        html += renderSection(section);
+      }
+      
+      // Add navigation controls
+      html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2rem; padding: 0 1rem;">';
+      html += '<button onclick="previousCard()" style="padding: 0.75rem 1.5rem; background: rgba(201, 169, 97, 0.1); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 8px; color: #c9a961; cursor: pointer; font-family: \'Space Grotesk\', sans-serif; font-weight: 600; transition: all 0.2s;" ' + (currentCardIndex === 0 ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : '') + '>← Previous</button>';
+      html += '<span style="color: #8b8b8b; font-size: 0.9rem; font-family: \'IBM Plex Mono\', monospace;">Card ' + (currentCardIndex + 1) + ' of ' + totalCards + '</span>';
+      html += '<button onclick="nextCard()" style="padding: 0.75rem 1.5rem; background: rgba(201, 169, 97, 0.1); border: 1px solid rgba(201, 169, 97, 0.3); border-radius: 8px; color: #c9a961; cursor: pointer; font-family: \'Space Grotesk\', sans-serif; font-weight: 600; transition: all 0.2s;" ' + (currentCardIndex === totalCards - 1 ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : '') + '>Next →</button>';
+      html += '</div>';
+      
+      html += '</div>';
+      return html;
+    }
+
+    function nextCard() {
+      const structure = ESSAY_STRUCTURES[currentType];
+      if (!structure || !structure.sections) return;
+      const totalCards = Object.keys(structure.sections).length;
+      if (currentCardIndex < totalCards - 1) {
+        currentCardIndex++;
+        renderStructure(currentType);
+      }
+    }
+
+    function previousCard() {
+      if (currentCardIndex > 0) {
+        currentCardIndex--;
+        renderStructure(currentType);
+      }
     }
 
     function renderSlidesMode(structure) {

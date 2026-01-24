@@ -536,10 +536,6 @@
       padding-bottom: 2px !important;
     }
 
-    /* ========================================
-       PHRASE EXPLORER FEATURE
-       ======================================== */
-    
     /* Phrase Enhancement */
     .phrase-enhanced {
       position: relative;
@@ -548,7 +544,7 @@
     }
 
     .phrase-hint-btn {
-      display: none; /* Hidden by default */
+      display: none;
       align-items: center;
       justify-content: center;
       width: 18px;
@@ -814,10 +810,7 @@
       box-shadow: 0 0 8px rgba(201, 169, 97, 0.4);
     }
 
-    /* ========================================
-       PHRASE ALTERNATIVES MODAL
-       ======================================== */
-
+    /* Phrase Alternatives Modal */
     .alternatives-modal-overlay {
       position: fixed;
       top: 0;
@@ -1183,7 +1176,7 @@
           <span id="phraseCount">0 phrases detected</span>
         </div>
         
-        <!-- Top Action Buttons (ALL THREE BUTTONS IN ONE CONTAINER) -->
+        <!-- Top Action Buttons -->
         <div class="top-action-buttons">
           <!-- Read Aloud Button -->
           <button class="phrase-toggle-btn" id="readAloudBtn" onclick="toggleReadAloud()">
@@ -1293,7 +1286,7 @@ async function init() {
   try {
     updateLoadingStatus('Loading essay data...');
     
-    // Load essay data (original paths preserved)
+    // Load essay data from JSON files
     const [questionsRes, samplesRes, ideasRes] = await Promise.all([
       fetch('data/essay-questions.json'),
       fetch('data/samples.json'),
@@ -1321,7 +1314,7 @@ async function init() {
 
     updateLoadingStatus('Loading phrase database...');
     
-    // Load phrase data for the Phrase Explorer feature (original paths preserved)
+    // Load phrase data for the Phrase Explorer feature
     await loadPhraseDatabase();
 
     updateUI();
@@ -1341,7 +1334,7 @@ function updateLoadingStatus(message) {
 // ==================== PHRASE DATABASE LOADING ====================
 async function loadPhraseDatabase() {
   try {
-    // Attempt to load all phrase JSON files (original paths preserved)
+    // Attempt to load all phrase JSON files
     const phraseFiles = [
       { path: 'data/phrases.json', source: 'General Phrases' },
       { path: 'data/conclusion-phrases.json', source: 'Conclusion Phrases' },
@@ -1468,6 +1461,7 @@ function enhanceWithPhraseHints(htmlContent) {
   return { html: enhanced, count: matchCount };
 }
 
+
 // ==================== UI CONTROLS ====================
 function selectStyle(styleName) {
   currentStyle = styleName;
@@ -1516,7 +1510,7 @@ function goToStage(index) {
 function prevEssay() {
   if (currentEssayIndex > 0) {
     currentEssayIndex--;
-    currentParagraph = 0;
+    // DON'T RESET currentParagraph here - that was the bug!
     currentStyle = 'default';
     updateStyleButtons();
     updateUI();
@@ -1527,7 +1521,7 @@ function prevEssay() {
 function nextEssay() {
   if (currentEssayIndex < samplesData.length - 1) {
     currentEssayIndex++;
-    currentParagraph = 0;
+    // DON'T RESET currentParagraph here - that was the bug!
     currentStyle = 'default';
     updateStyleButtons();
     updateUI();
@@ -1864,11 +1858,9 @@ function showToast(message, success = true) {
   }, 2500);
 }
     
-// ==================== READ ALOUD FEATURE (MOBILE-OPTIMIZED) ====================
-// Speech settings - optimized for UK English with better quality
+// ==================== READ ALOUD FEATURE ====================
 let speechSettings = {
-  useSystemDefault: false, // We'll select high-quality UK voices
-  rate: 0.95, // Slightly slower for clarity
+  rate: 0.95,
   pitch: 1.0,
   volume: 1.0
 };
@@ -1884,26 +1876,11 @@ function toggleReadAloud() {
 function getBestUKVoice() {
   const voices = speechSynthesis.getVoices();
   
-  // Priority order for UK English voices (best quality first)
   const voicePreferences = [
-    // iOS/Safari premium voices
-    v => v.name.includes('Daniel') && v.lang === 'en-GB', // UK male (premium)
-    v => v.name.includes('Kate') && v.lang === 'en-GB',   // UK female (premium)
-    v => v.name.includes('Serena') && v.lang === 'en-GB', // UK female (premium)
-    v => v.name.includes('Oliver') && v.lang === 'en-GB', // UK male (premium)
-    
-    // Google/Chrome UK voices
-    v => v.name.includes('Google UK English Male'),
-    v => v.name.includes('Google UK English Female'),
-    v => v.name.includes('British English Male'),
-    v => v.name.includes('British English Female'),
-    
-    // General UK voices
+    v => v.name.includes('Daniel') && v.lang === 'en-GB',
+    v => v.name.includes('Kate') && v.lang === 'en-GB',
     v => v.lang === 'en-GB' && v.localService,
     v => v.lang === 'en-GB',
-    
-    // Fallback to quality English voices
-    v => v.name.includes('Samantha') && v.lang === 'en-US', // High quality fallback
     v => v.lang.startsWith('en-') && v.localService,
     v => v.lang.startsWith('en')
   ];
@@ -1920,18 +1897,13 @@ function getBestUKVoice() {
 }
 
 function startReading() {
-  // Clear any existing speech first (critical for mobile)
   speechSynthesis.cancel();
   
-  // Small delay to let mobile browser reset
   setTimeout(() => {
     const content = document.querySelector('.paragraph-text, .full-text-view');
     if (!content) return;
     
-    // Get plain text (removes HTML tags)
     const text = content.innerText;
-    
-    // Break into sentences for better mobile handling
     const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
     let currentIndex = 0;
     
@@ -1942,14 +1914,11 @@ function startReading() {
       }
       
       const utterance = new SpeechSynthesisUtterance(sentences[currentIndex]);
-      
-      // Apply optimized settings for UK accent
       utterance.rate = speechSettings.rate;
       utterance.pitch = speechSettings.pitch;
       utterance.volume = speechSettings.volume;
-      utterance.lang = 'en-GB'; // Force UK English
+      utterance.lang = 'en-GB';
       
-      // Select best UK voice
       const ukVoice = getBestUKVoice();
       if (ukVoice) {
         utterance.voice = ukVoice;
@@ -1972,7 +1941,6 @@ function startReading() {
     updateReadButtonUI(true);
     speakNextSentence();
     
-    // iOS Safari keep-alive (pauses after ~15 seconds)
     resumeInterval = setInterval(() => {
       if (speechSynthesis.paused && isReading) {
         speechSynthesis.resume();
@@ -2009,7 +1977,6 @@ function updateReadButtonUI(reading) {
   }
 }
 
-// Load voices on page load (important for mobile)
 if (speechSynthesis.onvoiceschanged !== undefined) {
   speechSynthesis.onvoiceschanged = () => {
     console.log('Voices loaded:', speechSynthesis.getVoices().length);
@@ -2028,5 +1995,6 @@ document.addEventListener('keydown', (e) => {
 // ==================== START ====================
 init();
   </script>
+  
 </body>
 </html>

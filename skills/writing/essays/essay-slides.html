@@ -153,6 +153,16 @@
       line-height: 1;
     }
     
+    .type-count {
+      font-size: 0.7rem;
+      color: #636366;
+      font-weight: 500;
+    }
+    
+    .type-btn.active .type-count {
+      color: #C9A961;
+    }
+    
     /* INFOGRAPHIC SLIDE */
     .slide-container {
       background: rgba(28, 28, 30, 0.6);
@@ -461,32 +471,7 @@
     <!-- TWO-TIER NAVIGATION -->
     <div class="two-tier-nav">
       <!-- TOP TIER: Essay Types -->
-      <div class="type-selector" id="typeSelector">
-        <button class="type-btn active" data-type="for_and_against">
-          <span class="type-icon">⚖️</span>
-          <span>For & Against</span>
-        </button>
-        <button class="type-btn" data-type="problems_and_solutions">
-          <span class="type-icon">🔧</span>
-          <span>Problem-Solution</span>
-        </button>
-        <button class="type-btn" data-type="cause_and_effect">
-          <span class="type-icon">🔗</span>
-          <span>Cause & Effect</span>
-        </button>
-        <button class="type-btn" data-type="agree_and_disagree">
-          <span class="type-icon">💭</span>
-          <span>Agree/Disagree</span>
-        </button>
-        <button class="type-btn" data-type="opinion">
-          <span class="type-icon">💡</span>
-          <span>Opinion</span>
-        </button>
-        <button class="type-btn" data-type="speculation_and_trends">
-          <span class="type-icon">🔮</span>
-          <span>Trends & Future</span>
-        </button>
-      </div>
+      <div class="type-selector" id="typeSelector"></div>
     </div>
     
     <!-- SLIDE CONTAINER -->
@@ -524,37 +509,46 @@
   
   <script>
     // State
-    let allQuestions = {};
-    let currentType = 'for_and_against';
+    let allQuestions = [];
+    let currentType = 'for-against';
     let currentIndex = 0;
     let currentQuestions = [];
     
-    // Type labels
+    // Type mapping
+    const typeMapping = {
+      'for-against': { icon: '⚖️', label: 'For & Against', key: 'for_and_against' },
+      'problem-solution': { icon: '🔧', label: 'Problem-Solution', key: 'problems_and_solutions' },
+      'cause-effect': { icon: '🔗', label: 'Cause & Effect', key: 'cause_and_effect' },
+      'agree-disagree': { icon: '💭', label: 'Agree/Disagree', key: 'agree_and_disagree' },
+      'opinion': { icon: '💡', label: 'Opinion', key: 'opinion' },
+      'speculation-trends': { icon: '🔮', label: 'Trends & Future', key: 'speculation_and_trends' }
+    };
+    
     const typeLabels = {
-      'for_and_against': 'For and Against ESSAY',
-      'problems_and_solutions': 'Problems & Solutions ESSAY',
-      'cause_and_effect': 'Cause & Effect ESSAY',
-      'agree_and_disagree': 'Agree/Disagree ESSAY',
+      'for-against': 'For and Against ESSAY',
+      'problem-solution': 'Problems & Solutions ESSAY',
+      'cause-effect': 'Cause & Effect ESSAY',
+      'agree-disagree': 'Agree/Disagree ESSAY',
       'opinion': 'Opinion ESSAY',
-      'speculation_and_trends': 'Trends & Speculation ESSAY'
+      'speculation-trends': 'Trends & Speculation ESSAY'
     };
     
     // Load data
     async function init() {
       try {
-        const [skeletonsRes, structuresRes] = await Promise.all([
-          fetch('data/essay-skeletons.json'),
+        const [questionsRes, structuresRes] = await Promise.all([
+          fetch('data/essay-questions.json'),
           fetch('data/essay-structures.json')
         ]);
         
-        const skeletons = await skeletonsRes.json();
+        const questionsData = await questionsRes.json();
         const structures = await structuresRes.json();
         
-        allQuestions = skeletons;
+        allQuestions = questionsData.questions || [];
         window.structuresData = structures;
         
-        // Setup type selector
-        setupTypeSelector();
+        // Build type selector
+        buildTypeSelector();
         
         // Load default type
         loadType(currentType);
@@ -565,12 +559,32 @@
       }
     }
     
-    function setupTypeSelector() {
-      const buttons = document.querySelectorAll('.type-btn');
-      buttons.forEach(btn => {
+    function buildTypeSelector() {
+      const container = document.getElementById('typeSelector');
+      
+      // Count questions per type
+      const typeCounts = {};
+      Object.keys(typeMapping).forEach(key => {
+        const essayType = typeMapping[key].key;
+        typeCounts[key] = allQuestions.filter(q => q.essayType === essayType).length;
+      });
+      
+      container.innerHTML = Object.entries(typeMapping).map(([key, data]) => {
+        const activeClass = key === currentType ? 'active' : '';
+        const count = typeCounts[key] || 0;
+        return `
+          <button class="type-btn ${activeClass}" data-type="${key}">
+            <span class="type-icon">${data.icon}</span>
+            <span>${data.label}</span>
+            <span class="type-count">(${count})</span>
+          </button>
+        `;
+      }).join('');
+      
+      // Add click handlers
+      document.querySelectorAll('.type-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-          const type = btn.dataset.type;
-          selectType(type);
+          selectType(btn.dataset.type);
         });
       });
     }
@@ -588,16 +602,11 @@
     }
     
     function loadType(type) {
-      const typeData = allQuestions[type];
-      if (!typeData) {
-        showError('No questions found for this essay type.');
-        return;
-      }
-      
-      currentQuestions = Object.values(typeData);
+      const essayType = typeMapping[type].key;
+      currentQuestions = allQuestions.filter(q => q.essayType === essayType);
       
       if (currentQuestions.length === 0) {
-        showError('No questions available.');
+        showError('No questions available for this essay type.');
         return;
       }
       
@@ -607,7 +616,8 @@
     function render() {
       const q = currentQuestions[currentIndex];
       const container = document.getElementById('slideContent');
-      const expressionsData = window.structuresData[currentType];
+      const essayType = typeMapping[currentType].key;
+      const expressionsData = window.structuresData[essayType];
       
       // Extract expressions for display
       let introExpressions = [];
@@ -626,7 +636,7 @@
               introExpressions = section.expressions.slice(0, 3);
             }
           }
-          if (section.key === 'advantages' || section.key === 'listing') {
+          if (section.key === 'advantages' || section.key === 'listing' || section.key === 'argument_1') {
             if (Array.isArray(section.expressions) && section.expressions[0]?.items) {
               section.expressions.forEach(group => {
                 listingExpressions = listingExpressions.concat(group.items.slice(0, 2));
@@ -673,14 +683,13 @@
           
           ${q.context ? `<div class="question-context">${q.context}</div>` : ''}
           
-          <div class="question-main">${q.question}</div>
+          <div class="question-main">${q.mainQuestion}</div>
           
           <div class="writing-points">
             <div class="writing-points-title">Write about</div>
             ${q.writingPoints.map(point => `
               <div class="writing-point">${point}</div>
             `).join('')}
-            <div class="writing-point">---------- (your own idea)</div>
           </div>
         </div>
         
@@ -763,10 +772,11 @@
     
     function updateButtons() {
       const q = currentQuestions[currentIndex];
+      const essayType = typeMapping[currentType].key;
       
-      document.getElementById('btnPlan').href = `essay-plan-infographic.html?type=${currentType}&id=${q.id}`;
+      document.getElementById('btnPlan').href = `essay-plan-infographic.html?type=${essayType}&id=${q.id}`;
       document.getElementById('btnSample').href = `essay-master.html?id=${q.id}`;
-      document.getElementById('btnPhrases').href = `structures-guide.html?type=${currentType}`;
+      document.getElementById('btnPhrases').href = `structures-guide.html?type=${essayType}`;
     }
     
     function updateNavigation() {

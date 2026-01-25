@@ -508,303 +508,346 @@
   </div>
   
   <script>
-    // State
-    let allQuestions = [];
-    let currentType = 'for-against';
-    let currentIndex = 0;
-    let currentQuestions = [];
-    
-    // Type mapping
-    const typeMapping = {
-      'for-against': { icon: '⚖️', label: 'For & Against', key: 'for_and_against' },
-      'problem-solution': { icon: '🔧', label: 'Problem-Solution', key: 'problems_and_solutions' },
-      'cause-effect': { icon: '🔗', label: 'Cause & Effect', key: 'cause_and_effect' },
-      'agree-disagree': { icon: '💭', label: 'Agree/Disagree', key: 'agree_and_disagree' },
-      'opinion': { icon: '💡', label: 'Opinion', key: 'opinion' },
-      'speculation-trends': { icon: '🔮', label: 'Trends & Future', key: 'speculation_and_trends' }
-    };
-    
-    const typeLabels = {
-      'for-against': 'For and Against ESSAY',
-      'problem-solution': 'Problems & Solutions ESSAY',
-      'cause-effect': 'Cause & Effect ESSAY',
-      'agree-disagree': 'Agree/Disagree ESSAY',
-      'opinion': 'Opinion ESSAY',
-      'speculation-trends': 'Trends & Speculation ESSAY'
-    };
-    
-    // Load data
-    async function init() {
-      try {
-        const [questionsRes, structuresRes] = await Promise.all([
-          fetch('data/essay-questions.json'),
-          fetch('data/essay-structures.json')
-        ]);
-        
-        const questionsData = await questionsRes.json();
-        const structures = await structuresRes.json();
-        
-        allQuestions = questionsData.questions || [];
-        window.structuresData = structures;
-        
-        // Build type selector
-        buildTypeSelector();
-        
-        // Load default type
-        loadType(currentType);
-        
-      } catch (error) {
-        console.error('Error loading data:', error);
-        showError('Failed to load essay data.');
-      }
+  // State
+  let allQuestions = [];
+  let currentType = 'for-against';
+  let currentIndex = 0;
+  let currentQuestions = [];
+  
+  // Type mapping with BOTH formats
+  const typeMapping = {
+    'for-against': { 
+      icon: '⚖️', 
+      label: 'For & Against', 
+      structureKey: 'for_and_against',
+      questionKeys: ['for-against', 'for_and_against']
+    },
+    'problem-solution': { 
+      icon: '🔧', 
+      label: 'Problem-Solution', 
+      structureKey: 'problems_and_solutions',
+      questionKeys: ['problem-solution', 'problems_and_solutions']
+    },
+    'cause-effect': { 
+      icon: '🔗', 
+      label: 'Cause & Effect', 
+      structureKey: 'cause_and_effect',
+      questionKeys: ['cause-effect', 'cause_and_effect']
+    },
+    'agree-disagree': { 
+      icon: '💭', 
+      label: 'Agree/Disagree', 
+      structureKey: 'agree_and_disagree',
+      questionKeys: ['agree-disagree', 'agree_and_disagree']
+    },
+    'opinion': { 
+      icon: '💡', 
+      label: 'Opinion', 
+      structureKey: 'opinion',
+      questionKeys: ['opinion']
+    },
+    'speculation-trends': { 
+      icon: '🔮', 
+      label: 'Trends & Future', 
+      structureKey: 'speculation_and_trends',
+      questionKeys: ['speculation-trends', 'speculation_and_trends']
     }
-    
-    function buildTypeSelector() {
-      const container = document.getElementById('typeSelector');
+  };
+  
+  const typeLabels = {
+    'for-against': 'For and Against ESSAY',
+    'problem-solution': 'Problems & Solutions ESSAY',
+    'cause-effect': 'Cause & Effect ESSAY',
+    'agree-disagree': 'Agree/Disagree ESSAY',
+    'opinion': 'Opinion ESSAY',
+    'speculation-trends': 'Trends & Speculation ESSAY'
+  };
+  
+  // Load data
+  async function init() {
+    try {
+      const [questionsRes, structuresRes] = await Promise.all([
+        fetch('data/essay-questions.json'),
+        fetch('data/essay-structures.json')
+      ]);
       
-      // Count questions per type
-      const typeCounts = {};
-      Object.keys(typeMapping).forEach(key => {
-        const essayType = typeMapping[key].key;
-        typeCounts[key] = allQuestions.filter(q => q.essayType === essayType).length;
+      const questionsData = await questionsRes.json();
+      const structures = await structuresRes.json();
+      
+      allQuestions = questionsData.questions || [];
+      window.structuresData = structures;
+      
+      console.log('Loaded questions:', allQuestions.length);
+      console.log('Sample question types:', allQuestions.slice(0, 3).map(q => q.essayType));
+      
+      // Build type selector
+      buildTypeSelector();
+      
+      // Load default type
+      loadType(currentType);
+      
+    } catch (error) {
+      console.error('Error loading data:', error);
+      showError('Failed to load essay data.');
+    }
+  }
+  
+  function buildTypeSelector() {
+    const container = document.getElementById('typeSelector');
+    
+    // Count questions per type
+    const typeCounts = {};
+    Object.keys(typeMapping).forEach(key => {
+      const typeData = typeMapping[key];
+      typeCounts[key] = allQuestions.filter(q => 
+        typeData.questionKeys.includes(q.essayType)
+      ).length;
+    });
+    
+    console.log('Type counts:', typeCounts);
+    
+    container.innerHTML = Object.entries(typeMapping).map(([key, data]) => {
+      const activeClass = key === currentType ? 'active' : '';
+      const count = typeCounts[key] || 0;
+      return `
+        <button class="type-btn ${activeClass}" data-type="${key}">
+          <span class="type-icon">${data.icon}</span>
+          <span>${data.label}</span>
+          <span class="type-count">(${count})</span>
+        </button>
+      `;
+    }).join('');
+    
+    // Add click handlers
+    document.querySelectorAll('.type-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectType(btn.dataset.type);
       });
-      
-      container.innerHTML = Object.entries(typeMapping).map(([key, data]) => {
-        const activeClass = key === currentType ? 'active' : '';
-        const count = typeCounts[key] || 0;
-        return `
-          <button class="type-btn ${activeClass}" data-type="${key}">
-            <span class="type-icon">${data.icon}</span>
-            <span>${data.label}</span>
-            <span class="type-count">(${count})</span>
-          </button>
-        `;
-      }).join('');
-      
-      // Add click handlers
-      document.querySelectorAll('.type-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          selectType(btn.dataset.type);
-        });
-      });
+    });
+  }
+  
+  function selectType(type) {
+    currentType = type;
+    currentIndex = 0;
+    
+    // Update active button
+    document.querySelectorAll('.type-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.type === type);
+    });
+    
+    loadType(type);
+  }
+  
+  function loadType(type) {
+    const typeData = typeMapping[type];
+    
+    // Filter questions using BOTH possible naming conventions
+    currentQuestions = allQuestions.filter(q => 
+      typeData.questionKeys.includes(q.essayType)
+    );
+    
+    console.log(`Loading type: ${type}, found ${currentQuestions.length} questions`);
+    
+    if (currentQuestions.length === 0) {
+      showError(`No questions available for ${typeData.label}.`);
+      return;
     }
     
-    function selectType(type) {
-      currentType = type;
-      currentIndex = 0;
-      
-      // Update active button
-      document.querySelectorAll('.type-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.type === type);
-      });
-      
-      loadType(type);
-    }
+    render();
+  }
+  
+  function render() {
+    const q = currentQuestions[currentIndex];
+    const container = document.getElementById('slideContent');
+    const structureKey = typeMapping[currentType].structureKey;
+    const expressionsData = window.structuresData[structureKey];
     
-    function loadType(type) {
-      const essayType = typeMapping[type].key;
-      currentQuestions = allQuestions.filter(q => q.essayType === essayType);
-      
-      if (currentQuestions.length === 0) {
-        showError('No questions available for this essay type.');
-        return;
-      }
-      
-      render();
-    }
+    // Extract expressions for display
+    let introExpressions = [];
+    let listingExpressions = [];
+    let opinionExpressions = [];
+    let argumentExpressions = [];
     
-    function render() {
-      const q = currentQuestions[currentIndex];
-      const container = document.getElementById('slideContent');
-      const essayType = typeMapping[currentType].key;
-      const expressionsData = window.structuresData[essayType];
-      
-      // Extract expressions for display
-      let introExpressions = [];
-      let listingExpressions = [];
-      let opinionExpressions = [];
-      let argumentExpressions = [];
-      
-      if (expressionsData && expressionsData.sections) {
-        expressionsData.sections.forEach(section => {
-          if (section.key === 'introduction') {
-            if (Array.isArray(section.expressions) && section.expressions[0]?.items) {
-              section.expressions.forEach(group => {
-                introExpressions = introExpressions.concat(group.items.slice(0, 3));
-              });
-            } else {
-              introExpressions = section.expressions.slice(0, 3);
-            }
+    if (expressionsData && expressionsData.sections) {
+      expressionsData.sections.forEach(section => {
+        if (section.key === 'introduction') {
+          if (Array.isArray(section.expressions) && section.expressions[0]?.items) {
+            section.expressions.forEach(group => {
+              introExpressions = introExpressions.concat(group.items.slice(0, 3));
+            });
+          } else if (Array.isArray(section.expressions)) {
+            introExpressions = section.expressions.slice(0, 3);
           }
-          if (section.key === 'advantages' || section.key === 'listing' || section.key === 'argument_1') {
-            if (Array.isArray(section.expressions) && section.expressions[0]?.items) {
-              section.expressions.forEach(group => {
-                listingExpressions = listingExpressions.concat(group.items.slice(0, 2));
-              });
-            } else {
-              listingExpressions = section.expressions.slice(0, 2);
-            }
+        }
+        if (section.key === 'advantages' || section.key === 'problems' || section.key === 'argument_1') {
+          if (Array.isArray(section.expressions) && section.expressions[0]?.items) {
+            section.expressions.forEach(group => {
+              listingExpressions = listingExpressions.concat(group.items.slice(0, 2));
+            });
+          } else if (Array.isArray(section.expressions)) {
+            listingExpressions = section.expressions.slice(0, 2);
           }
-        });
-      }
-      
-      // Fallback expressions
-      if (introExpressions.length === 0) {
-        introExpressions = [
-          'Over the past few years, there has been...',
-          'Hence it is vital to discuss...',
-          'It seems that...'
-        ];
-      }
-      
-      if (listingExpressions.length === 0) {
-        listingExpressions = [
-          'Firstly, in the first place...',
-          'Secondly, in the second place...'
-        ];
-      }
-      
-      opinionExpressions = [
-        'It seems to me,',
-        'As far as I can judge,',
-        'From my point of view,'
+        }
+      });
+    }
+    
+    // Fallback expressions
+    if (introExpressions.length === 0) {
+      introExpressions = [
+        'Over the past few years, there has been...',
+        'Hence it is vital to discuss...',
+        'It seems that...'
       ];
-      
-      argumentExpressions = [
-        'One obvious argument in favour of...',
-        'By far the most important aspect of...',
-        'One drawback of ... is'
+    }
+    
+    if (listingExpressions.length === 0) {
+      listingExpressions = [
+        'Firstly, in the first place...',
+        'Secondly, in the second place...'
       ];
+    }
+    
+    opinionExpressions = [
+      'It seems to me,',
+      'As far as I can judge,',
+      'From my point of view,'
+    ];
+    
+    argumentExpressions = [
+      'One obvious argument in favour of...',
+      'By far the most important aspect of...',
+      'One drawback of ... is'
+    ];
+    
+    container.innerHTML = `
+      <!-- LEFT COLUMN -->
+      <div class="column-left" style="counter-reset: point;">
+        <div class="essay-type-badge">${typeLabels[currentType]}</div>
+        
+        ${q.context ? `<div class="question-context">${q.context}</div>` : ''}
+        
+        <div class="question-main">${q.mainQuestion}</div>
+        
+        <div class="writing-points">
+          <div class="writing-points-title">Write about</div>
+          ${q.writingPoints.map(point => `
+            <div class="writing-point">${point}</div>
+          `).join('')}
+        </div>
+      </div>
       
-      container.innerHTML = `
-        <!-- LEFT COLUMN -->
-        <div class="column-left" style="counter-reset: point;">
-          <div class="essay-type-badge">${typeLabels[currentType]}</div>
+      <!-- MIDDLE COLUMN -->
+      <div class="column-middle">
+        <div class="column-title">Suggested Model</div>
+        
+        <div class="model-structure">
+          <div class="model-step">
+            <span class="model-step-icon">⬇️</span>
+            <div class="model-step-label">listing</div>
+            <div class="model-step-text">To begin with, it seems that the main argument in favour of ..... (reason – example – contrast)</div>
+          </div>
           
-          ${q.context ? `<div class="question-context">${q.context}</div>` : ''}
+          <div class="model-step">
+            <span class="model-step-icon">⬇️</span>
+            <div class="model-step-label">opinion</div>
+            <div class="model-step-text">Secondly, it is generally argued that one other benefit of ..... (reason – example – contrast)</div>
+          </div>
           
-          <div class="question-main">${q.mainQuestion}</div>
+          <div class="model-step">
+            <span class="model-step-icon">⬇️</span>
+            <div class="model-step-label">argument</div>
+            <div class="model-step-text">On the other hand, as as far as I can judge the main drawback of ..... (reason – example – contrast)</div>
+          </div>
           
-          <div class="writing-points">
-            <div class="writing-points-title">Write about</div>
-            ${q.writingPoints.map(point => `
-              <div class="writing-point">${point}</div>
+          <div class="model-step">
+            <div class="model-step-text" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.2);">
+              All things considered, as far as I can judge, despite some of the views expressed, it is...
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- RIGHT COLUMN -->
+      <div class="column-right">
+        <div class="column-title">Useful Expressions</div>
+        
+        <div class="expressions-groups">
+          <div class="expression-group">
+            <div class="expression-group-title">Introduction</div>
+            ${introExpressions.map(expr => `
+              <div class="expression-item">${expr.replace(/\[([^\]]+)\]/g, '...')}</div>
             `).join('')}
           </div>
-        </div>
-        
-        <!-- MIDDLE COLUMN -->
-        <div class="column-middle">
-          <div class="column-title">Suggested Model</div>
           
-          <div class="model-structure">
-            <div class="model-step">
-              <span class="model-step-icon">⬇️</span>
-              <div class="model-step-label">listing</div>
-              <div class="model-step-text">To begin with, it seems that the main argument in favour of ..... (reason – example – contrast)</div>
-            </div>
-            
-            <div class="model-step">
-              <span class="model-step-icon">⬇️</span>
-              <div class="model-step-label">opinion</div>
-              <div class="model-step-text">Secondly, it is generally argued that one other benefit of ..... (reason – example – contrast)</div>
-            </div>
-            
-            <div class="model-step">
-              <span class="model-step-icon">⬇️</span>
-              <div class="model-step-label">argument</div>
-              <div class="model-step-text">On the other hand, as as far as I can judge the main drawback of ..... (reason – example – contrast)</div>
-            </div>
-            
-            <div class="model-step">
-              <div class="model-step-text" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.2);">
-                All things considered, as far as I can judge, despite some of the views expressed, it is...
-              </div>
-            </div>
+          <div class="expression-group">
+            <div class="expression-group-title">Listing</div>
+            ${listingExpressions.map(expr => `
+              <div class="expression-item">${expr.replace(/\[([^\]]+)\]/g, '...')}</div>
+            `).join('')}
+            <div class="expression-item">Moreover,</div>
+            <div class="expression-item">On the other hand,...</div>
+          </div>
+          
+          <div class="expression-group">
+            <div class="expression-group-title">Opinion</div>
+            ${opinionExpressions.map(expr => `
+              <div class="expression-item">${expr}</div>
+            `).join('')}
+            <div class="expression-item">It has been maintained that...</div>
+            <div class="expression-item">It is argued that...</div>
+          </div>
+          
+          <div class="expression-group">
+            <div class="expression-group-title">Argument</div>
+            ${argumentExpressions.map(expr => `
+              <div class="expression-item">${expr}</div>
+            `).join('')}
+            <div class="expression-item">What makes ... so important is...</div>
+            <div class="expression-item">The main benefit of ... is...</div>
           </div>
         </div>
-        
-        <!-- RIGHT COLUMN -->
-        <div class="column-right">
-          <div class="column-title">Useful Expressions</div>
-          
-          <div class="expressions-groups">
-            <div class="expression-group">
-              <div class="expression-group-title">Introduction</div>
-              ${introExpressions.map(expr => `
-                <div class="expression-item">${expr.replace(/\[([^\]]+)\]/g, '...')}</div>
-              `).join('')}
-            </div>
-            
-            <div class="expression-group">
-              <div class="expression-group-title">Listing</div>
-              ${listingExpressions.map(expr => `
-                <div class="expression-item">${expr.replace(/\[([^\]]+)\]/g, '...')}</div>
-              `).join('')}
-              <div class="expression-item">Moreover,</div>
-              <div class="expression-item">On the other hand,...</div>
-            </div>
-            
-            <div class="expression-group">
-              <div class="expression-group-title">Opinion</div>
-              ${opinionExpressions.map(expr => `
-                <div class="expression-item">${expr}</div>
-              `).join('')}
-              <div class="expression-item">It has been maintained that...</div>
-              <div class="expression-item">It is argued that...</div>
-            </div>
-            
-            <div class="expression-group">
-              <div class="expression-group-title">Argument</div>
-              ${argumentExpressions.map(expr => `
-                <div class="expression-item">${expr}</div>
-              `).join('')}
-              <div class="expression-item">What makes ... so important is...</div>
-              <div class="expression-item">The main benefit of ... is...</div>
-            </div>
-          </div>
-        </div>
-      `;
-      
-      updateButtons();
-      updateNavigation();
-    }
+      </div>
+    `;
     
-    function updateButtons() {
-      const q = currentQuestions[currentIndex];
-      const essayType = typeMapping[currentType].key;
-      
-      document.getElementById('btnPlan').href = `essay-plan-infographic.html?type=${essayType}&id=${q.id}`;
-      document.getElementById('btnSample').href = `essay-master.html?id=${q.id}`;
-      document.getElementById('btnPhrases').href = `structures-guide.html?type=${essayType}`;
-    }
+    updateButtons();
+    updateNavigation();
+  }
+  
+  function updateButtons() {
+    const q = currentQuestions[currentIndex];
+    const structureKey = typeMapping[currentType].structureKey;
     
-    function updateNavigation() {
-      document.getElementById('prevBtn').disabled = currentIndex === 0;
-      document.getElementById('nextBtn').disabled = currentIndex === currentQuestions.length - 1;
-      document.getElementById('slideCounter').textContent = `${currentIndex + 1} / ${currentQuestions.length}`;
+    document.getElementById('btnPlan').href = `essay-plan-infographic.html?type=${structureKey}&id=${q.id}`;
+    document.getElementById('btnSample').href = `essay-master.html?id=${q.id}`;
+    document.getElementById('btnPhrases').href = `structures-guide.html?type=${structureKey}`;
+  }
+  
+  function updateNavigation() {
+    document.getElementById('prevBtn').disabled = currentIndex === 0;
+    document.getElementById('nextBtn').disabled = currentIndex === currentQuestions.length - 1;
+    document.getElementById('slideCounter').textContent = `${currentIndex + 1} / ${currentQuestions.length}`;
+  }
+  
+  function navigate(direction) {
+    const newIndex = currentIndex + direction;
+    if (newIndex >= 0 && newIndex < currentQuestions.length) {
+      currentIndex = newIndex;
+      render();
     }
-    
-    function navigate(direction) {
-      const newIndex = currentIndex + direction;
-      if (newIndex >= 0 && newIndex < currentQuestions.length) {
-        currentIndex = newIndex;
-        render();
-      }
-    }
-    
-    function showError(message) {
-      document.getElementById('slideContent').innerHTML = `
-        <div style="text-align: center; padding: 4rem 2rem; grid-column: 1/-1;">
-          <div style="font-size: 3rem; margin-bottom: 1rem; color: #ef4444;">⚠️</div>
-          <div style="color: #e5e5e7; font-size: 1.125rem; margin-bottom: 1rem;">Error</div>
-          <div style="color: #8e8e93; font-size: 0.875rem;">${message}</div>
-        </div>
-      `;
-    }
-    
-    // Initialize
-    init();
-  </script>
+  }
+  
+  function showError(message) {
+    document.getElementById('slideContent').innerHTML = `
+      <div style="text-align: center; padding: 4rem 2rem; grid-column: 1/-1;">
+        <div style="font-size: 3rem; margin-bottom: 1rem; color: #ef4444;">⚠️</div>
+        <div style="color: #e5e5e7; font-size: 1.125rem; margin-bottom: 1rem;">Error</div>
+        <div style="color: #8e8e93; font-size: 0.875rem;">${message}</div>
+      </div>
+    `;
+  }
+  
+  // Initialize
+  init();
+</script>
 </body>
 </html>

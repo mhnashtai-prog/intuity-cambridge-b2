@@ -1191,454 +1191,462 @@
   </div>
 
   <script>
-    // State
-    let questionsData = [];
-    let viewMode = 'all';
-    let currentSlideIndex = 0;
+  // Data paths
+  const DATA_PATHS = {
+    questions: 'data/review-questions.json'
+  };
 
-    // Theme colors
-    const themeColors = ['beige', 'sage', 'slate', 'terracotta'];
+  // State
+  let questionsData = [];
+  let viewMode = 'all';
+  let currentSlideIndex = 0;
+  let currentQuestion = null;
+  let currentTheme = 'beige';
 
-    // Initialize
-    async function init() {
-      console.log('🚀 Loading review questions...');
+  // Theme configuration
+  const themeColors = ['beige', 'sage', 'slate', 'terracotta'];
+  
+  const themeGradients = {
+    beige: 'linear-gradient(135deg, #d4b896 0%, #c9a981 100%)',
+    sage: 'linear-gradient(135deg, #a8b5a0 0%, #8a9985 100%)',
+    slate: 'linear-gradient(135deg, #8e9aaf 0%, #6b7888 100%)',
+    terracotta: 'linear-gradient(135deg, #c89f7e 0%, #a87d5e 100%)'
+  };
+
+  // Initialize
+  async function init() {
+    console.log('🚀 Loading review questions...');
+    
+    try {
+      const response = await fetch(DATA_PATHS.questions);
       
-      try {
-        const response = await fetch('data/review-questions.json');
-        
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        questionsData = data.questions || [];
-        
-        console.log(`✅ Loaded ${questionsData.length} review questions`);
-        
-        if (questionsData.length > 0) {
-          renderView();
-        } else {
-          showError('No review questions found in the database.');
-        }
-        
-      } catch (error) {
-        console.error('❌ Error loading questions:', error);
-        showError(`Failed to load questions: ${error.message}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-    }
-
-    function toggleViewMode() {
-      viewMode = viewMode === 'all' ? 'swipe' : 'all';
       
-      const toggle = document.getElementById('viewToggle');
-      const allLabel = document.getElementById('allLabel');
-      const swipeLabel = document.getElementById('swipeLabel');
+      const data = await response.json();
+      const rawQuestions = data.questions || [];
       
-      if (viewMode === 'swipe') {
-        toggle.classList.add('active');
-        allLabel.classList.remove('active');
-        swipeLabel.classList.add('active');
-        currentSlideIndex = 0;
+      // Transform data with themes
+      questionsData = rawQuestions.map((q, index) => ({
+        id: q.id,
+        type: q.type || 'Review',
+        topic: q.topic || q.question || 'Review Question',
+        question: q.question || q.topic,
+        keyPoints: q.keyPoints || [],
+        theme: themeColors[index % themeColors.length]
+      }));
+      
+      console.log(`✅ Loaded ${questionsData.length} review questions`);
+      
+      if (questionsData.length > 0) {
+        renderView();
       } else {
-        toggle.classList.remove('active');
-        allLabel.classList.add('active');
-        swipeLabel.classList.remove('active');
+        showError('No review questions found in the database.');
       }
       
-      renderView();
+    } catch (error) {
+      console.error('❌ Error loading questions:', error);
+      showError(`Failed to load questions: ${error.message}`);
     }
+  }
 
-    function renderView() {
-      if (viewMode === 'all') {
-        renderAllPosters();
-      } else {
-        renderSwipeMode();
-      }
-    }
-
-    function renderAllPosters() {
-      const container = document.getElementById('questionsContainer');
-      
-      if (!questionsData || questionsData.length === 0) {
-        container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><div>Loading review questions...</div></div>';
-        return;
-      }
-      
-      const grid = document.createElement('div');
-      grid.className = 'posters-grid';
-      
-      questionsData.forEach((question, index) => {
-        const poster = createPosterCard(question, index);
-        grid.appendChild(poster);
-      });
-      
-      container.innerHTML = '';
-      container.appendChild(grid);
-    }
-
-    function renderSwipeMode() {
-      const container = document.getElementById('questionsContainer');
-      
-      if (!questionsData || questionsData.length === 0) {
-        container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><div>Loading review questions...</div></div>';
-        return;
-      }
-      
-      const swipeContainer = document.createElement('div');
-      swipeContainer.className = 'swipe-container';
-      
-      const swipeTrack = document.createElement('div');
-      swipeTrack.className = 'swipe-track';
-      swipeTrack.id = 'swipeTrack';
-      
-      questionsData.forEach((question, index) => {
-        const slide = document.createElement('div');
-        slide.className = 'swipe-slide';
-        const poster = createPosterCard(question, index);
-        slide.appendChild(poster);
-        swipeTrack.appendChild(slide);
-      });
-      
-      swipeContainer.appendChild(swipeTrack);
-      
-      const controls = document.createElement('div');
-      controls.className = 'swipe-controls';
-      
-      const prevBtn = document.createElement('button');
-      prevBtn.className = 'swipe-btn';
-      prevBtn.innerHTML = '←';
-      prevBtn.onclick = () => navigateSlide(-1);
-      prevBtn.disabled = currentSlideIndex === 0;
-      
-      const indicator = document.createElement('div');
-      indicator.className = 'swipe-indicator';
-      indicator.id = 'swipeIndicator';
-      
-      questionsData.forEach((_, index) => {
-        const dot = document.createElement('div');
-        dot.className = 'swipe-dot';
-        if (index === currentSlideIndex) dot.classList.add('active');
-        dot.onclick = () => goToSlide(index);
-        indicator.appendChild(dot);
-      });
-      
-      const counter = document.createElement('div');
-      counter.className = 'swipe-counter';
-      counter.id = 'swipeCounter';
-      counter.textContent = `${currentSlideIndex + 1} / ${questionsData.length}`;
-      
-      const nextBtn = document.createElement('button');
-      nextBtn.className = 'swipe-btn';
-      nextBtn.innerHTML = '→';
-      nextBtn.onclick = () => navigateSlide(1);
-      nextBtn.disabled = currentSlideIndex === questionsData.length - 1;
-      
-      controls.appendChild(prevBtn);
-      controls.appendChild(counter);
-      controls.appendChild(indicator);
-      controls.appendChild(nextBtn);
-      
-      swipeContainer.appendChild(controls);
-      container.innerHTML = '';
-      container.appendChild(swipeContainer);
-      updateSlidePosition();
-    }
-
-    function navigateSlide(direction) {
-      const newIndex = currentSlideIndex + direction;
-      if (newIndex >= 0 && newIndex < questionsData.length) {
-        currentSlideIndex = newIndex;
-        updateSlidePosition();
-      }
-    }
-
-    function goToSlide(index) {
-      currentSlideIndex = index;
-      updateSlidePosition();
-    }
-
-    function updateSlidePosition() {
-      const track = document.getElementById('swipeTrack');
-      const counter = document.getElementById('swipeCounter');
-      const indicator = document.getElementById('swipeIndicator');
-      
-      if (track) {
-        track.style.transform = `translateX(-${currentSlideIndex * 100}%)`;
-      }
-      
-      if (counter) {
-        counter.textContent = `${currentSlideIndex + 1} / ${questionsData.length}`;
-      }
-      
-      if (indicator) {
-        const dots = indicator.querySelectorAll('.swipe-dot');
-        dots.forEach((dot, index) => {
-          dot.classList.toggle('active', index === currentSlideIndex);
-        });
-      }
-      
-      const prevBtn = document.querySelector('.swipe-btn:first-child');
-      const nextBtn = document.querySelector('.swipe-btn:last-child');
-      
-      if (prevBtn) prevBtn.disabled = currentSlideIndex === 0;
-      if (nextBtn) nextBtn.disabled = currentSlideIndex === questionsData.length - 1;
-    }
-
-    // Create poster card
-    function createPosterCard(question, index) {
-      const card = document.createElement('div');
-      const theme = themeColors[index % themeColors.length];
-      card.className = `poster-card theme-${theme}`;
-      card.onclick = () => openPosterModal(question, theme);
-      
-      const content = document.createElement('div');
-      content.className = 'poster-content';
-      
-      const header = document.createElement('div');
-      header.className = 'poster-header';
-      
-      const type = document.createElement('div');
-      type.className = 'poster-type';
-      type.textContent = question.type || 'Review';
-      header.appendChild(type);
-      
-      const title = document.createElement('div');
-      title.className = 'poster-title';
-      title.textContent = (question.type || 'REVIEW').toUpperCase();
-      header.appendChild(title);
-      content.appendChild(header);
-      
-      const questionEl = document.createElement('div');
-      questionEl.className = 'poster-question';
-      questionEl.textContent = question.topic || question.question || 'Review Question';
-      content.appendChild(questionEl);
-      
-      // Add writing points if available
-      if (question.keyPoints && question.keyPoints.length > 0) {
-        const footer = document.createElement('div');
-        footer.className = 'poster-footer';
-        
-        const footerLabel = document.createElement('div');
-        footerLabel.className = 'poster-footer-label';
-        footerLabel.textContent = 'Include';
-        footer.appendChild(footerLabel);
-        
-        const points = document.createElement('div');
-        points.className = 'poster-points';
-        
-        question.keyPoints.forEach(point => {
-          const pointEl = document.createElement('div');
-          pointEl.className = 'poster-point';
-          pointEl.textContent = point;
-          points.appendChild(pointEl);
-        });
-        
-        footer.appendChild(points);
-        content.appendChild(footer);
-      }
-      
-      card.appendChild(content);
-      
-      // Store question data on card for later use
-      card.dataset.questionId = question.id;
-      card.dataset.theme = theme;
-      
-      return card;
-    }
-
-    // Theme colors for modal backgrounds
-    const themeGradients = {
-      beige: 'linear-gradient(135deg, #d4b896 0%, #c9a981 100%)',
-      sage: 'linear-gradient(135deg, #a8b5a0 0%, #8a9985 100%)',
-      slate: 'linear-gradient(135deg, #8e9aaf 0%, #6b7888 100%)',
-      terracotta: 'linear-gradient(135deg, #c89f7e 0%, #a87d5e 100%)'
-    };
-
-    // Current question for modal
-    let currentQuestion = null;
-    let currentTheme = 'beige';
-
-    function openPosterModal(question, theme) {
-      currentQuestion = question;
-      currentTheme = theme;
-      
-      const posterContainer = document.getElementById('phonePoster');
-      posterContainer.style.background = themeGradients[theme];
-      posterContainer.innerHTML = '';
-      
-      const type = document.createElement('div');
-      type.className = 'modal-poster-type';
-      type.textContent = question.type || 'Review';
-      posterContainer.appendChild(type);
-      
-      const title = document.createElement('div');
-      title.className = 'modal-poster-title';
-      title.textContent = (question.type || 'REVIEW').toUpperCase();
-      posterContainer.appendChild(title);
-      
-      const questionEl = document.createElement('div');
-      questionEl.className = 'modal-poster-question';
-      questionEl.textContent = question.topic || question.question || 'Review Question';
-      posterContainer.appendChild(questionEl);
-      
-      if (question.keyPoints && question.keyPoints.length > 0) {
-        const pointsBox = document.createElement('div');
-        pointsBox.className = 'modal-poster-points-box';
-        
-        const pointsLabel = document.createElement('div');
-        pointsLabel.className = 'modal-poster-points-label';
-        pointsLabel.textContent = 'Include';
-        pointsBox.appendChild(pointsLabel);
-        
-        const points = document.createElement('div');
-        points.className = 'modal-poster-points';
-        
-        question.keyPoints.forEach(point => {
-          const pointEl = document.createElement('div');
-          pointEl.className = 'modal-poster-point';
-          pointEl.textContent = point;
-          points.appendChild(pointEl);
-        });
-        
-        pointsBox.appendChild(points);
-        posterContainer.appendChild(pointsBox);
-      }
-      
-      document.getElementById('questionModal').classList.add('active');
-      document.body.style.overflow = 'hidden';
-    }
-
-    function closeModal(event) {
-      if (event && !event.target.classList.contains('modal-overlay') && !event.target.classList.contains('phone-close')) {
-        return;
-      }
-      
-      document.getElementById('questionModal').classList.remove('active');
-      document.body.style.overflow = '';
-      currentQuestion = null;
-    }
-
-    function handleAction(action) {
-      if (!currentQuestion) return;
-      
-      console.log(`${action.toUpperCase()} button clicked for:`, currentQuestion.id);
-      
-      // For now, just navigate to the appropriate page with question ID
-      // In the future, this can be expanded to load JSON data like the report selector
-      const questionId = currentQuestion.id;
-      
-      switch(action) {
-        case 'plan':
-          alert(`💡 PLAN\n\nPlanning features coming soon for ${questionId}`);
-          break;
-        case 'model':
-          alert(`📖 MODEL\n\nModel structures coming soon for ${questionId}`);
-          break;
-        case 'sample':
-          // Navigate to review master with this question
-          window.location.href = `review-master.html?question=${questionId}`;
-          break;
-        case 'structure':
-          // Navigate to structure practice
-          window.location.href = `review-structure-practice.html?question=${questionId}`;
-          break;
-      }
-    }
-
-    function closeStageModal(event) {
-      if (event && event.target.id !== 'stageModal' && !event.target.classList.contains('stage-close-btn')) return;
-      
-      document.getElementById('stageModal').classList.remove('active');
-      document.body.style.overflow = '';
-    }
-
-    function selectStageStyle(style) {
-      // Update active button
-      document.querySelectorAll('.stage-style-btn').forEach(btn => {
-        btn.classList.remove('active');
-        if (btn.dataset.style === style) {
-          btn.classList.add('active');
-        }
-      });
-      
-      console.log('Style switched to:', style);
-    }
-
-    // Select question - OLD FUNCTION, now replaced by openPosterModal
-    function selectQuestion(questionId) {
-      console.log('📝 Selected question:', questionId);
-      // Navigate to review master with this question
-      window.location.href = `review-master.html?question=${questionId}`;
-    }
-
-    // Show error
-    function showError(message) {
-      const container = document.getElementById('questionsContainer');
-      container.innerHTML = `
-        <div class="error-state">
-          <div class="error-icon">⚠️</div>
-          <div class="error-title">Error Loading Questions</div>
-          <div class="error-message">${escapeHtml(message)}</div>
-          <button class="retry-btn" onclick="init()">Retry</button>
-        </div>
-      `;
-    }
-
-    // Escape HTML
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
-    // Event listeners
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        if (document.getElementById('stageModal').classList.contains('active')) {
-          closeStageModal();
-        } else if (document.getElementById('questionModal').classList.contains('active')) {
-          closeModal();
-        }
-      }
-      
-      if (viewMode === 'swipe') {
-        if (e.key === 'ArrowLeft') navigateSlide(-1);
-        else if (e.key === 'ArrowRight') navigateSlide(1);
-      }
-    });
-
-    let touchStartX = 0;
-    let touchEndX = 0;
-
-    document.addEventListener('touchstart', (e) => {
-      if (viewMode === 'swipe') {
-        touchStartX = e.changedTouches[0].screenX;
-      }
-    });
-
-    document.addEventListener('touchend', (e) => {
-      if (viewMode === 'swipe') {
-        touchEndX = e.changedTouches[0].screenX;
-        handleSwipe();
-      }
-    });
-
-    function handleSwipe() {
-      const swipeThreshold = 50;
-      const diff = touchStartX - touchEndX;
-      
-      if (Math.abs(diff) > swipeThreshold) {
-        if (diff > 0) navigateSlide(1);
-        else navigateSlide(-1);
-      }
-    }
-
-    // Initialize on load
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', init);
+  // View mode toggle
+  function toggleViewMode() {
+    viewMode = viewMode === 'all' ? 'swipe' : 'all';
+    
+    const toggle = document.getElementById('viewToggle');
+    const allLabel = document.getElementById('allLabel');
+    const swipeLabel = document.getElementById('swipeLabel');
+    
+    if (viewMode === 'swipe') {
+      toggle.classList.add('active');
+      allLabel.classList.remove('active');
+      swipeLabel.classList.add('active');
+      currentSlideIndex = 0;
     } else {
-      init();
+      toggle.classList.remove('active');
+      allLabel.classList.add('active');
+      swipeLabel.classList.remove('active');
     }
-  </script>
+    
+    renderView();
+  }
+
+  // Render current view
+  function renderView() {
+    if (viewMode === 'all') {
+      renderAllPosters();
+    } else {
+      renderSwipeMode();
+    }
+  }
+
+  // Render all posters grid
+  function renderAllPosters() {
+    const container = document.getElementById('questionsContainer');
+    
+    if (!questionsData || questionsData.length === 0) {
+      container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><div>Loading review questions...</div></div>';
+      return;
+    }
+    
+    const grid = document.createElement('div');
+    grid.className = 'posters-grid';
+    
+    questionsData.forEach(question => {
+      const poster = createPosterCard(question);
+      grid.appendChild(poster);
+    });
+    
+    container.innerHTML = '';
+    container.appendChild(grid);
+  }
+
+  // Render swipe mode
+  function renderSwipeMode() {
+    const container = document.getElementById('questionsContainer');
+    
+    if (!questionsData || questionsData.length === 0) {
+      container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><div>Loading review questions...</div></div>';
+      return;
+    }
+    
+    const swipeContainer = document.createElement('div');
+    swipeContainer.className = 'swipe-container';
+    
+    const swipeTrack = document.createElement('div');
+    swipeTrack.className = 'swipe-track';
+    swipeTrack.id = 'swipeTrack';
+    
+    questionsData.forEach(question => {
+      const slide = document.createElement('div');
+      slide.className = 'swipe-slide';
+      const poster = createPosterCard(question);
+      slide.appendChild(poster);
+      swipeTrack.appendChild(slide);
+    });
+    
+    swipeContainer.appendChild(swipeTrack);
+    
+    const controls = document.createElement('div');
+    controls.className = 'swipe-controls';
+    
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'swipe-btn';
+    prevBtn.innerHTML = '←';
+    prevBtn.onclick = () => navigateSlide(-1);
+    prevBtn.disabled = currentSlideIndex === 0;
+    
+    const indicator = document.createElement('div');
+    indicator.className = 'swipe-indicator';
+    indicator.id = 'swipeIndicator';
+    
+    questionsData.forEach((_, index) => {
+      const dot = document.createElement('div');
+      dot.className = 'swipe-dot';
+      if (index === currentSlideIndex) dot.classList.add('active');
+      dot.onclick = () => goToSlide(index);
+      indicator.appendChild(dot);
+    });
+    
+    const counter = document.createElement('div');
+    counter.className = 'swipe-counter';
+    counter.id = 'swipeCounter';
+    counter.textContent = `${currentSlideIndex + 1} / ${questionsData.length}`;
+    
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'swipe-btn';
+    nextBtn.innerHTML = '→';
+    nextBtn.onclick = () => navigateSlide(1);
+    nextBtn.disabled = currentSlideIndex === questionsData.length - 1;
+    
+    controls.appendChild(prevBtn);
+    controls.appendChild(counter);
+    controls.appendChild(indicator);
+    controls.appendChild(nextBtn);
+    
+    swipeContainer.appendChild(controls);
+    container.innerHTML = '';
+    container.appendChild(swipeContainer);
+    updateSlidePosition();
+  }
+
+  // Navigate slides
+  function navigateSlide(direction) {
+    const newIndex = currentSlideIndex + direction;
+    if (newIndex >= 0 && newIndex < questionsData.length) {
+      currentSlideIndex = newIndex;
+      updateSlidePosition();
+    }
+  }
+
+  function goToSlide(index) {
+    currentSlideIndex = index;
+    updateSlidePosition();
+  }
+
+  function updateSlidePosition() {
+    const track = document.getElementById('swipeTrack');
+    const counter = document.getElementById('swipeCounter');
+    const indicator = document.getElementById('swipeIndicator');
+    
+    if (track) {
+      track.style.transform = `translateX(-${currentSlideIndex * 100}%)`;
+    }
+    
+    if (counter) {
+      counter.textContent = `${currentSlideIndex + 1} / ${questionsData.length}`;
+    }
+    
+    if (indicator) {
+      const dots = indicator.querySelectorAll('.swipe-dot');
+      dots.forEach((dot, index) => {
+        dot.classList.toggle('active', index === currentSlideIndex);
+      });
+    }
+    
+    const prevBtn = document.querySelector('.swipe-btn:first-child');
+    const nextBtn = document.querySelector('.swipe-btn:last-child');
+    
+    if (prevBtn) prevBtn.disabled = currentSlideIndex === 0;
+    if (nextBtn) nextBtn.disabled = currentSlideIndex === questionsData.length - 1;
+  }
+
+  // Create poster card
+  function createPosterCard(question) {
+    const card = document.createElement('div');
+    card.className = `poster-card theme-${question.theme}`;
+    card.onclick = () => openPosterModal(question);
+    
+    const content = document.createElement('div');
+    content.className = 'poster-content';
+    
+    // Header
+    const header = document.createElement('div');
+    header.className = 'poster-header';
+    
+    const type = document.createElement('div');
+    type.className = 'poster-type';
+    type.textContent = question.type;
+    header.appendChild(type);
+    
+    const title = document.createElement('div');
+    title.className = 'poster-title';
+    title.textContent = question.type.toUpperCase();
+    header.appendChild(title);
+    
+    content.appendChild(header);
+    
+    // Question
+    const questionEl = document.createElement('div');
+    questionEl.className = 'poster-question';
+    questionEl.textContent = question.topic;
+    content.appendChild(questionEl);
+    
+    // Footer with key points
+    if (question.keyPoints && question.keyPoints.length > 0) {
+      const footer = document.createElement('div');
+      footer.className = 'poster-footer';
+      
+      const footerLabel = document.createElement('div');
+      footerLabel.className = 'poster-footer-label';
+      footerLabel.textContent = 'Include';
+      footer.appendChild(footerLabel);
+      
+      const points = document.createElement('div');
+      points.className = 'poster-points';
+      
+      question.keyPoints.forEach(point => {
+        const pointEl = document.createElement('div');
+        pointEl.className = 'poster-point';
+        pointEl.textContent = point;
+        points.appendChild(pointEl);
+      });
+      
+      footer.appendChild(points);
+      content.appendChild(footer);
+    }
+    
+    card.appendChild(content);
+    return card;
+  }
+
+  // Open poster modal
+  function openPosterModal(question) {
+    currentQuestion = question;
+    currentTheme = question.theme;
+    
+    const posterContainer = document.getElementById('phonePoster');
+    posterContainer.style.background = themeGradients[question.theme];
+    posterContainer.innerHTML = '';
+    
+    const type = document.createElement('div');
+    type.className = 'modal-poster-type';
+    type.textContent = question.type;
+    posterContainer.appendChild(type);
+    
+    const title = document.createElement('div');
+    title.className = 'modal-poster-title';
+    title.textContent = question.type.toUpperCase();
+    posterContainer.appendChild(title);
+    
+    const questionEl = document.createElement('div');
+    questionEl.className = 'modal-poster-question';
+    questionEl.textContent = question.topic;
+    posterContainer.appendChild(questionEl);
+    
+    if (question.keyPoints && question.keyPoints.length > 0) {
+      const pointsBox = document.createElement('div');
+      pointsBox.className = 'modal-poster-points-box';
+      
+      const pointsLabel = document.createElement('div');
+      pointsLabel.className = 'modal-poster-points-label';
+      pointsLabel.textContent = 'Include';
+      pointsBox.appendChild(pointsLabel);
+      
+      const points = document.createElement('div');
+      points.className = 'modal-poster-points';
+      
+      question.keyPoints.forEach(point => {
+        const pointEl = document.createElement('div');
+        pointEl.className = 'modal-poster-point';
+        pointEl.textContent = point;
+        points.appendChild(pointEl);
+      });
+      
+      pointsBox.appendChild(points);
+      posterContainer.appendChild(pointsBox);
+    }
+    
+    document.getElementById('questionModal').classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+
+  // Close modal
+  function closeModal(event) {
+    if (event && !event.target.classList.contains('modal-overlay') && !event.target.classList.contains('phone-close')) {
+      return;
+    }
+    
+    document.getElementById('questionModal').classList.remove('active');
+    document.body.style.overflow = '';
+    currentQuestion = null;
+  }
+
+  // Handle action buttons
+  function handleAction(action) {
+    if (!currentQuestion) return;
+    
+    console.log(`${action.toUpperCase()} button clicked for:`, currentQuestion.id);
+    
+    const questionId = currentQuestion.id;
+    
+    switch(action) {
+      case 'plan':
+        alert(`💡 PLAN\n\nPlanning features coming soon for ${questionId}`);
+        break;
+      case 'model':
+        alert(`📖 MODEL\n\nModel structures coming soon for ${questionId}`);
+        break;
+      case 'sample':
+        window.location.href = `review-master.html?question=${questionId}`;
+        break;
+      case 'structure':
+        window.location.href = `review-structure-practice.html?question=${questionId}`;
+        break;
+    }
+  }
+
+  // Close stage modal
+  function closeStageModal(event) {
+    if (event && event.target.id !== 'stageModal' && !event.target.classList.contains('stage-close-btn')) return;
+    
+    document.getElementById('stageModal').classList.remove('active');
+    document.body.style.overflow = '';
+  }
+
+  // Select stage style
+  function selectStageStyle(style) {
+    document.querySelectorAll('.stage-style-btn').forEach(btn => {
+      btn.classList.remove('active');
+      if (btn.dataset.style === style) {
+        btn.classList.add('active');
+      }
+    });
+    
+    console.log('Style switched to:', style);
+  }
+
+  // Show error
+  function showError(message) {
+    const container = document.getElementById('questionsContainer');
+    container.innerHTML = `
+      <div class="error-state">
+        <div class="error-icon">⚠️</div>
+        <div class="error-title">Error Loading Questions</div>
+        <div class="error-message">${escapeHtml(message)}</div>
+        <button class="retry-btn" onclick="init()">Retry</button>
+      </div>
+    `;
+  }
+
+  // Escape HTML
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // Event listeners
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (document.getElementById('stageModal').classList.contains('active')) {
+        closeStageModal();
+      } else if (document.getElementById('questionModal').classList.contains('active')) {
+        closeModal();
+      }
+    }
+    
+    if (viewMode === 'swipe') {
+      if (e.key === 'ArrowLeft') navigateSlide(-1);
+      else if (e.key === 'ArrowRight') navigateSlide(1);
+    }
+  });
+
+  // Touch events for mobile swipe
+  let touchStartX = 0;
+  let touchEndX = 0;
+
+  document.addEventListener('touchstart', (e) => {
+    if (viewMode === 'swipe') {
+      touchStartX = e.changedTouches[0].screenX;
+    }
+  });
+
+  document.addEventListener('touchend', (e) => {
+    if (viewMode === 'swipe') {
+      touchEndX = e.changedTouches[0].screenX;
+      handleSwipe();
+    }
+  });
+
+  function handleSwipe() {
+    const swipeThreshold = 50;
+    const diff = touchStartX - touchEndX;
+    
+    if (Math.abs(diff) > swipeThreshold) {
+      if (diff > 0) navigateSlide(1);
+      else navigateSlide(-1);
+    }
+  }
+
+  // Initialize on load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+</script>
 </body>
 </html>

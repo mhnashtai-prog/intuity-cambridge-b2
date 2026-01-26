@@ -1125,7 +1125,7 @@
     </div>
   </div>
 
-  <script>
+ <script>
     // Data paths
     const DATA_PATHS = {
       questions: 'data/report-questions.json',
@@ -1140,7 +1140,7 @@
 
     // State
     let currentQuestion = null;
-    let viewMode = 'all'; // 'all' or 'swipe'
+    let viewMode = 'all';
     let currentSlideIndex = 0;
     
     // Data stores
@@ -1189,7 +1189,6 @@
       return highlightedText;
     }
 
-    // Initialize
     async function init() {
       console.log('🎨 Loading report data from JSON files...');
       
@@ -1212,17 +1211,12 @@
         }));
         
         console.log(`✅ Loaded ${sampleQuestions.length} questions`);
-        
-        // Render immediately after questions are loaded
         renderView();
-        
-        // Load additional data asynchronously
         loadAdditionalData();
         
       } catch (error) {
         console.error('❌ Error loading questions:', error);
         showError('Failed to load report questions. Please check the data files.');
-        return;
       }
     }
     
@@ -1236,14 +1230,12 @@
         ]);
         
         if (modelsRes && modelsRes.ok) {
-          const data = await modelsRes.json();
-          modelsData = data.models || data;
+          modelsData = await modelsRes.json();
           console.log('✅ Loaded models data');
         }
         
         if (plansRes && plansRes.ok) {
-          const data = await plansRes.json();
-          plansData = data;
+          plansData = await plansRes.json();
           console.log('✅ Loaded plans data');
         }
         
@@ -1561,8 +1553,8 @@
       
       switch(action) {
         case 'plan':
-          if (plansData) {
-            const plan = plansData[questionId];
+          if (plansData && plansData.reports) {
+            const plan = plansData.reports[questionId];
             if (plan) {
               const stages = transformPlanToStages(plan);
               openStageModal({
@@ -1580,10 +1572,8 @@
           break;
           
         case 'model':
-          if (modelsData) {
-            const model = Array.isArray(modelsData) 
-              ? modelsData.find(m => m.id === questionId)
-              : modelsData[questionId];
+          if (modelsData && modelsData.models) {
+            const model = modelsData.models.find(m => m.id === questionId);
             if (model) {
               currentModelStyle = 'default';
               const stages = transformModelToStages(model, 'default');
@@ -1602,8 +1592,8 @@
           break;
           
         case 'sample':
-          if (samplesData) {
-            const sample = samplesData[questionId];
+          if (samplesData && samplesData.reports) {
+            const sample = samplesData.reports.find(r => r.id === questionId);
             if (sample) {
               currentSampleStyle = 'default';
               const stages = transformSampleToStages(sample, 'default');
@@ -1622,32 +1612,28 @@
           break;
           
         case 'structure':
-          if (structuresData) {
-            const structure = structuresData.report || structuresData;
-            if (structure) {
-              const stages = transformStructureToStages(structure);
-              openStageModal({
-                type: 'structure',
-                icon: '🏗️',
-                title: 'Report Structure',
-                stages: stages
-              });
-            } else {
-              alert(`🏗️ STRUCTURE\n\n❌ Structure not available.`);
-            }
+          if (structuresData && structuresData.educational) {
+            const structure = structuresData.educational;
+            const stages = transformStructureToStages(structure);
+            openStageModal({
+              type: 'structure',
+              icon: '🏗️',
+              title: 'Report Structure',
+              stages: stages
+            });
           } else {
-            alert('🏗️ STRUCTURE\n\n❌ Structures data file not loaded.');
+            alert(`🏗️ STRUCTURE\n\n❌ Structure not available.`);
           }
           break;
       }
     }
-
+    
     function transformPlanToStages(planData) {
       return planData.skeleton.map(section => ({
         title: section.title,
         content: {
           type: 'bullet-list',
-          items: section.notes.map(note => ({
+          items: section.items.map(note => ({
             marker: note.marker,
             text: note.text,
             markerType: getMarkerType(note.marker)
@@ -1657,19 +1643,18 @@
     }
      
     function getMarkerType(marker) {
-      if (marker === '(hook)' || marker === '(context)') return 'hook';
-      if (marker === '(stance)' || marker === '(debate)') return 'stance';
-      if (marker === '💡') return 'idea';
+      if (marker === '📋') return 'hook';
+      if (marker === '👥' || marker === '📅' || marker === '🏫' || marker === '📊') return 'hook';
+      if (marker === '✅' || marker === '💻' || marker === '🏠' || marker === '🍽️' || marker === '🎯') return 'idea';
+      if (marker === '⚠️' || marker === '😰' || marker === '❄️' || marker === '🚽') return 'result';
+      if (marker === '💡' || marker === '🪑' || marker === '🔧' || marker === '🌐' || marker === '⭐') return 'stance';
       if (marker === '↳') return 'develop';
-      if (marker === '→') return 'example';
-      if (marker === '∵' || marker === '⚖️') return 'result';
-      if (marker === '✓') return 'stance';
-      if (marker === '📝') return 'result';
       return 'idea';
     }
 
     function transformModelToStages(modelData, styleVersion) {
       const model = modelData[styleVersion];
+      if (!model) return [];
       
       function truncateAfterDevelop(text) {
         const developIndex = text.indexOf('[develop]');
@@ -1707,13 +1692,32 @@
     }
 
     function transformStructureToStages(structure) {
-      return structure.sections.map(section => ({
+      // structure.sections is an object, not an array
+      const sectionsArray = Object.entries(structure.sections).map(([key, section]) => ({
+        icon: getIconForSection(key),
+        title: section.label,
+        expressions: section.phrases || []
+      }));
+      
+      return sectionsArray.map(section => ({
         title: `${section.icon} ${section.title}`,
         content: {
           type: 'structure-unified',
           expressions: section.expressions
         }
       }));
+    }
+
+    function getIconForSection(sectionKey) {
+      const iconMap = {
+        introduction: '📝',
+        neutral: '⚖️',
+        praising: '✨',
+        criticising: '⚠️',
+        recommending: '💡',
+        conclusion: '🎯'
+      };
+      return iconMap[sectionKey] || '📌';
     }
 
     function openStageModal(config) {
@@ -1774,18 +1778,9 @@
           contentHtml = `
             <div class="structure-section-box">
               <div class="structure-expressions-list">
-                ${stage.content.expressions.map(expr => {
-                  if (expr.subheading) {
-                    return `
-                      <div class="structure-subheading">${expr.subheading}</div>
-                      ${expr.items.map(item => `
-                        <div class="structure-expression">${item}</div>
-                      `).join('')}
-                    `;
-                  } else {
-                    return `<div class="structure-expression">${expr}</div>`;
-                  }
-                }).join('')}
+                ${stage.content.expressions.map(expr => `
+                  <div class="structure-expression">${expr}</div>
+                `).join('')}
               </div>
             </div>
           `;
@@ -1810,9 +1805,7 @@
         document.querySelectorAll('.stage-style-btn').forEach(btn => btn.classList.remove('active'));
         event.target.classList.add('active');
         
-        const model = Array.isArray(modelsData)
-          ? modelsData.find(m => m.id === currentQuestion.id)
-          : modelsData[currentQuestion.id];
+        const model = modelsData.models.find(m => m.id === currentQuestion.id);
         if (model && model[style]) {
           currentStages = transformModelToStages(model, style);
           currentStageIndex = 0;
@@ -1823,7 +1816,7 @@
         document.querySelectorAll('.stage-style-btn').forEach(btn => btn.classList.remove('active'));
         event.target.classList.add('active');
         
-        const sample = samplesData[currentQuestion.id];
+        const sample = samplesData.reports.find(r => r.id === currentQuestion.id);
         if (sample && sample.styles[style]) {
           currentStages = transformSampleToStages(sample, style);
           currentStageIndex = 0;
@@ -1833,7 +1826,7 @@
     }
 
     function closeStageModal(event) {
-      if (event && event.target.id !== 'stageModal') return;
+      if (event && event.target.id !== 'stageModal' && !event.target.classList.contains('stage-close-btn')) return;
       
       document.getElementById('stageModal').classList.remove('active');
       document.body.style.overflow = '';
@@ -1884,7 +1877,6 @@
       }
     }
 
-    // Initialize on load
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', init);
     } else {

@@ -1387,8 +1387,8 @@
       <!-- Style Selector (for MODEL and SAMPLE) -->
       <div class="stage-style-selector" id="stageStyleSelector">
         <button class="stage-style-btn active" data-style="default" onclick="selectStageStyle('default')">Default</button>
-        <button class="stage-style-btn" data-style="professional" onclick="selectStageStyle('professional')">Professional</button>
-        <button class="stage-style-btn" data-style="formal" onclick="selectStageStyle('formal')">Formal</button>
+        <button class="stage-style-btn" data-style="alternative1" onclick="selectStageStyle('alternative1')">Alternative 1</button>
+        <button class="stage-style-btn" data-style="alternative2" onclick="selectStageStyle('alternative2')">Alternative 2</button>
       </div>
 
       <!-- Content Area -->
@@ -1397,13 +1397,14 @@
     </div>
   </div>
 
-  <script>
+<script>
     // Data paths
     const DATA_PATHS = {
       questions: 'data/review-questions.json',
       models: 'data/review-models-skeleton.json',
       plans: 'data/ideas.json',
-      samples: 'data/samples.json'
+      samples: 'data/samples.json',
+      structures: 'data/review-full-structures.json'
     };
 
     // State
@@ -1417,6 +1418,7 @@
     let modelsData = null;
     let plansData = null;
     let samplesData = null;
+    let structuresData = null;
 
     // Stage modal state
     let currentStageType = null;
@@ -1494,10 +1496,11 @@
     // Load additional data files
     async function loadAdditionalData() {
       try {
-        const [modelsRes, plansRes, samplesRes] = await Promise.all([
+        const [modelsRes, plansRes, samplesRes, structuresRes] = await Promise.all([
           fetch(DATA_PATHS.models).catch(e => { console.error('Models fetch error:', e); return null; }),
           fetch(DATA_PATHS.plans).catch(e => { console.error('Plans fetch error:', e); return null; }),
-          fetch(DATA_PATHS.samples).catch(e => { console.error('Samples fetch error:', e); return null; })
+          fetch(DATA_PATHS.samples).catch(e => { console.error('Samples fetch error:', e); return null; }),
+          fetch(DATA_PATHS.structures).catch(e => { console.error('Structures fetch error:', e); return null; })
         ]);
         
         if (modelsRes && modelsRes.ok) {
@@ -1513,6 +1516,11 @@
         if (samplesRes && samplesRes.ok) {
           samplesData = await samplesRes.json();
           console.log('✅ Loaded samples data');
+        }
+
+        if (structuresRes && structuresRes.ok) {
+          structuresData = await structuresRes.json();
+          console.log('✅ Loaded structures data');
         }
         
       } catch (error) {
@@ -1925,9 +1933,42 @@
       });
     }
 
-    // Load STRUCTURE (placeholder for now)
+    // Load STRUCTURE from review-full-structures.json
     async function loadStructure(questionId) {
-      alert(`🏗️ STRUCTURE\n\nStructure loading coming soon for:\n"${currentQuestion.topic}"`);
+      if (!structuresData || !structuresData.structures) {
+        alert('🏗️ STRUCTURE\n\n❌ Structures data file not loaded.');
+        return;
+      }
+      
+      // Map question types to structure categories
+      const question = questionsData.find(q => q.id === questionId);
+      let structureCategory = 'entertainment'; // default
+      
+      if (question) {
+        if (question.type.includes('Restaurant') || question.type.includes('Food')) {
+          structureCategory = 'places';
+        } else if (question.type.includes('App') || question.type.includes('Game')) {
+          structureCategory = 'products';
+        } else if (question.type.includes('Holiday') || question.type.includes('Sports')) {
+          structureCategory = 'experiences';
+        }
+      }
+      
+      const structure = structuresData.structures[structureCategory];
+      
+      if (!structure || !structure.sections) {
+        alert(`🏗️ STRUCTURE\n\n❌ No structure available for "${structureCategory}".`);
+        return;
+      }
+      
+      const stages = transformStructureToStages(structure);
+      
+      openStageModal({
+        type: 'structure',
+        icon: '🏗️',
+        title: structure.title || 'Review Structure',
+        stages: stages
+      });
     }
 
     // Transform PLAN with hierarchical section headings
@@ -1961,6 +2002,28 @@
           html: sample.styles[styleVersion]
         }
       }];
+    }
+
+    // Transform STRUCTURE from full structures JSON
+    function transformStructureToStages(structureData) {
+      const stages = [];
+      
+      Object.entries(structureData.sections).forEach(([sectionKey, section]) => {
+        // For each section, create stages for default, alt1, alt2
+        ['default', 'alt1', 'alt2'].forEach(styleKey => {
+          if (section.phrases && section.phrases[styleKey]) {
+            stages.push({
+              title: `${section.label} - ${styleKey === 'default' ? 'Default' : styleKey === 'alt1' ? 'Alternative 1' : 'Alternative 2'}`,
+              content: {
+                type: 'structure-section',
+                expressions: section.phrases[styleKey]
+              }
+            });
+          }
+        });
+      });
+      
+      return stages;
     }
 
     // Open stage modal
@@ -2038,6 +2101,17 @@
           contentHtml = `
             <div class="sample-essay-content">
               ${stage.content.html}
+            </div>
+          `;
+        } else if (stage.content.type === 'structure-section') {
+          contentHtml = `
+            <div class="structure-section-box">
+              <div class="structure-section-heading">${stage.title}</div>
+              <div class="structure-expressions-list">
+                ${stage.content.expressions.map(expr => `
+                  <div class="structure-expression">${expr}</div>
+                `).join('')}
+              </div>
             </div>
           `;
         }

@@ -928,6 +928,45 @@
       transform: rotate(90deg);
     }
 
+    /* ✅ NEW: Reading Mode Toggle */
+    .reading-mode-toggle {
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.75rem 1rem;
+      background: rgba(0, 0, 0, 0.2);
+      border-bottom: 1px solid rgba(84, 84, 88, 0.2);
+      justify-content: center;
+    }
+
+    .reading-mode-btn {
+      flex: 1;
+      padding: 0.5rem 1rem;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 0.5rem;
+      color: #8e8e93;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+    }
+
+    .reading-mode-btn:hover {
+      background: rgba(0, 0, 0, 0.5);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .reading-mode-btn.active {
+      background: rgba(201, 169, 97, 0.2);
+      border-color: rgba(201, 169, 97, 0.4);
+      color: #C9A961;
+    }
+
     /* Style Selector (for MODEL and SAMPLE) */
     .stage-style-selector {
       display: none;
@@ -1101,6 +1140,76 @@
       font-weight: 600;
     }
 
+    /* ✅ NEW: Progressive Sentence View Styling */
+    .sample-progressive-content {
+      background: linear-gradient(135deg, #d4b896 0%, #c9a981 100%);
+      border-radius: 1rem;
+      padding: 2rem 1.75rem;
+      border-left: 5px solid #C9A961;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      min-height: 300px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sample-progressive-text {
+      font-size: 1.05rem;
+      line-height: 1.9;
+      color: #1a1a1a;
+      font-weight: 500;
+      text-align: justify;
+    }
+
+    /* Progressive Nav Controls */
+    .progressive-nav {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+      padding: 0 1rem;
+    }
+
+    .progressive-btn {
+      padding: 0.5rem 1rem;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 0.5rem;
+      color: #e5e5e7;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .progressive-btn:hover:not(:disabled) {
+      background: rgba(0, 0, 0, 0.5);
+      border-color: rgba(201, 169, 97, 0.3);
+    }
+
+    .progressive-btn.primary {
+      background: rgba(201, 169, 97, 0.2);
+      border-color: rgba(201, 169, 97, 0.4);
+      color: #C9A961;
+    }
+
+    .progressive-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .sentence-counter {
+      font-size: 0.7rem;
+      color: #8e8e93;
+      font-weight: 600;
+      font-family: 'Space Grotesk', sans-serif;
+    }
+
     /* STRUCTURE CONTENT */
     .structure-content-visual {
       display: flex;
@@ -1255,6 +1364,18 @@
         <button class="stage-close-btn" onclick="closeStageModal()">×</button>
       </div>
 
+      <!-- ✅ NEW: Reading Mode Toggle (only shown for SAMPLE) -->
+      <div class="reading-mode-toggle" id="readingModeToggle" style="display: none;">
+        <button class="reading-mode-btn active" onclick="setReadingMode('complete')">
+          <span>📖</span>
+          <span>Complete</span>
+        </button>
+        <button class="reading-mode-btn" onclick="setReadingMode('progressive')">
+          <span>🔍</span>
+          <span>Progressive</span>
+        </button>
+      </div>
+
       <!-- Style Selector (for MODEL and SAMPLE) -->
       <div class="stage-style-selector" id="stageStyleSelector">
         <button class="stage-style-btn active" onclick="selectStageStyle('default')">Default</button>
@@ -1299,6 +1420,11 @@
     let currentModelStyle = 'default';
     let currentSampleStyle = 'default';
 
+    // ✅ NEW: Progressive reading state
+    let readingMode = 'complete'; // 'complete' or 'progressive'
+    let currentSentenceIndex = 0;
+    let currentEssaySentences = [];
+
     // Theme colors
     const themeColors = {
       beige: 'linear-gradient(135deg, #d4b896 0%, #c9a981 100%)',
@@ -1328,6 +1454,70 @@
       });
       
       return highlightedText;
+    }
+
+    // ✅ NEW: Extract sentences from HTML
+    function extractSentences(htmlString) {
+      // Remove paragraph tags but keep spans
+      const textWithSpans = htmlString.replace(/<\/?p>/g, ' ');
+      
+      const sentences = [];
+      let currentSentence = '';
+      let insideTag = false;
+      
+      for (let i = 0; i < textWithSpans.length; i++) {
+        const char = textWithSpans[i];
+        currentSentence += char;
+        
+        if (char === '<') insideTag = true;
+        if (char === '>') insideTag = false;
+        
+        if (!insideTag && (char === '.' || char === '!' || char === '?')) {
+          const nextChar = textWithSpans[i + 1];
+          if (nextChar === ' ' || nextChar === '<' || i === textWithSpans.length - 1) {
+            const trimmed = currentSentence.trim();
+            if (trimmed) {
+              sentences.push(trimmed);
+            }
+            currentSentence = '';
+          }
+        }
+      }
+      
+      if (currentSentence.trim()) {
+        sentences.push(currentSentence.trim());
+      }
+      
+      return sentences;
+    }
+
+    // ✅ NEW: Set reading mode
+    function setReadingMode(mode) {
+      readingMode = mode;
+      currentSentenceIndex = 0;
+      
+      // Update button states
+      document.querySelectorAll('.reading-mode-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      event.target.classList.add('active');
+      
+      renderStageContent();
+    }
+
+    // ✅ NEW: Navigate sentences in progressive mode
+    function nextSentence() {
+      if (currentSentenceIndex < currentEssaySentences.length - 1) {
+        currentSentenceIndex++;
+        renderStageContent();
+      }
+    }
+
+    function prevSentence() {
+      if (currentSentenceIndex > 0) {
+        currentSentenceIndex--;
+        renderStageContent();
+      }
     }
 
     // Initialize
@@ -1766,6 +1956,9 @@
             const sample = samplesData.opinion.find(s => s.id === questionId);
             if (sample) {
               currentSampleStyle = 'default';
+              // ✅ Reset reading mode to complete when opening
+              readingMode = 'complete';
+              currentSentenceIndex = 0;
               const stages = transformSampleToStages(sample, 'default');
               openStageModal({
                 type: 'sample',
@@ -1814,11 +2007,15 @@
     }
 
     function transformSampleToStages(sample, styleVersion) {
+      // ✅ Extract sentences for progressive mode
+      const htmlContent = sample.styles[styleVersion];
+      currentEssaySentences = extractSentences(htmlContent);
+      
       return [{
         title: 'ESSAY',
         content: {
           type: 'html-content',
-          html: sample.styles[styleVersion]
+          html: htmlContent
         }
       }];
     }
@@ -1830,6 +2027,12 @@
         } else {
           closeModal();
         }
+      }
+      
+      // ✅ NEW: Arrow key navigation in progressive mode
+      if (currentStageType === 'sample' && readingMode === 'progressive') {
+        if (e.key === 'ArrowRight') nextSentence();
+        else if (e.key === 'ArrowLeft') prevSentence();
       }
       
       if (viewMode === 'swipe' && !document.getElementById('stageModal').classList.contains('active')) {
@@ -1942,10 +2145,28 @@
       document.getElementById('stageTitle').textContent = config.title;
 
       const styleSelector = document.getElementById('stageStyleSelector');
-      if (config.type === 'model' || config.type === 'sample') {
+      const readingToggle = document.getElementById('readingModeToggle');
+      
+      // ✅ Show reading mode toggle only for SAMPLE
+      if (config.type === 'sample') {
+        readingToggle.style.display = 'flex';
         styleSelector.classList.add('visible');
+        
+        // Reset to complete mode buttons
+        document.querySelectorAll('.reading-mode-btn').forEach(btn => {
+          btn.classList.remove('active');
+          if (btn.textContent.includes('Complete')) {
+            btn.classList.add('active');
+          }
+        });
       } else {
-        styleSelector.classList.remove('visible');
+        readingToggle.style.display = 'none';
+        
+        if (config.type === 'model') {
+          styleSelector.classList.add('visible');
+        } else {
+          styleSelector.classList.remove('visible');
+        }
       }
 
       renderStageContent();
@@ -1954,7 +2175,7 @@
       document.body.style.overflow = 'hidden';
     }
 
-    // ✅ UPDATED: Render stage content with new unified MODEL display
+    // ✅ UPDATED: Render stage content with progressive reading mode
     function renderStageContent() {
       const container = document.getElementById('stageContentArea');
       
@@ -1976,7 +2197,7 @@
             </div>
           `;
         } else if (stage.content.type === 'model-unified') {
-          // ✅ NEW: All 5 sections in ONE box with blue highlights
+          // MODEL mode (unchanged)
           contentHtml = `
             <div class="model-unified-box">
               ${stage.content.sections.map(text => `
@@ -1985,12 +2206,45 @@
             </div>
           `;
         } else if (stage.content.type === 'html-content') {
-          // SAMPLE mode - apply blue highlights to discourse markers
-          contentHtml = `
-            <div class="sample-essay-content">
-              ${addBlueHighlights(stage.content.html)}
-            </div>
-          `;
+          // ✅ SAMPLE mode - with reading mode support
+          if (readingMode === 'complete') {
+            // Complete mode - show full essay
+            contentHtml = `
+              <div class="sample-essay-content">
+                ${addBlueHighlights(stage.content.html)}
+              </div>
+            `;
+          } else {
+            // Progressive mode - show sentences up to current index
+            const visibleSentences = currentEssaySentences.slice(0, currentSentenceIndex + 1);
+            const content = visibleSentences.join(' ');
+            
+            const isFirst = currentSentenceIndex === 0;
+            const isLast = currentSentenceIndex === currentEssaySentences.length - 1;
+            
+            let nextLabel = 'Add Sentence';
+            if (isLast) nextLabel = 'Complete';
+            else if (currentSentenceIndex === 0) nextLabel = 'Add Support';
+            
+            contentHtml = `
+              <div class="sample-progressive-content">
+                <div class="sample-progressive-text">${addBlueHighlights(content)}</div>
+              </div>
+              <div class="progressive-nav">
+                <button class="progressive-btn" onclick="prevSentence()" ${isFirst ? 'disabled' : ''}>
+                  <span>←</span>
+                  <span>Previous</span>
+                </button>
+                <span class="sentence-counter">
+                  Sentence ${currentSentenceIndex + 1} / ${currentEssaySentences.length}
+                </span>
+                <button class="progressive-btn primary" onclick="nextSentence()" ${isLast ? 'disabled' : ''}>
+                  <span>${nextLabel}</span>
+                  <span>→</span>
+                </button>
+              </div>
+            `;
+          }
         } else if (stage.content.type === 'structure-unified') {
           // STRUCTURE mode (unchanged)
           contentHtml = `
@@ -2047,6 +2301,8 @@
         
         const sample = samplesData.opinion.find(s => s.id === currentQuestion.id);
         if (sample && sample.styles[style]) {
+          // ✅ Reset sentence index when changing styles
+          currentSentenceIndex = 0;
           currentStages = transformSampleToStages(sample, style);
           currentStageIndex = 0;
           renderStageContent();
@@ -2062,6 +2318,10 @@
       currentStageType = null;
       currentStages = [];
       currentStageIndex = 0;
+      // ✅ Reset reading mode state
+      readingMode = 'complete';
+      currentSentenceIndex = 0;
+      currentEssaySentences = [];
     }
 
     if (document.readyState === 'loading') {

@@ -571,6 +571,31 @@
       font-weight: 600;
     }
 
+    .progression-step.base-sentence {
+      background: linear-gradient(135deg, rgba(201, 169, 97, 0.15), rgba(30, 30, 32, 0.9));
+      border-color: var(--accent);
+      box-shadow: 
+        0 6px 24px rgba(201, 169, 97, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+
+    .progression-step.expansion-clause {
+      max-width: 650px;
+      margin-left: 50px;
+      border-left: 3px solid rgba(59, 130, 246, 0.3);
+      border-radius: 0 1rem 1rem 0;
+    }
+
+    .progression-step.hidden-clause {
+      opacity: 0.3;
+      transform: scale(0.97);
+      pointer-events: none;
+    }
+
+    .expansion-clause .step-number {
+      background: linear-gradient(135deg, #3b82f6, #60a5fa);
+    }
+
     /* SENTENCE MODAL */
     .sentence-modal {
       position: fixed;
@@ -1799,40 +1824,59 @@ function renderContent() {
   
   if (mode === 'read') {
     if (!showXRay) {
-      // Linear progression infographic
+      // Linear progression infographic - base sentence + stacking clauses
       let html = '<div class="progression-container">';
       
-      readParagraphSteps.forEach((step, index) => {
-        const isActive = index === readDotIndex;
-        const openers = getCurrentOpeners();
-        let openerMatch = null;
-        let restOfText = step;
-        
-        // Find opener
-        for (const opener of openers) {
-          if (step.toLowerCase().startsWith(opener.toLowerCase())) {
-            openerMatch = step.substring(0, opener.length);
-            restOfText = step.substring(opener.length).trim();
-            break;
-          }
+      // Extract base sentence (first step)
+      const baseSentence = readParagraphSteps[0] || '';
+      const openers = getCurrentOpeners();
+      let openerMatch = null;
+      let baseText = baseSentence;
+      
+      // Find opener in base
+      for (const opener of openers) {
+        if (baseSentence.toLowerCase().startsWith(opener.toLowerCase())) {
+          openerMatch = baseSentence.substring(0, opener.length);
+          baseText = baseSentence.substring(opener.length).trim();
+          break;
         }
-        
-        // Determine step label
-        let label = 'BUILDING';
-        if (index === 0) label = 'OPENER + TOPIC';
-        else if (index === readParagraphSteps.length - 1) label = 'COMPLETE';
-        
-        html += `
-          <div class="progression-step ${isActive ? 'active' : ''}" onclick="jumpToReadStep(${index})">
-            <div class="step-number">Step ${index + 1}</div>
-            <div class="step-label">${label}</div>
-            <div class="step-text">
-              ${openerMatch ? `<span class="opener-highlight">${openerMatch}</span> ` : ''}
-              ${highlightLinkingWords(restOfText)}
-            </div>
+      }
+      
+      // Show base sentence once at top
+      html += `
+        <div class="progression-step base-sentence ${readDotIndex === 0 ? 'active' : ''}" onclick="jumpToReadStep(0)">
+          <div class="step-number">Base</div>
+          <div class="step-label">TOPIC SENTENCE</div>
+          <div class="step-text">
+            ${openerMatch ? `<span class="opener-highlight">${openerMatch}</span> ` : ''}
+            ${highlightLinkingWords(baseText)}
           </div>
-        `;
-      });
+        </div>
+      `;
+      
+      // Now show each expansion as additional clauses
+      for (let i = 1; i < readParagraphSteps.length; i++) {
+        const previousStep = readParagraphSteps[i - 1];
+        const currentStep = readParagraphSteps[i];
+        
+        // Extract only the NEW part added in this step
+        const newClause = currentStep.substring(previousStep.length).trim();
+        
+        if (newClause) {
+          const isActive = i === readDotIndex;
+          const isVisible = i <= readDotIndex;
+          
+          html += `
+            <div class="progression-step expansion-clause ${isActive ? 'active' : ''} ${!isVisible ? 'hidden-clause' : ''}" onclick="jumpToReadStep(${i})">
+              <div class="step-number">+${i}</div>
+              <div class="step-label">EXPANSION</div>
+              <div class="step-text">
+                ${highlightLinkingWords(newClause)}
+              </div>
+            </div>
+          `;
+        }
+      }
       
       html += '</div>';
       return html;

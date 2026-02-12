@@ -403,6 +403,35 @@
       border-color: #cccccc;
     }
 
+    /* MODEL VIEW STYLES */
+    .skeleton-card {
+      background: #ffffff;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .skeleton-header {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #000000;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .skeleton-line {
+      padding: 0.75rem 1rem;
+      background: #f8f8f8;
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      color: #333333;
+    }
+
     /* MOBILE */
     @media (max-width: 768px) {
       .back-btn { top: 0.75rem; left: 0.75rem; padding: 0.5rem 0.85rem; font-size: 0.75rem; }
@@ -457,14 +486,26 @@
     </div>
   </div>
 
+  <!-- NAV PILLS (moved outside card for visibility) -->
+  <div style="position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); z-index: 200;">
+    <div style="display: flex; gap: 0.25rem; background: rgba(15, 15, 17, 0.95); backdrop-filter: blur(40px); border: 1px solid rgba(84, 84, 88, 0.3); border-radius: 2rem; padding: 0.5rem;">
+      <button class="nb on" data-mode="question" onclick="switchMode('question')" style="background: transparent; border: none; padding: 0.65rem 1.25rem; border-radius: 1.5rem; font-family: 'Inter', sans-serif; font-size: 0.85rem; color: rgba(255, 255, 255, 0.5); cursor: pointer; transition: all 0.3s; font-weight: 600;">QUESTION</button>
+      <button class="nb" data-mode="plan" onclick="switchMode('plan')" style="background: transparent; border: none; padding: 0.65rem 1.25rem; border-radius: 1.5rem; font-family: 'Inter', sans-serif; font-size: 0.85rem; color: rgba(255, 255, 255, 0.5); cursor: pointer; transition: all 0.3s; font-weight: 600;">PLAN</button>
+      <button class="nb" data-mode="model" onclick="switchMode('model')" style="background: transparent; border: none; padding: 0.65rem 1.25rem; border-radius: 1.5rem; font-family: 'Inter', sans-serif; font-size: 0.85rem; color: rgba(255, 255, 255, 0.5); cursor: pointer; transition: all 0.3s; font-weight: 600;">MODEL</button>
+      <button class="nb" data-mode="sample" onclick="switchMode('sample')" style="background: transparent; border: none; padding: 0.65rem 1.25rem; border-radius: 1.5rem; font-family: 'Inter', sans-serif; font-size: 0.85rem; color: rgba(255, 255, 255, 0.5); cursor: pointer; transition: all 0.3s; font-weight: 600;">SAMPLE</button>
+    </div>
+  </div>
+
 <script>
 // ============================================
 // JSON URLS
 // ============================================
 const JSON_URLS = {
-  questions: 'https://raw.githubusercontent.com/mhnashtai-prog/intuity-cambridge-b2/main/skills/writing/essays/data/essay-questions.json',
-  skeleton: 'https://raw.githubusercontent.com/mhnashtai-prog/intuity-cambridge-b2/main/skills/writing/essays/data/essay-models-skeleton.json',
-  samples: 'https://raw.githubusercontent.com/mhnashtai-prog/intuity-cambridge-b2/main/skills/writing/essays/data/samples.json'
+  questions: 'data/essay-questions.json',
+  skeleton: 'data/ideas.json',
+  samples: 'data/samples.json',
+  phraseBank: 'data/complete-essay-phrase-bank.json',
+  phraseBank1: 'data/complete-essay-phrase-bank1.json'
 };
 
 // ============================================
@@ -473,27 +514,34 @@ const JSON_URLS = {
 let questionsData = null;
 let skeletonData = null;
 let samplesData = null;
+let phraseBankData = null;
+let phraseBank1Data = null;
 let currentEssayId = null;
 let revealedCount = 0;
 let totalSentences = 0;
 let paragraphProgress = [];
+let currentMode = 'question';
 
 // ============================================
 // LOAD DATA
 // ============================================
 async function loadAllData() {
   try {
-    const [questionsRes, skeletonRes, samplesRes] = await Promise.all([
+    const [questionsRes, skeletonRes, samplesRes, phraseBankRes, phraseBank1Res] = await Promise.all([
       fetch(JSON_URLS.questions),
       fetch(JSON_URLS.skeleton),
-      fetch(JSON_URLS.samples)
+      fetch(JSON_URLS.samples),
+      fetch(JSON_URLS.phraseBank),
+      fetch(JSON_URLS.phraseBank1)
     ]);
     
     questionsData = await questionsRes.json();
     skeletonData = await skeletonRes.json();
     samplesData = await samplesRes.json();
+    phraseBankData = await phraseBankRes.json();
+    phraseBank1Data = await phraseBank1Res.json();
     
-    console.log('✅ Data loaded!', { questionsData, skeletonData, samplesData });
+    console.log('✅ Data loaded!', { questionsData, skeletonData, samplesData, phraseBankData, phraseBank1Data });
     
     // Set first essay as default
     currentEssayId = questionsData.questions[0].id;
@@ -653,6 +701,138 @@ function resetPlan() {
   });
   
   updateProgress();
+}
+
+// ============================================
+// MODE SWITCHING
+// ============================================
+function switchMode(mode) {
+  currentMode = mode;
+  
+  // Update button active states
+  document.querySelectorAll('.nb').forEach(btn => {
+    if(btn.dataset.mode === mode){
+      btn.style.background = '#C9A961';
+      btn.style.color = '#000000';
+      btn.style.fontWeight = '700';
+    } else {
+      btn.style.background = 'transparent';
+      btn.style.color = 'rgba(255, 255, 255, 0.5)';
+      btn.style.fontWeight = '600';
+    }
+  });
+  
+  // Handle different modes
+  switch(mode){
+    case 'question':
+      document.getElementById('essayScreen').classList.remove('active');
+      setTimeout(() => document.getElementById('questionScreen').classList.remove('hidden'), 300);
+      break;
+      
+    case 'plan':
+      document.getElementById('questionScreen').classList.add('hidden');
+      setTimeout(() => {
+        loadEssay(currentEssayId);
+        document.getElementById('essayScreen').classList.add('active');
+      }, 200);
+      break;
+      
+    case 'model':
+      displayModel();
+      break;
+      
+    case 'sample':
+      displaySample();
+      break;
+  }
+}
+
+function displayModel() {
+  const question = questionsData.questions.find(q => q.id === currentEssayId);
+  if (!question) return;
+  
+  // Get essay type to find correct skeleton
+  const essayType = question.essayType.toLowerCase().replace(/\s+/g, '-');
+  
+  // Find matching skeleton from phrase bank
+  let skeleton = null;
+  if (phraseBankData[essayType] && phraseBankData[essayType].skeletons) {
+    skeleton = phraseBankData[essayType].skeletons[0]; // Use first variation
+  }
+  
+  if (!skeleton) {
+    showError('No model skeleton found for this essay type');
+    return;
+  }
+  
+  const container = document.getElementById('paragraphsContainer');
+  container.innerHTML = '';
+  
+  document.getElementById('essayTitle').textContent = `${skeleton.name.toUpperCase()} MODEL`;
+  
+  skeleton.skeleton.forEach((section, index) => {
+    const card = document.createElement('div');
+    card.className = 'skeleton-card';
+    
+    const header = document.createElement('div');
+    header.className = 'skeleton-header';
+    header.textContent = `${section.emoji} ${section.title}`;
+    card.appendChild(header);
+    
+    section.lines.forEach(line => {
+      if (line.trim()) {
+        const lineDiv = document.createElement('div');
+        lineDiv.className = 'skeleton-line';
+        lineDiv.textContent = line;
+        card.appendChild(lineDiv);
+      }
+    });
+    
+    container.appendChild(card);
+  });
+  
+  document.getElementById('questionScreen').classList.add('hidden');
+  setTimeout(() => document.getElementById('essayScreen').classList.add('active'), 200);
+}
+
+function displaySample() {
+  const question = questionsData.questions.find(q => q.id === currentEssayId);
+  if (!question) return;
+  
+  // Find sample essay
+  const sample = samplesData.opinion.find(s => s.id === currentEssayId);
+  
+  if (!sample) {
+    showError('No sample essay found for this topic');
+    return;
+  }
+  
+  const container = document.getElementById('paragraphsContainer');
+  container.innerHTML = '';
+  
+  document.getElementById('essayTitle').textContent = 'SAMPLE ESSAY';
+  
+  const sampleDiv = document.createElement('div');
+  sampleDiv.innerHTML = sample.styles.default;
+  sampleDiv.style.padding = '1.5rem';
+  sampleDiv.style.lineHeight = '1.8';
+  sampleDiv.style.fontSize = '1.05rem';
+  
+  container.appendChild(sampleDiv);
+  
+  document.getElementById('questionScreen').classList.add('hidden');
+  setTimeout(() => document.getElementById('essayScreen').classList.add('active'), 200);
+}
+
+function showError(message) {
+  const container = document.getElementById('paragraphsContainer');
+  container.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:center;height:100%;padding:2rem;text-align:center;color:#999999;font-size:1.1rem;">
+      ${message}
+    </div>`;
+  
+  document.getElementById('questionScreen').classList.add('hidden');
+  setTimeout(() => document.getElementById('essayScreen').classList.add('active'), 200);
 }
 
 // START

@@ -265,34 +265,47 @@ html,body{
 ═══════════════════════════ */
 .infographic{
   flex:1;
-  padding:3.5rem 4rem 3.5rem;
+  padding:2.5rem 4rem 2rem;
   overflow-y:auto;
   -webkit-overflow-scrolling:touch;
   display:flex;
   flex-direction:column;
-  gap:3.5rem;
+  gap:2rem;
+  min-height:0;
 }
-.infographic::-webkit-scrollbar{display:none}
+.infographic::-webkit-scrollbar{
+  width:6px;
+}
+.infographic::-webkit-scrollbar-track{
+  background:transparent;
+}
+.infographic::-webkit-scrollbar-thumb{
+  background:rgba(0,0,0,0.15);
+  border-radius:3px;
+}
+.infographic::-webkit-scrollbar-thumb:hover{
+  background:rgba(0,0,0,0.25);
+}
 
 /* Header */
 .info-header{
   text-align:center;
-  padding-bottom:2.5rem;
+  padding-bottom:1.5rem;
   border-bottom:3px solid rgba(0,0,0,0.06);
 }
 
 .info-title{
   font-family:'Inter',sans-serif;
-  font-size:3rem;
+  font-size:2.25rem;
   font-weight:700;
   line-height:1.2;
   color:var(--ink);
-  margin-bottom:1rem;
+  margin-bottom:0.75rem;
 }
 
 .info-subtitle{
   font-family:'Inter',sans-serif;
-  font-size:1.5rem;
+  font-size:1.25rem;
   font-weight:500;
   color:rgba(0,0,0,0.45);
   line-height:1.6;
@@ -300,17 +313,17 @@ html,body{
 
 .info-context{
   font-family:'DM Sans',sans-serif;
-  font-size:1.1rem;
+  font-size:1rem;
   font-weight:400;
   color:rgba(0,0,0,0.4);
-  margin-top:1rem;
+  margin-top:0.75rem;
 }
 
 /* Bullet Points Section */
 .info-bullets{
   display:flex;
   flex-direction:column;
-  gap:2.5rem;
+  gap:1.5rem;
   padding-left:1rem;
 }
 
@@ -350,7 +363,7 @@ html,body{
 .bullet-title{
   flex:1;
   font-family:'Inter',sans-serif;
-  font-size:1.75rem;
+  font-size:1.35rem;
   font-weight:600;
   color:var(--ink);
   text-transform:capitalize;
@@ -662,10 +675,11 @@ html,body{
   <!-- NAV PILLS — INSIDE CARD -->
   <div class="card-nav">
     <div class="nav-pill">
-      <button class="nb on" data-m="0">question</button>
-      <button class="nb" data-m="1">plan</button>
-      <button class="nb" data-m="2">model</button>
-      <button class="nb" data-m="3">sample</button>
+      <button class="nb on" data-mode="question" onclick="switchMode('question')">question</button>
+      <button class="nb" data-mode="plan" onclick="switchMode('plan')">plan</button>
+      <button class="nb" data-mode="model" onclick="switchMode('model')">model</button>
+      <button class="nb" data-mode="build" onclick="switchMode('build')">build</button>
+      <button class="nb" data-mode="sample" onclick="switchMode('sample')">sample</button>
     </div>
   </div>
 
@@ -746,7 +760,7 @@ async function load(){
     </div>`;
   
   try{
-    const response = await fetch('data/essay-questions.json');
+    const response = await fetch('essay-questions.json');
     if(response.ok){
       const data = await response.json();
       allQs = data.questions || [];
@@ -776,7 +790,7 @@ function showError(message){
         ${message}
       </div>
       <div style="font-family:Inter,sans-serif;font-size:0.85rem;color:rgba(0,0,0,0.35);line-height:1.6;text-align:center;max-width:400px;">
-        Make sure <strong>data/essay-questions.json</strong> is in the same directory as this HTML file, then refresh the page.
+        Make sure <strong>essay-questions.json</strong> is in the same directory as this HTML file, then refresh the page.
       </div>
     </div>`;
 }
@@ -835,18 +849,21 @@ function nextQ(){
   if(curQ < Qs.length - 1) loadQuestion(curQ + 1);
 }
 
-/* ═══ SWIPE GESTURE NAVIGATION ═══ */
+/* ═══ SWIPE GESTURE NAVIGATION (MOBILE ONLY) ═══ */
 let touchStartX = 0;
 let touchEndX = 0;
 
-document.addEventListener('touchstart', e => {
-  touchStartX = e.changedTouches[0].screenX;
-});
+// Only enable swipe on touch devices
+if ('ontouchstart' in window) {
+  document.addEventListener('touchstart', e => {
+    touchStartX = e.changedTouches[0].screenX;
+  });
 
-document.addEventListener('touchend', e => {
-  touchEndX = e.changedTouches[0].screenX;
-  handleSwipe();
-});
+  document.addEventListener('touchend', e => {
+    touchEndX = e.changedTouches[0].screenX;
+    handleSwipe();
+  });
+}
 
 function handleSwipe() {
   if (touchEndX < touchStartX - 50) {
@@ -864,6 +881,133 @@ document.addEventListener('keydown', e => {
   if(e.key === 'ArrowLeft') prevQ();
   if(e.key === 'ArrowRight') nextQ();
 });
+
+/* ═══ MODE SWITCHING (FOOTER BUTTONS) ═══ */
+let currentMode = 'question';
+
+function switchMode(mode){
+  currentMode = mode;
+  
+  // Update button active states
+  document.querySelectorAll('.nb').forEach(btn => {
+    btn.classList.remove('on');
+    if(btn.dataset.mode === mode){
+      btn.classList.add('on');
+    }
+  });
+  
+  // Handle different modes
+  switch(mode){
+    case 'question':
+      // Reload current question
+      loadQuestion(curQ);
+      break;
+      
+    case 'plan':
+      // Load ideas.json
+      loadIdeas();
+      break;
+      
+    case 'model':
+      // Open essay-builder.html
+      window.location.href = 'essay-builder.html';
+      break;
+      
+    case 'build':
+      // Build mode - open essay builder
+      // Store current question in session storage
+      if(Qs[curQ]){
+        sessionStorage.setItem('currentQuestion', JSON.stringify(Qs[curQ]));
+      }
+      window.location.href = 'essay-builder-build-mode.html';
+      break;
+      
+    case 'sample':
+      // Load sample.json
+      loadSample();
+      break;
+  }
+}
+
+async function loadIdeas(){
+  try{
+    const response = await fetch('ideas.json');
+    if(response.ok){
+      const data = await response.json();
+      displayIdeas(data);
+    } else {
+      showError('Could not load ideas.json');
+    }
+  }catch(err){
+    console.error('Error loading ideas:', err);
+    showError('Please place ideas.json in the same folder as this HTML file');
+  }
+}
+
+async function loadSample(){
+  try{
+    const response = await fetch('sample.json');
+    if(response.ok){
+      const data = await response.json();
+      displaySample(data);
+    } else {
+      showError('Could not load sample.json');
+    }
+  }catch(err){
+    console.error('Error loading sample:', err);
+    showError('Please place sample.json in the same folder as this HTML file');
+  }
+}
+
+function displayIdeas(data){
+  // Display ideas/plan content
+  const content = `
+    <div class="info-header">
+      <h1 class="info-title">Essay Plan & Ideas</h1>
+      <p class="info-subtitle">Brainstorming and structure</p>
+    </div>
+    <div class="info-bullets">
+      ${(data.ideas || []).map((idea, i) => {
+        const colors = ['health', 'entertain', 'tech'];
+        const colorClass = colors[i % colors.length];
+        return `
+          <div class="bullet-card ${colorClass}">
+            <div class="bullet-header">
+              <div class="bullet-dot"></div>
+              <h2 class="bullet-title">${idea}</h2>
+            </div>
+          </div>`;
+      }).join('')}
+    </div>`;
+  
+  document.querySelector('.infographic').innerHTML = content;
+}
+
+function displaySample(data){
+  // Display sample essay content
+  const content = `
+    <div class="info-header">
+      <h1 class="info-title">Sample Essay</h1>
+      <p class="info-subtitle">${data.title || 'Example response'}</p>
+    </div>
+    <div style="padding:1rem;font-family:'DM Sans',sans-serif;font-size:1rem;line-height:1.8;color:rgba(0,0,0,0.8);">
+      ${data.content || data.essay || 'No sample content available'}
+    </div>`;
+  
+  document.querySelector('.infographic').innerHTML = content;
+}
+
+function showComingSoon(feature){
+  document.querySelector('.infographic').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:1.5rem;padding:2rem;">
+      <div style="font-family:Inter,sans-serif;font-size:2rem;font-weight:700;color:var(--gold);text-align:center;">
+        ${feature} Mode
+      </div>
+      <div style="font-family:Inter,sans-serif;font-size:1rem;color:rgba(0,0,0,0.4);text-align:center;">
+        Coming Soon
+      </div>
+    </div>`;
+}
 
 /* ═══ START ═══ */
 load();

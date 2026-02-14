@@ -98,18 +98,18 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
   </div>
 
   <!-- MAIN CONTENT -->
-  <div class="infographic">
-    <!-- Your custom content goes here -->
+  <div class="infographic" id="contentArea">
+    <!-- Content will be loaded here -->
     <div style="text-align:center;padding:3rem;">
-      <p style="color:rgba(0,0,0,0.5);">Content will be loaded here</p>
+      <p style="color:rgba(0,0,0,0.5);">Loading essay structures...</p>
     </div>
   </div>
 
-  <!-- OPTIONAL: Navigation arrows (remove if not needed) -->
+  <!-- NAVIGATION ARROWS -->
   <div class="slide-nav">
-    <button class="slide-arrow" id="btnPrev" onclick="prevSlide()">←</button>
+    <button class="slide-arrow" id="btnPrev" onclick="navigate(-1)">←</button>
     <div class="page-counter" id="pageCounter">1 / 1</div>
-    <button class="slide-arrow" id="btnNext" onclick="nextSlide()">→</button>
+    <button class="slide-arrow" id="btnNext" onclick="navigate(1)">→</button>
   </div>
 
   <!-- FOOTER NAVIGATION -->
@@ -127,6 +127,13 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 </div>
 
 <script>
+/* ═══ STATE ═══ */
+let skeletonData = null;
+let phraseData = null;
+let currentType = 'for-against';
+let currentVariation = 0;
+let viewMode = 'skeleton';
+
 /* ═══ MENU ═══ */
 function toggleMenu(){
   document.getElementById('menuDropdown').classList.toggle('open');
@@ -140,10 +147,138 @@ document.addEventListener('click', e => {
 
 /* ═══ FILTER ═══ */
 function filterByType(type){
+  currentFilter = type;
   document.querySelectorAll('.menu-item').forEach(item => item.classList.remove('active'));
   event.target.closest('.menu-item').classList.add('active');
   document.getElementById('menuDropdown').classList.remove('open');
-  // Add your filter logic here
+  // Filter logic can be added here if needed
+}
+
+/* ═══ INIT ═══ */
+async function init() {
+  try {
+    const [skeletonResponse, phraseResponse] = await Promise.all([
+      fetch('data/complete-essay-phrase-bank.json'),
+      fetch('data/complete-essay-phrase-bank1.json')
+    ]);
+    
+    if (!skeletonResponse.ok || !phraseResponse.ok) {
+      throw new Error('Failed to load data files');
+    }
+    
+    skeletonData = await skeletonResponse.json();
+    phraseData = await phraseResponse.json();
+    
+    renderContent();
+    updateNav();
+    
+  } catch (error) {
+    console.error('Error loading data:', error);
+    document.getElementById('contentArea').innerHTML = `
+      <div style="text-align: center; padding: 2rem; color: rgba(0,0,0,0.4);">
+        <div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div>
+        <div style="font-size: 1.2rem; font-weight: 700;">Failed to load essay data</div>
+        <div style="font-size: 0.9rem; margin-top: 1rem; opacity: 0.6;">${error.message}</div>
+      </div>
+    `;
+  }
+}
+
+/* ═══ RENDER CONTENT ═══ */
+function renderContent() {
+  const container = document.getElementById('contentArea');
+  const typeData = skeletonData[currentType];
+  const variation = typeData.skeletons[currentVariation];
+  
+  let html = '<div style="padding:1rem;">';
+  html += `<h2 style="font-size:1.5rem;color:var(--ink);margin-bottom:1.5rem;text-align:center;">${typeData.label}</h2>`;
+  html += `<h3 style="font-size:1.1rem;color:var(--gold);margin-bottom:1rem;text-align:center;">${variation.name}</h3>`;
+  
+  if (viewMode === 'skeleton') {
+    html += '<div style="display:flex;flex-direction:column;gap:1.5rem;">';
+    variation.skeleton.forEach((para, index) => {
+      html += `
+        <div style="background:rgba(0,0,0,0.02);border-left:4px solid var(--gold);padding:1rem;border-radius:0.5rem;">
+          <div style="font-size:0.9rem;font-weight:700;color:var(--gold);margin-bottom:0.5rem;">${para.emoji} ${para.title}</div>
+          ${para.lines.map(line => 
+            `<div style="font-size:0.9rem;color:rgba(0,0,0,0.7);line-height:1.6;margin-bottom:0.3rem;">${line || '&nbsp;'}</div>`
+          ).join('')}
+        </div>
+      `;
+    });
+    html += '</div>';
+  } else {
+    // Phrase mode
+    if (phraseData[currentType] && phraseData[currentType].categories) {
+      const categories = phraseData[currentType].categories;
+      html += '<div style="display:flex;flex-direction:column;gap:2rem;">';
+      categories.forEach(category => {
+        html += `
+          <div>
+            <h4 style="font-size:1rem;font-weight:700;color:var(--gold);margin-bottom:1rem;border-bottom:2px solid var(--gold);padding-bottom:0.5rem;">${category.title}</h4>
+        `;
+        category.subcategories.forEach(sub => {
+          html += `
+            <div style="margin-bottom:1.5rem;">
+              <div style="font-size:0.85rem;font-weight:600;color:rgba(0,0,0,0.7);margin-bottom:0.5rem;">${sub.subtitle}</div>
+              <ul style="list-style:none;padding:0;">
+          `;
+          sub.phrases.forEach(phrase => {
+            html += `<li style="font-size:0.85rem;color:rgba(0,0,0,0.6);line-height:1.6;margin-bottom:0.4rem;padding-left:1rem;position:relative;">
+              <span style="position:absolute;left:0;color:var(--gold);">→</span>${phrase}
+            </li>`;
+          });
+          html += '</ul></div>';
+        });
+        html += '</div>';
+      });
+      html += '</div>';
+    } else {
+      html += '<p style="color:rgba(0,0,0,0.4);text-align:center;">No phrase bank available for this essay type.</p>';
+    }
+  }
+  
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+/* ═══ NAVIGATION ═══ */
+function navigate(direction) {
+  if (viewMode === 'skeleton') {
+    const typeData = skeletonData[currentType];
+    currentVariation += direction;
+    currentVariation = Math.max(0, Math.min(currentVariation, typeData.skeletons.length - 1));
+  } else {
+    const types = Object.keys(skeletonData).filter(key => key !== 'meta');
+    const currentIndex = types.indexOf(currentType);
+    const newIndex = currentIndex + direction;
+    if (newIndex >= 0 && newIndex < types.length) {
+      currentType = types[newIndex];
+      currentVariation = 0;
+    }
+  }
+  
+  renderContent();
+  updateNav();
+}
+
+function updateNav() {
+  const btnPrev = document.getElementById('btnPrev');
+  const btnNext = document.getElementById('btnNext');
+  const pageCounter = document.getElementById('pageCounter');
+  
+  if (viewMode === 'skeleton') {
+    const typeData = skeletonData[currentType];
+    btnPrev.disabled = currentVariation === 0;
+    btnNext.disabled = currentVariation === typeData.skeletons.length - 1;
+    pageCounter.textContent = `${currentVariation + 1} / ${typeData.skeletons.length}`;
+  } else {
+    const types = Object.keys(skeletonData).filter(key => key !== 'meta');
+    const currentIndex = types.indexOf(currentType);
+    btnPrev.disabled = currentIndex === 0;
+    btnNext.disabled = currentIndex === types.length - 1;
+    pageCounter.textContent = `${currentIndex + 1} / ${types.length}`;
+  }
 }
 
 /* ═══ MODE SWITCHING ═══ */
@@ -160,7 +295,7 @@ function switchMode(mode){
       window.location.href = 'essay-plan.html';
       break;
     case 'model':
-      // Current page - essay-builder.html
+      // Current page - stay here
       break;
     case 'build':
       window.location.href = 'essay-builder-interactive.html';
@@ -171,14 +306,14 @@ function switchMode(mode){
   }
 }
 
-/* ═══ NAVIGATION (Optional) ═══ */
-function prevSlide(){
-  // Add your previous slide logic
-}
+/* ═══ KEYBOARD NAV ═══ */
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft') navigate(-1);
+  if (e.key === 'ArrowRight') navigate(1);
+});
 
-function nextSlide(){
-  // Add your next slide logic
-}
+/* ═══ START ═══ */
+init();
 </script>
 </body>
 </html>

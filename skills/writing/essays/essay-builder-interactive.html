@@ -60,7 +60,10 @@ html, body { width:100%; height:100%; overflow:hidden; position:fixed; backgroun
 .pill:nth-child(3n+1){animation-delay:0s} .pill:nth-child(3n+2){animation-delay:0.8s} .pill:nth-child(3n+3){animation-delay:1.6s}
 .pill:hover { transform:scale(1.15) translateY(-2px); background:var(--gold-d); box-shadow:0 4px 14px rgba(155,125,58,0.55); animation:none; }
 .pill:active { transform:scale(0.92); }
-.s-new { display:inline; color:var(--gold-d); font-weight:600; animation:zipOpen 0.5s cubic-bezier(0.34,1.1,0.64,1) both; }
+.pill-container { display:inline; position:relative; }
+.pill-container.revealed .pill { display:none; }
+.s-new { display:none; color:var(--gold-d); font-weight:600; }
+.pill-container.revealed .s-new { display:inline; animation:zipOpen 0.5s cubic-bezier(0.34,1.1,0.64,1) both; }
 @keyframes zipOpen { from{clip-path:inset(0 100% 0 0);opacity:0.3} to{clip-path:inset(0 0% 0 0);opacity:1} }
 .s-new.ink { color:var(--settled); font-weight:400; transition:color 0.9s ease,font-weight 0.9s ease; }
 .celebration { position:fixed; inset:0; z-index:900; display:flex; align-items:center; justify-content:center; pointer-events:none; opacity:0; }
@@ -88,7 +91,7 @@ html, body { width:100%; height:100%; overflow:hidden; position:fixed; backgroun
     <a class="home-link" href="essay-question-selector.html">← Questions</a>
     <span class="brand-word">INTUITY</span>
     <div style="flex:1"></div>
-    <div class="menu-btn" id="menuBtn" onclick="toggleMenu()">
+    <div class="menu-btn" onclick="toggleMenu()">
       <div class="menu-dots"><span></span><span></span><span></span></div>
     </div>
     <div class="menu-dropdown" id="menuDropdown">
@@ -124,172 +127,15 @@ html, body { width:100%; height:100%; overflow:hidden; position:fixed; backgroun
 </div>
 
 <script>
-let question    = null;
-let sampleData  = null;
-let sentences   = [];
+// ==================== STATE ====================
+let question = null;
+let essayData = null;
 let totalHidden = 0;
 let revealCount = 0;
 
 const PARA_LABELS = ['Introduction','Body Paragraph 1','Body Paragraph 2','Conclusion'];
 
-function fromStructured(paragraphs) {
-  return paragraphs.map(p => ({
-    label:     p.label || null,
-    sentences: (p.sentences || []).map(s => s.trim()).filter(Boolean)
-  })).filter(p => p.sentences.length > 0);
-}
-
-const ABBR = /\b(Mr|Mrs|Ms|Dr|Prof|St|etc|e\.g|i\.e|vs|approx|dept)\s*$/i;
-function splitSentences(text) {
-  const raw = text.match(/[^.!?]*(?:[.!?]+(?=\s+[A-Z])|[.!?]+$)|[^.!?]+/g) || [text];
-  const out = []; let buf = '';
-  raw.forEach(chunk => {
-    buf += chunk;
-    if (ABBR.test(buf.trimEnd())) return;
-    const s = buf.trim(); if (s) out.push(s); buf = '';
-  });
-  if (buf.trim()) out.push(buf.trim());
-  return out.filter(Boolean);
-}
-
-function fromHTML(html) {
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  const ps = div.querySelectorAll('p');
-  const paraTexts = ps.length
-    ? Array.from(ps).map(p => p.textContent.trim()).filter(Boolean)
-    : html.split(/\n\n+/).map(chunk => { const d = document.createElement('div'); d.innerHTML = chunk; return d.textContent.trim(); }).filter(Boolean);
-  return paraTexts.map(text => ({ label: null, sentences: splitSentences(text) })).filter(p => p.sentences.length > 0);
-}
-
-function getParaSentences(match) {
-  if (match.paragraphs && Array.isArray(match.paragraphs) && match.paragraphs.length)
-    return fromStructured(match.paragraphs);
-  const html = match.styles?.default || match.html || match.text || '';
-  return fromHTML(html);
-}
-
-function render(paraSentences) {
-  sentences = []; totalHidden = 0; revealCount = 0;
-  const canvas = document.getElementById('essayCanvas');
-  canvas.innerHTML = '';
-
-  paraSentences.forEach((para, pi) => {
-    const sents = Array.isArray(para) ? para : para.sentences;
-    const label = (!Array.isArray(para) && para.label)
-      ? para.label : (PARA_LABELS[pi] || `Paragraph ${pi + 1}`);
-
-    const block = document.createElement('div');
-    block.className = 'para-block'; block.id = `para-${pi}`;
-
-    const lbl = document.createElement('div');
-    lbl.className = 'para-label'; lbl.textContent = label;
-    const checkSpan = document.createElement('span');
-    checkSpan.className = 'check'; checkSpan.textContent = ' ✦';
-    lbl.appendChild(checkSpan); block.appendChild(lbl);
-
-    const prose = document.createElement('div');
-    prose.className = 'prose';
-
-    sents.forEach((text, si) => {
-      const globalIdx = sentences.length;
-      sentences.push({ paraIdx: pi, sentIdx: si, text, revealed: si === 0 });
-
-      if (si === 0) {
-        const span = document.createElement('span');
-        span.className = 's-anchor'; span.textContent = text;
-        prose.appendChild(span);
-        prose.appendChild(document.createTextNode(' '));
-      } else {
-        totalHidden++;
-        const pill = document.createElement('span');
-        pill.className = 'pill'; 
-        pill.dataset.idx = globalIdx;
-        pill.textContent = si;
-        pill.title = `Tap to reveal sentence ${si}`;
-        // FIXED: Use addEventListener with regular function to preserve 'this' context
-        pill.addEventListener('click', function() { 
-          tapPill(parseInt(this.dataset.idx), this); 
-        });
-        prose.appendChild(pill);
-        prose.appendChild(document.createTextNode(' '));
-      }
-    });
-
-    block.appendChild(prose); canvas.appendChild(block);
-  });
-  updateProgress();
-}
-
-function tapPill(idx, pillEl) {
-  const s = sentences[idx];
-  if (!s || s.revealed) return;
-  s.revealed = true; revealCount++;
-
-  const span = document.createElement('span');
-  span.className = 's-new';
-  span.textContent = s.text + ' ';
-  pillEl.replaceWith(span);
-  setTimeout(() => span.classList.add('ink'), 1400);
-
-  const paraSents = sentences.filter(x => x.paraIdx === s.paraIdx);
-  if (paraSents.every(x => x.revealed))
-    document.getElementById(`para-${s.paraIdx}`)?.classList.add('complete');
-
-  updateProgress();
-  if (revealCount === totalHidden) setTimeout(celebrate, 350);
-}
-
-function updateProgress() {
-  const pct = totalHidden > 0 ? (revealCount / totalHidden) * 100 : 0;
-  document.getElementById('barFill').style.width = pct + '%';
-  const lbl = document.getElementById('progressLabel');
-  if (revealCount === 0)            { lbl.textContent = 'tap the numbers'; lbl.classList.remove('done'); }
-  else if (revealCount === totalHidden) { lbl.textContent = 'complete ✦'; lbl.classList.add('done'); }
-  else                              { lbl.textContent = `${revealCount} / ${totalHidden}`; lbl.classList.remove('done'); }
-}
-
-function celebrate() {
-  const el = document.getElementById('celebration');
-  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 2900);
-}
-
-function revealAll() {
-  closeMenu();
-  document.querySelectorAll('.pill').forEach(pill => {
-    const idx = parseInt(pill.dataset.idx);
-    if (!isNaN(idx)) {
-      tapPill(idx, pill);
-    }
-  });
-}
-
-function resetAll() {
-  closeMenu();
-  if (!sampleData?.paragraphs) return;
-  render(fromStructured(sampleData.paragraphs));
-}
-
-function toggleMenu() { document.getElementById('menuDropdown').classList.toggle('open'); }
-function closeMenu()  { document.getElementById('menuDropdown').classList.remove('open'); }
-document.addEventListener('click', e => {
-  if (!document.getElementById('menuDropdown').contains(e.target) &&
-      !document.getElementById('menuBtn').contains(e.target)) closeMenu();
-});
-
-function navTo(dest) {
-  if (dest === 'build') return;
-  if (question) sessionStorage.setItem('currentQuestion', JSON.stringify(question));
-  const map = {
-    question: 'essay-question-selector.html',
-    plan:     'essay-plan.html',
-    model:    'essay-builder.html',
-    sample:   'essay-master.html'
-  };
-  if (map[dest]) window.location.href = map[dest];
-}
-
+// ==================== INIT ====================
 async function init() {
   try { 
     question = JSON.parse(sessionStorage.getItem('currentQuestion')); 
@@ -316,8 +162,8 @@ async function init() {
       return;
     }
 
-    sampleData = { paragraphs };
-    render(fromStructured(paragraphs));
+    essayData = paragraphs;
+    renderEssay();
 
   } catch(err) {
     document.getElementById('essayCanvas').innerHTML =
@@ -326,6 +172,183 @@ async function init() {
   }
 }
 
+// ==================== RENDER ESSAY ====================
+function renderEssay() {
+  if (!essayData) return;
+  
+  totalHidden = 0;
+  revealCount = 0;
+  const canvas = document.getElementById('essayCanvas');
+  canvas.innerHTML = '';
+
+  essayData.forEach((para, pi) => {
+    const label = para.label || PARA_LABELS[pi] || `Paragraph ${pi + 1}`;
+    const sentences = para.sentences || [];
+
+    const block = document.createElement('div');
+    block.className = 'para-block';
+    block.id = `para-${pi}`;
+
+    // Label with checkmark
+    const lbl = document.createElement('div');
+    lbl.className = 'para-label';
+    lbl.textContent = label;
+    const checkSpan = document.createElement('span');
+    checkSpan.className = 'check';
+    checkSpan.textContent = ' ✦';
+    lbl.appendChild(checkSpan);
+    block.appendChild(lbl);
+
+    // Prose container
+    const prose = document.createElement('div');
+    prose.className = 'prose';
+
+    sentences.forEach((text, si) => {
+      if (si === 0) {
+        // First sentence always visible
+        const span = document.createElement('span');
+        span.className = 's-anchor';
+        span.textContent = text;
+        prose.appendChild(span);
+        prose.appendChild(document.createTextNode(' '));
+      } else {
+        // Hidden sentences with pills
+        totalHidden++;
+        
+        const container = document.createElement('span');
+        container.className = 'pill-container';
+        container.dataset.paraIdx = pi;
+        container.dataset.sentIdx = si;
+        
+        const pill = document.createElement('span');
+        pill.className = 'pill';
+        pill.textContent = si + 1;
+        pill.title = `Tap to reveal sentence ${si + 1}`;
+        pill.onclick = function() { revealSentence(pi, si); };
+        
+        const newText = document.createElement('span');
+        newText.className = 's-new';
+        newText.textContent = text + ' ';
+        
+        container.appendChild(newText);
+        container.appendChild(pill);
+        prose.appendChild(container);
+        prose.appendChild(document.createTextNode(' '));
+      }
+    });
+
+    block.appendChild(prose);
+    canvas.appendChild(block);
+  });
+  
+  updateProgress();
+}
+
+// ==================== REVEAL SENTENCE ====================
+function revealSentence(paraIdx, sentIdx) {
+  const container = document.querySelector(`.pill-container[data-para-idx="${paraIdx}"][data-sent-idx="${sentIdx}"]`);
+  if (!container || container.classList.contains('revealed')) return;
+  
+  container.classList.add('revealed');
+  revealCount++;
+  
+  // Add ink effect after animation
+  const newText = container.querySelector('.s-new');
+  setTimeout(() => newText.classList.add('ink'), 1400);
+  
+  // Check if paragraph is complete
+  checkParagraphComplete(paraIdx);
+  updateProgress();
+  
+  if (revealCount === totalHidden) {
+    setTimeout(celebrate, 350);
+  }
+}
+
+// ==================== CHECK PARAGRAPH COMPLETE ====================
+function checkParagraphComplete(paraIdx) {
+  const para = document.getElementById(`para-${paraIdx}`);
+  const containers = para.querySelectorAll('.pill-container');
+  const allRevealed = Array.from(containers).every(c => c.classList.contains('revealed'));
+  
+  if (allRevealed) {
+    para.classList.add('complete');
+  }
+}
+
+// ==================== UPDATE PROGRESS ====================
+function updateProgress() {
+  const pct = totalHidden > 0 ? (revealCount / totalHidden) * 100 : 0;
+  document.getElementById('barFill').style.width = pct + '%';
+  const lbl = document.getElementById('progressLabel');
+  
+  if (revealCount === 0) {
+    lbl.textContent = 'tap the numbers';
+    lbl.classList.remove('done');
+  } else if (revealCount === totalHidden) {
+    lbl.textContent = 'complete ✦';
+    lbl.classList.add('done');
+  } else {
+    lbl.textContent = `${revealCount} / ${totalHidden}`;
+    lbl.classList.remove('done');
+  }
+}
+
+// ==================== CELEBRATE ====================
+function celebrate() {
+  const el = document.getElementById('celebration');
+  el.classList.remove('show');
+  void el.offsetWidth;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2900);
+}
+
+// ==================== REVEAL ALL ====================
+function revealAll() {
+  closeMenu();
+  document.querySelectorAll('.pill-container:not(.revealed)').forEach(container => {
+    const paraIdx = parseInt(container.dataset.paraIdx);
+    const sentIdx = parseInt(container.dataset.sentIdx);
+    revealSentence(paraIdx, sentIdx);
+  });
+}
+
+// ==================== RESET ALL ====================
+function resetAll() {
+  closeMenu();
+  if (!essayData) return;
+  renderEssay();
+}
+
+// ==================== MENU ====================
+function toggleMenu() {
+  document.getElementById('menuDropdown').classList.toggle('open');
+}
+
+function closeMenu() {
+  document.getElementById('menuDropdown').classList.remove('open');
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#menuDropdown') && !e.target.closest('.menu-btn')) {
+    closeMenu();
+  }
+});
+
+// ==================== NAVIGATION ====================
+function navTo(dest) {
+  if (dest === 'build') return;
+  if (question) sessionStorage.setItem('currentQuestion', JSON.stringify(question));
+  const map = {
+    question: 'essay-question-selector.html',
+    plan:     'essay-plan.html',
+    model:    'essay-builder.html',
+    sample:   'essay-master.html'
+  };
+  if (map[dest]) window.location.href = map[dest];
+}
+
+// ==================== INIT ====================
 init();
 </script>
 </body>

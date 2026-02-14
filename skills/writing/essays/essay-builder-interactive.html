@@ -93,6 +93,10 @@ html, body { width:100%; height:100%; overflow:hidden; position:fixed; backgroun
 .pill[data-type="addition"] { background: #8b5cf6; }
 .pill[data-type="contrast"] { background: #ef4444; }
 .pill[data-type="compare"] { background: #06b6d4; }
+.pill[data-type="thesis"] { background: #ec4899; }
+.pill[data-type="context"] { background: #64748b; }
+.pill[data-type="summary"] { background: #14b8a6; }
+.pill[data-type="view"] { background: #f97316; }
 
 @keyframes breathe { 0%,100%{box-shadow:0 0 0 0 rgba(201,169,97,0.5)} 60%{box-shadow:0 0 0 6px rgba(201,169,97,0)} }
 .pill:nth-child(3n+1){animation-delay:0s} .pill:nth-child(3n+2){animation-delay:0.8s} .pill:nth-child(3n+3){animation-delay:1.6s}
@@ -184,6 +188,10 @@ html, body { width:100%; height:100%; overflow:hidden; position:fixed; backgroun
 .legend-dot.addition { background: #8b5cf6; }
 .legend-dot.contrast { background: #ef4444; }
 .legend-dot.compare { background: #06b6d4; }
+.legend-dot.thesis { background: #ec4899; }
+.legend-dot.context { background: #64748b; }
+.legend-dot.summary { background: #14b8a6; }
+.legend-dot.view { background: #f97316; }
 
 @media(max-width:768px){ 
   .shell{padding:1vh 2vw} 
@@ -264,29 +272,61 @@ let essayData = null;
 let totalHidden = 0;
 let revealCount = 0;
 
-const PARA_LABELS = ['Introduction','Body Paragraph 1','Body Paragraph 2','Conclusion'];
+const PARA_LABELS = ['Introduction','Body Paragraph 1','Body Paragraph 2','Body Paragraph 3','Body Paragraph 4','Conclusion'];
 
-// ==================== SENTENCE TYPE DETECTION ====================
-function detectSentenceType(text) {
+// ==================== SENTENCE TYPE DETECTION (EXPANDED) ====================
+function detectSentenceType(text, paraLabel, sentenceIndex) {
   const lower = text.toLowerCase();
   
-  // REASON patterns
+  // INTRODUCTION-SPECIFIC PATTERNS
+  if (paraLabel && paraLabel.toLowerCase().includes('introduction')) {
+    // THESIS/STANCE patterns
+    if (lower.match(/^(i|from my perspective|in my view|i believe|i firmly believe|i strongly believe|i am convinced)/i) ||
+        lower.includes('i believe') || 
+        lower.includes('i firmly believe') ||
+        lower.includes('from my perspective')) {
+      return { type: 'thesis', label: 'Thesis' };
+    }
+    
+    // CONTEXT patterns
+    if (lower.match(/^(nowadays|in recent times|in recent years|these days|over the past|it is widely|few people would deny|there is growing)/i)) {
+      return { type: 'context', label: 'Context' };
+    }
+  }
+  
+  // CONCLUSION-SPECIFIC PATTERNS
+  if (paraLabel && paraLabel.toLowerCase().includes('conclusion')) {
+    // SUMMARY patterns
+    if (lower.match(/^(in conclusion|to sum up|to conclude|overall|in summary|taking everything into account)/i)) {
+      return { type: 'summary', label: 'Summary' };
+    }
+    
+    // FINAL VIEW patterns
+    if (lower.match(/^(i|from my perspective|in my view|i believe|i am convinced|on balance)/i)) {
+      return { type: 'view', label: 'View' };
+    }
+  }
+  
+  // BODY PARAGRAPH PATTERNS
+  
+  // REASON patterns (expanded)
   if (lower.includes('this is because') || 
       lower.includes('this is largely because') ||
       lower.includes('this happens because') ||
-      lower.match(/^(the main|one|a key|the primary) (advantage|disadvantage|benefit|drawback|reason|cause)/i)) {
+      lower.includes('this is due to') ||
+      lower.match(/^(the main|one|a key|the primary|the chief|firstly|secondly|to begin with) (advantage|disadvantage|benefit|drawback|reason|cause)/i)) {
     return { type: 'reason', label: 'Reason' };
   }
   
-  // EXAMPLE patterns
+  // EXAMPLE patterns (expanded)
   if (lower.includes('for example') || 
       lower.includes('for instance') ||
       lower.includes('such as') ||
-      lower.match(/^to illustrate/i)) {
+      lower.match(/^(to illustrate|a clear example)/i)) {
     return { type: 'example', label: 'Example' };
   }
   
-  // RESULT patterns
+  // RESULT patterns (expanded)
   if (lower.includes('as a result') || 
       lower.includes('consequently') ||
       lower.includes('therefore') ||
@@ -296,7 +336,7 @@ function detectSentenceType(text) {
     return { type: 'result', label: 'Result' };
   }
   
-  // ADDITION patterns
+  // ADDITION patterns (expanded)
   if (lower.includes('furthermore') || 
       lower.includes('moreover') ||
       lower.includes('in addition') ||
@@ -305,14 +345,15 @@ function detectSentenceType(text) {
     return { type: 'addition', label: 'Addition' };
   }
   
-  // CONTRAST patterns
+  // CONTRAST patterns (expanded)
   if (lower.includes('however') || 
       lower.includes('on the other hand') ||
       lower.includes('in contrast') ||
       lower.includes('nevertheless') ||
       lower.includes('although') ||
       lower.includes('while there are') ||
-      lower.match(/^(despite|critics argue)/i)) {
+      lower.includes('while some argue') ||
+      lower.match(/^(despite|critics argue|the key disadvantage|a major drawback)/i)) {
     return { type: 'contrast', label: 'Contrast' };
   }
   
@@ -365,7 +406,7 @@ async function init() {
   }
 }
 
-// ==================== RENDER ESSAY (HTML-FIRST PATTERN WITH TYPE DETECTION) ====================
+// ==================== RENDER ESSAY (HTML-FIRST PATTERN WITH EXPANDED TYPE DETECTION) ====================
 function renderEssay() {
   if (!essayData) return;
   
@@ -376,7 +417,7 @@ function renderEssay() {
   // Track which types are used for the legend
   const typesUsed = new Set();
 
-  // BUILD HTML STRING with type detection
+  // BUILD HTML STRING with context-aware type detection
   const html = essayData.map((para, pi) => {
     const label = para.label || PARA_LABELS[pi] || `Paragraph ${pi + 1}`;
     const sentences = para.sentences || [];
@@ -384,14 +425,14 @@ function renderEssay() {
     // Count hidden sentences
     totalHidden += sentences.length - 1;
     
-    // Build sentence HTML - TEXT FIRST, PILL SECOND with type detection
+    // Build sentence HTML - TEXT FIRST, PILL SECOND with context-aware detection
     const sentenceHTML = sentences.map((text, si) => {
       if (si === 0) {
         // First sentence visible
         return `<span class="s-anchor">${text}</span>`;
       } else {
-        // Detect sentence type
-        const detection = detectSentenceType(text);
+        // Detect sentence type with paragraph context
+        const detection = detectSentenceType(text, label, si);
         const pillLabel = detection.label || (si + 1);
         
         // Track types for legend
@@ -422,17 +463,21 @@ function renderEssay() {
   let legendHTML = '';
   if (typesUsed.size > 0) {
     const legendItems = [];
-    const typeOrder = ['reason', 'example', 'result', 'addition', 'contrast', 'compare'];
+    const typeOrder = ['context', 'thesis', 'reason', 'example', 'result', 'addition', 'contrast', 'compare', 'summary', 'view'];
     
     typeOrder.forEach(type => {
       if (typesUsed.has(type)) {
         const labels = {
+          context: 'Context',
+          thesis: 'Thesis',
           reason: 'Reason',
           example: 'Example', 
           result: 'Result',
           addition: 'Addition',
           contrast: 'Contrast',
-          compare: 'Compare'
+          compare: 'Compare',
+          summary: 'Summary',
+          view: 'View'
         };
         legendItems.push(`
           <div class="legend-item">

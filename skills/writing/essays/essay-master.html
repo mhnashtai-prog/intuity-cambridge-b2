@@ -77,7 +77,7 @@ html, body {
   margin-top: 3px;
   border-bottom: 1px solid rgba(0,0,0,0.06);
   position: relative;
-  z-index: 10;         /* ensures dropdown escapes card overflow */
+  z-index: 10;
 }
 .home-link {
   text-decoration: none;
@@ -169,6 +169,7 @@ html, body {
   padding: 0.75rem 1.5rem 0.625rem;
   border-bottom: 1px solid rgba(0,0,0,0.05);
 }
+.stage-dots-row.hidden { display: none; }
 .stage-dot-wrapper {
   display: flex; flex-direction: column; align-items: center; gap: 0.35rem;
   cursor: pointer; transition: all 0.2s;
@@ -226,6 +227,43 @@ html, body {
 }
 .phrase-badge.on { display: inline; }
 
+/* View Mode Toggle Switch */
+.view-switch {
+  display: flex;
+  background: rgba(0,0,0,0.06);
+  border: 1.5px solid rgba(0,0,0,0.12);
+  border-radius: 2rem;
+  padding: 0.25rem;
+  gap: 0.25rem;
+}
+.switch-option {
+  padding: 0.3rem 0.875rem;
+  border-radius: 1.5rem;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: rgba(0,0,0,0.45);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+  white-space: nowrap;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  user-select: none;
+}
+.switch-option:hover:not(.active) {
+  color: rgba(0,0,0,0.65);
+  background: rgba(0,0,0,0.04);
+}
+.switch-option.active {
+  background: var(--ink);
+  color: var(--gold);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.switch-option:active {
+  transform: scale(0.96);
+}
+
 /* ═══════════════════════════
    CONTENT AREA
 ═══════════════════════════ */
@@ -245,11 +283,14 @@ html, body {
   text-transform: uppercase; letter-spacing: 0.12em;
   color: rgba(0,0,0,0.28); margin-bottom: 1rem;
 }
+.para-label.hidden { display: none; }
 .para-text {
   font-family: 'DM Sans', sans-serif;
   font-size: 1.05rem; line-height: 1.85;
   color: rgba(0,0,0,0.82); font-weight: 400;
+  margin-bottom: 2rem;
 }
+.para-text:last-child { margin-bottom: 0; }
 
 /* X-Ray: discourse markers go blue */
 .xray-on .dm {
@@ -286,6 +327,7 @@ html, body {
   border-top: 1px solid rgba(0,0,0,0.06);
   gap: 1rem;
 }
+.para-nav.hidden { display: none; }
 .para-arrow {
   background: transparent;
   border: 2px solid rgba(0,0,0,0.15);
@@ -427,6 +469,8 @@ html, body {
   .stage-dot-label { font-size: 0.525rem; }
   .tool-row { padding: 0.4rem 1rem; gap: 0.375rem; }
   .tool-btn { padding: 0.275rem 0.7rem; font-size: 0.625rem; min-height: 28px; }
+  .view-switch { padding: 0.2rem; gap: 0.2rem; }
+  .switch-option { padding: 0.25rem 0.7rem; font-size: 0.6rem; min-height: 28px; }
   .infographic { padding: 1.25rem; }
   .para-text { font-size: 0.95rem; line-height: 1.8; }
   .para-nav { padding: 0.625rem 1rem; }
@@ -447,6 +491,7 @@ html, body {
   .stage-dot { width: 12px; height: 12px; }
   .stage-dot-label { font-size: 0.65rem; }
   .tool-btn { font-size: 0.8rem; padding: 0.4rem 1.1rem; min-height: 38px; }
+  .switch-option { padding: 0.35rem 1rem; font-size: 0.75rem; min-height: 38px; }
   .para-arrow { width: 52px; height: 52px; font-size: 1.4rem; }
   .nb { font-size: 0.8rem; padding: 0.6rem 1.25rem; min-height: 42px; }
 }
@@ -480,7 +525,7 @@ html, body {
   </div>
 
   <!-- STAGE DOTS -->
-  <div class="stage-dots-row" id="stageDots"></div>
+  <div class="stage-dots-row hidden" id="stageDots"></div>
 
   <!-- TOOL ROW -->
   <div class="tool-row">
@@ -489,7 +534,15 @@ html, body {
       Phrases <span class="phrase-badge" id="phraseBadge"></span>
     </button>
     <div class="tool-spacer"></div>
-    <button class="tool-btn" onclick="copyPara()">📋 Copy</button>
+    <!-- Toggle Switch -->
+    <div class="view-switch">
+      <div class="switch-option active" id="switchFullText" onclick="setViewMode(true)">
+        <span>Full Text</span>
+      </div>
+      <div class="switch-option" id="switchParagraphs" onclick="setViewMode(false)">
+        <span>Paragraphs</span>
+      </div>
+    </div>
   </div>
 
   <!-- CONTENT -->
@@ -498,7 +551,7 @@ html, body {
   </div>
 
   <!-- PARAGRAPH NAVIGATION -->
-  <div class="para-nav">
+  <div class="para-nav hidden" id="paraNav">
     <button class="para-arrow" id="btnPrev" onclick="goPrev()" disabled>←</button>
     <div class="para-nav-label" id="paraLabel">Introduction</div>
     <button class="para-arrow" id="btnNext" onclick="goNext()">→</button>
@@ -545,11 +598,12 @@ let currentPara  = 0;
 let currentStyle = 'default';
 let xrayOn       = false;
 let phrasesOn    = false;
-let phraseDB     = {};      // built from essay-phrases.json
+let fullTextMode = true;    // DEFAULT: Start in Full Text mode
+let phraseDB     = {};
 let phraseReady  = false;
 let sampleData   = null;
 
-const PARA_LABELS = ['Introduction', 'Body 1', 'Body 2', 'Conclusion'];
+const PARA_LABELS = ['Introduction', 'Body 1', 'Body 2', 'Body 3', 'Conclusion'];
 
 /* ════════════════════════════════
    DISCOURSE MARKERS — X-Ray
@@ -646,6 +700,23 @@ function extractParagraphs(html) {
 }
 
 /* ════════════════════════════════
+   VIEW MODE TOGGLE
+════════════════════════════════ */
+function setViewMode(isFullText) {
+  fullTextMode = isFullText;
+  
+  // Update switch UI
+  document.getElementById('switchFullText').classList.toggle('active', isFullText);
+  document.getElementById('switchParagraphs').classList.toggle('active', !isFullText);
+  
+  // Show/hide navigation elements
+  document.getElementById('stageDots').classList.toggle('hidden', isFullText);
+  document.getElementById('paraNav').classList.toggle('hidden', isFullText);
+  
+  render();
+}
+
+/* ════════════════════════════════
    RENDER
 ════════════════════════════════ */
 function render() {
@@ -655,40 +726,66 @@ function render() {
     return;
   }
 
-  let html = paragraphs[currentPara] || '';
+  let html = '';
+  let totalPhraseCount = 0;
 
-  // 1. Phrase highlighting (applied first)
-  let phraseCount = 0;
-  if (phrasesOn) {
-    const r = enhancePhrases(html);
-    html = r.html; phraseCount = r.count;
+  if (fullTextMode) {
+    // FULL TEXT MODE: Show all paragraphs
+    html = paragraphs.map((para, idx) => {
+      let paraHtml = para;
+      
+      // Apply phrase highlighting
+      if (phrasesOn) {
+        const r = enhancePhrases(paraHtml);
+        paraHtml = r.html;
+        totalPhraseCount += r.count;
+      }
+      
+      // Apply X-Ray
+      if (xrayOn) paraHtml = wrapDM(paraHtml);
+      
+      return `<div class="para-text ${xrayOn ? 'xray-on' : ''}">${paraHtml}</div>`;
+    }).join('');
+    
+    box.innerHTML = html;
+    
+  } else {
+    // PARAGRAPH MODE: Show single paragraph
+    html = paragraphs[currentPara] || '';
+
+    // Apply phrase highlighting
+    if (phrasesOn) {
+      const r = enhancePhrases(html);
+      html = r.html;
+      totalPhraseCount = r.count;
+    }
+
+    // Apply X-Ray
+    if (xrayOn) html = wrapDM(html);
+
+    const label = PARA_LABELS[currentPara] || `Paragraph ${currentPara + 1}`;
+
+    box.innerHTML = `
+      <div class="para-label">${label}</div>
+      <div class="para-text ${xrayOn ? 'xray-on' : ''}">${html}</div>`;
   }
-
-  // 2. X-Ray discourse markers
-  if (xrayOn) html = wrapDM(html);
-
-  const label = PARA_LABELS[currentPara] || `Paragraph ${currentPara + 1}`;
-
-  box.innerHTML = `
-    <div class="para-label">${label}</div>
-    <div class="para-text ${xrayOn ? 'xray-on' : ''}">${html}</div>`;
 
   // Badge
   const badge = document.getElementById('phraseBadge');
-  if (phrasesOn && phraseCount > 0) {
-    badge.textContent = phraseCount;
+  if (phrasesOn && totalPhraseCount > 0) {
+    badge.textContent = totalPhraseCount;
     badge.classList.add('on');
   } else {
     badge.classList.remove('on');
   }
 
-  updateNav();
+  if (!fullTextMode) updateNav();
 }
 
 /* ════════════════════════════════
    NAVIGATION
 ════════════════════════════════ */
-const STAGE_SHORT = ['Intro','Body 1','Body 2','Concl.'];
+const STAGE_SHORT = ['Intro','Body 1','Body 2','Body 3','Concl.'];
 
 function buildDots(count) {
   document.getElementById('stageDots').innerHTML =
@@ -727,14 +824,6 @@ function togglePhrases() {
   render();
 }
 
-function copyPara() {
-  const div = document.createElement('div');
-  div.innerHTML = paragraphs[currentPara] || '';
-  navigator.clipboard.writeText((div.textContent || '').trim())
-    .then(() => showToast('Paragraph copied ✓'))
-    .catch(() => showToast('Copy failed'));
-}
-
 function copyAllParagraphs() {
   const full = paragraphs.map(p => {
     const div = document.createElement('div');
@@ -751,13 +840,11 @@ function copyAllParagraphs() {
 ════════════════════════════════ */
 function selectStyle(style) {
   currentStyle = style;
-  // Update visible style buttons
   document.getElementById('styleDefault').classList.toggle('active', style === 'default');
   document.getElementById('styleAlt1').classList.toggle('active',    style === 'alternative1');
   document.getElementById('styleAlt2').classList.toggle('active',    style === 'alternative2');
 
   if (sampleData) {
-    // Fall back gracefully if the style variant doesn't exist in JSON
     const html = sampleData.styles?.[style]
               || sampleData.styles?.default
               || sampleData.html || '';
@@ -822,6 +909,7 @@ function showToast(msg) {
    KEYBOARD + SWIPE
 ════════════════════════════════ */
 document.addEventListener('keydown', e => {
+  if (fullTextMode) return; // Disable in full text mode
   if (e.key === 'ArrowRight') goNext();
   if (e.key === 'ArrowLeft')  goPrev();
   if (e.key === 'Escape')     closeAlt();
@@ -830,6 +918,7 @@ let _tx = 0;
 if ('ontouchstart' in window) {
   document.addEventListener('touchstart', e => { _tx = e.changedTouches[0].screenX; });
   document.addEventListener('touchend',   e => {
+    if (fullTextMode) return; // Disable in full text mode
     const dx = e.changedTouches[0].screenX - _tx;
     if (dx < -50) goNext();
     if (dx >  50) goPrev();
@@ -855,7 +944,6 @@ function navTo(dest) {
    INIT
 ════════════════════════════════ */
 async function init() {
-  // Restore question
   try { question = JSON.parse(sessionStorage.getItem('currentQuestion')); } catch(e) {}
   if (!question) {
     document.getElementById('infographic').innerHTML =

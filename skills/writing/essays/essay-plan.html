@@ -43,6 +43,28 @@ html, body { width:100%; height:100%; overflow:hidden; position:fixed; backgroun
 .menu-dots { display:flex; gap:3px; }
 .menu-dots span { width:3px; height:3px; border-radius:50%; background:#fff; }
 
+/* ── Menu dropdown ── */
+.menu-dropdown { position:absolute; top:calc(100% + 0.5rem); right:1rem; background:#fff; border-radius:0.75rem; box-shadow:0 0 0 1px rgba(0,0,0,0.08),0 8px 24px rgba(0,0,0,0.12); min-width:190px; padding:0.5rem; z-index:200; display:none; }
+.menu-dropdown.open { display:block; animation:menuIn 0.2s ease-out; }
+@keyframes menuIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+.menu-item { padding:0.65rem 0.85rem; border-radius:0.5rem; font-size:0.78rem; font-weight:500; color:rgba(0,0,0,0.7); cursor:pointer; transition:all 0.15s; }
+.menu-item:hover { background:rgba(0,0,0,0.04); color:rgba(0,0,0,0.9); }
+
+/* ── Progress bar ── */
+.progress-strip { flex-shrink:0; padding:0.45rem 1.25rem 0.5rem; border-bottom:1px solid var(--rule); display:flex; align-items:center; gap:0.9rem; }
+.progress-strip.hidden { display:none; }
+.bar-track { flex:1; height:3px; background:rgba(0,0,0,0.08); border-radius:3px; overflow:hidden; }
+.bar-fill { height:100%; width:0%; background:linear-gradient(90deg,var(--teal),var(--coral),var(--purple)); border-radius:3px; transition:width 0.6s cubic-bezier(0.4,0,0.2,1); }
+.progress-label { font-size:0.6rem; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; color:rgba(0,0,0,0.28); white-space:nowrap; transition:color 0.3s; }
+.progress-label.done { color:var(--teal-d); }
+
+/* ── Celebration ── */
+.celebration { position:fixed; inset:0; z-index:900; display:flex; align-items:center; justify-content:center; pointer-events:none; opacity:0; }
+.celebration.show { animation:celebPop 2.8s ease forwards; }
+@keyframes celebPop { 0%{opacity:0} 15%{opacity:1} 75%{opacity:1} 100%{opacity:0} }
+.celeb-pill { background:var(--ink); color:var(--gold); padding:1rem 2.25rem; border-radius:3rem; font-size:1rem; font-weight:800; letter-spacing:0.07em; text-transform:uppercase; box-shadow:0 12px 48px rgba(0,0,0,0.45); animation:celebScale 0.45s cubic-bezier(0.34,1.56,0.64,1) both; }
+@keyframes celebScale { from{transform:scale(0.7)} to{transform:scale(1)} }
+
 /* ── Question strip ── */
 .q-strip { flex-shrink:0; padding:0.5rem 1.25rem; border-bottom:1px solid var(--rule); background:rgba(201,169,97,0.03); }
 .q-text { font-family:'DM Sans',sans-serif; font-size:0.75rem; line-height:1.4; color:var(--settled); font-style:italic; font-weight:400; }
@@ -355,6 +377,10 @@ html, body { width:100%; height:100%; overflow:hidden; position:fixed; backgroun
     <div class="menu-btn" onclick="toggleMenu()">
       <div class="menu-dots"><span></span><span></span><span></span></div>
     </div>
+    <div class="menu-dropdown" id="menuDropdown">
+      <div class="menu-item" onclick="revealAll()">Reveal all</div>
+      <div class="menu-item" onclick="resetPlan()">Reset</div>
+    </div>
   </div>
 
   <div class="q-strip" id="qStrip" style="display:none">
@@ -366,6 +392,11 @@ html, body { width:100%; height:100%; overflow:hidden; position:fixed; backgroun
       <div class="switch-option active" id="switchExplore" onclick="setViewMode('explore')">Explore</div>
       <div class="switch-option" id="switchFull" onclick="setViewMode('full')">Full Plan</div>
     </div>
+  </div>
+
+  <div class="progress-strip" id="progressStrip">
+    <div class="bar-track"><div class="bar-fill" id="barFill"></div></div>
+    <div class="progress-label" id="progressLabel">tap to reveal</div>
   </div>
 
   <div class="plan-canvas" id="planCanvas">
@@ -385,18 +416,232 @@ html, body { width:100%; height:100%; overflow:hidden; position:fixed; backgroun
 </div>
 </div>
 
+<div class="celebration" id="celebration">
+  <div class="celeb-pill">Plan complete ✦</div>
+</div>
+
 <script>
 let question = null;
 let viewMode = 'explore';
 let currentEssay = null;
+let totalHidden = 0;
+let revealCount = 0;
+
+// ==================== MENU ====================
+function toggleMenu() {
+  document.getElementById('menuDropdown').classList.toggle('open');
+}
+function closeMenu() {
+  document.getElementById('menuDropdown').classList.remove('open');
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('#menuDropdown') && !e.target.closest('.menu-btn')) closeMenu();
+});
+
+// ==================== REVEAL ALL ====================
+function revealAll() {
+  closeMenu();
+  document.querySelectorAll('.reveal-btn:not(.done)').forEach(btn => btn.click());
+}
+
+// ==================== RESET ====================
+function resetPlan() {
+  closeMenu();
+  if (currentEssay) renderPlan(currentEssay);
+}
 
 // ==================== VIEW MODE ====================
 function setViewMode(mode) {
   viewMode = mode;
   document.getElementById('switchExplore').classList.toggle('active', mode === 'explore');
   document.getElementById('switchFull').classList.toggle('active', mode === 'full');
+  document.getElementById('progressStrip').classList.toggle('hidden', mode !== 'explore');
   if (currentEssay) renderPlan(currentEssay);
 }
+
+// ==================== PROGRESS ====================
+function updateProgress() {
+  if (viewMode !== 'explore') return;
+  const pct = totalHidden > 0 ? (revealCount / totalHidden) * 100 : 0;
+  document.getElementById('barFill').style.width = pct + '%';
+  const lbl = document.getElementById('progressLabel');
+  if (revealCount === 0) {
+    lbl.textContent = 'tap to reveal';
+    lbl.classList.remove('done');
+  } else if (revealCount === totalHidden) {
+    lbl.textContent = 'complete ✦';
+    lbl.classList.add('done');
+  } else {
+    lbl.textContent = `${revealCount} / ${totalHidden}`;
+    lbl.classList.remove('done');
+  }
+}
+
+// ==================== CELEBRATE ====================
+function celebrate() {
+  const el = document.getElementById('celebration');
+  el.classList.remove('show');
+  void el.offsetWidth;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2900);
+}
+
+// ==================== RENDER PLAN ====================
+function renderPlan(essay) {
+  currentEssay = essay;
+  totalHidden = 0;
+  revealCount = 0;
+  const canvas = document.getElementById('planCanvas');
+  canvas.innerHTML = '';
+
+  if (essay.question) {
+    document.getElementById('qText').textContent = essay.question;
+    document.getElementById('qStrip').style.display = 'block';
+  }
+
+  (essay.skeleton || []).forEach((para, i) => {
+
+    const t = (para.title || '').toLowerCase();
+    let typeClass = 'type-body';
+    let tagClass  = 'tag-body';
+    if (t.includes('intro') || t.includes('opening'))  { typeClass = 'type-intro';      tagClass = 'tag-intro'; }
+    if (t.includes('conclu') || t.includes('closing')) { typeClass = 'type-conclusion'; tagClass = 'tag-conclusion'; }
+
+    const wrap = document.createElement('div');
+    wrap.className = `para-plan ${typeClass}`;
+
+    const pin = document.createElement('div');
+    pin.className = 'para-pin';
+    wrap.appendChild(pin);
+
+    const tag = document.createElement('div');
+    tag.className = `para-tag ${tagClass}`;
+    tag.textContent = String(i + 1).padStart(2, '0');
+    wrap.appendChild(tag);
+
+    const card = document.createElement('div');
+    card.className = 'para-card';
+
+    const header = document.createElement('div');
+    header.className = 'para-card-header';
+    const titleEl = document.createElement('div');
+    titleEl.className = 'para-card-title';
+    titleEl.textContent = para.title || `Paragraph ${i + 1}`;
+    header.appendChild(titleEl);
+    card.appendChild(header);
+
+    if (para.notes && para.notes.length > 0) {
+      const mainNote = para.notes[0];
+      const mainArg = document.createElement('div');
+      mainArg.className = 'main-arg';
+      let text = mainNote.text || '';
+      if (mainNote.verb) {
+        const re = new RegExp(`\\b(${mainNote.verb})\\b`, 'gi');
+        text = text.replace(re, '<span class="verb">$1</span>');
+      }
+      mainArg.innerHTML = text;
+      card.appendChild(mainArg);
+
+      if (para.notes.length > 1) {
+        const list = document.createElement('ul');
+        list.className = 'support-list';
+
+        para.notes.slice(1).forEach((note) => {
+          const item = document.createElement('li');
+          item.className = 'support-item';
+          let s = note.text || '';
+          if (note.verb) {
+            const re = new RegExp(`\\b(${note.verb})\\b`, 'gi');
+            s = s.replace(re, '<span class="verb">$1</span>');
+          }
+          const span = document.createElement('span');
+          span.className = 'support-text';
+          span.innerHTML = s;
+
+          if (viewMode === 'explore') {
+            totalHidden++;
+            const btn = document.createElement('button');
+            btn.className = 'reveal-btn';
+            btn.textContent = 'reveal';
+            btn.onclick = function() {
+              span.classList.add('show');
+              btn.classList.add('done');
+              btn.onclick = null;
+              revealCount++;
+              updateProgress();
+              if (revealCount === totalHidden) setTimeout(celebrate, 350);
+            };
+            item.appendChild(btn);
+            item.appendChild(span);
+          } else {
+            const dot = document.createElement('span');
+            dot.style.cssText = 'flex-shrink:0;width:8px;height:8px;border-radius:50%;margin-top:0.35rem;opacity:0.4;background:currentColor;';
+            item.appendChild(dot);
+            span.classList.add('show');
+            item.appendChild(span);
+          }
+          list.appendChild(item);
+        });
+        card.appendChild(list);
+      }
+    }
+
+    wrap.appendChild(card);
+    canvas.appendChild(wrap);
+  });
+
+  updateProgress();
+}
+
+// ==================== NAVIGATION ====================
+function navTo(dest) {
+  if (dest === 'plan') return;
+  if (question) sessionStorage.setItem('currentQuestion', JSON.stringify(question));
+  const map = {
+    question: 'essay-question-selector.html',
+    model:    'essay-builder.html',
+    build:    'essay-builder-interactive.html',
+    sample:   'essay-master.html'
+  };
+  if (map[dest]) window.location.href = map[dest];
+}
+
+// ==================== INIT ====================
+async function init() {
+  try { question = JSON.parse(sessionStorage.getItem('currentQuestion')); }
+  catch(e) { question = null; }
+
+  if (!question) {
+    document.getElementById('planCanvas').innerHTML =
+      `<div class="state-msg">No question selected.<br>Return to Questions to choose one.</div>`;
+    return;
+  }
+
+  try {
+    const res = await fetch('data/ideas.json');
+    if (!res.ok) throw new Error('ideas.json not found');
+    const data = await res.json();
+    const pool = data.opinion || data.essays || data;
+    const essay = Array.isArray(pool)
+      ? pool.find(e => e.id === question.id)
+      : pool[question.id];
+
+    if (!essay) {
+      document.getElementById('planCanvas').innerHTML =
+        `<div class="state-msg">No plan for this question yet.<br>
+         <small style="opacity:0.35;margin-top:0.5rem;display:block;">id: ${question.id}</small></div>`;
+      return;
+    }
+    renderPlan(essay);
+
+  } catch(err) {
+    document.getElementById('planCanvas').innerHTML =
+      `<div class="state-msg">Could not load ideas.json<br>
+       <small style="opacity:0.35;margin-top:0.5rem;display:block;">${err.message}</small></div>`;
+  }
+}
+
+init();
 
 // ==================== RENDER PLAN ====================
 function renderPlan(essay) {

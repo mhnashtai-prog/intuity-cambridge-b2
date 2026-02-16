@@ -351,27 +351,73 @@ html, body { width:100%; height:100%; overflow:hidden; position:fixed; backgroun
 }
 .reveal-btn.done::before { display: none; }
 
-/* ── Magnet snap reveal ── */
+/* ── Support text (hidden until banner lands) ── */
 .support-text {
   display: none;
   font-size: 0.92rem; font-weight: 400; line-height: 1.6;
 }
 .support-text.show {
   display: inline-block;
-  animation: magnetSnap 0.45s cubic-bezier(0.22, 1.8, 0.5, 1) both;
+  animation: textSettle 0.25s ease both;
+}
+@keyframes textSettle {
+  from { opacity:0; transform:translateY(4px); }
+  to   { opacity:1; transform:translateY(0); }
 }
 
-/* Stagger each sentence by its position in the list */
-.support-item:nth-child(1) .support-text.show { animation-delay: 0.00s; }
-.support-item:nth-child(2) .support-text.show { animation-delay: 0.15s; }
-.support-item:nth-child(3) .support-text.show { animation-delay: 0.30s; }
-.support-item:nth-child(4) .support-text.show { animation-delay: 0.45s; }
+/* ── Floating banner ── */
+.fly-banner {
+  position: fixed;
+  z-index: 800;
+  pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0.9rem 1.6rem;
+  border-radius: 1rem;
+  background: #fff;
+  border: 3px solid var(--teal);
+  box-shadow:
+    0 20px 60px rgba(0,0,0,0.22),
+    0 4px 16px rgba(0,0,0,0.14),
+    0 0 0 1px rgba(255,255,255,0.8) inset;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 1.1rem; font-weight: 600; line-height: 1.5;
+  color: var(--ink);
+  text-align: center;
+  max-width: min(480px, 88vw);
+  white-space: normal;
+}
+.fly-banner.type-intro      { border-color: var(--teal);   }
+.fly-banner.type-body       { border-color: var(--coral);  }
+.fly-banner.type-conclusion { border-color: var(--purple); }
 
-@keyframes magnetSnap {
-  0%   { opacity:0.6; transform:translateY(-22px) scaleY(0.88); filter:blur(1.5px); }
-  65%  { opacity:1;   transform:translateY(3px)   scaleY(1.03); filter:blur(0); }
-  82%  {              transform:translateY(-2px)  scaleY(0.98); }
-  100% { opacity:1;   transform:translateY(0)     scaleY(1);    filter:blur(0); }
+/* Phase 1 — float in from above, hover at centre */
+.fly-banner.phase-float {
+  animation: bannerFloat 0.55s cubic-bezier(0.22,1,0.36,1) both;
+}
+@keyframes bannerFloat {
+  0%   { opacity:0; transform: scale(0.7) translateY(-40px); }
+  60%  { opacity:1; transform: scale(1.02) translateY(4px); }
+  100% { opacity:1; transform: scale(1) translateY(0); }
+}
+
+/* Phase 2 — gentle bob while hovering */
+.fly-banner.phase-hover {
+  animation: bannerBob 1.8s ease-in-out infinite;
+}
+@keyframes bannerBob {
+  0%,100% { transform: scale(1) translateY(0);   }
+  50%      { transform: scale(1) translateY(-7px); }
+}
+
+/* Phase 3 — dive toward slot (position set by JS via CSS vars) */
+.fly-banner.phase-dive {
+  animation: bannerDive 0.52s cubic-bezier(0.6, 0, 0.8, 1) both;
+}
+@keyframes bannerDive {
+  0%   { opacity:1; transform: scale(1)    translateY(0); }
+  55%  { opacity:1; transform: scale(0.72) translateY(var(--dive-y)) translateX(var(--dive-x)); }
+  85%  { opacity:0.4; transform: scale(0.18) translateY(calc(var(--dive-y) * 1.12)) translateX(var(--dive-x)); }
+  100% { opacity:0; transform: scale(0.05) translateY(calc(var(--dive-y) * 1.15)) translateX(var(--dive-x)); }
 }
 
 .verb { display:inline; color:var(--ink); font-weight:700; }
@@ -761,6 +807,74 @@ function toggleFullAudio() {
   playNext();
 }
 
+// ==================== BANNER LAUNCH ====================
+function launchBanner(htmlText, slotEl, typeClass, onLanded) {
+  // Create banner element
+  const banner = document.createElement('div');
+  banner.className = `fly-banner ${typeClass}`;
+  banner.innerHTML = htmlText;
+
+  // Position off-screen first to measure size
+  banner.style.visibility = 'hidden';
+  banner.style.left = '0px';
+  banner.style.top  = '0px';
+  document.body.appendChild(banner);
+
+  // Measure banner and centre it precisely
+  const bw = banner.offsetWidth;
+  const bh = banner.offsetHeight;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const centreLeft = Math.round((vw - bw) / 2);
+  const centreTop  = Math.round((vh - bh) / 2);
+
+  banner.style.left       = centreLeft + 'px';
+  banner.style.top        = centreTop  + 'px';
+  banner.style.visibility = 'visible';
+
+  // Force reflow so position is committed before animation starts
+  void banner.offsetWidth;
+
+  // Phase 1 — float in
+  banner.classList.add('phase-float');
+
+  setTimeout(() => {
+    // Phase 2 — hover/bob
+    banner.classList.remove('phase-float');
+    void banner.offsetWidth; // reflow
+    banner.classList.add('phase-hover');
+
+    setTimeout(() => {
+      // Re-measure after bob (position unchanged, but be safe)
+      const slotRect   = slotEl.getBoundingClientRect();
+      const bannerRect = banner.getBoundingClientRect();
+
+      const bannerCX = bannerRect.left + bannerRect.width  / 2;
+      const bannerCY = bannerRect.top  + bannerRect.height / 2;
+      const slotCX   = slotRect.left   + slotRect.width    / 2;
+      const slotCY   = slotRect.top    + slotRect.height   / 2;
+
+      const diveX = slotCX - bannerCX;
+      const diveY = slotCY - bannerCY;
+
+      banner.style.setProperty('--dive-x', `${diveX}px`);
+      banner.style.setProperty('--dive-y', `${diveY}px`);
+
+      // Phase 3 — dive
+      banner.classList.remove('phase-hover');
+      void banner.offsetWidth; // reflow
+      banner.classList.add('phase-dive');
+
+      setTimeout(() => {
+        banner.remove();
+        onLanded && onLanded();
+      }, 480);
+
+    }, 900);
+
+  }, 520);
+}
+
 // ==================== MENU ====================
 function toggleMenu() {
   document.getElementById('menuDropdown').classList.toggle('open');
@@ -920,12 +1034,18 @@ function renderPlan(essay) {
             btn.className = 'reveal-btn';
             btn.textContent = 'reveal';
             btn.onclick = function() {
-              span.classList.add('show');
               btn.classList.add('done');
               btn.onclick = null;
               revealCount++;
               updateProgress();
-              if (revealCount === totalHidden) setTimeout(celebrate, 350);
+              // Launch the banner — pass text, slot element, and card type
+              const cardType = wrap.classList.contains('type-intro')      ? 'type-intro'
+                             : wrap.classList.contains('type-conclusion') ? 'type-conclusion'
+                             : 'type-body';
+              launchBanner(s, item, cardType, () => {
+                span.classList.add('show');
+                if (revealCount === totalHidden) setTimeout(celebrate, 350);
+              });
             };
             item.appendChild(btn);
             item.appendChild(span);

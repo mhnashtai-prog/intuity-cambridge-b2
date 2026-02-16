@@ -268,25 +268,23 @@ html, body { width:100%; height:100%; overflow:hidden; position:fixed; backgroun
   50%      { box-shadow: 0 0 0 6px rgba(201,169,97,0); }
 }
 
-/* ── Dialogue bubble (shown during audio) ── */
+/* ── Lecture caption (shown during audio) ── */
 .dialogue-bubble {
   display: none;
-  background: rgba(0,0,0,0.04);
   border-left: 3px solid rgba(0,0,0,0.12);
   border-radius: 0 0.5rem 0.5rem 0;
-  padding: 0.6rem 0.85rem;
+  padding: 0.55rem 0.85rem;
   margin-bottom: 0.65rem;
   font-family: 'DM Sans', sans-serif;
   font-size: 0.76rem;
-  line-height: 1.55;
-  color: rgba(0,0,0,0.55);
+  line-height: 1.6;
+  color: rgba(0,0,0,0.6);
+  font-style: italic;
+  background: rgba(0,0,0,0.03);
   animation: fadeIn 0.3s ease;
+  transition: opacity 0.25s;
 }
 .dialogue-bubble.show { display: block; }
-.dialogue-bubble .speaker-a { color: rgba(0,0,0,0.38); font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.2rem; }
-.dialogue-bubble .speaker-b { color: rgba(0,0,0,0.38); font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.2rem; margin-top: 0.45rem; }
-.dialogue-bubble .line-a { color: rgba(0,0,0,0.5); font-style: italic; }
-.dialogue-bubble .line-b { color: var(--ink); font-weight: 500; }
 .type-intro      .dialogue-bubble { border-left-color: var(--teal); }
 .type-body       .dialogue-bubble { border-left-color: var(--coral); }
 .type-conclusion .dialogue-bubble { border-left-color: var(--purple); }
@@ -512,31 +510,31 @@ function getVoices() {
   });
 }
 
-let voiceA = null; // interviewer — slightly higher pitch
-let voiceB = null; // student model — default
+let narrator = null;
 
 async function initVoices() {
   const voices = await getVoices();
-  // Prefer English voices
   const en = voices.filter(v => v.lang.startsWith('en'));
   const pool = en.length ? en : voices;
-  // A: pick a different voice from B if possible
-  voiceB = pool.find(v => v.name.includes('Google UK')) ||
-           pool.find(v => v.name.includes('Daniel'))    ||
-           pool[0] || null;
-  voiceA = pool.find(v => v !== voiceB && (v.name.includes('Samantha') || v.name.includes('Karen') || v.name.includes('Female') || v.gender === 'female')) ||
-           pool.find(v => v !== voiceB) || voiceB;
+  // Prefer a warm, natural English voice
+  narrator =
+    pool.find(v => v.name === 'Google UK English Male') ||
+    pool.find(v => v.name === 'Daniel') ||
+    pool.find(v => v.name === 'Google UK English Female') ||
+    pool.find(v => v.name.includes('UK')) ||
+    pool.find(v => v.name.includes('Google')) ||
+    pool[0] || null;
 }
 
-function speak(text, isA, onEnd) {
+function speak(text, onEnd) {
   if (!synth) { onEnd && onEnd(); return; }
   synth.cancel();
   const utt = new SpeechSynthesisUtterance(text);
-  utt.voice  = isA ? voiceA : voiceB;
-  utt.rate   = isA ? 0.92 : 0.88;
-  utt.pitch  = isA ? 1.15 : 1.0;
+  utt.voice  = narrator;
+  utt.rate   = 0.9;    // measured, easy to follow
+  utt.pitch  = 1.05;   // warm, not robotic
   utt.volume = 1;
-  utt.onend  = () => { onEnd && onEnd(); };
+  utt.onend   = () => { onEnd && onEnd(); };
   utt.onerror = () => { onEnd && onEnd(); };
   currentUtterance = utt;
   synth.speak(utt);
@@ -562,123 +560,134 @@ function stopAudio() {
   audioCardIndex = -1;
 }
 
-// ==================== DIALOGUE BUILDER ====================
-// Builds the A/B exchange for a single paragraph
-function buildDialogue(para, essayQuestion, paraIndex) {
-  const title  = para.title  || `paragraph ${paraIndex + 1}`;
-  const notes  = para.notes  || [];
-  const main   = notes[0]    ? notes[0].text  : '';
-  const subs   = notes.slice(1).map(n => n.text).filter(Boolean);
+// ==================== LECTURE BUILDER ====================
+// Builds a list of spoken sentences for one paragraph card.
+// Each sentence maps to a caption string and (optionally) triggers a reveal.
+function buildLecture(para, essayQuestion, paraIndex) {
+  const title = para.title  || `paragraph ${paraIndex + 1}`;
+  const notes = para.notes  || [];
+  const main  = notes[0]    ? notes[0].text : '';
+  const subs  = notes.slice(1).map(n => n.text).filter(Boolean);
+  const t     = title.toLowerCase();
 
-  // Question A asks depends on paragraph type
-  const t = title.toLowerCase();
-  let questionA;
+  const sentences = []; // { text, caption, revealIndex }
+
+  // ── Opening line — sets the context ──────────────────────
   if (t.includes('intro') || t.includes('opening')) {
-    questionA = essayQuestion
-      ? `So, the question is: ${essayQuestion}. How would you introduce this topic?`
-      : `How would you open this essay?`;
+    const q = essayQuestion ? `"${essayQuestion}"` : 'this topic';
+    sentences.push({
+      text:    `Let's begin with the introduction. The question is ${q}.`,
+      caption: `Introduction — setting up the argument.`
+    });
   } else if (t.includes('conclu') || t.includes('closing')) {
-    questionA = `How would you bring your essay to a close?`;
+    sentences.push({
+      text:    `Now for the conclusion — this is where we bring everything together.`,
+      caption: `Conclusion — drawing the essay to a close.`
+    });
   } else {
-    // Body — derive a natural discussion question from the main idea
-    questionA = `Let's talk about ${title}. What's your main point here?`;
-  }
-
-  // B answers with main idea + model phrase
-  const openers = [
-    'Personally, I would argue that',
-    'From my perspective,',
-    'I firmly believe that',
-    'In my view,',
-    'I think the key point is that',
-  ];
-  const opener = openers[paraIndex % openers.length];
-  const answerB = main ? `${opener} ${main}.` : `${opener} this is an important area to consider.`;
-
-  // Follow-up exchange for supporting ideas
-  const followUps = [];
-  if (subs.length > 0) {
-    const followQs = [
-      `Can you give an example?`,
-      `And what about the consequences of that?`,
-      `Could you develop that idea a bit further?`,
-      `How does that connect to the bigger picture?`,
-    ];
-    subs.forEach((sub, i) => {
-      followUps.push({
-        a: followQs[i % followQs.length],
-        b: sub,
-        revealIndex: i  // which reveal-btn to trigger
-      });
+    sentences.push({
+      text:    `Now let's look at ${title}.`,
+      caption: `${title}.`
     });
   }
 
-  return { questionA, answerB, followUps };
+  // ── Main argument ─────────────────────────────────────────
+  if (main) {
+    const starters = [
+      `The central idea here is that`,
+      `The key argument is that`,
+      `What we want to say is that`,
+      `The main point to make is that`,
+      `Here the argument is that`,
+    ];
+    const starter = starters[paraIndex % starters.length];
+    sentences.push({
+      text:    `${starter} ${main}.`,
+      caption: `${starter} ${main}.`
+    });
+  }
+
+  // ── Supporting ideas, each triggering a reveal ────────────
+  const bridges = [
+    `To support this, we can add that`,
+    `We can also point out that`,
+    `A further point is that`,
+    `It is also worth noting that`,
+    `On top of that, we should mention that`,
+  ];
+  subs.forEach((sub, i) => {
+    const bridge = bridges[i % bridges.length];
+    sentences.push({
+      text:        `${bridge} ${sub}.`,
+      caption:     `${bridge} ${sub}.`,
+      revealIndex: i
+    });
+  });
+
+  // ── Closing sign-off for the card ────────────────────────
+  if (t.includes('intro') || t.includes('opening')) {
+    sentences.push({
+      text:    `That gives us a strong opening. Now let's develop the argument.`,
+      caption: `A strong opening — ready to develop.`
+    });
+  } else if (t.includes('conclu') || t.includes('closing')) {
+    sentences.push({
+      text:    `And that is how we close the essay — clearly and confidently.`,
+      caption: `Essay complete.`
+    });
+  } else {
+    sentences.push({
+      text:    `So that paragraph makes a clear, well-supported point.`,
+      caption: `Paragraph complete.`
+    });
+  }
+
+  return sentences;
 }
 
 // ==================== PLAY CARD AUDIO ====================
 function playCardAudio(paraIndex, cardWrapEl, onFinished) {
   if (!currentEssay) return;
-  const para   = currentEssay.skeleton[paraIndex];
-  const qText  = document.getElementById('qText').textContent;
-  const dialog = buildDialogue(para, qText, paraIndex);
+
+  const para     = currentEssay.skeleton[paraIndex];
+  const qText    = document.getElementById('qText').textContent;
+  const sequence = buildLecture(para, qText, paraIndex);
 
   const listenBtn = cardWrapEl.querySelector('.card-listen-btn');
   const bubble    = cardWrapEl.querySelector('.dialogue-bubble');
 
-  // Mark card as speaking
+  // Mark card active
   cardWrapEl.classList.add('speaking');
-  if (listenBtn) { listenBtn.classList.add('playing'); listenBtn.innerHTML = '■'; }
-
-  // Scroll card into view
   cardWrapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-  // Build sequence of utterances
-  const sequence = [];
-
-  // Opening A question
-  sequence.push({ text: dialog.questionA, isA: true, label: 'A', line: dialog.questionA });
-  // B main answer
-  sequence.push({ text: dialog.answerB,   isA: false, label: 'B', line: dialog.answerB, reveal: null });
-
-  // Follow-up pairs
-  dialog.followUps.forEach((fu, i) => {
-    sequence.push({ text: fu.a, isA: true,  label: 'A', line: fu.a });
-    sequence.push({ text: fu.b, isA: false, label: 'B', line: fu.b, reveal: fu.revealIndex });
-  });
+  if (listenBtn) { listenBtn.classList.add('playing'); listenBtn.innerHTML = '■'; }
 
   let step = 0;
 
   function runStep() {
     if (!audioPlaying || step >= sequence.length) {
-      // Done
       cardWrapEl.classList.remove('speaking');
       if (listenBtn) { listenBtn.classList.remove('playing'); listenBtn.innerHTML = '▶'; }
-      if (bubble) bubble.classList.remove('show');
+      if (bubble)    { bubble.classList.remove('show'); bubble.textContent = ''; }
       onFinished && onFinished();
       return;
     }
 
     const s = sequence[step];
 
-    // Update dialogue bubble
+    // Update caption strip
     if (bubble) {
+      bubble.textContent = s.caption;
       bubble.classList.add('show');
-      bubble.innerHTML = `
-        <div class="speaker-${s.isA ? 'a' : 'b'}">${s.label}</div>
-        <div class="line-${s.isA ? 'a' : 'b'}">${s.line}</div>`;
     }
 
-    // Auto-reveal the matching support button when B speaks a supporting idea
-    if (!s.isA && s.reveal !== null && s.reveal !== undefined) {
+    // Auto-reveal support button in sync with its sentence
+    if (s.revealIndex !== undefined) {
       const btns = cardWrapEl.querySelectorAll('.reveal-btn:not(.done)');
-      if (btns.length > 0) {
-        setTimeout(() => btns[0].click(), 300);
-      }
+      if (btns.length > 0) setTimeout(() => btns[0].click(), 320);
     }
 
     step++;
-    speak(s.text, s.isA, runStep);
+    speak(s.text, runStep);
   }
 
   runStep();
@@ -852,7 +861,7 @@ function renderPlan(essay) {
     const listenBtn = document.createElement('button');
     listenBtn.className = 'card-listen-btn';
     listenBtn.innerHTML = '▶';
-    listenBtn.title = 'Listen to dialogue';
+    listenBtn.title = 'Listen to lecture';
     listenBtn.onclick = () => toggleCardAudio(i);
     header.appendChild(listenBtn);
 

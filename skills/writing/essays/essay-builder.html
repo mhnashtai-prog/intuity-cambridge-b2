@@ -232,13 +232,13 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 @keyframes bannerDive {
   0%   { opacity:1;   transform:scale(1)    translateY(0) translateX(0); }
   55%  { opacity:1;   transform:scale(0.72) translateY(var(--dive-y)) translateX(var(--dive-x)); }
-  85%  { opacity:0.5; transform:scale(0.28) translateY(calc(var(--dive-y)*1.08)) translateX(var(--dive-x)); }
-  100% { opacity:0.3; transform:scale(0.18) translateY(calc(var(--dive-y)*1.1))  translateX(var(--dive-x)); }
+  85%  { opacity:0.8; transform:scale(0.28) translateY(calc(var(--dive-y)*1.08)) translateX(var(--dive-x)); }
+  100% { opacity:1;   transform:scale(0.18) translateY(calc(var(--dive-y)*1.1))  translateX(var(--dive-x)); }
 }
-.fly-banner.phase-fadeout { animation: bannerFadeOut 0.5s ease both; }
-@keyframes bannerFadeOut {
-  from { opacity:0.3; }
-  to   { opacity:0; }
+/* Banner stays visible until replaced by next banner */
+.fly-banner.phase-settled {
+  opacity: 1;
+  transform: scale(0.18) translateY(var(--dive-y)) translateX(var(--dive-x));
 }
 
 /* Support text settle */
@@ -769,6 +769,7 @@ let practiceActive = false;
 let practiceSynth  = window.speechSynthesis;
 let practiceNarrator = null;
 let silentPractice = null;
+let currentBanner = null; // Track visible banner
 
 async function getPracticeVoice(){
   return new Promise(resolve=>{
@@ -791,6 +792,7 @@ function stopPractice(){
   practiceActive = false;
   if(silentPractice){ clearTimeout(silentPractice); silentPractice=null; }
   practiceSynth.cancel();
+  if(currentBanner){ currentBanner.remove(); currentBanner=null; }
   const btn = document.getElementById('playPracticeBtn');
   const cap = document.getElementById('practiceCaption');
   if(btn){ btn.textContent='▶ Play'; btn.disabled=false; }
@@ -875,6 +877,12 @@ function attachPracticeControls(){
 
 /* ══ BANNER SYSTEM ══ */
 function launchBanner(htmlText, slotEl, typeClass, label, onLanded){
+  // Remove previous banner immediately when new one launches
+  if(currentBanner){
+    currentBanner.remove();
+    currentBanner = null;
+  }
+
   const banner = document.createElement('div');
   banner.className = `fly-banner ${typeClass}`;
   banner.innerHTML = htmlText;
@@ -912,9 +920,11 @@ function launchBanner(htmlText, slotEl, typeClass, label, onLanded){
 
       setTimeout(()=>{
         onLanded && onLanded();
+        // Banner stays settled — no fadeout, no removal
         void banner.offsetWidth;
-        banner.classList.add('phase-fadeout');
-        setTimeout(()=>banner.remove(), 520);
+        banner.classList.remove('phase-dive');
+        banner.classList.add('phase-settled');
+        currentBanner = banner; // Track this banner
       }, 480);
 
     }, 4000); // hover duration — 4s for reading

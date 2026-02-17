@@ -600,12 +600,12 @@ html, body {
    STATE
 ════════════════════════════════ */
 let question     = null;
-let paragraphs   = [];      // raw HTML strings, one per paragraph
+let paragraphs   = [];
 let currentPara  = 0;
 let currentStyle = 'default';
 let xrayOn       = false;
 let phrasesOn    = false;
-let fullTextMode = true;    // DEFAULT: Start in Full Text mode
+let fullTextMode = true;
 let phraseDB     = {};
 let phraseReady  = false;
 let sampleData   = null;
@@ -674,18 +674,15 @@ function buildPhraseDB(json) {
 
   if (Array.isArray(json)) {
     json.forEach(entry => addEntry(entry.category || 'Phrases', entry.phrases || entry.items || []));
-} else {
+  } else {
     Object.entries(json).forEach(([cat, val]) => {
-      if (val && val.categories) {
-        // Nested format used by complete-review-phrase-bank1.json
+      if (!val || typeof val !== 'object') return;
+      if (val.categories) {
         val.categories.forEach(catObj => {
           (catObj.subcategories || []).forEach(sub => {
             addEntry(catObj.title || cat, sub.phrases || []);
           });
         });
-      } else {
-        // Flat format used by essay-phrases.json
-        addEntry(cat, Array.isArray(val) ? val : (val.phrases || val.items || []));
       }
     });
   }
@@ -729,15 +726,10 @@ function extractParagraphs(html) {
 ════════════════════════════════ */
 function setViewMode(isFullText) {
   fullTextMode = isFullText;
-  
-  // Update switch UI
   document.getElementById('switchFullText').classList.toggle('active', isFullText);
   document.getElementById('switchParagraphs').classList.toggle('active', !isFullText);
-  
-  // Show/hide navigation elements
   document.getElementById('stageDots').classList.toggle('hidden', isFullText);
   document.getElementById('paraNav').classList.toggle('hidden', isFullText);
-  
   render();
 }
 
@@ -755,47 +747,34 @@ function render() {
   let totalPhraseCount = 0;
 
   if (fullTextMode) {
-    // FULL TEXT MODE: Show all paragraphs
     html = paragraphs.map((para, idx) => {
       let paraHtml = para;
-      
-      // Apply phrase highlighting
       if (phrasesOn) {
         const r = enhancePhrases(paraHtml);
         paraHtml = r.html;
         totalPhraseCount += r.count;
       }
-      
-      // Apply X-Ray
       if (xrayOn) paraHtml = wrapDM(paraHtml);
-      
-      return `<div class="para-text ${xrayOn ? 'xray-on' : ''}">${paraHtml}</div>`;
+      const label = PARA_LABELS[idx] || `Paragraph ${idx + 1}`;
+      return `<div class="para-label">${label}</div>
+              <div class="para-text ${xrayOn ? 'xray-on' : ''}">${paraHtml}</div>`;
     }).join('');
-    
     box.innerHTML = html;
-    
-  } else {
-    // PARAGRAPH MODE: Show single paragraph
-    html = paragraphs[currentPara] || '';
 
-    // Apply phrase highlighting
+  } else {
+    html = paragraphs[currentPara] || '';
     if (phrasesOn) {
       const r = enhancePhrases(html);
       html = r.html;
       totalPhraseCount = r.count;
     }
-
-    // Apply X-Ray
     if (xrayOn) html = wrapDM(html);
-
     const label = PARA_LABELS[currentPara] || `Paragraph ${currentPara + 1}`;
-
     box.innerHTML = `
       <div class="para-label">${label}</div>
       <div class="para-text ${xrayOn ? 'xray-on' : ''}">${html}</div>`;
   }
 
-  // Badge
   const badge = document.getElementById('phraseBadge');
   if (phrasesOn && totalPhraseCount > 0) {
     badge.textContent = totalPhraseCount;
@@ -934,7 +913,7 @@ function showToast(msg) {
    KEYBOARD + SWIPE
 ════════════════════════════════ */
 document.addEventListener('keydown', e => {
-  if (fullTextMode) return; // Disable in full text mode
+  if (fullTextMode) return;
   if (e.key === 'ArrowRight') goNext();
   if (e.key === 'ArrowLeft')  goPrev();
   if (e.key === 'Escape')     closeAlt();
@@ -943,7 +922,7 @@ let _tx = 0;
 if ('ontouchstart' in window) {
   document.addEventListener('touchstart', e => { _tx = e.changedTouches[0].screenX; });
   document.addEventListener('touchend',   e => {
-    if (fullTextMode) return; // Disable in full text mode
+    if (fullTextMode) return;
     const dx = e.changedTouches[0].screenX - _tx;
     if (dx < -50) goNext();
     if (dx >  50) goPrev();
@@ -958,7 +937,6 @@ function navTo(dest) {
   if (question) sessionStorage.setItem('currentReviewQuestion', JSON.stringify(question));
   const map = {
     question: 'review-question-selector.html',
-    structure: 'review-plan.html',
     plan:     'review-plan.html',
     model:    'review-model.html',
     builder:  'review-builder.html'
@@ -977,12 +955,11 @@ async function init() {
     return;
   }
 
-  // Phrase bank (non-blocking) - try review-specific file first
+  // Phrase bank (non-blocking) — try review-specific file first, fall back to essay phrases
   fetch('data/complete-review-phrase-bank1.json')
     .then(r => r.ok ? r.json() : null)
     .then(d => { if (d) buildPhraseDB(d); })
     .catch(() => {
-      // Fallback to essay phrases if review phrases not found
       fetch('data/essay-phrases.json')
         .then(r => r.ok ? r.json() : null)
         .then(d => { if (d) buildPhraseDB(d); })
@@ -991,28 +968,34 @@ async function init() {
 
   // Samples
   try {
-    const res  = await fetch('data/samples.json');
-    if (!res.ok) throw new Error('samples.json not found');
+    const res = await fetch('data/samples.json');
+    if (!res.ok) throw new Error('data/samples.json not found');
     const data = await res.json();
-    const pool = Array.isArray(data) ? data : (data.opinion || data.reviews || data.samples || []);
-    const match = pool.find(s => s.id === question.id);
 
-    if (!match) {
+    // Data is keyed by review type: { "ocean-documentary": [...], ... }
+    const paragraphData = data[question.id];
+
+    if (!paragraphData) {
       document.getElementById('infographic').innerHTML =
         `<div class="state-msg">No sample review for this question yet.<br>
          <small style="opacity:0.35;margin-top:0.5rem;display:block;">id: ${question.id}</small></div>`;
       return;
     }
 
-    sampleData = match;
-    const html = match.styles?.default || match.html || match.text || '';
+    // Convert { label, sentences[] } objects into <p> HTML strings
+    sampleData = {
+      styles: {
+        default: paragraphData.map(p => `<p>${p.sentences.join(' ')}</p>`).join('')
+      }
+    };
+    const html = sampleData.styles.default;
     paragraphs = extractParagraphs(html);
     buildDots(paragraphs.length);
     render();
 
   } catch(err) {
     document.getElementById('infographic').innerHTML =
-      `<div class="state-msg">Could not load samples.json<br>
+      `<div class="state-msg">Could not load data/samples.json<br>
        <small style="opacity:0.35;margin-top:0.5rem;display:block;">${err.message}</small></div>`;
   }
 }

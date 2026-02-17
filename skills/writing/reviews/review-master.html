@@ -572,7 +572,7 @@ function wrapDM(html) {
   let out = html;
   DM.forEach(dm => {
     const esc = dm.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-    const re  = new RegExp(`(?<![a-zA-Z])(${esc})(?![a-zA-Z])(?=[^<]*(?:<|$))`, 'g');
+    const re  = new RegExp(`(?<![a-zA-Z<"'])(${esc})(?![a-zA-Z<"'])`, 'g');
     out = out.replace(re, `<span class="dm">$1</span>`);
   });
   return out;
@@ -622,47 +622,23 @@ function buildPhraseDB(json) {
 ════════════════════════════════ */
 function enhancePhrases(html) {
   if (!phraseReady) return { html, count: 0 };
-  let count = 0;
+  let out = html, count = 0;
   const seen = new Set();
-
-  const div = document.createElement('div');
-  div.innerHTML = html;
-
-  const phrases = Object.keys(phraseDB)
+  Object.keys(phraseDB)
     .filter(p => phraseDB[p].alternatives.length > 0)
-    .sort((a, b) => b.length - a.length);
-
-  // KEY FIX: snapshot ALL text nodes before any DOM mutation.
-  // The old recursive walkNode visited new span children after
-  // replacement, re-scanning onclick="showAlts(...)" attributes.
-  const textNodes = [];
-  const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT);
-  while (walker.nextNode()) textNodes.push(walker.currentNode);
-
-  textNodes.forEach(node => {
-    let text = node.textContent;
-    let result = text;
-
-    phrases.forEach(phrase => {
-      const esc = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const re  = new RegExp(`(?<![\\w])(${esc})(?![\\w])`, 'gi');
-      result = result.replace(re, match => {
+    .sort((a,b) => b.length - a.length)
+    .forEach(phrase => {
+      const esc = phrase.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      const re  = new RegExp(`(?<![a-zA-Z<"'])(${esc})(?![a-zA-Z<"'])`, 'gi');
+      out = out.replace(re, match => {
         const k = match.toLowerCase();
         if (seen.has(k)) return match;
         seen.add(k); count++;
-        const safe = phrase.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        const safe = phrase.replace(/'/g,"\\'").replace(/"/g,'\\"');
         return `<span class="phrase-enhanced"><span class="phrase-text" onclick="showAlts('${safe}')">${match}</span><button class="phrase-hint-btn" onclick="event.stopPropagation();showAlts('${safe}')">💡</button></span>`;
       });
     });
-
-    if (result !== text) {
-      const replacement = document.createElement('span');
-      replacement.innerHTML = result;
-      node.parentNode.replaceChild(replacement, node);
-    }
-  });
-
-  return { html: div.innerHTML, count };
+  return { html: out, count };
 }
 
 /* ════════════════════════════════

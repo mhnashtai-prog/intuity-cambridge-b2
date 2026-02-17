@@ -691,23 +691,59 @@ function buildPhraseDB(json) {
 
 function enhancePhrases(html) {
   if (!phraseReady) return { html, count: 0 };
-  let out = html, count = 0;
+  let count = 0;
   const seen = new Set();
-  Object.keys(phraseDB)
+
+  // Parse into DOM — operate on text nodes only, never attribute strings
+  const div = document.createElement('div');
+  div.innerHTML = html;
+
+  const phrases = Object.keys(phraseDB)
     .filter(p => phraseDB[p].alternatives.length > 0)
-    .sort((a,b) => b.length - a.length)
-    .forEach(phrase => {
-      const esc = phrase.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-      const re  = new RegExp(`(?<![a-zA-Z<"'])(${esc})(?![a-zA-Z<"'])`, 'gi');
-      out = out.replace(re, match => {
-        const k = match.toLowerCase();
-        if (seen.has(k)) return match;
-        seen.add(k); count++;
-        const safe = phrase.replace(/'/g,"\\'").replace(/"/g,'\\"');
-        return `<span class="phrase-enhanced"><span class="phrase-text" onclick="showAlts('${safe}')">${match}</span><button class="phrase-hint-btn" onclick="event.stopPropagation();showAlts('${safe}')">💡</button></span>`;
+    .sort((a, b) => b.length - a.length);
+
+  function walkNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      let text = node.textContent;
+      let changed = false;
+      const temp = document.createElement('span');
+
+      phrases.forEach(phrase => {
+        const esc = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re  = new RegExp(`(${esc})`, 'gi');
+        if (re.test(temp.innerHTML || text)) {
+          // reset lastIndex
+        }
       });
-    });
-  return { html: out, count };
+
+      // Build replacement HTML from text content
+      let result = text;
+      phrases.forEach(phrase => {
+        const esc = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re  = new RegExp(`(?<![\\w])(${esc})(?![\\w])`, 'gi');
+        result = result.replace(re, match => {
+          const k = match.toLowerCase();
+          if (seen.has(k)) return match;
+          seen.add(k); count++;
+          const safe = phrase.replace(/'/g, "\\'").replace(/"/g, '\\"');
+          return `<span class="phrase-enhanced"><span class="phrase-text" onclick="showAlts('${safe}')">${match}</span><button class="phrase-hint-btn" onclick="event.stopPropagation();showAlts('${safe}')">💡</button></span>`;
+        });
+      });
+
+      if (result !== text) {
+        const replacement = document.createElement('span');
+        replacement.innerHTML = result;
+        node.parentNode.replaceChild(replacement, node);
+      }
+
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      // Clone children list — DOM mutates during walk
+      Array.from(node.childNodes).forEach(walkNode);
+    }
+  }
+
+  Array.from(div.childNodes).forEach(walkNode);
+  return { html: div.innerHTML, count };
 }
 
 /* ════════════════════════════════

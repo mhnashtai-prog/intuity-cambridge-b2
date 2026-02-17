@@ -674,9 +674,20 @@ function buildPhraseDB(json) {
 
   if (Array.isArray(json)) {
     json.forEach(entry => addEntry(entry.category || 'Phrases', entry.phrases || entry.items || []));
-  } else {
-    Object.entries(json).forEach(([cat, val]) =>
-      addEntry(cat, Array.isArray(val) ? val : (val.phrases || val.items || [])));
+} else {
+    Object.entries(json).forEach(([cat, val]) => {
+      if (val && val.categories) {
+        // Nested format used by complete-review-phrase-bank1.json
+        val.categories.forEach(catObj => {
+          (catObj.subcategories || []).forEach(sub => {
+            addEntry(catObj.title || cat, sub.phrases || []);
+          });
+        });
+      } else {
+        // Flat format used by essay-phrases.json
+        addEntry(cat, Array.isArray(val) ? val : (val.phrases || val.items || []));
+      }
+    });
   }
   phraseReady = Object.keys(phraseDB).length > 0;
 }
@@ -972,7 +983,7 @@ async function init() {
     .then(d => { if (d) buildPhraseDB(d); })
     .catch(() => {
       // Fallback to essay phrases if review phrases not found
-      fetch('data/complete-review-phrase-bank1.json')
+      fetch('data/essay-phrases.json')
         .then(r => r.ok ? r.json() : null)
         .then(d => { if (d) buildPhraseDB(d); })
         .catch(() => {});

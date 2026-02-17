@@ -632,34 +632,36 @@ function enhancePhrases(html) {
     .filter(p => phraseDB[p].alternatives.length > 0)
     .sort((a, b) => b.length - a.length);
 
-  function walkNode(node) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      let text = node.textContent;
-      let result = text;
+  // KEY FIX: snapshot ALL text nodes before any DOM mutation.
+  // The old recursive walkNode visited new span children after
+  // replacement, re-scanning onclick="showAlts(...)" attributes.
+  const textNodes = [];
+  const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) textNodes.push(walker.currentNode);
 
-      phrases.forEach(phrase => {
-        const esc = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const re  = new RegExp(`(?<![\\w])(${esc})(?![\\w])`, 'gi');
-        result = result.replace(re, match => {
-          const k = match.toLowerCase();
-          if (seen.has(k)) return match;
-          seen.add(k); count++;
-          const safe = phrase.replace(/'/g, "\\'").replace(/"/g, '\\"');
-          return `<span class="phrase-enhanced"><span class="phrase-text" onclick="showAlts('${safe}')">${match}</span><button class="phrase-hint-btn" onclick="event.stopPropagation();showAlts('${safe}')">💡</button></span>`;
-        });
+  textNodes.forEach(node => {
+    let text = node.textContent;
+    let result = text;
+
+    phrases.forEach(phrase => {
+      const esc = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re  = new RegExp(`(?<![\\w])(${esc})(?![\\w])`, 'gi');
+      result = result.replace(re, match => {
+        const k = match.toLowerCase();
+        if (seen.has(k)) return match;
+        seen.add(k); count++;
+        const safe = phrase.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        return `<span class="phrase-enhanced"><span class="phrase-text" onclick="showAlts('${safe}')">${match}</span><button class="phrase-hint-btn" onclick="event.stopPropagation();showAlts('${safe}')">💡</button></span>`;
       });
+    });
 
-      if (result !== text) {
-        const replacement = document.createElement('span');
-        replacement.innerHTML = result;
-        node.parentNode.replaceChild(replacement, node);
-      }
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      Array.from(node.childNodes).forEach(walkNode);
+    if (result !== text) {
+      const replacement = document.createElement('span');
+      replacement.innerHTML = result;
+      node.parentNode.replaceChild(replacement, node);
     }
-  }
+  });
 
-  Array.from(div.childNodes).forEach(walkNode);
   return { html: div.innerHTML, count };
 }
 

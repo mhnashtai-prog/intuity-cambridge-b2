@@ -269,6 +269,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
     <div class="nav-pill">
       <button class="nb" data-mode="question" onclick="switchMode('question')">question</button>
       <button class="nb" data-mode="structure" onclick="switchMode('structure')">structure</button>
+      <button class="nb" data-mode="plan" onclick="switchMode('plan')">plan</button>
       <button class="nb on" data-mode="model" onclick="switchMode('model')">model</button>
       <button class="nb" data-mode="builder" onclick="switchMode('builder')">builder</button>
       <button class="nb" data-mode="sample" onclick="switchMode('sample')">sample</button>
@@ -287,54 +288,22 @@ let currentPracticeQuestion = 0;
 let viewMode     = 'skeleton';
 
 /* ══ PRACTICE DATA ══ */
-const PRACTICE_DATA = {
-  'ocean-documentary': [
-    {
-      question: "Tell me about a documentary you learnt a lot from",
-      answer: [
-        { text: "I recently watched Our Oceans on the BBC, and I have to say it was definitely worth considering.", phrase: "I have to say", phraseType: "intro", label: "Opening phrase" },
-        { text: "The first thing that impressed me was the stunning underwater photography.", phrase: "The first thing that impressed me was", phraseType: "feature", label: "Feature 1" },
-        { text: "What really stands out is how the cameras capture life in the darkest ocean zones, revealing creatures we rarely see.", phrase: "What really stands out is how", phraseType: "feature", label: "Feature detail" },
-        { text: "Another feature worth mentioning is the powerful environmental message about plastic pollution.", phrase: "Another feature worth mentioning is", phraseType: "feature", label: "Feature 2" },
-        { text: "I wouldn't hesitate to recommend this documentary to anyone who enjoys nature programming.", phrase: "I wouldn't hesitate to recommend", phraseType: "conclusion", label: "Recommendation" }
-      ]
-    }
-  ],
-  'ed-sheeran-concert': [
-    {
-      question: "Describe a concert you've been to",
-      answer: [
-        { text: "When it comes to live performances, Ed Sheeran at Wembley Stadium was definitely worth considering.", phrase: "When it comes to", phraseType: "intro", label: "Opening" },
-        { text: "What really stands out is that he performs alone with just his guitar and loop pedal.", phrase: "What really stands out is", phraseType: "feature", label: "Feature 1" },
-        { text: "The thing that is most likely to impress you is how he builds up complex songs layer by layer right in front of your eyes.", phrase: "The thing that is most likely to impress you is", phraseType: "feature", label: "Feature detail" },
-        { text: "Another feature worth mentioning is the intimate atmosphere he creates, even in a massive stadium with ninety thousand people.", phrase: "Another feature worth mentioning is", phraseType: "feature", label: "Feature 2" },
-        { text: "I would highly recommend seeing Ed Sheeran live if you get the chance.", phrase: "I would highly recommend", phraseType: "conclusion", label: "Recommendation" }
-      ]
-    }
-  ]
-};
+let practiceQuestions = null;
 
 /* ══ INIT ══ */
 async function init(){
   try{
-    const [r1,r2] = await Promise.all([
-      fetch('data/ideas.json'),
-      fetch('data/review-full-structures.json')
+    const [r1,r2,r3] = await Promise.all([
+      fetch('data/complete-review-phrase-bank.json'),
+      fetch('data/complete-review-phrase-bank1.json'),
+      fetch('data/review-practice.json')
     ]);
-    const ideas = await r1.json();
-    const structures = await r2.json();
+    skeletonData = await r1.json();
+    phraseData   = await r2.json();
+    const practice = await r3.json();
     
-    // Transform ideas.json into skeleton format
-    skeletonData = {};
-    Object.keys(ideas.reviews).forEach(key => {
-      skeletonData[key] = {
-        label: ideas.reviews[key].topic,
-        skeleton: ideas.reviews[key].skeleton
-      };
-    });
-    
-    // Transform structures into phrase format
-    phraseData = structures.structures;
+    // Load practice questions
+    practiceQuestions = practice.questions;
     
     renderTabs();
     renderContent();
@@ -382,64 +351,77 @@ function renderContent(){
 
 function renderSkeleton(){
   const review = skeletonData[currentType];
+  if(!review || !review.skeletons || !review.skeletons[0]) {
+    return '<div style="padding:2rem;text-align:center;color:rgba(0,0,0,0.4)">Skeleton not available</div>';
+  }
+  
+  const variation = review.skeletons[0];
   let h='<div class="skeleton-display">';
-  review.skeleton.forEach((section,i)=>{
+  
+  variation.skeleton.forEach((section,i)=>{
     h+='<div class="paragraph-block">';
     const t=section.title.toLowerCase();
     const c=t.includes('intro')?'intro':t.includes('recommend')?'conclusion':'feature';
-    h+=`<div class="paragraph-title ${c}">${section.title}</div>`;
-    section.items.forEach(item=>{
-      h+=`<div class="paragraph-text">${item.marker} ${item.text}</div>`;
+    h+=`<div class="paragraph-title ${c}">${section.emoji||''} ${section.title}</div>`;
+    section.lines.forEach(line=>{
+      h+=`<div class="paragraph-text">${line}</div>`;
     });
-    if(i<review.skeleton.length-1) h+='</div><div class="divider"></div>';
+    if(i<variation.skeleton.length-1) h+='</div><div class="divider"></div>';
     else h+='</div>';
   });
   return h+'</div>';
 }
 
 function renderPhrases(){
-  // Map review types to structure categories
-  const categoryMap = {
-    'ocean-documentary': 'entertainment',
-    'ed-sheeran-concert': 'entertainment',
-    'film-intern': 'entertainment',
-    'stardew-valley-game': 'entertainment',
-    'italian-restaurant-meal': 'places',
-    'restaurant-anniversary': 'places',
-    'surf-camp-portugal': 'experiences',
-    'lonely-planet-spain': 'products',
-    'atomic-habits-book': 'products',
-    'duolingo-app': 'products'
-  };
+  const phraseBank = phraseData[currentType];
   
-  const category = categoryMap[currentType] || 'entertainment';
-  const structure = phraseData[category];
-  
-  if(!structure) return '<div style="padding:2rem;text-align:center;color:rgba(0,0,0,0.4)">No phrases available.</div>';
+  if(!phraseBank || !phraseBank.categories) {
+    return '<div style="padding:2rem;text-align:center;color:rgba(0,0,0,0.4)">No phrases available.</div>';
+  }
   
   let h='<div class="phrases-display">';
-  Object.values(structure.sections).forEach(section=>{
-    const t=section.label.toLowerCase();
+  phraseBank.categories.forEach(cat=>{
+    const t=cat.title.toLowerCase();
     const c=t.includes('intro')?'intro':t.includes('recommend')?'conclusion':'feature';
-    h+=`<div class="phrase-category"><div class="category-title ${c}">${section.label}</div>`;
-    
-    const phrases = section.phrases?.default || [];
-    h+=`<ul class="phrase-list">`;
-    phrases.forEach(p=>{ h+=`<li class="phrase-item">${p}</li>`; });
-    h+='</ul></div>';
+    h+=`<div class="phrase-category"><div class="category-title ${c}">${cat.title}</div>`;
+    cat.subcategories.forEach(sub=>{
+      h+=`<ul class="phrase-list">`;
+      sub.phrases.forEach(p=>{ h+=`<li class="phrase-item">${p}</li>`; });
+      h+='</ul>';
+    });
+    h+='</div>';
   });
   return h+'</div>';
 }
 
 /* ══ PRACTICE ══ */
 function renderPractice(){
-  const set = PRACTICE_DATA[currentType];
-  if(!set||!set.length) return '<div style="padding:2rem;text-align:center;color:rgba(0,0,0,0.4)">Practice coming soon.</div>';
+  if(!practiceQuestions) return '<div style="padding:2rem;text-align:center;color:rgba(0,0,0,0.4)">Loading practice questions...</div>';
+  
+  // Map review types to practice question categories
+  const categoryMap = {
+    'ocean-documentary': 'documentaries',
+    'ed-sheeran-concert': 'festivals',
+    'italian-restaurant-meal': 'places',
+    'restaurant-anniversary': 'places',
+    'surf-camp-portugal': 'experiences',
+    'lonely-planet-spain': 'products',
+    'atomic-habits-book': 'products',
+    'duolingo-app': 'products',
+    'film-intern': 'entertainment',
+    'stardew-valley-game': 'entertainment'
+  };
+  
+  const category = categoryMap[currentType] || 'entertainment';
+  const set = practiceQuestions[category];
+  
+  if(!set||!set.length) return '<div style="padding:2rem;text-align:center;color:rgba(0,0,0,0.4)">No practice questions for this type.</div>';
+  
   const data = set[currentPracticeQuestion];
 
   let h = `<div class="practice-display">
     <div class="practice-question">
-      <div class="practice-question-label">Practice Question</div>
+      <div class="practice-question-label">Practice Question ${currentPracticeQuestion+1} of ${set.length}</div>
       <div class="practice-question-text">${data.question}</div>
     </div>
     <div class="practice-controls">
@@ -498,7 +480,22 @@ function stopPractice(){
 async function startPractice(){
   if(practiceActive){ stopPractice(); return; }
 
-  const data = PRACTICE_DATA[currentType][currentPracticeQuestion];
+  // Map review type to question category
+  const categoryMap = {
+    'ocean-documentary': 'documentaries',
+    'ed-sheeran-concert': 'festivals',
+    'italian-restaurant-meal': 'places',
+    'restaurant-anniversary': 'places',
+    'surf-camp-portugal': 'experiences',
+    'lonely-planet-spain': 'products',
+    'atomic-habits-book': 'products',
+    'duolingo-app': 'products',
+    'film-intern': 'entertainment',
+    'stardew-valley-game': 'entertainment'
+  };
+  
+  const category = categoryMap[currentType] || 'entertainment';
+  const data = practiceQuestions[category][currentPracticeQuestion];
   if(!data) return;
 
   practiceActive = true;
@@ -601,7 +598,20 @@ function setViewMode(mode){
 function navigate(dir){
   stopPractice();
   if(viewMode==='practice'){
-    const set=PRACTICE_DATA[currentType]||[];
+    const categoryMap = {
+      'ocean-documentary': 'documentaries',
+      'ed-sheeran-concert': 'festivals',
+      'italian-restaurant-meal': 'places',
+      'restaurant-anniversary': 'places',
+      'surf-camp-portugal': 'experiences',
+      'lonely-planet-spain': 'products',
+      'atomic-habits-book': 'products',
+      'duolingo-app': 'products',
+      'film-intern': 'entertainment',
+      'stardew-valley-game': 'entertainment'
+    };
+    const category = categoryMap[currentType] || 'entertainment';
+    const set = practiceQuestions ? (practiceQuestions[category] || []) : [];
     const next=currentPracticeQuestion+dir;
     if(next>=0&&next<set.length){
       currentPracticeQuestion=next;
@@ -620,7 +630,20 @@ function updateNav(){
   const ctr =document.getElementById('pageCounter');
   
   if(viewMode==='practice'){
-    const set=PRACTICE_DATA[currentType]||[];
+    const categoryMap = {
+      'ocean-documentary': 'documentaries',
+      'ed-sheeran-concert': 'festivals',
+      'italian-restaurant-meal': 'places',
+      'restaurant-anniversary': 'places',
+      'surf-camp-portugal': 'experiences',
+      'lonely-planet-spain': 'products',
+      'atomic-habits-book': 'products',
+      'duolingo-app': 'products',
+      'film-intern': 'entertainment',
+      'stardew-valley-game': 'entertainment'
+    };
+    const category = categoryMap[currentType] || 'entertainment';
+    const set = practiceQuestions ? (practiceQuestions[category] || []) : [];
     const types=Object.keys(skeletonData);
     const typeIdx=types.indexOf(currentType);
     prev.disabled=(currentPracticeQuestion===0);
@@ -637,7 +660,7 @@ function updateNav(){
 /* ══ MODE SWITCHING ══ */
 function switchMode(mode){
   document.querySelectorAll('.nb').forEach(b=>b.classList.toggle('on',b.dataset.mode===mode));
-  const map={question:'review-question-selector.html',structure:'review-structure.html',builder:'review-builder.html',sample:'review-master.html'};
+  const map={question:'review-question-selector.html',structure:'review-structure.html',plan:'review-plan.html',builder:'review-builder.html',sample:'review-master.html'};
   if(map[mode]) window.location.href=map[mode];
 }
 

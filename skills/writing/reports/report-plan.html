@@ -330,7 +330,31 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .mode-opt:hover:not(.active){color:rgba(0,0,0,0.55)}
 .mode-opt.active{background:var(--ink);color:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.18)}
 
-/* ── SWIPE HINT ── */
+/* ── LISTEN MODE: hide nav inside card ── */
+.stage.listen-mode .card-foot{
+  opacity:0;
+  pointer-events:none;
+}
+.stage.listen-mode .poster{cursor:default;}
+
+/* ── LISTEN INDICATOR: subtle pulsing bar at bottom of card ── */
+.listen-bar{
+  position:absolute;
+  bottom:0;left:1.8rem;right:1.8rem;
+  height:3px;border-radius:2px;
+  background:currentColor;
+  opacity:0;
+  transition:opacity 0.3s;
+  transform-origin:left;
+}
+.stage.listen-mode .poster.active-card .listen-bar{
+  opacity:0.35;
+  animation:listenPulse 1.8s ease-in-out infinite;
+}
+@keyframes listenPulse{
+  0%,100%{opacity:0.2;transform:scaleX(0.6)}
+  50%{opacity:0.5;transform:scaleX(1)}
+}
 .swipe-hint{
   position:absolute;bottom:3.2rem;left:50%;transform:translateX(-50%);
   font-size:0.58rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;
@@ -613,15 +637,20 @@ async function activateCard(idx, firstTime=false){
   });
 
   el.classList.add('speaking');
-  const speech = `${section.phrase}. ${section.idea}. ${(section.bullets||[]).join('. ')}`;
-  await speak(speech);
+  // Only speak in listen mode
+  if(playMode==='listen'){
+    const speech = `${section.phrase}. ${section.idea}. ${(section.bullets||[]).join('. ')}`;
+    await speak(speech);
+  }
   el.classList.remove('speaking');
   isPlaying=false;
 
-  if(idx < cards.length-1 && playMode==='listen'){
-    listenTimer=setTimeout(()=>{ if(playMode==='listen') advance(); }, 1400);
-  } else if(idx === cards.length-1){
-    sndDone();
+  if(playMode==='listen'){
+    if(idx < cards.length-1){
+      listenTimer=setTimeout(()=>{ if(playMode==='listen') advance(); }, 1400);
+    } else {
+      sndDone();
+    }
   }
 }
 
@@ -690,11 +719,27 @@ function switchType(type){
 // MODE
 // ══════════════════════════════════════════
 function setMode(mode){
-  playMode=mode;
-  document.getElementById('optExplore').classList.toggle('active',mode==='explore');
-  document.getElementById('optListen').classList.toggle('active',mode==='listen');
-  if(mode==='listen'){stopSpeech();isPlaying=false;activateCard(current,false);}
-  else{if(listenTimer){clearTimeout(listenTimer);listenTimer=null;}stopSpeech();isPlaying=false;}
+  playMode = mode;
+  const stage = document.getElementById('stage');
+  document.getElementById('optExplore').classList.toggle('active', mode==='explore');
+  document.getElementById('optListen').classList.toggle('active', mode==='listen');
+
+  if(mode==='listen'){
+    stage.classList.add('listen-mode');
+    // Stop any current speech, reset to card 1, then play through
+    if(listenTimer){clearTimeout(listenTimer);listenTimer=null;}
+    stopSpeech(); isPlaying=false;
+    // Jump back to first card and begin auto-play
+    cards.forEach(({el:ce})=>{ce.classList.remove('active-card','speaking');ce.style.display='none';});
+    current=0;
+    activateCard(0, true);
+  } else {
+    stage.classList.remove('listen-mode');
+    if(listenTimer){clearTimeout(listenTimer);listenTimer=null;}
+    stopSpeech(); isPlaying=false;
+    // Re-activate current card silently (no speech)
+    updateDots();
+  }
 }
 
 // ══════════════════════════════════════════

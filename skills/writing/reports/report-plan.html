@@ -444,7 +444,7 @@ function wait(ms){return new Promise(r=>setTimeout(r,ms));}
 // ══════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════
-let skeletonData = null;
+let planData = null;
 let currentType  = 'school-facilities';
 let cards        = [];   // { el, data } — all card elements
 let current      = 0;    // which card is active
@@ -456,29 +456,7 @@ let listenTimer = null;
 // ══════════════════════════════════════════
 // BUILD CARD ELEMENT
 // ══════════════════════════════════════════
-// Truncate to key fragment — strip after comma or after 5 words
-function fragment(text, maxWords=5){
-  if(!text) return '';
-  // Strip trailing punctuation
-  let t = text.replace(/[.!?]$/, '');
-  // Take up to comma
-  const comma = t.indexOf(',');
-  if(comma > 8) t = t.substring(0, comma);
-  // Take up to maxWords
-  const words = t.split(' ');
-  if(words.length > maxWords) return words.slice(0, maxWords).join(' ') + '…';
-  return t;
-}
-
-function buildCard(section, idx, color){
-  const tk = typeKey(section.title);
-  const phrase = pickPhrase(tk, idx);
-  const lines = section.lines || [];
-  // Main idea: just first 5 words
-  const mainText = fragment(lines[0] || '', 6);
-  // Subs: max 2, max 4 words each
-  const subs = lines.slice(1, 3).map(s => fragment(s, 4));
-
+function buildCard(sec, idx, color){
   const el = document.createElement('div');
   el.className = `sticky ${color}`;
   el.dataset.idx = idx;
@@ -487,34 +465,33 @@ function buildCard(section, idx, color){
   const pin = document.createElement('div'); pin.className='pin';
   el.appendChild(pin);
 
-  // Badge number
+  // Number badge
   const badge = document.createElement('div'); badge.className='badge';
-  badge.textContent = String(idx+1).padStart(2,'0');
+  badge.textContent = sec.num;
   el.appendChild(badge);
 
   // Section label
   const lbl = document.createElement('div'); lbl.className='section-label';
-  lbl.textContent = section.title;
+  lbl.textContent = sec.title;
   el.appendChild(lbl);
 
-  // Opening phrase — italic, short
+  // Key phrase — italic opener, shown once
   const ph = document.createElement('div'); ph.className='phrase-line';
-  // Trim phrase to fragment too
-  ph.textContent = phrase;
+  ph.textContent = sec.phrase;
   el.appendChild(ph);
 
-  // Main idea — large, bold, SHORT
+  // Main idea — BIG, bold, 3-5 words
   const mi = document.createElement('div'); mi.className='main-idea';
-  mi.textContent = mainText;
+  mi.textContent = sec.idea;
   el.appendChild(mi);
 
-  // Sub bullets — 2 max, short fragments only
-  if(subs.filter(Boolean).length){
+  // Bullets — max 2, fragments only
+  if(sec.bullets && sec.bullets.length){
     const sl = document.createElement('div'); sl.className='sub-bullets';
-    subs.filter(Boolean).forEach(s=>{
+    sec.bullets.slice(0,2).forEach(b=>{
       const li=document.createElement('div'); li.className='sub-item';
       const dot=document.createElement('div'); dot.className='sub-dot';
-      const txt=document.createElement('span'); txt.textContent=s;
+      const txt=document.createElement('span'); txt.textContent=b;
       li.appendChild(dot); li.appendChild(txt);
       sl.appendChild(li);
     });
@@ -525,9 +502,7 @@ function buildCard(section, idx, color){
   const ring=document.createElement('div'); ring.className='audio-ring';
   ring.textContent='♪'; el.appendChild(ring);
 
-  // Tap to advance
   el.onclick = ()=>{ if(current===idx) advance(); };
-
   return el;
 }
 
@@ -537,34 +512,33 @@ function buildCard(section, idx, color){
 function render(){
   const stage = document.getElementById('stage');
   stage.innerHTML='';
-  const hint=document.createElement('div'); hint.className='swipe-hint';
-  hint.textContent='tap to advance'; stage.appendChild(hint);
+  // Re-add the toggle (was wiped by innerHTML)
+  const tog = document.createElement('div');
+  tog.className='mode-toggle'; tog.id='modeToggle';
+  tog.innerHTML=`<button class="mode-opt ${playMode==='explore'?'active':''}" id="optExplore" onclick="setMode('explore')">Explore</button>
+    <button class="mode-opt ${playMode==='listen'?'active':''}" id="optListen" onclick="setMode('listen')">Listen</button>`;
+  stage.appendChild(tog);
 
-  const report = skeletonData[currentType];
+  const hint=document.createElement('div'); hint.className='swipe-hint';
+  hint.textContent='tap card to advance'; stage.appendChild(hint);
+
+  const report = planData[currentType];
   document.getElementById('topicLabel').textContent = report.label || currentType;
 
-  const skeleton = (report.skeletons && report.skeletons[0]) ? report.skeletons[0].skeleton : [];
-  cards=[];
-  current=0;
+  const sections = report.sections || [];
+  cards=[]; current=0;
 
-  // Build all cards, stack them
-  skeleton.forEach((sec,i)=>{
+  sections.forEach((sec,i)=>{
     const el = buildCard(sec, i, COLORS[i % COLORS.length]);
-    // Stack position (behind active)
-    const stackPos = i===0 ? 0 : Math.min(i, 3);
-    el.dataset.stack = stackPos;
     el.style.cssText = getStackStyle(i, 0);
     stage.appendChild(el);
     cards.push({el, section:sec});
   });
 
-  buildDots(skeleton.length);
+  buildDots(sections.length);
   updateDots();
 
-  // Activate first card with enter animation
-  setTimeout(()=>{
-    activateCard(0, true);
-  }, 200);
+  setTimeout(()=>{ activateCard(0, true); }, 200);
 }
 
 function getStackStyle(cardIdx, activeIdx){
@@ -622,14 +596,12 @@ async function activateCard(idx, firstTime=false){
   // Speak it
   el.classList.add('speaking');
 
-  const tk = typeKey(section.title);
-  const phrase = pickPhrase(tk, idx);
-  const lines = section.lines || [];
-  const mainText = lines[0] || '';
-  const subs = lines.slice(1);
-
-  // Build speech: phrase + main idea + subs
-  const speechText = `${phrase.replace('…','')}. ${mainText}. ${subs.join('. ')}`;
+  const sec = section; // section is now the clean JSON object
+  const phrase = sec.phrase || '';
+  const idea   = sec.idea   || '';
+  const subs   = sec.bullets|| [];
+  // Build speech: phrase + idea + bullets
+  const speechText = `${phrase.replace('…','')}. ${idea}. ${subs.join('. ')}`;
   await speak(speechText);
 
   el.classList.remove('speaking');
@@ -703,10 +675,10 @@ async function jumpTo(idx){
 // ══════════════════════════════════════════
 function buildTabs(){
   const c = document.getElementById('topicTabs');
-  const keys = Object.keys(skeletonData).filter(k=>k!=='meta');
+  const keys = Object.keys(planData);
   c.innerHTML = keys.map(k=>`
     <button class="ttab ${k===currentType?'active':''}" onclick="switchType('${k}')">
-      ${skeletonData[k].label}
+      ${planData[k].label}
     </button>`).join('');
 }
 function switchType(type){
@@ -767,8 +739,8 @@ function navTo(dest){
 async function init(){
   await initVoices();
   try{
-    const r = await fetch('data/complete-report-phrase-bank.json');
-    skeletonData = await r.json();
+    const r = await fetch('data/report-plan-data.json');
+    planData = await r.json();
     document.getElementById('loadingMsg').remove();
     buildTabs();
     render();

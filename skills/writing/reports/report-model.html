@@ -291,8 +291,57 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .tag-conclusion{background:rgba(123,94,167,0.12);color:var(--c-purple)}
 
 /* ══════════════════════════════
-   FLYING BANNER (kept, restyled to match)
+   PRACTICE MODE TOGGLE
    ══════════════════════════════ */
+.practice-mode-toggle{
+  display:flex;align-self:flex-end;
+  background:rgba(0,0,0,0.06);border-radius:2rem;padding:0.2rem;gap:0.12rem;
+}
+.pmt-btn{
+  background:transparent;border:none;
+  padding:0.26rem 0.85rem;border-radius:2rem;
+  font-family:'Instrument Sans',sans-serif;
+  font-size:0.6rem;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;
+  color:rgba(0,0,0,0.35);cursor:pointer;transition:all 0.22s;white-space:nowrap;
+}
+.pmt-btn.active{background:var(--ink);color:#fff}
+
+/* ══════════════════════════════
+   TEXT MODE — transcript builds line by line
+   ══════════════════════════════ */
+.transcript-wrap{
+  background:var(--white);border-radius:1.1rem;
+  padding:1rem 1.4rem;min-height:120px;
+  box-shadow:2px 4px 0 rgba(0,0,0,0.04),0 8px 24px rgba(0,0,0,0.08);
+  display:flex;flex-direction:column;gap:0;
+}
+.transcript-label{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:0.55rem;font-weight:900;letter-spacing:0.18em;text-transform:uppercase;
+  color:rgba(0,0,0,0.2);margin-bottom:0.75rem;
+}
+.transcript-line{
+  font-family:'Instrument Sans',sans-serif;
+  font-size:0.88rem;font-weight:400;line-height:1.6;
+  color:rgba(0,0,0,0.75);
+  padding:0.3rem 0;
+  border-bottom:1px dashed rgba(0,0,0,0.05);
+  opacity:0;transform:translateY(6px);
+  transition:opacity 0.4s ease,transform 0.4s ease;
+}
+.transcript-line:last-child{border-bottom:none}
+.transcript-line.visible{opacity:1;transform:translateY(0)}
+.transcript-line.active{color:var(--ink);font-weight:500}
+.transcript-line.done{color:rgba(0,0,0,0.38);font-weight:400}
+.transcript-tag{
+  display:inline-block;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:0.52rem;font-weight:900;text-transform:uppercase;letter-spacing:0.1em;
+  padding:0.1rem 0.42rem;border-radius:2rem;margin-left:0.4rem;vertical-align:middle;
+}
+.tag-intro{background:rgba(61,158,149,0.12);color:var(--c-teal)}
+.tag-feature{background:rgba(232,114,58,0.12);color:var(--c-coral)}
+.tag-conclusion{background:rgba(123,94,167,0.12);color:var(--c-purple)}
 .fly-banner{
   position:fixed;z-index:900;pointer-events:none;
   display:flex;flex-direction:column;justify-content:center;
@@ -664,6 +713,19 @@ function buildPractice(){
 }
 
 // ══════════════════════════════════════════
+// PRACTICE MODE STATE
+// ══════════════════════════════════════════
+let practiceMode = 'text'; // 'text' | 'listen'
+
+function setPracticeMode(m){
+  practiceMode = m;
+  document.querySelectorAll('.pmt-btn').forEach(b=>b.classList.toggle('active', b.dataset.pm===m));
+  // Show/hide the right content area
+  const tw = document.getElementById('transcriptWrap');
+  if(tw) tw.style.display = m==='text' ? '' : 'none';
+}
+
+// ══════════════════════════════════════════
 // PRACTICE — HTML
 // ══════════════════════════════════════════
 function renderPracticeHTML(){
@@ -672,13 +734,12 @@ function renderPracticeHTML(){
   const data = set[currentPracticeQ];
   const total = set.length;
 
-  let lines='';
+  // Pre-build transcript lines (hidden until revealed during play)
+  let transcriptLines = '';
   data.answer.forEach((l,i)=>{
-    const hasP = !!l.phrase;
-    lines+=`<div class="answer-line ${hasP?'has-phrase':''}" id="al${i}">
-      <div class="answer-marker"></div>
-      <div class="answer-text" id="at${i}">${l.text}${hasP?`<span class="answer-phrase-tag tag-${l.phraseType||'feature'}">${l.label||'phrase'}</span>`:''}</div>
-    </div>`;
+    const tag = l.phrase && l.phraseType
+      ? `<span class="transcript-tag tag-${l.phraseType}">${l.label||'phrase'}</span>` : '';
+    transcriptLines += `<div class="transcript-line" id="tl${i}">${l.text}${tag}</div>`;
   });
 
   return `<div class="practice-wrap">
@@ -686,13 +747,19 @@ function renderPracticeHTML(){
       <div class="practice-q-label">Practice Question ${currentPracticeQ+1} of ${total}</div>
       <div class="practice-q-text">${data.question}</div>
     </div>
-    <div class="practice-controls">
-      <button class="play-btn" id="playBtn" onclick="startPractice()">▶ Play</button>
-      <div class="practice-caption" id="practiceCaption">Press Play to hear the model answer</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem">
+      <div class="practice-controls" style="flex:1">
+        <button class="play-btn" id="playBtn" onclick="startPractice()">▶ Play</button>
+        <div class="practice-caption" id="practiceCaption">Press Play to hear the model answer</div>
+      </div>
+      <div class="practice-mode-toggle">
+        <button class="pmt-btn ${practiceMode==='text'?'active':''}" data-pm="text" onclick="setPracticeMode('text')">Text</button>
+        <button class="pmt-btn ${practiceMode==='listen'?'active':''}" data-pm="listen" onclick="setPracticeMode('listen')">Listen</button>
+      </div>
     </div>
-    <div class="practice-answer">
-      <div class="answer-label">Model Answer — key phrases highlighted</div>
-      ${lines}
+    <div class="transcript-wrap" id="transcriptWrap" style="${practiceMode==='listen'?'display:none':''}">
+      <div class="transcript-label">Model Answer</div>
+      ${transcriptLines}
     </div>
   </div>`;
 }
@@ -729,7 +796,10 @@ function stopPractice(){
   const cap=document.getElementById('practiceCaption');
   if(btn){btn.textContent='▶ Play';btn.disabled=false;}
   if(cap){cap.textContent='Press Play to hear the model answer';cap.classList.remove('speaking');}
-  document.querySelectorAll('.answer-line').forEach(l=>l.classList.remove('played'));
+  // Reset transcript lines
+  document.querySelectorAll('.transcript-line').forEach(l=>{
+    l.classList.remove('visible','active','done');
+  });
 }
 
 async function startPractice(){
@@ -743,24 +813,48 @@ async function startPractice(){
   const btn=document.getElementById('playBtn');
   if(btn) btn.textContent='■ Stop';
 
-  document.querySelectorAll('.answer-line').forEach(l=>l.classList.remove('played'));
-
   for(let i=0;i<data.answer.length;i++){
     if(!practiceActive) break;
     const line=data.answer[i];
     const cap=document.getElementById('practiceCaption');
-    if(cap){cap.textContent=line.text;cap.classList.add('speaking');}
 
-    if(line.phrase&&line.phraseType){
-      launchBanner(line.text, `type-${line.phraseType}`, line.label||'Key Phrase');
+    if(practiceMode==='text'){
+      // Text mode: reveal line, mark active, previous lines go dim
+      const lineEl=document.getElementById(`tl${i}`);
+      if(lineEl){
+        lineEl.classList.add('visible','active');
+        // Dim previous lines
+        for(let j=0;j<i;j++){
+          const prev=document.getElementById(`tl${j}`);
+          if(prev){prev.classList.remove('active');prev.classList.add('done');}
+        }
+        // Scroll into view
+        lineEl.scrollIntoView({behavior:'smooth',block:'nearest'});
+      }
+      if(cap){cap.textContent='';cap.classList.remove('speaking');}
+      // No banner in text mode
+      if(currentBanner){currentBanner.remove();currentBanner=null;}
+    } else {
+      // Listen mode: banner only, no transcript visible
+      if(cap){cap.textContent=line.text;cap.classList.add('speaking');}
+      if(line.phrase&&line.phraseType){
+        launchBanner(line.text,`type-${line.phraseType}`,line.label||'Key Phrase');
+      }
     }
+
     await speakLine(line.text);
-    const lineEl=document.getElementById(`al${i}`);
-    if(lineEl) lineEl.classList.add('played');
-    if(practiceActive) await wait(500);
+    if(practiceActive) await wait(400);
   }
 
   if(practiceActive){
+    // Final state
+    if(practiceMode==='text'){
+      // All lines visible and settled
+      document.querySelectorAll('.transcript-line').forEach(l=>{
+        l.classList.add('visible');l.classList.remove('active');l.classList.add('done');
+      });
+    }
+    if(currentBanner){currentBanner.remove();currentBanner=null;}
     stopPractice();
     const cap=document.getElementById('practiceCaption');
     if(cap) cap.textContent='Complete — press Play to repeat.';
@@ -771,10 +865,15 @@ function speakLine(text){
   return new Promise(res=>{
     if(!practiceActive){res();return;}
     synth.cancel();
-    const utt=new SpeechSynthesisUtterance(text);
-    utt.voice=narrator;utt.rate=0.88;utt.pitch=1.05;utt.volume=1;
-    utt.onend=()=>res();utt.onerror=()=>res();
-    synth.speak(utt);
+    // Small delay after cancel ensures the synthesis engine is ready
+    setTimeout(()=>{
+      if(!practiceActive){res();return;}
+      const utt=new SpeechSynthesisUtterance(text);
+      utt.voice=narrator;utt.rate=0.88;utt.pitch=1.05;utt.volume=1;
+      utt.onend=()=>res();
+      utt.onerror=()=>res();
+      synth.speak(utt);
+    }, 80);
   });
 }
 

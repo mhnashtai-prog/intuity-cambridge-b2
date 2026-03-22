@@ -390,16 +390,21 @@ let results = {};
 let cur = 0;
 let animDir = 'in';
 
+/* ── per-slide shuffled option indices, built fresh each game ── */
+let shuffledOpts = {}; // { slideIndex: [shuffled option texts] }
+let correctTexts = {}; // { slideIndex: correct answer text }
+
 function init(){
   order = Array.from({length:TOTAL},(_,i)=>i);
   shuffle(order);
-  // pre-shuffle options for each slide, store correct answer text
-  slides.forEach(s=>{
-    const correctText = s.options[s.correct];
-    const shuffled = [...s.options];
-    shuffle(shuffled);
-    s._shuffled = shuffled;
-    s._correctText = correctText;
+  // build shuffled options for each slide
+  shuffledOpts = {};
+  correctTexts = {};
+  slides.forEach((s, i)=>{
+    correctTexts[i] = s.options[s.correct];
+    const arr = [...s.options];
+    shuffle(arr);
+    shuffledOpts[i] = arr;
   });
   results = {};
   cur = 0;
@@ -461,29 +466,30 @@ function renderSlide(dir='in'){
   // scenario
   document.getElementById('scenarioText').textContent = s.scenario;
 
-  // options
   const zone = document.getElementById('optionsZone');
   zone.innerHTML = '';
   const letters = ['A','B','C'];
-  const res = results[order[cur]];
-  const opts = s._shuffled || s.options;
+  const slideIdx = order[cur];
+  const res = results[slideIdx];
+  const opts = shuffledOpts[slideIdx];
+  const correctText = correctTexts[slideIdx];
 
   opts.forEach((opt,i)=>{
     const btn = document.createElement('button');
     btn.className = 'opt-btn';
-    const isCorrectOpt = opt === s._correctText;
+    const isCorrectOpt = opt === correctText;
 
     if(res){
       btn.classList.add('locked');
       if(isCorrectOpt){
         btn.classList.add(res==='correct'?'correct':'reveal');
-      } else if(res==='wrong' && opt === s._chosenText){
+      } else if(res==='wrong' && opt === results[slideIdx+'_chosen']){
         btn.classList.add('wrong');
       }
     }
 
     btn.innerHTML = `<span class="opt-letter">${letters[i]}</span><span class="opt-text">${opt}</span>`;
-    if(!res) btn.onclick = ()=>choose(opt, btn, s);
+    if(!res) btn.onclick = ()=>choose(opt, btn, slideIdx);
     zone.appendChild(btn);
   });
 
@@ -495,10 +501,10 @@ function renderSlide(dir='in'){
     fb.classList.add('show');
     if(res==='correct'){
       fbIcon.textContent='✓';
-      fbText.innerHTML=`<strong>${s._correctText}</strong> · ${s.meaning}`;
+      fbText.innerHTML=`<strong>${correctText}</strong> · ${s.meaning}`;
     } else {
       fbIcon.textContent='✗';
-      fbText.innerHTML=`Correct: <strong>${s._correctText}</strong> · ${s.meaning}`;
+      fbText.innerHTML=`Correct: <strong>${correctText}</strong> · ${s.meaning}`;
     }
   } else {
     fb.classList.remove('show');
@@ -511,25 +517,25 @@ function renderSlide(dir='in'){
   renderDots();
 }
 
-function choose(chosenText, btn, s){
-  const isCorrect = chosenText === s._correctText;
-  const key = order[cur];
+function choose(chosenText, btn, slideIdx){
+  const s = slides[slideIdx];
+  const correctText = correctTexts[slideIdx];
+  const isCorrect = chosenText === correctText;
 
-  s._chosenText = chosenText;
-  results[key] = isCorrect?'correct':'wrong';
+  results[slideIdx] = isCorrect ? 'correct' : 'wrong';
+  results[slideIdx+'_chosen'] = chosenText;
 
   updateScoreDisplay();
 
   const allBtns = document.querySelectorAll('.opt-btn');
-  allBtns.forEach(b=>b.classList.add('locked'));
+  allBtns.forEach(b => b.classList.add('locked'));
 
   if(isCorrect){
     btn.classList.add('correct');
   } else {
     btn.classList.add('wrong');
-    // reveal correct among all buttons
     allBtns.forEach(b=>{
-      if(b.querySelector('.opt-text').textContent === s._correctText)
+      if(b.querySelector('.opt-text').textContent === correctText)
         b.classList.add('reveal');
     });
   }
@@ -540,27 +546,28 @@ function choose(chosenText, btn, s){
   fb.classList.add('show');
   if(isCorrect){
     fbIcon.textContent='✓';
-    fbText.innerHTML=`<strong>${s._correctText}</strong> · ${s.meaning}`;
+    fbText.innerHTML=`<strong>${correctText}</strong> · ${s.meaning}`;
   } else {
     fbIcon.textContent='✗';
-    fbText.innerHTML=`Correct: <strong>${s._correctText}</strong> · ${s.meaning}`;
+    fbText.innerHTML=`Correct: <strong>${correctText}</strong> · ${s.meaning}`;
   }
 
   renderDots();
 
-  const answered = Object.keys(results).length;
+  const answered = Object.keys(results).filter(k=>!k.includes('_')).length;
   if(answered===TOTAL){
-    setTimeout(showComplete,1800);
+    setTimeout(showComplete, 1800);
   } else {
-    setTimeout(()=>{
-      if(cur<TOTAL-1) next();
-    }, 1800);
+    setTimeout(()=>{ if(cur<TOTAL-1) next(); }, 1800);
   }
 }
 
 function updateScoreDisplay(){
   let ok=0,bad=0;
-  Object.values(results).forEach(v=>{ if(v==='correct')ok++; else bad++; });
+  Object.entries(results).forEach(([k,v])=>{
+    if(k.includes('_'))return;
+    if(v==='correct')ok++; else bad++;
+  });
   document.getElementById('scoreCorrect').textContent=ok;
   document.getElementById('scoreWrong').textContent=bad;
 }

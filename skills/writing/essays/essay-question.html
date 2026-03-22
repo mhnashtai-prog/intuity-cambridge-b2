@@ -111,7 +111,13 @@ function buildFilterBar(){
     return `<button class="ftab ${f===activeFilter?'active':''}" onclick="applyFilter('${f}')">${label}</button>`;
   }).join('');
 }
-function applyFilter(f){activeFilter=f;filteredQs=f==='all'?[...allQs]:allQs.filter(q=>(q.essayType||q.type||'')===f);current=0;buildFilterBar();if(filteredQs.length)showCard(0);}
+function applyFilter(f){
+  activeFilter=f;
+  filteredQs=f==='all'?[...allQs]:allQs.filter(q=>(q.essayType||q.type||'')===f);
+  current=0;
+  buildFilterBar();
+  if(filteredQs.length)showCard(0);
+}
 
 function buildCard(q,idx,total){
   const color=TYPE_COLOR[q.essayType||q.type||'']||'p-teal';
@@ -145,20 +151,45 @@ function showCard(idx){
   const q=filteredQs[current];
   if(!q)return;
   stage.appendChild(buildCard(q,current,filteredQs.length));
-  sessionStorage.setItem('currentQuestion',JSON.stringify({id:q.id,mainQuestion:q.mainQuestion,context:q.context||'',writingPoints:q.writingPoints||[],essayType:q.essayType||q.type||'opinion'}));
-  sessionStorage.setItem('currentEssayId', q.id);
+  /* write all sessionStorage keys the chain needs */
+  sessionStorage.setItem('currentQuestion',JSON.stringify({
+    id:        q.id,
+    questionId:q.id,   /* canonical key used by essay-sample.html */
+    mainQuestion:q.mainQuestion,
+    context:   q.context||'',
+    writingPoints:q.writingPoints||[],
+    essayType: q.essayType||q.type||'opinion'
+  }));
+  sessionStorage.setItem('currentEssayId',      q.id);
   sessionStorage.setItem('currentEssayQuestion', q.mainQuestion);
 }
- 
-function go(dir){const n=current+dir;if(n<0||n>=filteredQs.length)return;showCard(n);}
+
+function go(dir){
+  const n=current+dir;
+  if(n<0||n>=filteredQs.length)return;
+  showCard(n);
+}
 
 document.addEventListener('touchstart',e=>{touchStartX=e.touches[0].clientX;},{passive:true});
-document.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-touchStartX;if(dx<-55)go(1);if(dx>55)go(-1);},{passive:true});
-document.addEventListener('keydown',e=>{if(e.key==='ArrowRight')go(1);if(e.key==='ArrowLeft')go(-1);});
+document.addEventListener('touchend',e=>{
+  const dx=e.changedTouches[0].clientX-touchStartX;
+  if(dx<-55)go(1);
+  if(dx>55)go(-1);
+},{passive:true});
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight')go(1);
+  if(e.key==='ArrowLeft')go(-1);
+});
 
 function navTo(dest){
   if(dest==='question')return;
-  const map={plan:'essay-plan.html',model:'essay-model.html',build:'essay-build.html',sample:'essay-sample.html'};
+  sessionStorage.setItem('lastEssayPage', dest); /* track where student goes */
+  const map={
+    plan:  'essay-plan.html',
+    model: 'essay-model.html',
+    build: 'essay-build.html',
+    sample:'essay-sample.html'
+  };
   if(map[dest])window.location.href=map[dest];
 }
 
@@ -171,10 +202,23 @@ async function init(){
     filteredQs=[...allQs];
     document.getElementById('loadingMsg').remove();
     buildFilterBar();
+    /* Option B: restore last question on return */
     let startIdx=0;
-    try{const saved=sessionStorage.getItem('currentQuestion');if(saved){const q=JSON.parse(saved);if(q.id){const f=filteredQs.findIndex(x=>x.id===q.id);if(f>=0)startIdx=f;}}}catch(e){}
+    try{
+      const saved=sessionStorage.getItem('currentQuestion');
+      if(saved){
+        const q=JSON.parse(saved);
+        const id=q.questionId||q.id;
+        if(id){
+          const f=filteredQs.findIndex(x=>x.id===id);
+          if(f>=0)startIdx=f;
+        }
+      }
+    }catch(e){}
     if(filteredQs.length)showCard(startIdx);
-  }catch(e){document.getElementById('loadingMsg').textContent='⚠ Could not load questions';}
+  }catch(e){
+    document.getElementById('loadingMsg').textContent='⚠ Could not load questions';
+  }
 }
 init();
 </script>

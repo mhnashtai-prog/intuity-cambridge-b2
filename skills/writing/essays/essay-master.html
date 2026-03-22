@@ -505,7 +505,7 @@ html, body {
 
   <!-- HEADER -->
   <div class="card-brand">
-    <a href="essay-question-selector.html" class="home-link">← Questions</a>
+    <a href="../../../index.html?openModal=writing&submenu=essays" class="home-link">← Essays</a>
     <span class="brand-word">INTUITY</span>
     <div style="flex:1"></div>
     <div class="menu-btn" id="menuBtn" onclick="toggleMenu()">
@@ -564,7 +564,7 @@ html, body {
       <button class="nb"    data-dest="plan"     onclick="navTo('plan')">plan</button>
       <button class="nb"    data-dest="model"    onclick="navTo('model')">model</button>
       <button class="nb"    data-dest="build"    onclick="navTo('build')">build</button>
-      <button class="nb on" data-dest="sample"   onclick="navTo('sample')">sample</button>
+      <button class="nb on" data-dest="sample"   onclick="navTo('sample')">Sample</button>
     </div>
   </div>
 
@@ -593,12 +593,12 @@ html, body {
    STATE
 ════════════════════════════════ */
 let question     = null;
-let paragraphs   = [];      // raw HTML strings, one per paragraph
+let paragraphs   = [];
 let currentPara  = 0;
 let currentStyle = 'default';
 let xrayOn       = false;
 let phrasesOn    = false;
-let fullTextMode = true;    // DEFAULT: Start in Full Text mode
+let fullTextMode = true;
 let phraseDB     = {};
 let phraseReady  = false;
 let sampleData   = null;
@@ -704,15 +704,10 @@ function extractParagraphs(html) {
 ════════════════════════════════ */
 function setViewMode(isFullText) {
   fullTextMode = isFullText;
-  
-  // Update switch UI
   document.getElementById('switchFullText').classList.toggle('active', isFullText);
   document.getElementById('switchParagraphs').classList.toggle('active', !isFullText);
-  
-  // Show/hide navigation elements
   document.getElementById('stageDots').classList.toggle('hidden', isFullText);
   document.getElementById('paraNav').classList.toggle('hidden', isFullText);
-  
   render();
 }
 
@@ -730,47 +725,31 @@ function render() {
   let totalPhraseCount = 0;
 
   if (fullTextMode) {
-    // FULL TEXT MODE: Show all paragraphs
     html = paragraphs.map((para, idx) => {
       let paraHtml = para;
-      
-      // Apply phrase highlighting
       if (phrasesOn) {
         const r = enhancePhrases(paraHtml);
         paraHtml = r.html;
         totalPhraseCount += r.count;
       }
-      
-      // Apply X-Ray
       if (xrayOn) paraHtml = wrapDM(paraHtml);
-      
       return `<div class="para-text ${xrayOn ? 'xray-on' : ''}">${paraHtml}</div>`;
     }).join('');
-    
     box.innerHTML = html;
-    
   } else {
-    // PARAGRAPH MODE: Show single paragraph
     html = paragraphs[currentPara] || '';
-
-    // Apply phrase highlighting
     if (phrasesOn) {
       const r = enhancePhrases(html);
       html = r.html;
       totalPhraseCount = r.count;
     }
-
-    // Apply X-Ray
     if (xrayOn) html = wrapDM(html);
-
     const label = PARA_LABELS[currentPara] || `Paragraph ${currentPara + 1}`;
-
     box.innerHTML = `
       <div class="para-label">${label}</div>
       <div class="para-text ${xrayOn ? 'xray-on' : ''}">${html}</div>`;
   }
 
-  // Badge
   const badge = document.getElementById('phraseBadge');
   if (phrasesOn && totalPhraseCount > 0) {
     badge.textContent = totalPhraseCount;
@@ -909,7 +888,7 @@ function showToast(msg) {
    KEYBOARD + SWIPE
 ════════════════════════════════ */
 document.addEventListener('keydown', e => {
-  if (fullTextMode) return; // Disable in full text mode
+  if (fullTextMode) return;
   if (e.key === 'ArrowRight') goNext();
   if (e.key === 'ArrowLeft')  goPrev();
   if (e.key === 'Escape')     closeAlt();
@@ -918,7 +897,7 @@ let _tx = 0;
 if ('ontouchstart' in window) {
   document.addEventListener('touchstart', e => { _tx = e.changedTouches[0].screenX; });
   document.addEventListener('touchend',   e => {
-    if (fullTextMode) return; // Disable in full text mode
+    if (fullTextMode) return;
     const dx = e.changedTouches[0].screenX - _tx;
     if (dx < -50) goNext();
     if (dx >  50) goPrev();
@@ -927,6 +906,7 @@ if ('ontouchstart' in window) {
 
 /* ════════════════════════════════
    FOOTER NAV
+   FIX: model now correctly points to essay-builder-interactive.html
 ════════════════════════════════ */
 function navTo(dest) {
   if (dest === 'sample') return;
@@ -934,14 +914,15 @@ function navTo(dest) {
   const map = {
     question: 'essay-question-selector.html',
     plan:     'essay-plan.html',
-    model:    'essay-builder.html',
-    build:    'essay-builder-interactive.html'
+    model:    'essay-builder-interactive.html',
+    build:    'essay-builder.html'
   };
   if (map[dest]) window.location.href = map[dest];
 }
 
 /* ════════════════════════════════
    INIT
+   FIX: use questionId as the canonical lookup key so Plan cannot corrupt it
 ════════════════════════════════ */
 async function init() {
   try { question = JSON.parse(sessionStorage.getItem('currentQuestion')); } catch(e) {}
@@ -950,6 +931,9 @@ async function init() {
       `<div class="state-msg">No question selected.<br>Return to Questions to choose one.</div>`;
     return;
   }
+
+  /* FIX: prefer questionId (set by selector) over id (may have been overwritten by Plan) */
+  const lookupId = question.questionId || question.id;
 
   // Phrase bank (non-blocking)
   fetch('data/essay-phrases.json')
@@ -963,12 +947,12 @@ async function init() {
     if (!res.ok) throw new Error('samples.json not found');
     const data = await res.json();
     const pool = Array.isArray(data) ? data : (data.opinion || data.samples || data.essays || []);
-    const match = pool.find(s => s.id === question.id);
+    const match = pool.find(s => s.id === lookupId);
 
     if (!match) {
       document.getElementById('infographic').innerHTML =
         `<div class="state-msg">No sample essay for this question yet.<br>
-         <small style="opacity:0.35;margin-top:0.5rem;display:block;">id: ${question.id}</small></div>`;
+         <small style="opacity:0.35;margin-top:0.5rem;display:block;">id: ${lookupId}</small></div>`;
       return;
     }
 

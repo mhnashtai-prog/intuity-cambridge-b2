@@ -323,6 +323,67 @@ body::after{
 
 /* hide logo tag on small phones */
 @media(max-width:480px){.logo-pipe,.logo-tag,.hdr-badge{display:none}}
+
+/* ── MODE TOGGLE ── */
+.mode-toggle{
+  display:flex;align-items:center;gap:7px;
+  padding:0 14px;border-left:1px solid var(--border);flex-shrink:0;
+}
+.mode-lbl{
+  font-family:'DM Mono',monospace;font-size:9px;
+  letter-spacing:2px;text-transform:uppercase;
+  color:var(--ink-3);transition:color .2s;white-space:nowrap;
+}
+.mode-lbl.active{color:var(--gold)}
+.toggle{
+  width:38px;height:20px;border-radius:10px;
+  background:var(--surface);border:1px solid var(--border);
+  position:relative;cursor:pointer;
+  transition:background .22s,border-color .22s;outline:none;flex-shrink:0;
+}
+.toggle.on{background:rgba(201,169,97,.18);border-color:var(--gold)}
+.toggle-dot{
+  position:absolute;top:3px;left:3px;
+  width:12px;height:12px;border-radius:50%;
+  background:var(--ink-3);
+  transition:transform .22s cubic-bezier(.22,1,.36,1),background .22s;
+}
+.toggle.on .toggle-dot{transform:translateX(18px);background:var(--gold)}
+
+/* ── REFERENCE POSTER ── */
+.ref-panel{
+  position:absolute;inset:0;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:16px 20px 20px;
+  display:none;flex-direction:column;gap:0;
+  background:var(--surface);
+}
+.ref-panel.show{display:flex}
+.ref-title{
+  font-family:'Barlow Condensed',sans-serif;font-weight:900;
+  font-size:11px;letter-spacing:4px;text-transform:uppercase;
+  color:var(--gold);margin-bottom:14px;text-align:center;opacity:.7;
+}
+.ref-item{
+  display:flex;align-items:baseline;gap:10px;
+  padding:9px 0;border-bottom:1px solid var(--border-dim);
+}
+.ref-item:last-child{border-bottom:none}
+.ref-num{
+  font-family:'DM Mono',monospace;font-size:8px;
+  letter-spacing:1px;color:var(--ink-3);
+  flex-shrink:0;width:18px;text-align:right;
+}
+.ref-proverb{
+  font-family:'Barlow Condensed',sans-serif;font-weight:700;
+  font-size:clamp(14px,3.5vw,18px);
+  color:var(--ink);flex:1;line-height:1.2;
+}
+.ref-meaning{
+  font-family:'Instrument Sans',sans-serif;font-size:10px;
+  font-style:italic;color:var(--ink-3);
+  flex-shrink:0;text-align:right;max-width:38%;line-height:1.3;
+}
 </style>
 </head>
 <body>
@@ -343,6 +404,13 @@ body::after{
       <div class="score-chip">✓ <span id="scoreCorrect">0</span></div>
       <div class="score-chip">✗ <span id="scoreWrong">0</span></div>
     </div>
+    <div class="mode-toggle">
+      <span class="mode-lbl active" id="modeLblQ">QUIZ</span>
+      <button class="toggle" id="modeBtn" onclick="toggleMode()" aria-label="Switch mode">
+        <div class="toggle-dot"></div>
+      </button>
+      <span class="mode-lbl" id="modeLblR">LIST</span>
+    </div>
   </header>
 
   <!-- PROGRESS BAR -->
@@ -351,6 +419,12 @@ body::after{
   <!-- STAGE -->
   <main class="stage">
     <div class="card" id="card">
+      <!-- REFERENCE POSTER (LIST mode) -->
+      <div class="ref-panel" id="refPanel">
+        <div class="ref-title">Proverbs · B1–B2</div>
+        <div id="refList"></div>
+      </div>
+      <!-- QUIZ (QUIZ mode) -->
       <div class="poster-zone" id="posterZone">
         <div class="poster-meta">
           <span class="poster-num" id="cardNum">1 / 35</span>
@@ -397,15 +471,49 @@ const ICONS = ['💬','🏋️','💰','☁️','🐦','🥚','😤','🔧','�
 ═══════════════════════════════════════════ */
 let slides = [];
 let TOTAL = 0;
-
 let order = [];
 let results = {};
 let cur = 0;
 let animDir = 'in';
+let appMode = 'quiz'; // 'quiz' | 'list'
 
 /* ── per-slide shuffled option indices, built fresh each game ── */
-let shuffledOpts = {}; // { slideIndex: [shuffled option texts] }
-let correctTexts = {}; // { slideIndex: correct answer text }
+let shuffledOpts = {};
+let correctTexts = {};
+
+/* ── MODE TOGGLE ── */
+function toggleMode(){
+  appMode = appMode==='quiz' ? 'list' : 'quiz';
+  const btn  = document.getElementById('modeBtn');
+  const lblQ = document.getElementById('modeLblQ');
+  const lblR = document.getElementById('modeLblR');
+  btn.classList.toggle('on', appMode==='list');
+  lblQ.classList.toggle('active', appMode==='quiz');
+  lblR.classList.toggle('active', appMode==='list');
+  // show/hide panels
+  document.getElementById('refPanel').classList.toggle('show', appMode==='list');
+  document.getElementById('posterZone').style.display  = appMode==='quiz' ? '' : 'none';
+  document.getElementById('optionsZone').style.display = appMode==='quiz' ? '' : 'none';
+  document.getElementById('feedback').style.display    = appMode==='quiz' ? '' : 'none';
+  document.getElementById('progFill').parentElement.style.display = appMode==='quiz' ? '' : 'none';
+  document.getElementById('dotsRow').style.display     = appMode==='quiz' ? '' : 'none';
+  document.getElementById('ctr').style.display         = appMode==='quiz' ? '' : 'none';
+  document.getElementById('btnP').style.display        = appMode==='quiz' ? '' : 'none';
+  document.getElementById('btnN').style.display        = appMode==='quiz' ? '' : 'none';
+  if(appMode==='list') renderRefPanel();
+}
+
+function renderRefPanel(){
+  const list = document.getElementById('refList');
+  const KW = ['#C9A961','#6ab0d8','#a8d86a','#e07b7b','#b07dd4','#6fcf8a','#d4936a','#7ec8c8'];
+  list.innerHTML = slides.map((s,i)=>`
+    <div class="ref-item">
+      <span class="ref-num">${i+1}</span>
+      <span class="ref-proverb" style="color:${KW[i%KW.length]}">${s.options[s.correct]}</span>
+      <span class="ref-meaning">${s.meaning}</span>
+    </div>
+  `).join('');
+}
 
 function init(){
   order = Array.from({length:TOTAL},(_,i)=>i);

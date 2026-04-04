@@ -234,33 +234,60 @@ async function load(){
 
   /* Strategy 1: essayId is already a valid slug — done */
 
-  /* Strategy 2: match by question text stored in the JSON */
+  /* Strategy 2: fuzzy match — find JSON entry whose question
+     shares the most significant words with stored question text */
   if(!deepData[essayId]){
     const qLower=(question||'').toLowerCase().trim();
     if(qLower){
-      const byQ=Object.keys(deepData).find(k=>
+      // First try exact match
+      const byExact=Object.keys(deepData).find(k=>
         (deepData[k].question||'').toLowerCase().trim()===qLower
       );
-      if(byQ)essayId=byQ;
+      if(byExact){
+        essayId=byExact;
+      } else {
+        // Fuzzy: score each key by how many words from the stored question appear in the JSON question
+        const qWords=new Set(qLower.replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w=>w.length>3));
+        let bestKey=null,bestScore=0;
+        Object.keys(deepData).forEach(k=>{
+          const jqWords=new Set((deepData[k].question||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/));
+          let score=0;
+          qWords.forEach(w=>{if(jqWords.has(w))score++;});
+          if(score>bestScore){bestScore=score;bestKey=k;}
+        });
+        if(bestKey&&bestScore>=2)essayId=bestKey;
+      }
     }
   }
 
-  /* Strategy 3: match by essayType or id in currentQuestion sessionStorage */
+  /* Strategy 3: match by currentQuestion object fields */
   if(!deepData[essayId]){
     try{
       const saved=JSON.parse(sessionStorage.getItem('currentQuestion')||'{}');
-      /* check mainQuestion text against JSON question fields */
-      const mqLower=(saved.mainQuestion||'').toLowerCase().trim();
+      const mqLower=(saved.mainQuestion||saved.question||'').toLowerCase().trim();
       if(mqLower){
-        const byMQ=Object.keys(deepData).find(k=>
-          (deepData[k].question||'').toLowerCase().trim()===mqLower
-        );
-        if(byMQ){essayId=byMQ;}
+        const qWords=new Set(mqLower.replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w=>w.length>3));
+        let bestKey=null,bestScore=0;
+        Object.keys(deepData).forEach(k=>{
+          const jqWords=new Set((deepData[k].question||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/));
+          let score=0;qWords.forEach(w=>{if(jqWords.has(w))score++;});
+          if(score>bestScore){bestScore=score;bestKey=k;}
+        });
+        if(bestKey&&bestScore>=2)essayId=bestKey;
       }
-      /* check essayType slug directly */
       if(!deepData[essayId]&&saved.essayType&&deepData[saved.essayType])
         essayId=saved.essayType;
     }catch(e){}
+  }
+
+  /* Strategy 4: scan ALL sessionStorage values for a known slug */
+  if(!deepData[essayId]){
+    const slugs=Object.keys(deepData);
+    for(let i=0;i<sessionStorage.length;i++){
+      const val=sessionStorage.getItem(sessionStorage.key(i))||'';
+      const found=slugs.find(s=>val.includes(s));
+      if(found){essayId=found;break;}
+    }
   }
 
   if(!essayId||!deepData[essayId]){

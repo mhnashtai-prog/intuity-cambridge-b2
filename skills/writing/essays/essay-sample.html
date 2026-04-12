@@ -76,18 +76,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 
 .toolbar-sep{width:1px;height:18px;background:rgba(0,0,0,0.08);flex-shrink:0;margin:0 0.1rem}
 
-/* Tool buttons */
-.tool-btn{
-  font-family:'Barlow Condensed',sans-serif;font-size:0.56rem;font-weight:900;
-  letter-spacing:0.08em;text-transform:uppercase;
-  padding:0.26rem 0.7rem;border-radius:999px;
-  border:1.5px solid rgba(0,0,0,0.12);
-  background:transparent;color:rgba(0,0,0,0.35);
-  cursor:pointer;transition:all 0.2s;white-space:nowrap;
-  display:flex;align-items:center;gap:0.3rem;
-}
-.tool-btn:hover{border-color:rgba(0,0,0,0.25);color:rgba(0,0,0,0.65)}
-.tool-btn.active{background:var(--marker);border-color:var(--marker);color:#fff}
+
 
 .toolbar-spacer{flex:1}
 
@@ -129,18 +118,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 }
 
 /* Phrase explorer */
-.phrase-text{
-  color:var(--marker);font-weight:600;
-  border-bottom:1.5px solid rgba(37,99,235,0.4);
-  cursor:pointer;padding:0.05em 0;transition:background 0.15s;
-}
-.phrase-text:hover{background:var(--marker-bg);border-radius:2px}
-.phrase-hint-btn{
-  background:rgba(37,99,235,0.1);border:none;border-radius:50%;
-  width:16px;height:16px;font-size:0.55rem;
-  cursor:pointer;vertical-align:middle;margin-left:2px;
-  display:inline-flex;align-items:center;justify-content:center;
-}
+
 
 /* ── PARA NAV ── */
 .para-nav{
@@ -248,13 +226,10 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
         <button class="style-btn active" id="styleDefault"  onclick="selectStyle('default')">Default</button>
         <button class="style-btn"        id="styleAlt1"     onclick="selectStyle('alternative1')">Alt 1</button>
         <button class="style-btn"        id="styleAlt2"     onclick="selectStyle('alternative2')">Alt 2</button>
-        <div class="toolbar-sep"></div>
-        <button class="tool-btn" id="xrayBtn"   onclick="toggleXRay()">X-Ray</button>
-        <button class="tool-btn" id="phraseBtn" onclick="togglePhrases()">Phrases</button>
         <div class="toolbar-spacer"></div>
         <div class="view-toggle">
           <button class="vt-btn active" id="vtFull"  onclick="setViewMode(true)">Full</button>
-          <button class="vt-btn"        id="vtParas" onclick="setViewMode(false)">§§</button>
+          <button class="vt-btn"        id="vtParas" onclick="setViewMode(false)">Paragraphs</button>
         </div>
       </div>
 
@@ -285,27 +260,15 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
   </div>
 </div>
 
-<!-- Alternatives modal -->
-<div class="alt-overlay" id="altOverlay" onclick="closeAlt(event)">
-  <div class="alt-modal" onclick="event.stopPropagation()">
-    <div class="alt-header">
-      <div>
-        <div class="alt-title">Alternatives</div>
-        <div class="alt-phrase" id="altPhrase"></div>
-      </div>
-      <button class="alt-close" onclick="closeAlt()">×</button>
-    </div>
-    <div class="alt-body" id="altBody"></div>
-  </div>
-</div>
+
 
 <div class="toast" id="toast"></div>
 
 <script>
 /* ══ STATE ══ */
 let question=null,paragraphs=[],currentPara=0,currentStyle='default';
-let xrayOn=false,phrasesOn=false,fullTextMode=true;
-let phraseDB={},phraseReady=false,sampleData=null;
+let xrayOn=true,fullTextMode=true;
+let sampleData=null;
 const PARA_LABELS=['Introduction','Body 1','Body 2','Body 3','Conclusion'];
 
 /* ══ DISCOURSE MARKERS ══ */
@@ -338,46 +301,6 @@ function wrapDM(html){
   return out;
 }
 
-/* ══ PHRASE DB ══ */
-function buildPhraseDB(json){
-  phraseDB={};
-  const addEntry=(category,items)=>{
-    if(!Array.isArray(items))return;
-    items.forEach(item=>{
-      const raw=(typeof item==='string')?item:(item.phrase||item.text||'');
-      const phrase=raw.replace(/[.,;:!?]+$/,'').trim();
-      if(!phrase||phrase.split(/\s+/).length<2)return;
-      if(!phraseDB[phrase])phraseDB[phrase]={category,alternatives:[]};
-      items.forEach(sib=>{
-        const s=((typeof sib==='string')?sib:(sib.phrase||sib.text||'')).replace(/[.,;:!?]+$/,'').trim();
-        if(s&&s!==phrase&&!phraseDB[phrase].alternatives.includes(s))
-          phraseDB[phrase].alternatives.push(s);
-      });
-    });
-  };
-  if(Array.isArray(json))json.forEach(e=>addEntry(e.category||'Phrases',e.phrases||e.items||[]));
-  else Object.entries(json).forEach(([cat,val])=>addEntry(cat,Array.isArray(val)?val:(val.phrases||val.items||[])));
-  phraseReady=Object.keys(phraseDB).length>0;
-}
-
-function enhancePhrases(html){
-  if(!phraseReady)return{html,count:0};
-  let out=html,count=0;
-  const seen=new Set();
-  Object.keys(phraseDB).filter(p=>phraseDB[p].alternatives.length>0).sort((a,b)=>b.length-a.length)
-    .forEach(phrase=>{
-      const esc=phrase.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-      const re=new RegExp(`(?<![a-zA-Z<"'])(${esc})(?![a-zA-Z<"'])`,'gi');
-      out=out.replace(re,match=>{
-        const k=match.toLowerCase();
-        if(seen.has(k))return match;
-        seen.add(k);count++;
-        const safe=phrase.replace(/'/g,"\\'").replace(/"/g,'\\"');
-        return `<span class="phrase-enhanced"><span class="phrase-text" onclick="showAlts('${safe}')">${match}</span><button class="phrase-hint-btn" onclick="event.stopPropagation();showAlts('${safe}')">💡</button></span>`;
-      });
-    });
-  return{html:out,count};
-}
 
 /* ══ HELPERS ══ */
 function extractParagraphs(html){
@@ -404,14 +327,12 @@ function render(){
   if(fullTextMode){
     html=paragraphs.map((para,idx)=>{
       let p=para;
-      if(phrasesOn){const r=enhancePhrases(p);p=r.html;}
       if(xrayOn)p=wrapDM(p);
       return`<div class="para-text ${xrayOn?'xray-on':''}">${p}</div>`;
     }).join('');
     box.innerHTML=html;
   }else{
     let p=paragraphs[currentPara]||'';
-    if(phrasesOn){const r=enhancePhrases(p);p=r.html;}
     if(xrayOn)p=wrapDM(p);
     const label=PARA_LABELS[currentPara]||`Paragraph ${currentPara+1}`;
     box.innerHTML=`<div class="para-label">${label}</div><div class="para-text ${xrayOn?'xray-on':''}">${p}</div>`;
@@ -429,17 +350,6 @@ function goPrev(){if(currentPara>0){currentPara--;render();}}
 function goNext(){if(currentPara<paragraphs.length-1){currentPara++;render();}}
 
 /* ══ TOOLS ══ */
-function toggleXRay(){
-  xrayOn=!xrayOn;
-  document.getElementById('xrayBtn').classList.toggle('active',xrayOn);
-  render();
-}
-function togglePhrases(){
-  if(!phraseReady){showToast('Phrase bank not loaded');return;}
-  phrasesOn=!phrasesOn;
-  document.getElementById('phraseBtn').classList.toggle('active',phrasesOn);
-  render();
-}
 
 /* ══ STYLE ══ */
 function selectStyle(style){
@@ -524,9 +434,6 @@ async function init(){
   }
 
   const lookupId=question.questionId||question.id;
-
-  /* Phrase bank (non-blocking) */
-  fetch('data/essay-phrases.json').then(r=>r.ok?r.json():null).then(d=>{if(d)buildPhraseDB(d);}).catch(()=>{});
 
   /* Sample data */
   try{

@@ -396,30 +396,16 @@ function bonePurpose(title,role){
 function fmtLine(s){return s?s.replace(/\[([^\]]+)\]/g,'<span class="dph">[$1]</span>'):''}
 function fmtPrev(s){return s?s.replace(/\[([^\]]+)\]/g,'<em>[$1]</em>'):''}
 
-/* ══ PHRASE MATCHING ══ */
-function getMatchingPhrases(type,title,role){
+/* ══ PHRASE MATCHING ══
+   JSON has 4 categories in fixed order: intro(0), feature1(1), feature2(2), recommendation(3).
+   Match by bone index directly — no keyword-sniffing needed. */
+function getMatchingPhrases(type,boneIndex){
   if(!phraseData||!phraseData[type]||!phraseData[type].categories)return[];
-  const t=title.toLowerCase(),results=[];
-  phraseData[type].categories.forEach(cat=>{
-    const ct=cat.title.toLowerCase();
-    const catIsIntro=ct.includes('intro')||ct.includes('opening');
-    const catIsConc=ct.includes('recommend')||ct.includes('conclu');
-    const catIsBody=!catIsIntro&&!catIsConc;
-    if(role==='intro'&&!catIsIntro)return;
-    if(role==='end'&&!catIsConc)return;
-    if(role==='body'&&!catIsBody)return;
-    (cat.subcategories||[]).forEach(sub=>{
-      const st=(sub.subtitle||'').toLowerCase();
-      if(role==='body'){
-        const wantFeat=t.includes('feature')||t.includes('highlight')||t.includes('aspect')||t.includes('key');
-        const wantAtm=t.includes('atmosphere')||t.includes('experience')||t.includes('feel')||t.includes('personal');
-        const wantTech=t.includes('technical')||t.includes('quality')||t.includes('skill');
-        if(wantFeat&&!(st.includes('feature')||st.includes('highlight')||st.includes('key')||st.includes('aspect')||st.includes('what')))return;
-        if(wantAtm&&!(st.includes('atmosphere')||st.includes('experience')||st.includes('feel')||st.includes('impression')))return;
-        if(wantTech&&!(st.includes('technical')||st.includes('quality')||st.includes('skill')))return;
-      }
-      (sub.phrases||[]).forEach(p=>results.push(p));
-    });
+  const cat=phraseData[type].categories[boneIndex];
+  if(!cat)return[];
+  const results=[];
+  (cat.subcategories||[]).forEach(sub=>{
+    (sub.phrases||[]).forEach(p=>results.push(p));
   });
   return results;
 }
@@ -434,7 +420,7 @@ function renderSkeleton(){
     const role=boneRole(section.title);
     const num=String(i+1).padStart(2,'0');
     const lines=(section.lines||[]).filter(l=>l&&l.trim());
-    const phrases=getMatchingPhrases(currentType,section.title,role);
+    const phrases=getMatchingPhrases(currentType,i);
     const roleTag=role==='intro'?'A':role==='body'?'B':'C';
     /* No emoji prefix — title only, matching Essay Model */
     h+=`<div class="bone bone-${role}" id="rbone-${i}" onclick="toggleBone(${i})">

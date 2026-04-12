@@ -370,44 +370,39 @@ function renderNote(note){
   </div>`;
 }
 
-/* ══ MATCH PHRASES ══ */
+/* ══ MATCH PHRASES ══
+   For Plan page: match purely by role.
+   Only show phrases for body bones — intro/conclusion bones skip phrases
+   to avoid repetition and keep the drawer focused on the notes.
+════════════════════════════════════════════════════════════════════════════ */
+const usedPhrases=new Set();
+
 function getMatchingPhrases(type,title,role){
+  // Only show phrases for body paragraphs
+  if(role!=='body')return[];
   if(!phraseData?.structures)return[];
   const typeData=phraseData.structures[type];
   if(!typeData?.sections)return[];
-  const t=title.toLowerCase();
-  const sections=typeData.sections;
-  let bestKey=null,bestScore=-1;
-  for(const [key,sec] of Object.entries(sections)){
-    if(sec.role!==role)continue;
-    const sl=(sec.label+' '+key).toLowerCase();
-    let score=0;
-    ['advantage','disadvantage','problem','solution','cause','effect','agree','disagree',
-     'opinion','argument','counter','transition','conclusion','predict','trend']
-      .forEach(w=>{if(t.includes(w)&&sl.includes(w))score+=3;});
-    if(sl.includes('intro')&&(t.includes('intro')||t.includes('p1')))score+=2;
-    if(sl.includes('conclu')&&(t.includes('conclu')||t.includes('p5')))score+=2;
-    if(role==='body'&&score===0)score=0.5;
-    if(score>bestScore){bestScore=score;bestKey=key;}
-  }
-  if(role==='body'&&bestScore<=0.5){
-    const results=[];
-    for(const sec of Object.values(sections)){
-      if(sec.role!=='body')continue;
-      if(sec.phrases)['default','alt1','alt2'].forEach(k=>{
-        if(sec.phrases[k])sec.phrases[k].forEach(p=>results.push(p));
+
+  // Collect all body-role phrases for this type
+  const pool=[];
+  for(const sec of Object.values(typeData.sections)){
+    if(sec.role!=='body')continue;
+    if(sec.phrases)['default','alt1','alt2'].forEach(k=>{
+      if(sec.phrases[k])sec.phrases[k].forEach(p=>{
+        if(!usedPhrases.has(p))pool.push(p);
       });
-    }
-    return results;
+    });
   }
-  if(!bestKey)return[];
-  const sec=sections[bestKey];
-  if(!sec?.phrases)return[];
-  const results=[];
-  ['default','alt1','alt2'].forEach(k=>{
-    if(sec.phrases[k])sec.phrases[k].forEach(p=>results.push(p));
-  });
-  return results;
+
+  // Pick 3 unused phrases
+  const picked=[];
+  const shuffled=[...pool].sort(()=>Math.random()-0.5);
+  for(const p of shuffled){
+    if(picked.length>=3)break;
+    if(!usedPhrases.has(p)){picked.push(p);usedPhrases.add(p);}
+  }
+  return picked;
 }
 
 /* ══ TOGGLE BONE ══ */
@@ -429,6 +424,7 @@ function toggleBone(i){
 function renderContent(){
   const area=document.getElementById('contentArea');
   exploredBones.clear();
+  usedPhrases.clear();
 
   if(!currentQuestion){
     area.innerHTML=`<div class="no-data">No plan found for this question.<br>Navigate to a question first.</div>`;

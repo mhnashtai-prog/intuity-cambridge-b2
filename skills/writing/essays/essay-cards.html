@@ -180,6 +180,13 @@ function sndRoll(){tone(500,'triangle',0.07,0.06);tone(660,'triangle',0.05,0.04,
 function sndSwitch(){tone(440,'triangle',0.08,0.07);tone(580,'triangle',0.06,0.05,0.05);}
 
 const pick = a => a[Math.floor(Math.random()*a.length)];
+/* pick a value not already used on a sibling line, if the pool allows it */
+const pickAvoid = (pool, avoid) => {
+  if(!pool||!pool.length) return '...';
+  const av = avoid||[];
+  const free = pool.filter(x=>!av.includes(x));
+  return pick(free.length?free:pool);
+};
 const fmt  = s => (s||'').replace(/\.\.\./g,'<span class="gap">...</span>');
 
 let DATA=null, SH=null, T=null, TYPE=null, VIEW=null, BODYPLAN=null, KEYS=null;
@@ -264,12 +271,33 @@ function switchType(k){
 
 /* ── generators ── */
 function genOpen(){ return {bg:pick(SH.background), hinge:pick(T.open.hinge), aim:pick(T.open.aim)}; }
-function genArgue(i){ const plan=(T.argue.signpostPlan&&T.argue.signpostPlan[i])||['first','addition','turn'][i]; const pool=(KEYS[BODYPLAN[i]]||[]);
-  return {sign:pick(SH.signpost[plan]||SH.signpost.addition), view:pick(VIEW), key:pick(pool.length?pool:['...'])}; }
+function genArgue(i, avoid){ avoid=avoid||{views:[],keys:[],signs:[]};
+  const plan=(T.argue.signpostPlan&&T.argue.signpostPlan[i])||['first','addition','turn'][i];
+  const pool=(KEYS[BODYPLAN[i]]||[]);
+  return {
+    sign: pickAvoid(SH.signpost[plan]||SH.signpost.addition, avoid.signs),
+    view: pickAvoid(VIEW, avoid.views),
+    key:  pickAvoid(pool.length?pool:['...'], avoid.keys)
+  };
+}
+/* gather the view/key/signpost currently shown on the OTHER two body lines */
+function siblingAvoid(idx){
+  const used={views:[],keys:[],signs:[]};
+  for(let j=0;j<3;j++){ if(j===idx||!S) continue; const m=S.argue[j].h[S.argue[j].i];
+    used.views.push(m.view); used.keys.push(m.key); used.signs.push(m.sign); }
+  return used;
+}
 function genClose(){ return {summary:pick(T.close.summary), stance:pick(T.close.stance), verdict:pick(T.close.verdict)}; }
 
 function seedAndRender(){
-  S={open:{h:[genOpen()],i:0},argue:[{h:[genArgue(0)],i:0},{h:[genArgue(1)],i:0},{h:[genArgue(2)],i:0}],close:{h:[genClose()],i:0}};
+  const used={views:[],keys:[],signs:[]};
+  const argue=[];
+  for(let i=0;i<3;i++){
+    const m=genArgue(i,used);
+    used.views.push(m.view); used.keys.push(m.key); used.signs.push(m.sign);
+    argue.push({h:[m],i:0});
+  }
+  S={open:{h:[genOpen()],i:0},argue,close:{h:[genClose()],i:0}};
   render();
 }
 
@@ -278,7 +306,7 @@ let taught=false; /* clear the teaching pulse after the student's first roll */
 function roll(slot,dir,idx){
   taught=true;
   const st = slot==='argue'?S.argue[idx]:S[slot];
-  if(dir>0){ if(st.i<st.h.length-1)st.i++; else{ st.h.push(slot==='open'?genOpen():slot==='close'?genClose():genArgue(idx)); st.i=st.h.length-1; } }
+  if(dir>0){ if(st.i<st.h.length-1)st.i++; else{ st.h.push(slot==='open'?genOpen():slot==='close'?genClose():genArgue(idx,siblingAvoid(idx))); st.i=st.h.length-1; } }
   else if(st.i>0){ st.i--; }
   sndRoll(); render();
 }

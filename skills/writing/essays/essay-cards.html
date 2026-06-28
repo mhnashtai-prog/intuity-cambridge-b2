@@ -180,7 +180,7 @@ function sndSwitch(){tone(440,'triangle',0.08,0.07);tone(580,'triangle',0.06,0.0
 const pick = a => a[Math.floor(Math.random()*a.length)];
 const fmt  = s => (s||'').replace(/\.\.\./g,'<span class="gap">...</span>');
 
-let DATA=null, SH=null, T=null, TYPE=null, VIEW=null, POS=[], NEG=[];
+let DATA=null, SH=null, T=null, TYPE=null, VIEW=null, BODYPLAN=null, KEYS=null;
 let S=null;
 let typeKeys=[];
 
@@ -220,14 +220,24 @@ function resolveType(keys){
 function applyType(){
   T = DATA.types[TYPE];
   VIEW = SH.view[T.viewFlavour] || SH.view.generalisation || Object.values(SH.view)[0];
-  if(T.argue.keyFor || T.argue.keyAgainst){
-    POS = T.argue.keyFor || []; NEG = T.argue.keyAgainst || [];
+
+  /* bodyPlan: three pool-names, one per body line. The engine is type-agnostic —
+     each type declares which key-pool feeds slot 1, 2, 3. Falls back gracefully:
+     keyFor/keyAgainst, then a sense-split of a flat key list. */
+  if(Array.isArray(T.argue.bodyPlan) && T.argue.bodyPlan.length===3){
+    BODYPLAN = T.argue.bodyPlan;
+    KEYS = T.argue;                      // pools live by name on the argue object
+  }else if(T.argue.keyFor || T.argue.keyAgainst){
+    BODYPLAN = ['keyFor','keyFor','keyAgainst'];
+    KEYS = {keyFor:T.argue.keyFor||[], keyAgainst:T.argue.keyAgainst||[]};
   }else{
     const all=T.argue.key||[];
-    POS=all.filter(k=>/advantage|benefit|favour|positive/i.test(k));
-    NEG=all.filter(k=>/disadvantage|drawback|against/i.test(k));
-    if(!POS.length)POS=all; if(!NEG.length)NEG=all;
+    const pos=all.filter(k=>/advantage|benefit|favour|positive/i.test(k));
+    const neg=all.filter(k=>/disadvantage|drawback|against/i.test(k));
+    BODYPLAN = ['keyFor','keyFor','keyAgainst'];
+    KEYS = {keyFor:pos.length?pos:all, keyAgainst:neg.length?neg:all};
   }
+
   // topic label from question, else type label
   try{
     const q=JSON.parse(sessionStorage.getItem('currentQuestion')||'null');
@@ -252,8 +262,8 @@ function switchType(k){
 
 /* ── generators ── */
 function genOpen(){ return {bg:pick(SH.background), hinge:pick(T.open.hinge), aim:pick(T.open.aim)}; }
-function genArgue(i){ const bucket=['first','addition','turn'][i]; const keyPool=i<2?POS:NEG;
-  return {sign:pick(SH.signpost[bucket]), view:pick(VIEW), key:pick(keyPool)}; }
+function genArgue(i){ const bucket=['first','addition','turn'][i]; const pool=(KEYS[BODYPLAN[i]]||[]);
+  return {sign:pick(SH.signpost[bucket]), view:pick(VIEW), key:pick(pool.length?pool:['...'])}; }
 function genClose(){ return {summary:pick(T.close.summary), stance:pick(T.close.stance), verdict:pick(T.close.verdict)}; }
 
 function seedAndRender(){

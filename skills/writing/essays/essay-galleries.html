@@ -193,10 +193,7 @@
 <script>
 const QUESTIONS_URL = 'data/essay-questions.json';
 const CARDS_URL      = 'data/essay-intro-galleries.json';
-const VARIANTS_PER_SLOT_INTRO = 14;
-const VARIANTS_PER_SLOT_BODY  = 5;
-const VARIANTS_PER_SLOT_CONCL = 12;
-const CARDS_PER_PAGE = 3; // <-- how many cards each nav "step" shows at once
+const CARDS_PER_PAGE = 3; // how many phrase-cards are shown side by side per page
 
 const BUCKET_LABEL = { first:'First point', addition:'Further point', turn:'Counterpoint' };
 const SECTION_META = {
@@ -209,8 +206,7 @@ let questions = [];
 let cardsData = null;
 let selectedQuestion = null;
 let section = 'introduction';
-let slides = [];   // flat list of individual phrase-variants (unchanged generators)
-let pages = [];    // slides chunked into groups of CARDS_PER_PAGE — this is what nav operates on
+let pages = [];   // groups of up to CARDS_PER_PAGE phrase-cards — this is what nav operates on
 let current = 0, prev = -1, busy = false;
 
 async function loadAll() {
@@ -231,8 +227,14 @@ async function loadAll() {
   }, 500);
 }
 
-function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
-function keyOf(x){ return (x && x.t) ? x.t : x; }
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 function chunk(arr, size){
   const out = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
@@ -246,73 +248,40 @@ function fillTopic(rawText, fillWord) {
   return parts.join(span);
 }
 
-// Introduction & Conclusion combine several template pieces that each carry
-// their own "..." blank, so the SAME fill value can appear 2-3 times in one
-// sentence — use the short label here to keep that readable.
+// Each essay type ships 6 hand-curated cards, each holding a coherent
+// OPEN + ARGUE (x3) + CLOSE. Introduction reads .open, Body reads the 3
+// .argue lines together as one page (so a page always keeps one card's
+// voice/register consistent, rather than mixing fragments across cards),
+// and Conclusion reads .close. A '...' blank may appear more than once in
+// a line — fillTopic already fills every occurrence with the same value.
+
 function genIntroSlides(q, type) {
-  const SH = cardsData.shared;
-  const out = [];
-  const seen = new Set();
-  let guard = 0;
-  while (out.length < VARIANTS_PER_SLOT_INTRO && guard < 200) {
-    guard++;
-    const bg = pick(SH.background);
-    const hinge = pick(type.open.hinge);
-    const aim = pick(type.open.aim);
-    const raw = `${bg} ${hinge} ... . ${aim}`;
-    if (seen.has(raw)) continue;
-    seen.add(raw);
-    out.push({ text: fillTopic(raw, q.topicShort), label: 'Paraphrased hook' });
-  }
-  return out;
+  return shuffle(type.cards || []).map(card => ({
+    text: fillTopic(card.open, q.topicShort),
+    label: card.id
+  }));
 }
 
-// Body lines each carry exactly ONE blank, so the fuller topicPhrase reads
-// naturally and gives richer, more specific paraphrasing.
-function genBodySlides(q, type) {
-  const SH = cardsData.shared;
-  const viewPool = SH.view[type.viewFlavour] || SH.view.opinion;
-  const out = [];
-  for (let i = 0; i < 3; i++) {
-    const signpostKey = type.argue.signpostPlan[i];
-    const keyPool = type.argue[type.argue.bodyPlan[i]] || [];
-    const label = BUCKET_LABEL[signpostKey] || `Point ${i+1}`;
-    const seen = new Set();
-    let guard = 0;
-    while (out.filter(s => s.slot === i).length < VARIANTS_PER_SLOT_BODY && guard < 200) {
-      guard++;
-      const sp = pick(SH.signpost[signpostKey] || []);
-      const vw = pick(viewPool);
-      const ky = keyOf(pick(keyPool));
-      const raw = `${sp}, ${vw} ${ky}`;
-      if (seen.has(raw)) continue;
-      seen.add(raw);
-      out.push({ text: fillTopic(raw, q.topicPhrase), label, slot: i });
-    }
-  }
-  return out;
-}
-
-// Conclusion verdicts can carry 1-2 blanks in one sentence — short label again.
 function genConclusionSlides(q, type) {
-  const out = [];
-  const seen = new Set();
-  let guard = 0;
-  while (out.length < VARIANTS_PER_SLOT_CONCL && guard < 200) {
-    guard++;
-    const summary = pick(type.close.summary);
-    const stance = pick(type.close.stance);
-    const verdict = pick(type.close.verdict);
-    const raw = `${summary} ${stance} ${verdict}`;
-    if (seen.has(raw)) continue;
-    seen.add(raw);
-    out.push({ text: fillTopic(raw, q.topicShort), label: 'Restated verdict' });
-  }
-  return out;
+  return shuffle(type.cards || []).map(card => ({
+    text: fillTopic(card.close, q.topicShort),
+    label: card.id
+  }));
+}
+
+function genBodyPages(q, type, typeKey) {
+  const buckets = (cardsData.meta && cardsData.meta.argueBuckets && cardsData.meta.argueBuckets[typeKey])
+    || ['first', 'addition', 'addition'];
+  return shuffle(type.cards || []).map(card =>
+    (card.argue || []).map((line, i) => ({
+      text: fillTopic(line, q.topicPhrase || q.topicShort),
+      label: BUCKET_LABEL[buckets[i]] || `Point ${i + 1}`
+    }))
+  );
 }
 
 function rebuild() {
-  slides = []; pages = []; current = 0; prev = -1;
+  pages = []; current = 0; prev = -1;
 
   const stage = document.getElementById('stage');
   stage.className = `stage ${section}`;
@@ -336,11 +305,13 @@ function rebuild() {
 
   if (!type) { paint(true); return; }
 
-  if (section === 'introduction') slides = genIntroSlides(selectedQuestion, type);
-  else if (section === 'body')    slides = genBodySlides(selectedQuestion, type);
-  else                            slides = genConclusionSlides(selectedQuestion, type);
-
-  pages = chunk(slides, CARDS_PER_PAGE);
+  if (section === 'introduction') {
+    pages = chunk(genIntroSlides(selectedQuestion, type), CARDS_PER_PAGE);
+  } else if (section === 'body') {
+    pages = genBodyPages(selectedQuestion, type, selectedQuestion.essayType);
+  } else {
+    pages = chunk(genConclusionSlides(selectedQuestion, type), CARDS_PER_PAGE);
+  }
 
   paint(pages.length === 0);
   show(0, 'none');

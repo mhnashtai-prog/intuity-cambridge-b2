@@ -192,7 +192,7 @@
 
 <script>
 const QUESTIONS_URL = 'data/essay-questions.json';
-const CARDS_URL      = 'data/essay-intro-paragraphs.json';
+const CARDS_URL      = 'data/essay-intro-galleries.json';
 const VARIANTS_PER_SLOT_INTRO = 14;
 const VARIANTS_PER_SLOT_BODY  = 5;
 const VARIANTS_PER_SLOT_CONCL = 12;
@@ -203,21 +203,6 @@ const SECTION_META = {
   introduction: { color:'var(--sec1)', dark:'var(--sec1-d)', title:'Introduction' },
   body:         { color:'var(--sec2)', dark:'var(--sec2-d)', title:'Body' },
   conclusion:   { color:'var(--sec3)', dark:'var(--sec3-d)', title:'Conclusion' },
-};
-
-// Maps an essayType label (as used in essay-questions.json) to the
-// one-card-model prefix used in the INTUITY one-card PDF, e.g.
-// "Opinion" -> OP-1..OP-6, "For & Against" -> FA-1..FA-6.
-// This lets us show, on each pre-written intro card, exactly which
-// model card it was built from — keeping the link between the
-// generated paragraphs and their source templates visible.
-const CARD_PREFIX = {
-  'Opinion':              'OP',
-  'For & Against':        'FA',
-  'Problem-Solution':     'PS',
-  'Cause & Effect':       'CE',
-  'Agree & Disagree':     'AD',
-  'Speculation & Trends': 'ST',
 };
 
 let questions = [];
@@ -261,51 +246,29 @@ function fillTopic(rawText, fillWord) {
   return parts.join(span);
 }
 
-// ── Introduction ──────────────────────────────────────────────────
-// Preferred path: essay-intro-paragraphs.json now ships 6 complete,
-// pre-written paragraphs per question (cardsData.questions[id].intros),
-// each one already the corresponding one-card model (OP-1..OP-6,
-// FA-1..FA-6, etc. — see CARD_PREFIX) with its "..." blanks filled in.
-// No runtime generation needed for this mode; we just label each card
-// with the model it came from so that link stays visible.
-//
-// Fallback path: if an older, template-based data file is loaded
-// instead (cardsData.shared + cardsData.types), fall back to the
-// original slot-filling generator so nothing breaks for legacy data.
-function genIntroSlides(q, qData, legacyType) {
-  if (qData && Array.isArray(qData.intros) && qData.intros.length) {
-    const prefix = CARD_PREFIX[q.essayType] || '';
-    return qData.intros.map((text, i) => ({
-      text,
-      label: prefix ? `Model ${prefix}-${i + 1}` : `Option ${i + 1}`,
-    }));
+// Introduction & Conclusion combine several template pieces that each carry
+// their own "..." blank, so the SAME fill value can appear 2-3 times in one
+// sentence — use the short label here to keep that readable.
+function genIntroSlides(q, type) {
+  const SH = cardsData.shared;
+  const out = [];
+  const seen = new Set();
+  let guard = 0;
+  while (out.length < VARIANTS_PER_SLOT_INTRO && guard < 200) {
+    guard++;
+    const bg = pick(SH.background);
+    const hinge = pick(type.open.hinge);
+    const aim = pick(type.open.aim);
+    const raw = `${bg} ${hinge} ... . ${aim}`;
+    if (seen.has(raw)) continue;
+    seen.add(raw);
+    out.push({ text: fillTopic(raw, q.topicShort), label: 'Paraphrased hook' });
   }
-
-  if (legacyType && cardsData.shared) {
-    const SH = cardsData.shared;
-    const out = [];
-    const seen = new Set();
-    let guard = 0;
-    while (out.length < VARIANTS_PER_SLOT_INTRO && guard < 200) {
-      guard++;
-      const bg = pick(SH.background);
-      const hinge = pick(legacyType.open.hinge);
-      const aim = pick(legacyType.open.aim);
-      const raw = `${bg} ${hinge} ... . ${aim}`;
-      if (seen.has(raw)) continue;
-      seen.add(raw);
-      out.push({ text: fillTopic(raw, q.topicShort), label: 'Paraphrased hook' });
-    }
-    return out;
-  }
-
-  return [];
+  return out;
 }
 
 // Body lines each carry exactly ONE blank, so the fuller topicPhrase reads
 // naturally and gives richer, more specific paraphrasing.
-// (Still template-based — only Introduction has been migrated to
-// pre-written paragraphs so far. Requires legacy shared/types data.)
 function genBodySlides(q, type) {
   const SH = cardsData.shared;
   const viewPool = SH.view[type.viewFlavour] || SH.view.opinion;
@@ -331,7 +294,6 @@ function genBodySlides(q, type) {
 }
 
 // Conclusion verdicts can carry 1-2 blanks in one sentence — short label again.
-// (Still template-based — requires legacy shared/types data.)
 function genConclusionSlides(q, type) {
   const out = [];
   const seen = new Set();
@@ -367,22 +329,16 @@ function rebuild() {
     return;
   }
 
-  badge.textContent = selectedQuestion.essayType;
+  const type = cardsData.types[selectedQuestion.essayType];
+  badge.textContent = (type?.label) || selectedQuestion.essayType;
   qtext.textContent = selectedQuestion.mainQuestion;
   qtext.classList.remove('placeholder');
 
-  // New format: cardsData.questions[id].intros (pre-written paragraphs)
-  // Legacy format: cardsData.types[essayType] (template pieces)
-  const qData = cardsData.questions ? cardsData.questions[selectedQuestion.id] : null;
-  const legacyType = cardsData.types ? cardsData.types[selectedQuestion.essayType] : null;
+  if (!type) { paint(true); return; }
 
-  if (section === 'introduction') {
-    slides = genIntroSlides(selectedQuestion, qData, legacyType);
-  } else if (section === 'body') {
-    slides = legacyType ? genBodySlides(selectedQuestion, legacyType) : [];
-  } else {
-    slides = legacyType ? genConclusionSlides(selectedQuestion, legacyType) : [];
-  }
+  if (section === 'introduction') slides = genIntroSlides(selectedQuestion, type);
+  else if (section === 'body')    slides = genBodySlides(selectedQuestion, type);
+  else                            slides = genConclusionSlides(selectedQuestion, type);
 
   pages = chunk(slides, CARDS_PER_PAGE);
 
@@ -396,13 +352,8 @@ function paint(empty) {
   const meta = SECTION_META[section];
 
   if (empty) {
-    const msg = !selectedQuestion
-      ? 'Choose an essay question to generate a paraphrase gallery for it.'
-      : (section === 'introduction'
-          ? 'No introduction paragraphs found for this question yet.'
-          : `No ${section} templates found for this essay type yet.`);
     container.innerHTML = `<div class="slide active"><div class="empty-state">
-      <p>${msg}</p>
+      <p>${!selectedQuestion ? 'Choose an essay question to generate a paraphrase gallery for it.' : 'No templates found for this essay type yet.'}</p>
       ${!selectedQuestion ? '<button class="empty-cta" onclick="openPicker()">Choose a question</button>' : ''}
     </div></div>`;
     dotNav.innerHTML = '';

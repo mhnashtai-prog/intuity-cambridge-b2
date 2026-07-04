@@ -241,45 +241,104 @@ function chunk(arr, size){
   return out;
 }
 
+// fillWord can be a single string (used for every blank) or an array of
+// strings (used in order, one per blank, reusing the last value if the
+// line has more blanks than the array supplies).
 function fillTopic(rawText, fillWord) {
   const parts = rawText.split('...');
   if (parts.length === 1) return rawText;
-  const span = `<span class="fill underlined">${fillWord}</span>`;
-  return parts.join(span);
+  const values = Array.isArray(fillWord) ? fillWord : [fillWord];
+  let out = parts[0];
+  for (let g = 0; g < parts.length - 1; g++) {
+    const v = values[Math.min(g, values.length - 1)];
+    out += `<span class="fill underlined">${v}</span>` + parts[g + 1];
+  }
+  return out;
 }
 
-// Each essay type ships 6 hand-curated cards, each holding a coherent
-// OPEN + ARGUE (x3) + CLOSE. Introduction reads .open, Body reads the 3
-// .argue lines together as one page (so a page always keeps one card's
-// voice/register consistent, rather than mixing fragments across cards),
-// and Conclusion reads .close. A '...' blank may appear more than once in
-// a line — fillTopic already fills every occurrence with the same value.
+function countBlanks(text) {
+  return (text.match(/\.\.\./g) || []).length;
+}
+
+// Real, distinct supporting ideas for this question — the exam-set writing
+// points (minus the "own idea" placeholder line) plus the suggested ideas,
+// used to fill "point" blanks (a specific reason/cause/factor) rather than
+// repeating the essay's general topic over and over.
+function pointsForQuestion(q) {
+  const explicit = (q.writingPoints || [])
+    .filter(p => !/own idea/i.test(p) && !/^\.{3,}/.test(p.trim()))
+    .map(p => p.replace(/\.+$/, '').trim());
+  const extra = q.suggestedOwnIdeas || [];
+  return [...explicit, ...extra];
+}
+
+// OPEN/CLOSE hooks: a lone blank always refers to the overall topic. Two
+// blanks means [topic, point] (e.g. "... , although POINT"). Three blanks
+// bookend a point between two topic mentions (a common pattern across the
+// card set: "It is known that TOPIC due to POINT ... examine TOPIC").
+function hookFillValues(rawText, topicFill, pointFill) {
+  const n = countBlanks(rawText);
+  if (n <= 1) return topicFill;
+  if (n === 2) return [topicFill, pointFill];
+  return [topicFill, pointFill, topicFill];
+}
+
+// BODY argue lines: a lone blank is the specific supporting point itself
+// (e.g. "a further reason is that POINT"). Two blanks means [topic, point]
+// (e.g. "one of the main causes of TOPIC is POINT").
+function bodyFillValues(rawText, topicFill, pointFill) {
+  const n = countBlanks(rawText);
+  if (n <= 1) return pointFill;
+  return [topicFill, pointFill];
+}
 
 function genIntroSlides(q, type) {
-  const fill = q.topicShort || q.topicPhrase || q.topic;
-  return shuffle(type.cards || []).map(card => ({
-    text: fillTopic(card.open, fill),
-    label: card.id
-  }));
+  const topicFill = q.topicPhrase || q.topicShort || q.topic;
+  const points = pointsForQuestion(q);
+  const cards = shuffle(type.cards || []);
+  return cards.map((card, i) => {
+    const pointFill = points.length ? points[i % points.length] : topicFill;
+    return {
+      text: fillTopic(card.open, hookFillValues(card.open, topicFill, pointFill)),
+      label: card.id
+    };
+  });
 }
 
 function genConclusionSlides(q, type) {
-  const fill = q.topicShort || q.topicPhrase || q.topic;
-  return shuffle(type.cards || []).map(card => ({
-    text: fillTopic(card.close, fill),
-    label: card.id
-  }));
+  const topicFill = q.topicPhrase || q.topicShort || q.topic;
+  const points = pointsForQuestion(q);
+  const cards = shuffle(type.cards || []);
+  return cards.map((card, i) => {
+    const pointFill = points.length ? points[i % points.length] : topicFill;
+    return {
+      text: fillTopic(card.close, hookFillValues(card.close, topicFill, pointFill)),
+      label: card.id
+    };
+  });
 }
 
+// For-against is the one type whose argue lines talk directly about the
+// topic's pros/cons ("the main advantage of TOPIC"), so its body blanks
+// stay topic-anchored. Every other type's argue lines want the specific
+// supporting point (reason/cause/solution/prediction), pulled from the
+// question's own writingPoints/suggestedOwnIdeas.
 function genBodyPages(q, type, typeKey) {
-  const fill = q.topicPhrase || q.topic || q.topicShort;
+  const topicFill = q.topicPhrase || q.topicShort || q.topic;
+  const points = pointsForQuestion(q);
+  const topicAnchored = typeKey === 'for-against';
   const buckets = (cardsData.meta && cardsData.meta.argueBuckets && cardsData.meta.argueBuckets[typeKey])
     || ['first', 'addition', 'addition'];
+
   return shuffle(type.cards || []).map(card =>
-    (card.argue || []).map((line, i) => ({
-      text: fillTopic(line, fill),
-      label: BUCKET_LABEL[buckets[i]] || `Point ${i + 1}`
-    }))
+    (card.argue || []).map((line, i) => {
+      const pointFill = points.length ? points[i % points.length] : topicFill;
+      const fill = topicAnchored ? topicFill : bodyFillValues(line, topicFill, pointFill);
+      return {
+        text: fillTopic(line, fill),
+        label: BUCKET_LABEL[buckets[i]] || `Point ${i + 1}`
+      };
+    })
   );
 }
 

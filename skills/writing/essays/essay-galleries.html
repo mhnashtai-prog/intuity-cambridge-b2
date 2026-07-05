@@ -19,6 +19,18 @@
   .header{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;justify-content:space-between;align-items:center;
     padding:.65rem 1.25rem;background:rgba(13,13,13,.88);backdrop-filter:blur(20px);
     border-bottom:1px solid rgba(255,255,255,.06);height:50px;}
+
+  .type-chips-bar{position:fixed;top:50px;left:0;right:0;z-index:95;height:38px;display:flex;align-items:center;
+    background:rgba(13,13,13,.82);backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.05);
+    overflow-x:auto;scrollbar-width:none;}
+  .type-chips-bar::-webkit-scrollbar{display:none;}
+  .type-chips{display:flex;gap:.4rem;padding:0 .9rem;white-space:nowrap;}
+  .type-chip{flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:.58rem;font-weight:700;
+    letter-spacing:.06em;text-transform:uppercase;padding:.32rem .75rem;border-radius:999px;
+    border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:rgba(255,255,255,.55);
+    cursor:pointer;transition:all .2s;}
+  .type-chip:hover{border-color:rgba(201,169,97,.4);color:#fff;}
+  .type-chip.active{background:rgba(201,169,97,.18);border-color:var(--gold);color:var(--gold);}
   .back-link{text-decoration:none;font-family:'Space Grotesk',sans-serif;font-size:.6rem;font-weight:700;
     letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.3);transition:color .2s;}
   .back-link:hover{color:rgba(255,255,255,.7);}
@@ -39,7 +51,7 @@
     background:rgba(201,169,97,.12);color:var(--gold);min-width:90px;text-align:center;white-space:nowrap;
     overflow:hidden;text-overflow:ellipsis;max-width:150px;}
 
-  .stage{position:fixed;top:50px;left:0;right:0;bottom:0;display:flex;flex-direction:column;
+  .stage{position:fixed;top:88px;left:0;right:0;bottom:0;display:flex;flex-direction:column;
     align-items:center;justify-content:flex-start;padding:.9rem;gap:.6rem;overflow:hidden;}
 
   .question-bar{width:100%;max-width:1180px;display:flex;align-items:center;gap:.6rem;
@@ -167,6 +179,10 @@
   <div class="type-badge" id="typeBadge">Pick a question</div>
 </header>
 
+<div class="type-chips-bar">
+  <div class="type-chips" id="typeChips"></div>
+</div>
+
 <div class="stage introduction" id="stage">
   <div class="question-bar" id="questionBar">
     <span class="qtext placeholder" id="qtext">No question selected — tap to choose one</span>
@@ -185,7 +201,7 @@
 
 <div class="picker-overlay" id="pickerOverlay">
   <div class="picker-panel">
-    <div class="picker-head">Choose an essay question</div>
+    <div class="picker-head" id="pickerHead">Choose an essay question</div>
     <div class="picker-list" id="pickerList"></div>
   </div>
 </div>
@@ -201,6 +217,16 @@ const SECTION_META = {
   body:         { color:'var(--sec2)', dark:'var(--sec2-d)', title:'Body' },
   conclusion:   { color:'var(--sec3)', dark:'var(--sec3-d)', title:'Conclusion' },
 };
+// Fixed set of essay-type labels — kept local (not read from cardsData) so
+// the chip bar still works even if the cards JSON fails to load.
+const TYPE_LABELS = {
+  'for-against': 'For & Against',
+  'problem-solution': 'Problems & Solutions',
+  'cause-effect': 'Cause & Effect',
+  'agree-disagree': 'Agree & Disagree',
+  'opinion': 'Opinion',
+  'speculation-trends': 'Speculation & Trends',
+};
 
 let questions = [];
 let cardsData = null;
@@ -208,6 +234,22 @@ let selectedQuestion = null;
 let section = 'introduction';
 let pages = [];   // groups of up to CARDS_PER_PAGE phrase-cards — this is what nav operates on
 let current = 0, prev = -1, busy = false;
+let activeTypeFilter = null; // essayType key, or null for "All"
+
+function renderTypeChips() {
+  const bar = document.getElementById('typeChips');
+  const presentTypes = Object.keys(TYPE_LABELS).filter(k => questions.some(q => q.essayType === k));
+  const allChip = `<div class="type-chip ${activeTypeFilter === null ? 'active' : ''}" data-type="">All</div>`;
+  const typeChips = presentTypes.map(k =>
+    `<div class="type-chip ${activeTypeFilter === k ? 'active' : ''}" data-type="${k}">${TYPE_LABELS[k]}</div>`
+  ).join('');
+  bar.innerHTML = allChip + typeChips;
+  bar.querySelectorAll('.type-chip').forEach(chip =>
+    chip.addEventListener('click', () => {
+      activeTypeFilter = chip.dataset.type || null;
+      openPicker();
+    }));
+}
 
 async function loadAll() {
   try {
@@ -219,6 +261,7 @@ async function loadAll() {
     if (cRes.status === 'fulfilled' && cRes.value) cardsData = cRes.value;
   } catch (e) { console.error('Load failed', e); }
 
+  renderTypeChips();
   renderPickerList();
   document.getElementById('loadingScreen').classList.add('fade');
   setTimeout(() => {
@@ -458,11 +501,16 @@ function jump(idx){ if(busy) return; busy=true; show(idx, idx>current?'forward':
 
 function renderPickerList() {
   const list = document.getElementById('pickerList');
-  list.innerHTML = questions.map(q => `
+  const head = document.getElementById('pickerHead');
+  const filtered = activeTypeFilter ? questions.filter(q => q.essayType === activeTypeFilter) : questions;
+  head.textContent = activeTypeFilter
+    ? `Choose a question — ${TYPE_LABELS[activeTypeFilter] || activeTypeFilter}`
+    : 'Choose an essay question';
+  list.innerHTML = filtered.length ? filtered.map(q => `
     <div class="picker-item ${selectedQuestion?.id===q.id?'selected':''}" data-id="${q.id}">
       <div class="pt">${q.essayType.replace('-', ' & ')}</div>
       <div class="pq">${q.mainQuestion}</div>
-    </div>`).join('');
+    </div>`).join('') : `<div style="padding:1.2rem;color:rgba(255,255,255,.4);font-size:.82rem;">No questions of this type yet.</div>`;
   list.querySelectorAll('.picker-item').forEach(it =>
     it.addEventListener('click', () => {
       selectedQuestion = questions.find(q => q.id === it.dataset.id) || null;
@@ -470,7 +518,11 @@ function renderPickerList() {
       rebuild();
     }));
 }
-function openPicker(){ document.getElementById('pickerOverlay').classList.add('open'); renderPickerList(); }
+function openPicker(){
+  document.getElementById('pickerOverlay').classList.add('open');
+  renderTypeChips();
+  renderPickerList();
+}
 function closePicker(){ document.getElementById('pickerOverlay').classList.remove('open'); }
 
 document.getElementById('prevBtn').addEventListener('click', e => { e.stopPropagation(); back(); });

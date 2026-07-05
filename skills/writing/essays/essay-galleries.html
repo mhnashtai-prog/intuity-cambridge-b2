@@ -227,15 +227,17 @@
 </div>
 
 <script>
-// ─── PRE-FILLED CONTENT MODEL ─────────────────────────────
-// No runtime generation. Each question in the content file
-// carries its own six fully written cards (open / argue[3] /
-// close), authored and reviewed like samples.json. This page
-// only reads and displays. Cards keep the printed PDF order
-// (FA-1..FA-6) so on-screen numbers match the student's
-// physical card set.
-// Per-genre content files: swap paths as each genre's file is
-// written; nothing else in the code needs to change.
+// ─── CONTENT MODEL ─────────────────────────────────────────
+// Two files per genre:
+//   questions: authored role-fillers (topic / counter / verdict / pros[] / cons[])
+//              each filler has {np, cl} shapes, some as arrays of paraphrase variants
+//   cards:     fixed templates per essayType (FA-1..FA-6) with {role:shape} tokens
+// This page fetches both, then FILLS the templates with each question's role
+// fillers at load time (fillCards) and caches the result on q.cards so the
+// rest of the app (rebuild/paint) works exactly as before — it just reads
+// q.cards like it's pre-written.
+// Per-genre content files: swap paths as each genre's file is written;
+// nothing else in the code needs to change.
 const GENRE_DATA = {
   essay:   { questions: 'data/essay-questions-typed.json', cards: 'data/essay-cards-typed.json' },
   report:  { questions: 'data/essay-questions-typed.json', cards: 'data/essay-cards-typed.json' },
@@ -267,6 +269,56 @@ const TYPE_LABELS = {
   'speculation-trends': 'Speculation & Trends',
 };
 
+// role name -> how to pull it off a question object.
+// pro1/pro2/pro3 map to question.pros[0..2]; con1/con2 map to question.cons[0..1].
+function getRoleFillers(question) {
+  const pros = question.pros || [];
+  const cons = question.cons || [];
+  return {
+    topic: question.topic,
+    counter: question.counter,
+    verdict: question.verdict,
+    pro1: pros[0], pro2: pros[1], pro3: pros[2],
+    con1: cons[0], con2: cons[1],
+  };
+}
+
+// Pull one shape ('np' or 'cl') out of a filler. If the filler stores an
+// array of paraphrase variants for that shape, rotate through them using
+// cardIndex so the same question doesn't repeat identical wording across
+// its six cards.
+function pickFiller(fillerObj, shape, cardIndex) {
+  if (!fillerObj) return `[missing:${shape}]`;
+  const val = fillerObj[shape];
+  if (val == null) return `[missing:${shape}]`;
+  if (Array.isArray(val)) {
+    if (!val.length) return `[missing:${shape}]`;
+    return val[cardIndex % val.length];
+  }
+  return val;
+}
+
+// Replace every {role:shape} token in a template string.
+function fillTemplate(str, fillers, cardIndex) {
+  return str.replace(/\{(\w+):(\w+)\}/g, (match, role, shape) => {
+    return pickFiller(fillers[role], shape, cardIndex);
+  });
+}
+
+// Build the fully-written six-card set for one question, from the
+// essayType's templates + that question's own role fillers.
+function fillCards(question, templatesData) {
+  const typeDef = templatesData && templatesData.types && templatesData.types[question.essayType];
+  if (!typeDef || !Array.isArray(typeDef.cards)) return [];
+  const fillers = getRoleFillers(question);
+  return typeDef.cards.map((tpl, idx) => ({
+    id: tpl.id,
+    open: fillTemplate(tpl.open, fillers, idx),
+    argue: (tpl.argue || []).map(line => fillTemplate(line, fillers, idx)),
+    close: fillTemplate(tpl.close, fillers, idx),
+  }));
+}
+
 let genre = 'essay';
 const genreCache = {}; // genre -> { questions }
 let questions = [];
@@ -288,9 +340,24 @@ function renderGenreBar() {
 async function fetchGenreData(g) {
   const src = GENRE_DATA[g];
   try {
-    const r = await fetch(src.content);
-    const data = r.ok ? await r.json() : null;
-    return { questions: (data && data.questions) || [] };
+    const [qRes, cRes] = await Promise.all([
+      fetch(src.questions),
+      fetch(src.cards),
+    ]);
+    const qData = qRes.ok ? await qRes.json() : null;
+    const cData = cRes.ok ? await cRes.json() : null;
+    const rawQuestions = (qData && qData.questions) || [];
+    const templates = cData || { types: {} };
+
+    // Fill each question's card set once at load time, then cache it on
+    // the question object so the rest of the app can treat q.cards as
+    // pre-written, exactly as it did before.
+    const questions = rawQuestions.map(q => ({
+      ...q,
+      cards: fillCards(q, templates),
+    }));
+
+    return { questions };
   } catch (e) {
     console.error('Load failed for genre', g, e);
     return { questions: [] };
@@ -352,7 +419,7 @@ function chunk(arr, size){
   return out;
 }
 
-// ─── READ THE PRE-FILLED CARDS ────────────────────────────
+// ─── READ THE FILLED CARDS ─────────────────────────────────
 function genIntroSlides(q) {
   return (q.cards || []).map(c => ({ text: c.open, label: c.id }));
 }

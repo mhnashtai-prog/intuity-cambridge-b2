@@ -47,6 +47,7 @@
     cursor:pointer;transition:all .2s;}
   .type-chip:hover{border-color:rgba(201,169,97,.4);color:#fff;}
   .type-chip.active{background:rgba(201,169,97,.18);border-color:var(--gold);color:var(--gold);}
+  .type-chip.empty-type{opacity:.45;}
   .preview-note{flex-shrink:0;font-family:'DM Sans',sans-serif;font-size:.52rem;font-style:italic;
     color:rgba(255,255,255,.3);padding:0 .9rem 0 0;white-space:nowrap;}
   .back-link{text-decoration:none;font-family:'Space Grotesk',sans-serif;font-size:.6rem;font-weight:700;
@@ -232,7 +233,8 @@
 // Two files per genre:
 //   questions: authored role-fillers (topic / counter / verdict / pros[] / cons[])
 //              each filler has {np, cl} shapes, some as arrays of paraphrase variants
-//   cards:     fixed templates per essayType (FA-1..FA-6) with {role:shape} tokens
+//   cards:     fixed templates per essayType (FA-1..FA-6, PS-1..PS-6, CE-1..CE-6,
+//              AD-1..AD-6, OP-1..OP-6, ST-1..ST-6) with {role:shape} tokens
 // This page fetches both, then FILLS the templates with each question's role
 // fillers at load time (fillCards) and caches the result on q.cards so the
 // rest of the app (rebuild/paint) works exactly as before — it just reads
@@ -261,6 +263,12 @@ const SECTION_META = {
   body:         { color:'var(--sec2)', dark:'var(--sec2-d)', title:'Body' },
   conclusion:   { color:'var(--sec3)', dark:'var(--sec3-d)', title:'Conclusion' },
 };
+// Canonical list of all six essay types + labels — this drives the type-chip
+// bar directly, independent of which types happen to have authored questions
+// yet. That way all 6 types are always visible/selectable, and types with no
+// questions loaded simply show an empty state in the picker until content
+// is added for them.
+const TYPE_ORDER = ['for-against', 'problem-solution', 'cause-effect', 'agree-disagree', 'opinion', 'speculation-trends'];
 const TYPE_LABELS = {
   'for-against': 'For & Against',
   'problem-solution': 'Problems & Solutions',
@@ -279,8 +287,14 @@ function getRoleFillers(question) {
     topic: question.topic,
     counter: question.counter,
     verdict: question.verdict,
+    cause: question.cause,
+    context: question.context,
     pro1: pros[0], pro2: pros[1], pro3: pros[2],
     con1: cons[0], con2: cons[1],
+    sol1: question.sol1, sol2: question.sol2, sol3: question.sol3,
+    c1: question.c1, c2: question.c2, c3: question.c3,
+    r1: question.r1, r2: question.r2, r3: question.r3,
+    p1: question.p1, p2: question.p2, p3: question.p3,
   };
 }
 
@@ -382,13 +396,21 @@ async function switchGenre(g) {
   rebuild();
 }
 
+// Always render all six canonical essay types as chips — regardless of
+// whether the currently loaded questions include any for a given type yet.
+// Types with zero questions still show up (dimmed) so the full taxonomy is
+// visible; picking one just shows an empty state in the picker/carousel
+// until questions are authored for it.
 function renderTypeChips() {
   const bar = document.getElementById('typeChips');
-  const presentTypes = Object.keys(TYPE_LABELS).filter(k => questions.some(q => q.essayType === k));
+  const countByType = {};
+  questions.forEach(q => { countByType[q.essayType] = (countByType[q.essayType] || 0) + 1; });
+
   const allChip = `<div class="type-chip ${activeTypeFilter === null ? 'active' : ''}" data-type="">All</div>`;
-  const typeChips = presentTypes.map(k =>
-    `<div class="type-chip ${activeTypeFilter === k ? 'active' : ''}" data-type="${k}">${TYPE_LABELS[k]}</div>`
-  ).join('');
+  const typeChips = TYPE_ORDER.map(k => {
+    const has = !!countByType[k];
+    return `<div class="type-chip ${activeTypeFilter === k ? 'active' : ''} ${has ? '' : 'empty-type'}" data-type="${k}">${TYPE_LABELS[k]}</div>`;
+  }).join('');
   const previewNote = genre !== 'essay'
     ? `<div class="preview-note">Preview — showing essay content until ${GENRE_META[genre].label.toLowerCase()} data is added</div>`
     : '';

@@ -256,84 +256,90 @@ function fillTopic(rawText, fillWord) {
   return out;
 }
 
-function countBlanks(text) {
-  return (text.match(/\.\.\./g) || []).length;
+// Does the text right before a blank end in a concessive connector
+// ("although", "despite", "in spite of", "while", "whereas")? Those
+// blanks want the counterpoint clause rather than the main claim.
+function wantsCounterpoint(segment) {
+  return /(although|despite|in spite|while|whereas)\s*$/i.test(segment);
 }
 
-// Real, distinct supporting ideas for this question — the exam-set writing
-// points (minus the "own idea" placeholder line) plus the suggested ideas,
-// used to fill "point" blanks (a specific reason/cause/factor) rather than
-// repeating the essay's general topic over and over.
-function pointsForQuestion(q) {
-  const explicit = (q.writingPoints || [])
-    .filter(p => !/own idea/i.test(p) && !/^\.{3,}/.test(p.trim()))
-    .map(p => p.replace(/\.+$/, '').trim());
-  const extra = q.suggestedOwnIdeas || [];
-  return [...explicit, ...extra];
+// Does the text right before a blank end in "that"? Those blanks need a
+// full clause (subject + verb). Anything else (of/in/about/by/for...)
+// needs a noun phrase instead.
+function wantsClause(segment) {
+  return /\bthat\s*$/i.test(segment);
 }
 
-// OPEN/CLOSE hooks: a lone blank always refers to the overall topic. Two
-// blanks means [topic, point] (e.g. "... , although POINT"). Three blanks
-// bookend a point between two topic mentions (a common pattern across the
-// card set: "It is known that TOPIC due to POINT ... examine TOPIC").
-function hookFillValues(rawText, topicFill, pointFill) {
-  const n = countBlanks(rawText);
+// OPEN/CLOSE hooks: a lone blank is always the overall topic (a noun
+// phrase). Two or three blanks bookend a clause (the claim, or the
+// counterpoint if the connector right before it is concessive) between
+// topic mentions — a pattern common across the card set, e.g.
+// "It is known that TOPIC due to CLAIM ... examine TOPIC".
+function hookFillValues(rawText, topicFill, claim, counterpoint) {
+  const parts = rawText.split('...');
+  const n = parts.length - 1;
   if (n <= 1) return topicFill;
-  if (n === 2) return [topicFill, pointFill];
-  return [topicFill, pointFill, topicFill];
+  const values = [];
+  for (let g = 0; g < n; g++) {
+    const isBookend = (n === 3 && (g === 0 || g === 2)) || (n === 2 && g === 0);
+    values.push(isBookend ? topicFill : (wantsCounterpoint(parts[g]) ? counterpoint : claim));
+  }
+  return values;
 }
 
 // BODY argue lines: a lone blank is the specific supporting point itself
-// (e.g. "a further reason is that POINT"). Two blanks means [topic, point]
-// (e.g. "one of the main causes of TOPIC is POINT").
-function bodyFillValues(rawText, topicFill, pointFill) {
-  const n = countBlanks(rawText);
-  if (n <= 1) return pointFill;
-  return [topicFill, pointFill];
+// — a clause after "that" (e.g. "a further reason is that POINT-CLAUSE"),
+// otherwise a noun phrase (e.g. "a further contributing factor is
+// POINT-PHRASE"). Two blanks means [topic, point] (e.g. "one of the main
+// causes of TOPIC is POINT").
+function bodyFillValues(rawText, topicFill, point) {
+  const parts = rawText.split('...');
+  const n = parts.length - 1;
+  if (n === 0) return rawText;
+  const values = [];
+  for (let g = 0; g < n; g++) {
+    if (n > 1 && g === 0) { values.push(topicFill); continue; }
+    values.push(wantsClause(parts[g]) ? point.clause : point.phrase);
+  }
+  return values;
 }
 
 function genIntroSlides(q, type) {
   const topicFill = q.topicPhrase || q.topicShort || q.topic;
-  const points = pointsForQuestion(q);
-  const cards = shuffle(type.cards || []);
-  return cards.map((card, i) => {
-    const pointFill = points.length ? points[i % points.length] : topicFill;
-    return {
-      text: fillTopic(card.open, hookFillValues(card.open, topicFill, pointFill)),
-      label: card.id
-    };
-  });
+  const claim = q.claim || topicFill;
+  const counterpoint = q.counterpoint || claim;
+  return shuffle(type.cards || []).map(card => ({
+    text: fillTopic(card.open, hookFillValues(card.open, topicFill, claim, counterpoint)),
+    label: card.id
+  }));
 }
 
 function genConclusionSlides(q, type) {
   const topicFill = q.topicPhrase || q.topicShort || q.topic;
-  const points = pointsForQuestion(q);
-  const cards = shuffle(type.cards || []);
-  return cards.map((card, i) => {
-    const pointFill = points.length ? points[i % points.length] : topicFill;
-    return {
-      text: fillTopic(card.close, hookFillValues(card.close, topicFill, pointFill)),
-      label: card.id
-    };
-  });
+  const claim = q.claim || topicFill;
+  const counterpoint = q.counterpoint || claim;
+  return shuffle(type.cards || []).map(card => ({
+    text: fillTopic(card.close, hookFillValues(card.close, topicFill, claim, counterpoint)),
+    label: card.id
+  }));
 }
 
 // For-against is the one type whose argue lines talk directly about the
 // topic's pros/cons ("the main advantage of TOPIC"), so its body blanks
 // stay topic-anchored. Every other type's argue lines want the specific
 // supporting point (reason/cause/solution/prediction), pulled from the
-// question's own writingPoints/suggestedOwnIdeas.
+// question's own `points` data.
 function genBodyPages(q, type, typeKey) {
   const topicFill = q.topicPhrase || q.topicShort || q.topic;
-  const points = pointsForQuestion(q);
+  const points = q.points && q.points.length ? q.points : [{ clause: topicFill, phrase: topicFill }];
   const topicAnchored = typeKey === 'for-against';
   const buckets = (cardsData.meta && cardsData.meta.argueBuckets && cardsData.meta.argueBuckets[typeKey])
     || ['first', 'addition', 'addition'];
 
   return shuffle(type.cards || []).map(card =>
     (card.argue || []).map((line, i) => {
-      const pointFill = points.length ? points[i % points.length] : topicFill;
-      const fill = topicAnchored ? topicFill : bodyFillValues(line, topicFill, pointFill);
+      const point = points[i % points.length];
+      const fill = topicAnchored ? topicFill : bodyFillValues(line, topicFill, point);
       return {
         text: fillTopic(line, fill),
         label: BUCKET_LABEL[buckets[i]] || `Point ${i + 1}`

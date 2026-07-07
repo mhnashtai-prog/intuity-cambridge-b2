@@ -109,20 +109,13 @@
     overflow-y:auto;padding:0 .2rem;}
   .rphrase{font-size:clamp(.84rem,1.5vw,1.06rem);line-height:1.62;font-weight:500;color:var(--ink);text-align:center;}
 
-  /* ── body card: one model's full three-point movement on a single card ── */
-  .bodycard{position:relative;width:min(680px,100%);height:100%;background:#fff;border-radius:1.25rem;
-    padding:1.9rem 2.1rem 1.4rem 1.9rem;display:flex;flex-direction:column;
-    box-shadow:0 1px 0 rgba(255,255,255,.9) inset,0 18px 45px -12px rgba(0,0,0,.55),0 6px 18px rgba(0,0,0,.35);}
-  .bodycard::before{content:'';position:absolute;top:.9rem;left:1.9rem;right:2.1rem;height:8px;
-    background-image:radial-gradient(circle, rgba(0,0,0,.12) 3px, transparent 3.5px);
-    background-size:16px 8px;background-repeat:repeat-x;}
-  .body-points{flex:1;min-height:0;margin-top:2.9rem;display:flex;flex-direction:column;
-    justify-content:center;gap:1.5rem;overflow-y:auto;padding:.2rem .1rem;}
-  .body-points::-webkit-scrollbar{width:3px;} .body-points::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:2px;}
-  .bpoint{display:flex;flex-direction:column;gap:.4rem;}
-  .bpoint-role{font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:.5rem;letter-spacing:.16em;
-    text-transform:uppercase;color:var(--pc-d);opacity:.65;}
-  .bpoint-text{font-size:clamp(.82rem,1.35vw,.98rem);line-height:1.6;font-weight:500;color:var(--ink);}
+  /* ── body: three points stacked inside a standard three-up rcard ── */
+  .rbody-body{align-items:stretch;justify-content:center;}
+  .body-points{width:100%;display:flex;flex-direction:column;gap:1.15rem;}
+  .bpoint{display:flex;flex-direction:column;gap:.32rem;}
+  .bpoint-role{font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:.46rem;letter-spacing:.15em;
+    text-transform:uppercase;color:var(--pc-d);opacity:.6;}
+  .bpoint-text{font-size:clamp(.76rem,1.15vw,.92rem);line-height:1.5;font-weight:500;color:var(--ink);text-align:left;}
 
   /* ── skeleton card (whole-essay spine, one per page) ── */
   .skcard{position:relative;width:min(680px,100%);height:100%;background:#fff;border-radius:1.25rem;
@@ -617,7 +610,16 @@ const SECTION_META = {
 };
 let type='for-against', mode='skeleton', question=null;
 let pages=[], current=0, prev=-1, busy=false;
-const CARDS_PER_PAGE=3;
+const BOARD_MQ=window.matchMedia('(min-width:900px)');
+function cardsPerPage(){ return BOARD_MQ.matches ? 3 : 1; }
+BOARD_MQ.addEventListener('change',()=>{
+  // keep the student near the same model when the layout regroups
+  const per=cardsPerPage();
+  const modelIdx=current*(BOARD_MQ.matches?1:3); // rough anchor
+  rebuild();
+  const target=Math.min(Math.floor(modelIdx/per),pages.length-1);
+  if(target>0) show(target,'none');
+});
 
 function fill(html){
   if(!question) return html; /* pure model: gold ellipses stand */
@@ -653,12 +655,14 @@ function rebuild(){
   if(mode==='skeleton'){
     pages=t.cards.map((c,i)=>({skeleton:c,idx:i}));
   }else if(mode==='introduction'){
-    pages=chunk(t.cards.map((c,i)=>({text:fill(c.open),label:t.code+'-'+(i+1)})),CARDS_PER_PAGE);
+    pages=chunk(t.cards.map((c,i)=>({text:fill(c.open),label:t.code+'-'+(i+1)})),cardsPerPage());
   }else if(mode==='body'){
-    pages=t.cards.map((c,i)=>({bodyCard:true,idx:i,
-      points:c.argue.map((l,j)=>({text:fill(l),role:BODY_LABELS[j]}))}));
+    pages=chunk(t.cards.map((c,i)=>({
+      label:t.code+'-'+(i+1),
+      points:c.argue.map((l,j)=>({text:fill(l),role:BODY_LABELS[j]}))
+    })),cardsPerPage());
   }else{
-    pages=chunk(t.cards.map((c,i)=>({text:fill(c.close),label:t.code+'-'+(i+1)})),CARDS_PER_PAGE);
+    pages=chunk(t.cards.map((c,i)=>({text:fill(c.close),label:t.code+'-'+(i+1)})),cardsPerPage());
   }
   paint();show(0,'none');
 }
@@ -688,30 +692,35 @@ function paint(){
     }).join('');
   }else if(mode==='body'){
     const meta=SECTION_META.body;
-    container.innerHTML=pages.map((p,pi)=>{
-      const n=p.idx+1;
-      return `<div class="slide" data-idx="${pi}">
-        <div class="bodycard" style="--pc:${meta.color};--pc-d:${meta.dark}">
-          <div class="rhead"><div class="rnum">${String(n).padStart(2,'0')}</div>
-            <div class="rtitle"><div class="rtitle-main">Body</div>
-            <div class="rtitle-sub">${t.code}-${n}</div></div></div>
-          <div class="body-points">
-            ${p.points.map(pt=>`
-              <div class="bpoint">
-                <div class="bpoint-role">${pt.role}</div>
-                <div class="bpoint-text">${pt.text}</div>
-              </div>`).join('')}
-          </div>
+    container.innerHTML=pages.map((pg,pi)=>`
+      <div class="slide" data-idx="${pi}">
+        <div class="rgroup">
+          ${pg.map((s,j)=>{
+            const num=pi*cardsPerPage()+j+1;
+            return `<div class="rcard" style="--pc:${meta.color};--pc-d:${meta.dark}">
+              <div class="rhead"><div class="rnum">${String(num).padStart(2,'0')}</div>
+                <div class="rtitle"><div class="rtitle-main">Body</div>
+                <div class="rtitle-sub">${s.label}</div></div></div>
+              <div class="rbody rbody-body">
+                <div class="body-points">
+                  ${s.points.map(pt=>`
+                    <div class="bpoint">
+                      <div class="bpoint-role">${pt.role}</div>
+                      <div class="bpoint-text">${pt.text}</div>
+                    </div>`).join('')}
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
         </div>
-      </div>`;
-    }).join('');
+      </div>`).join('');
   }else{
     const meta=SECTION_META[mode];
     container.innerHTML=pages.map((pg,pi)=>`
       <div class="slide" data-idx="${pi}">
         <div class="rgroup">
           ${pg.map((s,j)=>{
-            const num=pi*CARDS_PER_PAGE+j+1;
+            const num=pi*cardsPerPage()+j+1;
             return `<div class="rcard" style="--pc:${meta.color};--pc-d:${meta.dark}">
               <div class="rhead"><div class="rnum">${String(num).padStart(2,'0')}</div>
                 <div class="rtitle"><div class="rtitle-main">${meta.title}</div>

@@ -216,78 +216,46 @@
 </div>
 
 <script>
-/* ══ CORPUS TREE — geometry-agnostic ═══════════════════════════
-   family → functions → capsule[] (variable length: as many honest,
-   frame-varied exponents as the function supports — no fixed quota).
-   Two functions authored fully to test size-follows-yield:
-   OPINION (rich) and GIVING EXCEPTIONS (lean). The rest are stubbed
-   with when-captions and yields so the map is whole and walkable. */
-const CORPUS = {
-  evaluating: {
-    name:'Evaluating', purpose:'is it good or bad?',
-    functions:{
-      advantages:   { when:'to point out a benefit or strength', sample:'A major advantage is…', capsule:[], yield:8 },
-      disadvantages:{ when:'to point out a drawback or weakness', sample:'One clear drawback is…', capsule:[], yield:8 },
-      praising:     { when:'to say what is done well', sample:'What stands out is…', capsule:[], yield:6 },
-      criticising:  { when:'to say what falls short', sample:'It falls short in…', capsule:[], yield:6 },
-    }
-  },
-  reasoning: {
-    name:'Reasoning', purpose:'why, and what follows?',
-    functions:{
-      cause:        { when:'to name what brings something about', sample:'This is largely due to…', capsule:[], yield:7 },
-      effect:       { when:'to name what results from it', sample:'As a result,…', capsule:[], yield:7 },
-      justifying:   { when:'to give grounds for a view', sample:'The reason for this is…', capsule:[], yield:6 },
-      examples:     { when:'to illustrate with a case', sample:'A good example of this is…', capsule:[], yield:6 },
-    }
-  },
-  positioning: {
-    name:'Positioning', purpose:'where do I stand?',
-    functions:{
-      opinion: { when:'to state your own view', sample:'In my view,…', yield:9, capsule:[
-        { stem:'In my view,',            tail:'…and this is something I feel strongly about.', frame:'adverbial phrase' },
-        { stem:'As I see it,',           tail:'…though others may disagree.',                  frame:'adverbial phrase' },
-        { stem:'To my mind,',            tail:'…the case is fairly clear.',                    frame:'adverbial phrase' },
-        { stem:'It seems to me that',    tail:'…the benefits outweigh the costs.',             frame:'clause opener' },
-        { stem:"I'm inclined to think",  tail:'…the opposite is closer to the truth.',         frame:'hedged clause' },
-        { stem:'I would argue that',     tail:'…this deserves more attention than it gets.',   frame:'clause opener' },
-        { stem:'From where I stand,',    tail:'…the priorities are the wrong way round.',      frame:'adverbial phrase' },
-        { stem:'My own feeling is that', tail:'…we have not gone far enough.',                 frame:'noun-phrase frame' },
-        { stem:'If you ask me,',         tail:'…the whole idea needs rethinking.',             frame:'informal opener' },
-      ]},
-      agreeing:    { when:'to align with a view', sample:'I couldn\u2019t agree more that…', capsule:[], yield:6 },
-      disagreeing: { when:'to push back on a view', sample:'I\u2019m not convinced that…', capsule:[], yield:6 },
-      concluding:  { when:'to close and sum up', sample:'All in all,…', capsule:[], yield:7 },
-    }
-  },
-  projecting: {
-    name:'Projecting', purpose:'how sure, how likely?',
-    functions:{
-      possibility:  { when:'to raise something that could be so', sample:'It could well be that…', capsule:[], yield:6 },
-      probability:  { when:'to say what is likely', sample:'It is likely that…', capsule:[], yield:6 },
-      speculating:  { when:'to imagine what might happen', sample:'One can imagine that…', capsule:[], yield:7 },
-      generalising: { when:'to state what is broadly true', sample:'On the whole,…', capsule:[], yield:6 },
-    }
-  },
-  relating: {
-    name:'Relating', purpose:'how do things compare and measure?',
-    functions:{
-      similarities: { when:'to show two things are alike', sample:'Similarly,…', capsule:[], yield:5 },
-      differences:  { when:'to show two things differ', sample:'In contrast,…', capsule:[], yield:5 },
-      comparison:   { when:'to weigh one against another', sample:'Compared with…', capsule:[], yield:6 },
-      trends:       { when:'to describe a change over time', sample:'There has been a rise in…', capsule:[], yield:6 },
-      quantities:   { when:'to describe amount or degree', sample:'The vast majority of…', capsule:[], yield:5 },
-      exceptions: { when:'to set one case apart from the rest', sample:'Apart from…', yield:4, capsule:[
-        { stem:'Apart from',          tail:'…this one instance, the pattern holds.',  frame:'preposition frame' },
-        { stem:'With the exception of', tail:'…a few rare cases, this is always true.', frame:'preposition frame' },
-        { stem:'Except for',          tail:'…one detail, everything fits.',           frame:'preposition frame' },
-        { stem:'Other than',          tail:'…that, there is little to add.',          frame:'preposition frame' },
-      ]},
-    }
-  },
-};
-
+/* ══ CORPUS — fetched from the unified functional-english.json ═══
+   One source of truth, shared with the speaking page. The adapter
+   folds the flat functions[] into the family tree the bank renders,
+   mapping {stem, connector, expanded} → {stem, tail, frame} + PREC. */
+let CORPUS = {};
 const FAM_ORDER=['evaluating','reasoning','positioning','projecting','relating'];
+
+// derive a short "frame" tag from a stem's grammatical shape (for the register chip)
+function frameOf(stem){
+  const s=stem.trim().toLowerCase();
+  if(/^(in my|from my|to my|as far as|as i see|personally|in general|by and large|broadly|on the whole|generally|more often|as a rule|in most)/.test(s)) return 'adverbial phrase';
+  if(/\bthat\s*…?$/.test(s) || /\bthat\b/.test(s)) return 'clause frame';
+  if(/^(this|it|there|one|a |the )/.test(s)) return 'noun-phrase frame';
+  if(/,\s*…?$/.test(s)) return 'sentence opener';
+  return 'set phrase';
+}
+
+function adaptCorpus(data){
+  const out={};
+  for(const [famKey,fam] of Object.entries(data.families)){
+    out[famKey]={ name:fam.label, purpose:fam.purpose, functions:{} };
+  }
+  for(const fn of data.functions){
+    const famKey=fn.family;
+    if(!out[famKey]) continue;
+    out[famKey].functions[fn.id]={
+      label: fn.label,
+      when: fn.when || 'to use this move',
+      yield: fn.phrases.length,
+      prec: fn.expanded || null,
+      capsule: fn.phrases.map(p=>({
+        stem: p.stem,
+        tail: p.connector,
+        frame: frameOf(p.stem)
+      }))
+    };
+  }
+  return out;
+}
+
 let path={family:null, fn:null};
 
 const hue = fam => ({
@@ -505,7 +473,24 @@ window.addEventListener('resize',()=>{
   }
 });
 
-renderFamilies();
+/* ── boot: fetch the unified corpus, adapt, then render ── */
+function corpusUrl(){
+  const p=new URLSearchParams(location.search).get('json');
+  return p || 'functional-english.json';
+}
+(function boot(){
+  const list=document.getElementById('familyList');
+  fetch(corpusUrl())
+    .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(data=>{ CORPUS=adaptCorpus(data); renderFamilies(); })
+    .catch(err=>{
+      list.innerHTML=`<div style="color:rgba(255,255,255,.55);font-size:.85rem;padding:2rem 1rem;max-width:520px;">
+        Couldn't load the phrase corpus (<code>${corpusUrl()}</code>). ${err.message}.<br><br>
+        On the live site the JSON sits beside this page; opened straight from disk, some browsers block the fetch —
+        run it through the deployed site or a local server.</div>`;
+    });
+})();
+
 </script>
 </body>
 </html>

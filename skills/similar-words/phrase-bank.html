@@ -194,7 +194,7 @@
 <header class="header">
   <a class="back-link" href="/?openModal=vocabulary" id="backLink" onclick="return smartBack(event)">← Back</a>
   <div class="brand"><span class="brand-t">Phrase Bank</span><span class="brand-s">Functional Language</span></div>
-  <span class="crumb" id="crumb" onclick="goBack()">← Back</span>
+  <span class="crumb" id="crumb" onclick="goBack()">↑ All families</span>
 </header>
 
 <div class="stage">
@@ -338,64 +338,76 @@ function initCarousel(){
   update();
 }
 
-/* LEVEL 2 — capsule (exponents). Reached directly from a family badge. */
+/* LEVEL 2 — constellation: question at centre, phrases orbiting with ribbon banners */
+let qList=[], qIndex=0, curFam=null, curFn=null;
+
 function openFn(fam,k){
   path={family:fam, fn:k};
-  const F=CORPUS[fam], fn=F.functions[k], [c,d]=hue(fam);
+  curFam=fam; curFn=k;
+  const F=CORPUS[fam], fn=F.functions[k], [c]=hue(fam);
   const con=document.getElementById('constellation');
+  con.style.setProperty('--fc',c);
+  con.style.setProperty('--fc-d',hue(fam)[1]);
 
-  // hub
-  const hub=document.getElementById('hub');
-  hub.style.setProperty('--fc',c);
-  document.getElementById('hubFam').textContent=F.name;
-  document.getElementById('hubName').textContent=cap(k);
-  document.getElementById('hubWhen').textContent=fn.when;
+  // question set for this function (fall back to a generic prompt if none)
+  qList = (QUESTIONS[k] && QUESTIONS[k].length) ? QUESTIONS[k].slice() : [];
+  qIndex = 0;
+  setQuestion(fam,k);
 
-  // clear previous nodes + spokes + hint
+  // clear previous cards + hint
   con.querySelectorAll('.enode').forEach(n=>n.remove());
   con.querySelector('.const-hint')?.remove();
-  const svg=document.getElementById('spokes'); svg.innerHTML='';
 
   switchView('viewCapsule');
-
-  // must render after view is visible so we can measure
   requestAnimationFrame(()=>layoutConstellation(fam,k));
   setCrumb();
+}
+
+function setQuestion(fam,k){
+  const F=CORPUS[fam], [c]=hue(fam);
+  document.getElementById('qEyebrow').textContent=cap(k)+' · '+F.name;
+  document.getElementById('qEyebrow').style.setProperty('--fc',c);
+  const qt=document.getElementById('qText');
+  qt.textContent = qList.length ? qList[qIndex] : F.functions[k].when;
+  const nextBtn=document.getElementById('qNext');
+  nextBtn.style.display = qList.length>1 ? 'inline-block' : 'none';
+  nextBtn.style.setProperty('--fc',c);
+}
+
+function nextQuestion(){
+  if(!qList.length) return;
+  qIndex = (qIndex+1) % qList.length;
+  setQuestion(curFam,curFn);
 }
 
 let dragEl=null, dragDX=0, dragDY=0;
 function layoutConstellation(fam,k){
   const F=CORPUS[fam], fn=F.functions[k], [c,d]=hue(fam);
   const con=document.getElementById('constellation');
-  const svg=document.getElementById('spokes');
   const W=con.clientWidth, H=con.clientHeight;
   const cx=W/2, cy=H/2;
 
-  // hub to centre
-  const hub=document.getElementById('hub');
-  hub.style.left=cx+'px'; hub.style.top=cy+'px';
-
-  const items = fn.capsule.length ? fn.capsule
-    : Array.from({length:fn.yield},(_,i)=>({stem:'…',tail:'expression '+(i+1)+' — not authored yet',frame:''}));
+  const items = fn.capsule;
   const n=items.length;
 
-  // ring geometry: keep everything inside the canvas with margin
+  // ring geometry: keep cards clear of the central question and the edges
   const twoRings = n>5;
-  const margin=110;
+  const margin=140;
   const maxR=Math.min(W/2, H/2)-margin;
-  const rOuter = Math.max(180, maxR);
-  const rInner = twoRings ? rOuter*0.58 : rOuter*0.9;
+  const rOuter = Math.max(200, maxR);
+  const rInner = twoRings ? rOuter*0.62 : rOuter*0.92;
 
   items.forEach((x,i)=>{
     const node=document.createElement('div');
     node.className='enode'; node.style.setProperty('--fc',c); node.style.setProperty('--fc-d',d);
-    node.innerHTML=`<div class="enode-num">${i+1}</div>
+    node.innerHTML=`<div class="enode-banner">
+        <span class="enode-bnum">${i+1}</span>
+        <span class="enode-blabel">${cap(k)}</span>
+      </div>
       <div class="enode-stem">${x.stem}</div>
-      <div class="enode-tail">${x.tail}</div>
-      ${x.frame?`<span class="enode-frame">${x.frame}</span>`:''}`;
+      <div class="enode-tail">${x.tail}</div>`;
     con.appendChild(node);
 
-    // position: distribute around circle; alternate rings when many
     let ring, idxInRing, countInRing, startAngle;
     if(twoRings){
       const innerCount=Math.ceil(n/2), outerCount=n-innerCount;
@@ -405,27 +417,16 @@ function layoutConstellation(fam,k){
     const ang=(startAngle + idxInRing*(360/countInRing))*Math.PI/180;
     const x0=cx+ring*Math.cos(ang), y0=cy+ring*Math.sin(ang);
     node.style.left=x0+'px'; node.style.top=y0+'px';
-    node.dataset.cx=cx; node.dataset.cy=cy;
 
-    // spoke
-    const line=document.createElementNS('http://www.w3.org/2000/svg','line');
-    line.setAttribute('x1',cx); line.setAttribute('y1',cy);
-    line.setAttribute('x2',x0); line.setAttribute('y2',y0);
-    line.style.stroke=`var(--fc)`; svg.appendChild(line);
-    node._line=line;
-
-    // drag
     const down=(px,py)=>{ dragEl=node; node.classList.add('dragging');
       const r=node.getBoundingClientRect(), cr=con.getBoundingClientRect();
       dragDX=px-(r.left+r.width/2 - cr.left); dragDY=py-(r.top+r.height/2 - cr.top); hideHint(); };
     node.addEventListener('mousedown',e=>{e.preventDefault();down(e.clientX,e.clientY);});
     node.addEventListener('touchstart',e=>{down(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
   });
-  svg.style.setProperty('--fc',c);
 
-  // hint
   const hint=document.createElement('div');
-  hint.className='const-hint'; hint.textContent='Drag any expression to arrange your own map';
+  hint.className='const-hint'; hint.textContent='Drag any expression to arrange your answer';
   con.appendChild(hint);
 }
 
@@ -435,7 +436,6 @@ function moveNode(px,py){
   const cr=con.getBoundingClientRect();
   const nx=px-cr.left-dragDX, ny=py-cr.top-dragDY;
   dragEl.style.left=nx+'px'; dragEl.style.top=ny+'px';
-  if(dragEl._line){ dragEl._line.setAttribute('x2',nx); dragEl._line.setAttribute('y2',ny); }
 }
 document.addEventListener('mousemove',e=>{ if(dragEl) moveNode(e.clientX,e.clientY); });
 document.addEventListener('touchmove',e=>{ if(dragEl){ moveNode(e.touches[0].clientX,e.touches[0].clientY);} },{passive:true});
@@ -475,7 +475,6 @@ window.addEventListener('resize',()=>{
   if(document.getElementById('viewCapsule').classList.contains('active') && path.fn){
     const con=document.getElementById('constellation');
     con.querySelectorAll('.enode').forEach(n=>n.remove());
-    document.getElementById('spokes').innerHTML='';
     con.querySelector('.const-hint')?.remove();
     layoutConstellation(path.family,path.fn);
   }

@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>INTUITY — Retention Check</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700;800;900&family=Lora:ital,wght@0,600;1,400;1,500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500&display=swap');
+
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#0d0d0d; --surface:#151517; --border:rgba(255,255,255,.10); --border2:rgba(255,255,255,.16);
+  --text:#e8e8ea; --muted:#b5b5bb; --faint:#7a7a82; --gold:#C9A961;
+  --hh:56px; --ff:'DM Sans',sans-serif; --fs:'Space Grotesk',sans-serif; --fd:'Lora',serif;
+  --evaluating:#3fbfb2;   --evaluating-d:#2a8b81;
+  --reasoning:#f0a23c;    --reasoning-d:#c07a1f;
+  --positioning:#e85a4f;  --positioning-d:#b83a31;
+  --projecting:#9a6baa;   --projecting-d:#6d4a7c;
+  --relating:#C9A961;     --relating-d:#9a7d3f;
+  --good:#3fbfb2; --bad:#e85a4f; --ink:#1a1a1a;
+}
+html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-family:var(--ff);overflow:hidden;}
+
+#load{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:9999;}
+#load.gone{display:none;}
+.ld-title{font-family:var(--fd);font-size:22px;font-style:italic;}
+.ld-sub{font-size:11px;color:var(--faint);letter-spacing:.12em;}
+.ld-err{font-size:13px;color:#dc2626;text-align:center;max-width:340px;line-height:1.7;}
+.spin{width:26px;height:26px;border:2px solid var(--border2);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+#hdr{position:fixed;top:0;left:0;right:0;height:var(--hh);z-index:200;background:var(--surface);
+  border-bottom:1.5px solid var(--border2);display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;gap:14px;}
+.hdr-brand{display:flex;flex-direction:column;gap:1px;}
+.hdr-t{font-size:14px;font-weight:800;color:var(--text);letter-spacing:-.01em;}
+.hdr-s{font-size:9px;color:var(--faint);letter-spacing:.14em;}
+.back-link{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);
+  text-decoration:none;flex-shrink:0;}
+.back-link:hover{color:var(--text);}
+
+.mode-pill{display:flex;background:rgba(255,255,255,.06);border:1.5px solid var(--border2);
+  border-radius:99px;padding:3px;gap:2px;flex-shrink:0;}
+.mb{font-size:11px;font-weight:800;letter-spacing:.03em;padding:6px 14px;border-radius:99px;border:none;
+  cursor:pointer;font-family:var(--ff);background:transparent;color:var(--faint);transition:all .2s;white-space:nowrap;}
+.mb.on{background:rgba(255,255,255,.14);color:#fff;}
+
+#dashBtn{font-size:11px;font-weight:700;padding:7px 14px;border-radius:8px;border:1.5px solid var(--border2);
+  background:transparent;color:var(--muted);cursor:pointer;font-family:var(--ff);flex-shrink:0;transition:all .2s;}
+#dashBtn:hover{color:var(--text);border-color:rgba(255,255,255,.3);}
+
+#app{position:fixed;top:var(--hh);left:0;right:0;bottom:0;overflow-y:auto;display:flex;flex-direction:column;
+  align-items:center;padding:34px 18px 60px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.12) transparent;}
+
+.stat-row{display:flex;gap:10px;max-width:640px;width:100%;margin-bottom:22px;flex-wrap:wrap;}
+.stat{flex:1;min-width:110px;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;
+  padding:11px 14px;}
+.stat-n{font-family:var(--fs);font-weight:800;font-size:19px;color:var(--gold);}
+.stat-l{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-top:2px;}
+
+.card{max-width:640px;width:100%;background:var(--surface);border:1.5px solid var(--border2);
+  border-radius:16px;overflow:hidden;box-shadow:0 3px 18px rgba(0,0,0,.15);}
+.card-eyebrow{padding:16px 24px 0;font-family:var(--fs);font-size:10px;font-weight:800;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--fc,var(--gold));}
+.card-q{padding:10px 24px 20px;font-family:var(--fd);font-size:18px;font-style:italic;color:#fff;line-height:1.55;}
+.card-body{padding:0 24px 24px;display:flex;flex-direction:column;gap:12px;}
+
+.opt-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.opt{background:#fff;border:1.5px solid rgba(0,0,0,.1);border-radius:11px;padding:13px 15px;cursor:pointer;
+  text-align:left;font-family:var(--ff);font-size:13.5px;color:var(--ink);line-height:1.4;transition:all .15s;}
+.opt:hover{transform:translateY(-1px);box-shadow:0 8px 20px -6px rgba(0,0,0,.4);}
+.opt.right{background:rgba(63,191,178,.16);border-color:var(--good);}
+.opt.wrong{background:rgba(232,90,79,.16);border-color:var(--bad);}
+.opt[disabled]{cursor:default;}
+.opt-stem{font-weight:700;font-size:13.5px;}
+.opt-conn{font-style:italic;font-family:var(--fd);color:#6a6a6a;font-size:12.5px;margin-top:3px;}
+
+.reveal{background:#fff;border-radius:12px;padding:15px 18px;color:var(--ink);}
+.rev-stem{font-weight:700;font-size:16px;}
+.rev-conn{font-style:italic;font-family:var(--fd);color:#6a6a6a;font-size:13.5px;margin-top:4px;}
+
+textarea.freebox{width:100%;min-height:90px;background:rgba(255,255,255,.05);border:1.5px solid var(--border2);
+  border-radius:10px;padding:12px 14px;color:var(--text);font-family:var(--ff);font-size:13.5px;line-height:1.5;
+  resize:vertical;outline:none;}
+textarea.freebox:focus{border-color:var(--gold);}
+
+.timer{font-family:var(--fs);font-weight:800;font-size:13px;color:var(--gold);letter-spacing:.04em;}
+
+.btn{font-size:12px;font-weight:700;padding:9px 20px;border-radius:9px;border:1.5px solid var(--border2);
+  background:rgba(255,255,255,.06);color:var(--muted);cursor:pointer;font-family:var(--ff);transition:all .15s;}
+.btn:hover{color:#fff;background:rgba(255,255,255,.1);}
+.btn.primary{background:color-mix(in srgb,var(--fc,var(--gold)) 20%,transparent);
+  border-color:color-mix(in srgb,var(--fc,var(--gold)) 55%,transparent);color:var(--fc,var(--gold));}
+.btn.good{border-color:rgba(63,191,178,.5);background:rgba(63,191,178,.14);color:#5fd4c7;}
+.btn.bad{border-color:rgba(232,90,79,.5);background:rgba(232,90,79,.14);color:#f0776d;}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;}
+
+.hint{font-size:11px;color:var(--faint);line-height:1.6;}
+
+/* dashboard overlay */
+#dash{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;display:none;align-items:flex-start;
+  justify-content:center;padding:70px 18px 30px;overflow-y:auto;}
+#dash.show{display:flex;}
+.dash-panel{max-width:640px;width:100%;background:var(--surface);border:1.5px solid var(--border2);
+  border-radius:16px;padding:22px 26px 26px;}
+.dash-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.dash-title{font-family:var(--fs);font-weight:800;font-size:15px;}
+.dash-x{background:none;border:none;color:var(--faint);font-size:20px;cursor:pointer;line-height:1;}
+.dash-x:hover{color:var(--text);}
+.dash-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);}
+.dash-row:last-child{border-bottom:none;}
+.dash-fn{font-size:12.5px;font-weight:700;width:150px;flex-shrink:0;}
+.dash-bar-track{flex:1;height:8px;background:rgba(255,255,255,.08);border-radius:99px;overflow:hidden;}
+.dash-bar-fill{height:100%;border-radius:99px;background:var(--gold);transition:width .3s;}
+.dash-pct{font-family:var(--fs);font-size:11px;font-weight:800;color:var(--faint);width:38px;text-align:right;flex-shrink:0;}
+.dash-reset{margin-top:18px;font-size:10px;color:var(--faint);}
+.dash-reset button{font-size:10px;background:none;border:none;color:var(--faint);text-decoration:underline;cursor:pointer;}
+
+@media(max-width:520px){
+  .opt-grid{grid-template-columns:1fr;}
+  .dash-fn{width:110px;font-size:11px;}
+  .mb{padding:6px 10px;font-size:10px;}
+}
+</style>
+</head>
+<body>
+
+<div id="load">
+  <div class="spin"></div>
+  <div class="ld-title">Retention Check</div>
+  <div class="ld-sub">LOADING CORPUS</div>
+</div>
+
+<div id="hdr">
+  <a class="back-link" href="index.html">← Back</a>
+  <div class="mode-pill" id="modePill"></div>
+  <button id="dashBtn" onclick="openDash()">Progress</button>
+</div>
+
+<div id="app"></div>
+
+<div id="dash">
+  <div class="dash-panel">
+    <div class="dash-head">
+      <div class="dash-title">Mastery by function</div>
+      <button class="dash-x" onclick="closeDash()">✕</button>
+    </div>
+    <div id="dashList"></div>
+    <div class="dash-reset">Progress is kept for this session only. <button onclick="resetAll()">Reset all progress</button></div>
+  </div>
+</div>
+
+<script>
+/* ══════════════════ CORPUS LOADING ══════════════════ */
+let RAW = {}, FUNCS = [], PROMPTS = [];
+function corpusUrl(){ return new URLSearchParams(location.search).get('json') || 'data/functional-english.json'; }
+function questionsUrl(){ return new URLSearchParams(location.search).get('questions') || 'data/functional-questions.json'; }
+
+async function boot(){
+  try{
+    const [c,q] = await Promise.all([
+      fetch(corpusUrl()).then(r=>{ if(!r.ok) throw new Error('corpus HTTP '+r.status); return r.json(); }),
+      fetch(questionsUrl()).then(r=> r.ok ? r.json() : {questions:{}}).catch(()=>({questions:{}}))
+    ]);
+    RAW = c; FUNCS = c.functions; PROMPTS = c.prompts || [];
+    QUESTIONS = (q && q.questions) ? q.questions : {};
+    initState();
+    document.getElementById('load').classList.add('gone');
+    buildModePill();
+    setMode('cloze');
+  }catch(e){
+    document.getElementById('load').innerHTML =
+      `<div class="ld-err"><strong>Could not load ${corpusUrl()}</strong><br><br>
+       Place this file alongside the corpus JSON and serve via the deployed site or a local server.<br><br>
+       <span style="opacity:.4">${e.message}</span></div>`;
+  }
+}
+let QUESTIONS = {};
+
+/* ══════════════════ LEITNER STATE (session-only, no persistence) ══════════════════ */
+// key = functionId + ':' + phraseIndex → box 1..5 (1 = new/weak, 5 = mastered)
+let STATE = {};
+function initState(){
+  FUNCS.forEach(fn=>{
+    fn.phrases.forEach((ph,pi)=>{
+      const key = fn.id+':'+pi;
+      if(!STATE[key]) STATE[key] = {box:1, seen:0, correct:0};
+    });
+  });
+}
+function keyFor(fnId,pi){ return fnId+':'+pi; }
+function markResult(fnId,pi,ok){
+  const k = keyFor(fnId,pi), s = STATE[k];
+  s.seen++;
+  if(ok){ s.correct++; s.box = Math.min(5, s.box+1); }
+  else  { s.box = 1; }
+}
+function fnMastery(fn){
+  const items = fn.phrases.map((_,pi)=>STATE[keyFor(fn.id,pi)]);
+  const avgBox = items.reduce((a,s)=>a+s.box,0)/items.length;
+  return Math.round(((avgBox-1)/4)*100); // box1→0%, box5→100%
+}
+// weighted pick: lower box = more likely to be chosen (spaced-repetition-ish)
+function weightedPhraseIndex(fn, avoidPi){
+  const weights = fn.phrases.map((_,pi)=> pi===avoidPi ? 0 : (6 - STATE[keyFor(fn.id,pi)].box));
+  const total = weights.reduce((a,b)=>a+b,0) || 1;
+  let r = Math.random()*total;
+  for(let pi=0; pi<weights.length; pi++){ r -= weights[pi]; if(r<=0) return pi; }
+  return 0;
+}
+function randomFn(avoidId){
+  const pool = FUNCS.filter(f=>f.id!==avoidId);
+  return pool[Math.floor(Math.random()*pool.length)] || FUNCS[0];
+}
+
+/* ══════════════════ MODE SHELL ══════════════════ */
+const MODES = [
+  {id:'cloze',   label:'Gap-fill'},
+  {id:'recall',  label:'Recall'},
+  {id:'idmatch', label:'Prompt → Function'},
+  {id:'free',    label:'Free Production'},
+];
+function buildModePill(){
+  document.getElementById('modePill').innerHTML = MODES.map(m=>
+    `<button class="mb" data-m="${m.id}" onclick="setMode('${m.id}')">${m.label}</button>`).join('');
+}
+let currentMode = null;
+function setMode(id){
+  currentMode = id;
+  document.querySelectorAll('.mb').forEach(b=>b.classList.toggle('on', b.dataset.m===id));
+  const app = document.getElementById('app');
+  app.innerHTML = statsRowHTML();
+  if(id==='cloze') renderCloze();
+  if(id==='recall') renderRecall();
+  if(id==='idmatch') renderIdMatch();
+  if(id==='free') renderFree();
+}
+function statsRowHTML(){
+  const total = FUNCS.reduce((a,f)=>a+f.phrases.length,0);
+  const mastered = FUNCS.reduce((a,f)=>a + f.phrases.filter((_,pi)=>STATE[keyFor(f.id,pi)].box>=4).length,0);
+  const attempted = Object.values(STATE).filter(s=>s.seen>0).length;
+  return `<div class="stat-row" id="statRow">
+    <div class="stat"><div class="stat-n">${mastered}/${total}</div><div class="stat-l">Mastered</div></div>
+    <div class="stat"><div class="stat-n">${attempted}</div><div class="stat-l">Phrases tried</div></div>
+    <div class="stat"><div class="stat-n">${MODES.find(m=>m.id===currentMode).label}</div><div class="stat-l">Current mode</div></div>
+  </div>`;
+}
+function refreshStats(){ const r=document.getElementById('statRow'); if(r) r.outerHTML = statsRowHTML(); }
+function hue(fam){ return {evaluating:'var(--evaluating)',reasoning:'var(--reasoning)',positioning:'var(--positioning)',
+  projecting:'var(--projecting)',relating:'var(--relating)'}[fam] || 'var(--gold)'; }
+
+/* ══════════════════ MODE 1 · GAP-FILL (cloze on connector) ══════════════════ */
+let clozeCur = null;
+function renderCloze(){
+  const fn = FUNCS[Math.floor(Math.random()*FUNCS.length)];
+  const pi = weightedPhraseIndex(fn);
+  const ph = fn.phrases[pi];
+  clozeCur = {fn, pi};
+  // build 3 distractor connectors from other phrases in the same function
+  const others = fn.phrases.map((p,i)=>i).filter(i=>i!==pi);
+  const shuffled = others.sort(()=>Math.random()-.5).slice(0,3);
+  const opts = shuffled.map(i=>fn.phrases[i].connector).concat([ph.connector]).sort(()=>Math.random()-.5);
+
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.style.setProperty('--fc', hue(fn.family));
+  card.innerHTML = `
+    <div class="card-eyebrow">${fn.label.toUpperCase()} · pick the matching connector</div>
+    <div class="card-q">${ph.stem}</div>
+    <div class="card-body">
+      <div class="opt-grid" id="clozeOpts">
+        ${opts.map(c=>`<button class="opt" onclick="clozeAnswer(this,'${escAttr(c)}')"><span class="opt-conn">${c}</span></button>`).join('')}
+      </div>
+      <div class="hint">Choose the connector that completes this stem.</div>
+    </div>`;
+  document.getElementById('app').appendChild(card);
+}
+function escAttr(s){ return s.replace(/'/g,"\\'"); }
+function clozeAnswer(btn, chosen){
+  const {fn,pi} = clozeCur;
+  const correct = fn.phrases[pi].connector;
+  document.querySelectorAll('#clozeOpts .opt').forEach(o=>o.disabled=true);
+  const ok = chosen===correct;
+  btn.classList.add(ok?'right':'wrong');
+  if(!ok){
+    document.querySelectorAll('#clozeOpts .opt').forEach(o=>{
+      if(o.textContent.trim()===correct.trim()) o.classList.add('right');
+    });
+  }
+  markResult(fn.id, pi, ok);
+  refreshStats();
+  const app = document.getElementById('app');
+  const btnRow = document.createElement('div');
+  btnRow.style.maxWidth='640px'; btnRow.style.width='100%'; btnRow.style.marginTop='14px';
+  btnRow.innerHTML = `<button class="btn primary" style="--fc:${hue(fn.family)}" onclick="setMode('cloze')">Next →</button>`;
+  app.appendChild(btnRow);
+}
+
+/* ══════════════════ MODE 2 · REVERSE RECALL ══════════════════ */
+let recallCur = null, recallRevealed = false;
+function renderRecall(){
+  const fn = FUNCS[Math.floor(Math.random()*FUNCS.length)];
+  const pi = weightedPhraseIndex(fn);
+  recallCur = {fn, pi}; recallRevealed = false;
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.style.setProperty('--fc', hue(fn.family));
+  card.innerHTML = `
+    <div class="card-eyebrow">${fn.label.toUpperCase()} · recall from memory</div>
+    <div class="card-q">${fn.when}</div>
+    <div class="card-body" id="recallBody">
+      <div class="hint">Say or write a phrase for this function out loud, then reveal to check yourself.</div>
+      <div class="btn-row">
+        <button class="btn primary" style="--fc:${hue(fn.family)}" onclick="revealRecall()">Reveal phrase</button>
+      </div>
+    </div>`;
+  document.getElementById('app').appendChild(card);
+}
+function revealRecall(){
+  if(recallRevealed) return;
+  recallRevealed = true;
+  const {fn,pi} = recallCur, ph = fn.phrases[pi];
+  const body = document.getElementById('recallBody');
+  body.innerHTML = `
+    <div class="reveal"><div class="rev-stem">${ph.stem}</div><div class="rev-conn">${ph.connector}</div></div>
+    <div class="hint">Did you produce something close to this?</div>
+    <div class="btn-row">
+      <button class="btn good" onclick="recallScore(true)">I got it ✓</button>
+      <button class="btn bad" onclick="recallScore(false)">I didn't ✕</button>
+    </div>`;
+}
+function recallScore(ok){
+  const {fn,pi} = recallCur;
+  markResult(fn.id, pi, ok);
+  refreshStats();
+  setMode('recall');
+}
+
+/* ══════════════════ MODE 3 · PROMPT → FUNCTION ID ══════════════════ */
+let idmatchCur = null;
+function fnIdsWithQuestions(){ return FUNCS.filter(f => QUESTIONS[f.id] && QUESTIONS[f.id].length); }
+function renderIdMatch(){
+  const pool = fnIdsWithQuestions();
+  if(!pool.length){
+    document.getElementById('app').insertAdjacentHTML('beforeend',
+      `<div class="card"><div class="card-body" style="padding-top:20px;"><div class="hint">No drill questions found — check that functional-questions.json is loaded.</div></div></div>`);
+    return;
+  }
+  const fn = pool[Math.floor(Math.random()*pool.length)];
+  const qs = QUESTIONS[fn.id];
+  const q = qs[Math.floor(Math.random()*qs.length)];
+  const distractors = FUNCS.filter(f=>f.id!==fn.id).sort(()=>Math.random()-.5).slice(0,3);
+  const options = [fn].concat(distractors).sort(()=>Math.random()-.5);
+  idmatchCur = {fn, q};
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.style.setProperty('--fc', hue(fn.family));
+  card.innerHTML = `
+    <div class="card-eyebrow">WHICH FUNCTION DOES THIS PROMPT CALL FOR?</div>
+    <div class="card-q">${q}</div>
+    <div class="card-body">
+      <div class="opt-grid" id="idOpts">
+        ${options.map(f=>`<button class="opt" onclick="idAnswer(this,'${f.id}')"><span class="opt-stem">${f.label}</span></button>`).join('')}
+      </div>
+    </div>`;
+  document.getElementById('app').appendChild(card);
+}
+function idAnswer(btn, chosenId){
+  const {fn} = idmatchCur;
+  document.querySelectorAll('#idOpts .opt').forEach(o=>o.disabled=true);
+  const ok = chosenId===fn.id;
+  btn.classList.add(ok?'right':'wrong');
+  if(!ok){
+    document.querySelectorAll('#idOpts .opt').forEach(o=>{ if(o.textContent.trim()===fn.label) o.classList.add('right'); });
+  }
+  // treat as a light-weight check on a representative phrase (index 0) for this function
+  markResult(fn.id, 0, ok);
+  refreshStats();
+  const ph = fn.phrases[0];
+  const app = document.getElementById('app');
+  const followUp = document.createElement('div');
+  followUp.className = 'card'; followUp.style.marginTop = '14px';
+  followUp.style.setProperty('--fc', hue(fn.family));
+  followUp.innerHTML = `
+    <div class="card-eyebrow">A PHRASE THAT FITS</div>
+    <div class="card-body" style="padding-top:6px;">
+      <div class="reveal"><div class="rev-stem">${ph.stem}</div><div class="rev-conn">${ph.connector}</div></div>
+      <div class="btn-row"><button class="btn primary" style="--fc:${hue(fn.family)}" onclick="setMode('idmatch')">Next →</button></div>
+    </div>`;
+  app.appendChild(followUp);
+}
+
+/* ══════════════════ MODE 4 · FREE PRODUCTION (timed, no phrase bank) ══════════════════ */
+let freeTimer = null, freeSeconds = 30;
+function renderFree(){
+  const p = PROMPTS[Math.floor(Math.random()*PROMPTS.length)];
+  const app = document.getElementById('app');
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <div class="card-eyebrow">FREE PRODUCTION · NO PHRASE BANK</div>
+    <div class="card-q">${p.text}</div>
+    <div class="card-body">
+      <div class="timer" id="freeTimerDisplay">0:30</div>
+      <textarea class="freebox" id="freeBox" placeholder="Speak your answer aloud, or type it here as you go…"></textarea>
+      <div class="btn-row">
+        <button class="btn primary" id="freeStartBtn" onclick="startFreeTimer()">Start 30s timer</button>
+        <button class="btn" onclick="revealFreeChecklist()">Show self-check</button>
+      </div>
+      <div id="freeChecklist"></div>
+    </div>`;
+  app.appendChild(card);
+}
+function startFreeTimer(){
+  clearInterval(freeTimer);
+  freeSeconds = 30;
+  const disp = document.getElementById('freeTimerDisplay');
+  const btn = document.getElementById('freeStartBtn');
+  btn.disabled = true; btn.textContent = 'Timing…';
+  freeTimer = setInterval(()=>{
+    freeSeconds--;
+    const m = Math.floor(freeSeconds/60), s = freeSeconds%60;
+    disp.textContent = m+':'+String(s).padStart(2,'0');
+    if(freeSeconds<=0){
+      clearInterval(freeTimer);
+      disp.textContent = "Time's up";
+      btn.textContent = 'Start 30s timer'; btn.disabled = false;
+    }
+  },1000);
+}
+function revealFreeChecklist(){
+  const box = document.getElementById('freeChecklist');
+  const families = ['evaluating','reasoning','positioning','projecting','relating'];
+  box.innerHTML = `<div class="hint" style="margin-top:8px;">Check your answer against these families — did you use at least one move from each you needed?</div>
+    <div class="opt-grid" style="margin-top:8px;grid-template-columns:1fr;">
+      ${families.map(f=>`<label style="display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--muted);">
+        <input type="checkbox" style="accent-color:${hue(f)};"> Used a <b style="color:${hue(f)};margin:0 3px;">${f}</b> move
+      </label>`).join('')}
+    </div>
+    <div class="btn-row" style="margin-top:12px;"><button class="btn primary" onclick="setMode('free')">Next prompt →</button></div>`;
+}
+
+/* ══════════════════ DASHBOARD ══════════════════ */
+function openDash(){
+  document.getElementById('dashList').innerHTML = FUNCS.map(fn=>{
+    const pct = fnMastery(fn);
+    return `<div class="dash-row">
+      <div class="dash-fn" style="color:${hue(fn.family)}">${fn.label}</div>
+      <div class="dash-bar-track"><div class="dash-bar-fill" style="width:${pct}%;background:${hue(fn.family)};"></div></div>
+      <div class="dash-pct">${pct}%</div>
+    </div>`;
+  }).join('');
+  document.getElementById('dash').classList.add('show');
+}
+function closeDash(){ document.getElementById('dash').classList.remove('show'); }
+function resetAll(){ initState(); closeDash(); setMode(currentMode); }
+
+boot();
+</script>
+</body>
+</html>

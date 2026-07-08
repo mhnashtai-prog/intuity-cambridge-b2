@@ -126,13 +126,13 @@
 
   /* phrase card — white poster with family-hue RIBBON BANNER (unity element) */
   .enode{position:absolute;z-index:2;width:270px;background:#fff;border-radius:.9rem;
-    padding:1.9rem .85rem .7rem;cursor:grab;transform:translate(-50%,-50%);
+    padding:2.4rem .85rem .7rem;cursor:grab;transform:translate(-50%,-50%);
     box-shadow:0 1px 0 rgba(255,255,255,.9) inset,0 10px 26px -8px rgba(0,0,0,.55),0 4px 12px rgba(0,0,0,.32);
     transition:box-shadow .18s;user-select:none;-webkit-user-select:none;}
   .enode:active{cursor:grabbing;}
   .enode.dragging{box-shadow:0 16px 40px -8px rgba(0,0,0,.6);z-index:20;}
   /* the ribbon banner — small tag straddling the top-left corner */
-  .enode-banner{position:absolute;top:-.4rem;left:-6px;display:flex;align-items:center;gap:.3rem;
+  .enode-banner{position:absolute;top:.75rem;left:-6px;display:flex;align-items:center;gap:.3rem;
     background:var(--fc);padding:.2rem .5rem .2rem .3rem;border-radius:.35rem .5rem .5rem .35rem;
     box-shadow:0 4px 10px -3px rgba(0,0,0,.4);z-index:3;}
   .enode-banner::after{content:'';position:absolute;left:0;bottom:-6px;border-style:solid;border-width:6px 0 0 9px;
@@ -390,12 +390,33 @@ function layoutConstellation(fam,k){
   const items = fn.capsule;
   const n=items.length;
 
-  // ring geometry: keep cards clear of the central question and the edges
-  const twoRings = n>5;
-  const margin=170;
-  const maxR=Math.min(W/2, H/2)-margin;
-  const rOuter = Math.max(220, maxR);
-  const rInner = twoRings ? rOuter*0.66 : rOuter*0.92;
+  /* Strategic elliptical placement:
+     - ellipse is wider than tall (matches landscape, uses side space)
+     - cards are pushed toward the LEFT and RIGHT flanks, avoiding the
+       central vertical band where the question + Next button live
+     - split evenly: left half and right half, each read top→bottom */
+  const rx = Math.min(W*0.30, 430);        // horizontal reach (wide cards stay on screen)
+  const ry = Math.min(H*0.40, 300);        // vertical reach (shorter)
+  const half = Math.ceil(n/2);             // cards per side (left gets the extra if odd)
+  const rightCount = n - half;
+
+  // vertical spread angle: keep away from the very top (-90°) and bottom (+90°)
+  // by confining each side to a comfortable arc down its flank.
+  function place(i){
+    const onLeft = i < half;
+    const idx = onLeft ? i : i - half;
+    const count = onLeft ? half : rightCount;
+    // spread from -55°..+55° measured from horizontal, down each side
+    const spread = 110; // degrees of arc used on each flank
+    const start = -spread/2;
+    const step = count>1 ? spread/(count-1) : 0;
+    const deg = start + idx*step;            // -55 .. +55
+    const rad = deg*Math.PI/180;
+    // left side uses angle measured from the LEFT (180°), right side from 0°
+    const baseX = onLeft ? -Math.cos(rad) : Math.cos(rad);
+    const y = Math.sin(rad);
+    return { x: cx + baseX*rx, y: cy + y*ry };
+  }
 
   items.forEach((x,i)=>{
     const node=document.createElement('div');
@@ -408,19 +429,20 @@ function layoutConstellation(fam,k){
       <div class="enode-tail">${x.tail}</div>`;
     con.appendChild(node);
 
-    let ring, idxInRing, countInRing, startAngle;
-    if(twoRings){
-      const innerCount=Math.ceil(n/2), outerCount=n-innerCount;
-      if(i<innerCount){ ring=rInner; idxInRing=i; countInRing=innerCount; startAngle=-90; }
-      else { ring=rOuter; idxInRing=i-innerCount; countInRing=outerCount; startAngle=-90+(180/outerCount); }
-    } else { ring=rInner; idxInRing=i; countInRing=n; startAngle=-90; }
-    const ang=(startAngle + idxInRing*(360/countInRing))*Math.PI/180;
-    const x0=cx+ring*Math.cos(ang), y0=cy+ring*Math.sin(ang);
-    node.style.left=x0+'px'; node.style.top=y0+'px';
+    const p=place(i);
+    node.style.left=p.x+'px'; node.style.top=p.y+'px';
 
-    const down=(px,py)=>{ dragEl=node; node.classList.add('dragging');
-      const r=node.getBoundingClientRect(), cr=con.getBoundingClientRect();
-      dragDX=px-(r.left+r.width/2 - cr.left); dragDY=py-(r.top+r.height/2 - cr.top); hideHint(); };
+    const down=(px,py)=>{
+      dragEl=node; node.classList.add('dragging');
+      const cr=con.getBoundingClientRect(), r=node.getBoundingClientRect();
+      // convert from transform-centred to plain top-left positioning so drag math is 1:1
+      node.style.transform='none';
+      node.style.left=(r.left-cr.left)+'px';
+      node.style.top =(r.top -cr.top )+'px';
+      // grab offset = pointer minus the card's current top-left
+      dragDX=px-r.left; dragDY=py-r.top;
+      hideHint();
+    };
     node.addEventListener('mousedown',e=>{e.preventDefault();down(e.clientX,e.clientY);});
     node.addEventListener('touchstart',e=>{down(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
   });
@@ -434,8 +456,8 @@ function moveNode(px,py){
   if(!dragEl) return;
   const con=document.getElementById('constellation');
   const cr=con.getBoundingClientRect();
-  const nx=px-cr.left-dragDX, ny=py-cr.top-dragDY;
-  dragEl.style.left=nx+'px'; dragEl.style.top=ny+'px';
+  dragEl.style.left=(px-cr.left-dragDX)+'px';
+  dragEl.style.top =(py-cr.top -dragDY)+'px';
 }
 document.addEventListener('mousemove',e=>{ if(dragEl) moveNode(e.clientX,e.clientY); });
 document.addEventListener('touchmove',e=>{ if(dragEl){ moveNode(e.touches[0].clientX,e.touches[0].clientY);} },{passive:true});

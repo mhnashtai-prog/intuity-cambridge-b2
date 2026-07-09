@@ -500,18 +500,19 @@ function nextQuestion(){
 }
 
 let dragEl=null, dragDX=0, dragDY=0;
-const GAP_PX = 4 * (96/25.4); // 4mm converted to CSS px (1in = 25.4mm = 96px)
-
 function layoutConstellation(fam,k){
   const F=CORPUS[fam], fn=F.functions[k], [c,d]=hue(fam);
   const con=document.getElementById('constellation');
   const W=con.clientWidth, H=con.clientHeight;
   const cx=W/2, cy=H/2;
 
+  // In Further Practice mode the orbiting cards are the drill CUE items;
+  // otherwise they are the phrase frames.
   const drillItems = (DRILLS[k] || []);
   const items = furtherMode ? drillItems : fn.capsule;
   const n=items.length;
   if(furtherMode && !n){
+    // no drills authored for this function — fall back with a note
     const note=document.createElement('div');
     note.className='const-hint'; note.style.opacity='.5';
     note.textContent='No production drills authored for this function yet.';
@@ -519,17 +520,56 @@ function layoutConstellation(fam,k){
     return;
   }
 
+  /* Radial orbit around the central question — cards go ROUND the question.
+     Distributed by even angular steps down each flank, but with the vertical
+     radius large enough (and the arc kept off the exact top/bottom) that
+     neighbouring cards keep a uniform gap and never pinch at the ends. */
+  /* Radial orbit around the central question, cards distributed by EQUAL ARC-LENGTH
+     (equal distance along the curve) so every neighbour gap is uniform — unlike equal
+     angular steps, which pinch at the top and bottom. Cards wrap round the question. */
   const half = Math.ceil(n/2);
-  const cyOrbit = cy - 10;
-  const rx = Math.min(W*0.32, 450);
+  const rightCount = n - half;
+  const cx0 = cx, cy0 = cy - 8;
+  const rx = Math.min(W*0.33, 470);
+  const ry = Math.min((H-170)/2, 205);        // clamps down on short screens so nothing clips
+  const topLimit = 66 * Math.PI/180;          // arc reaches 66° above/below horizontal (clear of top/bottom)
 
-  // build all nodes first (unpositioned) so we can measure real heights
-  const leftNodes=[], rightNodes=[];
+  function ellipsePt(t){ return [rx*Math.cos(t), ry*Math.sin(t)]; }
+  function arcTable(steps){
+    const table=[{a:-topLimit,s:0}]; let len=0, prev=ellipsePt(-topLimit);
+    for(let i=1;i<=steps;i++){
+      const a=-topLimit + (2*topLimit)*i/steps;
+      const p=ellipsePt(a);
+      len += Math.hypot(p[0]-prev[0], p[1]-prev[1]);
+      table.push({a,s:len}); prev=p;
+    }
+    return {table, total:len};
+  }
+  const AT = arcTable(400);
+  function angleAt(S){
+    for(let i=1;i<AT.table.length;i++){
+      if(AT.table[i].s>=S){
+        const a0=AT.table[i-1], a1=AT.table[i];
+        const f=(S-a0.s)/((a1.s-a0.s)||1);
+        return a0.a + (a1.a-a0.a)*f;
+      }
+    }
+    return AT.table[AT.table.length-1].a;
+  }
+  function place(i){
+    const onLeft = i < half;
+    const idx = onLeft ? i : i - half;
+    const count = onLeft ? half : rightCount;
+    const s = count>1 ? AT.total*idx/(count-1) : AT.total/2;
+    const a = angleAt(s);
+    const [px,py] = ellipsePt(a);
+    return { x: onLeft ? cx0 - px : cx0 + px, y: cy0 + py };
+  }
+
   items.forEach((x,i)=>{
     const node=document.createElement('div');
     node.className='enode'+(practiceMode?' practising':'')+(furtherMode?' cue-card':'');
     node.style.setProperty('--fc',c); node.style.setProperty('--fc-d',d);
-    node.style.visibility='hidden'; // avoid flash at (0,0) before we position it
 
     if(furtherMode){
       const cueHtml=x.cue.split('/').map(s=>s.trim()).join('<span class="cue-slash">/</span>');
@@ -550,41 +590,29 @@ function layoutConstellation(fam,k){
     }
     con.appendChild(node);
 
+    const p=place(i);
+    node.style.left=p.x+'px'; node.style.top=p.y+'px';
+
     if(furtherMode){
+      // cue cards: click opens the completion card (no dragging in drill mode)
       node.addEventListener('click',()=>openCompletion(k,i,x,c,d));
-    } else {
-      const down=(px,py)=>{
-        dragEl=node; node.classList.add('dragging');
-        const cr=con.getBoundingClientRect(), r=node.getBoundingClientRect();
-        node.style.transform='none';
-        node.style.left=(r.left-cr.left)+'px';
-        node.style.top =(r.top -cr.top )+'px';
-        dragDX=px-r.left; dragDY=py-r.top;
-        hideHint();
-      };
-      node.addEventListener('mousedown',e=>{e.preventDefault();down(e.clientX,e.clientY);});
-      node.addEventListener('touchstart',e=>{down(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
+      return; // skip drag wiring
     }
 
-    (i<half ? leftNodes : rightNodes).push(node);
+    let downX=0, downY=0, moved=false;
+    const down=(px,py)=>{
+      downX=px; downY=py; moved=false;
+      dragEl=node; node.classList.add('dragging');
+      const cr=con.getBoundingClientRect(), r=node.getBoundingClientRect();
+      node.style.transform='none';
+      node.style.left=(r.left-cr.left)+'px';
+      node.style.top =(r.top -cr.top )+'px';
+      dragDX=px-r.left; dragDY=py-r.top;
+      hideHint();
+    };
+    node.addEventListener('mousedown',e=>{e.preventDefault();down(e.clientX,e.clientY);});
+    node.addEventListener('touchstart',e=>{down(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
   });
-
-  // now that they're in the DOM, measure and stack each column with a fixed 4mm gap
-  function layoutColumn(nodes, xPos){
-    const heights = nodes.map(nd=>nd.offsetHeight);
-    const totalH = heights.reduce((s,h)=>s+h,0) + GAP_PX*(nodes.length-1);
-    let curY = cyOrbit - totalH/2;
-    nodes.forEach((nd,idx)=>{
-      const h=heights[idx];
-      nd.style.left = xPos+'px';
-      nd.style.top  = (curY + h/2)+'px'; // node uses translate(-50%,-50%), so top = centre
-      nd.style.visibility='visible';
-      curY += h + GAP_PX;
-    });
-  }
-
-  layoutColumn(leftNodes,  cx-rx);
-  layoutColumn(rightNodes, cx+rx);
 
   const hint=document.createElement('div');
   hint.className='const-hint';
@@ -593,6 +621,7 @@ function layoutConstellation(fam,k){
                    : 'Drag any expression to arrange your answer';
   con.appendChild(hint);
 }
+
 let dragMoved=false;
 function moveNode(px,py){
   if(!dragEl) return;

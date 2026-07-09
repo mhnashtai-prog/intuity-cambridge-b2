@@ -501,6 +501,101 @@ function nextQuestion(){
 
 let dragEl=null, dragDX=0, dragDY=0;
 function layoutConstellation(fam,k){
+  const F=CORPUS[fam], fn=F.functions[k], [c,d]=hue(fam);
+  const con=document.getElementById('constellation');
+  const W=con.clientWidth, H=con.clientHeight;
+  const cx=W/2, cy=H/2;
+
+  // In Further Practice mode the orbiting cards are the drill CUE items;
+  // otherwise they are the phrase frames.
+  const drillItems = (DRILLS[k] || []);
+  const items = furtherMode ? drillItems : fn.capsule;
+  const n=items.length;
+  if(furtherMode && !n){
+    // no drills authored for this function — fall back with a note
+    const note=document.createElement('div');
+    note.className='const-hint'; note.style.opacity='.5';
+    note.textContent='No production drills authored for this function yet.';
+    con.appendChild(note);
+    return;
+  }
+
+  /* Original elliptical placement — the natural spread around the question.
+     Cards on a wide ellipse, distributed by even angular steps down each flank. */
+  const half = Math.ceil(n/2);
+  const rightCount = n - half;
+  const rx = Math.min(W*0.30, 430);
+  const ry = Math.min(H*0.40, 250);   // tighter vertical reach → middle cards closer together
+
+  function place(i){
+    const onLeft = i < half;
+    const idx = onLeft ? i : i - half;
+    const count = onLeft ? half : rightCount;
+    const spread = 130;   // wider arc → more space between adjacent cards (1→2, 2→3…)
+    const start = -spread/2;
+    const step = count>1 ? spread/(count-1) : 0;
+    const deg = start + idx*step;
+    const rad = deg*Math.PI/180;
+    const baseX = onLeft ? -Math.cos(rad) : Math.cos(rad);
+    const y = Math.sin(rad);
+    return { x: cx + baseX*rx, y: cy + y*ry };
+  }
+
+  items.forEach((x,i)=>{
+    const node=document.createElement('div');
+    node.className='enode'+(practiceMode?' practising':'')+(furtherMode?' cue-card':'');
+    node.style.setProperty('--fc',c); node.style.setProperty('--fc-d',d);
+
+    if(furtherMode){
+      const cueHtml=x.cue.split('/').map(s=>s.trim()).join('<span class="cue-slash">/</span>');
+      node.innerHTML=`<div class="enode-banner">
+          <span class="enode-bnum">${i+1}</span>
+          <span class="enode-blabel">${cap(k)}</span>
+        </div>
+        <div class="enode-stem">${cueHtml}</div>
+        <span class="cue-trigger">[${x.trigger}]</span>`;
+      if(furtherDone.has(cueKey(k,i))) node.classList.add('done');
+    } else {
+      node.innerHTML=`<div class="enode-banner">
+          <span class="enode-bnum">${i+1}</span>
+          <span class="enode-blabel">${cap(k)}</span>
+        </div>
+        <div class="enode-stem">${practiceMode ? blankStem(x.stem) : x.stem}</div>
+        <div class="enode-tail">${x.tail}</div>`;
+    }
+    con.appendChild(node);
+
+    const p=place(i);
+    node.style.left=p.x+'px'; node.style.top=p.y+'px';
+
+    if(furtherMode){
+      // cue cards: click opens the completion card (no dragging in drill mode)
+      node.addEventListener('click',()=>openCompletion(k,i,x,c,d));
+      return; // skip drag wiring
+    }
+
+    let downX=0, downY=0, moved=false;
+    const down=(px,py)=>{
+      downX=px; downY=py; moved=false;
+      dragEl=node; node.classList.add('dragging');
+      const cr=con.getBoundingClientRect(), r=node.getBoundingClientRect();
+      node.style.transform='none';
+      node.style.left=(r.left-cr.left)+'px';
+      node.style.top =(r.top -cr.top )+'px';
+      dragDX=px-r.left; dragDY=py-r.top;
+      hideHint();
+    };
+    node.addEventListener('mousedown',e=>{e.preventDefault();down(e.clientX,e.clientY);});
+    node.addEventListener('touchstart',e=>{down(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
+  });
+
+  const hint=document.createElement('div');
+  hint.className='const-hint';
+  hint.textContent = furtherMode ? 'Choose a card to complete — build it, then close for the next student'
+                   : practiceMode ? 'Fill the gap in your head — then tap the card to check'
+                   : 'Drag any expression to arrange your answer';
+  con.appendChild(hint);
+}
 
 let dragMoved=false;
 function moveNode(px,py){

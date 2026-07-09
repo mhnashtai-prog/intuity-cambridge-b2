@@ -97,6 +97,27 @@ textarea.freebox:focus{border-color:var(--gold);}
 
 .hint{font-size:11px;color:var(--faint);line-height:1.6;}
 
+/* gap-fill: topic picker */
+.topic-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;max-width:640px;width:100%;}
+.topic-card{background:#fff;border-radius:12px;padding:14px 14px 12px;cursor:pointer;text-align:left;
+  border:1.5px solid rgba(0,0,0,.08);transition:all .15s;font-family:var(--ff);}
+.topic-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px -6px rgba(0,0,0,.35);border-color:var(--fc);}
+.topic-tag{font-family:var(--fs);font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--fc);background:color-mix(in srgb,var(--fc) 15%,#fff);border-radius:999px;padding:.15rem .5rem;
+  display:inline-block;margin-bottom:6px;}
+.topic-name{font-family:var(--fs);font-weight:800;font-size:13px;color:var(--ink);text-transform:uppercase;}
+
+/* gap-fill: fill cards */
+.fill-list{display:flex;flex-direction:column;gap:10px;max-width:640px;width:100%;}
+.fill-card{background:#fff;border-radius:12px;padding:14px 16px;color:var(--ink);border-left:4px solid var(--fc,var(--gold));}
+.fill-text{font-size:14.5px;line-height:1.6;}
+.fill-blank{display:inline-block;border:none;border-bottom:2px solid var(--fc,var(--gold));background:transparent;
+  font-family:inherit;font-size:14.5px;font-weight:700;color:var(--ink);padding:0 4px;outline:none;text-align:center;}
+.fill-blank.right{border-color:var(--good);color:var(--good);}
+.fill-blank.wrong{border-color:var(--bad);color:var(--bad);}
+.fill-tail{font-style:italic;font-family:var(--fd);color:#6a6a6a;font-size:12.5px;margin-top:4px;}
+.fill-answer{font-size:12px;color:var(--bad);margin-left:8px;font-weight:600;}
+
 /* dashboard overlay */
 #dash{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;display:none;align-items:flex-start;
   justify-content:center;padding:70px 18px 30px;overflow-y:auto;}
@@ -249,51 +270,93 @@ function refreshStats(){ const r=document.getElementById('statRow'); if(r) r.out
 function hue(fam){ return {evaluating:'var(--evaluating)',reasoning:'var(--reasoning)',positioning:'var(--positioning)',
   projecting:'var(--projecting)',relating:'var(--relating)'}[fam] || 'var(--gold)'; }
 
-/* ══════════════════ MODE 1 · GAP-FILL (cloze on connector) ══════════════════ */
-let clozeCur = null;
-function renderCloze(){
-  const fn = FUNCS[Math.floor(Math.random()*FUNCS.length)];
-  const pi = weightedPhraseIndex(fn);
-  const ph = fn.phrases[pi];
-  clozeCur = {fn, pi};
-  // build 3 distractor connectors from other phrases in the same function
-  const others = fn.phrases.map((p,i)=>i).filter(i=>i!==pi);
-  const shuffled = others.sort(()=>Math.random()-.5).slice(0,3);
-  const opts = shuffled.map(i=>fn.phrases[i].connector).concat([ph.connector]).sort(()=>Math.random()-.5);
-
-  const card = document.createElement('div');
-  card.className = 'card';
-  card.style.setProperty('--fc', hue(fn.family));
-  card.innerHTML = `
-    <div class="card-eyebrow">${fn.label.toUpperCase()} · pick the matching connector</div>
-    <div class="card-q">${ph.stem}</div>
-    <div class="card-body">
-      <div class="opt-grid" id="clozeOpts">
-        ${opts.map(c=>`<button class="opt" onclick="clozeAnswer(this,'${escAttr(c)}')"><span class="opt-conn">${c}</span></button>`).join('')}
-      </div>
-      <div class="hint">Choose the connector that completes this stem.</div>
-    </div>`;
-  document.getElementById('app').appendChild(card);
+/* ══════════════════ MODE 1 · GAP-FILL (pick a topic → every stem, key word blanked) ══════════════════ */
+// Auto-detect the "key word" per stem: strip function words (the, is, that, my, as, from…)
+// and blank the last remaining content word — this is the word that actually carries the
+// function's meaning ("As far as I am CONCERNED…", "My personal OPINION is that…").
+const STOPWORDS = new Set(['a','an','the','i','am','is','are','was','were','be','being','been','to','of',
+  'in','on','at','by','for','with','as','so','that','this','it','my','me','far','from','would','could',
+  'should','do','does','did','and','or','but','if','one','has','have','had','no','not','than','then',
+  'there','their','they','we','you','your','his','her','its','our','us','well','more','most','very',
+  'also','just','what','which','who','whom','can','will','shall']);
+function extractKeyword(stem){
+  const re = /[A-Za-z']+/g;
+  let m, tokens = [];
+  while((m = re.exec(stem))){ tokens.push({word:m[0], start:m.index, end:m.index+m[0].length}); }
+  if(!tokens.length) return null;
+  const content = tokens.filter(t=>!STOPWORDS.has(t.word.toLowerCase()));
+  const target = content.length ? content[content.length-1] : tokens[tokens.length-1];
+  return { before: stem.slice(0,target.start), word: target.word, after: stem.slice(target.end) };
 }
-function escAttr(s){ return s.replace(/'/g,"\\'"); }
-function clozeAnswer(btn, chosen){
-  const {fn,pi} = clozeCur;
-  const correct = fn.phrases[pi].connector;
-  document.querySelectorAll('#clozeOpts .opt').forEach(o=>o.disabled=true);
-  const ok = chosen===correct;
-  btn.classList.add(ok?'right':'wrong');
-  if(!ok){
-    document.querySelectorAll('#clozeOpts .opt').forEach(o=>{
-      if(o.textContent.trim()===correct.trim()) o.classList.add('right');
-    });
-  }
-  markResult(fn.id, pi, ok);
-  refreshStats();
+
+let clozeTopic = null;
+function renderCloze(){
+  clozeTopic = null;
   const app = document.getElementById('app');
-  const btnRow = document.createElement('div');
-  btnRow.style.maxWidth='640px'; btnRow.style.width='100%'; btnRow.style.marginTop='14px';
-  btnRow.innerHTML = `<button class="btn primary" style="--fc:${hue(fn.family)}" onclick="setMode('cloze')">Next →</button>`;
-  app.appendChild(btnRow);
+  app.innerHTML = statsRowHTML();
+  const lead = document.createElement('div');
+  lead.className = 'hint'; lead.style.maxWidth='640px'; lead.style.width='100%'; lead.style.marginBottom='12px';
+  lead.textContent = 'Pick a topic. Every card for that function loses its key word — fill them all in.';
+  app.appendChild(lead);
+  const grid = document.createElement('div');
+  grid.className = 'topic-grid';
+  FUNCS.forEach(fn=>{
+    const card = document.createElement('button');
+    card.className = 'topic-card';
+    card.style.setProperty('--fc', hue(fn.family));
+    card.innerHTML = `<span class="topic-tag">${fn.family}</span><div class="topic-name">${fn.label}</div>`;
+    card.onclick = ()=>{ clozeTopic = fn.id; renderClozeFillCards(); };
+    grid.appendChild(card);
+  });
+  app.appendChild(grid);
+}
+function renderClozeFillCards(){
+  const app = document.getElementById('app');
+  app.innerHTML = statsRowHTML();
+  const fn = FUNCS.find(f=>f.id===clozeTopic);
+
+  const header = document.createElement('div');
+  header.style.maxWidth='640px'; header.style.width='100%'; header.style.margin='0 0 12px';
+  header.innerHTML = `<button class="btn" onclick="renderCloze()">← Topics</button>
+    <div style="font-family:var(--fs);font-weight:800;font-size:14px;margin-top:10px;letter-spacing:.04em;
+      text-transform:uppercase;color:${hue(fn.family)}">${fn.label} · fill in the missing word</div>`;
+  app.appendChild(header);
+
+  const list = document.createElement('div');
+  list.className = 'fill-list';
+  list.style.setProperty('--fc', hue(fn.family));
+
+  fn.phrases.forEach((ph,pi)=>{
+    const kw = extractKeyword(ph.stem);
+    if(!kw) return;
+    const card = document.createElement('div');
+    card.className = 'fill-card';
+    card.style.setProperty('--fc', hue(fn.family));
+    const inputW = Math.max(64, kw.word.length*12);
+    card.innerHTML = `
+      <div class="fill-text">${kw.before}<input class="fill-blank" style="width:${inputW}px"
+        maxlength="24" autocomplete="off" spellcheck="false">${kw.after}</div>
+      <div class="fill-tail">${ph.connector}</div>`;
+    const input = card.querySelector('.fill-blank');
+    const check = ()=>{
+      if(input.disabled || !input.value.trim()) return;
+      const ok = input.value.trim().toLowerCase() === kw.word.toLowerCase();
+      input.disabled = true;
+      input.classList.add(ok?'right':'wrong');
+      if(!ok){
+        const note = document.createElement('span');
+        note.className = 'fill-answer';
+        note.textContent = '→ '+kw.word;
+        card.querySelector('.fill-text').appendChild(note);
+      }
+      markResult(fn.id, pi, ok);
+      refreshStats();
+    };
+    input.addEventListener('keydown', e=>{ if(e.key==='Enter') check(); });
+    input.addEventListener('blur', check);
+    list.appendChild(card);
+  });
+  app.appendChild(list);
 }
 
 /* ══════════════════ MODE 2 · REVERSE RECALL ══════════════════ */

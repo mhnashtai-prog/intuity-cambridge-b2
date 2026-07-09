@@ -520,32 +520,40 @@ function layoutConstellation(fam,k){
     return;
   }
 
-  /* Strategic elliptical placement:
-     - ellipse is wider than tall (matches landscape, uses side space)
-     - cards are pushed toward the LEFT and RIGHT flanks, avoiding the
-       central vertical band where the question + Next button live
-     - split evenly: left half and right half, each read top→bottom */
-  const rx = Math.min(W*0.30, 430);        // horizontal reach (wide cards stay on screen)
-  const ry = Math.min(H*0.40, 300);        // vertical reach (shorter)
-  const half = Math.ceil(n/2);             // cards per side (left gets the extra if odd)
+  /* Even vertical-column placement:
+     - two columns (left flank, right flank), cards evenly spaced top→bottom
+     - the column spans the FULL usable height, so gaps are as large as possible
+       and identical between every card (no ellipse crowding at the ends)
+     - a gentle horizontal bow pushes middle cards outward to clear the centre question */
+  const half = Math.ceil(n/2);
   const rightCount = n - half;
+  const cardH = 110;                        // approx card height
+  const padTop = 44, padBot = 28;           // margin inside the canvas (top clears the header)
+  const colX  = Math.min(W*0.29, 400);
+  const bow   = 46;
 
-  // vertical spread angle: keep away from the very top (-90°) and bottom (+90°)
-  // by confining each side to a comfortable arc down its flank.
+  function columnPositions(count){
+    if(count<=1) return [cy];
+    const top = padTop + cardH/2;
+    const bot = H - padBot - cardH/2;
+    const span = bot - top;
+    const ys=[];
+    for(let j=0;j<count;j++) ys.push(top + (span*j)/(count-1));
+    return ys;
+  }
+  const leftYs  = columnPositions(half);
+  const rightYs = columnPositions(rightCount);
+
   function place(i){
     const onLeft = i < half;
     const idx = onLeft ? i : i - half;
-    const count = onLeft ? half : rightCount;
-    // spread from -55°..+55° measured from horizontal, down each side
-    const spread = 110; // degrees of arc used on each flank
-    const start = -spread/2;
-    const step = count>1 ? spread/(count-1) : 0;
-    const deg = start + idx*step;            // -55 .. +55
-    const rad = deg*Math.PI/180;
-    // left side uses angle measured from the LEFT (180°), right side from 0°
-    const baseX = onLeft ? -Math.cos(rad) : Math.cos(rad);
-    const y = Math.sin(rad);
-    return { x: cx + baseX*rx, y: cy + y*ry };
+    const ys  = onLeft ? leftYs : rightYs;
+    const count = ys.length;
+    const y = ys[idx];
+    const t = count>1 ? idx/(count-1) : 0.5;
+    const bowFactor = Math.sin(t*Math.PI);
+    const dx = colX + bow*bowFactor;
+    return { x: onLeft ? cx - dx : cx + dx, y };
   }
 
   items.forEach((x,i)=>{

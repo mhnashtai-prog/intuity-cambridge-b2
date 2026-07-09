@@ -500,19 +500,18 @@ function nextQuestion(){
 }
 
 let dragEl=null, dragDX=0, dragDY=0;
+const GAP_PX = 4 * (96/25.4); // 4mm converted to CSS px (1in = 25.4mm = 96px)
+
 function layoutConstellation(fam,k){
   const F=CORPUS[fam], fn=F.functions[k], [c,d]=hue(fam);
   const con=document.getElementById('constellation');
   const W=con.clientWidth, H=con.clientHeight;
   const cx=W/2, cy=H/2;
 
-  // In Further Practice mode the orbiting cards are the drill CUE items;
-  // otherwise they are the phrase frames.
   const drillItems = (DRILLS[k] || []);
   const items = furtherMode ? drillItems : fn.capsule;
   const n=items.length;
   if(furtherMode && !n){
-    // no drills authored for this function — fall back with a note
     const note=document.createElement('div');
     note.className='const-hint'; note.style.opacity='.5';
     note.textContent='No production drills authored for this function yet.';
@@ -520,34 +519,17 @@ function layoutConstellation(fam,k){
     return;
   }
 
-  /* Radial orbit around the central question — cards go ROUND the question.
-     Distributed by even angular steps down each flank, but with the vertical
-     radius large enough (and the arc kept off the exact top/bottom) that
-     neighbouring cards keep a uniform gap and never pinch at the ends. */
   const half = Math.ceil(n/2);
-  const rightCount = n - half;
-  const cyOrbit = cy - 10;                   // lift the orbit centre slightly to balance top/bottom
-  const rx = Math.min(W*0.32, 450);         // horizontal reach
-  const ry = Math.min((H-150)/2, 230);      // vertical reach — tighter, more compact orbit
-  const arc = 128;                          // degrees of arc per flank (cards wrap round the question)
+  const cyOrbit = cy - 10;
+  const rx = Math.min(W*0.32, 450);
 
-  function place(i){
-    const onLeft = i < half;
-    const idx = onLeft ? i : i - half;
-    const count = onLeft ? half : rightCount;
-    const start = -arc/2;
-    const step  = count>1 ? arc/(count-1) : 0;
-    const deg   = start + idx*step;
-    const rad   = deg*Math.PI/180;
-    const baseX = onLeft ? -Math.cos(rad) : Math.cos(rad);
-    const y     = Math.sin(rad);
-    return { x: cx + baseX*rx, y: cyOrbit + y*ry };
-  }
-
+  // build all nodes first (unpositioned) so we can measure real heights
+  const leftNodes=[], rightNodes=[];
   items.forEach((x,i)=>{
     const node=document.createElement('div');
     node.className='enode'+(practiceMode?' practising':'')+(furtherMode?' cue-card':'');
     node.style.setProperty('--fc',c); node.style.setProperty('--fc-d',d);
+    node.style.visibility='hidden'; // avoid flash at (0,0) before we position it
 
     if(furtherMode){
       const cueHtml=x.cue.split('/').map(s=>s.trim()).join('<span class="cue-slash">/</span>');
@@ -568,29 +550,41 @@ function layoutConstellation(fam,k){
     }
     con.appendChild(node);
 
-    const p=place(i);
-    node.style.left=p.x+'px'; node.style.top=p.y+'px';
-
     if(furtherMode){
-      // cue cards: click opens the completion card (no dragging in drill mode)
       node.addEventListener('click',()=>openCompletion(k,i,x,c,d));
-      return; // skip drag wiring
+    } else {
+      const down=(px,py)=>{
+        dragEl=node; node.classList.add('dragging');
+        const cr=con.getBoundingClientRect(), r=node.getBoundingClientRect();
+        node.style.transform='none';
+        node.style.left=(r.left-cr.left)+'px';
+        node.style.top =(r.top -cr.top )+'px';
+        dragDX=px-r.left; dragDY=py-r.top;
+        hideHint();
+      };
+      node.addEventListener('mousedown',e=>{e.preventDefault();down(e.clientX,e.clientY);});
+      node.addEventListener('touchstart',e=>{down(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
     }
 
-    let downX=0, downY=0, moved=false;
-    const down=(px,py)=>{
-      downX=px; downY=py; moved=false;
-      dragEl=node; node.classList.add('dragging');
-      const cr=con.getBoundingClientRect(), r=node.getBoundingClientRect();
-      node.style.transform='none';
-      node.style.left=(r.left-cr.left)+'px';
-      node.style.top =(r.top -cr.top )+'px';
-      dragDX=px-r.left; dragDY=py-r.top;
-      hideHint();
-    };
-    node.addEventListener('mousedown',e=>{e.preventDefault();down(e.clientX,e.clientY);});
-    node.addEventListener('touchstart',e=>{down(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
+    (i<half ? leftNodes : rightNodes).push(node);
   });
+
+  // now that they're in the DOM, measure and stack each column with a fixed 4mm gap
+  function layoutColumn(nodes, xPos){
+    const heights = nodes.map(nd=>nd.offsetHeight);
+    const totalH = heights.reduce((s,h)=>s+h,0) + GAP_PX*(nodes.length-1);
+    let curY = cyOrbit - totalH/2;
+    nodes.forEach((nd,idx)=>{
+      const h=heights[idx];
+      nd.style.left = xPos+'px';
+      nd.style.top  = (curY + h/2)+'px'; // node uses translate(-50%,-50%), so top = centre
+      nd.style.visibility='visible';
+      curY += h + GAP_PX;
+    });
+  }
+
+  layoutColumn(leftNodes,  cx-rx);
+  layoutColumn(rightNodes, cx+rx);
 
   const hint=document.createElement('div');
   hint.className='const-hint';
@@ -599,7 +593,6 @@ function layoutConstellation(fam,k){
                    : 'Drag any expression to arrange your answer';
   con.appendChild(hint);
 }
-
 let dragMoved=false;
 function moveNode(px,py){
   if(!dragEl) return;

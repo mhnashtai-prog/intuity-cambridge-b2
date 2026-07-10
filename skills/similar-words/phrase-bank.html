@@ -520,21 +520,31 @@ function layoutConstellation(fam,k){
     return;
   }
 
+  /* Original elliptical placement — the natural spread around the question.
+     Cards on a wide ellipse, distributed by even angular steps down each flank. */
   const half = Math.ceil(n/2);
   const rightCount = n - half;
   const rx = Math.min(W*0.30, 430);
+  const ry = Math.min(H*0.40, 250);   // tighter vertical reach → middle cards closer together
 
-  const qClear = 130;              // reserved half-height around the question, px
-  const GAP = 14;                  // breathing room between stacked cards
-  const maxHalfHeight = H/2 - 30;  // don't let cards run off the container edge
+  function place(i){
+    const onLeft = i < half;
+    const idx = onLeft ? i : i - half;
+    const count = onLeft ? half : rightCount;
+    const spread = 130;   // wider arc → more space between adjacent cards (1→2, 2→3…)
+    const start = -spread/2;
+    const step = count>1 ? spread/(count-1) : 0;
+    const deg = start + idx*step;
+    const rad = deg*Math.PI/180;
+    const baseX = onLeft ? -Math.cos(rad) : Math.cos(rad);
+    const y = Math.sin(rad);
+    return { x: cx + baseX*rx, y: cy + y*ry };
+  }
 
-  // ---- build all nodes hidden first, so we can measure real rendered height ----
-  const nodes = items.map((x,i)=>{
+  items.forEach((x,i)=>{
     const node=document.createElement('div');
     node.className='enode'+(practiceMode?' practising':'')+(furtherMode?' cue-card':'');
     node.style.setProperty('--fc',c); node.style.setProperty('--fc-d',d);
-    node.style.visibility='hidden';
-    node.style.left='-9999px'; node.style.top='0px';
 
     if(furtherMode){
       const cueHtml=x.cue.split('/').map(s=>s.trim()).join('<span class="cue-slash">/</span>');
@@ -554,81 +564,22 @@ function layoutConstellation(fam,k){
         <div class="enode-tail">${x.tail}</div>`;
     }
     con.appendChild(node);
-    return node;
-  });
 
-  const heights = nodes.map(nd => nd.offsetHeight || 90); // fallback if measurement fails
-
-  // ---- for one group of `groupCount` cards stacked on one side of the question,
-  //      return an array of {y, scale} — y is signed px relative to the question's
-  //      mid-line, scale is a uniform shrink factor applied ONLY when the group's
-  //      real content doesn't fit the available room. Spacing is always tied to the
-  //      (possibly scaled) card height + gap, so cards can never overlap each other,
-  //      regardless of how many there are. ----
-  const SCALE_FLOOR = 0.65; // never shrink cards past this — legibility limit
-  function layoutGroup(startIdx, groupCount, sign){
-    if(!groupCount) return [];
-    let maxH = 0;
-    for(let j=0;j<groupCount;j++) maxH = Math.max(maxH, heights[startIdx+j]);
-    const desiredStep = maxH + GAP;
-    const neededSpan = desiredStep*groupCount;
-    const availableSpan = maxHalfHeight - qClear;
-
-    let scale = 1, step;
-    if(neededSpan <= availableSpan){
-      // fits comfortably — stretch spacing to fill the room evenly, never tighter than desiredStep
-      step = Math.max(desiredStep, availableSpan/groupCount);
-    } else {
-      // doesn't fit at full size — shrink cards uniformly so step (= card + gap, scaled)
-      // still matches the scaled card size exactly. This guarantees no overlap at any scale.
-      scale = Math.max(SCALE_FLOOR, availableSpan/neededSpan);
-      step = desiredStep*scale;
-    }
-
-    const out = [];
-    for(let j=0;j<groupCount;j++){
-      const yPx = qClear + step*(j+0.5);
-      out.push({ y: sign*Math.min(yPx, maxHalfHeight), scale });
-    }
-    return out;
-  }
-
-  function flankYs(count){
-    const upperCount = Math.ceil(count/2);
-    const lowerCount = count - upperCount;
-    const upperItems = layoutGroup(0, upperCount, -1);
-    const lowerItems = layoutGroup(upperCount, lowerCount, 1);
-    return [...upperItems, ...lowerItems];
-  }
-
-  const leftItems  = flankYs(half);
-  const rightItems = flankYs(rightCount);
-  const allItems = [...leftItems, ...rightItems]; // {y, scale} per node, in order
-
-  nodes.forEach((node,i)=>{
-    const onLeft = i < half;
-    const { y: yPx, scale } = allItems[i];
-    const yNorm = maxHalfHeight ? (yPx / maxHalfHeight) : 0; // -1..1 for the ellipse curve
-    const xNorm = Math.sqrt(Math.max(0, 1 - yNorm*yNorm));
-    const px = cx + (onLeft ? -xNorm : xNorm)*rx;
-    const py = cy + yPx;
-
-    node.style.visibility='';
-    node.style.left = px+'px';
-    node.style.top  = py+'px';
-    node.dataset.scale = scale; // remembered so dragging can preserve it
-    if(scale < 1) node.style.transform = `translate(-50%,-50%) scale(${scale})`;
+    const p=place(i);
+    node.style.left=p.x+'px'; node.style.top=p.y+'px';
 
     if(furtherMode){
       // cue cards: click opens the completion card (no dragging in drill mode)
-      node.addEventListener('click',()=>openCompletion(k,i,items[i],c,d));
+      node.addEventListener('click',()=>openCompletion(k,i,x,c,d));
       return; // skip drag wiring
     }
 
+    let downX=0, downY=0, moved=false;
     const down=(px,py)=>{
+      downX=px; downY=py; moved=false;
       dragEl=node; node.classList.add('dragging');
       const cr=con.getBoundingClientRect(), r=node.getBoundingClientRect();
-      node.style.transform='none'; // full size while actively dragging, for a stable, predictable drag target
+      node.style.transform='none';
       node.style.left=(r.left-cr.left)+'px';
       node.style.top =(r.top -cr.top )+'px';
       dragDX=px-r.left; dragDY=py-r.top;

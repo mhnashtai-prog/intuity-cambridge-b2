@@ -560,7 +560,12 @@ function layoutConstellation(fam,k){
   const heights = nodes.map(nd => nd.offsetHeight || 90); // fallback if measurement fails
 
   // ---- for one group of `groupCount` cards stacked on one side of the question,
-  //      return an array of signed y-centres (px, relative to the question's mid-line) ----
+  //      return an array of {y, scale} — y is signed px relative to the question's
+  //      mid-line, scale is a uniform shrink factor applied ONLY when the group's
+  //      real content doesn't fit the available room. Spacing is always tied to the
+  //      (possibly scaled) card height + gap, so cards can never overlap each other,
+  //      regardless of how many there are. ----
+  const SCALE_FLOOR = 0.65; // never shrink cards past this — legibility limit
   function layoutGroup(startIdx, groupCount, sign){
     if(!groupCount) return [];
     let maxH = 0;
@@ -568,33 +573,41 @@ function layoutConstellation(fam,k){
     const desiredStep = maxH + GAP;
     const neededSpan = desiredStep*groupCount;
     const availableSpan = maxHalfHeight - qClear;
-    // use whichever is smaller: if content needs more room than we have, compress the
-    // step evenly rather than letting any card overflow or collide with another.
-    const span = Math.min(neededSpan, availableSpan);
-    const step = span/groupCount;
-    const ys = [];
+
+    let scale = 1, step;
+    if(neededSpan <= availableSpan){
+      // fits comfortably — stretch spacing to fill the room evenly, never tighter than desiredStep
+      step = Math.max(desiredStep, availableSpan/groupCount);
+    } else {
+      // doesn't fit at full size — shrink cards uniformly so step (= card + gap, scaled)
+      // still matches the scaled card size exactly. This guarantees no overlap at any scale.
+      scale = Math.max(SCALE_FLOOR, availableSpan/neededSpan);
+      step = desiredStep*scale;
+    }
+
+    const out = [];
     for(let j=0;j<groupCount;j++){
       const yPx = qClear + step*(j+0.5);
-      ys.push(sign * Math.min(yPx, maxHalfHeight));
+      out.push({ y: sign*Math.min(yPx, maxHalfHeight), scale });
     }
-    return ys;
+    return out;
   }
 
   function flankYs(count){
     const upperCount = Math.ceil(count/2);
     const lowerCount = count - upperCount;
-    const upperYs = layoutGroup(0, upperCount, -1);
-    const lowerYs = layoutGroup(upperCount, lowerCount, 1);
-    return [...upperYs, ...lowerYs];
+    const upperItems = layoutGroup(0, upperCount, -1);
+    const lowerItems = layoutGroup(upperCount, lowerCount, 1);
+    return [...upperItems, ...lowerItems];
   }
 
-  const leftYs  = flankYs(half);
-  const rightYs = flankYs(rightCount);
-  const allYs = [...leftYs, ...rightYs]; // px, signed, one per node in order
+  const leftItems  = flankYs(half);
+  const rightItems = flankYs(rightCount);
+  const allItems = [...leftItems, ...rightItems]; // {y, scale} per node, in order
 
   nodes.forEach((node,i)=>{
     const onLeft = i < half;
-    const yPx = allYs[i];
+    const { y: yPx, scale } = allItems[i];
     const yNorm = maxHalfHeight ? (yPx / maxHalfHeight) : 0; // -1..1 for the ellipse curve
     const xNorm = Math.sqrt(Math.max(0, 1 - yNorm*yNorm));
     const px = cx + (onLeft ? -xNorm : xNorm)*rx;
@@ -603,6 +616,8 @@ function layoutConstellation(fam,k){
     node.style.visibility='';
     node.style.left = px+'px';
     node.style.top  = py+'px';
+    node.dataset.scale = scale; // remembered so dragging can preserve it
+    if(scale < 1) node.style.transform = `translate(-50%,-50%) scale(${scale})`;
 
     if(furtherMode){
       // cue cards: click opens the completion card (no dragging in drill mode)
@@ -613,7 +628,7 @@ function layoutConstellation(fam,k){
     const down=(px,py)=>{
       dragEl=node; node.classList.add('dragging');
       const cr=con.getBoundingClientRect(), r=node.getBoundingClientRect();
-      node.style.transform='none';
+      node.style.transform='none'; // full size while actively dragging, for a stable, predictable drag target
       node.style.left=(r.left-cr.left)+'px';
       node.style.top =(r.top -cr.top )+'px';
       dragDX=px-r.left; dragDY=py-r.top;

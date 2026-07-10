@@ -520,31 +520,21 @@ function layoutConstellation(fam,k){
     return;
   }
 
-  /* Original elliptical placement — the natural spread around the question.
-     Cards on a wide ellipse, distributed by even angular steps down each flank. */
   const half = Math.ceil(n/2);
   const rightCount = n - half;
   const rx = Math.min(W*0.30, 430);
-  const ry = Math.min(H*0.40, 250);   // tighter vertical reach → middle cards closer together
 
-  function place(i){
-    const onLeft = i < half;
-    const idx = onLeft ? i : i - half;
-    const count = onLeft ? half : rightCount;
-    const spread = 130;   // wider arc → more space between adjacent cards (1→2, 2→3…)
-    const start = -spread/2;
-    const step = count>1 ? spread/(count-1) : 0;
-    const deg = start + idx*step;
-    const rad = deg*Math.PI/180;
-    const baseX = onLeft ? -Math.cos(rad) : Math.cos(rad);
-    const y = Math.sin(rad);
-    return { x: cx + baseX*rx, y: cy + y*ry };
-  }
+  const qClear = 130;              // reserved half-height around the question, px
+  const GAP = 14;                  // breathing room between stacked cards
+  const maxHalfHeight = H/2 - 30;  // don't let cards run off the container edge
 
-  items.forEach((x,i)=>{
+  // ---- build all nodes hidden first, so we can measure real rendered height ----
+  const nodes = items.map((x,i)=>{
     const node=document.createElement('div');
     node.className='enode'+(practiceMode?' practising':'')+(furtherMode?' cue-card':'');
     node.style.setProperty('--fc',c); node.style.setProperty('--fc-d',d);
+    node.style.visibility='hidden';
+    node.style.left='-9999px'; node.style.top='0px';
 
     if(furtherMode){
       const cueHtml=x.cue.split('/').map(s=>s.trim()).join('<span class="cue-slash">/</span>');
@@ -564,19 +554,63 @@ function layoutConstellation(fam,k){
         <div class="enode-tail">${x.tail}</div>`;
     }
     con.appendChild(node);
+    return node;
+  });
 
-    const p=place(i);
-    node.style.left=p.x+'px'; node.style.top=p.y+'px';
+  const heights = nodes.map(nd => nd.offsetHeight || 90); // fallback if measurement fails
+
+  // ---- for one group of `groupCount` cards stacked on one side of the question,
+  //      return an array of signed y-centres (px, relative to the question's mid-line) ----
+  function layoutGroup(startIdx, groupCount, sign){
+    if(!groupCount) return [];
+    let maxH = 0;
+    for(let j=0;j<groupCount;j++) maxH = Math.max(maxH, heights[startIdx+j]);
+    const desiredStep = maxH + GAP;
+    const neededSpan = desiredStep*groupCount;
+    const availableSpan = maxHalfHeight - qClear;
+    // use whichever is smaller: if content needs more room than we have, compress the
+    // step evenly rather than letting any card overflow or collide with another.
+    const span = Math.min(neededSpan, availableSpan);
+    const step = span/groupCount;
+    const ys = [];
+    for(let j=0;j<groupCount;j++){
+      const yPx = qClear + step*(j+0.5);
+      ys.push(sign * Math.min(yPx, maxHalfHeight));
+    }
+    return ys;
+  }
+
+  function flankYs(count){
+    const upperCount = Math.ceil(count/2);
+    const lowerCount = count - upperCount;
+    const upperYs = layoutGroup(0, upperCount, -1);
+    const lowerYs = layoutGroup(upperCount, lowerCount, 1);
+    return [...upperYs, ...lowerYs];
+  }
+
+  const leftYs  = flankYs(half);
+  const rightYs = flankYs(rightCount);
+  const allYs = [...leftYs, ...rightYs]; // px, signed, one per node in order
+
+  nodes.forEach((node,i)=>{
+    const onLeft = i < half;
+    const yPx = allYs[i];
+    const yNorm = maxHalfHeight ? (yPx / maxHalfHeight) : 0; // -1..1 for the ellipse curve
+    const xNorm = Math.sqrt(Math.max(0, 1 - yNorm*yNorm));
+    const px = cx + (onLeft ? -xNorm : xNorm)*rx;
+    const py = cy + yPx;
+
+    node.style.visibility='';
+    node.style.left = px+'px';
+    node.style.top  = py+'px';
 
     if(furtherMode){
       // cue cards: click opens the completion card (no dragging in drill mode)
-      node.addEventListener('click',()=>openCompletion(k,i,x,c,d));
+      node.addEventListener('click',()=>openCompletion(k,i,items[i],c,d));
       return; // skip drag wiring
     }
 
-    let downX=0, downY=0, moved=false;
     const down=(px,py)=>{
-      downX=px; downY=py; moved=false;
       dragEl=node; node.classList.add('dragging');
       const cr=con.getBoundingClientRect(), r=node.getBoundingClientRect();
       node.style.transform='none';

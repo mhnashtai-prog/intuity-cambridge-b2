@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>INTUITY — Quiz Bank</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700;800;900&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500&family=Lora:ital,wght@1,500&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+  :root{
+    --bg:#0d0d0d; --gold:#C9A961;
+    /* four families = four topic hues */
+    --tenses:#3fbfb2;      --tenses-d:#2a8b81;
+    --culture:#f0a23c;     --culture-d:#c07a1f;
+    --grammar:#e85a4f;     --grammar-d:#b83a31;
+    --vocabulary:#9a6baa;  --vocabulary-d:#6d4a7c;
+    --ink:#2b2b30; --stance:#8a8a92;
+    --good:#2a8b81; --good-bg:rgba(63,191,178,.14); --good-bd:rgba(63,191,178,.5);
+    --bad:#b83a31; --bad-bg:rgba(232,90,79,.12); --bad-bd:rgba(232,90,79,.45);
+  }
+  html,body{width:100%;height:100%;background:var(--bg);overflow:hidden;}
+  body{font-family:'DM Sans',sans-serif;color:#e5e5e7;-webkit-tap-highlight-color:transparent;position:relative;}
+
+  /* ── ambient glow field — gives the glass panels something to refract ── */
+  .glow-field{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;}
+  .glow-field::before,.glow-field::after{content:'';position:absolute;border-radius:50%;filter:blur(90px);
+    opacity:.35;transition:background .5s ease, opacity .5s ease;}
+  .glow-field::before{width:46vw;height:46vw;top:-14vw;left:-10vw;background:radial-gradient(circle,var(--gc1,#3fbfb2),transparent 70%);}
+  .glow-field::after{width:40vw;height:40vw;bottom:-16vw;right:-8vw;background:radial-gradient(circle,var(--gc2,#9a6baa),transparent 70%);}
+
+  .header{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;
+    justify-content:space-between;padding:.7rem 1.15rem;height:52px;
+    background:linear-gradient(180deg,rgba(20,20,22,.72),rgba(13,13,13,.55));
+    backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);
+    border-bottom:1px solid rgba(255,255,255,.08);
+    box-shadow:0 1px 0 rgba(255,255,255,.05) inset,0 12px 30px -18px rgba(0,0,0,.6);}
+  .brand{display:flex;flex-direction:column;gap:1px;}
+  .brand-t{font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:.9rem;letter-spacing:-.01em;}
+  .brand-s{font-size:.5rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.32);}
+  .back-link{position:absolute;left:1.15rem;text-decoration:none;font-family:'Space Grotesk',sans-serif;
+    font-size:.58rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.3);}
+  .back-link:hover{color:rgba(255,255,255,.7);}
+  .header .brand{margin:0 auto;align-items:center;}
+  .header-right{position:absolute;right:1.15rem;display:flex;align-items:center;gap:.6rem;}
+  .score-chip{font-family:'Space Grotesk',sans-serif;font-size:.58rem;font-weight:800;letter-spacing:.06em;
+    color:var(--gold);background:linear-gradient(135deg,rgba(201,169,97,.22),rgba(201,169,97,.08));
+    backdrop-filter:blur(8px);border:1px solid rgba(201,169,97,.4);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.12);
+    border-radius:999px;padding:.32rem .7rem;white-space:nowrap;}
+  .crumb{font-family:'Space Grotesk',sans-serif;font-size:.56rem;
+    font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);cursor:pointer;
+    opacity:0;transition:opacity .2s;pointer-events:none;}
+  .crumb.show{opacity:1;pointer-events:auto;}
+  .crumb:hover{color:#fff;}
+
+  .stage{position:fixed;top:52px;left:0;right:0;bottom:0;overflow-y:auto;z-index:1;
+    scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.12) transparent;}
+  .stage::-webkit-scrollbar{width:5px;} .stage::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:3px;}
+  .stage.no-scroll{overflow:hidden;}
+  .wrap{max-width:1180px;margin:0 auto;padding:1.3rem 1.15rem 3rem;}
+  .wrap.full{max-width:none;padding:0;}
+
+  .lead{font-size:.8rem;color:rgba(255,255,255,.4);font-weight:500;margin:.1rem .3rem 1.15rem;line-height:1.5;max-width:640px;}
+
+  /* ── LEVEL 1 · FOUR TOPIC CARDS ── */
+  .fam-carousel{position:relative;display:flex;align-items:stretch;gap:.4rem;}
+  .fam-viewport{flex:1;min-width:0;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;
+    scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:.2rem 0 .3rem;}
+  .fam-viewport::-webkit-scrollbar{display:none;}
+  .families{display:flex;gap:.7rem;align-items:stretch;padding:0 .15rem;}
+  .fam{position:relative;flex:0 0 calc((100% - 2.1rem)/4);min-width:0;scroll-snap-align:start;
+    background:linear-gradient(165deg,rgba(255,255,255,.94),rgba(250,249,247,.8));
+    backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
+    border-radius:1.1rem;padding:2.3rem .8rem 1rem .9rem;
+    border:1px solid rgba(255,255,255,.6);
+    display:flex;flex-direction:column;transition:transform .2s,box-shadow .25s;
+    box-shadow:0 1px 0 rgba(255,255,255,.95) inset,0 18px 45px -14px rgba(0,0,0,.6),0 6px 18px rgba(0,0,0,.4),
+      0 0 0 1px color-mix(in srgb,var(--fc) 8%,transparent);}
+  .fam:hover{box-shadow:0 1px 0 rgba(255,255,255,.95) inset,0 22px 55px -14px rgba(0,0,0,.65),0 8px 22px rgba(0,0,0,.4),
+      0 0 0 1px color-mix(in srgb,var(--fc) 22%,transparent),0 0 32px -8px color-mix(in srgb,var(--fc) 45%,transparent);}
+  .fam::before{content:'';position:absolute;top:.9rem;left:.9rem;right:.8rem;height:8px;
+    background-image:radial-gradient(circle, rgba(0,0,0,.12) 3px, transparent 3.5px);
+    background-size:16px 8px;background-repeat:repeat-x;}
+  .fam-head{position:absolute;top:1.1rem;left:-9px;display:flex;align-items:center;gap:.4rem;
+    background:linear-gradient(135deg,color-mix(in srgb,var(--fc) 92%,#fff),var(--fc));
+    backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.35);
+    padding:.35rem .6rem .35rem .45rem;border-radius:.45rem .65rem .65rem .45rem;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 6px 14px -4px rgba(0,0,0,.35);z-index:2;max-width:calc(100% + 9px);}
+  .fam-head::after{content:'';position:absolute;left:0;bottom:-8px;border-style:solid;border-width:8px 0 0 12px;
+    border-color:var(--fc-d) transparent transparent transparent;filter:brightness(.75);}
+  .fam-name{font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:.6rem;letter-spacing:.1em;
+    text-transform:uppercase;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .fam-purpose{font-size:.66rem;font-style:italic;color:var(--stance);margin:.35rem .1rem .8rem;
+    line-height:1.4;min-height:2.6em;}
+  .fam-badges{display:grid;grid-template-columns:1fr 1fr;gap:1.1rem .9rem;align-content:start;justify-items:center;}
+  .fbadge{position:relative;min-width:0;width:80%;aspect-ratio:1/1;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;cursor:pointer;
+    background:linear-gradient(145deg,#fbfaf8,#f0efec);
+    border:1px solid rgba(255,255,255,.6);border-radius:22%;
+    padding:.4rem .35rem;
+    box-shadow:5px 5px 12px rgba(163,157,145,.38),-5px -5px 12px rgba(255,255,255,.95),
+      inset 0 0 0 1px rgba(255,255,255,.3);
+    transition:box-shadow .28s cubic-bezier(.4,0,.2,1),transform .18s ease,background .28s ease;}
+  .fbadge:hover{
+    background:linear-gradient(145deg,#f0efec,#fbfaf8);
+    box-shadow:inset 5px 5px 10px rgba(163,157,145,.4),inset -5px -5px 10px rgba(255,255,255,.95),
+      0 0 0 1px color-mix(in srgb,var(--fc) 35%,transparent);}
+  .fbadge:active{
+    box-shadow:inset 6px 6px 12px rgba(163,157,145,.45),inset -6px -6px 12px rgba(255,255,255,.9);}
+  .fbadge:focus-visible{outline:2px solid var(--fc);outline-offset:2px;}
+  .fbadge-tag{position:absolute;top:.35rem;left:.35rem;z-index:1;font-family:'Space Grotesk',sans-serif;font-size:.33rem;font-weight:700;
+    letter-spacing:.04em;text-transform:uppercase;color:var(--stance);
+    background:rgba(0,0,0,.04);
+    border-radius:999px;padding:.09rem .32rem;
+    transition:color .22s,background .22s;}
+  .fbadge:hover .fbadge-tag{color:var(--fc-d);background:color-mix(in srgb,var(--fc) 16%,transparent);}
+  .fbadge-hero{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;
+    font-family:'Space Grotesk',sans-serif;
+    font-size:.56rem;font-weight:800;letter-spacing:.01em;text-transform:uppercase;color:var(--ink);
+    line-height:1.2;word-break:break-word;transition:color .22s;}
+  .fbadge:hover .fbadge-hero{color:var(--fc-d);}
+  .fbadge-foot{position:absolute;bottom:.35rem;right:.35rem;z-index:1;display:flex;}
+  .fbadge-open{flex-shrink:0;width:.92rem;height:.92rem;border-radius:50%;
+    background:linear-gradient(145deg,#fbfaf8,#f0efec);color:var(--stance);
+    box-shadow:2px 2px 5px rgba(163,157,145,.4),-2px -2px 5px rgba(255,255,255,.9);
+    display:flex;align-items:center;justify-content:center;font-size:.54rem;line-height:1;font-weight:700;
+    transition:background .22s,color .22s,box-shadow .22s,transform .22s;}
+  .fbadge:hover .fbadge-open{background:var(--fc);color:#fff;transform:scale(1.1);
+    box-shadow:inset 1px 1px 3px rgba(0,0,0,.2),0 0 10px -2px color-mix(in srgb,var(--fc) 70%,transparent);}
+
+
+  /* ── LEVEL 2 · CONSTELLATION — question centre, answer options orbiting ── */
+  .constellation{position:relative;width:100%;height:calc(100vh - 52px);overflow:hidden;touch-action:none;}
+  .q-centre{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;
+    width:min(46%,540px);text-align:center;pointer-events:none;}
+  .q-eyebrow{font-family:'Space Grotesk',sans-serif;font-size:.56rem;font-weight:700;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--fc);opacity:.9;margin-bottom:.4rem;}
+  .q-progress{font-size:.6rem;color:rgba(255,255,255,.35);letter-spacing:.04em;margin-bottom:.7rem;}
+  .q-text{font-family:'Lora',serif;font-style:italic;font-weight:500;
+    font-size:clamp(1.05rem,2vw,1.55rem);line-height:1.4;color:#fff;
+    text-shadow:0 2px 20px rgba(0,0,0,.8);}
+  .q-controls{pointer-events:auto;display:flex;align-items:center;justify-content:center;gap:.55rem;margin-top:1.1rem;flex-wrap:wrap;}
+  .q-next{font-family:'Space Grotesk',sans-serif;font-size:.58rem;
+    font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--fc);
+    background:linear-gradient(135deg,color-mix(in srgb,var(--fc) 20%,transparent),color-mix(in srgb,var(--fc) 8%,transparent));
+    backdrop-filter:blur(10px);
+    border:1px solid color-mix(in srgb,var(--fc) 45%,transparent);border-radius:999px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.15),0 6px 16px -8px rgba(0,0,0,.5);
+    padding:.5rem 1.1rem;cursor:pointer;transition:background .18s,transform .18s,box-shadow .18s;}
+  .q-next:hover{background:linear-gradient(135deg,color-mix(in srgb,var(--fc) 34%,transparent),color-mix(in srgb,var(--fc) 14%,transparent));
+    transform:translateY(-1px);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 10px 20px -8px rgba(0,0,0,.55),0 0 18px -6px color-mix(in srgb,var(--fc) 55%,transparent);}
+  .q-restart{font-family:'Space Grotesk',sans-serif;font-size:.58rem;font-weight:700;
+    letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.6);
+    background:rgba(255,255,255,.08);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.18);border-radius:999px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.1);
+    padding:.5rem 1rem;cursor:pointer;transition:all .18s;}
+  .q-restart:hover{color:#fff;border-color:rgba(255,255,255,.32);background:rgba(255,255,255,.14);}
+
+  /* option cards — white poster with family-hue ribbon banner */
+  .enode{position:absolute;z-index:2;width:250px;
+    background:linear-gradient(160deg,rgba(255,255,255,.95),rgba(250,249,247,.82));
+    backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
+    border-radius:.9rem;
+    padding:2.2rem .85rem .8rem;cursor:pointer;transform:translate(-50%,-50%);
+    box-shadow:0 1px 0 rgba(255,255,255,.95) inset,0 10px 26px -8px rgba(0,0,0,.55),0 4px 12px rgba(0,0,0,.32),
+      0 0 0 1px color-mix(in srgb,var(--fc) 10%,transparent);
+    transition:box-shadow .18s,transform .18s,border-color .18s,background .2s;user-select:none;-webkit-user-select:none;
+    border:2px solid transparent;}
+  .enode:hover:not(.disabled){transform:translate(-50%,-50%) scale(1.03);
+    box-shadow:inset 3px 3px 8px rgba(0,0,0,.06),inset -3px -3px 8px rgba(255,255,255,.7),
+      0 16px 34px -8px rgba(0,0,0,.6),0 6px 16px rgba(0,0,0,.35),
+      0 0 0 1px color-mix(in srgb,var(--fc) 35%,transparent),0 0 24px -6px color-mix(in srgb,var(--fc) 45%,transparent);}
+  .enode.disabled{cursor:default;}
+  .enode-banner{position:absolute;top:.75rem;left:-6px;display:flex;align-items:center;gap:.3rem;
+    background:var(--fc);padding:.2rem .5rem .2rem .3rem;border-radius:.35rem .5rem .5rem .35rem;
+    box-shadow:0 4px 10px -3px rgba(0,0,0,.4);z-index:3;}
+  .enode-banner::after{content:'';position:absolute;left:0;bottom:-6px;border-style:solid;border-width:6px 0 0 9px;
+    border-color:var(--fc-d) transparent transparent transparent;filter:brightness(.75);}
+  .enode-bnum{font-family:'Space Grotesk',sans-serif;font-weight:900;font-size:.52rem;color:var(--fc);
+    background:#fff;width:.95rem;height:.95rem;border-radius:.25rem;display:flex;align-items:center;
+    justify-content:center;flex-shrink:0;}
+  .enode-blabel{font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:.44rem;letter-spacing:.09em;
+    text-transform:uppercase;color:#fff;white-space:nowrap;}
+  .enode-stem{font-size:.82rem;font-weight:700;color:var(--ink);line-height:1.32;}
+  .enode.correct{border-color:var(--good-bd);box-shadow:0 0 0 3px rgba(63,191,178,.18),0 10px 26px -8px rgba(0,0,0,.55);}
+  .enode.correct .enode-banner{background:var(--good);}
+  .enode.correct .enode-banner::after{border-color:var(--good) transparent transparent transparent;}
+  .enode.incorrect{border-color:var(--bad-bd);box-shadow:0 0 0 3px rgba(232,90,79,.16),0 10px 26px -8px rgba(0,0,0,.55);}
+  .enode.incorrect .enode-banner{background:var(--bad);}
+  .enode.incorrect .enode-banner::after{border-color:var(--bad) transparent transparent transparent;}
+  .enode.faded{opacity:.55;}
+  .const-hint{position:absolute;bottom:1.1rem;left:50%;transform:translateX(-50%);z-index:4;
+    font-size:.6rem;font-style:italic;color:rgba(255,255,255,.28);letter-spacing:.04em;pointer-events:none;
+    transition:opacity .5s;}
+  .const-hint.hidden{opacity:0;}
+
+  /* ── the "game" overlay: choosing → this refined result card → next ── */
+  .qc-overlay{position:absolute;inset:0;z-index:40;display:none;align-items:center;justify-content:center;
+    background:rgba(8,8,10,.6);backdrop-filter:blur(6px) saturate(120%);-webkit-backdrop-filter:blur(6px) saturate(120%);
+    padding:1rem;}
+  .qc-overlay.show{display:flex;animation:qcfade .35s ease;}
+  @keyframes qcfade{from{opacity:0;}to{opacity:1;}}
+  .qc-card{position:relative;width:min(480px,94%);
+    background:linear-gradient(160deg,rgba(255,255,255,.97),rgba(250,249,247,.92));
+    backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);
+    border-radius:1.25rem;border:1px solid rgba(255,255,255,.6);
+    padding:2.7rem 1.7rem 1.6rem;
+    box-shadow:0 1px 0 rgba(255,255,255,.9) inset,0 30px 70px -15px rgba(0,0,0,.7),0 0 0 1px color-mix(in srgb,var(--fc) 12%,transparent);
+    animation:qcpop .4s cubic-bezier(.22,1,.36,1);}
+  @keyframes qcpop{from{opacity:0;transform:translateY(18px) scale(.94);}to{opacity:1;transform:none;}}
+  .qc-banner{position:absolute;top:1rem;left:-8px;display:flex;align-items:center;gap:.4rem;
+    background:linear-gradient(135deg,color-mix(in srgb,var(--fc) 92%,#fff),var(--fc));
+    backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.35);
+    padding:.32rem .7rem .32rem .5rem;border-radius:.4rem .6rem .6rem .4rem;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 5px 12px -4px rgba(0,0,0,.35);}
+  .qc-banner::after{content:'';position:absolute;left:0;bottom:-8px;border-style:solid;border-width:8px 0 0 12px;
+    border-color:var(--fc-d) transparent transparent transparent;filter:brightness(.75);}
+  .qc-blabel{font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:.5rem;letter-spacing:.1em;
+    text-transform:uppercase;color:#fff;}
+  .qc-task{font-family:'Space Grotesk',sans-serif;font-size:.54rem;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--fc-d);margin-bottom:.6rem;}
+  .qc-question{font-family:'Lora',serif;font-style:italic;font-weight:500;font-size:1rem;color:var(--ink);
+    line-height:1.45;margin-bottom:1.1rem;}
+  .qc-chosen{display:flex;align-items:center;gap:.7rem;padding:1rem 1.1rem;border-radius:.9rem;
+    background:rgba(0,0,0,.03);border:1.5px solid rgba(0,0,0,.08);transition:all .2s;}
+  .qc-chosen.good{background:var(--good-bg);border-color:var(--good-bd);}
+  .qc-chosen.bad{background:var(--bad-bg);border-color:var(--bad-bd);}
+  .qc-chosen-icon{flex-shrink:0;width:1.7rem;height:1.7rem;border-radius:50%;display:flex;align-items:center;
+    justify-content:center;font-size:.9rem;font-weight:900;color:#fff;background:var(--stance);}
+  .qc-chosen.good .qc-chosen-icon{background:var(--good);}
+  .qc-chosen.bad .qc-chosen-icon{background:var(--bad);}
+  .qc-chosen-text{font-size:1.02rem;font-weight:700;color:var(--ink);line-height:1.35;}
+  .qc-explain{margin-top:1.1rem;padding:.9rem 1.05rem;border-radius:.8rem;font-size:.78rem;line-height:1.55;
+    background:rgba(0,0,0,.025);border:1px solid rgba(0,0,0,.06);color:var(--stance);}
+  .qc-actions{margin-top:1.4rem;display:flex;flex-direction:column;gap:.6rem;}
+  .qc-primary{font-family:'Space Grotesk',sans-serif;font-size:.66rem;font-weight:800;letter-spacing:.06em;
+    text-transform:uppercase;padding:.85rem;border-radius:.8rem;cursor:pointer;border:none;color:#0d0d0d;
+    background:linear-gradient(135deg,#e4c98a,var(--gold));
+    box-shadow:0 10px 22px -8px rgba(201,169,97,.5);transition:transform .16s,box-shadow .16s;}
+  .qc-primary:hover{transform:translateY(-1px);box-shadow:0 14px 26px -8px rgba(201,169,97,.6);}
+  .qc-close{font-family:'Space Grotesk',sans-serif;font-size:.6rem;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;padding:.7rem;border-radius:.8rem;cursor:pointer;
+    background:transparent;border:1px solid rgba(0,0,0,.14);color:var(--stance);transition:all .15s;}
+  .qc-close:hover{background:rgba(0,0,0,.04);color:var(--ink);}
+
+  .fam-arrow{flex-shrink:0;width:42px;height:42px;border-radius:50%;background:rgba(201,169,97,.22);
+    border:1px solid rgba(201,169,97,.4);color:var(--gold);font-size:1.1rem;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;transition:all .25s;box-shadow:0 6px 16px rgba(0,0,0,.4);}
+  .fam-arrow:hover:not(:disabled){background:rgba(201,169,97,.36);transform:scale(1.12);}
+  .fam-arrow:disabled{opacity:.18;cursor:not-allowed;}
+  .fam-dots{display:flex;align-items:center;justify-content:center;gap:.4rem;margin-top:1rem;}
+  .fam-dot{width:8px;height:8px;border-radius:50%;background:rgba(99,99,102,.32);cursor:pointer;transition:all .3s;}
+  .fam-dot.active{background:var(--gold);transform:scale(1.45);box-shadow:0 0 10px rgba(201,169,97,.4);}
+  .fam-dot:hover:not(.active){background:rgba(201,169,97,.45);}
+  .fam-arrow,.fam-dots{display:none;}
+
+  .view{display:none;} .view.active{display:block;animation:fade .28s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+  @media(prefers-reduced-motion:reduce){.view.active{animation:none;} .fam:hover,.fbadge:hover,.enode:hover{transform:none;} .fam-viewport{scroll-behavior:auto;}}
+
+  @media(max-width:1000px){
+    .fam-arrow{display:flex;}
+    .fam-dots{display:flex;}
+    .fam{flex:0 0 calc((100% - 1.4rem)/3);}
+  }
+  @media(max-width:760px){
+    .fam{flex:0 0 calc((100% - .7rem)/2);}
+  }
+  @media(max-width:520px){
+    .fam{flex:0 0 100%;}
+    .wrap{padding:1.3rem .6rem 3rem;}
+    .enode{width:210px;}
+  }
+  @media(max-width:380px){
+    .fam-badges{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="glow-field" id="glowField"></div>
+
+<header class="header">
+  <a class="back-link" href="/?openModal=vocabulary" id="backLink" onclick="return smartBack(event)">← Back</a>
+  <div class="brand"><span class="brand-t">Quiz Bank</span><span class="brand-s">Mixed Topics</span></div>
+  <div class="header-right">
+    <span class="crumb" id="crumb" onclick="goBack()">↑ All topics</span>
+    <span class="score-chip" id="scoreChip">✓ 0 / 0</span>
+  </div>
+</header>
+
+<div class="stage">
+  <div class="wrap">
+    <!-- LEVEL 1 -->
+    <div class="view active" id="viewFamilies">
+      <p class="lead">Four topics, many question types. Swipe across, tap a topic to start the quiz. Tap an answer to check it — no penalty for guessing.</p>
+      <div class="fam-carousel">
+        <button class="fam-arrow" id="famPrev" aria-label="Previous">←</button>
+        <div class="fam-viewport"><div class="families" id="familyList"></div></div>
+        <button class="fam-arrow" id="famNext" aria-label="Next">→</button>
+      </div>
+      <div class="fam-dots" id="famDots"></div>
+    </div>
+    <!-- LEVEL 2 · constellation — question at centre, answer options orbiting -->
+    <div class="view" id="viewCapsule">
+      <div class="constellation" id="constellation">
+        <div class="q-centre" id="qCentre">
+          <div class="q-eyebrow" id="qEyebrow"></div>
+          <div class="q-progress" id="qProgress"></div>
+          <div class="q-text" id="qText"></div>
+          <div class="q-controls">
+            <button class="q-next" id="qNext" onclick="nextQuestion()">Next question →</button>
+            <button class="q-restart" id="qRestart" onclick="restartTopic()">↻ Restart topic</button>
+          </div>
+        </div>
+        <!-- option cards injected here -->
+
+        <!-- the "game" overlay — appears once a card is chosen, refining the choosing moment into a result -->
+        <div class="qc-overlay" id="qcOverlay">
+          <div class="qc-card" id="qcCard">
+            <div class="qc-banner"><span class="qc-blabel" id="qcLabel"></span></div>
+            <div class="qc-task" id="qcTask">Your answer</div>
+            <div class="qc-question" id="qcQuestion"></div>
+            <div class="qc-chosen" id="qcChosen">
+              <span class="qc-chosen-icon" id="qcIcon"></span>
+              <span class="qc-chosen-text" id="qcChosenText"></span>
+            </div>
+            <div class="qc-explain" id="qcExplain"></div>
+            <div class="qc-actions">
+              <button class="qc-primary" id="qcNextBtn" onclick="advanceFromOverlay()">Next question →</button>
+              <button class="qc-close" onclick="closeOverlay()">✕ Review the board</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══ CORPUS — quiz content grouped into 4 families, each with several functions (subtopics) ══ */
+const QUIZ = {
+  tenses: {
+    name: 'Tenses', purpose: 'when do things happen?',
+    functions: {
+      present: { label:'Present', when:'now, habits, and facts', questions:[
+        {q:"Choose the correct present simple sentence.", options:["She go to school every day.","She goes to school every day.","She going to school every day.","She is go to school every day."], correct:1, explain:"Present simple with a third-person singular subject (she) needs the -s ending: goes."},
+        {q:"What are you doing right now?", options:["I do my homework.","I'm doing my homework.","I did my homework.","I have done my homework."], correct:1, explain:"Present continuous (am/is/are + -ing) describes an action happening at this moment."},
+        {q:"Choose the correct present perfect sentence.", options:["I have seen that film twice.","I saw seen that film twice.","I have see that film twice.","I has seen that film twice."], correct:0, explain:"Present perfect = have/has + past participle. First person uses 'have', not 'has'."},
+        {q:"She ___ English for three years.", options:["has been studying","have been studying","is studying","has study"], correct:0, explain:"Present perfect continuous = has/have been + -ing, for an action continuing up to now."},
+        {q:"Which time expression usually goes with the present perfect?", options:["yesterday","last week","already","next month"], correct:2, explain:"'Already' is a classic present-perfect signal word; the others point to a finished or future time."}
+      ]},
+      past: { label:'Past', when:'completed or ongoing past actions', questions:[
+        {q:"They ___ to the cinema last night.", options:["go","goes","went","have gone"], correct:2, explain:"Past simple for a finished action at a stated past time (last night)."},
+        {q:"I ___ dinner when the phone rang.", options:["cooked","was cooking","cook","have cooked"], correct:1, explain:"Past continuous (was/were + -ing) sets the scene for an action interrupted by another."},
+        {q:"By the time we arrived, the film ___.", options:["already started","had already started","has already started","was already starting"], correct:1, explain:"Past perfect (had + past participle) shows one past action happened before another."},
+        {q:"She was tired because she ___ all day.", options:["had been working","was working","has worked","worked"], correct:0, explain:"Past perfect continuous (had been + -ing) explains the cause of a later past state."},
+        {q:"Which word usually signals the past perfect?", options:["yesterday","by the time","now","tomorrow"], correct:1, explain:"'By the time' compares two past events, which is exactly what the past perfect is for."}
+      ]},
+      future: { label:'Future', when:'plans, predictions, and certainty', questions:[
+        {q:"I think it ___ rain later.", options:["will","is going to","is","would"], correct:0, explain:"'Will' is used for spontaneous predictions and opinions about the future."},
+        {q:"We ___ visit my grandmother this weekend — we've already decided.", options:["will","are going to","are","would"], correct:1, explain:"'Going to' expresses a plan or intention decided before the moment of speaking."},
+        {q:"I ___ my dentist at 4pm tomorrow.", options:["see","will see","am seeing","am going to seeing"], correct:2, explain:"Present continuous is used for fixed, pre-arranged future plans."},
+        {q:"The train ___ at 9am tomorrow.", options:["leaves","is leaving","will leave","is going to leave"], correct:0, explain:"Present simple is used for timetables and schedules, even future ones."},
+        {q:"This time tomorrow, I ___ on a plane to Rome.", options:["will fly","will be flying","am flying","fly"], correct:1, explain:"Future continuous (will be + -ing) describes an action in progress at a specific future moment."},
+        {q:"By 2030, scientists ___ a cure.", options:["will find","will have found","find","are finding"], correct:1, explain:"Future perfect (will have + past participle) describes something completed before a future point."}
+      ]},
+      present_modals: { label:'Present Modals', when:'ability, obligation, and possibility now', questions:[
+        {q:"You ___ wear a seatbelt in this country — it's the law.", options:["might","must","could","would"], correct:1, explain:"'Must' expresses strong obligation, especially rules and laws."},
+        {q:"She ___ speak three languages fluently.", options:["must","should","can","might"], correct:2, explain:"'Can' expresses present ability."},
+        {q:"It ___ rain later — the sky looks grey.", options:["must","might","should","has to"], correct:1, explain:"'Might' expresses a present possibility, not a certainty."},
+        {q:"You ___ see a doctor about that cough.", options:["should","can","must","will"], correct:0, explain:"'Should' is used to give advice."},
+        {q:"He isn't answering his phone — he ___ be asleep.", options:["can","must","should","would"], correct:1, explain:"'Must' expresses a confident logical deduction about the present."}
+      ]},
+      past_modals: { label:'Past Modals', when:'deduction, regret, and unreal past possibility', questions:[
+        {q:"She ___ forgotten her phone — it isn't in her bag.", options:["must have","should have","can have","would have"], correct:0, explain:"'Must have' + past participle expresses a confident deduction about the past."},
+        {q:"You ___ told me earlier — I could have helped.", options:["must have","should have","might have","would have"], correct:1, explain:"'Should have' + past participle expresses criticism or regret about a past action."},
+        {q:"They ___ left already; the lights are off and the car is gone.", options:["might have","must have","should have","would have"], correct:1, explain:"'Must have' expresses a strong, confident deduction based on evidence."},
+        {q:"He ___ passed the exam if he had studied harder.", options:["must have","could have","should have","would have"], correct:3, explain:"'Would have' + past participle describes the unreal result of a hypothetical past condition."},
+        {q:"I ___ heard a noise, but I'm not certain — it might have been the wind.", options:["must have","might have","should have","would have"], correct:1, explain:"'Might have' expresses a weaker, less certain possibility about the past."}
+      ]},
+      conditionals_wishes: { label:'Conditionals & Wishes', when:'imagined situations, and wishes about the present or past', questions:[
+        {q:"If it rains tomorrow, we ___ the picnic.", options:["cancel","will cancel","would cancel","canceled"], correct:1, explain:"First conditional: if + present simple, will + base verb, for a likely future result."},
+        {q:"If I ___ rich, I would travel the world.", options:["am","was","were","will be"], correct:2, explain:"Second conditional traditionally uses 'were' for all subjects in the if-clause."},
+        {q:"I wish I ___ more free time these days.", options:["have","had","will have","having"], correct:1, explain:"'Wish' + past simple expresses a wish about the present."},
+        {q:"If only she ___ me the truth back then.", options:["told","tells","had told","would tell"], correct:2, explain:"'If only' + past perfect expresses regret about the past."},
+        {q:"I wish you ___ so loudly — it's really distracting.", options:["wouldn't talk","didn't talk","hadn't talked","won't talk"], correct:0, explain:"'Wish' + would is used to complain about an annoying present habit."}
+      ]}
+    }
+  },
+  culture: {
+    name: 'Culture', purpose: 'what do you know about the world?',
+    functions: {
+      sports: { label:'Sports', when:'general knowledge about sport', questions:[
+        {q:"How many players does a football (soccer) team have on the pitch at once?", options:["9","10","11","12"], correct:2, explain:"Eleven players per side, including the goalkeeper."},
+        {q:"Which country is credited with inventing cricket?", options:["Australia","England","India","South Africa"], correct:1, explain:"Cricket originated in England before spreading across the Commonwealth."},
+        {q:"In tennis, what is a score of zero called?", options:["Deuce","Love","Ace","Fault"], correct:1, explain:"A score of zero in tennis is called 'love'."},
+        {q:"How often are the Summer Olympic Games held?", options:["Every 2 years","Every 3 years","Every 4 years","Every 5 years"], correct:2, explain:"The Summer Olympics take place every four years."},
+        {q:"Which Grand Slam tennis tournament is played on grass?", options:["The French Open","The US Open","Wimbledon","The Australian Open"], correct:2, explain:"Wimbledon is the only Grand Slam still played on grass courts."}
+      ]},
+      music: { label:'Music', when:'general knowledge about music', questions:[
+        {q:"Which instrument typically has 88 keys?", options:["Violin","Piano","Guitar","Flute"], correct:1, explain:"A standard piano keyboard has 88 keys: 52 white and 36 black."},
+        {q:"The Beatles came from which city?", options:["London","Manchester","Liverpool","Birmingham"], correct:2, explain:"The Beatles formed in Liverpool in 1960."},
+        {q:"How many lines does a standard musical staff have?", options:["4","5","6","7"], correct:1, explain:"A musical staff (or stave) has five lines and four spaces."},
+        {q:"Which genre developed in New Orleans in the early 20th century?", options:["Reggae","Jazz","Techno","Country"], correct:1, explain:"Jazz emerged from New Orleans around the turn of the 20th century."},
+        {q:"What does 'forte' mean in music?", options:["Quiet","Fast","Loud","Slow"], correct:2, explain:"'Forte' is an Italian musical term meaning 'loud'."}
+      ]},
+      cities: { label:'Cities', when:'famous cities around the world', questions:[
+        {q:"Which city is known as 'The Big Apple'?", options:["Chicago","Los Angeles","New York","Boston"], correct:2, explain:"New York City has been nicknamed 'The Big Apple' since the 1920s."},
+        {q:"The Eiffel Tower is located in which city?", options:["Rome","Paris","Madrid","Berlin"], correct:1, explain:"The Eiffel Tower stands on the Champ de Mars in Paris."},
+        {q:"Which city is the capital of Japan?", options:["Osaka","Kyoto","Tokyo","Yokohama"], correct:2, explain:"Tokyo has been the capital of Japan since 1868."},
+        {q:"Which European city is famous for its canals?", options:["Vienna","Amsterdam","Prague","Lisbon"], correct:1, explain:"Amsterdam's canal ring is a UNESCO World Heritage Site."},
+        {q:"Which city hosted the 2016 Summer Olympics?", options:["Beijing","London","Rio de Janeiro","Tokyo"], correct:2, explain:"Rio de Janeiro hosted the 2016 Summer Olympics, the first in South America."}
+      ]},
+      countries: { label:'Countries', when:'facts about countries', questions:[
+        {q:"What is the largest country in the world by area?", options:["Canada","China","USA","Russia"], correct:3, explain:"Russia is the largest country by land area, spanning eleven time zones."},
+        {q:"Which country currently has the largest population?", options:["USA","India","Indonesia","Brazil"], correct:1, explain:"India overtook China to become the world's most populous country in 2023."},
+        {q:"Which country is famous for the Great Barrier Reef?", options:["New Zealand","Australia","Fiji","Philippines"], correct:1, explain:"The Great Barrier Reef lies off the coast of Queensland, Australia."},
+        {q:"The pyramids of Giza are located in which country?", options:["Sudan","Egypt","Mexico","Peru"], correct:1, explain:"The Giza pyramid complex sits on the outskirts of Cairo, Egypt."},
+        {q:"Which country is known as the 'Land of the Rising Sun'?", options:["China","Japan","Thailand","South Korea"], correct:1, explain:"Japan's name in Japanese, Nihon, translates roughly to 'origin of the sun'."}
+      ]},
+      famous_people: { label:'Famous People', when:'well-known figures in history', questions:[
+        {q:"Who painted the Mona Lisa?", options:["Michelangelo","Leonardo da Vinci","Raphael","Donatello"], correct:1, explain:"Leonardo da Vinci painted the Mona Lisa in the early 16th century."},
+        {q:"Who developed the theory of relativity?", options:["Isaac Newton","Albert Einstein","Nikola Tesla","Galileo"], correct:1, explain:"Albert Einstein published the theory of relativity in the early 1900s."},
+        {q:"Who was the first person to walk on the Moon?", options:["Buzz Aldrin","Yuri Gagarin","Neil Armstrong","John Glenn"], correct:2, explain:"Neil Armstrong stepped onto the Moon on 20 July 1969."},
+        {q:"Who wrote the play Romeo and Juliet?", options:["Charles Dickens","William Shakespeare","Jane Austen","Oscar Wilde"], correct:1, explain:"Romeo and Juliet is an early tragedy by William Shakespeare."},
+        {q:"Who is known as the 'Queen of Pop'?", options:["Beyoncé","Rihanna","Madonna","Lady Gaga"], correct:2, explain:"Madonna earned the nickname 'Queen of Pop' over her decades-long career."}
+      ]},
+      popular_food: { label:'Popular Food', when:'dishes and cuisines from around the world', questions:[
+        {q:"Which dish is traditionally associated with Italy?", options:["Sushi","Paella","Pizza","Tacos"], correct:2, explain:"Pizza originated in Naples, Italy, in the 18th–19th century."},
+        {q:"Sushi originated in which country?", options:["China","Japan","Thailand","Korea"], correct:1, explain:"Sushi is a traditional Japanese dish based on vinegared rice."},
+        {q:"Which spice gives Indian curries their deep yellow colour?", options:["Cinnamon","Turmeric","Paprika","Nutmeg"], correct:1, explain:"Turmeric is the spice responsible for the golden-yellow colour in many curries."},
+        {q:"Which country is famous for tapas?", options:["Portugal","Spain","Mexico","Greece"], correct:1, explain:"Tapas are small savoury dishes that originated in Spain."},
+        {q:"A 'Sunday roast' is a traditional weekly meal in which country?", options:["France","Britain","Germany","Ireland"], correct:1, explain:"The Sunday roast is a classic British tradition, usually featuring roasted meat and vegetables."}
+      ]}
+    }
+  },
+  grammar: {
+    name: 'Grammar', purpose: 'how does the language actually work?',
+    functions: {
+      reported_speech: { label:'Reported Speech', when:'reporting what someone else said', questions:[
+        {q:"Direct: 'I am tired,' she said. Reported: She said (that) ___.", options:["she is tired","she was tired","she has been tired","she tired"], correct:1, explain:"Reported speech usually shifts the tense back one step: am → was."},
+        {q:"Direct: 'I will call you,' he said. Reported: He said (that) ___.", options:["he will call me","he would call me","he calls me","he is calling me"], correct:1, explain:"Will shifts back to would when reporting in the past."},
+        {q:"Direct: 'Where do you live?' she asked. Reported: She asked ___.", options:["where do I live","where did I live","where I lived","where I live"], correct:2, explain:"Reported questions drop the auxiliary and use normal word order, with the tense shifted back."},
+        {q:"Direct: 'Close the door,' he said. Reported: He told me ___.", options:["close the door","to close the door","closing the door","that close the door"], correct:1, explain:"Reported commands use told/asked + object + infinitive with 'to'."},
+        {q:"Which time expression changes to 'the next day' in reported speech?", options:["yesterday","tomorrow","now","ago"], correct:1, explain:"'Tomorrow' commonly shifts to 'the next day' (or 'the following day') when reporting."}
+      ]},
+      passive: { label:'Passive Voice', when:'when the action matters more than the doer', questions:[
+        {q:"Active: 'They built the bridge in 1990.' Passive: ___.", options:["The bridge built in 1990.","The bridge was built in 1990.","The bridge is built in 1990.","The bridge has built in 1990."], correct:1, explain:"Past simple passive: was/were + past participle."},
+        {q:"Which is the correct present simple passive pattern?", options:["was + past participle","is/are + past participle","has + past participle","be + -ing"], correct:1, explain:"Present simple passive: am/is/are + past participle."},
+        {q:"Active: 'Someone has stolen my bike.' Passive: ___.", options:["My bike stole.","My bike was stolen.","My bike has been stolen.","My bike is stolen."], correct:2, explain:"Present perfect passive: has/have been + past participle."},
+        {q:"Passive voice is most often used when ___.", options:["the action matters more than who did it","we want to sound very direct","we're speaking casually","the subject is always a person"], correct:0, explain:"We use the passive to focus on the action or result rather than the agent."},
+        {q:"Choose the correct passive for 'People speak English here.'", options:["English speaks here.","English is spoken here.","English was spoken here.","English has spoken here."], correct:1, explain:"Present simple passive of 'speak' is 'is spoken'."}
+      ]},
+      gerund_infinitive: { label:'Gerund & Infinitive', when:'-ing forms vs. to + verb', questions:[
+        {q:"I enjoy ___ music.", options:["to listen","listening","listen","listened"], correct:1, explain:"'Enjoy' is always followed by a gerund (-ing form)."},
+        {q:"She decided ___ early.", options:["leaving","leave","to leave","left"], correct:2, explain:"'Decide' is followed by a to-infinitive."},
+        {q:"They avoid ___ junk food.", options:["to eat","eating","eat","ate"], correct:1, explain:"'Avoid' is followed by a gerund."},
+        {q:"He wants ___ a new car.", options:["buying","to buy","buy","bought"], correct:1, explain:"'Want' is followed by a to-infinitive."},
+        {q:"Which verb is normally followed by a gerund, not an infinitive?", options:["want","decide","suggest","hope"], correct:2, explain:"'Suggest' takes a gerund: 'I suggest going now', not 'I suggest to go'."}
+      ]},
+      comparative: { label:'Comparative & Superlative', when:'comparing two or more things', questions:[
+        {q:"This book is ___ than the last one.", options:["interesting","more interesting","most interesting","interestinger"], correct:1, explain:"Longer adjectives form the comparative with 'more', not an -er ending."},
+        {q:"She is the ___ student in the class.", options:["smart","smarter","smartest","more smart"], correct:2, explain:"Superlatives (the -est form) compare one thing against a whole group."},
+        {q:"Choose the correct comparative of 'good'.", options:["gooder","more good","better","best"], correct:2, explain:"'Good' is irregular: good → better → best."},
+        {q:"London is ___ than Manchester in terms of population.", options:["big","bigger","biggest","more big"], correct:1, explain:"Short adjectives like 'big' take -er in the comparative (with the consonant doubled)."},
+        {q:"Which pattern means 'the more you practise, the better you get'?", options:["comparative + comparative","superlative + superlative","as...as","than-clause"], correct:0, explain:"The double comparative pattern (the + comparative, the + comparative) links two increasing things."}
+      ]},
+      inversion: { label:'Inversion', when:'flipping subject and verb for emphasis', questions:[
+        {q:"Never ___ such a beautiful sunset.", options:["I have seen","have I seen","I saw","did I saw"], correct:1, explain:"After a negative adverbial like 'never' at the start, the subject and auxiliary invert."},
+        {q:"Which sentence uses inversion correctly?", options:["Rarely I have seen such dedication.","Rarely have I seen such dedication.","Rarely I saw such dedication.","Rarely did I have seen such dedication."], correct:1, explain:"'Rarely' at the start of a sentence triggers subject-auxiliary inversion."},
+        {q:"Not only ___ late, but she also forgot her bag.", options:["she was","was she","she is","is she"], correct:1, explain:"'Not only' at the start of a clause requires inversion: was she."},
+        {q:"Inversion after negative adverbials (never, rarely, seldom) is mostly used in ___ English.", options:["casual spoken","formal written","text messages","slang"], correct:1, explain:"This structure adds emphasis and is typically found in more formal, written English."},
+        {q:"___ you need help, just call me.", options:["If","Should","When","Because"], correct:1, explain:"'Should' can replace 'if' with inversion: 'Should you need help' = 'If you should need help'."}
+      ]},
+      linking_cleft: { label:'Linking Words & Cleft Sentences', when:'connecting ideas, and using it/what/all for emphasis', questions:[
+        {q:"She was tired; ___, she kept working.", options:["therefore","nevertheless","moreover","because"], correct:1, explain:"'Nevertheless' links a contrasting idea, showing she worked despite being tired."},
+        {q:"He missed the bus ___ he woke up late.", options:["although","because","however","whereas"], correct:1, explain:"'Because' introduces the reason for an action."},
+        {q:"___ the rain, we went for a walk.", options:["Despite","Although","Because","Since"], correct:0, explain:"'Despite' is followed directly by a noun phrase, unlike 'although', which needs a clause."},
+        {q:"Choose the correct it-cleft sentence.", options:["It was Maria who solved the problem.","What was Maria who solved the problem.","All was Maria who solved the problem.","This was Maria who solved the problem."], correct:0, explain:"An it-cleft (It + be + ...) puts special emphasis on 'Maria' as the one who acted."},
+        {q:"___ I need is a good night's sleep.", options:["It","What","Which","That"], correct:1, explain:"A what-cleft ('What I need is...') emphasises the thing being talked about."}
+      ]}
+    }
+  },
+  vocabulary: {
+    name: 'Vocabulary', purpose: 'which word actually fits?',
+    functions: {
+      phrasal_verbs: { label:'Phrasal Verbs', when:'multi-word verbs and their meanings', questions:[
+        {q:"'The meeting has been ___ until next week.' (postponed)", options:["put off","put up","put on","put down"], correct:0, explain:"'Put off' means to postpone or delay something."},
+        {q:"'Please ___ your shoes before entering.' (remove)", options:["take off","take up","take over","take after"], correct:0, explain:"'Take off' means to remove clothing or footwear."},
+        {q:"'I can't ___ this noise any longer.' (tolerate)", options:["put up with","put off","put down","put across"], correct:0, explain:"'Put up with' means to tolerate or endure something unpleasant."},
+        {q:"'She takes ___ her mother — same eyes, same smile.' (resembles)", options:["after","off","up","over"], correct:0, explain:"'Take after' means to resemble a family member."},
+        {q:"'They finally ___ their differences and became friends again.' (resolved)", options:["sorted out","sorted up","sorted off","sorted down"], correct:0, explain:"'Sort out' means to resolve a problem or disagreement."}
+      ]},
+      prepositions: { label:'Prepositions', when:'the small words that link ideas', questions:[
+        {q:"She's been working here ___ 2019.", options:["since","for","from","at"], correct:0, explain:"'Since' is used with a specific starting point in time."},
+        {q:"The keys are ___ the table.", options:["in","on","at","into"], correct:1, explain:"'On' is used for a surface, like a table."},
+        {q:"We arrived ___ the airport an hour early.", options:["in","on","at","to"], correct:2, explain:"'At' is used for a specific point or place, such as an airport."},
+        {q:"He's afraid ___ spiders.", options:["from","of","for","with"], correct:1, explain:"'Afraid' is followed by 'of'."},
+        {q:"The cat jumped ___ the fence.", options:["over","on","at","in"], correct:0, explain:"'Over' describes movement across and above an obstacle like a fence."}
+      ]},
+      similar_words: { label:'Similar Words', when:'near-synonyms with different shades of meaning', questions:[
+        {q:"Which word means 'to look at something quickly'?", options:["gaze","glance","stare","gawk"], correct:1, explain:"'Glance' means a brief, quick look, unlike 'stare' or 'gaze', which are longer."},
+        {q:"Choose the best word: 'The lecture was so ___ that half the class fell asleep.'", options:["interesting","tedious","thrilling","brief"], correct:1, explain:"'Tedious' specifically implies long and boring, fitting the context."},
+        {q:"'Economical' most precisely means ___.", options:["cheap in price","careful with money and resources","free of charge","wealthy"], correct:1, explain:"'Economical' describes efficient use of money or resources, not simply a low price."},
+        {q:"Which word suggests a stronger, more sudden fear than 'worried'?", options:["concerned","anxious","terrified","uneasy"], correct:2, explain:"'Terrified' implies intense, often sudden fear, much stronger than 'worried' or 'uneasy'."},
+        {q:"Which word means 'important or likely to be remembered in history'?", options:["historical","historic","ancient","former"], correct:1, explain:"'Historic' means significant in history; 'historical' just means relating to history in general."}
+      ]},
+      collocations: { label:'Collocations', when:'words that naturally go together', questions:[
+        {q:"Which verb collocates with 'a decision'?", options:["do","make","take","have"], correct:1, explain:"We 'make' a decision, not 'do' or 'take' one."},
+        {q:"Which verb collocates with 'a mistake'?", options:["do","make","take","give"], correct:1, explain:"We 'make' a mistake."},
+        {q:"Which verb collocates with 'homework'?", options:["make","do","take","have"], correct:1, explain:"We 'do' homework, unlike 'make', which pairs with things we create."},
+        {q:"Which noun does NOT typically collocate with 'heavy'?", options:["heavy rain","heavy traffic","heavy sunshine","heavy smoker"], correct:2, explain:"'Heavy' collocates with rain, traffic, and smokers, but not naturally with 'sunshine'."},
+        {q:"Which verb collocates with 'attention'?", options:["pay","make","do","take"], correct:0, explain:"We 'pay' attention to something."}
+      ]},
+      descriptive_verbs: { label:'Descriptive Verbs', when:'vivid verbs instead of generic ones', questions:[
+        {q:"Which verb is a more descriptive alternative to 'walked', meaning to move slowly and wearily?", options:["strolled","trudged","dashed","skipped"], correct:1, explain:"'Trudged' vividly suggests slow, heavy, tired walking."},
+        {q:"Which verb means 'to speak in a complaining, unhappy way'?", options:["whispered","mumbled","whined","announced"], correct:2, explain:"'Whined' describes a complaining, high-pitched way of speaking."},
+        {q:"Which verb best replaces 'looked' to mean 'stared angrily'?", options:["glanced","glared","peeked","observed"], correct:1, explain:"'Glared' specifically means to look at someone with anger."},
+        {q:"Which verb means 'to eat quickly and greedily'?", options:["nibbled","devoured","sipped","tasted"], correct:1, explain:"'Devoured' means to eat something fast and hungrily."},
+        {q:"Which verb best replaces 'said' to mean 'said something quietly and hesitantly'?", options:["shouted","murmured","declared","announced"], correct:1, explain:"'Murmured' describes speaking softly and indistinctly."}
+      ]},
+      news: { label:'News', when:'vocabulary around journalism and current events', questions:[
+        {q:"What is the main story title on the front page of a newspaper called?", options:["byline","headline","caption","editorial"], correct:1, explain:"The 'headline' is the large title text introducing a news story."},
+        {q:"A person who writes news articles is called a ___.", options:["publisher","journalist","editor","broadcaster"], correct:1, explain:"A 'journalist' is someone who researches and writes news stories."},
+        {q:"Which word describes a news story that has not yet been confirmed?", options:["verified","unconfirmed","breaking","exclusive"], correct:1, explain:"'Unconfirmed' means the information hasn't been officially verified yet."},
+        {q:"The section of a newspaper giving the writer's opinion is called the ___.", options:["headline","editorial","obituary","classifieds"], correct:1, explain:"An 'editorial' is an article expressing the opinion of the publication."},
+        {q:"'Breaking news' refers to ___.", options:["old news","news that just happened","fake news","local news"], correct:1, explain:"'Breaking news' describes an important story that is developing right now."}
+      ]}
+    }
+  }
+};
+const FAM_ORDER=['tenses','culture','grammar','vocabulary'];
+
+const hue = fam => ({
+  tenses:['var(--tenses)','var(--tenses-d)'],
+  culture:['var(--culture)','var(--culture-d)'],
+  grammar:['var(--grammar)','var(--grammar-d)'],
+  vocabulary:['var(--vocabulary)','var(--vocabulary-d)'],
+}[fam]);
+
+let path={family:null, fn:null};
+let score={correct:0, total:0};
+
+function setGlow(fam){
+  const gf=document.getElementById('glowField');
+  if(!gf) return;
+  if(fam){
+    const [c,d]=hue(fam);
+    gf.style.setProperty('--gc1', `var(--${fam})`);
+    gf.style.setProperty('--gc2', `var(--${fam}-d)`);
+  } else {
+    gf.style.setProperty('--gc1', '#3fbfb2');
+    gf.style.setProperty('--gc2', '#9a6baa');
+  }
+}
+
+function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+function shuffle(arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+/* LEVEL 1 — four-up topic cards, function badges inside each */
+function renderFamilies(){
+  const el=document.getElementById('familyList');
+  el.innerHTML=FAM_ORDER.map(fam=>{
+    const F=QUIZ[fam], [c]=hue(fam);
+    const badges=Object.entries(F.functions).map(([k,fn])=>{
+      return `
+      <button class="fbadge" style="--fc:${c}" onclick="openFn('${fam}','${k}')"
+        aria-label="${fn.label}, ${fn.questions.length} questions">
+        <span class="fbadge-tag">${fn.questions.length} Q.</span>
+        <span class="fbadge-hero">${fn.label}</span>
+        <span class="fbadge-foot">
+          <span class="fbadge-open">→</span>
+        </span>
+      </button>`;
+    }).join('');
+    return `<div class="fam" style="--fc:${c};--fc-d:${hue(fam)[1]}">
+      <div class="fam-head"><span class="fam-name">${F.name}</span></div>
+      <div class="fam-purpose">${F.purpose}</div>
+      <div class="fam-badges">${badges}</div>
+    </div>`;
+  }).join('');
+  initCarousel();
+}
+
+/* ── horizontal carousel: arrows + dots page the scroll-snap track ── */
+function perPage(){
+  const w=window.innerWidth;
+  return w<=520?1 : w<=760?2 : w<=1000?3 : 4;
+}
+function pageCount(){ return Math.max(1, Math.ceil(FAM_ORDER.length/perPage())); }
+function currentPage(vp){
+  const cardW=vp.querySelector('.fam')?.offsetWidth||1;
+  const gap=16;
+  return Math.round(vp.scrollLeft/((cardW+gap)*perPage()));
+}
+function initCarousel(){
+  const vp=document.querySelector('.fam-viewport');
+  const prev=document.getElementById('famPrev');
+  const next=document.getElementById('famNext');
+  const dots=document.getElementById('famDots');
+  const pages=pageCount();
+  dots.innerHTML=Array.from({length:pages},(_,i)=>`<div class="fam-dot" data-p="${i}"></div>`).join('');
+  const update=()=>{
+    const p=currentPage(vp);
+    dots.querySelectorAll('.fam-dot').forEach((d,i)=>d.classList.toggle('active',i===p));
+    prev.disabled=vp.scrollLeft<=4;
+    next.disabled=vp.scrollLeft>=vp.scrollWidth-vp.clientWidth-4;
+  };
+  const go=dir=>{
+    const cardW=vp.querySelector('.fam')?.offsetWidth||1;
+    vp.scrollBy({left:dir*(cardW+16)*perPage(),behavior:'smooth'});
+  };
+  prev.onclick=()=>go(-1);
+  next.onclick=()=>go(1);
+  vp.onscroll=update;
+  dots.querySelectorAll('.fam-dot').forEach(d=>d.onclick=()=>{
+    const cardW=vp.querySelector('.fam')?.offsetWidth||1;
+    vp.scrollTo({left:(+d.dataset.p)*(cardW+16)*perPage(),behavior:'smooth'});
+  });
+  window.addEventListener('resize',()=>{dots.innerHTML='';initCarousel();},{once:true});
+  update();
+}
+
+/* LEVEL 2 — constellation: question at centre, answer options orbiting */
+let curFam=null, curFn=null, qOrder=[], qIdx=0, answered=false;
+
+function openFn(fam,k){
+  path={family:fam, fn:k};
+  curFam=fam; curFn=k;
+  const F=QUIZ[fam], fn=F.functions[k], [c,d]=hue(fam);
+  const con=document.getElementById('constellation');
+  con.style.setProperty('--fc',c);
+  con.style.setProperty('--fc-d',d);
+  setGlow(fam);
+  clearTimeout(pendingOverlayTimer);
+  closeOverlay();
+
+  qOrder = shuffle(fn.questions.map((_,i)=>i));
+  qIdx = 0;
+  answered = false;
+
+  switchView('viewCapsule');
+  requestAnimationFrame(()=>renderQuestion());
+  setCrumb();
+}
+
+function currentQuestion(){
+  const fn=QUIZ[curFam].functions[curFn];
+  return fn.questions[qOrder[qIdx]];
+}
+
+function updateScoreChip(){
+  document.getElementById('scoreChip').textContent = `✓ ${score.correct} / ${score.total}`;
+}
+
+function renderQuestion(){
+  const F=QUIZ[curFam], fn=F.functions[curFn], [c,d]=hue(curFam);
+  const con=document.getElementById('constellation');
+  con.querySelectorAll('.enode').forEach(n=>n.remove());
+  con.querySelector('.const-hint')?.remove();
+
+  document.getElementById('qEyebrow').textContent = fn.label+' · '+F.name;
+  document.getElementById('qProgress').textContent = `Question ${qIdx+1} of ${qOrder.length}`;
+  const item=currentQuestion();
+  document.getElementById('qText').textContent = item.q;
+  answered=false;
+
+  const W=con.clientWidth, H=con.clientHeight;
+  const cx=W/2, cy=H/2;
+  const n=item.options.length;
+  const half = Math.ceil(n/2);
+  const rightCount = n - half;
+  const rx = Math.min(W*0.32, 460);
+  const ry = Math.min(H*0.4, 260);
+
+  function place(i){
+    const onLeft = i < half;
+    const idx = onLeft ? i : i - half;
+    const count = onLeft ? half : rightCount;
+    const angMax = 65 * Math.PI/180;
+    const yMaxFrac = Math.sin(angMax);
+    const t = count>1 ? (idx/(count-1))*2 - 1 : 0;
+    const yFrac = t*yMaxFrac;
+    const xFrac = Math.sqrt(Math.max(0, 1 - yFrac*yFrac));
+    const baseX = onLeft ? -xFrac : xFrac;
+    return { x: cx + baseX*rx, y: cy + yFrac*ry };
+  }
+
+  item.options.forEach((opt,i)=>{
+    const node=document.createElement('div');
+    node.className='enode';
+    node.style.setProperty('--fc',c); node.style.setProperty('--fc-d',d);
+    node.innerHTML=`<div class="enode-banner">
+        <span class="enode-bnum">${String.fromCharCode(65+i)}</span>
+        <span class="enode-blabel">Answer</span>
+      </div>
+      <div class="enode-stem">${opt}</div>`;
+    con.appendChild(node);
+    const p=place(i);
+    node.style.left=p.x+'px'; node.style.top=p.y+'px';
+    node.addEventListener('click',()=>selectOption(i,node));
+    node.dataset.idx=i;
+  });
+
+  const hint=document.createElement('div');
+  hint.className='const-hint';
+  hint.textContent='Tap an answer to check it';
+  con.appendChild(hint);
+}
+
+function selectOption(i,node){
+  if(answered) return;
+  answered=true;
+  const item=currentQuestion();
+  const correctIdx=item.correct;
+  const isRight = i===correctIdx;
+
+  score.total++;
+  if(isRight) score.correct++;
+  updateScoreChip();
+
+  document.querySelectorAll('.enode').forEach(n=>{
+    n.classList.add('disabled');
+    const idx=+n.dataset.idx;
+    if(idx===correctIdx) n.classList.add('correct');
+    else if(idx===i) n.classList.add('incorrect');
+    else n.classList.add('faded');
+  });
+
+  document.querySelector('.const-hint')?.classList.add('hidden');
+
+  // let the board's own reaction play out for a beat before the refined result opens —
+  // choosing → (board reacts) → game / result
+  clearTimeout(pendingOverlayTimer);
+  pendingOverlayTimer = setTimeout(()=>openOverlay(item,i,isRight), 550);
+}
+
+let pendingOverlayTimer=null;
+
+function openOverlay(item,i,isRight){
+  const F=QUIZ[curFam], fn=F.functions[curFn], [c,d]=hue(curFam);
+  const ov=document.getElementById('qcOverlay');
+  const card=document.getElementById('qcCard');
+  card.style.setProperty('--fc',c); card.style.setProperty('--fc-d',d);
+  document.getElementById('qcLabel').textContent=fn.label;
+  document.getElementById('qcTask').textContent = isRight ? 'Nice — that checks out' : 'Not quite';
+  document.getElementById('qcQuestion').textContent = item.q;
+
+  const chosen=document.getElementById('qcChosen');
+  chosen.classList.remove('good','bad');
+  chosen.classList.add(isRight?'good':'bad');
+  document.getElementById('qcIcon').textContent = isRight ? '✓' : '✕';
+  document.getElementById('qcChosenText').textContent = isRight
+    ? item.options[i]
+    : `${item.options[i]}  →  ${item.options[item.correct]}`;
+
+  document.getElementById('qcExplain').textContent = item.explain;
+  ov.classList.add('show');
+}
+
+function closeOverlay(){
+  document.getElementById('qcOverlay').classList.remove('show');
+}
+
+function advanceFromOverlay(){
+  closeOverlay();
+  nextQuestion();
+}
+
+function nextQuestion(){
+  clearTimeout(pendingOverlayTimer);
+  closeOverlay();
+  if(!qOrder.length) return;
+  qIdx = (qIdx+1) % qOrder.length;
+  if(qIdx===0) qOrder = shuffle(qOrder);
+  renderQuestion();
+}
+
+function restartTopic(){
+  if(!curFn) return;
+  clearTimeout(pendingOverlayTimer);
+  closeOverlay();
+  const fn=QUIZ[curFam].functions[curFn];
+  qOrder = shuffle(fn.questions.map((_,i)=>i));
+  qIdx=0;
+  renderQuestion();
+}
+
+function switchView(id){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const stage=document.querySelector('.stage'), wrap=document.querySelector('.wrap');
+  const radial = id==='viewCapsule';
+  stage.classList.toggle('no-scroll',radial);
+  wrap.classList.toggle('full',radial);
+  if(!radial) stage.scrollTo({top:0});
+}
+function setCrumb(){ document.getElementById('crumb').classList.add('show'); }
+function goBack(){
+  clearTimeout(pendingOverlayTimer);
+  closeOverlay();
+  switchView('viewFamilies');
+  document.getElementById('crumb').classList.remove('show');
+  path={family:null,fn:null};
+  curFam=null; curFn=null;
+  setGlow(null);
+}
+function smartBack(e){
+  try{
+    const ref=document.referrer;
+    if(ref && new URL(ref).host===location.host){
+      e.preventDefault(); history.back(); return false;
+    }
+  }catch(_){}
+  return true;
+}
+window.addEventListener('resize',()=>{
+  if(document.getElementById('viewCapsule').classList.contains('active') && path.fn){
+    renderQuestion();
+  }
+});
+
+renderFamilies();
+updateScoreChip();
+</script>
+</body>
+</html>

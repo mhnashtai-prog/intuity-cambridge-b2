@@ -29,6 +29,31 @@ html,body{background:var(--bg);font-family:'Barlow',sans-serif;color:var(--ink);
 .pill:hover{border-color:rgba(0,0,0,0.3)}
 .pill.on{background:var(--pc,var(--ink));border-color:var(--pc,var(--ink));color:#fff}
 
+/* ── mode bar (Skeleton / Introduction / Body / Conclusion) ── */
+.modebar{display:flex;justify-content:center;gap:0.15rem;padding:0.55rem 1rem 0;flex-wrap:wrap}
+.mode-btn{border:none;background:transparent;cursor:pointer;font-family:'Barlow Condensed',sans-serif;
+  font-size:0.72rem;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;
+  color:rgba(0,0,0,0.35);padding:0.34rem 0.9rem;border-radius:2rem;transition:all 0.2s}
+.mode-btn:hover{color:rgba(0,0,0,0.6)}
+.mode-btn.on{background:var(--ink);color:#fff}
+
+/* ── register legend ── */
+.legend{display:flex;justify-content:center;gap:1.1rem;padding:0.45rem 1rem 0;flex-wrap:wrap;
+  font-family:'Barlow Condensed',sans-serif;font-size:0.6rem;font-weight:700;letter-spacing:0.12em;
+  text-transform:uppercase;color:rgba(0,0,0,0.4)}
+.legend .sw{display:inline-block;width:0.5rem;height:0.5rem;border-radius:2px;margin-right:0.3rem;vertical-align:middle}
+.legend .l-sg .sw{background:#6a4374}.legend .l-vw .sw{background:#9a9aa2}
+.legend .l-fr .sw{background:#1a1a1a}.legend .l-gp .sw{background:#C9A961}
+
+/* ── section-mode cards (one section per card) ── */
+.scard{background:var(--white);border-radius:0.8rem;padding:0.8rem 0.9rem 0.65rem 1rem;
+  box-shadow:0 6px 16px -8px rgba(0,0,0,0.16),0 1px 4px rgba(0,0,0,0.05);
+  display:flex;flex-direction:column;--sig:var(--essay)}
+.s-head{display:flex;align-items:baseline;gap:0.4rem;margin-bottom:0.45rem}
+.s-type{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:0.72rem;letter-spacing:0.05em;
+  text-transform:uppercase;color:var(--sig)}
+.s-tag{margin-left:auto;font-family:'Instrument Sans',sans-serif;font-style:italic;font-size:0.58rem;color:rgba(0,0,0,0.32)}
+
 /* ── gallery wall ── */
 .wall{padding:1.1rem 1.2rem 2.5rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1.1rem;max-width:1500px;margin:0 auto}
 .gcard{background:var(--white);border-radius:0.9rem;padding:1rem 1rem 0.75rem 1.15rem;
@@ -69,7 +94,19 @@ html,body{background:var(--bg);font-family:'Barlow',sans-serif;color:var(--ink);
   <span class="brand">INTUITY · SLIDE GALLERIES</span>
   <span class="count" id="count"></span>
 </div>
+<div class="modebar" id="modebar">
+  <button class="mode-btn on" data-m="skeleton">Skeleton</button>
+  <button class="mode-btn" data-m="introduction">Introduction</button>
+  <button class="mode-btn" data-m="body">Body</button>
+  <button class="mode-btn" data-m="conclusion">Conclusion</button>
+</div>
 <div class="pills" id="pills"></div>
+<div class="legend">
+  <span class="l-sg"><span class="sw"></span>Signpost</span>
+  <span class="l-vw"><span class="sw"></span>Stance</span>
+  <span class="l-fr"><span class="sw"></span>Frame</span>
+  <span class="l-gp"><span class="sw"></span>Your content</span>
+</div>
 <div class="wall" id="wall"><div class="state">Loading the gallery…</div></div>
 
 <script>
@@ -103,7 +140,7 @@ const G_LABEL={essay:'Essays',report:'Reports',review:'Reviews',email:'Emails',a
 const G_COLOR={essay:'var(--essay)',report:'var(--report)',review:'var(--review)',email:'var(--email)',article:'var(--article)',narrative:'var(--narrative)'};
 const PER_TYPE=2, PER_SINGLE=4;
 
-let CARDS=[]; let filter='all';
+let CARDS=[]; let filter='all'; let mode='skeleton';
 
 async function init(){
   const data={};
@@ -122,14 +159,30 @@ async function init(){
 }
 
 /* ── shared card shell ── */
-function shell(genre,label,num,tag,secsHTML){
-  return {genre, html:`<div class="gcard" data-genre="${genre}" style="--sig:${G_COLOR[genre]}">
-    <div class="g-head"><span class="g-type">${esc(label)}</span><span class="g-badge">${num}</span></div>
-    <div class="spine">${secsHTML}</div>
-    <div class="g-foot"><span class="g-brand">INTUITY</span><span class="g-tag">${tag} · one model</span></div>
-  </div>`};
+function shell(genre,label,num,tag,_ignored){
+  const secs=_secBuf; _secBuf=[];
+  return {genre,label,num,tag,secs};
 }
-const sec=(n,word,lines)=>`<div class="sec"><div class="sec-badge"><span class="n">${n}</span></div><div class="sec-word">${word}</div>${lines}</div>`;
+function skeletonHTML(c){
+  return `<div class="gcard" data-genre="${c.genre}" style="--sig:${G_COLOR[c.genre]}">
+    <div class="g-head"><span class="g-type">${esc(c.label)}</span><span class="g-badge">${c.num}</span></div>
+    <div class="spine">${c.secs.map(secHTML).join('')}</div>
+    <div class="g-foot"><span class="g-brand">INTUITY</span><span class="g-tag">${c.tag} · one model</span></div>
+  </div>`;
+}
+function sectionHTML(c,mode){
+  let picked;
+  if(mode==='introduction') picked=[c.secs[0]];
+  else if(mode==='conclusion') picked=[c.secs[c.secs.length-1]];
+  else picked=c.secs.slice(1,-1);
+  return `<div class="scard" style="--sig:${G_COLOR[c.genre]}">
+    <div class="s-head"><span class="s-type">${esc(c.label)}</span><span class="s-tag">${c.tag}</span></div>
+    <div class="spine">${picked.map(secHTML).join('')}</div>
+  </div>`;
+}
+let _secBuf=[];
+const sec=(n,word,lines)=>{ _secBuf.push({n,word,lines}); return ''; };
+const secHTML=x=>`<div class="sec"><div class="sec-badge"><span class="n">${x.n}</span></div><div class="sec-word">${x.word}</div>${x.lines}</div>`;
 
 /* ── ESSAYS ── */
 function genEssay(D){
@@ -280,10 +333,17 @@ function renderPills(){
 }
 function render(){
   const show=filter==='all'?CARDS:CARDS.filter(c=>c.genre===filter);
-  document.getElementById('wall').innerHTML=show.map(c=>c.html).join('');
+  document.getElementById('wall').innerHTML =
+    mode==='skeleton' ? show.map(skeletonHTML).join('')
+                      : show.map(c=>sectionHTML(c,mode)).join('');
   document.getElementById('count').textContent=`${show.length} model${show.length===1?'':'s'} on the wall`;
   window.scrollTo({top:0});
 }
+document.querySelectorAll('.mode-btn').forEach(b=>b.addEventListener('click',()=>{
+  mode=b.dataset.m;
+  document.querySelectorAll('.mode-btn').forEach(x=>x.classList.toggle('on',x===b));
+  render();
+}));
 init();
 </script>
 </body>

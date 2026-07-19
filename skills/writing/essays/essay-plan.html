@@ -253,8 +253,16 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .k-headside{grid-column:2;align-self:center;min-width:0}
 .k-over{font-family:'Barlow Condensed',sans-serif;font-size:0.68rem;font-weight:600;
   letter-spacing:0.18em;text-transform:uppercase;color:#8a8880;line-height:1.1}
-.k-idea{font-family:'Instrument Sans',sans-serif;font-size:0.98rem;font-weight:500;line-height:1.3;color:#2c2c2a}
+.k-idea{font-family:'Instrument Sans',sans-serif;font-size:1.02rem;font-weight:500;line-height:1.3;color:#2c2c2a}
 .k-neck{grid-column:1;width:6px;height:12px;background:var(--kc);justify-self:center;margin-top:-4px}
+/* claim → support tree: the cohesion, drawn */
+.k-tree{grid-column:1 / -1;position:relative;margin-left:21px;padding:2px 0 2px}
+.k-tree::before{content:'';position:absolute;left:0;top:-12px;bottom:1rem;width:2px;background:var(--kc);opacity:0.5}
+.k-branch{position:relative;padding:0.45rem 0 0.45rem 1.25rem}
+.k-branch::before{content:'';position:absolute;left:0;top:0.98rem;width:0.9rem;height:2px;background:var(--kc);opacity:0.5}
+.k-branch.nolabel::before{top:1.12rem}
+.k-suptext{font-family:'Instrument Sans',sans-serif;font-size:0.95rem;line-height:1.32;color:#2c2c2a}
+.k-branch .mv{margin-bottom:2px}
 .k-rows{grid-column:1 / -1;display:grid;grid-template-columns:44px 1fr;column-gap:0.7rem;grid-auto-rows:1fr;min-height:0}
 .k-seg{grid-column:1;width:6px;justify-self:center;background:var(--kc);
   display:flex;align-items:center;justify-content:center;min-height:34px;position:relative}
@@ -293,6 +301,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
   .k-over{font-size:0.72rem}
   .k-idea{font-size:1.12rem;line-height:1.35}
   .k-neck{width:7px;height:14px}
+  .k-tree{margin-left:27px}
   .k-rows{grid-template-columns:56px 1fr;column-gap:0.95rem}
   .k-seg{width:7px;min-height:46px}
   .k-seg .sn{font-size:0.74rem}
@@ -388,6 +397,11 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .ksig:active,.key:active{transform:scale(0.985)}
 
 .section-modal{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center}
+.modal-claim{font-family:'Instrument Sans',sans-serif;font-size:1.15rem;font-weight:500;color:#2c2c2a;margin:0.2rem 0 0.4rem}
+.section-modal .k-tree{margin-left:10px;--kc:#9a7d3f}
+.section-modal .k-tree::before{top:0}
+.section-modal .k-suptext{font-size:1.02rem}
+.section-modal .mv{font-size:0.66rem}
 .section-modal.open{display:flex}
 .modal-backdrop{position:fixed;inset:0;background:rgba(15,13,10,0.5);display:flex;align-items:center;
   justify-content:center;padding:1.5rem;animation:modalFade 0.2s ease both}
@@ -441,11 +455,6 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
         </div>
       </div>
       <div class="type-badge" id="typeBadge">Plan</div>
-      <div class="view-toggle">
-        <button class="vt-btn on" id="vtTemple" onclick="setView('temple')">Structure</button>
-        <button class="vt-btn" id="vtTour" onclick="setView('tour')">Tour</button>
-        <button class="vt-btn" id="vtList" onclick="setView('list')">List</button>
-      </div>
       <div class="card-scroll" id="contentArea"></div>
       <div class="slide-nav">
         <button class="slide-arrow" id="btnPrev" onclick="navigate(-1)">←</button>
@@ -592,6 +601,11 @@ function toggleBone(i){
 
 const MOVE_LABEL={reason:'BECAUSE',example:'EXAMPLE',result:'RESULT',
   contrast:'CONTRAST',compare:'COMPARE',reformulate:'REFORMULATE'};
+function treeHTML(sups){
+  return `<div class="k-tree">`+sups.map(n=>
+    `<div class="k-branch${n.move?'':' nolabel'}">${mvTag(n)}<div class="k-suptext">${kv(n.text)}</div></div>`
+  ).join('')+`</div>`;
+}
 function mvTag(n){return n.move?`<span class="mv">${MOVE_LABEL[n.move]||n.move.toUpperCase()}</span>`:'';}
 /* «verb» markers from ideas.json → bold key verbs (same convention as narrative samples) */
 function kv(t){return String(t).replace(/«([^»]+)»/g,'<b class="kv">$1</b>');}
@@ -621,7 +635,12 @@ function openSectionModal(idx){
   const title=sec.title.replace(/^P\d+:\s*/,'').trim();
   const purpose=bonePurpose(sec.title,role);
   const roleLabel=role==='intro'?'Introduction':role==='end'?'Conclusion':'Body';
-  const notesHtml=(sec.notes||[]).map(n=>renderNote(n)).join('');
+  const isBody=role!=='intro'&&role!=='end';
+  const mIdea=(sec.notes||[]).find(n=>n.marker==='💡');
+  const mSups=(sec.notes||[]).filter(n=>n!==mIdea);
+  const notesHtml=(isBody&&mIdea)
+    ? `<div class="modal-claim">${kv(mIdea.text)}</div>${treeHTML(mSups)}`
+    : (sec.notes||[]).map(n=>renderNote(n)).join('');
 
   const modal=document.getElementById('sectionModal');
   modal.innerHTML=`<div class="modal-backdrop" onclick="closeSectionModal()">
@@ -643,6 +662,7 @@ function openSectionModal(idx){
   modal.classList.add('open');
   sndOpen();
 }
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSectionModal();});
 function closeSectionModal(){
   const modal=document.getElementById('sectionModal');
   if(!modal||!modal.classList.contains('open'))return;
@@ -809,9 +829,7 @@ function renderTemple(area){
     const title=sec.title.replace(/^P\d+:\s*/,'').trim();
     const idea=(sec.notes||[]).find(n=>n.marker==='💡');
     const sups=(sec.notes||[]).filter(n=>n!==idea);
-    const rows=sups.map((n,i)=>`<div class="k-row">
-        <div class="k-seg"></div>
-        <div class="k-sup">${mvTag(n)}${kv(n.text)}</div></div>`).join('');
+    const rows=treeHTML(sups);
     const skIdx=ci+1;
     return `<div class="key" onclick="openSectionModal(${skIdx})">
       <div class="k-head"><span class="k-num">${String(ci+2).padStart(2,'0')}</span></div>
@@ -820,8 +838,7 @@ function renderTemple(area){
         <div class="k-idea">${idea?kv(idea.text):''}</div>
       </div>
       <div class="k-neck"></div>
-      <div class="k-rows">${rows}</div>
-      <div class="k-teeth"><i></i><i></i><i></i></div>
+      ${rows}
     </div>`;
   }).join('');
   area.innerHTML=`<div class="keysview">

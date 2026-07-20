@@ -149,6 +149,10 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .pitem{font-size:.9rem;line-height:1.5;color:#2c2c2a;padding:.42rem 0;border-bottom:1px solid rgba(201,169,97,.18)}
 .pitem:last-child{border-bottom:none}
 .pitem .gap{color:#9a7d3f;font-weight:600}
+.ppair{padding:.6rem 0}
+.phook{font-size:.9rem;line-height:1.5;color:#2c2c2a}
+.pthesis{font-size:.9rem;line-height:1.5;color:#6a5a3a;margin-top:.3rem;padding-left:.7rem;border-left:2px solid rgba(201,169,97,.5)}
+.phint{font-family:'Barlow Condensed',sans-serif;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:#b0a684;margin:-.5rem 0 .7rem}
 </style>
 </head>
 <body>
@@ -383,15 +387,29 @@ function richSections(){
   const bodySecs=RICH.full&&RICH.full.structures&&RICH.full.structures[tk]&&RICH.full.structures[tk].sections;
   if(!bodySecs)return null;
   let intro=[];
-  if(hookSec)Object.values(hookSec).forEach(sc=>intro=intro.concat(mergeTiers(sc)));
-  if(thSec)Object.values(thSec).forEach(sc=>intro=intro.concat(mergeTiers(sc)));
+  if(hookSec&&thSec){
+    const hSec=Object.values(hookSec)[0], tSec=Object.values(thSec)[0];
+    const hp=(hSec&&hSec.phrases)||{}, tp=(tSec&&tSec.phrases)||{};
+    const seen=new Set();
+    ['default','alt1','alt2'].forEach(gk=>{
+      const hs=hp[gk]||[], ts=tp[gk]||[], m=Math.max(hs.length,ts.length);
+      for(let i=0;i<m;i++){
+        const h=hs.length?hs[i%hs.length]:'', t=ts.length?ts[i%ts.length]:'';
+        const key=h+'|||'+t;
+        if(!seen.has(key)){ seen.add(key); intro.push({hook:h,thesis:t}); }
+      }
+    });
+  } else {
+    if(hookSec)Object.values(hookSec).forEach(sc=>mergeTiers(sc).forEach(p=>intro.push({hook:p,thesis:''})));
+    if(thSec)Object.values(thSec).forEach(sc=>mergeTiers(sc).forEach(p=>intro.push({hook:'',thesis:p})));
+  }
   let body=[],concl=[];
   Object.keys(bodySecs).forEach(n=>{
     const m=mergeTiers(bodySecs[n]);
     if(n.toLowerCase().includes('conclusion'))concl=concl.concat(m);
     else if(!n.toLowerCase().startsWith('transition'))body=body.concat(m);
   });
-  return {intro:[...new Set(intro)],body:[...new Set(body)],concl:[...new Set(concl)]};
+  return {intro:intro,body:[...new Set(body)],concl:[...new Set(concl)]};
 }
 function renderPhrases(){
   const stack=document.getElementById('stack');
@@ -399,8 +417,10 @@ function renderPhrases(){
   const R=richSections();
   if(!R){stack.innerHTML='<div style="padding:2.5rem;text-align:center;color:#999;font-size:.9rem">Loading phrases…</div>';return;}
   const icons={intro:'\uD83D\uDCCC',body:'\uD83D\uDC4D',concl:'\u2B50'};
-  const card=(sec,title,items)=>`<div class="pcard" data-sec="${sec}"><div class="prail"><span>${icons[sec]}</span></div><div class="pbody"><div class="ptitle">${title}</div>${items.map(x=>`<div class="pitem">${fmt(String(x))}</div>`).join('')}</div></div>`;
-  stack.innerHTML=`<div class="pcols">${card('intro','Introduction',R.intro)}${card('body','Body',R.body)}${card('concl','Conclusion',R.concl)}</div>`;
+  const listCard=(sec,title,items)=>`<div class="pcard" data-sec="${sec}"><div class="prail"><span>${icons[sec]}</span></div><div class="pbody"><div class="ptitle">${title}</div>${items.map(x=>`<div class="pitem">${fmt(String(x))}</div>`).join('')}</div></div>`;
+  const introItems=R.intro.map(p=>`<div class="pitem ppair"><div class="phook">${fmt(String(p.hook))}</div>${p.thesis?`<div class="pthesis">${fmt(String(p.thesis))}</div>`:''}</div>`).join('');
+  const introCard=`<div class="pcard" data-sec="intro"><div class="prail"><span>${icons.intro}</span></div><div class="pbody"><div class="ptitle">Introduction</div><div class="phint">hook + thesis = one opening</div>${introItems}</div></div>`;
+  stack.innerHTML=`<div class="pcols">${introCard}${listCard('body','Body',R.body)}${listCard('concl','Conclusion',R.concl)}</div>`;
 }
 
 function render(){

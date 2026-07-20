@@ -43,8 +43,19 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .hint{width:min(420px,92vw);font-family:'Instrument Sans',sans-serif;font-style:italic;font-size:0.7rem;color:rgba(0,0,0,0.32);margin-bottom:0.8rem;text-align:center}
 
 /* ── stack + spine ── */
-.stack{width:min(1080px,96vw);position:relative}
+.stack{width:min(1120px,96vw);position:relative}
 .stack.has-cards::before{content:'';position:absolute;left:1.35rem;top:0.6rem;bottom:0.6rem;width:2px;background:var(--sig);opacity:0.22;z-index:0}
+.stack.phrases-on::before{display:none}
+.pcols{display:grid;grid-template-columns:1fr;gap:0.9rem}
+@media(min-width:780px){.pcols{grid-template-columns:repeat(3,1fr)}}
+.pcard{background:var(--white);border-radius:1.1rem;overflow:hidden;box-shadow:3px 5px 0 rgba(0,0,0,0.05),0 14px 36px rgba(0,0,0,0.12),0 3px 9px rgba(0,0,0,0.06)}
+.pcard .band{padding:0.5rem 0.9rem}
+.pgroup{padding:0.7rem 1rem 0.9rem}
+.pgroup-label{font-family:'Barlow Condensed',sans-serif;font-size:0.62rem;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:var(--sig);opacity:0.85;margin:0.7rem 0 0.4rem}
+.pgroup-label:first-child{margin-top:0}
+.pitem{font-size:0.92rem;line-height:1.45;color:#2c2c2a;padding:0.28rem 0;border-bottom:1px solid rgba(0,0,0,0.05)}
+.pitem:last-child{border-bottom:none}
+.pitem .gap{color:var(--sig);font-weight:600}
 .card{position:relative;z-index:1;display:flex;background:var(--white);border-radius:1.1rem;overflow:hidden;margin-bottom:0.55rem;box-shadow:0 2px 0 rgba(255,255,255,0.8) inset,3px 5px 0 rgba(0,0,0,0.05),0 14px 36px rgba(0,0,0,0.12),0 3px 9px rgba(0,0,0,0.06);animation:cardUp .5s cubic-bezier(.22,1,.36,1) both}
 @keyframes cardUp{0%{opacity:0;transform:translateY(14px)}100%{opacity:1;transform:translateY(0)}}
 .band{width:2.7rem;flex-shrink:0;background:var(--sig);display:flex;flex-direction:column;align-items:center;padding:0.85rem 0 0.95rem;gap:0.55rem}
@@ -82,6 +93,46 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 
 .state{width:min(420px,92vw);text-align:center;padding:2.5rem 1rem;font-family:'Instrument Sans',sans-serif;color:rgba(0,0,0,0.4);font-style:italic;font-size:0.85rem}
 .state.err{color:#b4453a}
+
+/* ── CARDS / PHRASES view toggle (in-page, no navigation) ── */
+let view='cards';
+function setView(v){
+  view=v;
+  document.getElementById('mbCards').classList.toggle('active',v==='cards');
+  document.getElementById('mbPhrases').classList.toggle('active',v==='phrases');
+  render();
+}
+window.setView=setView;
+
+function phraseCol(title,num,groups){
+  const body=groups.filter(g=>g[1]&&g[1].length).map(g=>
+    `<div class="pgroup-label">${g[0]}</div>`+
+    g[1].map(x=>`<div class="pitem">${fmt(String(x))}</div>`).join('')
+  ).join('');
+  return `<div class="pcard"><div class="band"><span class="band-num">${num}</span><span class="band-word">${title}</span></div><div class="pgroup">${body}</div></div>`;
+}
+function renderPhrases(){
+  const argueKeys = KEYS ? Object.values(KEYS).flat() : [];
+  const open = phraseCol('Open','01',[
+    ['Hook / background', SH.background],
+    ['Hinge', T.open.hinge],
+    ['Aim', T.open.aim]
+  ]);
+  const argue = phraseCol('Argue','02',[
+    ['Signposts', SH.signpost ? Object.values(SH.signpost).flat() : []],
+    ['Viewpoint', VIEW],
+    ['Key claims', argueKeys],
+    ['Support moves', (SH.support||[]).map(x=>x.move)]
+  ]);
+  const close = phraseCol('Close','03',[
+    ['Summary', T.close.summary],
+    ['Stance', T.close.stance],
+    ['Verdict', T.close.verdict]
+  ]);
+  const stack=document.getElementById('stack');
+  stack.classList.add('has-cards','phrases-on');
+  stack.innerHTML=`<div class="pcols">${open}${argue}${close}</div>`;
+}
 
 /* ── FOOTER NAV — identical to live page ── */
 .foot{flex-shrink:0;display:flex;justify-content:center;padding:0.5rem 1rem calc(env(safe-area-inset-bottom,0px) + 0.55rem);background:rgba(240,239,236,0.95);border-top:1px solid rgba(0,0,0,0.06)}
@@ -138,8 +189,8 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 
   <div class="mode-row">
     <div class="mode-pill">
-      <button class="mode-btn active">Cards</button>
-      <a class="mode-btn" href="essay-model.html">Phrases</a>
+      <button class="mode-btn active" id="mbCards" onclick="setView('cards')">Cards</button>
+      <button class="mode-btn" id="mbPhrases" onclick="setView('phrases')">Phrases</button>
     </div>
   </div>
 
@@ -315,6 +366,8 @@ const cur=(slot,idx)=> slot==='argue'?S.argue[idx].h[S.argue[idx].i]:S[slot].h[S
 function nav(slot,idx){const a=idx===undefined?'':idx;return `<div class="nav"><button onclick="roll('${slot}',-1,${a})">‹</button><button onclick="roll('${slot}',1,${a})">›</button></div>`;}
 
 function render(){
+  if(view==='phrases'){ renderPhrases(); return; }
+  document.getElementById('stack').classList.remove('phrases-on');
   const o=cur('open'), c=cur('close');
   const openLine=`<span class="lead">${fmt(o.bg)}</span> <span class="soft">${o.hinge}<span class="ast">*</span> <span class="gap">...</span>. ${fmt(o.aim)}</span>`;
   const argueLines=[0,1,2].map(i=>{const m=cur('argue',i);

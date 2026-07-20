@@ -217,6 +217,7 @@ async function init(){
   }
 
   SH = DATA.shared;
+  fetchRichPhrases();
   typeKeys = Object.keys(DATA.types||{});
   if(!typeKeys.length){ document.getElementById('stack').innerHTML='<div class="state err">No essay types found.</div>'; renderTabs(); return; }
 
@@ -326,46 +327,65 @@ window.roll=roll; window.switchType=switchType;
 const cur=(slot,idx)=> slot==='argue'?S.argue[idx].h[S.argue[idx].i]:S[slot].h[S[slot].i];
 function nav(slot,idx){const a=idx===undefined?'':idx;return `<div class="nav"><button onclick="roll('${slot}',-1,${a})">‹</button><button onclick="roll('${slot}',1,${a})">›</button></div>`;}
 
+
+/* ══ CARDS / PHRASES (in-page views) + RICH TIERED PHRASES from data1/ ══ */
 let view='cards';
-/* ── CARDS / PHRASES view toggle (in-page, no navigation) ── */
+let RICH=null;
+const RICH_TYPE_MAP={
+  'opinion':'opinion','for-against':'for_and_against','problem-solution':'problems_and_solutions',
+  'cause-effect':'cause_and_effect','agree-disagree':'agree_and_disagree','speculation-trends':'speculation_and_trends'
+};
 function setView(v){
   view=v;
-  document.getElementById('mbCards').classList.toggle('active',v==='cards');
-  document.getElementById('mbPhrases').classList.toggle('active',v==='phrases');
+  const c=document.getElementById('mbCards'),p=document.getElementById('mbPhrases');
+  if(c)c.classList.toggle('active',v==='cards');
+  if(p)p.classList.toggle('active',v==='phrases');
   render();
 }
 window.setView=setView;
-
-function phraseCol(title,num,groups){
-  const body=groups.filter(g=>g[1]&&g[1].length).map(g=>
-    `<div class="pgroup-label">${g[0]}</div>`+
-    g[1].map(x=>`<div class="pitem">${fmt(String(x))}</div>`).join('')
-  ).join('');
-  return `<div class="pcard"><div class="band"><span class="band-num">${num}</span><span class="band-word">${title}</span></div><div class="pgroup">${body}</div></div>`;
+function fetchRichPhrases(){
+  if(RICH)return Promise.resolve(RICH);
+  return Promise.all([
+    fetch('data1/essay-hook.json').then(r=>r.json()).catch(()=>null),
+    fetch('data1/essay-thesis.json').then(r=>r.json()).catch(()=>null),
+    fetch('data1/essay-full-structures.json').then(r=>r.json()).catch(()=>null)
+  ]).then(a=>{RICH={hook:a[0],thesis:a[1],full:a[2]}; if(view==='phrases')render(); return RICH;});
+}
+function richTypeKey(){
+  const raw=(TYPE||'opinion').toLowerCase().trim();
+  return RICH_TYPE_MAP[raw]||'opinion';
+}
+function mergeTiers(sec){
+  if(!sec||!sec.phrases)return[];
+  const out=[];['default','alt1','alt2'].forEach(g=>(sec.phrases[g]||[]).forEach(p=>{if(!out.includes(p))out.push(p);}));
+  return out;
+}
+function richSections(){
+  if(!RICH||!RICH.full)return null;
+  const tk=richTypeKey();
+  const hookSec=RICH.hook&&RICH.hook.structures&&RICH.hook.structures[tk]&&RICH.hook.structures[tk].sections;
+  const thSec=RICH.thesis&&RICH.thesis.structures&&RICH.thesis.structures[tk]&&RICH.thesis.structures[tk].sections;
+  const bodySecs=RICH.full&&RICH.full.structures&&RICH.full.structures[tk]&&RICH.full.structures[tk].sections;
+  if(!bodySecs)return null;
+  let intro=[];
+  if(hookSec)Object.values(hookSec).forEach(sc=>intro=intro.concat(mergeTiers(sc)));
+  if(thSec)Object.values(thSec).forEach(sc=>intro=intro.concat(mergeTiers(sc)));
+  let body=[],concl=[];
+  Object.keys(bodySecs).forEach(n=>{
+    const m=mergeTiers(bodySecs[n]);
+    if(n.toLowerCase().includes('conclusion'))concl=concl.concat(m);
+    else if(!n.toLowerCase().startsWith('transition'))body=body.concat(m);
+  });
+  return {intro:[...new Set(intro)],body:[...new Set(body)],concl:[...new Set(concl)]};
 }
 function renderPhrases(){
-  const argueKeys = KEYS ? Object.values(KEYS).flat() : [];
-  const open = phraseCol('Open','01',[
-    ['Hook / background', SH.background],
-    ['Hinge', T.open.hinge],
-    ['Aim', T.open.aim]
-  ]);
-  const argue = phraseCol('Argue','02',[
-    ['Signposts', SH.signpost ? Object.values(SH.signpost).flat() : []],
-    ['Viewpoint', VIEW],
-    ['Key claims', argueKeys],
-    ['Support moves', (SH.support||[]).map(x=>x.move)]
-  ]);
-  const close = phraseCol('Close','03',[
-    ['Summary', T.close.summary],
-    ['Stance', T.close.stance],
-    ['Verdict', T.close.verdict]
-  ]);
   const stack=document.getElementById('stack');
   stack.classList.add('has-cards','phrases-on');
-  stack.innerHTML=`<div class="pcols">${open}${argue}${close}</div>`;
+  const R=richSections();
+  if(!R){stack.innerHTML='<div style="padding:2.5rem;text-align:center;color:#999;font-size:0.9rem">Loading phrases…</div>';return;}
+  const col=(title,num,items)=>`<div class="pcard"><div class="band"><span class="band-num">${num}</span><span class="band-word">${title}</span></div><div class="pgroup">${items.map(x=>`<div class="pitem">${fmt(String(x))}</div>`).join('')}</div></div>`;
+  stack.innerHTML=`<div class="pcols">${col('Introduction','01',R.intro)}${col('Body','02',R.body)}${col('Conclusion','03',R.concl)}</div>`;
 }
-
 
 function render(){
   if(view==='phrases'){ renderPhrases(); return; }

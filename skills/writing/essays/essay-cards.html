@@ -153,6 +153,21 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .phook{font-size:.9rem;line-height:1.5;color:#2c2c2a}
 .pthesis{font-size:.9rem;line-height:1.5;color:#6a5a3a;margin-top:.3rem;padding-left:.7rem;border-left:2px solid rgba(201,169,97,.5)}
 .phint{font-family:'Barlow Condensed',sans-serif;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:#b0a684;margin:-.5rem 0 .7rem}
+
+/* ── PHRASES bloom: a phrase transforms into a mini CARDS-style card ── */
+.pitem{position:relative;cursor:pointer}
+.pitem.ppair{cursor:pointer}
+.pbloom{display:none;margin-top:.55rem;background:#fff;border-radius:.7rem;box-shadow:0 6px 22px rgba(0,0,0,.14);border-left:4px solid var(--sig,#7a5ea8);padding:.75rem .9rem;animation:bloomIn .22s ease}
+.pitem.open .pbloom{display:block}
+@keyframes bloomIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.pbloom{animation:none}}
+.pbloom-tag{font-family:'Barlow Condensed',sans-serif;font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:#9a7d3f;font-weight:700;margin-bottom:.4rem}
+.pbloom-line{font-size:.95rem;line-height:1.6;color:#2c2c2a}
+.pbloom-hook{font-weight:600}
+.pbloom-thesis{margin-top:.4rem;padding-left:.7rem;border-left:2px solid rgba(201,169,97,.5);color:#4a463a}
+.pbloom .soft{color:#8a8880}
+.pbloom .sig,.pbloom .pbloom-hook{color:#6a4c93}
+.pbloom .view{color:#9a7d3f;font-style:italic}
 </style>
 </head>
 <body>
@@ -340,10 +355,19 @@ function roll(slot,dir,idx){
   const st = slot==='argue'?S.argue[idx]:S[slot];
   if(dir>0){ if(st.i<st.h.length-1)st.i++; else{ st.h.push(slot==='open'?genOpen():slot==='close'?genClose():genArgue(idx,siblingAvoid(idx))); st.i=st.h.length-1; } }
   else if(st.i>0){ st.i--; }
-  sndRoll(); render();
+  sndRoll();
+  const id = slot==='argue' ? 'ln-argue-'+idx : 'ln-'+slot;
+  const el = document.getElementById(id);
+  if(el){ el.innerHTML = lineHTML(slot,idx); }
+  else { render(); }
 }
 window.roll=roll; window.switchType=switchType;
 const cur=(slot,idx)=> slot==='argue'?S.argue[idx].h[S.argue[idx].i]:S[slot].h[S[slot].i];
+function lineHTML(slot,idx){
+  if(slot==='open'){const o=cur('open');return `<span class="lead">${fmt(o.bg)}</span> <span class="soft">${o.hinge}<span class="ast">*</span> <span class="gap">...</span>. ${fmt(o.aim)}</span>`;}
+  if(slot==='close'){const c=cur('close');return `${fmt(c.summary)} <span class="view">${c.stance}</span> ${fmt(c.verdict)}`;}
+  const m=cur('argue',idx);return `<span class="sig">${m.sign}</span> <span class="view">${m.view}</span> ${fmt(m.key)}<span class="ast">*</span>`;
+}
 function nav(slot,idx){const a=idx===undefined?'':idx;return `<div class="nav"><button onclick="roll('${slot}',-1,${a})">‹</button><button onclick="roll('${slot}',1,${a})">›</button></div>`;}
 
 
@@ -403,46 +427,88 @@ function richSections(){
     if(hookSec)Object.values(hookSec).forEach(sc=>mergeTiers(sc).forEach(p=>intro.push({hook:p,thesis:''})));
     if(thSec)Object.values(thSec).forEach(sc=>mergeTiers(sc).forEach(p=>intro.push({hook:'',thesis:p})));
   }
-  let body=[],concl=[];
+  let bodySections=[],concl=[];
+  const LABELS={argument_1:'First Claim',argument_2:'Second Claim',counter_argument:'Counter-Claim',
+    advantages:'Advantages',disadvantages:'Disadvantages',problems:'Problems',solutions:'Solutions',
+    causes:'Causes',effects:'Effects',predictions:'Predictions',
+    arguments_agree:'Arguments to Agree',arguments_disagree:'Arguments to Disagree',personal_opinion:'Personal View'};
   Object.keys(bodySecs).forEach(n=>{
-    const m=mergeTiers(bodySecs[n]);
-    if(n.toLowerCase().includes('conclusion'))concl=concl.concat(m);
-    else if(!n.toLowerCase().startsWith('transition'))body=body.concat(m);
+    const ln=n.toLowerCase();
+    const m=[...new Set(mergeTiers(bodySecs[n]))];
+    if(ln.includes('conclusion'))concl=concl.concat(m);
+    else if(!ln.startsWith('transition')){
+      const label=LABELS[n]||n.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+      bodySections.push({name:n,label:label,items:m});
+    }
   });
-  return {intro:intro,body:[...new Set(body)],concl:[...new Set(concl)]};
+  return {intro:intro,bodySections:bodySections,concl:[...new Set(concl)]};
 }
 function renderPhrases(){
   const stack=document.getElementById('stack');
   stack.classList.add('has-cards','phrases-on');
   const R=richSections();
-  if(!R){stack.innerHTML='<div style="padding:2.5rem;text-align:center;color:#999;font-size:.9rem">Loading phrases…</div>';return;}
+  if(!R){stack.innerHTML='<div style="padding:2.5rem;text-align:center;color:#999;font-size:.9rem">Loading phrases\u2026</div>';return;}
   const icons={intro:'\uD83D\uDCCC',body:'\uD83D\uDC4D',concl:'\u2B50'};
-  const listCard=(sec,title,items)=>`<div class="pcard" data-sec="${sec}"><div class="prail"><span>${icons[sec]}</span></div><div class="pbody"><div class="ptitle">${title}</div>${items.map(x=>`<div class="pitem">${fmt(String(x))}</div>`).join('')}</div></div>`;
-  const introItems=R.intro.map(p=>`<div class="pitem ppair"><div class="phook">${fmt(String(p.hook))}</div>${p.thesis?`<div class="pthesis">${fmt(String(p.thesis))}</div>`:''}</div>`).join('');
-  const introCard=`<div class="pcard" data-sec="intro"><div class="prail"><span>${icons.intro}</span></div><div class="pbody"><div class="ptitle">Introduction</div><div class="phint">hook + thesis = one opening</div>${introItems}</div></div>`;
-  stack.innerHTML=`<div class="pcols">${introCard}${listCard('body','Body',R.body)}${listCard('concl','Conclusion',R.concl)}</div>`;
+
+  // INTRODUCTION — paired hook+thesis, blooms to the complete opening
+  const introItems=R.intro.map(p=>{
+    const bloom=`<div class="pbloom"><div class="pbloom-tag">Complete introduction</div>`+
+      `<div class="pbloom-line"><span class="pbloom-hook">${fmt(String(p.hook))}</span>`+
+      (p.thesis?`<div class="pbloom-thesis">${fmt(String(p.thesis))}</div>`:'')+`</div></div>`;
+    return `<div class="pitem ppair" onclick="pbloom(this)"><div class="phook">${fmt(String(p.hook))}</div>`+
+      (p.thesis?`<div class="pthesis">${fmt(String(p.thesis))}</div>`:'')+bloom+`</div>`;
+  }).join('');
+  const introCard=`<div class="pcard" data-sec="intro"><div class="prail"><span>${icons.intro}</span></div><div class="pbody"><div class="ptitle">Introduction</div><div class="phint">hook + thesis \u2014 tap to see it whole</div>${introItems}</div></div>`;
+
+  // BODY — one card per real section (First Claim / Second Claim / Counter-Claim, etc.), shared amber scheme
+  const bodyCard=(R.bodySections||[]).map((bs,bi)=>{
+    const items=bs.items.map(t=>{
+      const sign=pick(SH.signpost.addition||Object.values(SH.signpost)[0]);
+      const vw=pick(VIEW);
+      const bloom=`<div class="pbloom"><div class="pbloom-tag">As a body sentence</div>`+
+        `<div class="pbloom-line"><span class="sig">${sign}</span> <span class="view">${vw}</span> ${fmt(String(t))}</div></div>`;
+      return `<div class="pitem" onclick="pbloom(this)">${fmt(String(t))}${bloom}</div>`;
+    }).join('');
+    return `<div class="pcard" data-sec="body"><div class="prail"><span>${bi+1}</span></div><div class="pbody"><div class="ptitle">${bs.label}</div><div class="phint">tap to see it in a sentence</div>${items}</div></div>`;
+  }).join('');
+
+  // CONCLUSION — blooms into a close-line dressing
+  const conclItems=R.concl.map(t=>{
+    const vw=pick(VIEW);
+    const bloom=`<div class="pbloom"><div class="pbloom-tag">As a closing sentence</div>`+
+      `<div class="pbloom-line">${fmt(String(t))}</div></div>`;
+    return `<div class="pitem" onclick="pbloom(this)">${fmt(String(t))}${bloom}</div>`;
+  }).join('');
+  const conclCard=`<div class="pcard" data-sec="concl"><div class="prail"><span>${icons.concl}</span></div><div class="pbody"><div class="ptitle">Conclusion</div><div class="phint">tap to see it whole</div>${conclItems}</div></div>`;
+
+  stack.innerHTML=`<div class="pcols pcols-flex">${introCard}${bodyCard}${conclCard}</div>`;
 }
+function pbloom(el){
+  const wasOpen=el.classList.contains('open');
+  // close siblings for a clean single-focus reveal
+  const p=el.parentElement; if(p) p.querySelectorAll('.pitem.open').forEach(x=>{if(x!==el)x.classList.remove('open');});
+  el.classList.toggle('open',!wasOpen);
+}
+window.pbloom=pbloom;
 
 function render(){
   if(view==='phrases'){ renderPhrases(); return; }
   document.getElementById('stack').classList.remove('phrases-on');
-  const o=cur('open'), c=cur('close');
-  const openLine=`<span class="lead">${fmt(o.bg)}</span> <span class="soft">${o.hinge}<span class="ast">*</span> <span class="gap">...</span>. ${fmt(o.aim)}</span>`;
-  const argueLines=[0,1,2].map(i=>{const m=cur('argue',i);
-    return `<div class="rline"><div class="rtext"><div class="line"><span class="sig">${m.sign}</span> <span class="view">${m.view}</span> ${fmt(m.key)}<span class="ast">*</span></div><div class="dev">...</div></div>${nav('argue',i)}</div>`;}).join('');
-  const closeLine=`${fmt(c.summary)} <span class="view">${c.stance}</span> ${fmt(c.verdict)}`;
+  const openLine=lineHTML('open');
+  const argueLines=[0,1,2].map(i=>`<div class="rline"><div class="rtext"><div class="line" id="ln-argue-${i}">${lineHTML('argue',i)}</div><div class="dev">...</div></div>${nav('argue',i)}</div>`).join('');
+  const closeLine=lineHTML('close');
   const hingeNote=`<div class="card-note"><span class="k">*</span>`+(T.open.hinge||[]).map(h=>`<span class="opt">${h}</span>`).join('')+`</div>`;
   const supportNote=`<div class="card-note"><span class="k">*</span>`+(SH.support||[]).map(s=>`<span class="opt">${s.move}</span>`).join('')+`</div>`;
 
   document.getElementById('stack').innerHTML=`
     <div class="card"><div class="band"><span class="band-num">01</span><span class="band-word">Open</span></div>
-      <div class="content"><div class="rline"><div class="rtext"><div class="line">${openLine}</div></div>${nav('open')}</div>${hingeNote}</div></div>
+      <div class="content"><div class="rline"><div class="rtext"><div class="line" id="ln-open">${openLine}</div></div>${nav('open')}</div>${hingeNote}</div></div>
     <div class="flow">&#9662;</div>
     <div class="card"><div class="band"><span class="band-num">02</span><span class="band-word">Argue</span></div>
       <div class="content">${argueLines}${supportNote}</div></div>
     <div class="flow">&#9662;</div>
     <div class="card"><div class="band"><span class="band-num">03</span><span class="band-word">Close</span></div>
-      <div class="content"><div class="rline"><div class="rtext"><div class="line">${closeLine}</div></div>${nav('close')}</div></div></div>`;
+      <div class="content"><div class="rline"><div class="rtext"><div class="line" id="ln-close">${closeLine}</div></div>${nav('close')}</div></div></div>`;
   document.getElementById('stack').classList.add('has-cards');
   /* one-time gesture hint: pulse the first arrow until the student rolls anything */
   if(!taught){ const first=document.querySelector('.nav button'); if(first) first.classList.add('teach'); }

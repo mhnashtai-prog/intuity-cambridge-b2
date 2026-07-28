@@ -915,7 +915,20 @@ function renderList(area){
   area.innerHTML=h;
   area.scrollTop=0;
 }
-
+  
+/* Shared type-key normalisation, used both here and at the top of init()
+   so the accent colour can be set before ideas.json has even loaded */
+function normalizeEssayType(raw){
+  return String(raw||'opinion').toLowerCase()
+    .replace(/\s+&\s+/g,'-').replace(/\s+/g,'-')
+    .replace('for-and-against','for-against')
+    .replace('problems-and-solutions','problem-solution')
+    .replace('problems-solutions','problem-solution')
+    .replace('cause-and-effect','cause-effect')
+    .replace('agree-and-disagree','agree-disagree')
+    .replace('speculation','speculation-trends');
+}
+  
 /* ══ SET ACCENT COLOUR ══ */
 function applyAccent(type){
   const pal=TYPE_COLOR[type]||TYPE_COLOR['opinion'];
@@ -942,15 +955,7 @@ function loadQuestion(q){
   currentQuestion=q;
   currentId=q.id;
   /* Normalise essayType to match TYPE_COLOR keys */
-  const typeRaw=(q.essayType||'opinion').toLowerCase()
-    .replace(/\s+&\s+/g,'-').replace(/\s+/g,'-')
-    .replace('for-and-against','for-against')
-    .replace('problems-and-solutions','problem-solution')
-    .replace('problems-solutions','problem-solution')
-    .replace('cause-and-effect','cause-effect')
-    .replace('agree-and-disagree','agree-disagree')
-    .replace('speculation','speculation-trends');
-  currentType=typeRaw;
+currentType=normalizeEssayType(q.essayType);
   applyAccent(currentType);
   /* Update topic label */
   document.getElementById('topicLabel').textContent=(q.question||q.topic||'').substring(0,40).toUpperCase();
@@ -992,9 +997,13 @@ async function init(){
       savedType=q.essayType||null;
       savedQuestion=q.mainQuestion||q.question||null;
       /* Show question in header immediately */
-      if(savedQuestion)document.getElementById('topicLabel').textContent=savedQuestion.substring(0,40).toUpperCase();
+  if(savedQuestion)document.getElementById('topicLabel').textContent=savedQuestion.substring(0,40).toUpperCase();
     }
   }catch(e){}
+
+  /* Apply the accent colour from sessionStorage immediately — don't wait for
+     the network fetch, or the card flashes gold before the real type loads */
+  if(savedType) applyAccent(normalizeEssayType(savedType));
 
   try{
     const r1=await fetch('data/ideas.json');

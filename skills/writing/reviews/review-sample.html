@@ -198,6 +198,47 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 }
 
 /* ── TOAST ── */
+/* ══ PHRASE LAYER — tap an expression, see what else says the same job ══ */
+.phrase-enhanced{position:relative;display:inline}
+.phrase-text{color:var(--c-discourse);font-weight:600;border-bottom:1.5px solid rgba(37,99,235,0.4);
+  cursor:pointer;padding:0.05em 0;transition:background .15s}
+.phrase-text:hover{background:var(--c-discourse-bg);border-radius:2px}
+.phrase-hint-btn{background:var(--c-discourse-bg);border:none;border-radius:50%;
+  width:18px;height:18px;font-size:0.6rem;cursor:pointer;vertical-align:middle;margin-left:2px;
+  display:inline-flex;align-items:center;justify-content:center;transition:background .15s}
+.phrase-hint-btn:hover{background:rgba(37,99,235,0.2)}
+.phrase-badge{font-family:'Barlow Condensed',sans-serif;font-size:0.55rem;font-weight:900;
+  background:var(--c-discourse-bg);color:var(--c-discourse);padding:0.05rem 0.32rem;
+  border-radius:1rem;margin-left:0.25rem;display:none}
+.phrase-badge.on{display:inline}
+
+.alt-overlay{position:fixed;inset:0;background:rgba(20,18,22,0.5);backdrop-filter:blur(3px);
+  z-index:500;display:none;align-items:flex-end;justify-content:center;padding:1rem}
+.alt-overlay.open{display:flex;animation:altFade .2s ease both}
+@keyframes altFade{from{opacity:0}to{opacity:1}}
+.alt-modal{background:var(--white,#fff);border-radius:1.1rem;width:100%;max-width:520px;max-height:70vh;
+  overflow:hidden;display:flex;flex-direction:column;
+  box-shadow:0 -4px 40px rgba(0,0,0,0.22);animation:altUp .28s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes altUp{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
+.alt-header{padding:1rem 1.15rem 0.8rem;border-bottom:1px solid rgba(0,0,0,0.07);
+  display:flex;align-items:flex-start;justify-content:space-between;gap:0.6rem;flex-shrink:0}
+.alt-title{font-family:'Barlow Condensed',sans-serif;font-size:0.9rem;font-weight:900;
+  letter-spacing:0.04em;text-transform:uppercase;color:var(--ink,#111)}
+.alt-phrase{font-size:0.82rem;color:var(--c-discourse);font-weight:600;margin-top:0.15rem}
+.alt-close{background:rgba(0,0,0,0.06);border:none;width:1.9rem;height:1.9rem;border-radius:50%;
+  font-size:1rem;color:rgba(0,0,0,0.45);cursor:pointer;display:flex;align-items:center;
+  justify-content:center;flex-shrink:0}
+.alt-close:hover{background:rgba(0,0,0,0.11)}
+.alt-body{overflow-y:auto;padding:0.6rem;flex:1}
+.alt-category{font-family:'Barlow Condensed',sans-serif;font-size:0.58rem;font-weight:800;
+  letter-spacing:0.14em;text-transform:uppercase;color:rgba(0,0,0,0.3);padding:0.45rem 0.5rem 0.55rem}
+.alt-item{padding:0.62rem 0.8rem;border-radius:0.55rem;font-family:'Instrument Sans',sans-serif;
+  font-size:0.88rem;color:rgba(0,0,0,0.75);cursor:pointer;transition:all .15s;
+  display:flex;align-items:center;justify-content:space-between;gap:0.5rem}
+.alt-item:hover{background:var(--c-discourse-bg);color:var(--c-discourse)}
+.alt-copy-hint{font-family:'Barlow Condensed',sans-serif;font-size:0.55rem;font-weight:800;
+  letter-spacing:0.1em;text-transform:uppercase;color:rgba(0,0,0,0.22);flex-shrink:0}
+
 .toast{
   position:fixed;bottom:5rem;left:50%;transform:translateX(-50%);
   background:var(--ink);color:#fff;
@@ -238,6 +279,21 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
         </div>
       </div>
 
+      <!-- X-Ray + Phrases -->
+      <div class="xray-row">
+        <div class="xray-toggle" onclick="toggleXray()">
+          <div class="xray-switch" id="xraySwitch"></div>
+          <span class="xray-label">X-Ray</span>
+        </div>
+        <div class="xray-toggle" onclick="togglePhrases()">
+          <div class="xray-switch" id="phraseSwitch"></div>
+          <span class="xray-label">Phrases<span class="phrase-badge" id="phraseBadge"></span></span>
+        </div>
+        <div class="legend hidden" id="legend">
+          <span class="legend-item"><span class="legend-dot discourse"></span>Signpost</span>
+        </div>
+      </div>
+
       <!-- Content -->
       <div class="card-scroll" id="infographic">
         <div class="state-msg">Loading…</div>
@@ -261,6 +317,19 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
       <button class="nb"    onclick="navTo('model')">Model</button>
       <button class="nb on" onclick="navTo('sample')">Sample</button>
     </div>
+  </div>
+</div>
+
+<div class="alt-overlay" id="altOverlay" onclick="closeAlt(event)">
+  <div class="alt-modal" onclick="event.stopPropagation()">
+    <div class="alt-header">
+      <div>
+        <div class="alt-title">Other ways to say it</div>
+        <div class="alt-phrase" id="altPhrase"></div>
+      </div>
+      <button class="alt-close" onclick="closeAlt()">×</button>
+    </div>
+    <div class="alt-body" id="altBody"></div>
   </div>
 </div>
 
@@ -315,19 +384,200 @@ function setViewMode(full){
 }
 window.setViewMode=setViewMode;
 
+/* ══════════ X-RAY — curated discourse markers, no annotation needed ══════════
+   Lifted from review-master.html: a hand-tuned list that covers ~71% of the
+   sample sentences. Marked spans use the essay page's `discourse` class, so
+   Signpost is the same blue everywhere on the site. */
+const DM = [
+  'To begin with','First of all','Firstly','Secondly','Thirdly',
+  'In addition','Moreover','Furthermore','What is more','Besides','Additionally',
+  'On the other hand','However','Nevertheless','Nonetheless',
+  'In contrast','By contrast','Conversely','Whereas','Although','Though',
+  'Despite','In spite of',
+  'Therefore','Thus','Hence','Consequently',
+  'As a result','As a consequence','For this reason',
+  'Due to','Because of','Owing to',
+  'For example','For instance','Such as','Namely',
+  'In particular','Specifically','To illustrate',
+  'All things considered','In conclusion','To conclude',
+  'To sum up','In summary','Overall','All in all','On the whole',
+  'Finally','Lastly',
+  'In my opinion','In my view','I believe','Personally',
+  'Clearly','Undoubtedly','Certainly','Indeed',
+  'Meanwhile','Subsequently','Eventually','Ultimately',
+  'When it comes to','Choosing','Selecting',
+  'What makes','The thing that','By far the best',
+  'Known for','Located','Designed by',
+  'I would highly recommend','I would definitely recommend',
+  'For anyone who is looking for','This is a must',
+  'I can assure you that','I guarantee that',
+  'This is','which you cannot afford to miss',
+  'Another feature worth mentioning',
+  'One of the most impressive','One thing I really appreciated',
+  'What I found particularly','I would not hesitate to recommend',
+  'It is equally suitable',
+  'If you are looking for',
+  'The first thing that strikes you','The first thing that will strike you',
+  'Beyond the','Beyond this',
+  'What really sets','What really elevates','What really keeps','What really made',
+  'What really distinguished','What really elevated',
+  'I would strongly urge',
+  'It is, without doubt','without doubt',
+  'Whether you are','This combination of','This level of',
+  'This balance of','This mix of','Rather than','Unlike many'
+].sort((a,b)=>b.length-a.length);
+
+/* the lookahead keeps matches out of HTML attributes the phrase layer added */
+function wrapMarkers(html){
+  let out=html;
+  DM.forEach(dm=>{
+    const e=dm.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    out=out.replace(new RegExp(`(?<![a-zA-Z<"'])(${e})(?![a-zA-Z<"'])`,'g'),'<span class="discourse">$1</span>');
+  });
+  return out;
+}
+
+/* ══════════ PHRASE LAYER — tap an expression for alternatives ══════════ */
+let phraseDB={}, phraseReady=false;
+function buildPhraseDB(json){
+  phraseDB={};
+  const add=(category,items)=>{
+    if(!Array.isArray(items))return;
+    const clean=x=>String((typeof x==='string')?x:(x&&(x.phrase||x.text))||'').replace(/[.,;:!?]+$/,'').trim();
+    items.forEach(item=>{
+      const p=clean(item);
+      if(!p||p.split(/\s+/).length<2)return;
+      if(!phraseDB[p])phraseDB[p]={category,alternatives:[]};
+      items.forEach(sib=>{
+        const s=clean(sib);
+        if(s&&s!==p&&!phraseDB[p].alternatives.includes(s))phraseDB[p].alternatives.push(s);
+      });
+    });
+  };
+  if(Array.isArray(json)){
+    json.forEach(e=>add(e.category||'Phrases', e.phrases||e.items||[]));
+  }else if(json&&typeof json==='object'){
+    Object.entries(json).forEach(([cat,val])=>{
+      if(!val||typeof val!=='object')return;
+      if(val.categories){
+        val.categories.forEach(c=>(c.subcategories||[]).forEach(sub=>add(c.title||cat, sub.phrases||[])));
+      }
+    });
+  }
+  /* families the JSON bank doesn't cover, carried over from review-master */
+  [ {category:'Opening',        phrases:['If you are looking for','If you are planning','If you want']},
+    {category:'First impression',phrases:['The first thing that strikes you','The first thing that will strike you','The first thing you notice','What immediately strikes you']},
+    {category:'Beyond the obvious',phrases:['Beyond the visuals','Beyond the technical skill','Beyond the performance','Beyond the atmosphere','Beyond the food itself','Beyond the teaching itself','Beyond the theory']},
+    {category:'What stands out',phrases:['What really sets this','What really elevates','What really keeps you','What really made','What really distinguished','What really elevated']},
+    {category:'Strong recommendation',phrases:['I would strongly urge','I would strongly recommend','I would strongly advise']},
+    {category:'Certainty',      phrases:['It is, without doubt','without doubt','There is no doubt that','It goes without saying']},
+    {category:'Whichever reader',phrases:['Whether you are','Whether you know','Whether you have','Regardless of whether you']},
+    {category:'This combination',phrases:['This combination of','This level of','This balance of','This mix of','This degree of']},
+    {category:'Contrasting',    phrases:['Rather than','Unlike many','Unlike most','In contrast to many']}
+  ].forEach(e=>add(e.category,e.phrases));
+  phraseReady=Object.keys(phraseDB).length>0;
+}
+
+function enhancePhrases(html){
+  if(!phraseReady) return {html,count:0};
+  let out=html,count=0; const seen=new Set();
+  Object.keys(phraseDB).filter(p=>phraseDB[p].alternatives.length>0)
+    .sort((a,b)=>b.length-a.length)
+    .forEach(phrase=>{
+      const e=phrase.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      out=out.replace(new RegExp(`(?<![a-zA-Z<"'])(${e})(?![a-zA-Z<"'])`,'gi'),m=>{
+        const k=m.toLowerCase();
+        if(seen.has(k))return m;
+        seen.add(k); count++;
+        const safe=phrase.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+        return `<span class="phrase-enhanced"><span class="phrase-text" onclick="showAlts('${safe}')">${m}</span><button class="phrase-hint-btn" onclick="event.stopPropagation();showAlts('${safe}')">💡</button></span>`;
+      });
+    });
+  return {html:out,count};
+}
+
+function showAlts(phrase){
+  const key=Object.keys(phraseDB).find(k=>k.toLowerCase()===String(phrase).toLowerCase())||phrase;
+  const d=phraseDB[key];
+  if(!d||!d.alternatives.length){ showToast('No alternatives found'); return; }
+  document.getElementById('altPhrase').textContent='“'+phrase+'”';
+  document.getElementById('altBody').innerHTML=
+    `<div class="alt-category">${esc(d.category)} — ${d.alternatives.length} alternatives</div>`+
+    d.alternatives.map(a=>{
+      const safe=String(a).replace(/'/g,"\\'").replace(/"/g,'&quot;');
+      return `<div class="alt-item" onclick="copyAlt('${safe}')"><span>${esc(a)}</span><span class="alt-copy-hint">tap to copy</span></div>`;
+    }).join('');
+  document.getElementById('altOverlay').classList.add('open');
+}
+function copyAlt(text){
+  try{ navigator.clipboard.writeText(text).then(()=>{showToast('Copied');closeAlt();},()=>showToast('Copy failed')); }
+  catch(e){ showToast('Copy failed'); }
+}
+function closeAlt(e){
+  if(e&&e.target&&e.target.id!=='altOverlay')return;
+  document.getElementById('altOverlay').classList.remove('open');
+}
+window.showAlts=showAlts; window.copyAlt=copyAlt; window.closeAlt=closeAlt;
+
+let _toastTimer;
+function showToast(msg){
+  const el=document.getElementById('toast');
+  if(!el)return;
+  el.textContent=msg; el.classList.add('show');
+  clearTimeout(_toastTimer); _toastTimer=setTimeout(()=>el.classList.remove('show'),2000);
+}
+
+/* ══ the two toggles ══ */
+let xrayOn=false, phrasesOn=false;
+function toggleXray(){
+  xrayOn=!xrayOn;
+  document.getElementById('xraySwitch').classList.toggle('on',xrayOn);
+  document.getElementById('legend').classList.toggle('hidden',!xrayOn);
+  render();
+}
+function togglePhrases(){
+  if(!phraseReady){ showToast('Phrase bank not loaded'); return; }
+  phrasesOn=!phrasesOn;
+  document.getElementById('phraseSwitch').classList.toggle('on',phrasesOn);
+  render();
+}
+window.toggleXray=toggleXray; window.togglePhrases=togglePhrases;
+
+/* phrases run BEFORE the markers, so the marker lookahead can skip the
+   onclick attributes the phrase layer introduces */
+function dress(text){
+  let out=text, n=0;
+  if(phrasesOn){ const r=enhancePhrases(out); out=r.html; n=r.count; }
+  if(xrayOn)   out=wrapMarkers(out);
+  return {html:out,count:n};
+}
+
 function render(){
   const box=document.getElementById('infographic');
   if(!sections.length){ box.innerHTML='<div class="state-msg">No sample review found for this question yet.</div>'; return; }
   box.classList.toggle('board-cols',fullTextMode);
   if(fullTextMode){
-    box.innerHTML=sections.map(s=>
-      `<div class="para-label">${esc(s.label)}</div><div class="para-text">${s.text}</div>`).join('');
+    let total=0;
+    box.innerHTML=sections.map(s=>{
+      const d=dress(s.text); total+=d.count;
+      return `<div class="para-label">${esc(s.label)}</div><div class="para-text ${xrayOn?'xray-on':''}">${d.html}</div>`;
+    }).join('');
+    setPhraseBadge(total);
   }else{
     const s=sections[currentPara]||{label:'',text:''};
-    box.innerHTML=`<div class="para-label">${esc(s.label)}</div><div class="para-text">${s.text}</div>`;
+    const d=dress(s.text);
+    box.innerHTML=`<div class="para-label">${esc(s.label)}</div><div class="para-text ${xrayOn?'xray-on':''}">${d.html}</div>`;
+    setPhraseBadge(d.count);
     updateNav();
   }
   box.scrollTop=0;
+}
+
+function setPhraseBadge(n){
+  const b=document.getElementById('phraseBadge');
+  if(!b)return;
+  b.textContent=n||'';
+  b.classList.toggle('on',!!(phrasesOn&&n));
 }
 
 function goPrev(){ if(currentPara>0){ currentPara--; render(); } }
@@ -360,6 +610,11 @@ async function init(){
     if(s){ const q=JSON.parse(s); savedId=q.id||q.questionId||null; }
   }catch(e){}
   try{
+    /* the phrase bank loads in the background — the page never waits for it */
+    fetch('data/complete-review-phrase-bank1.json')
+      .then(r=>r.ok?r.json():null)
+      .then(d=>{ if(d){ buildPhraseDB(d); } })
+      .catch(()=>{});
     const [sm,qs]=await Promise.all([
       fetch('data/samples.json').then(r=>r.json()),
       fetch('data/review-questions.json').then(r=>r.json()).catch(()=>null)
@@ -394,6 +649,7 @@ function navTo(dest){
 window.navTo=navTo;
 
 document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){ closeAlt(); return; }
   if(!fullTextMode){ if(e.key==='ArrowLeft')goPrev(); if(e.key==='ArrowRight')goNext(); }
 });
 

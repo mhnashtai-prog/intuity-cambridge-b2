@@ -9,9 +9,9 @@
 
 :root {
   --bg:        #0c0c0c;
-  --gold:      #C9A961;
-  --gold-d:    #9B7D3A;
-  --gold-l:    #E8D4A0;
+  --gold:      #c2681f;
+  --gold-d:    #8f4a12;
+  --gold-l:    #e6b98f;
   --white:     #FAFAF8;
   --cream:     #F4EFE6;
   --cream-d:   #EAE2D4;
@@ -246,6 +246,10 @@ html, body {
   text-transform: uppercase; letter-spacing: 0.12em;
   color: rgba(0,0,0,0.28); margin-bottom: 1rem;
 }
+.topic-key{color:var(--marker);cursor:pointer}
+.topic-count{font-family:'Inter',sans-serif;font-size:0.62em;font-weight:800;vertical-align:super;
+  margin-left:0.12em;color:var(--marker);opacity:0.75;cursor:pointer}
+.topic-count:hover{opacity:1}
 .para-text {
   font-family: 'DM Sans', sans-serif;
   font-size: 1.05rem; line-height: 1.85;
@@ -599,118 +603,94 @@ function wrapDM(html) {
    PHRASE DATABASE
 ════════════════════════════════ */
 function buildPhraseDB(json) {
+  /* reports-expressions.json — move > function > sub-function.
+     A phrase's alternatives are its siblings in the same sub-function;
+     if that group is thin, widen to the whole function. */
   phraseDB = {};
-  const addEntry = (category, items) => {
-    if (!Array.isArray(items)) return;
-    items.forEach(item => {
-      const raw = (typeof item === 'string') ? item : (item.phrase || item.text || '');
-      const phrase = raw.replace(/[.,;:!?]+$/, '').trim();
-      if (!phrase || phrase.split(/\s+/).length < 2) return;
-      if (!phraseDB[phrase]) phraseDB[phrase] = { category, alternatives: [] };
-      items.forEach(sib => {
-        const s = ((typeof sib === 'string') ? sib : (sib.phrase || sib.text || ''))
-                  .replace(/[.,;:!?]+$/, '').trim();
-        if (s && s !== phrase && !phraseDB[phrase].alternatives.includes(s))
-          phraseDB[phrase].alternatives.push(s);
-      });
-    });
+  CORPUS = json || null;
+  const moves = (json && json.moves) || {};
+  const keyOf = t => {
+    const segs = String(t).split(/\.\.\.|…/)
+      .map(x => x.trim().replace(/^[^A-Za-z]+/, '').replace(/[.,;:!?]+$/, ''))
+      .filter(x => x.split(/\s+/).length >= 3);
+    return segs.sort((a, b) => b.length - a.length)[0] || '';
   };
-
-  if (Array.isArray(json)) {
-    json.forEach(entry => addEntry(entry.category || 'Phrases', entry.phrases || entry.items || []));
-  } else {
-    Object.entries(json).forEach(([cat, val]) =>
-      addEntry(cat, Array.isArray(val) ? val : (val.phrases || val.items || [])));
-  }
-
-  // Supplementary Report Phrases
-  const REPORT_PHRASES = [
-    { category: 'Introduction — formal', phrases: [
-      'The main objective of this report is to assess',
-      'The main objective of this report is to evaluate',
-      'This report focuses on',
-      'The primary aim of this report is to'
-    ]},
-    { category: 'Introduction — data', phrases: [
-      'This report is based on',
-      'The findings in this report are drawn from',
-      'The information presented was collected through'
-    ]},
-    { category: 'General view', phrases: [
-      'It is generally agreed that',
-      'It was generally felt that',
-      'There is broad agreement that'
-    ]},
-    { category: 'Praising', phrases: [
-      'One positive aspect of',
-      'By far the best aspect of',
-      'What makes this',
-      'One feature that was highly appreciated was'
-    ]},
-    { category: 'Criticising', phrases: [
-      'However, one major concern expressed by students is',
-      'However, a common complaint relates to',
-      'By far the worst aspect of',
-      'is far from ideal'
-    ]},
-    { category: 'Cause', phrases: [
-      'This is mainly due to the fact that',
-      'This is mainly because',
-      'As a result',
-      'Consequently'
-    ]},
-    { category: 'Recommendations', phrases: [
-      'One key recommendation would be to',
-      'I would strongly recommend',
-      'It is essential that',
-      'It would be advisable to'
-    ]},
-    { category: 'Conclusion', phrases: [
-      'Taking everything into account, it seems clear that',
-      'To sum up',
-      'In conclusion'
-    ]}
-  ];
-
-  REPORT_PHRASES.forEach(entry => {
-    entry.phrases.forEach(phrase => {
-      const p = phrase.trim();
-      if (!phraseDB[p]) phraseDB[p] = { category: entry.category, alternatives: [] };
-      entry.phrases.forEach(sib => {
-        const s = sib.trim();
-        if (s && s !== p && !phraseDB[p].alternatives.includes(s))
-          phraseDB[p].alternatives.push(s);
+  Object.keys(moves).forEach(mv => {
+    const funcs = moves[mv] || {};
+    Object.keys(funcs).forEach(fn => {
+      const subs = funcs[fn] || {};
+      const whole = [].concat(...Object.keys(subs).map(sb => subs[sb].map(e => e.t)));
+      Object.keys(subs).forEach(sb => {
+        const here = subs[sb].map(e => e.t);
+        const pool = here.length >= 4 ? here : whole;
+        const label = mv + ' — ' + fn.replace(/_/g, ' ');
+        subs[sb].forEach(e => {
+          const k = keyOf(e.t);
+          if (!k) return;
+          const alts = pool.filter(x => x !== e.t);
+          if (!phraseDB[k] || alts.length > phraseDB[k].alternatives.length)
+            phraseDB[k] = { category: label, alternatives: alts };
+        });
       });
     });
   });
-
   phraseReady = Object.keys(phraseDB).length > 0;
 }
 
-function enhancePhrases(html) {
-  if (!phraseReady) return { html, count: 0 };
-  let out = html, count = 0;
-  const seen = new Set();
-  Object.keys(phraseDB)
-    .filter(p => phraseDB[p].alternatives.length > 0)
-    .sort((a,b) => b.length - a.length)
-    .forEach(phrase => {
-      const esc = phrase.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-      const re  = new RegExp(`(?<![a-zA-Z<"'])(${esc})(?![a-zA-Z<"'])`, 'gi');
-      out = out.replace(re, match => {
-        const k = match.toLowerCase();
-        if (seen.has(k)) return match;
-        seen.add(k); count++;
-        const safe = phrase.replace(/'/g,"\\'").replace(/"/g,'\\"');
-        return `<span class="phrase-enhanced"><span class="phrase-text" onclick="showAlts('${safe}')">${match}</span><button class="phrase-hint-btn" onclick="event.stopPropagation();showAlts('${safe}')">💡</button></span>`;
-      });
-    });
-  return { html: out, count };
+/* the corpus also carries its x-ray patterns, already sorted by move */
+let CORPUS = null;
+function altsForFunction(path) {
+  if (!CORPUS || !path) return [];
+  const bits = String(path).split('/'), fn = bits[0], sub = bits.slice(1).join('/');
+  const moves = CORPUS.moves || {};
+  for (const mv of Object.keys(moves)) {
+    const f = moves[mv][fn];
+    if (!f) continue;
+    const here = (f[sub] || []).map(e => e.t);
+    if (here.length >= 4) return here;
+    return [].concat(...Object.keys(f).map(k => f[k].map(e => e.t)));
+  }
+  return [];
+}
+function showAltsFn(path) {
+  const alts = altsForFunction(path);
+  const ov = document.getElementById('altOverlay'),
+        ph = document.getElementById('altPhrase'),
+        bd = document.getElementById('altBody');
+  if (!alts.length || !ov || !ph || !bd) return;
+  ph.textContent = String(path).split('/')[0].replace(/_/g, ' ');
+  bd.innerHTML = `<div class="alt-category">${alts.length} ways to open this section</div>` +
+    alts.map(a => {
+      const safe = String(a).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+      return `<div class="alt-item" onclick="copyAlt('${safe}')"><span>${String(a).replace(/&/g,'&amp;').replace(/</g,'&lt;')}</span><span class="alt-copy-hint">tap to copy</span></div>`;
+    }).join('');
+  ov.classList.add('open');
+}
+window.showAltsFn = showAltsFn;
+
+/* mark the topic sentence of a section from samples.json, run by run so the
+   authored spans are never split */
+function markTopic(html, span, path) {
+  if (!span || !path) return { html, count: 0 };
+  const alts = altsForFunction(path);
+  if (!alts.length) return { html, count: 0 };
+  const words = span.split(/\s+/).filter(Boolean)
+    .map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (!words.length) return { html, count: 0 };
+  const between = '(?:<[^>]*>|[\\s,;:.\u2019\'"()-]|&[a-z]+;)*';
+  const m = new RegExp(words.join(between), 'i').exec(html);
+  if (!m) return { html, count: 0 };
+  const wrapped = m[0].replace(/(^|>)([^<]+)/g, (all, gt, txt) =>
+    txt.trim() ? gt + '<span class="topic-key">' + txt + '</span>' : all);
+  const safe = String(path).replace(/'/g, "\\'");
+  const tail = `<span class="topic-count" onclick="showAltsFn('${safe}')">${alts.length}</span>`;
+  return { html: html.slice(0, m.index) + wrapped + tail + html.slice(m.index + m[0].length), count: 1 };
+}
+function topicFor(i) {
+  const t = (sampleData && sampleData.topics && sampleData.topics[currentStyle]) || [];
+  return t[i] || null;
 }
 
-/* ════════════════════════════════
-   EXTRACT SECTIONS
-════════════════════════════════ */
 function extractSections(html) {
   const div = document.createElement('div');
   div.innerHTML = html;
@@ -763,6 +743,12 @@ function render() {
         const r2 = enhancePhrases(content);
         content = r2.html;
         totalPhraseCount += r2.count;
+      }
+
+      const tp = topicFor(idx);
+      if (tp && tp.function) {
+        const d = markTopic(content, tp.span, tp.function);
+        content = d.html;
       }
 
       if (xrayOn) {
@@ -977,7 +963,7 @@ function navTo(dest) {
 ════════════════════════════════ */
 async function init() {
   // Phrase bank
-  fetch('data/report-phrases.json')
+  fetch('data/reports-expressions.json')
     .then(r => r.ok ? r.json() : null)
     .then(d => { if (d) buildPhraseDB(d); })
     .catch(() => {});

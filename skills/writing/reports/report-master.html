@@ -637,7 +637,7 @@ function buildPhraseDB(json) {
   phraseReady = Object.keys(phraseDB).length > 0;
 }
 
-/* the corpus also carries its x-ray patterns, already sorted by move */
+/* ── the topic layer: marks the sentence samples.json has already labelled ── */
 let CORPUS = null;
 function altsForFunction(path) {
   if (!CORPUS || !path) return [];
@@ -667,9 +667,6 @@ function showAltsFn(path) {
   ov.classList.add('open');
 }
 window.showAltsFn = showAltsFn;
-
-/* mark the topic sentence of a section from samples.json, run by run so the
-   authored spans are never split */
 function markTopic(html, span, path) {
   if (!span || !path) return { html, count: 0 };
   const alts = altsForFunction(path);
@@ -691,6 +688,30 @@ function topicFor(i) {
   return t[i] || null;
 }
 
+function enhancePhrases(html) {
+  if (!phraseReady) return { html, count: 0 };
+  let out = html, count = 0;
+  const seen = new Set();
+  Object.keys(phraseDB)
+    .filter(p => phraseDB[p].alternatives.length > 0)
+    .sort((a,b) => b.length - a.length)
+    .forEach(phrase => {
+      const esc = phrase.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      const re  = new RegExp(`(?<![a-zA-Z<"'])(${esc})(?![a-zA-Z<"'])`, 'gi');
+      out = out.replace(re, match => {
+        const k = match.toLowerCase();
+        if (seen.has(k)) return match;
+        seen.add(k); count++;
+        const safe = phrase.replace(/'/g,"\\'").replace(/"/g,'\\"');
+        return `<span class="phrase-enhanced"><span class="phrase-text" onclick="showAlts('${safe}')">${match}</span><button class="phrase-hint-btn" onclick="event.stopPropagation();showAlts('${safe}')">💡</button></span>`;
+      });
+    });
+  return { html: out, count };
+}
+
+/* ════════════════════════════════
+   EXTRACT SECTIONS
+════════════════════════════════ */
 function extractSections(html) {
   const div = document.createElement('div');
   div.innerHTML = html;
@@ -746,10 +767,7 @@ function render() {
       }
 
       const tp = topicFor(idx);
-      if (tp && tp.function) {
-        const d = markTopic(content, tp.span, tp.function);
-        content = d.html;
-      }
+      if (tp && tp.function) content = markTopic(content, tp.span, tp.function).html;
 
       if (xrayOn) {
         heading = wrapDM(heading);

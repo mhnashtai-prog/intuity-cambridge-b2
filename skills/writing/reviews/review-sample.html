@@ -359,10 +359,13 @@ function loadSections(){
   const id=order[currentIdx];
   const rec=(SAMPLES&&SAMPLES[id])||null;
   const ver=(rec&&(rec[styleKey]||rec.default))||[];
-  sections=ver.map((s,i)=>({
-    label:s.label||('Paragraph '+(i+1)),
-    text:(s.sentences||[]).map(esc).join(' ')
-  }));
+sections=ver.map((s,i)=>{
+    const sents=(s.sentences||[]).map(esc);
+    const tp=s.topic||{};
+    return { label:s.label||('Paragraph '+(i+1)),
+             topic:tp.span?esc(tp.span):'', topicFn:tp.function||'',
+             text:sents.join(' ') };
+  });
   if(currentPara>=sections.length) currentPara=0;
 }
 
@@ -473,7 +476,20 @@ function buildPhraseDB(json){
   });
   phraseReady=Object.keys(phraseDB).length>0;
 }
-
+let CORPUS=null;
+function altsForFunction(path){
+  if(!CORPUS||!path) return [];
+  const [fn,sub]=path.split('/');
+  for(const mv of Object.keys(CORPUS.moves||{})){
+    const f=CORPUS.moves[mv][fn];
+    if(!f) continue;
+    const here=(f[sub]||[]).map(e=>e.t);
+    if(here.length>=4) return here;
+    return [].concat(...Object.keys(f).map(s=>f[s].map(e=>e.t)));
+  }
+  return [];
+}
+  
 function enhancePhrases(html){
   if(!phraseReady) return {html,count:0};
   let out=html,count=0; const seen=new Set();
@@ -542,13 +558,23 @@ window.toggleXray=toggleXray; window.togglePhrases=togglePhrases;
 
 /* phrases run BEFORE the markers, so the marker lookahead can skip the
    onclick attributes the phrase layer introduces */
-function dress(text){
-  let out=text, n=0;
-  if(phrasesOn){ const r=enhancePhrases(out); out=r.html; n=r.count; }
-  if(xrayOn)   out=wrapMarkers(out);
+
+function dress(sec){
+  let out=sec.text, n=0;
+  if(phrasesOn && sec.topic){
+    const alts=altsForFunction(sec.topicFn);
+    if(alts.length){
+      const safe=sec.topicFn.replace(/'/g,"\\'");
+      out=out.replace(sec.topic,
+        `<span class="phrase-text topic-key" onclick="showAltsFn('${safe}')">${sec.topic}</span><span class="phrase-count" onclick="showAltsFn('${safe}')">${alts.length}</span>`);
+      n++;
+    }
+  }
+  if(phrasesOn){ const r=enhancePhrases(out); out=r.html; n+=r.count; }
+  if(xrayOn) out=wrapMarkers(out);
   return {html:out,count:n};
 }
-
+  
 function render(){
   const box=document.getElementById('infographic');
   if(!sections.length){ box.innerHTML='<div class="state-msg">No sample review found for this question yet.</div>'; return; }

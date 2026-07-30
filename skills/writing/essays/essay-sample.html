@@ -150,6 +150,29 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
    causal = reason→result chain. Colour-coding them (rather than re-detecting
    markers with a separate word list) keeps this page in sync with whatever
    phrase families the Model page teaches. */
+/* ══ TOPIC SENTENCE — the expression that generated the paragraph ══ */
+.topic-key{border-bottom:2px solid var(--c-discourse);cursor:pointer}
+.topic-count{font-family:'Barlow Condensed',sans-serif;font-size:0.62em;font-weight:800;
+  vertical-align:super;margin-left:0.12em;color:var(--c-discourse);opacity:0.75;cursor:pointer}
+.topic-count:hover{opacity:1}
+.alt-overlay{position:fixed;inset:0;background:rgba(20,18,22,0.5);backdrop-filter:blur(3px);
+  z-index:500;display:none;align-items:flex-end;justify-content:center;padding:1rem}
+.alt-overlay.open{display:flex}
+.alt-modal{background:#fff;border-radius:1.1rem;width:100%;max-width:520px;max-height:70vh;
+  overflow:hidden;display:flex;flex-direction:column;box-shadow:0 -4px 40px rgba(0,0,0,0.22)}
+.alt-header{padding:1rem 1.15rem 0.8rem;border-bottom:1px solid rgba(0,0,0,0.07);
+  display:flex;align-items:flex-start;justify-content:space-between;gap:0.6rem;flex-shrink:0}
+.alt-title{font-family:'Barlow Condensed',sans-serif;font-size:0.9rem;font-weight:900;
+  letter-spacing:0.04em;text-transform:uppercase;color:var(--ink)}
+.alt-phrase{font-size:0.8rem;color:var(--c-discourse);font-weight:600;margin-top:0.15rem}
+.alt-close{background:rgba(0,0,0,0.06);border:none;width:1.9rem;height:1.9rem;border-radius:50%;
+  font-size:1rem;color:rgba(0,0,0,0.45);cursor:pointer;flex-shrink:0}
+.alt-body{overflow-y:auto;padding:0.6rem;flex:1}
+.alt-category{font-family:'Barlow Condensed',sans-serif;font-size:0.58rem;font-weight:800;
+  letter-spacing:0.14em;text-transform:uppercase;color:rgba(0,0,0,0.3);padding:0.45rem 0.5rem 0.55rem}
+.alt-item{padding:0.6rem 0.8rem;border-radius:0.55rem;font-family:'Instrument Sans',sans-serif;
+  font-size:0.86rem;color:rgba(0,0,0,0.75);cursor:pointer}
+.alt-item:hover{background:var(--c-discourse-bg);color:var(--c-discourse)}
 .xray-on .discourse{color:var(--c-discourse);font-weight:600;background:var(--c-discourse-bg);padding:0.05em 0.2em;border-radius:3px}
 .xray-on .opinion{color:var(--c-opinion);font-weight:600;background:var(--c-opinion-bg);padding:0.05em 0.2em;border-radius:3px}
 .xray-on .causal{color:var(--c-causal);font-weight:600;background:var(--c-causal-bg);padding:0.05em 0.2em;border-radius:3px}
@@ -351,18 +374,80 @@ function toggleXray(){
 }
 
 /* ══ RENDER ══ */
+
+/* ══════════ TOPIC SENTENCES — read from samples.json, not guessed ══════════
+   Each style carries a parallel `topics` array: one entry per paragraph, naming
+   the corpus function its opening realises. The span is wrapped run-by-run so
+   the authored x-ray markup is never split. */
+let CORPUS=window.CORPUS||null;
+function altsForFunction(path){
+  if(!CORPUS||!path) return [];
+  const [fn,sub]=String(path).split('/');
+  for(const mv of Object.keys(CORPUS.moves||{})){
+    const f=CORPUS.moves[mv][fn];
+    if(!f) continue;
+    const here=(f[sub]||[]).map(e=>e.t);
+    if(here.length>=4) return here;
+    return [].concat(...Object.keys(f).map(k=>f[k].map(e=>e.t)));
+  }
+  return [];
+}
+const escRe=w=>w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+function markTopic(html,span,path){
+  if(!span||!path) return {html,count:0};
+  const alts=altsForFunction(path);
+  if(!alts.length) return {html,count:0};
+  const words=span.split(/\s+/).filter(Boolean).map(escRe);
+  if(!words.length) return {html,count:0};
+  /* tolerate tags, punctuation and entities between the words */
+  const between='(?:<[^>]*>|[\\s,;:.\u2019\'"()-]|&[a-z]+;)*';
+  const re=new RegExp(words.join(between),'i');
+  const m=re.exec(html);
+  if(!m) return {html,count:0};
+  /* wrap each text run inside the match separately — always valid HTML */
+  const wrapped=m[0].replace(/(^|>)([^<]+)/g,(all,gt,txt)=>
+    txt.trim()? gt+'<span class="topic-key">'+txt+'</span>' : all);
+  const safe=String(path).replace(/'/g,"\\'");
+  const tail=`<span class="topic-count" onclick="showAltsFn('${safe}')">${alts.length}</span>`;
+  return {html:html.slice(0,m.index)+wrapped+tail+html.slice(m.index+m[0].length),count:1};
+}
+function showAltsFn(path){
+  const alts=altsForFunction(path);
+  if(!alts.length) return;
+  document.getElementById('altPhrase').textContent=String(path).split('/')[0].replace(/_/g,' ');
+  document.getElementById('altBody').innerHTML=
+    `<div class="alt-category">${alts.length} ways to open this paragraph</div>`+
+    alts.map(a=>`<div class="alt-item">${String(a).replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>`).join('');
+  document.getElementById('altOverlay').classList.add('open');
+}
+function closeAlt(e){
+  if(e&&e.target&&e.target.id!=='altOverlay') return;
+  document.getElementById('altOverlay').classList.remove('open');
+}
+window.showAltsFn=showAltsFn; window.closeAlt=closeAlt;
+function topicFor(i){
+  const t=(sampleData&&sampleData.topics&&sampleData.topics[currentStyle])||[];
+  return t[i]||null;
+}
+
 function render(){
   const box=document.getElementById('infographic');
   if(!paragraphs.length){box.innerHTML='<div class="state-msg">No sample essay found for this question yet.</div>';return;}
   let html='';
   box.classList.toggle('board-cols',fullTextMode);
   if(fullTextMode){
-    html=paragraphs.map(para=>`<div class="para-text ${xrayOn?'xray-on':''}">${para}</div>`).join('');
+    html=paragraphs.map((para,i)=>{
+      const t=topicFor(i);
+      const d=t?markTopic(para,t.span,t.function):{html:para};
+      return `<div class="para-text ${xrayOn?'xray-on':''}">${d.html}</div>`;
+    }).join('');
     box.innerHTML=html;
   }else{
     const p=paragraphs[currentPara]||'';
+    const t=topicFor(currentPara);
+    const d=t?markTopic(p,t.span,t.function):{html:p};
     const label=paraLabels[currentPara]||`Paragraph ${currentPara+1}`;
-    box.innerHTML=`<div class="para-label">${label}</div><div class="para-text ${xrayOn?'xray-on':''}">${p}</div>`;
+    box.innerHTML=`<div class="para-label">${label}</div><div class="para-text ${xrayOn?'xray-on':''}">${d.html}</div>`;
     updateNav();
   }
 }
@@ -448,7 +533,7 @@ async function init(){
     /* the expression corpus loads in the background — the page never waits for it */
     fetch('data/essays-expressions.json')
       .then(r=>r.ok?r.json():null)
-      .then(d=>{ if(d) window.CORPUS=d; })
+      .then(d=>{ if(d){ window.CORPUS=d; CORPUS=d; render(); } })
       .catch(()=>{});
     const res=await fetch('data/samples.json');
     if(!res.ok)throw new Error('samples.json not found');

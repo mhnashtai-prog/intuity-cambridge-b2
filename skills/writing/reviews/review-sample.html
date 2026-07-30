@@ -443,40 +443,34 @@ function wrapMarkers(html){
 let phraseDB={}, phraseReady=false;
 function buildPhraseDB(json){
   phraseDB={};
-  const add=(category,items)=>{
-    if(!Array.isArray(items))return;
-    const clean=x=>String((typeof x==='string')?x:(x&&(x.phrase||x.text))||'').replace(/[.,;:!?]+$/,'').trim();
-    items.forEach(item=>{
-      const p=clean(item);
-      if(!p||p.split(/\s+/).length<2)return;
-      if(!phraseDB[p])phraseDB[p]={category,alternatives:[]};
-      items.forEach(sib=>{
-        const s=clean(sib);
-        if(s&&s!==p&&!phraseDB[p].alternatives.includes(s))phraseDB[p].alternatives.push(s);
+  /* reviews-expressions.json — move > function > sub-function.
+     A phrase's alternatives are its siblings in the same sub-function;
+     if that group is thin, widen to the whole function. */
+  const moves=(json&&json.moves)||{};
+  const key=t=>{
+    const segs=String(t).split(/\.\.\.|…/).map(s=>s.trim().replace(/^[^A-Za-z]+/,''))
+      .filter(s=>s.split(/\s+/).length>=3);
+    return segs.sort((a,b)=>b.length-a.length)[0]||'';
+  };
+  Object.keys(moves).forEach(mv=>{
+    const funcs=moves[mv]||{};
+    Object.keys(funcs).forEach(fn=>{
+      const subs=funcs[fn]||{};
+      const whole=[].concat(...Object.keys(subs).map(s=>subs[s].map(e=>e.t)));
+      Object.keys(subs).forEach(sub=>{
+        const here=subs[sub].map(e=>e.t);
+        const pool=here.length>=4?here:whole;
+        const label=fn.replace(/_/g,' ');
+        subs[sub].forEach(e=>{
+          const k=key(e.t);
+          if(!k) return;
+          const alts=pool.filter(x=>x!==e.t);
+          if(!phraseDB[k] || alts.length>phraseDB[k].alternatives.length)
+            phraseDB[k]={category:label, alternatives:alts};
+        });
       });
     });
-  };
-  if(Array.isArray(json)){
-    json.forEach(e=>add(e.category||'Phrases', e.phrases||e.items||[]));
-  }else if(json&&typeof json==='object'){
-    Object.entries(json).forEach(([cat,val])=>{
-      if(!val||typeof val!=='object')return;
-      if(val.categories){
-        val.categories.forEach(c=>(c.subcategories||[]).forEach(sub=>add(c.title||cat, sub.phrases||[])));
-      }
-    });
-  }
-  /* families the JSON bank doesn't cover, carried over from review-master */
-  [ {category:'Opening',        phrases:['If you are looking for','If you are planning','If you want']},
-    {category:'First impression',phrases:['The first thing that strikes you','The first thing that will strike you','The first thing you notice','What immediately strikes you']},
-    {category:'Beyond the obvious',phrases:['Beyond the visuals','Beyond the technical skill','Beyond the performance','Beyond the atmosphere','Beyond the food itself','Beyond the teaching itself','Beyond the theory']},
-    {category:'What stands out',phrases:['What really sets this','What really elevates','What really keeps you','What really made','What really distinguished','What really elevated']},
-    {category:'Strong recommendation',phrases:['I would strongly urge','I would strongly recommend','I would strongly advise']},
-    {category:'Certainty',      phrases:['It is, without doubt','without doubt','There is no doubt that','It goes without saying']},
-    {category:'Whichever reader',phrases:['Whether you are','Whether you know','Whether you have','Regardless of whether you']},
-    {category:'This combination',phrases:['This combination of','This level of','This balance of','This mix of','This degree of']},
-    {category:'Contrasting',    phrases:['Rather than','Unlike many','Unlike most','In contrast to many']}
-  ].forEach(e=>add(e.category,e.phrases));
+  });
   phraseReady=Object.keys(phraseDB).length>0;
 }
 
@@ -614,7 +608,7 @@ async function init(){
   }catch(e){}
   try{
     /* the phrase bank loads in the background — the page never waits for it */
-    fetch('data/complete-review-phrase-bank1.json')
+  fetch('data/reviews-expressions.json')
       .then(r=>r.ok?r.json():null)
       .then(d=>{ if(d){ buildPhraseDB(d); } })
       .catch(()=>{});

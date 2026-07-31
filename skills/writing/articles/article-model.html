@@ -156,17 +156,24 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
   </div>
 </div>
 <script>
-const SECTIONS=[
-  {key:'intro',cls:'s-intro',accent:'#3d9e95',icon:'📢',label:'Introduction',sub:'Hook the reader',num:'01',
-   skeleton:["Who has never thought of / pictured / imagined … ?","Why do so many people attach such importance to … ?","What is it about … that draws people to … ?"],
-   phrases:["Who has never thought of / pictured / imagined … ?","Why do so many people attach such importance to … ?","What is it about … that draws people to … ?","Faced with the task of describing …, it is perfectly natural for people to …","There seems to be something irresistible about …","Few can resist the appeal of …","It's hard to deny that … plays a huge part in our lives."]},
-  {key:'args',cls:'s-args',accent:'#e8723a',icon:'💬',label:'Arguments',sub:'Describe · Compare · Opinion · Mini-story',num:'02',
-   skeleton:["For me personally, the best thing about … is …","One of the key things I love about … is …","I'll never forget the time when …"],
-   phrases:["My ideal … features / would feature …","One of the key things I love about … is …","What makes it so special is …","As far as I'm concerned, … is of great importance.","Apart from …, another thing that really stands out is …","For me personally, the best thing about … is …","I'll never forget the time when …","If I had to choose one example, it would be …"]},
-  {key:'conc',cls:'s-conc',accent:'#c94f6d',icon:'✨',label:'Conclusion',sub:'Leave a lasting impression',num:'03',
-   skeleton:["In short, there's something truly unforgettable about …","Whether you love it or not, there's no denying that … leaves a lasting impression."],
-   phrases:["It's hard to imagine life without …","If you haven't tried / seen / experienced …, make sure you do — you won't regret it!","In short, there's something truly unforgettable about …","Whether you love it or not, there's no denying that … leaves a lasting impression."]}
-];
+const DATA_PATH='data/article-cards-models.json';
+const CLS={opening:'s-intro',development:'s-args',closing:'s-conc'};
+let SECTIONS=[], loadError='';
+
+async function loadModels(){
+  const r=await fetch(DATA_PATH);
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const d=await r.json();
+  SECTIONS=(d.sections||[]).map(s=>({
+    key:s.key,
+    cls:CLS[s.key]||'',
+    label:s.label,
+    sub:s.sub,
+    num:s.num,
+    skeleton:(d.skeleton&&d.skeleton[s.key])||[],
+    phrases:Object.values((d.shared&&d.shared[s.key])||{}).flat()
+  }));
+}
 const SAMPLES={
   changes:[
     {sec:'Introduction',text:"Who has never experienced a change that turned their world upside down? Change is one of those things we all talk about but few of us truly welcome."},
@@ -199,6 +206,7 @@ let synth=window.speechSynthesis,narrator=null,lineIdx=0;
 async function init(){
   try{const sq=sessionStorage.getItem('currentArticleQuestion');if(sq)question=JSON.parse(sq);}catch(e){}
   document.getElementById('topicLabel').textContent=question?.title||'Article';
+  try{ await loadModels(); }catch(err){ loadError=err.message; }
   render();
   const pick=v=>{const en=v.filter(x=>x.lang.startsWith('en'));const p=en.length?en:v;narrator=p.find(x=>x.name==='Google UK English Male')||p.find(x=>x.name==='Daniel')||p.find(x=>x.lang==='en-GB')||p[0]||null;};
   const v=synth.getVoices();if(v.length)pick(v);else synth.onvoiceschanged=()=>pick(synth.getVoices());
@@ -207,6 +215,7 @@ function setView(v2){stopPrac();view=v2;document.querySelectorAll('.vbtn').forEa
 function render(){document.getElementById('contentArea').innerHTML=view==='skeleton'?renderSkel():renderPrac();}
 function pick(arr){return arr[Math.floor(Math.random()*arr.length)]||'…';}
 function renderSkel(){
+  if(!SECTIONS.length) return '<div class="skel-wrap" style="padding:1.2rem;font-size:0.85rem;color:rgba(0,0,0,0.4);line-height:1.6">'+(loadError?('Could not load '+DATA_PATH+'<br><small style="opacity:0.6">'+loadError+'</small>'):'Loading models…')+'</div>';
   return'<div class="skel-wrap">'+SECTIONS.map((s,si)=>`
     <div class="sec-block ${s.cls}" id="sb${si}">
       <div class="sec-hd"><div class="sec-num">${s.num}</div><div class="sec-title">${s.label}</div><div class="sec-sub">${s.sub}</div></div>

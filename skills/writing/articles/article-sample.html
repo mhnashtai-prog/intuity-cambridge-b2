@@ -439,14 +439,18 @@ let phraseDB={}, phraseReady=false;
 function buildPhraseDB(json){
   phraseDB={};
   /* article-expressions.json — move > function > sub-function.
-     A phrase's alternatives are its siblings in the same sub-function;
-     if that group is thin, widen to the whole function. */
+     Unlike the review corpus, each entry carries `frame` (the teachable lead-in)
+     and `match` (the literal strings that actually occur in the samples). The
+     review page derived its key by taking the LONGEST segment of the phrase,
+     which for an article lands on the tail — "plays a huge part in our lives"
+     rather than "It's hard to deny that" — so the highlight fell on the part a
+     learner cannot reuse. Here the data says which span to mark.
+     ONE record per phrase, not per literal: the literals are ordered longest
+     first and the renderer stops at the first that hits, so a phrase can never
+     be marked twice by its own shorter prefix.
+     Alternatives are the phrase's siblings in the same sub-function; if that
+     group is thin, widen to the whole function. */
   const moves=(json&&json.moves)||{};
-  const key=t=>{
-    const segs=String(t).split(/\.\.\.|…/).map(s=>s.trim().replace(/^[^A-Za-z]+/,''))
-      .filter(s=>s.split(/\s+/).length>=3);
-    return segs.sort((a,b)=>b.length-a.length)[0]||'';
-  };
   Object.keys(moves).forEach(mv=>{
     const funcs=moves[mv]||{};
     Object.keys(funcs).forEach(fn=>{
@@ -455,13 +459,13 @@ function buildPhraseDB(json){
       Object.keys(subs).forEach(sub=>{
         const here=subs[sub].map(e=>e.t);
         const pool=here.length>=4?here:whole;
-        const label=fn.replace(/_/g,' ');
         subs[sub].forEach(e=>{
-          const k=key(e.t);
-          if(!k) return;
           const alts=pool.filter(x=>x!==e.t);
-          if(!phraseDB[k] || alts.length>phraseDB[k].alternatives.length)
-            phraseDB[k]={category:label, alternatives:alts};
+          if(!alts.length) return;
+          const lits=(e.match&&e.match.length?e.match:[e.frame||e.t])
+            .filter(Boolean).slice().sort((x,y)=>y.length-x.length);
+          phraseDB[e.t]={literals:lits, frame:e.frame||e.t,
+                         category:sub.replace(/_/g,' '), alternatives:alts};
         });
       });
     });
@@ -484,28 +488,32 @@ function altsForFunction(path){
   
 function enhancePhrases(html){
   if(!phraseReady) return {html,count:0};
-  let out=html,count=0; const seen=new Set();
-  Object.keys(phraseDB).filter(p=>phraseDB[p].alternatives.length>0)
-    .sort((a,b)=>b.length-a.length)
-    .forEach(phrase=>{
-      const e=phrase.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-      out=out.replace(new RegExp(`(?<![a-zA-Z<"'])(${e})(?![a-zA-Z<"'])`,'gi'),m=>{
-        const k=m.toLowerCase();
-        if(seen.has(k))return m;
-        seen.add(k); count++;
-        const safe=phrase.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-        const n=phraseDB[phrase].alternatives.length;
-        return `<span class="phrase-text" onclick="showAlts('${safe}')">${m}</span><span class="phrase-count" onclick="showAlts('${safe}')">${n}</span>`;
-      });
+  let out=html,count=0;
+  /* longest frame first, so a general phrase never steals a specific one's span */
+  Object.keys(phraseDB)
+    .sort((x,y)=>phraseDB[y].frame.length-phraseDB[x].frame.length)
+    .forEach(id=>{
+      const d=phraseDB[id];
+      for(const lit of d.literals){
+        const e=lit.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+        const re=new RegExp(`(?<![a-zA-Z<"'])(${e})(?![a-zA-Z<"'])`,'i');
+        if(!re.test(out)) continue;
+        let done=false;
+        out=out.replace(re,m=>{
+          done=true;
+          const safe=id.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+          return `<span class="phrase-text" onclick="showAlts('${safe}')">${m}</span><span class="phrase-count" onclick="showAlts('${safe}')">${d.alternatives.length}</span>`;
+        });
+        if(done){ count++; break; }   /* one mark per phrase, then stop */
+      }
     });
   return {html:out,count};
 }
 
 function showAlts(phrase){
-  const key=Object.keys(phraseDB).find(k=>k.toLowerCase()===String(phrase).toLowerCase())||phrase;
-  const d=phraseDB[key];
+  const d=phraseDB[phrase];
   if(!d||!d.alternatives.length){ showToast('No alternatives found'); return; }
-  document.getElementById('altPhrase').textContent='“'+phrase+'”';
+  document.getElementById('altPhrase').textContent='“'+d.frame+'”';
   document.getElementById('altBody').innerHTML=
     `<div class="alt-category">${esc(d.category)} — ${d.alternatives.length} alternatives</div>`+
     d.alternatives.map(a=>{

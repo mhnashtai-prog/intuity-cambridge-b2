@@ -24,6 +24,14 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .shell{position:fixed;inset:0;display:flex;flex-direction:column}
 
 /* ── TOPBAR ── */
+.pair-lock{flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:0.5rem;flex-wrap:wrap;
+  padding:0.32rem 1rem;background:color-mix(in srgb, var(--acc) 8%, var(--bg));
+  border-bottom:1px solid rgba(0,0,0,0.05);
+  font-family:'Barlow Condensed',sans-serif;font-size:0.6rem;font-weight:800;
+  letter-spacing:0.1em;text-transform:uppercase;color:#2f5f8e}
+.pair-lock .pl-arrow{opacity:0.5}
+.pair-lock .pl-alt{font-weight:600;text-transform:none;letter-spacing:0.02em;
+  font-family:'Instrument Sans',sans-serif;font-size:0.62rem;color:rgba(0,0,0,0.35)}
 .register-bar{flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:0.35rem;padding:0.4rem 1.25rem;background:rgba(240,239,236,0.9);border-bottom:1px solid rgba(0,0,0,0.06)}
 .reg-btn{display:flex;align-items:center;gap:0.3rem;padding:0.28rem 0.9rem;border-radius:2rem;border:none;font-family:'Barlow Condensed',sans-serif;font-size:0.65rem;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;transition:all 0.22s;background:transparent;color:rgba(0,0,0,0.3)}
 .reg-btn:hover{color:rgba(0,0,0,0.55);background:rgba(0,0,0,0.05)}
@@ -272,6 +280,8 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
     <button class="reg-btn"        id="regInformal" onclick="setRegister('informal')">😊 Informal</button>
   </div>
 
+  <div class="pair-lock" id="pairLock" style="display:none"></div>
+
   <div class="stage">
     <div class="poster" id="posterCard">
 
@@ -364,13 +374,35 @@ const EMAIL_BLUE='#4a7fb5';
 function applyAccent(){ document.documentElement.style.setProperty('--acc',EMAIL_BLUE); }
 
 let SAMPLES=null, QUESTIONS=null, REG='formal';
+let TASKS=null, QMAP=null, PAIRING={};
+
+/* the task type of the sample on screen — samples now name it directly */
+function taskFor(rec){ const k=rec&&rec.taskType; return (k&&TASKS&&TASKS[k])||null; }
 let order=[], currentIdx=0;
 let styleKey='default', fullTextMode=true, currentPara=0;
 let sections=[];
 
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-function poolFor(reg){ return (SAMPLES&&SAMPLES[reg])||{}; }
+function poolFor(reg){
+  const p=(SAMPLES&&SAMPLES[reg])||{};
+  const out={}; Object.keys(p).forEach(k=>{ if(k!=='meta') out[k]=p[k]; });
+  return out;
+}
+
+/* the greeting decides the ending before a word is written — and because it is
+   fixed, it is STATED here rather than annotated in the text */
+function renderPairLock(task){
+  const el=document.getElementById('pairLock');
+  if(!el) return;
+  const p=task?PAIRING[task.pairing]:null;
+  if(!p){ el.innerHTML=''; el.style.display='none'; return; }
+  el.style.display='';
+  const alts=(p.alternatives||[]).slice(0,3);
+  el.innerHTML=`<span class="pl-sal">${p.salutations[0]}</span><span class="pl-arrow">&#8594;</span>`+
+    `<span class="pl-sig">${p.signoff}</span>`+
+    (alts.length?`<span class="pl-alt">or ${alts.join(' / ')}</span>`:'');
+}
 
 function loadSections(){
   const id=order[currentIdx];
@@ -453,33 +485,70 @@ function wrapMarkers(html){
 
 /* ══════════ PHRASE LAYER — tap an expression for alternatives ══════════ */
 let phraseDB={}, phraseReady=false;
+
+/* ══ WHAT THE PHRASE LAYER ANNOTATES ═══════════════════════════════════
+   Two sources, in priority order.
+   1. The TASK TYPE's own moves. The samples were written from these, and the
+      Plan teaches them, so highlighting one here and showing its siblings means
+      "here are the other ways to make this same move" — the same phrases the
+      learner met two screens earlier. Alternatives are the siblings in that
+      move, never across moves: an opening is not an alternative to a closing.
+   2. The general corpus (email-expressions.json), for functional language the
+      task types do not carry.
+   Entries flagged `fixed` are skipped in both. Greetings and sign-offs are
+   conventions, not vocabulary — they are STATED by the pairing lock above.
+   Each entry keeps a ladder of literals, longest first; the renderer marks the
+   first that hits and stops, so no phrase is marked twice by its own prefix. */
+
+const PH_TAIL=new Set("the a an and or to of for in on with that this it is was as so my your i am are be been have has had do does not".split(' '));
+
+function frameOf(t){
+  let f=String(t||'').split(/\[|\.\.\.|…/)[0].trim().replace(/[,.;:?!]+$/,'');
+  if(f.split(/\s+/).length<2) f=String(t||'').replace(/\[[^\]]*\]/g,'').trim().replace(/[,.;:?!]+$/,'');
+  return f;
+}
+function ladderFor(frame){
+  const out=[frame];
+  const w=frame.split(/\s+/);
+  for(let n=w.length-1;n>2;n--){
+    const pre=w.slice(0,n).join(' ').replace(/[,\s]+$/,'');
+    const last=pre.split(/\s+/).pop().toLowerCase().replace(/[',.]/g,'');
+    if(PH_TAIL.has(last)) continue;
+    out.push(pre);
+  }
+  return out;
+}
+function addPhrase(id, alts, category){
+  if(!alts.length) return;
+  const f=frameOf(id);
+  if(f.split(/\s+/).length<2) return;
+  const lits=ladderFor(f).sort((x,y)=>y.length-x.length);
+  if(!phraseDB[id] || alts.length>phraseDB[id].alternatives.length)
+    phraseDB[id]={literals:lits, frame:f, category, alternatives:alts};
+}
+
 function buildPhraseDB(json){
   phraseDB={};
-  /* email-expressions.json — REGISTER > function > sub-function.
-     Each entry carries `frame` (the reusable lead-in, i.e. the text before the
-     first [placeholder]) and `match` (the literals that actually occur in the
-     samples). Deriving a key by taking the longest segment — as the review page
-     does — lands on the tail of a phrase, which is the part a learner cannot
-     reuse; and the email samples paraphrase the bank rather than quoting it, so
-     exact matching alone finds almost nothing. Here the data says what to mark.
-     ONE record per phrase: literals are ordered longest first and the renderer
-     stops at the first hit, so a phrase is never marked twice by its own prefix.
-     Alternatives are the phrase's siblings in the same sub-function; if that
-     group is thin, widen to the whole function — never across the register. */
+  /* 1 — the task type on screen */
+  const rec=poolFor(REG)[order[currentIdx]]||{};
+  const task=taskFor(rec);
+  if(task){
+    (task.moves||[]).forEach(m=>{
+      const pool=(m.phrases||[]);
+      pool.forEach(p=>addPhrase(p, pool.filter(x=>x!==p), m.label));
+    });
+  }
+  /* 2 — the general corpus, minus the conventions */
   const moves=((json&&json.moves)||{})[REG]||{};
   Object.keys(moves).forEach(fn=>{
     const subs=moves[fn]||{};
-    const whole=[].concat(...Object.keys(subs).map(s=>subs[s].map(e=>e.t)));
+    const whole=[].concat(...Object.keys(subs).map(s=>subs[s].filter(e=>!e.fixed).map(e=>e.t)));
     Object.keys(subs).forEach(sub=>{
-      const here=subs[sub].map(e=>e.t);
+      const here=subs[sub].filter(e=>!e.fixed).map(e=>e.t);
       const pool=here.length>=4?here:whole;
       subs[sub].forEach(e=>{
-        const alts=pool.filter(x=>x!==e.t);
-        if(!alts.length) return;
-        const lits=(e.match&&e.match.length?e.match:[e.frame||e.t])
-          .filter(Boolean).slice().sort((x,y)=>y.length-x.length);
-        phraseDB[e.t]={literals:lits, frame:e.frame||e.t,
-                       category:(fn+' · '+sub).replace(/_/g,' '), alternatives:alts};
+        if(e.fixed) return;
+        addPhrase(e.t, pool.filter(x=>x!==e.t), (fn+' · '+sub).replace(/_/g,' '));
       });
     });
   });
@@ -508,8 +577,6 @@ function enhancePhrases(html){
       const d=phraseDB[id];
       for(const lit of d.literals){
         const e=lit.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-        /* one-word literals ("Dear", "Hi", "Best") match case-SENSITIVELY, or
-           "Best," the sign-off would also mark "the best thing" mid-sentence */
         const flags = lit.trim().split(/\s+/).length<2 ? '' : 'i';
         const re=new RegExp(`(?<![a-zA-Z<"\'])(${e})(?![a-zA-Z<"\'])`,flags);
         if(!re.test(out)) continue;
@@ -647,9 +714,12 @@ function loadIdx(i){
   currentIdx=Math.max(0,Math.min(i,order.length-1));
   const id=order[currentIdx];
   const rec=poolFor(REG)[id]||{};
-  const lab=rec.title||rec.topic||id;
+  const task=taskFor(rec);
+  const lab=rec.title||(task&&task.label)||id;
+  renderPairLock(task);
   document.getElementById('topicLabel').textContent=String(lab).substring(0,40).toUpperCase();
   currentPara=0;
+  if(CORPUS) buildPhraseDB(CORPUS); else buildPhraseDB(null);
   syncStyleButtons();
   loadSections(); render();
 }
@@ -687,7 +757,14 @@ async function init(){
       .then(d=>{ if(d){ CORPUS=d; buildPhraseDB(d); render(); } })
       .catch(()=>{});
 
-    SAMPLES=await fetch('data/email-samples.json').then(r=>r.json());
+    const [sm,td]=await Promise.all([
+      fetch('data/email-samples.json').then(r=>r.json()),
+      fetch('data/email-task-types.json').then(r=>r.json())
+    ]);
+    SAMPLES=sm;
+    TASKS = td.taskTypes || {};
+    QMAP  = td.questionMap || {};
+    (td.salutation && td.salutation.pairing || []).forEach(p=>{ PAIRING[p.id]=p; });
     order=Object.keys(poolFor(REG));
     if(!order.length){ REG='formal'; order=Object.keys(poolFor(REG)); }
     if(!order.length){ document.getElementById('infographic').innerHTML='<div class="state-msg">No sample emails found.</div>'; return; }

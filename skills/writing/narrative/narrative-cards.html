@@ -137,17 +137,25 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .ing-word.g3{background:color-mix(in srgb, var(--sig) 17%, transparent);color:var(--sig);font-weight:600}
 
 /* the assembled line — one word per class, each slot rolls on its own */
-.build-row{display:flex;align-items:flex-start;gap:0.6rem;margin:0.7rem 0 0.9rem;
-  padding:0.6rem 0.7rem;border-radius:0.6rem;background:color-mix(in srgb, var(--acc) 6%, transparent)}
-.build-lead{flex-shrink:0;font-family:'Barlow Condensed',sans-serif;font-size:0.56rem;font-weight:800;
-  letter-spacing:0.14em;text-transform:uppercase;color:var(--acc);opacity:0.7;padding-top:0.35rem}
+/* the build row sticks while the banks scroll under it, so the slot you are
+   filling stays visible next to the words you are choosing from */
+.build-row{position:sticky;top:0;z-index:5;margin:0.7rem 0 0.9rem;
+  padding:0.55rem 0.7rem 0.65rem;border-radius:0.6rem;
+  background:color-mix(in srgb, var(--acc) 8%, var(--white));
+  box-shadow:0 4px 12px rgba(0,0,0,0.06)}
+.build-head{display:flex;align-items:center;justify-content:space-between;gap:0.6rem;margin-bottom:0.42rem}
+.shuffle-btn{border:1px solid color-mix(in srgb, var(--acc) 35%, transparent);background:transparent;
+  color:var(--acc);font-family:'Barlow Condensed',sans-serif;font-size:0.55rem;font-weight:900;
+  letter-spacing:0.09em;text-transform:uppercase;padding:0.22rem 0.6rem;border-radius:2rem;cursor:pointer;
+  transition:background .15s}
+.shuffle-btn:hover{background:color-mix(in srgb, var(--acc) 12%, transparent)}
+.shuffle-btn:active{transform:scale(0.95)}
+.build-lead{font-family:'Barlow Condensed',sans-serif;font-size:0.56rem;font-weight:800;
+  letter-spacing:0.14em;text-transform:uppercase;color:var(--acc);opacity:0.75}
 .build-slots{display:flex;flex-wrap:wrap;gap:0.4rem}
-.bslot{display:flex;flex-direction:column;gap:0.12rem;align-items:flex-start;cursor:pointer;
+.bslot{display:flex;flex-direction:column;gap:0.12rem;align-items:flex-start;
   background:var(--white);border:1px solid rgba(0,0,0,0.09);border-radius:0.5rem;
-  padding:0.3rem 0.6rem;transition:border-color .15s,transform .12s;text-align:left}
-.bslot:hover{border-color:var(--acc)}
-.bslot:active{transform:scale(0.97)}
-.bslot:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+  padding:0.3rem 0.6rem;text-align:left}
 .bcat{font-family:'Barlow Condensed',sans-serif;font-size:0.5rem;font-weight:800;letter-spacing:0.1em;
   text-transform:uppercase;color:rgba(0,0,0,0.3)}
 .bw{transition:opacity .09s linear}
@@ -160,7 +168,12 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .ing-cat{font-family:'Barlow Condensed',sans-serif;font-size:0.55rem;font-weight:900;letter-spacing:0.14em;text-transform:uppercase;color:rgba(0,0,0,0.4);margin-bottom:0.35rem}
 .ing-words{display:flex;flex-wrap:wrap;gap:0.3rem}
 .ing-word{font-family:'Instrument Sans',sans-serif;font-size:0.8rem;color:rgba(0,0,0,0.72);background:rgba(0,0,0,0.04);border:1px solid rgba(0,0,0,0.06);border-radius:0.5rem;padding:0.16rem 0.5rem;cursor:default;transition:all 0.15s}
-.ing-word:hover{background:rgba(176,106,44,0.12);border-color:var(--acc);color:var(--sig)}
+.ing-word{cursor:pointer;font-family:'Instrument Sans',sans-serif}
+.ing-word:hover{border-color:var(--acc)}
+.ing-word:active{transform:scale(0.96)}
+.ing-word:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.ing-word.picked{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+.ing-word.picked::after{content:'\2713';margin-left:0.32rem;font-size:0.72em;opacity:0.85}
 .narr-note{margin-top:0.9rem}
 </style>
 </head>
@@ -280,20 +293,54 @@ function recipeHTML(recipe){
    grade by register, narrative grades by vividness. */
 const GRADE={1:{k:'plain',t:'Plain'},2:{k:'core',t:'B2 core'},3:{k:'vivid',t:'Ambitious'}};
 
+const slug = c => c.replace(/[^a-z]/gi,'');
 const wordOf = x => (x && typeof x==='object') ? x.w : x;
 const gradeOf = x => (x && typeof x==='object' && x.grade) ? x.grade : 2;
 
+/* The banks ARE the picker. A modal would cover the ladder, and rolling would
+   hide it: tap for a random word and you never see that you landed on a plain
+   one when a B2 word was sitting beside it. Here the choice is direct, the
+   alternatives stay on screen, and the upgrade is an action you perform. */
 function ingredientBanks(ings){
   return Object.entries(ings||{}).map(([cat,words])=>{
+    const id=slug(cat);
     const rows=[1,2,3].map(g=>{
-      const ws=(words||[]).filter(w=>gradeOf(w)===g);
+      const ws=(words||[]).map((w,i)=>[w,i]).filter(([w])=>gradeOf(w)===g);
       if(!ws.length) return '';
       return `<div class="ing-row g${g}"><span class="ing-g">${GRADE[g].t}</span><div class="ing-words">${
-        ws.map(w=>`<span class="ing-word g${g}">${wordOf(w)}</span>`).join('')}</div></div>`;
+        ws.map(([w,i])=>`<button type="button" class="ing-word g${g}" data-cat="${id}" data-i="${i}" onclick="choose('${cat.replace(/'/g,"\\'")}',${i})">${wordOf(w)}</button>`).join('')}</div></div>`;
     }).join('');
     return `<div class="ing-grp"><div class="ing-cat">${cat}<span class="ing-n">${(words||[]).length}</span></div>${rows}</div>`;
   }).join('');
 }
+
+function choose(cat,i){
+  if(BUILD[cat]===i) return;
+  BUILD[cat]=i; taught=true; sndRoll();
+  paintSlot(cat); paintChosen(cat);
+}
+window.choose=choose;
+
+/* the chosen word is marked in the bank too, so the slot and the ladder agree */
+function paintChosen(cat){
+  const id=slug(cat);
+  document.querySelectorAll(`.ing-word[data-cat="${id}"]`).forEach(el=>{
+    el.classList.toggle('picked', +el.dataset.i===BUILD[cat]);
+  });
+}
+function paintSlot(cat){
+  const el=document.getElementById('bw-'+slug(cat));
+  if(!el) return;
+  el.style.opacity='0';
+  setTimeout(()=>{ el.innerHTML=buildWordHTML(cat); el.style.opacity='1'; },90);
+}
+function paintAll(){ Object.keys(STAGES[STAGE].ingredients||{}).forEach(c=>{ paintSlot(c); paintChosen(c); }); }
+
+function shuffleAll(){
+  seedBuild(); taught=true; sndSwitch();
+  paintAll();
+}
+window.shuffleAll=shuffleAll;
 
 /* ══ ASSEMBLE ═════════════════════════════════════════════════════════
    The banks are a palette; this makes it generative. One word is drawn
@@ -312,8 +359,7 @@ function rollSlot(cat){
   let i=BUILD[cat];
   while(i===BUILD[cat]) i=Math.floor(Math.random()*pool.length);
   BUILD[cat]=i; taught=true; sndRoll();
-  const el=document.getElementById('bw-'+cat.replace(/[^a-z]/gi,''));
-  if(el){ el.style.opacity='0'; setTimeout(()=>{ el.innerHTML=buildWordHTML(cat); el.style.opacity='1'; },90); }
+  paintSlot(cat);
 }
 window.rollSlot=rollSlot;
 function buildWordHTML(cat){
@@ -324,11 +370,13 @@ function buildWordHTML(cat){
 function buildHTML(){
   const ings=STAGES[STAGE].ingredients||{};
   const slots=Object.keys(ings).map(cat=>
-    `<button type="button" class="bslot" onclick="rollSlot('${cat.replace(/'/g,"\\'")}')" aria-label="Another ${cat}">
+    `<div class="bslot">
        <span class="bcat">${cat}</span>
-       <span class="bw" id="bw-${cat.replace(/[^a-z]/gi,'')}">${buildWordHTML(cat)}</span>
-     </button>`).join('');
-  return `<div class="build-row"><div class="build-lead">try one</div><div class="build-slots">${slots}</div></div>`;
+       <span class="bw" id="bw-${slug(cat)}">${buildWordHTML(cat)}</span>
+     </div>`).join('');
+  return `<div class="build-row"><div class="build-head"><span class="build-lead">your sentence</span>`+
+    `<button type="button" class="shuffle-btn" onclick="shuffleAll()">Shuffle all</button></div>`+
+    `<div class="build-slots">${slots}</div></div>`;
 }
 
 function render(){
@@ -355,10 +403,11 @@ function render(){
 
         <div class="ing-wrap">${ingredientBanks(st.ingredients)}</div>
 
-        <div class="card-note narr-note"><span class="k">how</span> tap a slot above for another word, then write the sentence in your own words</div>
+        <div class="card-note narr-note"><span class="k">how</span> tap any word below to place it above &mdash; then write the sentence in your own words</div>
       </div>
     </div>`;
   document.getElementById('stack').classList.add('has-cards');
+  Object.keys(STAGES[STAGE].ingredients||{}).forEach(paintChosen);
   if(!taught){ const first=document.querySelector('.nav button'); if(first) first.classList.add('teach'); }
 }
 

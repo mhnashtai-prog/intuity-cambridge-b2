@@ -9,7 +9,7 @@
 :root{
   --bg:#f0efec;--ink:#111111;--white:#ffffff;
   /* lettuce = Review stage identity (matches review-model.html) */
-  --acc:#b06a2c;--sig:#8f5320;--txt:rgba(0,0,0,0.82);
+  --acc:#c94f6d;--sig:#c74767;--txt:rgba(0,0,0,0.82);
 }
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(--bg);font-family:'Barlow',sans-serif;-webkit-font-smoothing:antialiased}
@@ -125,6 +125,37 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .recipe-chip{font-family:'Barlow Condensed',sans-serif;font-size:0.68rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--sig);background:rgba(176,106,44,0.1);border-radius:1rem;padding:0.18rem 0.6rem}
 .recipe-plus{color:rgba(0,0,0,0.28);font-weight:700}
 .ing-wrap{display:flex;flex-direction:column;gap:0.7rem}
+.ing-n{margin-left:0.45rem;font-family:'Instrument Sans',sans-serif;font-size:0.6rem;font-style:italic;
+  letter-spacing:0;text-transform:none;color:rgba(0,0,0,0.26);font-weight:400}
+.ing-row{display:flex;align-items:baseline;gap:0.5rem;margin-bottom:0.28rem}
+.ing-g{flex-shrink:0;width:4.6rem;font-family:'Barlow Condensed',sans-serif;font-size:0.54rem;font-weight:800;
+  letter-spacing:0.12em;text-transform:uppercase;color:rgba(0,0,0,0.28);padding-top:0.18rem}
+.ing-row.g2 .ing-g{color:var(--acc);opacity:0.75}
+.ing-row.g3 .ing-g{color:var(--sig)}
+.ing-word.g1{background:rgba(0,0,0,0.045);color:rgba(0,0,0,0.5)}
+.ing-word.g2{background:color-mix(in srgb, var(--acc) 11%, transparent);color:rgba(0,0,0,0.78)}
+.ing-word.g3{background:color-mix(in srgb, var(--sig) 17%, transparent);color:var(--sig);font-weight:600}
+
+/* the assembled line — one word per class, each slot rolls on its own */
+.build-row{display:flex;align-items:flex-start;gap:0.6rem;margin:0.7rem 0 0.9rem;
+  padding:0.6rem 0.7rem;border-radius:0.6rem;background:color-mix(in srgb, var(--acc) 6%, transparent)}
+.build-lead{flex-shrink:0;font-family:'Barlow Condensed',sans-serif;font-size:0.56rem;font-weight:800;
+  letter-spacing:0.14em;text-transform:uppercase;color:var(--acc);opacity:0.7;padding-top:0.35rem}
+.build-slots{display:flex;flex-wrap:wrap;gap:0.4rem}
+.bslot{display:flex;flex-direction:column;gap:0.12rem;align-items:flex-start;cursor:pointer;
+  background:var(--white);border:1px solid rgba(0,0,0,0.09);border-radius:0.5rem;
+  padding:0.3rem 0.6rem;transition:border-color .15s,transform .12s;text-align:left}
+.bslot:hover{border-color:var(--acc)}
+.bslot:active{transform:scale(0.97)}
+.bslot:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.bcat{font-family:'Barlow Condensed',sans-serif;font-size:0.5rem;font-weight:800;letter-spacing:0.1em;
+  text-transform:uppercase;color:rgba(0,0,0,0.3)}
+.bw{transition:opacity .09s linear}
+.bw-word{font-family:'Barlow',sans-serif;font-size:0.92rem;font-weight:500;color:var(--txt,rgba(0,0,0,0.82))}
+.bw-word.g1{color:rgba(0,0,0,0.5)}
+.bw-word.g3{color:var(--sig);font-weight:600}
+@media (prefers-reduced-motion:reduce){ .bw,.bslot{transition:none} }
+
 .ing-grp{}
 .ing-cat{font-family:'Barlow Condensed',sans-serif;font-size:0.55rem;font-weight:900;letter-spacing:0.14em;text-transform:uppercase;color:rgba(0,0,0,0.4);margin-bottom:0.35rem}
 .ing-words{display:flex;flex-wrap:wrap;gap:0.3rem}
@@ -151,9 +182,9 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 
   <div class="foot">
     <div class="nav-pill">
-      <button class="nb"    onclick="switchMode('question')">Questions</button>
-      <button class="nb"    onclick="switchMode('sample')">Samples</button>
-      <button class="nb on" onclick="switchMode('expressions')">Expressions</button>
+      <button class="nb"    onclick="switchMode('question')">Question</button>
+      <button class="nb on" onclick="switchMode('model')">Model</button>
+      <button class="nb"    onclick="switchMode('sample')">Sample</button>
     </div>
   </div>
 </div>
@@ -205,7 +236,7 @@ async function init(){
 }
 
 function applyStage(){
-  frameIdx=0;
+  frameIdx=0; seedBuild();
   document.getElementById('topicLabel').textContent=(STAGES[STAGE].label||STAGE).toUpperCase();
 }
 
@@ -229,16 +260,68 @@ function rollFrame(dir){
 }
 window.rollFrame=rollFrame;
 
-/* ── ingredient recipe: turn "adjective" etc into styled chips ── */
+/* ── recipe chips ── */
 function recipeHTML(recipe){
   return (recipe||[]).map(r=>`<span class="recipe-chip">${r}</span>`).join('<span class="recipe-plus">+</span>');
 }
+
+/* ══ THE LADDER ═══════════════════════════════════════════════════════
+   Ingredients carry a grade: 1 plain, 2 B2 core, 3 ambitious. Within one
+   class the three grades are the SAME choice point at three levels —
+   walked / hurried / hurtled — so stacking them vertically makes the
+   upgrade visible without needing a synonym map. Where the other genres
+   grade by register, narrative grades by vividness. */
+const GRADE={1:{k:'plain',t:'Plain'},2:{k:'core',t:'B2 core'},3:{k:'vivid',t:'Ambitious'}};
+
+const wordOf = x => (x && typeof x==='object') ? x.w : x;
+const gradeOf = x => (x && typeof x==='object' && x.grade) ? x.grade : 2;
+
 function ingredientBanks(ings){
-  return Object.entries(ings||{}).map(([cat,words])=>
-    `<div class="ing-grp"><div class="ing-cat">${cat}</div><div class="ing-words">${
-      (words||[]).map(w=>`<span class="ing-word">${w}</span>`).join('')
-    }</div></div>`
-  ).join('');
+  return Object.entries(ings||{}).map(([cat,words])=>{
+    const rows=[1,2,3].map(g=>{
+      const ws=(words||[]).filter(w=>gradeOf(w)===g);
+      if(!ws.length) return '';
+      return `<div class="ing-row g${g}"><span class="ing-g">${GRADE[g].t}</span><div class="ing-words">${
+        ws.map(w=>`<span class="ing-word g${g}">${wordOf(w)}</span>`).join('')}</div></div>`;
+    }).join('');
+    return `<div class="ing-grp"><div class="ing-cat">${cat}<span class="ing-n">${(words||[]).length}</span></div>${rows}</div>`;
+  }).join('');
+}
+
+/* ══ ASSEMBLE ═════════════════════════════════════════════════════════
+   The banks are a palette; this makes it generative. One word is drawn
+   from each class and each slot rolls on its own, so the learner sees a
+   combination rather than a list — the paradigmatic choice the genre is
+   actually built on. */
+let BUILD={};
+function seedBuild(){
+  BUILD={};
+  const ings=STAGES[STAGE].ingredients||{};
+  Object.keys(ings).forEach(cat=>{ BUILD[cat]=Math.floor(Math.random()*(ings[cat]||[]).length); });
+}
+function rollSlot(cat){
+  const pool=(STAGES[STAGE].ingredients||{})[cat]||[];
+  if(pool.length<2) return;
+  let i=BUILD[cat];
+  while(i===BUILD[cat]) i=Math.floor(Math.random()*pool.length);
+  BUILD[cat]=i; taught=true; sndRoll();
+  const el=document.getElementById('bw-'+cat.replace(/[^a-z]/gi,''));
+  if(el){ el.style.opacity='0'; setTimeout(()=>{ el.innerHTML=buildWordHTML(cat); el.style.opacity='1'; },90); }
+}
+window.rollSlot=rollSlot;
+function buildWordHTML(cat){
+  const pool=(STAGES[STAGE].ingredients||{})[cat]||[];
+  const x=pool[BUILD[cat]||0];
+  return `<span class="bw-word g${gradeOf(x)}">${wordOf(x)}</span>`;
+}
+function buildHTML(){
+  const ings=STAGES[STAGE].ingredients||{};
+  const slots=Object.keys(ings).map(cat=>
+    `<button type="button" class="bslot" onclick="rollSlot('${cat.replace(/'/g,"\\'")}')" aria-label="Another ${cat}">
+       <span class="bcat">${cat}</span>
+       <span class="bw" id="bw-${cat.replace(/[^a-z]/gi,'')}">${buildWordHTML(cat)}</span>
+     </button>`).join('');
+  return `<div class="build-row"><div class="build-lead">try one</div><div class="build-slots">${slots}</div></div>`;
 }
 
 function render(){
@@ -261,19 +344,21 @@ function render(){
 
         <div class="recipe-row"><span class="recipe-k">recipe</span>${recipeHTML(st.recipe)}</div>
 
+        ${buildHTML()}
+
         <div class="ing-wrap">${ingredientBanks(st.ingredients)}</div>
 
-        <div class="card-note narr-note"><span class="k">how</span> pick one from each bank — build the sentence in your own words</div>
+        <div class="card-note narr-note"><span class="k">how</span> tap a slot above for another word, then write the sentence in your own words</div>
       </div>
     </div>`;
   document.getElementById('stack').classList.add('has-cards');
   if(!taught){ const first=document.querySelector('.nav button'); if(first) first.classList.add('teach'); }
 }
 
-/* ── FOOTER NAV — matches review-model.html targets ── */
+/* ── FOOTER NAV ── */
 function switchMode(mode){
   if(mode==='model')return;
-  const map={question:'narrative-question.html',sample:'narrative-sample.html',expressions:'narrative-expressions.html'};
+  const map={question:'narrative-question.html',sample:'narrative-sample.html'};
   if(map[mode])window.location.href=map[mode];
 }
 window.switchMode=switchMode;

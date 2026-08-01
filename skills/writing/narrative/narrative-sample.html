@@ -8,7 +8,7 @@
 <style>
 :root{
   --bg:#f0efec;--ink:#111111;--white:#ffffff;
-  --acc:#b06a2c;--acc-d:#8f5320;--acc-lt:rgba(176,106,44,0.08);--acc-mid:rgba(176,106,44,0.4);
+  --acc:#c94f6d;--acc-d:#c74767;--acc-lt:rgba(176,106,44,0.08);--acc-mid:rgba(176,106,44,0.4);
   --key:#2f6fb0;
 }
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -51,6 +51,23 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .nb{background:transparent;border:none;padding:0.35rem 0.9rem;border-radius:1.5rem;font-family:'Barlow',sans-serif;font-size:0.62rem;color:rgba(0,0,0,0.3);cursor:pointer;transition:all 0.22s;font-weight:700;text-transform:uppercase}
 .nb.on{background:var(--ink);color:#fff;font-weight:800}
 .nb:hover:not(.on){color:rgba(0,0,0,0.5)}
+.para-practise{display:inline-flex;align-items:center;gap:0.3rem;margin-top:0.55rem;
+  padding:0.26rem 0.66rem;border-radius:2rem;background:var(--acc);color:#fff;
+  font-family:'Barlow Condensed',sans-serif;font-size:0.56rem;font-weight:900;
+  letter-spacing:0.09em;text-transform:uppercase;text-decoration:none;white-space:nowrap;
+  box-shadow:0 2px 0 rgba(0,0,0,0.12);transform-origin:50% 130%;
+  animation:pbWobble 9s ease-in-out infinite}
+.para-practise:hover{filter:brightness(1.08)}
+.para-practise:active{transform:scale(0.94)}
+.para:nth-child(3) .para-practise{animation-delay:2s}
+.para:nth-child(4) .para-practise{animation-delay:4s}
+.para:nth-child(5) .para-practise{animation-delay:6s}
+@keyframes pbWobble{
+  0%{transform:rotate(0) scale(1)} 2%{transform:rotate(-5deg) scale(1.06)}
+  4%{transform:rotate(4deg) scale(1.06)} 6%{transform:rotate(-3deg) scale(1.04)}
+  8%{transform:rotate(2deg) scale(1.02)} 11%{transform:rotate(0) scale(1)}
+  100%{transform:rotate(0) scale(1)}}
+@media (prefers-reduced-motion:reduce){ .para-practise{animation:none} }
 .loading{font-family:'Barlow Condensed',sans-serif;font-size:0.85rem;font-weight:700;color:rgba(0,0,0,0.25);letter-spacing:0.12em;text-transform:uppercase;text-align:center;padding:2rem}
 </style>
 </head>
@@ -71,9 +88,9 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 
   <div class="foot">
     <div class="nav-pill">
-      <button class="nb"    onclick="navTo('question')">Questions</button>
-      <button class="nb on" onclick="navTo('sample')">Samples</button>
-      <button class="nb"    onclick="navTo('expressions')">Expressions</button>
+      <button class="nb"    onclick="navTo('question')">Question</button>
+      <button class="nb"    onclick="navTo('model')">Model</button>
+      <button class="nb on" onclick="navTo('sample')">Sample</button>
     </div>
   </div>
 </div>
@@ -81,17 +98,48 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 const DATA_PATH='data/narrative-samples.json';
 let SAMPLES=[], cur=0, xray=false;
 
+/* ══ THE CHAIN ════════════════════════════════════════════════════════
+   narrative-question.html writes currentNarrativeQuestion, and until now
+   nothing read it: a learner chose a task, tapped SAMPLE, and landed on
+   whichever story happened to be first. Nothing looked broken, which is
+   why it survived. Question ids and sample ids run in parallel —
+   q_matt / s_matt — so one is resolved from the other, with a fall back
+   on the title when a sample has no matching question. */
+function savedQuestion(){
+  try{ return JSON.parse(sessionStorage.getItem('currentNarrativeQuestion')||'null'); }
+  catch(e){ return null; }
+}
+function indexForQuestion(q){
+  if(!q) return 0;
+  const want=String(q.id||'').replace(/^q_/,'');
+  let i=SAMPLES.findIndex(s=>String(s.id||'').replace(/^s_/,'')===want);
+  if(i<0 && q.title) i=SAMPLES.findIndex(s=>s.title===q.title);
+  return i<0?0:i;
+}
+
 async function init(){
   try{ SAMPLES=(await (await fetch(DATA_PATH)).json()).samples||[]; }
   catch(e){ document.getElementById('stage').innerHTML='<div class="loading">⚠ Could not load samples</div>'; return; }
   if(!SAMPLES.length){ document.getElementById('stage').innerHTML='<div class="loading">No samples yet</div>'; return; }
+  cur=indexForQuestion(savedQuestion());
   renderTabs(); render();
 }
 function renderTabs(){
   document.getElementById('sampTabs').innerHTML=SAMPLES.map((s,i)=>
     `<button class="stab ${i===cur?'active':''}" onclick="pick(${i})">${s.title||('Story '+(i+1))}</button>`).join('');
 }
-function pick(i){ cur=i; renderTabs(); render(); }
+function pick(i){
+  cur=i; renderTabs(); render();
+  /* choosing a story here IS choosing a task — keep Question and Model in step */
+  const s=SAMPLES[cur]; if(!s) return;
+  try{
+    const q=savedQuestion()||{};
+    q.id='q_'+String(s.id||'').replace(/^s_/,'');
+    q.title=s.title||q.title;
+    q.opening=s.question||q.opening;
+    sessionStorage.setItem('currentNarrativeQuestion',JSON.stringify(q));
+  }catch(e){}
+}
 window.pick=pick;
 
 function toggleXray(){
@@ -113,10 +161,26 @@ function render(){
       ${(s.paragraphs||[]).map(p=>`
         <div class="para">
           <div class="para-text">${fmtKeys(p.text||'')}</div>
-          ${p.note?`<div class="para-note"><div class="para-note-inner">${fmtNote(p.note)}</div></div>`:''}
+          ${p.note?`<div class="para-note"><div class="para-note-inner">${fmtNote(p.note)}${practiseBadge(p.note)}</div></div>`:''}
         </div>`).join('')}
     </div>`;
 }
+/* ── the practice badge, per paragraph ────────────────────────────────
+   Every paragraph of a sample IS one stage of the story, and the craft note
+   already names it. So each paragraph can hand the learner straight to the
+   ingredient banks for that stage — read how it was done, then build one.
+   The link that used to exist once, at the bottom of another page. */
+const NOTE_STAGE={SCENE:'scene',DEVELOP:'develop',TENSION:'tension',RESOLUTION:'resolution'};
+function stageOfNote(note){
+  const m=String(note||'').match(/^([A-Z]+)/);
+  return (m && NOTE_STAGE[m[1]]) || null;
+}
+function practiseBadge(note){
+  const st=stageOfNote(note);
+  if(!st) return '';
+  return `<a class="para-practise" href="narrative-cards.html?stage=${st}">Build one like this <span aria-hidden="true">&#8250;</span></a>`;
+}
+
 function fmtKeys(t){
   // «phrase» → blue key expression (always on, like the teaching slide)
   return t.replace(/«([^»]+)»/g,'<span class="key-x">$1</span>');
@@ -128,7 +192,7 @@ function fmtNote(n){
 
 function navTo(dest){
   if(dest==='sample')return;
-  const map={question:'narrative-question.html',expressions:'narrative-expressions.html'};
+  const map={question:'narrative-question.html',model:'narrative-cards.html'};
   if(map[dest])window.location.href=map[dest];
 }
 window.navTo=navTo;

@@ -10,6 +10,7 @@
   --bg:#f0efec;--ink:#111111;--white:#ffffff;
   --acc:#4a7fb5; /* email blue — the wing colour. The k1..k3 note scale below is
                     derived from it, so the plan reads as one family. */
+  --sig:#2f5f8e; /* darkened accent for white text — clears WCAG AA where --acc does not */
   --intro:var(--acc);--body-c:var(--acc);--end-c:var(--acc);
   --gold:var(--acc);
 }
@@ -327,6 +328,20 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .k-idea .kv{font-size:1.06em}
 .ks-note .kv{font-size:1.1em;color:rgba(25,22,18,0.95)}
 
+.pair-lock{display:flex;align-items:center;justify-content:center;gap:0.5rem;margin:0 0 0.6rem;
+  padding:0.3rem 0.7rem;border-radius:0.4rem;background:color-mix(in srgb, var(--acc) 10%, white);
+  font-family:'Barlow Condensed',sans-serif;font-size:0.6rem;font-weight:800;
+  letter-spacing:0.08em;text-transform:uppercase;color:var(--acc)}
+.pair-lock .pl-arrow{opacity:0.55}
+.mv-phrases{margin-top:0.7rem;padding-top:0.55rem;border-top:1px solid rgba(0,0,0,0.07)}
+.mvp-lab{font-family:'Barlow Condensed',sans-serif;font-size:0.55rem;font-weight:800;
+  letter-spacing:0.14em;text-transform:uppercase;color:var(--acc);opacity:0.8;margin-bottom:0.35rem}
+.mvp{font-family:'Instrument Sans',sans-serif;font-size:0.78rem;line-height:1.6;
+  color:rgba(0,0,0,0.62);padding:0.22rem 0;border-bottom:1px dashed rgba(0,0,0,0.06)}
+.mvp:last-child{border-bottom:none}
+.mv-guide{display:flex;flex-wrap:wrap;gap:0.3rem;margin:0.5rem 0 0.2rem}
+.mvg{font-family:'Instrument Sans',sans-serif;font-size:0.66rem;line-height:1.5;
+  color:rgba(0,0,0,0.45);background:rgba(0,0,0,0.04);border-radius:0.3rem;padding:0.16rem 0.45rem}
 .k-caption{font-family:'Barlow Condensed',sans-serif;font-size:0.55rem;font-weight:800;
   letter-spacing:0.2em;text-transform:uppercase;color:rgba(0,0,0,0.3);text-align:center;margin-top:0.15rem}
 
@@ -574,23 +589,55 @@ let DATA=null, REG='formal';
 let order=[];            /* question ids in the active register, in file order */
 let currentIdx=0;
 let plan=null, meta=null;
+let TASKS=null, QMAP=null, PAIRING={};
 
 function poolFor(reg){ return (DATA && DATA.email && DATA.email[reg]) || {}; }
 
-/* the skeleton in emails-ideas.json is {title, notes:[{marker,text}]}; the
-   renderer wants {num,title,phrase,idea,bullets} — the first text note becomes
-   the model phrase, the second the idea stem, the rest the branches */
-function skeletonToSections(skeleton){
-  return (skeleton||[]).map((sec,i)=>{
-    const notes=(sec.notes||[]).filter(n=>n.text&&n.text.trim());
-    return {
+/* retired task types (Proposal, Recommendation) stay in the data file but drop
+   out of the pager — reversible by editing questionMap.retired, not the data */
+function liveOrder(reg){
+  const pool=poolFor(reg);
+  return Object.keys(pool).filter(id=>!isRetired(pool[id]));
+}
+
+/* the task type this question belongs to, resolved through questionMap */
+function taskKeyFor(entry){ return (QMAP && QMAP[REG] && QMAP[REG][entry.type]) || null; }
+function taskFor(entry){ const k=taskKeyFor(entry); return (k && TASKS && TASKS[k]) || null; }
+function isRetired(entry){ return (QMAP && (QMAP.retired||[]).includes(entry.type)); }
+
+/* ══ THE JOIN ══════════════════════════════════════════════════════════
+   The task type supplies the FRAME — what each move is called, what it has to
+   do, and the phrases that realise it. emails-ideas.json supplies the CONTENT
+   for this particular question. Neither can do the other's job: the task type
+   cannot know what this complaint is about, and the idea bank cannot know that
+   every complaint opens the same way.
+   Slots are matched by position: both sides run opening → body1 → body2 →
+   closing, and every task type and every skeleton has exactly four. If a
+   skeleton ever runs short, the frame still renders with empty bullets rather
+   than dropping the move. */
+function buildSections(entry){
+  const task=taskFor(entry);
+  const sk=(entry.skeleton||[]);
+  const moves=(task&&task.moves)||[];
+  const n=Math.max(moves.length, sk.length);
+  const out=[];
+  for(let i=0;i<n;i++){
+    const mv=moves[i]||null;
+    const sec=sk[i]||null;
+    const notes=sec?(sec.notes||[]).filter(x=>x.text&&x.text.trim()):[];
+    /* fall back to the skeleton's own title only where no task type exists */
+    const title = mv ? mv.label : String((sec&&sec.title)||'').replace(/^[A-D]:\s*/,'');
+    out.push({
       num:i+1,
-      title:String(sec.title||'').replace(/^[A-D]:\s*/,''),
-      phrase: notes[0]?notes[0].text:'…',
+      title,
+      guide: mv&&mv.guide ? mv.guide : [],
+      phrases: mv&&mv.phrases ? mv.phrases : [],
+      phrase: notes[0]?notes[0].text:(mv&&mv.phrases&&mv.phrases[0])||'…',
       idea:   notes[1]?notes[1].text.toUpperCase():'KEY POINTS',
-      bullets:notes.slice(2).map(n=>n.text)
-    };
-  });
+      bullets:notes.slice(2).map(x=>x.text)
+    });
+  }
+  return out;
 }
 
 /* «verb» markers → bold key verbs, same convention as the essay plan */
@@ -627,8 +674,15 @@ function renderTemple(area){
     </div>`;
   }).join('');
 
+  const pr=plan.pairing;
+  /* the greeting decides the ending before a word is written — show the lock */
+  const lockHTML = (pr && plan.task && plan.task.register==='formal')
+    ? `<div class="pair-lock"><span class="pl-sal">${esc(pr.salutations[0])}</span><span class="pl-arrow">&#8594;</span><span class="pl-sig">${esc(pr.signoff)}</span></div>`
+    : '';
+
   area.innerHTML=`<div class="keysview">
     <div class="kq"><span class="kq-lock">🔒</span><span class="kq-text">${esc(q)}</span></div>
+    ${lockHTML}
     ${strip(intro,'intro',0)}
     <div class="keys-row">${keyHTML}</div>
     ${strip(concl,'concl',secs.length-1)}
@@ -638,6 +692,18 @@ function renderTemple(area){
 }
 
 /* ══ SECTION MODAL — the phrase is the model sentence for that move ══ */
+/* the task type's `guide` says what this move must DO; the bullets say what
+   this question needs to say in it. Both belong on the card. */
+function phrasesHTML(sec){
+  if(!sec.phrases || !sec.phrases.length) return '';
+  const items=sec.phrases.slice(0,6).map(p=>`<div class="mvp">${esc(p)}</div>`).join('');
+  return `<div class="mv-phrases"><div class="mvp-lab">Ways to say it</div>${items}</div>`;
+}
+
+function guideHTML(sec){
+  if(!sec.guide || !sec.guide.length) return '';
+  return `<div class="mv-guide">`+sec.guide.map(g=>`<span class="mvg">${esc(g)}</span>`).join('')+`</div>`;
+}
 function openSectionModal(idx){
   const secs=(plan&&plan.sections)||[];
   const sec=secs[idx];
@@ -654,9 +720,11 @@ function openSectionModal(idx){
         <span class="modal-role">${roleLabel}</span>
       </div>
       <div class="modal-title">${esc(sec.title||'')}</div>
+      ${guideHTML(sec)}
       <div class="modal-purpose">${esc(sec.phrase||'')}</div>
       <div class="modal-claim">${kv(sec.idea||'')}</div>
       <div class="k-tree">${bullets}</div>
+      ${phrasesHTML(sec)}
       <div class="modal-nav">
         <button class="modal-nav-btn" onclick="openSectionModal(${idx-1})" ${idx<=0?'disabled':''}>← Prev</button>
         <button class="modal-nav-btn" onclick="openSectionModal(${idx+1})" ${idx>=secs.length-1?'disabled':''}>Next →</button>
@@ -696,14 +764,18 @@ function loadIdx(i){
   const id=order[currentIdx];
   const entry=pool[id]||null;
   meta=entry;
-  plan=entry?{sections:skeletonToSections(entry.skeleton),question:entry.question,label:entry.topic}:null;
-  applyAccent(entry&&(entry.type||'Email'));
-  const lab=(entry&&(entry.topic||entry.type))||id;
+  const task=taskFor(entry);
+  plan=entry?{sections:buildSections(entry),question:entry.question,
+              label:(task&&task.label)||entry.topic,
+              task:task, pairing:task?PAIRING[task.pairing]:null}:null;
+  applyAccent((task&&task.label)||'Email');
+  const lab=(task&&task.label)||(entry&&(entry.topic||entry.type))||id;
   document.getElementById('topicLabel').textContent=String(lab).toUpperCase();
   document.getElementById('flagNum').textContent=String(currentIdx+1).padStart(2,'0');
   try{
     sessionStorage.setItem('currentEmailQuestion',JSON.stringify({
-      id:id, questionId:id, type:entry&&entry.type, topic:entry&&entry.topic,
+      id:id, questionId:id, taskType:taskKeyFor(entry),
+      type:(task&&task.label)||(entry&&entry.type), topic:entry&&entry.topic,
       question:entry&&entry.question, formality:REG
     }));
   }catch(e){}
@@ -716,7 +788,7 @@ function setRegister(reg){
   REG=reg; sndSwitch();
   document.getElementById('regFormal').classList.toggle('active',reg==='formal');
   document.getElementById('regInformal').classList.toggle('active',reg==='informal');
-  order=Object.keys(poolFor(REG));
+  order=liveOrder(REG);
   if(!order.length){ document.getElementById('contentArea').innerHTML='<div class="no-data">No plans in this register.</div>'; return; }
   loadIdx(0);
 }
@@ -750,12 +822,20 @@ async function init(){
   document.getElementById('regInformal').classList.toggle('active',REG==='informal');
 
   try{
-    const r=await fetch('data/emails-ideas.json');
-    if(!r.ok) throw new Error('HTTP '+r.status);
+    const [rt,r]=await Promise.all([
+      fetch('data/email-task-types.json'),
+      fetch('data/emails-ideas.json')
+    ]);
+    if(!rt.ok) throw new Error('email-task-types.json — HTTP '+rt.status);
+    if(!r.ok)  throw new Error('emails-ideas.json — HTTP '+r.status);
+    const td=await rt.json();
+    TASKS = td.taskTypes || {};
+    QMAP  = td.questionMap || {formal:{},informal:{},retired:[]};
+    (td.salutation && td.salutation.pairing || []).forEach(p=>{ PAIRING[p.id]=p; });
     DATA=await r.json();
 
-    order=Object.keys(poolFor(REG));
-    if(!order.length){ REG='formal'; order=Object.keys(poolFor(REG)); }
+    order=liveOrder(REG);
+    if(!order.length){ REG='formal'; order=liveOrder(REG); }
     if(!order.length){ document.getElementById('contentArea').innerHTML='<div class="no-data">No email plans found.</div>'; return; }
 
     const at=savedId?order.indexOf(savedId):-1;

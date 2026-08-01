@@ -252,11 +252,46 @@
   .fam-arrow,.fam-dots{display:none;}
 
   /* view switching */
-  .fbadge-bar{display:flex;gap:2px;height:4px;border-radius:2px;overflow:hidden;margin:6px 0 2px;}
-  .rb-seg{display:block;border-radius:2px;}
-.fbadge-bar{display:flex;gap:2px;height:4px;border-radius:2px;overflow:hidden;margin:6px 0 2px;
+  .fbadge-bar{display:flex;gap:2px;height:4px;border-radius:2px;overflow:hidden;margin:6px 0 2px;
     background:rgba(0,0,0,.05);}
+  .rb-seg{display:block;border-radius:2px;}
+  .rb-i{background:color-mix(in srgb, var(--fc) 28%, transparent);}
+  .rb-n{background:color-mix(in srgb, var(--fc) 58%, transparent);}
+  .rb-f{background:var(--fc);}
   .fbadge-note{font-size:.7rem;opacity:.55;}
+  /* ── REGISTER LADDER ────────────────────────────────────────────────
+     The card the badge bar is a summary of. Six phrases at a time, laid
+     on the informal-to-formal axis, with the convention note underneath.
+     The cap is the design: the rest stay one tap away, never on screen. */
+  .lad-overlay{position:fixed;inset:0;background:rgba(8,8,10,.72);backdrop-filter:blur(4px);
+    z-index:900;display:none;align-items:center;justify-content:center;padding:1rem;}
+  .lad-overlay.show{display:flex;animation:fade .2s ease;}
+  .lad-card{background:#faf9f7;color:#141414;border-radius:1rem;width:100%;max-width:520px;
+    max-height:86vh;overflow-y:auto;padding:1.1rem 1.2rem 1rem;
+    box-shadow:0 24px 60px rgba(0,0,0,.5);}
+  .lad-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.6rem;}
+  .lad-fn{font-size:1.05rem;font-weight:600;}
+  .lad-when{font-size:.78rem;color:rgba(0,0,0,.5);margin-top:2px;}
+  .lad-close{background:rgba(0,0,0,.06);border:none;width:1.9rem;height:1.9rem;border-radius:50%;
+    font-size:1.05rem;color:rgba(0,0,0,.45);cursor:pointer;flex-shrink:0;}
+  .lad-close:hover{background:rgba(0,0,0,.12);}
+  .lad-axis{display:flex;align-items:center;gap:.5rem;margin:.9rem 0 .6rem;
+    font-size:.62rem;letter-spacing:.09em;text-transform:uppercase;color:rgba(0,0,0,.35);}
+  .lad-line{flex:1;height:1px;background:rgba(0,0,0,.12);}
+  .lad-list{display:flex;flex-direction:column;gap:.4rem;}
+  .lad-row{display:flex;align-items:center;gap:.6rem;}
+  .lad-bar{flex-shrink:0;height:6px;border-radius:3px;background:var(--fc,#7b5ea7);}
+  .lad-i{width:52px;opacity:.32;} .lad-n{width:104px;opacity:.62;} .lad-f{width:156px;opacity:1;}
+  .lad-t{font-size:.92rem;line-height:1.45;}
+  .lad-tail{display:block;font-size:.78rem;color:rgba(0,0,0,.42);font-style:italic;}
+  .lad-note{margin-top:.9rem;padding-top:.75rem;border-top:1px solid rgba(0,0,0,.08);
+    font-size:.8rem;line-height:1.6;color:rgba(0,0,0,.55);}
+  .lad-note:empty{display:none;}
+  .lad-foot{margin-top:.9rem;}
+  .lad-more{width:100%;border:1px solid rgba(0,0,0,.12);background:transparent;border-radius:.5rem;
+    padding:.5rem;font-size:.78rem;color:rgba(0,0,0,.55);cursor:pointer;}
+  .lad-more:hover{background:rgba(0,0,0,.04);}
+  .lad-more:disabled{opacity:.4;cursor:default;}
   .view{display:none;} .view.active{display:block;animation:fade .28s ease;}
   @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
   @media(prefers-reduced-motion:reduce){.view.active{animation:none;} .fam:hover,.fn-tile:hover,.fbadge:hover{transform:none;} .fam-viewport{scroll-behavior:auto;}}
@@ -310,11 +345,30 @@
           <div class="q-controls">
             <button class="q-next" id="qNext" onclick="nextQuestion()">Next question →</button>
             <button class="q-practice" id="qPractice" onclick="togglePractice()">Practice: off</button>
-            <button class="q-further" id="qFurther" onclick="toggleFurther()">Further practice →</button>
+            <button class="q-further" id="qFurther" onclick="furtherAction()">Further practice →</button>
           </div>
         </div>
         <!-- phrase / cue cards injected here -->
         <!-- completion card overlay (appears when a cue is chosen) -->
+        <!-- REGISTER LADDER — the card the badge bar summarises -->
+        <div class="lad-overlay" id="ladOverlay" onclick="closeLadder(event)">
+          <div class="lad-card" id="ladCard" onclick="event.stopPropagation()">
+            <div class="lad-head">
+              <div>
+                <div class="lad-fn" id="ladFn"></div>
+                <div class="lad-when" id="ladWhen"></div>
+              </div>
+              <button class="lad-close" onclick="closeLadder()" aria-label="Close">&times;</button>
+            </div>
+            <div class="lad-axis"><span>Informal</span><span class="lad-line"></span><span>Formal</span></div>
+            <div class="lad-list" id="ladList"></div>
+            <div class="lad-note" id="ladNote"></div>
+            <div class="lad-foot">
+              <button class="lad-more" id="ladMore" onclick="ladderMore()"></button>
+            </div>
+          </div>
+        </div>
+
         <div class="cc-overlay" id="ccOverlay">
           <div class="cc-card" id="ccCard">
             <div class="cc-banner"><span class="cc-blabel" id="ccLabel"></span></div>
@@ -527,6 +581,7 @@ function openFn(fam,k){
   qList = (QUESTIONS[k] && QUESTIONS[k].length) ? QUESTIONS[k].slice() : [];
   qIndex = 0;
   setQuestion(fam,k);
+  syncFurtherBtn();
 
   // reset Further Practice when entering a function
   furtherMode=false;
@@ -728,6 +783,91 @@ let DRILLS={};                 // { functionId: [ {cue,trigger,models} ] }
 const furtherDone=new Set();   // cueKey of completed cues (tick marks)
 let ccCurrent=null;            // {k, i, item}
 function cueKey(k,i){ return k+':'+i; }
+
+/* ══ THE LADDER CARD ══════════════════════════════════════════════════
+   Drills and questions exist for only 21 of the 42 functions — the
+   discursive half. On the other 21 "Further practice" opened an empty
+   orbit. Those same 21 are the register-tagged ones, so the button now
+   does whatever the function has data for: drills where they exist, the
+   register ladder where they do not, hidden where neither. */
+const LAD_STEP=6;
+let ladFnKey=null, ladShown=0;
+
+function hasDrills(k){ return !!(DRILLS && DRILLS[k] && DRILLS[k].length); }
+function hasLadder(fam,k){
+  const fn=CORPUS[fam] && CORPUS[fam].functions[k];
+  return !!(fn && fn.graded);
+}
+
+/* the button changes job with the data, and says which job it is doing */
+function syncFurtherBtn(){
+  const btn=document.getElementById('qFurther');
+  if(!btn) return;
+  if(hasDrills(curFn)){
+    btn.style.display=''; btn.dataset.mode='drill';
+    btn.textContent = furtherMode ? '← Back to frames' : 'Further practice →';
+  } else if(hasLadder(curFam,curFn)){
+    btn.style.display=''; btn.dataset.mode='ladder';
+    btn.textContent='Register ladder →';
+  } else {
+    btn.style.display='none'; btn.dataset.mode='';
+  }
+}
+
+function furtherAction(){
+  const btn=document.getElementById('qFurther');
+  if(btn && btn.dataset.mode==='ladder') return openLadder(curFam,curFn);
+  return toggleFurther();
+}
+window.furtherAction=furtherAction;
+
+const REG_CLASS={informal:'lad-i',neutral:'lad-n',formal:'lad-f'};
+const REG_RANK={informal:0,neutral:1,formal:2};
+
+function ladderPhrases(fam,k){
+  const fn=CORPUS[fam].functions[k];
+  return (fn.capsule||[]).filter(p=>p.register)
+    .sort((a,b)=>REG_RANK[a.register]-REG_RANK[b.register]);
+}
+
+function openLadder(fam,k){
+  const fn=CORPUS[fam] && CORPUS[fam].functions[k];
+  if(!fn) return;
+  ladFnKey={fam,k}; ladShown=LAD_STEP;
+  const card=document.getElementById('ladCard');
+  card.style.setProperty('--fc', hue(fam)[0]);
+  document.getElementById('ladFn').textContent=fn.label||cap(k);
+  document.getElementById('ladWhen').textContent=fn.when||'';
+  document.getElementById('ladNote').textContent=fn.convention||'';
+  paintLadder();
+  document.getElementById('ladOverlay').classList.add('show');
+}
+window.openLadder=openLadder;
+
+function paintLadder(){
+  const {fam,k}=ladFnKey;
+  const all=ladderPhrases(fam,k);
+  const show=all.slice(0,ladShown);
+  document.getElementById('ladList').innerHTML=show.map(p=>
+    `<div class="lad-row"><span class="lad-bar ${REG_CLASS[p.register]||'lad-n'}"></span>
+      <span class="lad-t">${p.stem}${p.tail?`<span class="lad-tail">${p.tail}</span>`:''}</span></div>`
+  ).join('');
+  const more=document.getElementById('ladMore');
+  const left=all.length-show.length;
+  more.textContent = left>0 ? `Show ${left} more` : `All ${all.length} shown`;
+  more.disabled = left<=0;
+}
+function ladderMore(){ ladShown+=LAD_STEP; paintLadder(); }
+window.ladderMore=ladderMore;
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape' && document.getElementById('ladOverlay')?.classList.contains('show')) closeLadder();
+});
+function closeLadder(e){
+  if(e && e.target && e.target.id!=='ladOverlay') return;
+  document.getElementById('ladOverlay').classList.remove('show');
+}
+window.closeLadder=closeLadder;
 
 function toggleFurther(){
   furtherMode=!furtherMode;

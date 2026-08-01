@@ -349,7 +349,40 @@ function switchType(k){
 }
 
 /* ── generators ── */
-function genOpen(){ return {greet:pick(SH.greeting||['...']), hinge:pick(T.open.hinge), aim:pick(T.open.aim)}; }
+/* Hinge and aim are drawn from separate pools, and a few pairings collide:
+   "sorry to hear you're having trouble with" + "the trouble you're having
+   with ..." says the same thing twice. Rather than pruning the pools — which
+   costs variety everywhere to fix three cases — reject a pairing that repeats
+   a content word, and draw again. Auxiliaries are excluded, or "I would like
+   to suggest ... which I believe would suit your needs" would be blocked, and
+   that reads perfectly well. */
+const OPEN_STOP=new Set(("the a an and or but of to in on for with about that this from at by as so " +
+  "you your yours i me my we our they them their it its is are was were be been am " +
+  "have has had do does did not don't won't just really very too much " +
+  "would could should will shall might must can may").split(' '));
+function contentWords(t){
+  const out=new Set();
+  String(t||'').toLowerCase().match(/[a-z']+/g)?.forEach(w=>{
+    if(w.length>=4 && !OPEN_STOP.has(w)) out.add(w);
+  });
+  return out;
+}
+function clashes(a,b){
+  const A=contentWords(a), B=contentWords(b);
+  for(const w of A) if(B.has(w)) return true;
+  return false;
+}
+function genOpen(){
+  const H=T.open.hinge||['...'], A=T.open.aim||['...'];
+  let hinge=pick(H), aim=pick(A);
+  /* a bounded retry: the pools are small, and a clash is rare */
+  for(let i=0;i<12 && clashes(hinge,aim);i++){ hinge=pick(H); aim=pick(A); }
+  if(clashes(hinge,aim)){
+    const ok=A.filter(x=>!clashes(hinge,x));
+    if(ok.length) aim=pick(ok);
+  }
+  return {greet:pick(SH.greeting||['...']), hinge, aim};
+}
 
 /* a feature line: signpost (object with _join) + maybe a view + key.
    _join 'self' → the signpost completes itself, view suppressed.
@@ -534,7 +567,9 @@ function buildModels(){
     const tag=TAG[k]||k.slice(0,2).toUpperCase();
     const SPF=Tg.signpostFeature||SHg.signpostFeature||{};
     for(let c=1;c<=PER_TYPE;c++){
-      const open=`<div class="fl"><span class="fl-lead">${gfmt(gpick(SHg.greeting||['...']))}</span> <span class="vw">${esc(gpick(Tg.open.hinge))} ${esc(gpick(Tg.open.aim))}</span></div>`;
+      let gh=gpick(Tg.open.hinge), ga=gpick(Tg.open.aim);
+      for(let r=0;r<12 && clashes(gh,ga);r++){ gh=gpick(Tg.open.hinge); ga=gpick(Tg.open.aim); }
+      const open=`<div class="fl"><span class="fl-lead">${gfmt(gpick(SHg.greeting||['...']))}</span> <span class="vw">${esc(gh)} ${esc(ga)}</span></div>`;
       const used={s:[],v:[],k:[]}, body=[];
       for(let i=0;i<3;i++){
         const sp=gpickAvoid(SPF[FEAT_BUCKETS[i]]||SPF.open||[],used.s); used.s.push(sp);

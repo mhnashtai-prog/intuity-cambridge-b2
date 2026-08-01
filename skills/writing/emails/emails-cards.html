@@ -35,7 +35,13 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .ttab:hover{color:rgba(0,0,0,0.55);background:rgba(0,0,0,0.05)}
 .ttab.active{background:var(--ink);color:#fff}
 
-/* ── MODE TOGGLE (Cards here / Phrases → accordion model page) ── */
+/* ── MODE TOGGLE — Cards and Phrases are two views of THIS page ── */
+.pair-lock{flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:0.5rem;
+  padding:0.3rem 1rem;background:color-mix(in srgb, var(--acc) 8%, var(--bg));
+  border-bottom:1px solid rgba(0,0,0,0.05);
+  font-family:'Barlow Condensed',sans-serif;font-size:0.6rem;font-weight:800;
+  letter-spacing:0.1em;text-transform:uppercase;color:var(--sig)}
+.pair-lock .pl-arrow{opacity:0.5}
 .mode-row{flex-shrink:0;display:flex;justify-content:center;padding:0.5rem 1rem 0.15rem;background:rgba(240,239,236,0.8)}
 .mode-pill{display:inline-flex;background:rgba(10,10,10,0.06);border-radius:2rem;padding:0.2rem}
 .mode-btn{font-family:'Barlow',sans-serif;font-size:0.6rem;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;padding:0.34rem 0.95rem;border:none;background:transparent;border-radius:1.5rem;cursor:pointer;color:rgba(0,0,0,0.4);transition:all .25s;text-decoration:none}
@@ -93,6 +99,25 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 
 .state{width:min(420px,92vw);text-align:center;padding:2.5rem 1rem;font-family:'Instrument Sans',sans-serif;color:rgba(0,0,0,0.4);font-style:italic;font-size:0.85rem}
 .state.err{color:#b4453a}
+
+/* ══ PHRASES — three cards holding the gallery's own models ══ */
+.pgroup+.pgroup{margin-top:0.9rem;padding-top:0.75rem;border-top:1px solid rgba(0,0,0,0.07)}
+.pgroup-title{font-family:'Barlow Condensed',sans-serif;font-size:0.62rem;font-weight:800;letter-spacing:0.16em;
+  text-transform:uppercase;color:var(--sig);opacity:0.85;margin-bottom:0.45rem;display:flex;align-items:baseline;gap:0.4rem}
+.pgroup-count{font-family:'Instrument Sans',sans-serif;font-size:0.6rem;font-style:italic;letter-spacing:0;
+  text-transform:none;color:rgba(0,0,0,0.28);font-weight:400}
+.pitem{position:relative;padding:0.6rem 0.5rem;margin:0 -0.5rem;border-radius:0.5rem;
+  border-bottom:1px solid rgba(0,0,0,0.06);transition:background .12s linear}
+.pitem:last-child{border-bottom:none}
+.pitem:hover{background:rgba(0,0,0,0.03)}
+.pitem-tag{float:right;margin-left:0.6rem;font-family:'Instrument Sans',sans-serif;font-style:italic;
+  font-size:0.58rem;color:rgba(0,0,0,0.26);letter-spacing:0.02em}
+.pitem .fl{font-family:'Barlow',sans-serif;font-weight:500;font-size:0.92rem;line-height:1.55;color:var(--txt)}
+.pitem .fl+.fl{margin-top:0.3rem}
+.pitem .fl-lead{font-weight:600;color:var(--txt)}
+.pitem .sg{color:var(--sig);font-weight:600}
+.pitem .vw{color:rgba(0,0,0,0.4);font-weight:400;font-size:0.94em}
+.pitem .gp{color:rgba(0,0,0,0.5);font-weight:600;letter-spacing:0.16em;padding:0 0.06rem}
 
 /* ── FOOTER NAV ── */
 .foot{flex-shrink:0;display:flex;justify-content:center;padding:0.5rem 1rem calc(env(safe-area-inset-bottom,0px) + 0.55rem);background:rgba(240,239,236,0.95);border-top:1px solid rgba(0,0,0,0.06)}
@@ -154,11 +179,12 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
   </div>
 
   <div class="topic-tabs" id="tabsContainer"></div>
+  <div class="pair-lock" id="pairLock" style="display:none"></div>
 
   <div class="mode-row">
     <div class="mode-pill">
-      <button class="mode-btn active">Cards</button>
-      <a class="mode-btn" href="emails-cards.html">Phrases</a>
+      <button class="mode-btn active" id="mbCards"   onclick="setView('cards')">Cards</button>
+      <button class="mode-btn"        id="mbPhrases" onclick="setView('phrases')">Phrases</button>
     </div>
   </div>
 
@@ -186,6 +212,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
    type — every register and every type stays email blue. */
 
 const DATA_PATH = 'data/emails-cards-models.json';
+const TASK_PATH = 'data/email-task-types.json';
 
 /* type tabs are register-dependent; filled at runtime from the active register */
 const REGISTERS = ['formal','informal'];
@@ -216,33 +243,73 @@ const fmt  = s => (s||'').replace(/\.\.\./g,'<span class="gap">...</span>');
 
 let DATA=null, REG='formal', SH=null, T=null, TYPE=null;
 let S=null, typeKeys=[];
+let TASKS=null, QMAP=null, PAIRING={};
+
+/* ══ THE SEAM, STATED ═══════════════════════════════════════════════════
+   This page keeps its own assembly pools and does NOT read phrases from the
+   task types. That is deliberate: a job-application opening builds 224
+   combinations here, where email-task-types.json holds 14 fixed phrases for
+   the whole task. Collapsing the two would trade the Model page's entire
+   purpose for consistency.
+   What the task type DOES supply is naming and convention — the tab label,
+   the register, and the salutation/sign-off pair. So the Model agrees with
+   Question and Plan on what things are CALLED, while keeping its own language.
+   Two card types (Congratulate, Invite) map to one task type, so tabs are
+   built from the CARD keys and only labelled through the task type. */
+function taskKeyFor(cardType){ return (QMAP && QMAP[REG] && QMAP[REG][cardType]) || null; }
+function taskFor(cardType){ const k=taskKeyFor(cardType); return (k && TASKS && TASKS[k]) || null; }
+function labelFor(cardType){
+  const cl=(QMAP && QMAP.cardTypes && QMAP.cardTypes.labels) || {};
+  if(cl[cardType]) return cl[cardType];
+  const t=taskFor(cardType);
+  return (t && t.label) || cardType;
+}
+function isRetired(cardType){ return !!(QMAP && (QMAP.retired||[]).includes(cardType)); }
 
 async function init(){
   try{
-    const r = await fetch(DATA_PATH);
-    if(!r.ok) throw new Error('HTTP '+r.status);
+    const [r, rt] = await Promise.all([fetch(DATA_PATH), fetch(TASK_PATH)]);
+    if(!r.ok)  throw new Error(DATA_PATH+' — HTTP '+r.status);
+    if(!rt.ok) throw new Error(TASK_PATH+' — HTTP '+rt.status);
     DATA = await r.json();
+    const td = await rt.json();
+    TASKS = td.taskTypes || {};
+    QMAP  = td.questionMap || {formal:{},informal:{},retired:[]};
+    (td.salutation && td.salutation.pairing || []).forEach(p=>{ PAIRING[p.id]=p; });
   }catch(e){
     document.getElementById('stack').innerHTML =
       `<div class="state err">Couldn't load the model data.<br><span style="font-size:.72rem;opacity:.7">${DATA_PATH} — ${e.message}. A fetch page must be served over http, not opened from disk.</span></div>`;
     return;
   }
   /* honour a stored question's formality if present */
+  let wanted=null;
   try{
     const q=JSON.parse(sessionStorage.getItem('currentEmailQuestion')||'null');
-    if(q && (q.formality==='informal'||q.register==='informal')) REG='informal';
+    if(q){
+      const t = q.taskType && TASKS[q.taskType] ? TASKS[q.taskType] : null;
+      REG = t ? t.register : ((q.formality==='informal'||q.register==='informal') ? 'informal' : 'formal');
+      wanted = q.taskType || null;
+    }
   }catch(e){}
-  loadRegister(); seedAndRender();
+  loadRegister(wanted); seedAndRender();
 }
 
 /* swap the whole active dataset to the chosen register, rebuild type tabs */
-function loadRegister(){
+function loadRegister(wantedTask){
   const R = DATA.registers[REG];
   SH = R.shared;
-  typeKeys = Object.keys(R.types||{});
-  TAB_ORDER = typeKeys.slice();
-  TAB_LABEL = {}; typeKeys.forEach(k=>TAB_LABEL[k]=R.types[k].label||k);
-  if(!typeKeys.includes(TYPE)) TYPE = typeKeys[0];
+  /* retired types stay in the data file but drop out of the tab row */
+  typeKeys = Object.keys(R.types||{}).filter(k=>!isRetired(k));
+  const order = (QMAP.cardTypes && QMAP.cardTypes[REG]) || [];
+  TAB_ORDER = order.filter(k=>typeKeys.includes(k))
+                   .concat(typeKeys.filter(k=>!order.includes(k)));
+  TAB_LABEL = {}; typeKeys.forEach(k=>TAB_LABEL[k]=labelFor(k));
+  /* arriving from Question or Plan: land on the matching card type */
+  if(wantedTask){
+    const hit = TAB_ORDER.find(k=>taskKeyFor(k)===wantedTask);
+    if(hit) TYPE = hit;
+  }
+  if(!typeKeys.includes(TYPE)) TYPE = TAB_ORDER[0] || typeKeys[0];
   document.getElementById('regFormal').classList.toggle('active', REG==='formal');
   document.getElementById('regInformal').classList.toggle('active', REG==='informal');
   applyType(); renderTabs();
@@ -250,13 +317,24 @@ function loadRegister(){
 
 function setRegister(reg){
   if(reg===REG) return;
-  REG=reg; TYPE=null; sndSwitch(); loadRegister(); seedAndRender();
+  REG=reg; TYPE=null; MODELS=null; sndSwitch(); loadRegister(); seedAndRender();
 }
 window.setRegister=setRegister;
 
 function applyType(){
   T = DATA.registers[REG].types[TYPE];
-  document.getElementById('topicLabel').textContent=(T.label||TYPE).toUpperCase();
+  document.getElementById('topicLabel').textContent=labelFor(TYPE).toUpperCase();
+  renderPairLock();
+}
+
+/* the greeting decides the ending before a word is written */
+function renderPairLock(){
+  const el=document.getElementById('pairLock');
+  if(!el) return;
+  const t=taskFor(TYPE), p=t?PAIRING[t.pairing]:null;
+  if(!p || REG!=='formal'){ el.innerHTML=''; el.style.display='none'; return; }
+  el.style.display='';
+  el.innerHTML=`<span class="pl-sal">${p.salutations[0]}</span><span class="pl-arrow">&#8594;</span><span class="pl-sig">${p.signoff}</span>`;
 }
 
 function renderTabs(){
@@ -421,7 +499,103 @@ function featLineHTML(m){
   return `<span class="sig">${spt}</span> ${fmt(m.key)}<span class="ast">*</span>`;
 }
 
+
+/* ══════════ PHRASES — the gallery's models, in three cards ══════════
+   Seeded PRNG, so the six models shown here are the six the slide gallery
+   prints for this register and type. Rebuilt when the register changes, since
+   the pools live under registers > {formal,informal} > {shared,types}. */
+
+const SEED=20260710;
+let _s=SEED;
+function grand(){ _s|=0; _s=(_s+0x6D2B79F5)|0; let t=Math.imul(_s^_s>>>15,1|_s);
+  t=(t+Math.imul(t^t>>>7,61|t))^t; return ((t^t>>>14)>>>0)/4294967296; }
+const gpick=a=>a[Math.floor(grand()*a.length)];
+const gpickAvoid=(pool,av)=>{ if(!pool||!pool.length) return '...';
+  const A=(av||[]).map(keyOf);
+  const f=pool.filter(x=>!A.includes(keyOf(x)));
+  return gpick(f.length?f:pool); };
+const esc=v=>String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const gfmt=v=>esc(v).replace(/\.\.\./g,'<span class="gp">...</span>').replace(/…/g,'<span class="gp">…</span>');
+
+const PER_TYPE=6;
+const TAG={Application:'AP',Request:'RQ',Complaint:'CP',
+           Congratulate:'CG',Invite:'IV',Apologise:'AY',Advise:'AD',Arrange:'AR'};
+
+let MODELS=null, MODELS_REG=null;
+
+function buildModels(){
+  const out=[];
+  _s=SEED;
+  const reg=(DATA.registers&&DATA.registers[REG])||{};
+  const SHg=reg.shared||{};
+  const types=reg.types||{};
+  Object.keys(types).filter(k=>!isRetired(k)).forEach(k=>{
+    const Tg=types[k];
+    const tag=TAG[k]||k.slice(0,2).toUpperCase();
+    const SPF=Tg.signpostFeature||SHg.signpostFeature||{};
+    for(let c=1;c<=PER_TYPE;c++){
+      const open=`<div class="fl"><span class="fl-lead">${gfmt(gpick(SHg.greeting||['...']))}</span> <span class="vw">${esc(gpick(Tg.open.hinge))} ${esc(gpick(Tg.open.aim))}</span></div>`;
+      const used={s:[],v:[],k:[]}, body=[];
+      for(let i=0;i<3;i++){
+        const sp=gpickAvoid(SPF[FEAT_BUCKETS[i]]||SPF.open||[],used.s); used.s.push(sp);
+        const ky=gpickAvoid(Tg.argue[FEAT_KEYS[i]]||['...'],used.k); used.k.push(ky);
+        const raw=(sp&&sp.t)||'';
+        let line;
+        if(raw===''){
+          /* some email signposts are deliberately empty — the key leads alone,
+             so it has to carry the capital. No review signpost does this. */
+          const kk=gfmt(keyOf(ky));
+          line=kk.replace(/^(<[^>]+>)?\s*([a-z])/,(m,tg,ch)=>(tg||'')+ch.toUpperCase());
+        } else if((sp._join||'self')==='open'){
+          const vw=gpickAvoid(SHg.view||[],used.v); used.v.push(vw);
+          line=`<span class="sg">${esc(raw)}</span> <span class="vw">${esc(vw)}</span> ${gfmt(keyOf(ky))}`;
+        } else {
+          line=`<span class="sg">${esc(raw)}</span> ${gfmt(keyOf(ky))}`;
+        }
+        body.push(`<div class="fl">${line}</div>`);
+      }
+      const close=`<div class="fl">${gfmt(gpick(Tg.close.recommend))} ${gfmt(gpick(Tg.close.verdict))} <span class="vw">${esc(gpick(SHg.signoff||['...']))}</span></div>`;
+      out.push({type:k, tag:`${tag}-${c}`, secs:[open, body.join(''), close]});
+    }
+  });
+  return out;
+}
+
+const STAGE_WORD=['Opening','Body','Closing'];
+const STAGE_NOTE=['one greeting + purpose per model','three body moves per model','one close + sign-off per model'];
+
+function renderPhrases(){
+  if(!MODELS || MODELS_REG!==REG){ MODELS=buildModels(); MODELS_REG=REG; }
+  const mine=MODELS.filter(m=>m.type===TYPE);
+  const stack=document.getElementById('stack');
+  if(!mine.length){ stack.innerHTML='<div class="state">No models for this type.</div>'; return; }
+  stack.innerHTML = STAGE_WORD.map((word,i)=>{
+    const items=mine.map(m=>
+      `<div class="pitem"><span class="pitem-tag">${m.tag}</span>${m.secs[i]}</div>`).join('');
+    return `<div class="card"><div class="band"><span class="band-num">0${i+1}</span><span class="band-word">${word}</span></div>
+      <div class="content"><div class="pgroup"><div class="pgroup-title">${word}<span class="pgroup-count">${STAGE_NOTE[i]}</span></div>${items}</div></div></div>`+
+      (i<2?'<div class="flow">&#9662;</div>':'');
+  }).join('');
+  stack.classList.add('has-cards');
+  const h=document.getElementById('hint');
+  if(h) h.textContent=`${mine.length} models \u00b7 ${labelFor(TYPE)} \u00b7 ${REG} \u00b7 straight from the wall`;
+}
+
+/* ── view switch ── */
+let view='cards';
+function setView(v){
+  view=v;
+  const c=document.getElementById('mbCards'), p=document.getElementById('mbPhrases');
+  if(c)c.classList.toggle('active',v==='cards');
+  if(p)p.classList.toggle('active',v==='phrases');
+  const h=document.getElementById('hint');
+  if(h && v==='cards') h.textContent='Tap any line to say it another way.';
+  render();
+}
+window.setView=setView;
+
 function render(){
+  if(view==='phrases'){ renderPhrases(); return; }
   const featLines=[0,1,2].map(i=>
     `<div class="rline" id="rl-feat-${i}" data-slot="feat" data-idx="${i}" role="button" tabindex="0" aria-label="Another way of saying this point"><div class="rtext"><div class="line" id="ln-feat-${i}">${lineHTML('feat',i)}</div><div class="dev">...</div></div>${navBack()}</div>`
   ).join('');

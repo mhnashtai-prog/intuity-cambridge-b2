@@ -29,6 +29,18 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .intro-sub{font-family:'Instrument Sans',sans-serif;font-style:italic;font-size:0.82rem;color:rgba(0,0,0,0.45)}
 
 .grp{background:var(--white);border-radius:1rem;padding:0.9rem 1.1rem;margin-bottom:0.8rem;box-shadow:0 2px 8px rgba(0,0,0,0.05),0 1px 0 rgba(0,0,0,0.02)}
+.stage-head{font-family:'Barlow Condensed',sans-serif;font-size:0.68rem;font-weight:900;
+  letter-spacing:0.2em;text-transform:uppercase;color:var(--acc);opacity:0.85;
+  margin:1.4rem 0 0.5rem;padding-bottom:0.3rem;border-bottom:1.5px solid color-mix(in srgb, var(--acc) 25%, transparent)}
+.stage-head:first-child{margin-top:0}
+.wrow{display:flex;align-items:baseline;gap:0.5rem;margin-bottom:0.3rem}
+.wg{flex-shrink:0;width:4.4rem;font-family:'Barlow Condensed',sans-serif;font-size:0.52rem;font-weight:800;
+  letter-spacing:0.12em;text-transform:uppercase;color:rgba(0,0,0,0.28);padding-top:0.2rem}
+.wrow.g2 .wg{color:var(--acc);opacity:0.75}
+.wrow.g3 .wg{color:var(--acc-d)}
+.word.g1{background:rgba(0,0,0,0.045);color:rgba(0,0,0,0.5)}
+.word.g2{background:color-mix(in srgb, var(--acc) 11%, transparent);color:rgba(0,0,0,0.78)}
+.word.g3{background:color-mix(in srgb, var(--acc) 18%, transparent);color:var(--acc-d);font-weight:600}
 .grp-head{display:flex;align-items:baseline;gap:0.6rem;margin-bottom:0.6rem;border-bottom:1px solid rgba(0,0,0,0.06);padding-bottom:0.45rem}
 .grp-cat{font-family:'Barlow Condensed',sans-serif;font-size:0.95rem;font-weight:900;letter-spacing:0.03em;text-transform:uppercase;color:var(--acc)}
 .grp-head{display:flex;align-items:baseline;gap:0.5rem;flex-wrap:wrap}
@@ -92,17 +104,30 @@ const DATA_PATH='data/narrative-expressions.json';
    Now every group carries its own badge, and it lands on the STAGE that
    group belongs to, so the practice is about the words just read rather
    than the page in general. */
-const GROUP_STAGE={
-  'Setting the scene':'scene',
-  'Atmosphere adjectives':'scene',
-  'Sequencing (time conjunctions)':'develop',
-  'Building tension':'tension',
-  'Vivid verbs':'tension',
-  'Intensifying adverbs':'tension',
-  'Reactions & Feelings':'develop',
-  'Resolving & reflecting':'resolution'
-};
-function stageFor(cat){ return GROUP_STAGE[cat]||'scene'; }
+const STAGE_ORDER=['scene','develop','tension','resolution'];
+const GRADE={1:'Plain',2:'B2 core',3:'Ambitious'};
+const wordOf  = x => (x && typeof x==='object') ? x.w : x;
+const gradeOf = x => (x && typeof x==='object' && x.grade) ? x.grade : 2;
+
+/* groups arrive tagged with their stage, so the page reads in story order —
+   scene, develop, tension, resolution — rather than as one flat list */
+function renderGroups(groups){
+  return STAGE_ORDER.map(sk=>{
+    const mine=groups.filter(g=>(g.stage||'scene')===sk);
+    if(!mine.length) return '';
+    const label=(mine[0].stageLabel)||sk;
+    return `<div class="stage-head">${label}</div>`+mine.map(g=>`
+      <div class="grp">
+        <div class="grp-head"><span class="grp-cat">${g.category||''}</span><span class="grp-hint">${g.hint||''}</span><a class="grp-practise" href="narrative-cards.html?stage=${sk}">Practise <span aria-hidden="true">&#8250;</span></a></div>
+        ${[1,2,3].map(gr=>{
+          const ws=(g.words||[]).filter(w=>gradeOf(w)===gr);
+          if(!ws.length) return '';
+          return `<div class="wrow g${gr}"><span class="wg">${GRADE[gr]}</span><div class="words">${
+            ws.map(w=>`<span class="word g${gr}">${wordOf(w)}</span>`).join('')}</div></div>`;
+        }).join('')}
+      </div>`).join('');
+  }).join('');
+}
 async function init(){
   let groups=[];
   try{ groups=(await (await fetch(DATA_PATH)).json()).groups||[]; }
@@ -111,13 +136,9 @@ async function init(){
     <div class="sheet">
       <div class="intro">
         <div class="intro-title">Narrative Language</div>
-        <div class="intro-sub">the words that make a story move — pick, don't copy</div>
+        <div class="intro-sub">the words that make a story move — plain, B2, ambitious</div>
       </div>
-      ${groups.map(g=>`
-        <div class="grp">
-          <div class="grp-head"><span class="grp-cat">${g.category||''}</span><span class="grp-hint">${g.hint||''}</span><a class="grp-practise" href="narrative-cards.html?stage=${stageFor(g.category)}">Practise <span aria-hidden="true">&#8250;</span></a></div>
-          <div class="words">${(g.words||[]).map(w=>`<span class="word">${w}</span>`).join('')}</div>
-        </div>`).join('')}
+      ${renderGroups(groups)}
       <a class="practice-link" href="narrative-cards.html">Build a sentence with these →</a>
     </div>`;
 }

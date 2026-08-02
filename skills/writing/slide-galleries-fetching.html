@@ -183,19 +183,11 @@ body:not(.learner) .mode-hint{display:none}
 .slide-mag.sl-m  .fl{font-size:clamp(1.35rem,2.6vw,2rem) !important}
 .slide-mag.sl-s  .fl{font-size:clamp(1.1rem,2vw,1.5rem) !important;
   text-transform:none;letter-spacing:0;line-height:1.45}
-/* ── X-RAY ──────────────────────────────────────────────────────────
-   Two things on a slide are not sentence: the SIGNPOST, which is the
-   expression a learner is here to steal, and the GAP, which is where
-   their own content goes. The signpost gets the gold, because it is the
-   lesson. The gap stays dim — it marks an absence, and lighting up an
-   absence competes with the thing worth reading.
-   The stance span (.vw) inherits: colour-coding three parts of one
-   sentence is what made this unreadable on the wall's palette. */
-.slide-mag .sg{background:linear-gradient(135deg,#C9A961 0%,#FFD700 100%);
+/* the gap is the learner's job — the one thing allowed to glow */
+.slide-mag .gp{background:linear-gradient(135deg,#C9A961 0%,#FFD700 100%);
   -webkit-background-clip:text;background-clip:text;
-  -webkit-text-fill-color:transparent;font-weight:900 !important}
-.slide-mag .gp{color:rgba(229,229,231,.34) !important;font-weight:700}
-.slide-mag .vw{color:inherit !important;font-weight:inherit !important}
+  -webkit-text-fill-color:transparent;font-weight:900}
+.slide-mag .sg, .slide-mag .vw{color:inherit !important;font-weight:inherit !important}
 .slide-foot{flex-shrink:0;display:flex;justify-content:space-between;align-items:baseline;
   font-family:"Space Grotesk",sans-serif;font-size:.58rem;font-weight:700;
   letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.22);
@@ -930,6 +922,41 @@ function renderWall(){
    writing hub had per paragraph, applied to the whole wall. */
 let slideIndex=0, _slideKey='', _slides=[];
 
+/* The generators mark signposts only in body sections. For openings and
+   conclusions the expression is still there — "In conclusion, it seems
+   that", "It is often argued that" — it simply carries no span. These are
+   the fixed frames of the genre, and they are exactly what a learner is
+   here to take, so the renderer marks them where the data does not.
+   Matching is on the phrase, not on position: a bare word count would
+   catch content as often as frame. */
+const XRAY_OPENERS=[
+  'In conclusion','To sum up','In summary','On the whole','All in all','Overall',
+  'Taking everything into account','On balance','To conclude','All things considered',
+  'It is often argued that','It is widely recognised that','It is commonly known that',
+  'It is generally believed that','These days','Nowadays','In recent years',
+  'Few people would deny that','It is widely held that','There is no doubt that',
+  'The main objective of this report is','This report aims to','The purpose of this report is',
+  'This report is based on','The information presented','The findings in this report',
+  'Regarded/Considered as one of the best','Known/famous for its','By far one of the best',
+  'If you are looking for a','When it comes to choosing a','Choosing a',
+  'Who has never','Why do so many people','There seems to be something irresistible about',
+  'Faced with the task of','Few can resist the appeal of',"It's hard to deny that",
+  'Dear Sir or Madam','Dear Sir','Dear Madam','To whom it may concern',
+  'I am writing to','I am writing with reference to','I would like to apply for',
+  'Yours faithfully','Yours sincerely','Kind regards','Best regards'
+].sort((a,b)=>b.length-a.length);
+
+function markSignpost(html){
+  /* only the first hit per line, and never inside an existing span */
+  if(/class="(sg|fl-lead)"/.test(html)) return html;
+  for(const p of XRAY_OPENERS){
+    const e=p.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const re=new RegExp(`(^|>)(\\s*)(${e})`,'i');
+    if(re.test(html)) return html.replace(re,(m,pre,sp,hit)=>`${pre}${sp}<span class="xr">${hit}</span>`);
+  }
+  return html;
+}
+
 function buildSlides(){
   const show=presentSource();
   /* Skeleton means "every section of every model" — 487 slides, which is a
@@ -940,14 +967,16 @@ function buildSlides(){
   if(key===_slideKey) return _slides;
   const seen=new Set(); const out=[];
   show.forEach(c=>{
-    sectionsFor(c,m).forEach(sec=>{
+    sectionsFor(c,mode).forEach(sec=>{
       if(!sec) return;
       const plain=String(sec.lines||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();
       if(!plain) return;
       const k=plain.toLowerCase();
       if(seen.has(k)) return;
       seen.add(k);
-      out.push({genre:c.genre,label:c.label,word:sec.word,lines:sec.lines,plain});
+      out.push({genre:c.genre,label:c.label,word:sec.word,
+                lines:String(sec.lines).replace(/<div class="fl">([\s\S]*?)<\/div>/g,(m,inner)=>`<div class="fl">${markSignpost(inner)}</div>`),
+                plain});
     });
   });
   _slideKey=key; _slides=out; slideIndex=0;

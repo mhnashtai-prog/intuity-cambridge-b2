@@ -147,19 +147,47 @@ body.learner .modebar{border-bottom:none}
 body.hc .mode-hint{color:rgba(255,255,255,0.3)}
 body:not(.learner) .mode-hint{display:none}
 
-/* ── SLIDES fits the viewport ────────────────────────────────────────
-   The page is a scrolling document: topbar, deck, mode row, pills and
-   legend stack up before any English, and the poster fell below the
-   fold. A slide that has to be scrolled to is not a slide. The chrome
-   is measured at runtime rather than hard-coded, because it changes
-   with the audience mode and with wrapping on narrow screens. */
-body.slides-on .legend{display:none}
-body.slides-on .slide-mag{
-  height:var(--slide-h,58vh);
-  min-height:0;
-  max-height:none;
+/* ── ONE PRESENTATION FOR ALL THREE VIEWS ────────────────────────────
+   The wall modal floats: a centred overlay card over a dimmed page.
+   Focus rendered inline with no box at all, and Slides sat in the page
+   flow and fell below the fold — three views, three presentations.
+   Focus and Slides now borrow the wall's shell: same overlay, same
+   position, same box, same width token, so switching between them moves
+   nothing but the contents. Slides keeps its black fill, because a
+   projected poster wants the page removed rather than lit. */
+body.stage-on .focus{
+  position:fixed; inset:0; z-index:90; max-width:none; margin:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:0.7rem; padding:3.5vh 1rem;
+  background:rgba(20,18,22,0.55); backdrop-filter:blur(3px); overflow-y:auto;
 }
-body.slides-on .focus{margin-bottom:1rem}
+body.stage-on .focus-nav{margin:0;flex-shrink:0}
+body.stage-on .focus-stage{width:100%;max-width:var(--card-w);display:flex;justify-content:center}
+body.stage-on .focus-tools{flex-shrink:0;margin:0}
+
+/* Focus had no card of its own — give it the wall's */
+body.stage-on .focus-stage .gcard{
+  width:100%; background:var(--white); border-radius:1.1rem;
+  box-shadow:0 30px 60px -20px rgba(0,0,0,0.4); cursor:default;
+}
+body.hc.stage-on .focus-stage .gcard{background:#141216}
+
+/* the poster keeps its own skin inside the same frame */
+body.stage-on .slide-mag{
+  box-shadow:0 30px 60px -20px rgba(0,0,0,0.55), 0 0 90px rgba(201,169,97,.10);
+}
+body.stage-on .legend{display:none}
+
+/* an overlay needs a way out */
+.stage-close{
+  position:fixed; top:64px; right:16px; z-index:95;
+  width:2.4rem; height:2.4rem; border-radius:50%;
+  border:1px solid rgba(255,255,255,0.25); background:rgba(20,18,22,0.55);
+  color:#fff; font-size:1.1rem; cursor:pointer; backdrop-filter:blur(4px);
+  display:none; align-items:center; justify-content:center;
+}
+body.stage-on .stage-close{display:flex}
+.stage-close:hover{background:rgba(20,18,22,0.85)}
 
 /* ── SLIDES: one EXPRESSION at a time, as a poster ──────────────────
    Taken from the writing hub, whose version worked for four reasons that
@@ -468,6 +496,7 @@ body.presenting .present-bar{display:flex}
 
 <div class="wall" id="wall"><div class="state">Loading the gallery…</div></div>
 
+<button class="stage-close" id="stageClose" title="Back to the wall">&times;</button>
 <div class="focus" id="focus">
   <div class="focus-nav">
     <button class="nav-btn" id="focusPrev">‹</button>
@@ -905,7 +934,8 @@ function render(){
   document.getElementById('densityGroup').style.opacity = stageView ? 0.35 : 1;
   document.getElementById('densityGroup').style.pointerEvents = stageView ? 'none' : 'auto';
 
-  document.body.classList.toggle('slides-on', view==='slides');
+  /* focus and slides float over the wall, exactly as the modal does */
+  document.body.classList.toggle('stage-on', stageView && !presenting);
   if(view==='wall') renderWall();
   else if(view==='slides') renderSlides();
   else renderFocus();
@@ -998,16 +1028,6 @@ function buildSlides(){
   return out;
 }
 
-/* measure the chrome above the stage and give the card the rest */
-function fitSlide(){
-  const stage=document.getElementById('focusStage');
-  if(!stage || view!=='slides') return;
-  const top=stage.getBoundingClientRect().top;
-  const h=Math.max(260, window.innerHeight - top - 28);
-  document.documentElement.style.setProperty('--slide-h', h+'px');
-}
-window.addEventListener('resize', fitSlide);
-
 function renderSlides(){
   const S=buildSlides();
   const stage=document.getElementById('focusStage');
@@ -1035,7 +1055,6 @@ function renderSlides(){
   const pp=document.getElementById('presentPrev'), pn=document.getElementById('presentNext');
   if(pp) pp.disabled = slideIndex===0;
   if(pn) pn.disabled = slideIndex===S.length-1;
-  requestAnimationFrame(fitSlide);
 }
 
 function stepSlides(d){
@@ -1107,6 +1126,9 @@ document.addEventListener('keydown',e=>{
     if(e.key==='ArrowLeft') stepFocus(-1);
     return;
   }
+  if((view==='focus'||view==='slides') && e.key==='Escape' && !presenting){
+    document.getElementById('stageClose').click(); return;
+  }
   if(view==='focus'||view==='slides'){
     if(e.key==='ArrowRight') stepFocus(1);
     if(e.key==='ArrowLeft') stepFocus(-1);
@@ -1167,18 +1189,22 @@ function renderModal(){
 }
 
 /* ── control deck wiring ── */
-/* swipe: on a phone the arrows are 2.4rem targets at the edge of a
-   full-bleed card, which is not a gesture anyone reaches for */
+document.getElementById('stageClose').onclick=()=>{
+  const b=document.getElementById('viewSeg').querySelector('[data-v="wall"]');
+  if(b) b.click();
+};
+
+/* swipe: the arrows are small targets at the edge of a full-bleed card */
 (function(){
-  const stage=document.getElementById('focusStage');
-  if(!stage) return;
-  let x0=0,y0=0,track=false;
-  stage.addEventListener('touchstart',e=>{
-    if(view!=='slides'&&view!=='focus') return;
-    x0=e.touches[0].clientX; y0=e.touches[0].clientY; track=true;
+  const st=document.getElementById('focusStage');
+  if(!st) return;
+  let x0=0,y0=0,tr=false;
+  st.addEventListener('touchstart',e=>{
+    if(view==='wall') return;
+    x0=e.touches[0].clientX; y0=e.touches[0].clientY; tr=true;
   },{passive:true});
-  stage.addEventListener('touchend',e=>{
-    if(!track) return; track=false;
+  st.addEventListener('touchend',e=>{
+    if(!tr) return; tr=false;
     const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0;
     if(Math.abs(dx)>45 && Math.abs(dy)<40) stepFocus(dx<0?1:-1);
   },{passive:true});

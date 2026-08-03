@@ -147,6 +147,20 @@ body.learner .modebar{border-bottom:none}
 body.hc .mode-hint{color:rgba(255,255,255,0.3)}
 body:not(.learner) .mode-hint{display:none}
 
+/* ── SLIDES fits the viewport ────────────────────────────────────────
+   The page is a scrolling document: topbar, deck, mode row, pills and
+   legend stack up before any English, and the poster fell below the
+   fold. A slide that has to be scrolled to is not a slide. The chrome
+   is measured at runtime rather than hard-coded, because it changes
+   with the audience mode and with wrapping on narrow screens. */
+body.slides-on .legend{display:none}
+body.slides-on .slide-mag{
+  height:var(--slide-h,58vh);
+  min-height:0;
+  max-height:none;
+}
+body.slides-on .focus{margin-bottom:1rem}
+
 /* ── SLIDES: one EXPRESSION at a time, as a poster ──────────────────
    Taken from the writing hub, whose version worked for four reasons that
    are easy to lose:
@@ -891,6 +905,7 @@ function render(){
   document.getElementById('densityGroup').style.opacity = stageView ? 0.35 : 1;
   document.getElementById('densityGroup').style.pointerEvents = stageView ? 'none' : 'auto';
 
+  document.body.classList.toggle('slides-on', view==='slides');
   if(view==='wall') renderWall();
   else if(view==='slides') renderSlides();
   else renderFocus();
@@ -983,6 +998,16 @@ function buildSlides(){
   return out;
 }
 
+/* measure the chrome above the stage and give the card the rest */
+function fitSlide(){
+  const stage=document.getElementById('focusStage');
+  if(!stage || view!=='slides') return;
+  const top=stage.getBoundingClientRect().top;
+  const h=Math.max(260, window.innerHeight - top - 28);
+  document.documentElement.style.setProperty('--slide-h', h+'px');
+}
+window.addEventListener('resize', fitSlide);
+
 function renderSlides(){
   const S=buildSlides();
   const stage=document.getElementById('focusStage');
@@ -1010,6 +1035,7 @@ function renderSlides(){
   const pp=document.getElementById('presentPrev'), pn=document.getElementById('presentNext');
   if(pp) pp.disabled = slideIndex===0;
   if(pn) pn.disabled = slideIndex===S.length-1;
+  requestAnimationFrame(fitSlide);
 }
 
 function stepSlides(d){
@@ -1141,6 +1167,23 @@ function renderModal(){
 }
 
 /* ── control deck wiring ── */
+/* swipe: on a phone the arrows are 2.4rem targets at the edge of a
+   full-bleed card, which is not a gesture anyone reaches for */
+(function(){
+  const stage=document.getElementById('focusStage');
+  if(!stage) return;
+  let x0=0,y0=0,track=false;
+  stage.addEventListener('touchstart',e=>{
+    if(view!=='slides'&&view!=='focus') return;
+    x0=e.touches[0].clientX; y0=e.touches[0].clientY; track=true;
+  },{passive:true});
+  stage.addEventListener('touchend',e=>{
+    if(!track) return; track=false;
+    const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0;
+    if(Math.abs(dx)>45 && Math.abs(dy)<40) stepFocus(dx<0?1:-1);
+  },{passive:true});
+})();
+
 document.getElementById('modeFlip').onclick=flipAudience;
 document.getElementById('viewSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{
   view=b.dataset.v;

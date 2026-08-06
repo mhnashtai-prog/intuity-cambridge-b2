@@ -9,7 +9,11 @@
   *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
   :root{
     --bg:#0d0d0d; --gold:#C9A961; --ink:#2b2b30; --stance:#8a8a92;
-    --evaluating:#3fbfb2;   --evaluating-d:#2a8b81;
+    --discursive:#3fbfb2; --reasoning:#f0a23c; --stance:#e85a4f;
+  --comparison:#5B9BD5; --projecting:#9a6baa; --social:#C9A961;
+  --interpersonal:#c94f6d; --advisory:#5a9657; --informational:#4a7fb5;
+  --planning:#b06a2c;
+  --evaluating:#3fbfb2;   --evaluating-d:#2a8b81;
     --reasoning:#f0a23c;    --reasoning-d:#c07a1f;
     --positioning:#e85a4f;  --positioning-d:#b83a31;
     --projecting:#9a6baa;   --projecting-d:#6d4a7c;
@@ -397,11 +401,37 @@ function start(){
 }
 
 /* ── boot ── */
+/* ══ SCHEMA BRIDGE ═══════════════════════════════════════════════════
+   This page was written against functional-english.json, which nests
+   functions inside five families. The site corpus is now functions-v2:
+   42 functions in ten categories, keyed by id rather than listed. The
+   two describe the same thing, so the shape is translated here rather
+   than either file being bent to fit the other.
+   Discursive phrases carry a `connector` — the second half of an essay
+   sentence — and interactional ones do not; both survive the trip. */
+function adaptV2(d){
+  const families={}, functions=[];
+  for(const [key,cat] of Object.entries(d.categories||{})){
+    families[key]={label:cat.label, purpose:cat.note||'', functionIds:[]};
+  }
+  for(const [id,fn] of Object.entries(d.functions||{})){
+    const fam = families[fn.category] ? fn.category : Object.keys(families)[0];
+    families[fam].functionIds.push(id);
+    functions.push({
+      id, label:fn.label, family:fam,
+      when: fn.when || 'to make this move',
+      phrases:(fn.phrases||[]).map(p=>({stem:p.t, connector:p.connector||''}))
+    });
+  }
+  return {families, functions};
+}
+
 function corpusUrl(){ return new URLSearchParams(location.search).get('json') || 'data/functional-english.json'; }
 fetch(corpusUrl())
   .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
   .then(data=>{
-    CORPUS = data.families ? data : {families:{},functions:data.functions||[]};
+    /* families = the old schema; categories = functions-v2 */
+    CORPUS = data.families ? data : (data.categories ? adaptV2(data) : {families:{},functions:data.functions||[]});
     buildScopePickers(); bindSetup(); validate();
   })
   .catch(err=>{

@@ -147,6 +147,12 @@
   .enode.practising .enode-tail{opacity:.55;}
 
   /* phrase card — white poster with family-hue RIBBON BANNER (unity element) */
+  /* the cue that matches the question on screen leads the orbit */
+  .enode.lead{outline:2px solid var(--fc,#C9A961);outline-offset:2px;
+    box-shadow:0 14px 34px -10px rgba(0,0,0,.5);}
+  .enode.lead::after{content:'answers this question';position:absolute;left:.75rem;bottom:-1.05rem;
+    font-family:'Space Grotesk',sans-serif;font-size:.52rem;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--fc,#C9A961);opacity:.85;white-space:nowrap;}
   .enode{position:absolute;z-index:2;width:270px;background:#fff;border-radius:.9rem;
     padding:2.4rem .85rem .7rem;cursor:grab;transform:translate(-50%,-50%);
     box-shadow:0 1px 0 rgba(255,255,255,.9) inset,0 10px 26px -8px rgba(0,0,0,.55),0 4px 12px rgba(0,0,0,.32);
@@ -220,12 +226,6 @@
   .cc-reveal-alt{font-size:.9rem;color:var(--stance);line-height:1.5;margin-top:.5rem;font-style:italic;font-family:'Lora',serif;}
   .cc-assess{display:none;gap:.6rem;margin-top:1.1rem;}
   .cc-assess.show{display:flex;}
-  /* the check speaks to the one thing that has a right answer */
-  .cc-check{margin:.5rem 0 0;font-family:'Space Grotesk',sans-serif;font-size:.72rem;
-    line-height:1.5;min-height:1rem;}
-  .cc-check.ok{color:#1a8f5e;}
-  .cc-check.no{color:#b4763a;}
-  .cc-assess-btn.cc-near{background:rgba(201,169,97,.12);border-color:rgba(201,169,97,.45);color:#8a6d2f;}
   .cc-assess-btn{flex:1;font-family:'Space Grotesk',sans-serif;font-size:.6rem;font-weight:700;letter-spacing:.06em;
     text-transform:uppercase;padding:.7rem;border-radius:.7rem;cursor:pointer;border:1.5px solid;transition:all .15s;}
   .cc-got{background:rgba(63,191,178,.14);border-color:rgba(63,191,178,.5);color:#2a8b81;}
@@ -329,17 +329,14 @@
             <div class="cc-cue" id="ccCue"></div>
             <span class="cc-trigger" id="ccTrigger"></span>
             <textarea class="cc-answer" id="ccAnswer" placeholder="Write your sentence… (optional — or say it aloud)"></textarea>
-            <!-- the ONLY thing with a right answer is the trigger; the rest is style -->
-            <div class="cc-check" id="ccCheck"></div>
             <div class="cc-reveal" id="ccReveal">
-              <div class="cc-reveal-label">One way to say it</div>
+              <div class="cc-reveal-label">Model answer</div>
               <div class="cc-reveal-model" id="ccModel"></div>
               <div class="cc-reveal-alt" id="ccAlt"></div>
             </div>
             <div class="cc-assess" id="ccAssess">
-              <button class="cc-assess-btn cc-got"  onclick="ccMark('got')">✓ Got it</button>
-              <button class="cc-assess-btn cc-near" onclick="ccMark('near')">~ Nearly</button>
-              <button class="cc-assess-btn cc-miss" onclick="ccMark('again')">↻ Again</button>
+              <button class="cc-assess-btn cc-got" onclick="ccMark(true)">✓ I built it</button>
+              <button class="cc-assess-btn cc-miss" onclick="ccMark(false)">✗ Needs work</button>
             </div>
             <div class="cc-actions" id="ccActions">
               <button class="cc-act cc-primary" id="ccRevealBtn" onclick="ccReveal()">Reveal model</button>
@@ -385,6 +382,10 @@ function adaptV2(data){
     const cat=out[fn.category] ? fn.category : Object.keys(out)[0];
     out[cat].functions[fid]={
       label: fn.label,
+      /* question, cue, trigger and model are ONE object now, so the card on
+         screen always answers the question on screen. They used to live in
+         two files matched by array position, which silently permuted. */
+      tasks: fn.tasks || [],
       when: fn.when || 'to use this move',
       yield: (fn.phrases||[]).length,
       convention: fn.convention || null,
@@ -523,7 +524,7 @@ function initCarousel(){
 }
 
 /* LEVEL 2 — constellation: question at centre, phrases orbiting with ribbon banners */
-let qList=[], qIndex=0, curFam=null, curFn=null;
+let qList=[], taskList=[], qIndex=0, curFam=null, curFn=null;
 
 function openFn(fam,k){
   path={family:fam, fn:k};
@@ -534,7 +535,10 @@ function openFn(fam,k){
   con.style.setProperty('--fc-d',hue(fam)[1]);
 
   // question set for this function (fall back to a generic prompt if none)
-  qList = (QUESTIONS[k] && QUESTIONS[k].length) ? QUESTIONS[k].slice() : [];
+  const T=(CORPUS[fam]&&CORPUS[fam].functions[k]&&CORPUS[fam].functions[k].tasks)||[];
+  taskList = T.filter(t=>t.question);
+  qList = taskList.length ? taskList.map(t=>t.question)
+                          : ((QUESTIONS[k] && QUESTIONS[k].length) ? QUESTIONS[k].slice() : []);
   qIndex = 0;
   setQuestion(fam,k);
 
@@ -578,14 +582,23 @@ function layoutConstellation(fam,k){
 
   // In Further Practice mode the orbiting cards are the drill CUE items;
   // otherwise they are the phrase frames.
-  const drillItems = (DRILLS[k] || []);
+  /* the drill for the question on screen; the rest of the function's cues
+     stay available, but the matching one leads. A task with no cue is a
+     question nobody has written a drill for — say so, do not fake it. */
+  const tasks = fn.tasks || [];
+  const withQ = tasks.filter(t=>t.question);
+  const active = withQ.length ? withQ[qIndex % withQ.length] : null;
+  const others = tasks.filter(t=>t.cue && t!==active);
+  const drillItems = active && active.cue
+    ? [{cue:active.cue, trigger:active.trigger, models:active.models, _lead:true}].concat(others)
+    : (tasks.filter(t=>t.cue).length ? tasks.filter(t=>t.cue) : (DRILLS[k] || []));
   const items = furtherMode ? drillItems : fn.capsule;
   const n=items.length;
   if(furtherMode && !n){
     // no drills authored for this function — fall back with a note
     const note=document.createElement('div');
     note.className='const-hint'; note.style.opacity='.5';
-    note.textContent='No production drills authored for this function yet.';
+    note.textContent='No drill written for this question yet.';
     con.appendChild(note);
     return;
   }
@@ -615,7 +628,7 @@ function layoutConstellation(fam,k){
 
   items.forEach((x,i)=>{
     const node=document.createElement('div');
-    node.className='enode'+(practiceMode?' practising':'')+(furtherMode?' cue-card':'');
+    node.className='enode'+(practiceMode?' practising':'')+(furtherMode?' cue-card':'')+(x&&x._lead?' lead':'');
     node.style.setProperty('--fc',c); node.style.setProperty('--fc-d',d);
 
     if(furtherMode){
@@ -761,9 +774,6 @@ function toggleFurther(){
 
 function openCompletion(k,i,item,c,d){
   ccCurrent={k,i,item};
-  const ans=document.getElementById('ccAnswer');
-  if(ans && !ans._wired){ ans.addEventListener('input',ccCheckTrigger); ans._wired=true; }
-  const box=document.getElementById('ccCheck'); if(box){ box.textContent=''; box.className='cc-check'; }
   const ov=document.getElementById('ccOverlay');
   const card=document.getElementById('ccCard');
   card.style.setProperty('--fc',c); card.style.setProperty('--fc-d',d);
@@ -789,67 +799,10 @@ function ccReveal(){
   document.getElementById('ccActions').style.display='none';
   document.getElementById('ccAssess').classList.add('show');
 }
-/* ══ MEMORY ═══════════════════════════════════════════════════════════
-   Nothing was recorded: both buttons marked a cue "seen" and the judgement
-   was discarded, so retention was a word rather than a mechanism.
-   Three states, not two, because binary cannot schedule anything —
-   "again" returns first, "nearly" later, "got it" drops out until the set
-   is exhausted. Stored per function+cue, so it survives the session. */
-const MEM_KEY='intuity.phrasebank.recall';
-let MEM={};
-try{ MEM=JSON.parse(localStorage.getItem(MEM_KEY)||'{}'); }catch(e){ MEM={}; }
-function memSave(){ try{ localStorage.setItem(MEM_KEY,JSON.stringify(MEM)); }catch(e){} }
-function memGet(k,i){ return MEM[cueKey(k,i)]; }
-function memSet(k,i,state){
-  MEM[cueKey(k,i)]={state, at:Date.now()};
-  memSave();
-}
-/* the weakest first: again, then nearly, then unseen, then got */
-const MEM_RANK={again:0, near:1, undefined:2, got:3};
-function cueOrder(k,list){
-  return list.map((c,i)=>({c,i}))
-    .sort((a,b)=>MEM_RANK[(memGet(k,a.i)||{}).state] - MEM_RANK[(memGet(k,b.i)||{}).state]);
-}
-
-/* ══ WHAT IS ACTUALLY CHECKABLE ═══════════════════════════════════════
-   "significantly" against "hugely" is a style choice, not an error, and
-   marking it wrong teaches a student that there is one sentence and they
-   failed to guess it. The TRIGGER is different: it is the task. Every one
-   of the 126 cues has its trigger inside its model, so this check is
-   sound — and it is the only automatic judgement the page makes. */
-function triggerHit(text,trigger){
-  /* triggers are often two or three words — "core strength", "address this
-     issue" — so each content word is checked separately and stemmed, because
-     a student writing "addressing this issue" has done the task. Function
-     words are ignored; requiring "this" would fail a perfectly good answer. */
-  const STOP=new Set(['a','an','the','this','that','of','to','in','on','for','is','be','it']);
-  const parts=String(trigger||'').toLowerCase().match(/[a-z]+/g)||[];
-  const need=parts.filter(w=>!STOP.has(w));
-  if(!need.length) return null;
-  const hay=String(text||'').toLowerCase();
-  return need.every(w=>{
-    const stem = w.length>5 ? w.slice(0,w.length-2) : w;
-    return new RegExp('\\b'+stem).test(hay);
-  });
-}
-function ccCheckTrigger(){
-  const box=document.getElementById('ccCheck');
-  if(!box||!ccCurrent) return;
-  const txt=document.getElementById('ccAnswer').value;
-  if(!txt.trim()){ box.textContent=''; box.className='cc-check'; return; }
-  const ok=triggerHit(txt, ccCurrent.item.trigger);
-  box.className='cc-check '+(ok?'ok':'no');
-  box.textContent = ok
-    ? '\u2713 You used ' + ccCurrent.item.trigger + ' — that was the task. The rest is your own wording.'
-    : 'Try to work ' + ccCurrent.item.trigger + ' into the sentence.';
-}
-
-function ccMark(state){
+function ccMark(got){
   if(!ccCurrent) return;
-  // the judgement is the student's own — but it is now kept
-  memSet(ccCurrent.k, ccCurrent.i, state);
-  if(state==='got') furtherDone.add(cueKey(ccCurrent.k, ccCurrent.i));
-  else furtherDone.delete(cueKey(ccCurrent.k, ccCurrent.i));
+  // mark this cue as done (tick) regardless — the self-judgement is the student's own
+  furtherDone.add(cueKey(ccCurrent.k, ccCurrent.i));
   ccCloseCard();
 }
 function ccCloseCard(){
@@ -904,7 +857,7 @@ window.addEventListener('resize',()=>{
 /* ── boot: fetch the unified corpus, adapt, then render ── */
 function corpusUrl(){
   const p=new URLSearchParams(location.search).get('json');
-  return p || '../data/functions-corpus.json';
+  return p || '../data/phrase-bank-corpus.json';
 }
 function questionsUrl(){
   const p=new URLSearchParams(location.search).get('questions');

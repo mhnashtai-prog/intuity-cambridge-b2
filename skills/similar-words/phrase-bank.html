@@ -114,9 +114,9 @@
     width:min(46%,520px);text-align:center;pointer-events:none;}
   .q-eyebrow{font-family:'Space Grotesk',sans-serif;font-size:.56rem;font-weight:700;letter-spacing:.16em;
     text-transform:uppercase;color:var(--fc);opacity:.9;margin-bottom:.7rem;}
-  .q-text.is-instruction{font-family:'Space Grotesk',sans-serif;font-style:normal;
-    font-weight:400;font-size:.82rem;letter-spacing:.04em;line-height:1.6;
-    color:rgba(255,255,255,.62);text-shadow:none;}
+  .q-text{font-family:'Lora',serif;font-style:italic;font-weight:500;
+    font-size:clamp(1.15rem,2.1vw,1.7rem);line-height:1.4;color:#fff;
+    text-shadow:0 2px 20px rgba(0,0,0,.8);}
   .q-next{pointer-events:auto;margin-top:1.1rem;font-family:'Space Grotesk',sans-serif;font-size:.58rem;
     font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--fc);
     background:color-mix(in srgb,var(--fc) 12%,transparent);
@@ -220,6 +220,12 @@
   .cc-reveal-alt{font-size:.9rem;color:var(--stance);line-height:1.5;margin-top:.5rem;font-style:italic;font-family:'Lora',serif;}
   .cc-assess{display:none;gap:.6rem;margin-top:1.1rem;}
   .cc-assess.show{display:flex;}
+  /* the check speaks to the one thing that has a right answer */
+  .cc-check{margin:.5rem 0 0;font-family:'Space Grotesk',sans-serif;font-size:.72rem;
+    line-height:1.5;min-height:1rem;}
+  .cc-check.ok{color:#1a8f5e;}
+  .cc-check.no{color:#b4763a;}
+  .cc-assess-btn.cc-near{background:rgba(201,169,97,.12);border-color:rgba(201,169,97,.45);color:#8a6d2f;}
   .cc-assess-btn{flex:1;font-family:'Space Grotesk',sans-serif;font-size:.6rem;font-weight:700;letter-spacing:.06em;
     text-transform:uppercase;padding:.7rem;border-radius:.7rem;cursor:pointer;border:1.5px solid;transition:all .15s;}
   .cc-got{background:rgba(63,191,178,.14);border-color:rgba(63,191,178,.5);color:#2a8b81;}
@@ -323,14 +329,17 @@
             <div class="cc-cue" id="ccCue"></div>
             <span class="cc-trigger" id="ccTrigger"></span>
             <textarea class="cc-answer" id="ccAnswer" placeholder="Write your sentence… (optional — or say it aloud)"></textarea>
+            <!-- the ONLY thing with a right answer is the trigger; the rest is style -->
+            <div class="cc-check" id="ccCheck"></div>
             <div class="cc-reveal" id="ccReveal">
-              <div class="cc-reveal-label">Model answer</div>
+              <div class="cc-reveal-label">One way to say it</div>
               <div class="cc-reveal-model" id="ccModel"></div>
               <div class="cc-reveal-alt" id="ccAlt"></div>
             </div>
             <div class="cc-assess" id="ccAssess">
-              <button class="cc-assess-btn cc-got" onclick="ccMark(true)">✓ I built it</button>
-              <button class="cc-assess-btn cc-miss" onclick="ccMark(false)">✗ Needs work</button>
+              <button class="cc-assess-btn cc-got"  onclick="ccMark('got')">✓ Got it</button>
+              <button class="cc-assess-btn cc-near" onclick="ccMark('near')">~ Nearly</button>
+              <button class="cc-assess-btn cc-miss" onclick="ccMark('again')">↻ Again</button>
             </div>
             <div class="cc-actions" id="ccActions">
               <button class="cc-act cc-primary" id="ccRevealBtn" onclick="ccReveal()">Reveal model</button>
@@ -548,17 +557,9 @@ function setQuestion(fam,k){
   document.getElementById('qEyebrow').textContent=cap(k)+' · '+F.name;
   document.getElementById('qEyebrow').style.setProperty('--fc',c);
   const qt=document.getElementById('qText');
-  /* In Further practice the cards are DRILLS, keyed on the function, not on
-     the question — so cycling the question left a student reading "drawbacks
-     of working from home" above cues about living in a city. The drill carries
-     its own context (the cue plus the trigger in brackets), so the essay
-     question is not just redundant there, it contradicts what is on screen. */
-  qt.textContent = furtherMode
-    ? 'Build the sentence, then check it against the frames.'
-    : (qList.length ? qList[qIndex] : F.functions[k].when);
-  qt.classList.toggle('is-instruction', furtherMode);
+  qt.textContent = qList.length ? qList[qIndex] : F.functions[k].when;
   const nextBtn=document.getElementById('qNext');
-  nextBtn.style.display = (!furtherMode && qList.length>1) ? 'inline-block' : 'none';
+  nextBtn.style.display = qList.length>1 ? 'inline-block' : 'none';
   nextBtn.style.setProperty('--fc',c);
 }
 
@@ -760,6 +761,9 @@ function toggleFurther(){
 
 function openCompletion(k,i,item,c,d){
   ccCurrent={k,i,item};
+  const ans=document.getElementById('ccAnswer');
+  if(ans && !ans._wired){ ans.addEventListener('input',ccCheckTrigger); ans._wired=true; }
+  const box=document.getElementById('ccCheck'); if(box){ box.textContent=''; box.className='cc-check'; }
   const ov=document.getElementById('ccOverlay');
   const card=document.getElementById('ccCard');
   card.style.setProperty('--fc',c); card.style.setProperty('--fc-d',d);
@@ -785,10 +789,67 @@ function ccReveal(){
   document.getElementById('ccActions').style.display='none';
   document.getElementById('ccAssess').classList.add('show');
 }
-function ccMark(got){
+/* ══ MEMORY ═══════════════════════════════════════════════════════════
+   Nothing was recorded: both buttons marked a cue "seen" and the judgement
+   was discarded, so retention was a word rather than a mechanism.
+   Three states, not two, because binary cannot schedule anything —
+   "again" returns first, "nearly" later, "got it" drops out until the set
+   is exhausted. Stored per function+cue, so it survives the session. */
+const MEM_KEY='intuity.phrasebank.recall';
+let MEM={};
+try{ MEM=JSON.parse(localStorage.getItem(MEM_KEY)||'{}'); }catch(e){ MEM={}; }
+function memSave(){ try{ localStorage.setItem(MEM_KEY,JSON.stringify(MEM)); }catch(e){} }
+function memGet(k,i){ return MEM[cueKey(k,i)]; }
+function memSet(k,i,state){
+  MEM[cueKey(k,i)]={state, at:Date.now()};
+  memSave();
+}
+/* the weakest first: again, then nearly, then unseen, then got */
+const MEM_RANK={again:0, near:1, undefined:2, got:3};
+function cueOrder(k,list){
+  return list.map((c,i)=>({c,i}))
+    .sort((a,b)=>MEM_RANK[(memGet(k,a.i)||{}).state] - MEM_RANK[(memGet(k,b.i)||{}).state]);
+}
+
+/* ══ WHAT IS ACTUALLY CHECKABLE ═══════════════════════════════════════
+   "significantly" against "hugely" is a style choice, not an error, and
+   marking it wrong teaches a student that there is one sentence and they
+   failed to guess it. The TRIGGER is different: it is the task. Every one
+   of the 126 cues has its trigger inside its model, so this check is
+   sound — and it is the only automatic judgement the page makes. */
+function triggerHit(text,trigger){
+  /* triggers are often two or three words — "core strength", "address this
+     issue" — so each content word is checked separately and stemmed, because
+     a student writing "addressing this issue" has done the task. Function
+     words are ignored; requiring "this" would fail a perfectly good answer. */
+  const STOP=new Set(['a','an','the','this','that','of','to','in','on','for','is','be','it']);
+  const parts=String(trigger||'').toLowerCase().match(/[a-z]+/g)||[];
+  const need=parts.filter(w=>!STOP.has(w));
+  if(!need.length) return null;
+  const hay=String(text||'').toLowerCase();
+  return need.every(w=>{
+    const stem = w.length>5 ? w.slice(0,w.length-2) : w;
+    return new RegExp('\\b'+stem).test(hay);
+  });
+}
+function ccCheckTrigger(){
+  const box=document.getElementById('ccCheck');
+  if(!box||!ccCurrent) return;
+  const txt=document.getElementById('ccAnswer').value;
+  if(!txt.trim()){ box.textContent=''; box.className='cc-check'; return; }
+  const ok=triggerHit(txt, ccCurrent.item.trigger);
+  box.className='cc-check '+(ok?'ok':'no');
+  box.textContent = ok
+    ? '\u2713 You used ' + ccCurrent.item.trigger + ' — that was the task. The rest is your own wording.'
+    : 'Try to work ' + ccCurrent.item.trigger + ' into the sentence.';
+}
+
+function ccMark(state){
   if(!ccCurrent) return;
-  // mark this cue as done (tick) regardless — the self-judgement is the student's own
-  furtherDone.add(cueKey(ccCurrent.k, ccCurrent.i));
+  // the judgement is the student's own — but it is now kept
+  memSet(ccCurrent.k, ccCurrent.i, state);
+  if(state==='got') furtherDone.add(cueKey(ccCurrent.k, ccCurrent.i));
+  else furtherDone.delete(cueKey(ccCurrent.k, ccCurrent.i));
   ccCloseCard();
 }
 function ccCloseCard(){

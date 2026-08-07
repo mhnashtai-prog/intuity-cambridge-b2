@@ -114,9 +114,9 @@
     width:min(46%,520px);text-align:center;pointer-events:none;}
   .q-eyebrow{font-family:'Space Grotesk',sans-serif;font-size:.56rem;font-weight:700;letter-spacing:.16em;
     text-transform:uppercase;color:var(--fc);opacity:.9;margin-bottom:.7rem;}
-  .q-text{font-family:'Lora',serif;font-style:italic;font-weight:500;
-    font-size:clamp(1.15rem,2.1vw,1.7rem);line-height:1.4;color:#fff;
-    text-shadow:0 2px 20px rgba(0,0,0,.8);}
+  .q-text.is-instruction{font-family:'Space Grotesk',sans-serif;font-style:normal;
+    font-weight:400;font-size:.82rem;letter-spacing:.04em;line-height:1.6;
+    color:rgba(255,255,255,.62);text-shadow:none;}
   .q-next{pointer-events:auto;margin-top:1.1rem;font-family:'Space Grotesk',sans-serif;font-size:.58rem;
     font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--fc);
     background:color-mix(in srgb,var(--fc) 12%,transparent);
@@ -252,6 +252,12 @@
   .fam-arrow,.fam-dots{display:none;}
 
   /* view switching */
+  .fbadge-bar{display:flex;gap:2px;height:4px;border-radius:2px;overflow:hidden;margin:6px 0 2px;}
+  .rb-seg{display:block;border-radius:2px;}
+  .rb-i{background:rgba(255,255,255,.30);}
+  .rb-n{background:rgba(255,255,255,.55);}
+  .rb-f{background:rgba(255,255,255,.88);}
+  .fbadge-note{font-size:.7rem;opacity:.55;}
   .view{display:none;} .view.active{display:block;animation:fade .28s ease;}
   @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
   @media(prefers-reduced-motion:reduce){.view.active{animation:none;} .fam:hover,.fn-tile:hover,.fbadge:hover{transform:none;} .fam-viewport{scroll-behavior:auto;}}
@@ -288,7 +294,7 @@
   <div class="wrap">
     <!-- LEVEL 1 -->
     <div class="view active" id="viewFamilies">
-      <p class="lead">Five families of moves. Swipe across, tap a function to see the expressions worth owning. A map to reach into — not a list to learn.</p>
+      <p class="lead">Forty-two moves, grouped ten ways. Swipe across, tap one to see the expressions worth owning. The bar under a move shows its register spread — informal on the left, formal on the right. A map to reach into, not a list to learn.</p>
       <div class="fam-carousel">
         <button class="fam-arrow" id="famPrev" aria-label="Previous">←</button>
         <div class="fam-viewport"><div class="families" id="familyList"></div></div>
@@ -343,7 +349,7 @@
    folds the flat functions[] into the family tree the bank renders,
    mapping {stem, connector, expanded} → {stem, tail, frame} + PREC. */
 let CORPUS = {};
-const FAM_ORDER=['evaluating','reasoning','positioning','projecting','relating'];
+let FAM_ORDER=['evaluating','reasoning','positioning','projecting','relating'];
 
 // derive a short "frame" tag from a stem's grammatical shape (for the register chip)
 function frameOf(stem){
@@ -355,7 +361,39 @@ function frameOf(stem){
   return 'set phrase';
 }
 
+/* ══ CORPUS ADAPTER ═══════════════════════════════════════════════════
+   Two schemas. The original five-family file, and functions-v2 — the merged
+   inventory, where DISCURSIVE language (advantages, cause, trends) meets
+   INTERACTIONAL language (thanking, inviting, refusing). 42 functions across
+   10 categories, so a category is what the old file called a family and the
+   carousel simply grows. Phrases come in two shapes: discursive ones carry a
+   connector, interactional ones are complete on their own. */
+function adaptV2(data){
+  const out={};
+  for(const [k,c] of Object.entries(data.categories||{}))
+    out[k]={ name:c.label, purpose:c.note||'', functions:{} };
+  for(const [fid,fn] of Object.entries(data.functions||{})){
+    const cat=out[fn.category] ? fn.category : Object.keys(out)[0];
+    out[cat].functions[fid]={
+      label: fn.label,
+      when: fn.when || 'to use this move',
+      yield: (fn.phrases||[]).length,
+      convention: fn.convention || null,
+      /* the bar is shown only where the phrases are actually graded —
+         an axis that is not in the data would be a lie on the card */
+      graded: (fn.phrases||[]).some(p=>p.register),
+      prec: null,
+      capsule: (fn.phrases||[]).map(p=>({
+        stem: p.t, tail: p.connector || '', register: p.register || null,
+        frame: frameOf(p.t)
+      }))
+    };
+  }
+  return out;
+}
+
 function adaptCorpus(data){
+  if(data && data.functions && !Array.isArray(data.functions)) return adaptV2(data);
   const out={};
   for(const [famKey,fam] of Object.entries(data.families)){
     out[famKey]={ name:fam.label, purpose:fam.purpose, functions:{} };
@@ -380,15 +418,36 @@ function adaptCorpus(data){
 
 let path={family:null, fn:null};
 
-const hue = fam => ({
+const HUE_FALLBACK=['#7b5ea7','#5a9657','#c2681f','#4a7fb5','#c94f6d','#3d9e95','#c08b2f','#6a4374','#1a8f5e','#b4453a'];
+function hueFor(fam){
+  const map=HUES[fam];
+  if(map) return map;
+  const i=Math.max(0,FAM_ORDER.indexOf(fam))%HUE_FALLBACK.length;
+  const c=HUE_FALLBACK[i];
+  return [c,c];
+}
+const HUES={
   evaluating:['var(--evaluating)','var(--evaluating-d)'],
   reasoning:['var(--reasoning)','var(--reasoning-d)'],
   positioning:['var(--positioning)','var(--positioning-d)'],
   projecting:['var(--projecting)','var(--projecting-d)'],
-  relating:['var(--relating)','var(--relating-d)'],
-}[fam]);
+  relating:['var(--relating)','var(--relating-d)']
+};
+const hue = fam => hueFor(fam);
 
-/* LEVEL 1 — five-up family cards, four function-badges inside each */
+/* the bar shows the register spread of a function's phrases — informal to
+   formal, left to right. Only drawn where the data is graded. */
+function regBar(fn){
+  const n={informal:0,neutral:0,formal:0};
+  fn.capsule.forEach(p=>{ if(p.register && n[p.register]!==undefined) n[p.register]++; });
+  const t=n.informal+n.neutral+n.formal;
+  if(!t) return '';
+  const seg=(k,cls)=> n[k]?`<span class="rb-seg ${cls}" style="flex:${n[k]}"></span>`:'';
+  return `<span class="fbadge-bar" aria-label="${n.informal} informal, ${n.neutral} neutral, ${n.formal} formal">${
+    seg('informal','rb-i')}${seg('neutral','rb-n')}${seg('formal','rb-f')}</span>`;
+}
+
+/* LEVEL 1 — one card per category, a badge per function inside it */
 function renderFamilies(){
   const el=document.getElementById('familyList');
   el.innerHTML=FAM_ORDER.map(fam=>{
@@ -398,8 +457,10 @@ function renderFamilies(){
       <button class="fbadge" style="--fc:${c}" onclick="openFn('${fam}','${k}')"
         aria-label="${cap(k)}, ${fn.yield} expressions">
         <span class="fbadge-tag">${fn.yield} expr.</span>
-        <span class="fbadge-hero">${cap(k)}</span>
+        <span class="fbadge-hero">${fn.label||cap(k)}</span>
+        ${fn.graded?regBar(fn):''}
         <span class="fbadge-foot">
+          ${fn.convention?'<span class="fbadge-note" title="Convention note">&#9432;</span>':'<span></span>'}
           <span class="fbadge-open">→</span>
         </span>
       </button>`;
@@ -487,9 +548,17 @@ function setQuestion(fam,k){
   document.getElementById('qEyebrow').textContent=cap(k)+' · '+F.name;
   document.getElementById('qEyebrow').style.setProperty('--fc',c);
   const qt=document.getElementById('qText');
-  qt.textContent = qList.length ? qList[qIndex] : F.functions[k].when;
+  /* In Further practice the cards are DRILLS, keyed on the function, not on
+     the question — so cycling the question left a student reading "drawbacks
+     of working from home" above cues about living in a city. The drill carries
+     its own context (the cue plus the trigger in brackets), so the essay
+     question is not just redundant there, it contradicts what is on screen. */
+  qt.textContent = furtherMode
+    ? 'Build the sentence, then check it against the frames.'
+    : (qList.length ? qList[qIndex] : F.functions[k].when);
+  qt.classList.toggle('is-instruction', furtherMode);
   const nextBtn=document.getElementById('qNext');
-  nextBtn.style.display = qList.length>1 ? 'inline-block' : 'none';
+  nextBtn.style.display = (!furtherMode && qList.length>1) ? 'inline-block' : 'none';
   nextBtn.style.setProperty('--fc',c);
 }
 
@@ -774,7 +843,7 @@ window.addEventListener('resize',()=>{
 /* ── boot: fetch the unified corpus, adapt, then render ── */
 function corpusUrl(){
   const p=new URLSearchParams(location.search).get('json');
-  return p || 'data/functional-english.json';
+  return p || '../data/functions-corpus.json';
 }
 function questionsUrl(){
   const p=new URLSearchParams(location.search).get('questions');
@@ -794,6 +863,7 @@ let QUESTIONS={};   // { functionId: [ "…", "…" ] }
   ])
     .then(([corpus, q, dr])=>{
       CORPUS=adaptCorpus(corpus);
+      FAM_ORDER=Object.keys(CORPUS);   /* ten categories now, not five */
       QUESTIONS=(q && q.questions) ? q.questions : {};
       DRILLS=(dr && dr.drills) ? dr.drills : {};
       renderFamilies();

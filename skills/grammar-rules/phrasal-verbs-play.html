@@ -229,6 +229,22 @@
       transform: translateX(26px);
     }
 
+    /* NEXT / PREVIOUS VERB */
+    .verb-step { display: none; align-items: center; justify-content: center;
+      gap: 1rem; margin: 0 0 .6rem; }
+    .verb-step.show { display: flex; }
+    .verb-step-btn { width: 2.2rem; height: 2.2rem; border-radius: 50%;
+      border: 1px solid rgba(201,169,97,.35); background: rgba(201,169,97,.12);
+      color: #C9A961; font-size: 1.15rem; line-height: 1; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s, transform .12s; }
+    .verb-step-btn:hover { background: rgba(201,169,97,.28); }
+    .verb-step-btn:active { transform: scale(.92); }
+    .verb-step-btn:disabled { opacity: .25; cursor: default; }
+    .verb-step-now { font-family: 'Space Grotesk', sans-serif; font-size: .78rem;
+      font-weight: 600; letter-spacing: .16em; text-transform: uppercase;
+      color: rgba(229,229,229,.7); min-width: 7rem; text-align: center; }
+
     /* CATEGORY SELECTOR */
     .category-selector {
       display: none;
@@ -802,6 +818,13 @@
     </div>
 
     <!-- CATEGORY SELECTOR (Explore mode only) -->
+    <!-- the tabs alone meant reaching back to the top to change verb; these
+         step through the same list so a student can stay with the card -->
+    <div class="verb-step" id="verbStep">
+      <button class="verb-step-btn" id="verbPrev" onclick="stepVerb(-1)" aria-label="Previous verb">&#8249;</button>
+      <span class="verb-step-now" id="verbNow"></span>
+      <button class="verb-step-btn" id="verbNext" onclick="stepVerb(1)" aria-label="Next verb">&#8250;</button>
+    </div>
     <div class="category-selector" id="categorySelector"></div>
 
     <!-- EXPLORE MODE CONTENT -->
@@ -884,7 +907,7 @@ let slides = [];
 let currentMainMode = 'explore';
 
 // CONFIGURATION
-const JSON_FILE = '../../datacentre/phrasal-verbs-complete-set.json';
+const JSON_FILE = '../../data/grammar-rules/phrasal-verbs-complete-set.json';
 const COMMON_VERBS = ['take', 'go', 'look', 'get', 'keep', 'put', 'turn', 'run'];
 const VERBS_PER_LIST = 6;
 
@@ -938,6 +961,7 @@ function switchMainMode(mode) {
       }
     }
   }
+  syncVerbStep();
 }
 
 // ==================== VOICE LOADING ====================
@@ -1014,7 +1038,13 @@ function setupTwoTier() {
   /* a tab that opens to nothing is worse than no tab: break and point have
      meanings but no example sentences, so they would render an empty card.
      Offer only the verbs that actually produce slides. */
-  const playable = v => (grammarData.verbs[v].particles||[]).some(p => {
+  /* the canonical file stores verbs["take"] = ["off","up",…]; a sibling copy
+     wraps them as {id, particles}. Accept either rather than assume. */
+  const particlesOf = v => {
+    const e = grammarData.verbs[v];
+    return Array.isArray(e) ? e : (e && e.particles) || [];
+  };
+  const playable = v => particlesOf(v).some(p => {
     const pv = grammarData.phrasalVerbs[`${v}_${p.replace(/ /g,'_')}`];
     if (!pv) return false;
     return (grammarData.sets||[]).some(set =>
@@ -1023,6 +1053,7 @@ function setupTwoTier() {
   const allVerbs = Object.keys(grammarData.verbs).filter(playable);
   const commonVerbs = allVerbs.filter(v => COMMON_VERBS.includes(v));
   const lessCommonVerbs = allVerbs.filter(v => !COMMON_VERBS.includes(v));
+  VERB_ORDER = commonVerbs.concat(lessCommonVerbs);
   
   commonVerbs.forEach((verb, index) => {
     const btn = document.createElement('button');
@@ -1054,6 +1085,30 @@ function setupTwoTier() {
 }
 
 // ==================== CATEGORY ====================
+let VERB_ORDER = [];
+
+function syncVerbStep() {
+  const bar = document.getElementById('verbStep');
+  if (!bar) return;
+  const i = VERB_ORDER.indexOf(currentCategory);
+  const on = mainMode === 'explore' && i >= 0 && VERB_ORDER.length > 1;
+  bar.classList.toggle('show', on);
+  if (!on) return;
+  document.getElementById('verbNow').textContent = `${currentCategory}  ${i+1}/${VERB_ORDER.length}`;
+  document.getElementById('verbPrev').disabled = i === 0;
+  document.getElementById('verbNext').disabled = i === VERB_ORDER.length - 1;
+}
+
+function stepVerb(dir) {
+  const i = VERB_ORDER.indexOf(currentCategory);
+  const n = i + dir;
+  if (i < 0 || n < 0 || n >= VERB_ORDER.length) return;
+  selectCategory(VERB_ORDER[n], 'single');
+  const btn = [...document.querySelectorAll('.category-btn')]
+    .find(b => b.dataset.type === 'single' && b.textContent === VERB_ORDER[n]);
+  if (btn) btn.scrollIntoView({behavior:'smooth', block:'nearest', inline:'center'});
+}
+
 function selectCategory(verbOrVerbs, type) {
   if (isPlaying) pause();
   
@@ -1144,6 +1199,7 @@ function loadCategory(verbOrVerbs, type) {
     });
   });
   
+  syncVerbStep();
   if (MISSING.length) console.log('No example sentence yet for:', MISSING.join(', '));
   console.log(`Loaded ${slides.length} slides`);
   renderWatchSlide();

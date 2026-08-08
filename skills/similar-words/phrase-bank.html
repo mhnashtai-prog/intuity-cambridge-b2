@@ -69,7 +69,7 @@
    Columns instead: a card is as tall as its own functions, and a short card
    leaves room for the next one BENEATH it. Nothing off screen. */
   .families{column-count:5;column-gap:.7rem;padding:0 .15rem;display:block;}
-  .fam{position:relative;break-inside:avoid;-webkit-column-break-inside:avoid;
+  .fam{position:relative;padding-top:1rem;break-inside:avoid;-webkit-column-break-inside:avoid;
     page-break-inside:avoid;width:100%;margin:0 0 .7rem;min-width:0;
     background:#fff;border-radius:1.1rem;padding:2.3rem .8rem 1rem .9rem;
     display:flex;flex-direction:column;
@@ -77,7 +77,9 @@
   .fam::before{content:'';position:absolute;top:.9rem;left:.9rem;right:.8rem;height:8px;
     background-image:radial-gradient(circle, rgba(0,0,0,.12) 3px, transparent 3.5px);
     background-size:16px 8px;background-repeat:repeat-x;}
-  .fam-head{position:absolute;top:1.1rem;left:-9px;display:flex;align-items:center;gap:.4rem;
+  .fam-sec{position:relative;padding-top:2.1rem;}
+  .fam-sec.guest{margin-top:1.5rem;padding-top:2.3rem;border-top:1px dashed rgba(0,0,0,.1);}
+  .fam-head{position:absolute;top:.55rem;left:-9px;display:flex;align-items:center;gap:.4rem;
     background:var(--fc);padding:.35rem .6rem .35rem .45rem;border-radius:.45rem .65rem .65rem .45rem;
     box-shadow:0 6px 14px -4px rgba(0,0,0,.35);z-index:2;max-width:calc(100% + 9px);}
   .fam-head::after{content:'';position:absolute;left:0;bottom:-8px;border-style:solid;border-width:8px 0 0 12px;
@@ -487,13 +489,17 @@ function regBar(fn){
     seg('informal','rb-i')}${seg('neutral','rb-n')}${seg('formal','rb-f')}</span>`;
 }
 
-/* LEVEL 1 — one card per category, a badge per function inside it */
-function renderFamilies(){
-  const el=document.getElementById('familyList');
-  el.innerHTML=FAM_ORDER.map(fam=>{
-    const F=CORPUS[fam], [c]=hue(fam);
-    const badges=Object.entries(F.functions).map(([k,fn])=>{
-      return `
+/* LEVEL 1 — one card per category, a badge per function inside it.
+   A category may be MERGED into another: it keeps its own banner badge and
+   its own purpose line, but shares the card. Weighing it up (4 functions)
+   and Assess and recommend (3) each needed a card of their own, and the
+   two stacked pushed the first column past the fold. Together they are one
+   card with two banners — the same reading, less chrome. */
+const MERGE={ assess:'discursive' };
+
+function badgesFor(fam){
+  const F=CORPUS[fam], [c]=hue(fam);
+  return Object.entries(F.functions).map(([k,fn])=>`
       <button class="fbadge" style="--fc:${c}" onclick="openFn('${fam}','${k}')"
         aria-label="${cap(k)}, ${fn.yield} expressions">
         <span class="fbadge-tag">${fn.yield} expr.</span>
@@ -501,14 +507,32 @@ function renderFamilies(){
         ${fn.graded?regBar(fn):''}
         <span class="fbadge-foot">
           ${fn.convention?'<span class="fbadge-note" title="Convention note">&#9432;</span>':'<span></span>'}
-          <span class="fbadge-open">→</span>
+          <span class="fbadge-open">&rarr;</span>
         </span>
-      </button>`;
-    }).join('');
-    return `<div class="fam" style="--fc:${c};--fc-d:${hue(fam)[1]}">
+      </button>`).join('');
+}
+
+function sectionFor(fam,isGuest){
+  const F=CORPUS[fam], [c]=hue(fam);
+  return `<div class="fam-sec${isGuest?' guest':''}" style="--fc:${c}">
       <div class="fam-head"><span class="fam-name">${F.name}</span></div>
       <div class="fam-purpose">${F.purpose}</div>
-      <div class="fam-badges">${badges}</div>
+      <div class="fam-badges">${badgesFor(fam)}</div>
+    </div>`;
+}
+
+function renderFamilies(){
+  const el=document.getElementById('familyList');
+  const guests={};
+  Object.entries(MERGE).forEach(([g,host])=>{
+    if(CORPUS[g] && CORPUS[host]) (guests[host]=guests[host]||[]).push(g);
+  });
+  const hosts=FAM_ORDER.filter(f=>!MERGE[f] || !CORPUS[MERGE[f]]);
+  el.innerHTML=hosts.map(fam=>{
+    const [c]=hue(fam);
+    const extra=(guests[fam]||[]).map(g=>sectionFor(g,true)).join('');
+    return `<div class="fam" style="--fc:${c};--fc-d:${hue(fam)[1]}">
+      ${sectionFor(fam,false)}${extra}
     </div>`;
   }).join('');
   initCarousel();

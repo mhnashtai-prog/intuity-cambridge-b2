@@ -181,9 +181,6 @@
       -webkit-text-fill-color: var(--verb-color, var(--gold));
       transition: filter .25s, opacity .25s;
     }
-    .phrase-text .particle.masked {
-      filter: blur(7px); opacity: .55; cursor: pointer;
-    }
 
     .meaning-text {
       font-family: 'DM Sans', sans-serif; font-size: clamp(.82rem, 1.7vw, .98rem);
@@ -522,7 +519,7 @@
       <button class="arrow-btn" id="prevBtn">←</button>
       <button class="arrow-btn" id="nextBtn">→</button>
     </div>
-    <div class="hold-hint" id="holdHint">Hold to reveal particle</div>
+    <div class="hold-hint" id="holdHint">Hold for verb ID</div>
     <div class="dot-nav" id="dotNav"></div>
   </div>
 </div>
@@ -591,7 +588,6 @@ let streak    = 0;
 let answered  = false;
 let gapChecked = false;
 let reviewMode = false;
-let learnRevealed = false;   // whether the current Learn-mode particle is unmasked
 
 /* ── LOAD ── */
 async function loadAll() {
@@ -639,7 +635,7 @@ function applyVerbTheme() {
 
 function switchVerb(i) {
   verbIdx = i;
-  current = 0; prev = -1; answered = false; gapChecked = false; learnRevealed = false;
+  current = 0; prev = -1; answered = false; gapChecked = false;
   // Clear per-verb results so previous runs never bleed into new session
   reviewMode = false;
   results = {}; scoreOk = 0; scoreErr = 0; streak = 0;
@@ -662,7 +658,7 @@ function build() {
   } else {
     shuffled(verb.items).forEach((item, idx) => slides.push({ type: 'gap', idx, item }));
   }
-  current = 0; prev = -1; answered = false; gapChecked = false; learnRevealed = false;
+  current = 0; prev = -1; answered = false; gapChecked = false;
 }
 
 /* ── PAINT DOM ── */
@@ -703,15 +699,14 @@ function renderSlideInner(s) {
 
 /* ── LEARN ── */
 function renderLearn(item) {
-  // Particle starts masked (blurred) — tapping/holding reveals it for real,
-  // instead of the old hint that didn't do anything.
-  // The base verb (e.g. "GET") is shown in front of the blank in the verb's
-  // colour so the sentence reads grammatically and gives real context.
+  // The particle is shown plainly — Learn mode is for passive exposure;
+  // Quiz and Practice already handle active recall, so hiding it here
+  // just adds friction without a clear purpose.
   const particleUpper = item.particle.toUpperCase();
   const verbWord = verbs[verbIdx].id.toUpperCase();
   const posterHtml = item.example
     .toUpperCase()
-    .replace('_____', `<span class="verb-word">${verbWord}</span> <span class="particle masked" data-particle-toggle>${particleUpper}</span>`);
+    .replace('_____', `<span class="verb-word">${verbWord}</span> <span class="particle" data-particle-toggle>${particleUpper}</span>`);
 
   const wordCount = item.example.split(/\s+/).length;
   const size = wordCount <= 8 ? 'size-small' : wordCount <= 16 ? 'size-medium' : 'size-large';
@@ -722,13 +717,8 @@ function renderLearn(item) {
 }
 
 function attachLearnMaskHandlers() {
-  document.querySelectorAll('[data-particle-toggle]').forEach(el => {
-    el.addEventListener('click', e => {
-      e.stopPropagation();
-      el.classList.toggle('masked');
-      learnRevealed = !el.classList.contains('masked');
-    });
-  });
+  // No-op: particles are shown plainly in Learn mode now. Kept as a hook
+  // in case a future "quiz yourself" toggle wants to reuse data-particle-toggle.
 }
 
 /* ── QUIZ ── */
@@ -801,8 +791,6 @@ function show(idx, dir) {
       if (incomingInput) { incomingInput.classList.remove('correct','wrong'); incomingInput.disabled = false; incomingInput.value = ''; }
       const incomingHint = els[idx].querySelector('.gap-hint');
       if (incomingHint) { incomingHint.textContent = 'type the missing particle — press Check below'; incomingHint.classList.remove('show-answer'); }
-      const incomingParticle = els[idx].querySelector('[data-particle-toggle]');
-      if (incomingParticle) incomingParticle.classList.add('masked');
     }
 
     if (dir === 'forward')  els[idx].style.cssText = 'transform:translateX(60px);opacity:0';
@@ -1175,9 +1163,6 @@ function showXray() {
   xray = true;
   document.getElementById('sectionLabel').classList.add('visible');
   if (!xrayDone) { xrayDone = true; document.getElementById('holdHint').classList.add('hidden'); }
-  // Long-press also unmasks the particle in Learn mode
-  const p = document.querySelector('.slide.active [data-particle-toggle]');
-  if (p) p.classList.remove('masked');
 }
 function hideXray() {
   xray = false;

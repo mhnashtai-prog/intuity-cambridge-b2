@@ -1269,21 +1269,18 @@ function renderWatchSlide() {
   const data = slides[currentIndex];
   const content = document.getElementById('cardContent');
 
-  /* the fade was written for slide-to-slide transitions: it removes `show`,
-     waits 500ms, then repaints. On the FIRST render there is nothing to fade
-     from, so the card sat empty until play forced a second render. */
+  /* The fade was written for slide-to-slide transitions: strip `show`, wait
+     500ms, repaint, add `show` back. On the FIRST render there is nothing to
+     fade from, so the card sat empty until pressing play forced a second one.
+     Paint immediately the first time, fade thereafter. */
   const first = !content.classList.contains('show');
   content.classList.remove('show');
 
   const paint = () => {
-  
-  content.classList.remove('show');
-  
-  setTimeout(() => {
     document.getElementById('expression').textContent = data.expression;
     document.getElementById('meaning').textContent = data.meaning || '';
     document.getElementById('meaning').style.display = data.meaning ? 'block' : 'none';
-    
+
     if (data.normal && data.inverted) {
       document.getElementById('normalContainer').style.display = 'block';
       document.getElementById('arrow').style.display = 'block';
@@ -1298,12 +1295,13 @@ function renderWatchSlide() {
       document.getElementById('invertedContainer').querySelector('.sentence-label').textContent = 'EXAMPLE IN CONTEXT';
       document.getElementById('invertedSentence').innerHTML = data.example;
     }
-    
+
     document.getElementById('current').textContent = currentIndex + 1;
     document.getElementById('total').textContent = slides.length;
-    
     content.classList.add('show');
-  }, 500);
+  };
+
+  if (first) paint(); else setTimeout(paint, 500);
 }
 
 function stepSlide(dir) {
@@ -1336,27 +1334,19 @@ function togglePlay() {
 
 function play() {
   isPlaying = true;
-  document.getElementById('playBtn').textContent = '■';
+  document.getElementById('playBtn').textContent = '\u25A0';
   syncStepBtns();
-  
-  /* six seconds a slide: long enough to read the meaning and the example,
-     short enough that a teenager does not leave. Previously the timer waited
-     on speech that has now gone. */
+
+  /* Six seconds a slide: long enough to read the meaning and the example,
+     short enough that a teenager does not leave. The old timer waited on
+     speech to finish before advancing; with the speech gone it is a plain
+     interval. */
+  clearInterval(playInterval);
   playInterval = setInterval(() => {
-    {
-      clearInterval(playInterval);
-      setTimeout(() => {
-        if (isPlaying) {
-          advanceSlide();
-          if (isPlaying) play();
-        }
-      }, 6000);
-      return;
-    }
-    
+    if (!isPlaying) { clearInterval(playInterval); return; }
+    if (currentIndex >= slides.length - 1) { pause(); return; }
     advanceSlide();
-};
-  if (first) paint(); else setTimeout(paint, 500);
+  }, 6000);
 }
 
 function advanceSlide() {
@@ -1414,7 +1404,9 @@ document.addEventListener('keydown', (e) => {
 
 
 // ==================== START ====================
-   setupToggle();
+/* bound before the fetch — the switch used to be dead while data loaded,
+   and binding it twice made every click toggle and toggle straight back */
+setupToggle();
 init();
   </script>
 </body>

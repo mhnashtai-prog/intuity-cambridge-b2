@@ -482,6 +482,59 @@
       .progress { bottom: 105px; }
       .verb-tabs { justify-content: flex-start; }
     }
+
+    /* ── MATCH MODE (drag & drop) ── */
+    .match-wrap {
+      display: flex; gap: 1rem; width: 100%; height: 100%;
+      padding: 1.2rem 1.5rem;
+    }
+    .match-col {
+      flex: 1; display: flex; flex-direction: column;
+      justify-content: space-between; gap: .4rem; min-width: 0;
+    }
+    .match-chip {
+      font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: .68rem;
+      letter-spacing: .04em; text-transform: uppercase; text-align: center;
+      padding: .5rem .4rem; border-radius: .6rem; flex: 1;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(255,217,74,.08); border: 1px solid rgba(255,217,74,.35);
+      color: #FFD94A; cursor: grab; user-select: none; touch-action: none;
+      transition: box-shadow .15s, opacity .3s, background .2s; min-height: 0;
+    }
+    .match-chip.dragging {
+      position: fixed; z-index: 999; pointer-events: none;
+      box-shadow: 0 14px 34px rgba(0,0,0,.55); transform: scale(1.06); cursor: grabbing;
+    }
+    .match-chip.matched { display: none; }
+    .match-chip.wrong-shake { animation: optShake .35s ease; }
+    .match-slot {
+      font-family: 'DM Sans', sans-serif; font-size: .66rem; line-height: 1.35;
+      text-align: center; padding: .5rem .55rem; border-radius: .6rem; flex: 1;
+      display: flex; align-items: center; justify-content: center; min-height: 0;
+      background: rgba(255,255,255,.03); border: 1px dashed rgba(255,255,255,.15);
+      color: rgba(229,229,231,.55); transition: all .25s;
+    }
+    .match-slot.target-hover { border-color: #FFD94A; background: rgba(255,217,74,.09); border-style: solid; }
+    .match-slot.matched {
+      border-style: solid; border-color: rgba(77,201,138,.5);
+      background: rgba(77,201,138,.09); color: #4DC98A; font-weight: 600;
+    }
+    .match-slot.matched .match-slot-phrase {
+      font-family: 'Space Grotesk', sans-serif; font-weight: 900; letter-spacing: .04em;
+      margin-right: .4rem;
+    }
+    .match-slot.wrong-flash { border-color: #E05555; background: rgba(224,85,85,.08); }
+    .match-round-label {
+      position: absolute; top: .85rem; right: 1rem;
+      font-family: 'DM Sans', sans-serif; font-size: .56rem; font-weight: 700;
+      letter-spacing: .14em; text-transform: uppercase; color: rgba(255,217,74,.55);
+      pointer-events: none; z-index: 6;
+    }
+    @media(max-width:600px){
+      .match-wrap { padding: .8rem .6rem; gap: .5rem; }
+      .match-chip { font-size: .56rem; padding: .4rem .25rem; }
+      .match-slot { font-size: .58rem; padding: .4rem .35rem; }
+    }
   </style>
 </head>
 <body>
@@ -506,6 +559,9 @@
     </button>
     <button class="mode-btn" data-mode="gap">
       <span class="mode-icon">✍</span><span class="mode-label">Practice</span><span class="mode-badge" id="badge-gap">–</span>
+    </button>
+    <button class="mode-btn" data-mode="match">
+      <span class="mode-icon">🔗</span><span class="mode-label">Match</span><span class="mode-badge" id="badge-match">–</span>
     </button>
   </div>
   <div class="verb-tabs" id="verbTabs"></div>
@@ -566,7 +622,8 @@
 
 <script>
 const DATA_URL = 'phrasal-verbs-data.json';
-const AUTO_MS  = 9000;
+const GAME_DATA_URL = 'game-data.json';
+const AUTO_MS  = 5500;
 
 /* ── STATE ── */
 let verbs     = [];          // all verb groups from JSON
@@ -588,6 +645,13 @@ let streak    = 0;
 let answered  = false;
 let gapChecked = false;
 let reviewMode = false;
+
+/* ── MATCH MODE STATE ── */
+let gameRounds  = [];
+let gameLoaded  = false;
+let roundIdx    = 0;
+let roundResults = {};   // roundIdx -> 'perfect'
+let dragCtx     = null;
 
 /* ── LOAD ── */
 async function loadAll() {
@@ -914,6 +978,10 @@ function showStreak() {
 
 /* ── NAV ── */
 function next() {
+  if (mode === 'match') {
+    if (roundIdx < gameRounds.length - 1) switchRound(roundIdx + 1);
+    return;
+  }
   if (busy) return;
   if (current >= slides.length - 1) {
     // Only show results when every slide in this set has been answered
@@ -929,6 +997,10 @@ function next() {
   resetAuto(); updateCheckBtn();
 }
 function back() {
+  if (mode === 'match') {
+    if (roundIdx > 0) switchRound(roundIdx - 1);
+    return;
+  }
   if (busy || current <= 0) return;
   busy = true; answered = false; gapChecked = false;
   show(current - 1, 'back');
@@ -1190,7 +1262,8 @@ function applyModeAccent() {
   }
 }
 
-function setMode(m) {
+async function setMode(m) {
+  const leavingMatch = (mode === 'match' && m !== 'match');
   mode = m;
   document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
   // Fresh session per mode change
@@ -1198,12 +1271,41 @@ function setMode(m) {
   results = {}; scoreOk = 0; scoreErr = 0; streak = 0;
   document.getElementById('scoreOk').textContent  = 0;
   document.getElementById('scoreErr').textContent = 0;
+  document.getElementById('checkBtn').style.display = 'none';
+  stopAuto(); autoOn = false;
+  document.getElementById('autoRow').classList.remove('on');
+
+  if (m === 'match') {
+    document.getElementById('holdHint').classList.add('hidden');
+    document.getElementById('sectionLabel').classList.remove('visible');
+    document.getElementById('dotNav').innerHTML = '';
+    document.getElementById('progressFill').style.width = '0%';
+    document.documentElement.style.setProperty('--verb-color', '#FFD94A');
+    document.documentElement.style.setProperty('--verb-rgb', '255,217,74');
+    await ensureGameData();
+    roundIdx = 0; roundResults = {};
+    buildRoundTabs();
+    renderMatchRound();
+    updateModeBadges();
+    return;
+  }
+
+  if (leavingMatch) {
+    buildTabs();
+    document.querySelectorAll('.vtab').forEach((b, j) => b.classList.toggle('active', j === verbIdx));
+    applyVerbTheme();
+  }
   applyModeAccent();
   build(); paint(); show(0, 'none'); resetAuto(); updateCheckBtn(); updateModeBadges();
 }
 
 /* ── MODE BADGES (infographic progress pills in the header) ── */
 function updateModeBadges() {
+  const matchBadge = document.getElementById('badge-match');
+  if (matchBadge) {
+    matchBadge.textContent = gameLoaded ? (mode === 'match' ? (roundIdx + 1) + '/' + gameRounds.length : gameRounds.length) : '–';
+    matchBadge.classList.toggle('live', mode === 'match');
+  }
   if (!verbs.length) return;
   const verb = verbs[verbIdx];
   const total = verb.items.length;
@@ -1260,15 +1362,17 @@ document.getElementById('nextBtn').addEventListener('click', e => { e.stopPropag
 const card = document.getElementById('slideCard');
 let tx = 0;
 card.addEventListener('touchstart', e => {
+  if (mode === 'match') return;
   tx = e.touches[0].clientX;
   longTimer = setTimeout(showXray, 400);
 }, {passive: true});
 card.addEventListener('touchend', e => {
+  if (mode === 'match') return;
   clearTimeout(longTimer); hideXray();
   const dx = e.changedTouches[0].clientX - tx;
   if (Math.abs(dx) > 50) { if (dx < 0) next(); else back(); }
 }, {passive: true});
-card.addEventListener('mousedown', () => { longTimer = setTimeout(showXray, 400); });
+card.addEventListener('mousedown', () => { if (mode !== 'match') longTimer = setTimeout(showXray, 400); });
 card.addEventListener('mouseup', () => { clearTimeout(longTimer); hideXray(); });
 
 document.addEventListener('keydown', e => {
@@ -1293,6 +1397,173 @@ document.querySelectorAll('.mode-btn').forEach(b =>
   b.addEventListener('click', e => { e.stopPropagation(); setMode(b.dataset.mode); })
 );
 document.getElementById('autoRow').addEventListener('click', e => { e.stopPropagation(); toggleAuto(); });
+
+
+/* ══════════════════════════════ MATCH MODE ══════════════════════════════ */
+
+async function ensureGameData() {
+  if (gameLoaded) return;
+  const data = await fetch(GAME_DATA_URL).then(r => r.json());
+  gameRounds = data.rounds;
+  gameLoaded = true;
+}
+
+/* Round tabs reuse the .vtab strip that normally lists verbs */
+function buildRoundTabs() {
+  const wrap = document.getElementById('verbTabs');
+  wrap.innerHTML = '';
+  gameRounds.forEach((r, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'vtab' + (i === roundIdx ? ' active' : '') + (roundResults[i] === 'perfect' ? ' score-perfect' : '');
+    btn.textContent = 'R' + (i + 1);
+    btn.style.setProperty('--verb-color', '#FFD94A');
+    btn.style.setProperty('--verb-rgb', '255,217,74');
+    btn.addEventListener('click', e => { e.stopPropagation(); switchRound(i); });
+    wrap.appendChild(btn);
+  });
+  wrap.querySelectorAll('.vtab')[roundIdx]?.scrollIntoView({ inline: 'center', block: 'nearest' });
+}
+
+function switchRound(i) {
+  roundIdx = i;
+  document.querySelectorAll('#verbTabs .vtab').forEach((b, j) => b.classList.toggle('active', j === i));
+  renderMatchRound();
+  updateModeBadges();
+}
+
+function renderMatchRound() {
+  const round = gameRounds[roundIdx];
+  const container = document.getElementById('slidesContainer');
+  const colA = shuffled(round.pairs);
+  const colB = shuffled(round.pairs);
+
+  container.innerHTML = `
+    <div class="slide active" style="padding:0;">
+      <div class="match-round-label">ROUND ${roundIdx + 1} / ${gameRounds.length}</div>
+      <div class="match-wrap">
+        <div class="match-col" id="matchColA">
+          ${colA.map(p => `<div class="match-chip" data-id="${p.id}">${p.phrase}</div>`).join('')}
+        </div>
+        <div class="match-col" id="matchColB">
+          ${colB.map(p => `<div class="match-slot" data-id="${p.id}" data-phrase="${p.phrase.replace(/"/g,'&quot;')}">${p.meaning}</div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('prevBtn').disabled = roundIdx === 0;
+  document.getElementById('nextBtn').disabled = roundIdx === gameRounds.length - 1;
+  document.getElementById('sectionLabel').textContent = 'MATCH ROUND ' + (roundIdx + 1);
+
+  attachDragHandlers();
+  updateMatchProgress();
+}
+
+function attachDragHandlers() {
+  document.querySelectorAll('.match-chip').forEach(chip => {
+    chip.addEventListener('pointerdown', onChipPointerDown);
+  });
+}
+
+function onChipPointerDown(e) {
+  const chip = e.currentTarget;
+  if (chip.classList.contains('matched')) return;
+  e.stopPropagation();
+  chip.setPointerCapture(e.pointerId);
+
+  const rect = chip.getBoundingClientRect();
+  dragCtx = {
+    chip, pointerId: e.pointerId,
+    offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top,
+    origParent: chip.parentElement, origNext: chip.nextSibling,
+    width: rect.width, height: rect.height
+  };
+
+  chip.classList.add('dragging');
+  chip.style.width = rect.width + 'px';
+  chip.style.height = rect.height + 'px';
+  document.body.appendChild(chip);
+  positionChip(e.clientX, e.clientY);
+
+  chip.addEventListener('pointermove', onChipPointerMove);
+  chip.addEventListener('pointerup', onChipPointerUp);
+  chip.addEventListener('pointercancel', onChipPointerUp);
+}
+
+function positionChip(x, y) {
+  const { chip, offsetX, offsetY } = dragCtx;
+  chip.style.left = (x - offsetX) + 'px';
+  chip.style.top  = (y - offsetY) + 'px';
+}
+
+function onChipPointerMove(e) {
+  if (!dragCtx) return;
+  positionChip(e.clientX, e.clientY);
+  document.querySelectorAll('.match-slot.target-hover').forEach(s => s.classList.remove('target-hover'));
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const slot = el && el.closest ? el.closest('.match-slot') : null;
+  if (slot && !slot.classList.contains('matched')) slot.classList.add('target-hover');
+}
+
+function onChipPointerUp(e) {
+  if (!dragCtx) return;
+  const { chip, pointerId, origParent, origNext } = dragCtx;
+  chip.releasePointerCapture(pointerId);
+  chip.removeEventListener('pointermove', onChipPointerMove);
+  chip.removeEventListener('pointerup', onChipPointerUp);
+  chip.removeEventListener('pointercancel', onChipPointerUp);
+  document.querySelectorAll('.match-slot.target-hover').forEach(s => s.classList.remove('target-hover'));
+
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const slot = el && el.closest ? el.closest('.match-slot') : null;
+
+  chip.classList.remove('dragging');
+  chip.style.position = ''; chip.style.left = ''; chip.style.top = '';
+  chip.style.width = ''; chip.style.height = '';
+  if (origNext) origParent.insertBefore(chip, origNext); else origParent.appendChild(chip);
+
+  if (slot && !slot.classList.contains('matched')) {
+    const isCorrect = slot.dataset.id === chip.dataset.id;
+    if (isCorrect) {
+      chip.classList.add('matched');
+      slot.classList.add('matched');
+      slot.innerHTML = `<span class="match-slot-phrase">${slot.dataset.phrase}</span>${slot.textContent}`;
+      recordMatchResult(true);
+    } else {
+      slot.classList.add('wrong-flash');
+      chip.classList.add('wrong-shake');
+      setTimeout(() => { slot.classList.remove('wrong-flash'); chip.classList.remove('wrong-shake'); }, 400);
+      recordMatchResult(false);
+    }
+  }
+  dragCtx = null;
+}
+
+function recordMatchResult(isCorrect) {
+  if (isCorrect) { scoreOk++; streak++; if (streak > 0 && streak % 3 === 0) showStreak(); }
+  else { scoreErr++; streak = 0; }
+  document.getElementById('scoreOk').textContent  = scoreOk;
+  document.getElementById('scoreErr').textContent = scoreErr;
+  updateMatchProgress();
+
+  const total = gameRounds[roundIdx].pairs.length;
+  const matchedCount = document.querySelectorAll('.match-slot.matched').length;
+  if (matchedCount === total) {
+    roundResults[roundIdx] = 'perfect';
+    buildRoundTabs();
+    triggerConfetti();
+    setTimeout(() => stopConfetti(), 2000);
+    if (roundIdx < gameRounds.length - 1) {
+      setTimeout(() => switchRound(roundIdx + 1), 1600);
+    }
+  }
+}
+
+function updateMatchProgress() {
+  const total = gameRounds[roundIdx]?.pairs.length || 1;
+  const matchedCount = document.querySelectorAll('.match-slot.matched').length;
+  document.getElementById('progressFill').style.width = (matchedCount / total * 100) + '%';
+}
+
 
 loadAll();
 </script>

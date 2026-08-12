@@ -846,56 +846,52 @@
   <script>
 // ==================== STATE ====================
 let grammarData = null;
-let dataType = null;
-let currentCategory = null;
+let currentCategory = null;      // group id: 'take', 'mix1', …
 let currentIndex = 0;
 let isPlaying = false;
 let playInterval = null;
 let viewMode = 'watch';
 let slides = [];
 let currentMainMode = 'explore';
+let GROUPS = [];
+let VERB_ORDER = [];
 
-// CONFIGURATION
-const JSON_FILE = '../../data/grammar-rules/phrasal-verbs-complete-set.json';
-const COMMON_VERBS = ['take', 'go', 'look', 'get', 'keep', 'put', 'turn', 'run'];
-const VERBS_PER_LIST = 6;
+/* One data file for the whole topic. The quiz page, the game and this page
+   all read it, so a correction lands everywhere at once and the three can
+   never drift apart. It sits beside this HTML, not in ../../data. */
+const JSON_FILE = 'phrasal-verbs-data.json';
+
+/* Items in a MIX group carry their own `verb`; `form` is the inflected verb
+   the example sentence needs. The phrase label always uses the citation
+   form, the sentence always uses the inflected one. */
+const baseVerbOf = (item, group) => item.verb || group.id;
+const formOf     = (item, group) => item.form || item.verb || group.id;
 
 // ==================== MAIN MODE SWITCHING ====================
 function switchMainMode(mode) {
   if (mode === currentMainMode) return;
-  
-  console.log('Switching main mode to:', mode);
+
   currentMainMode = mode;
-  
-  // Stop any playback
-  if (isPlaying) {
-    pause();
-  }
-  
-  // Update mode selector buttons
+  if (isPlaying) pause();
+
   document.querySelectorAll('.mode-option').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.mode === mode);
   });
-  
-  // Hide all content areas
   document.querySelectorAll('.content-area').forEach(area => {
     area.classList.remove('active');
   });
-  
-  // Show/hide view mode toggle (only for explore)
+
   const viewModeContainer = document.getElementById('viewModeContainer');
   const categorySelector = document.getElementById('categorySelector');
-  
+
   if (mode === 'explore') {
     viewModeContainer.classList.remove('hidden');
-    if (dataType === 'two-tier') {
-      categorySelector.classList.add('show');
-    }
+    categorySelector.classList.add('show');
     document.getElementById('exploreArea').classList.add('active');
   } else {
     viewModeContainer.classList.add('hidden');
     categorySelector.classList.remove('show');
-    
+
     if (mode === 'practice') {
       document.getElementById('practiceArea').classList.add('active');
       const iframe = document.getElementById('practiceIframe');
@@ -913,36 +909,23 @@ function switchMainMode(mode) {
   syncVerbStep();
 }
 
-// ==================== VOICE LOADING ====================
-let voicesLoaded = false;
-
-
 // ==================== INITIALIZE ====================
 async function init() {
   try {
-    console.log('Loading JSON from:', JSON_FILE);
     const response = await fetch(JSON_FILE);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const text = await response.text();
-    grammarData = JSON.parse(text);
-    console.log('Data loaded:', grammarData.title);
-    
-    if (grammarData.verbs && grammarData.phrasalVerbs) {
-      dataType = 'two-tier';
-      setupTwoTier();
-    } else if (grammarData.items) {
-      dataType = 'one-tier';
-      setupOneTier();
-    }
-    
-   
-    
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    grammarData = await response.json();
+
+    GROUPS = grammarData.verbs || [];
+    if (!GROUPS.length) throw new Error('no verb groups in data');
+
+    VERB_ORDER = GROUPS.map(g => g.id);
+    buildCategorySelector();
+    currentCategory = VERB_ORDER[0];
+    loadCategory(currentCategory);
+
   } catch (error) {
-    /* an alert() blocks the page and tells a student nothing they can act on.
+    /* An alert() blocks the page and tells a student nothing they can act on.
        Fail visibly and quietly, and keep the detail in the console. */
     console.error('Error loading data:', JSON_FILE, error);
     document.getElementById('subtitle').textContent =
@@ -950,72 +933,24 @@ async function init() {
   }
 }
 
-// ==================== SETUP ====================
-function setupOneTier() {
-  slides = grammarData.items;
-  renderWatchSlide();
-  buildListMode();
-  
-  if (grammarData.hideArrow) {
-    document.getElementById('arrow').style.display = 'none';
-  }
-}
+// ==================== CATEGORY SELECTOR ====================
+/* Straight from the data: seven core verbs and three MIX sets. No filtering
+   for "playable" any more — every pair in this file has both a meaning and
+   a real example sentence, which is what the old page had to work around. */
+function buildCategorySelector() {
+  const selector = document.getElementById('categorySelector');
+  selector.innerHTML = '';
+  selector.classList.add('show');
 
-function setupTwoTier() {
-  const categorySelector = document.getElementById('categorySelector');
-  categorySelector.classList.add('show');
-  
-  /* a tab that opens to nothing is worse than no tab: break and point have
-     meanings but no example sentences, so they would render an empty card.
-     Offer only the verbs that actually produce slides. */
-  /* the canonical file stores verbs["take"] = ["off","up",…]; a sibling copy
-     wraps them as {id, particles}. Accept either rather than assume. */
-  const particlesOf = v => {
-    const e = grammarData.verbs[v];
-    return Array.isArray(e) ? e : (e && e.particles) || [];
-  };
-  const playable = v => particlesOf(v).some(p => {
-    const pv = grammarData.phrasalVerbs[`${v}_${p.replace(/ /g,'_')}`];
-    if (!pv) return false;
-    return (grammarData.sets||[]).some(set =>
-      (set.sentences||[]).some(s => s.answer.toLowerCase() === `${v} ${p}`.toLowerCase()));
-  });
-  const allVerbs = Object.keys(grammarData.verbs).filter(playable);
-  const commonVerbs = allVerbs.filter(v => COMMON_VERBS.includes(v));
-  const lessCommonVerbs = allVerbs.filter(v => !COMMON_VERBS.includes(v));
-  VERB_ORDER = commonVerbs.concat(lessCommonVerbs);
-  
-  commonVerbs.forEach((verb, index) => {
+  GROUPS.forEach((g, index) => {
     const btn = document.createElement('button');
-    btn.className = 'category-btn';
-    if (index === 0) {
-      btn.classList.add('active');
-      currentCategory = verb;
-    }
-    btn.textContent = verb;
-    btn.dataset.type = 'single';
-    btn.dataset.verbs = verb;
-    btn.onclick = () => selectCategory(verb, 'single');
-    categorySelector.appendChild(btn);
+    btn.className = 'category-btn' + (index === 0 ? ' active' : '');
+    btn.textContent = g.label.toLowerCase();
+    btn.dataset.group = g.id;
+    btn.onclick = () => selectCategory(g.id);
+    selector.appendChild(btn);
   });
-  
-  const numLists = Math.ceil(lessCommonVerbs.length / VERBS_PER_LIST);
-  for (let i = 0; i < numLists; i++) {
-    const listVerbs = lessCommonVerbs.slice(i * VERBS_PER_LIST, (i + 1) * VERBS_PER_LIST);
-    const btn = document.createElement('button');
-    btn.className = 'category-btn';
-    btn.textContent = `list ${i + 1}`;
-    btn.dataset.type = 'list';
-    btn.dataset.verbs = listVerbs.join(',');
-    btn.onclick = () => selectCategory(listVerbs, 'list');
-    categorySelector.appendChild(btn);
-  }
-  
-  loadCategory(currentCategory, 'single');
 }
-
-// ==================== CATEGORY ====================
-let VERB_ORDER = [];
 
 function syncVerbStep() {
   const bar = document.getElementById('verbStep');
@@ -1024,7 +959,8 @@ function syncVerbStep() {
   const on = currentMainMode === 'explore' && i >= 0 && VERB_ORDER.length > 1;
   bar.classList.toggle('show', on);
   if (!on) return;
-  document.getElementById('verbNow').textContent = `${currentCategory}  ${i+1}/${VERB_ORDER.length}`;
+  const label = GROUPS[i] ? GROUPS[i].label : currentCategory;
+  document.getElementById('verbNow').textContent = `${label}  ${i + 1}/${VERB_ORDER.length}`;
   document.getElementById('verbPrev').disabled = i === 0;
   document.getElementById('verbNext').disabled = i === VERB_ORDER.length - 1;
 }
@@ -1033,126 +969,59 @@ function stepVerb(dir) {
   const i = VERB_ORDER.indexOf(currentCategory);
   const n = i + dir;
   if (i < 0 || n < 0 || n >= VERB_ORDER.length) return;
-  selectCategory(VERB_ORDER[n], 'single');
-  const btn = [...document.querySelectorAll('.category-btn')]
-    .find(b => b.dataset.type === 'single' && b.textContent === VERB_ORDER[n]);
-  if (btn) btn.scrollIntoView({behavior:'smooth', block:'nearest', inline:'center'});
+  selectCategory(VERB_ORDER[n]);
+  const btn = document.querySelector(`.category-btn[data-group="${VERB_ORDER[n]}"]`);
+  if (btn) btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
 }
 
-function selectCategory(verbOrVerbs, type) {
+function selectCategory(groupId) {
   if (isPlaying) pause();
-  
-  if (type === 'single') {
-    currentCategory = verbOrVerbs;
-    currentIndex = 0;
-    
-    document.querySelectorAll('.category-btn').forEach(btn => {
-      if (btn.dataset.type === 'single') {
-        btn.classList.toggle('active', btn.textContent === verbOrVerbs);
-      } else {
-        btn.classList.remove('active');
-      }
-    });
-    
-    loadCategory(verbOrVerbs, 'single');
-  } else {
-    currentCategory = verbOrVerbs;
-    currentIndex = 0;
-    
-    document.querySelectorAll('.category-btn').forEach(btn => {
-      if (btn.dataset.type === 'list') {
-        const btnVerbs = btn.dataset.verbs.split(',');
-        const isActive = verbOrVerbs.every(v => btnVerbs.includes(v)) && 
-                       btnVerbs.every(v => verbOrVerbs.includes(v));
-        btn.classList.toggle('active', isActive);
-      } else {
-        btn.classList.remove('active');
-      }
-    });
-    
-    loadCategory(verbOrVerbs, 'list');
-  }
+  currentCategory = groupId;
+  currentIndex = 0;
+  document.querySelectorAll('.category-btn').forEach(btn =>
+    btn.classList.toggle('active', btn.dataset.group === groupId));
+  loadCategory(groupId);
 }
 
-const MISSING = [];   /* verb+particle pairs with a meaning but no sentence */
-
-function loadCategory(verbOrVerbs, type) {
+// ==================== LOAD ====================
+function loadCategory(groupId) {
+  const group = GROUPS.find(g => g.id === groupId);
   slides = [];
-  MISSING.length = 0;
-  
-  const verbsToLoad = type === 'single' ? [verbOrVerbs] : verbOrVerbs;
-  
-  verbsToLoad.forEach(verb => {
-    const particles = grammarData.verbs[verb];
-    
-    particles.forEach((particle) => {
-      const key = `${verb}_${particle.replace(/ /g, '_')}`;
-      const pvData = grammarData.phrasalVerbs[key];
-      
-      if (pvData) {
-        let exampleSentence = null;
-        
-        if (grammarData.sets) {
-          for (const set of grammarData.sets) {
-            if (set.sentences) {
-              const matchingSentence = set.sentences.find(s => {
-                const answer = s.answer.toLowerCase();
-                const searchKey = `${verb} ${particle}`.toLowerCase();
-                return answer === searchKey;
-              });
-              
-              if (matchingSentence) {
-                exampleSentence = matchingSentence.text.replace('_____', `<span class="highlight">${matchingSentence.answer}</span>`);
-                break;
-              }
-            }
-          }
-        }
-        
-        /* The fallback used to invent "Example: I will take off in this
-           context." — a sentence that looks like an example and teaches
-           nothing. On a page whose whole job is showing meaning IN USE,
-           a quarter of the slides would have been lying. Skip instead:
-           72 true slides beat 96 with 24 inventions. The verbs still
-           missing sentences are listed in the console for authoring. */
-        if (!exampleSentence) {
-          MISSING.push(`${verb} ${particle}`);
-          return;
-        }
+  if (!group) return;
 
-        slides.push({
-          expression: `${verb} ${particle}`,
-          meaning: pvData.meaning,
-          example: exampleSentence
-        });
-      }
-    });
+  group.items.forEach(item => {
+    const base = baseVerbOf(item, group);
+    const phrase = `${base} ${item.particle}`;
+    const inflected = `${formOf(item, group)} ${item.particle}`;
+
+    /* The old page had a hard-coded table of about forty sentences inside the
+       JavaScript, and invented one when a pair was missing. Every example now
+       comes from the data, with the blank filled by the form the sentence
+       actually needs — "I came across…", not "I come across…". */
+    const example = item.example.replace(/_+/,
+      `<span class="highlight">${inflected}</span>`);
+
+    slides.push({ expression: phrase, meaning: item.meaning, example });
   });
-  
+
   syncVerbStep();
-  if (MISSING.length) console.log('No example sentence yet for:', MISSING.join(', '));
-  console.log(`Loaded ${slides.length} slides`);
   renderWatchSlide();
   buildListMode();
+  syncStepBtns();
 }
 
 // ==================== VIEW MODE TOGGLE ====================
 function toggleViewMode() {
-  
   if (isPlaying) pause();
-  
   viewMode = viewMode === 'watch' ? 'list' : 'watch';
-  
+
   const toggle = document.getElementById('viewModeToggle');
-  const watchLabel = document.getElementById('watchLabel');
-  const listLabel = document.getElementById('listLabel');
+  document.getElementById('watchLabel').classList.toggle('active', viewMode === 'watch');
+  document.getElementById('listLabel').classList.toggle('active', viewMode === 'list');
+  toggle.classList.toggle('active', viewMode === 'list');
+
   const watchMode = document.getElementById('watchMode');
   const listMode = document.getElementById('listMode');
-  
-  toggle.classList.toggle('active', viewMode === 'list');
-  watchLabel.classList.toggle('active', viewMode === 'watch');
-  listLabel.classList.toggle('active', viewMode === 'list');
-  
   if (viewMode === 'watch') {
     watchMode.style.display = 'block';
     listMode.classList.remove('show');
@@ -1166,55 +1035,24 @@ function setupToggle() {
   document.getElementById('viewModeToggle').addEventListener('click', toggleViewMode);
 }
 
-// ==================== SOUND ====================
-
 // ==================== RENDER ====================
 function buildListMode() {
   const container = document.getElementById('listContainer');
-  container.innerHTML = '';
-  
-  slides.forEach((data, index) => {
-    const item = document.createElement('div');
-    item.className = 'list-item';
-    
-    let html = `<div class="list-expression">${data.expression}</div>`;
-    
-    if (data.meaning) {
-      html += `<div class="list-meaning">${data.meaning}</div>`;
-    }
-    
-    if (data.normal && data.inverted) {
-      html += `
-        <div class="list-sentences">
-          <div class="list-sentence-row">
-            <div class="list-sentence-label">NORMAL</div>
-            <div class="list-sentence">${data.normal}</div>
-          </div>
-          <div class="list-arrow">↓</div>
-          <div class="list-sentence-row">
-            <div class="list-sentence-label">INVERTED</div>
-            <div class="list-sentence">${data.inverted}</div>
-          </div>
+  container.innerHTML = slides.map(data => `
+    <div class="list-item">
+      <div class="list-expression">${data.expression}</div>
+      <div class="list-meaning">${data.meaning}</div>
+      <div class="list-sentences">
+        <div class="list-sentence-row">
+          <div class="list-sentence-label">EXAMPLE</div>
+          <div class="list-sentence">${data.example}</div>
         </div>
-      `;
-    } else if (data.example) {
-      html += `
-        <div class="list-sentences">
-          <div class="list-sentence-row">
-            <div class="list-sentence-label">EXAMPLE</div>
-            <div class="list-sentence">${data.example}</div>
-          </div>
-        </div>
-      `;
-    }
-    
-    item.innerHTML = html;
-    container.appendChild(item);
-  });
+      </div>
+    </div>`).join('');
 }
 
 function renderWatchSlide() {
-  if (slides.length === 0) return;
+  if (!slides.length) return;
 
   const data = slides[currentIndex];
   const content = document.getElementById('cardContent');
@@ -1231,20 +1069,12 @@ function renderWatchSlide() {
     document.getElementById('meaning').textContent = data.meaning || '';
     document.getElementById('meaning').style.display = data.meaning ? 'block' : 'none';
 
-    if (data.normal && data.inverted) {
-      document.getElementById('normalContainer').style.display = 'block';
-      document.getElementById('arrow').style.display = 'block';
-      document.getElementById('invertedContainer').style.display = 'block';
-      document.getElementById('invertedContainer').querySelector('.sentence-label').textContent = 'INVERTED';
-      document.getElementById('normalSentence').innerHTML = data.normal;
-      document.getElementById('invertedSentence').innerHTML = data.inverted;
-    } else if (data.example) {
-      document.getElementById('normalContainer').style.display = 'none';
-      document.getElementById('arrow').style.display = 'none';
-      document.getElementById('invertedContainer').style.display = 'block';
-      document.getElementById('invertedContainer').querySelector('.sentence-label').textContent = 'EXAMPLE IN CONTEXT';
-      document.getElementById('invertedSentence').innerHTML = data.example;
-    }
+    document.getElementById('normalContainer').style.display = 'none';
+    document.getElementById('arrow').style.display = 'none';
+    document.getElementById('invertedContainer').style.display = 'block';
+    document.getElementById('invertedContainer').querySelector('.sentence-label')
+      .textContent = 'EXAMPLE IN CONTEXT';
+    document.getElementById('invertedSentence').innerHTML = data.example;
 
     document.getElementById('current').textContent = currentIndex + 1;
     document.getElementById('total').textContent = slides.length;
@@ -1269,18 +1099,7 @@ function syncStepBtns() {
   if (n) n.disabled = currentIndex >= slides.length - 1;
 }
 
-function repeatSlide() {
-  if (isPlaying) pause();
-  renderWatchSlide();
-}
-
-function togglePlay() {
-  if (isPlaying) {
-    pause();
-  } else {
-    play();
-  }
-}
+function togglePlay() { isPlaying ? pause() : play(); }
 
 function play() {
   isPlaying = true;
@@ -1288,38 +1107,22 @@ function play() {
   syncStepBtns();
 
   /* Six seconds a slide: long enough to read the meaning and the example,
-     short enough that a teenager does not leave. The old timer waited on
-     speech to finish before advancing; with the speech gone it is a plain
-     interval. */
+     short enough that a teenager does not leave. */
   clearInterval(playInterval);
   playInterval = setInterval(() => {
     if (!isPlaying) { clearInterval(playInterval); return; }
     if (currentIndex >= slides.length - 1) { pause(); return; }
-    advanceSlide();
-  }, 6000);
-}
-
-function advanceSlide() {
-  if (currentIndex < slides.length - 1) {
     currentIndex++;
     renderWatchSlide();
-  } else {
-    pause();
-    currentIndex = 0;
-    renderWatchSlide();
-  }
+    syncStepBtns();
+  }, 6000);
 }
 
 function pause() {
   isPlaying = false;
   document.getElementById('playBtn').textContent = '▶';
   syncStepBtns();
-  
-  if (playInterval) {
-    clearInterval(playInterval);
-    playInterval = null;
-  }
-  
+  if (playInterval) { clearInterval(playInterval); playInterval = null; }
 }
 
 // ==================== EVENT LISTENERS ====================
@@ -1328,34 +1131,14 @@ document.getElementById('nextBtn').addEventListener('click', () => stepSlide(1))
 document.getElementById('playBtn').addEventListener('click', togglePlay);
 
 document.addEventListener('keydown', (e) => {
-  if (viewMode === 'watch' && currentMainMode === 'explore') {
-    if (e.key === ' ') {
-      e.preventDefault();
-      togglePlay();
-    }
-    if (e.key === 'r' || e.key === 'R') {
-      repeatSlide();
-    }
-    if (e.key === 's' || e.key === 'S') {
-    }
-    if (e.key === 'ArrowRight' && currentIndex < slides.length - 1) {
-      if (isPlaying) pause();
-      currentIndex++;
-      renderWatchSlide();
-    }
-    if (e.key === 'ArrowLeft' && currentIndex > 0) {
-      if (isPlaying) pause();
-      currentIndex--;
-      renderWatchSlide();
-    }
-  }
+  if (viewMode !== 'watch' || currentMainMode !== 'explore') return;
+  if (e.key === ' ')          { e.preventDefault(); togglePlay(); }
+  if (e.key === 'ArrowRight') { e.preventDefault(); stepSlide(1); }
+  if (e.key === 'ArrowLeft')  { e.preventDefault(); stepSlide(-1); }
 });
 
-
-
 // ==================== START ====================
-/* bound before the fetch — the switch used to be dead while data loaded,
-   and binding it twice made every click toggle and toggle straight back */
+/* Bound before the fetch — the switch used to be dead while data loaded. */
 setupToggle();
 init();
   </script>

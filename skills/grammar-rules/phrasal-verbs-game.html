@@ -144,14 +144,6 @@
   .score-num{ font-variant-numeric:tabular-nums; }
   .barstage{ font-family:'Space Grotesk',sans-serif; font-size:.55rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.3); }
   .barstage b{ color:var(--gold); font-weight:700; }
-  /* The five stage marks live in the fixed bar, so they are on screen in
-     every mode and on every set — the reward is never out of sight. Unlit
-     stages keep their shape and are merely dim. */
-  .stagestrip{ display:flex; align-items:center; gap:.22rem; }
-  .stagestrip svg{ width:14px; height:14px; display:block; }
-  .stagestrip .sm{ opacity:.28; transition:opacity .4s; }
-  .stagestrip .sm.lit{ opacity:1; }
-  .stagestrip .sm.now svg{ filter:drop-shadow(0 0 5px currentColor); }
 
   /* ── LOADING ── */
   .loading-screen{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#0d0d0d; z-index:999; transition:opacity .6s; }
@@ -164,22 +156,49 @@
      Everything below is the game's own. The menu is deliberately NOT a tab
      strip: the verb grid with its mastery states is the map, and it says
      more than tabs can. */
+  /* The ladder is not part of any screen — it sits above them all, so the
+     five marks are on view in the menu, mid-round and on the summary. */
+  .screens{ position:relative; flex:1; min-height:0; }
   .screen{ position:absolute; inset:0; display:none; flex-direction:column; min-height:0; }
   .screen.active{ display:flex; }
 
   /* ---------- MENU ---------- */
-  #menu{ overflow-y:auto; padding:1.1rem 1.4rem 1.8rem; }
-  .stagebar{ display:flex; align-items:center; justify-content:center; gap:clamp(.4rem,2vw,1.1rem); padding:.3rem 0 .9rem; }
-  .stagenode{ display:flex; flex-direction:column; align-items:center; gap:.3rem; width:56px; }
-  .stagenode .dot{ width:30px; height:30px; }
+  #menu{ overflow-y:auto; padding:.5rem 1.4rem 1.8rem; }
+
+  /* Small enough to live above the field for a whole round. */
+  .stagebar{
+    display:flex; align-items:flex-start; justify-content:center;
+    gap:clamp(.3rem,1.6vw,.85rem); padding:.5rem 0 .45rem; flex-shrink:0;
+    border-bottom:1px solid rgba(255,255,255,.05);
+  }
+  .stagenode{ display:flex; flex-direction:column; align-items:center; gap:.2rem; width:46px; }
+  .stagenode .dot{ position:relative; width:22px; height:22px; }
+
+  /* A green ring fills round the stage you're on as sets are cleared, so the
+     ladder shows not just where you are but how far through you've got. */
+  .stagenode.current .dot::before{
+    content:''; position:absolute; inset:-5px; border-radius:50%;
+    background:conic-gradient(var(--clear) calc(var(--p,0) * 1%), rgba(255,255,255,.09) 0);
+    -webkit-mask:radial-gradient(circle, transparent 57%, #000 60%);
+            mask:radial-gradient(circle, transparent 57%, #000 60%);
+    transition:background .5s;
+  }
+  /* Every catch inflates the mark you're on and throws a ring of light. */
+  .stagenode.pop svg{ animation:stagePop .5s cubic-bezier(.3,1.6,.5,1); }
+  @keyframes stagePop{ 0%{transform:scale(1)} 35%{transform:scale(1.7)} 100%{transform:scale(1)} }
+  .stagenode.pop .dot::after{
+    content:''; position:absolute; inset:-6px; border-radius:50%;
+    border:2px solid var(--clear); animation:stageRay .55s ease-out forwards;
+  }
+  @keyframes stageRay{ from{opacity:.9; transform:scale(.6)} to{opacity:0; transform:scale(2.3)} }
   /* Unreached stages keep their shape and are merely unlit — five milestones
      on a road, not four missing ones. */
   .stagenode:not(.done):not(.current) svg{ opacity:.45; }
   .stagenode svg{ width:100%; height:100%; }
-  .stagenode .lbl{ font-family:'DM Mono',monospace; font-size:.52rem; letter-spacing:.08em; text-transform:uppercase; color:var(--paper-faint); }
+  .stagenode .lbl{ font-family:'DM Mono',monospace; font-size:.45rem; letter-spacing:.08em; text-transform:uppercase; color:var(--paper-faint); }
   .stagenode.done .lbl{ color:var(--paper-dim); }
   .stagenode.current .lbl{ color:var(--mode-accent); font-weight:500; }
-  .stagelink{ width:clamp(10px,3vw,26px); height:1px; background:var(--line); margin-top:-18px; flex-shrink:0; }
+  .stagelink{ width:clamp(8px,2.4vw,20px); height:1px; background:var(--line); margin-top:11px; flex-shrink:0; }
   .stagelink.done{ background:var(--gold); }
 
   .stagecaption{ text-align:center; font-family:'DM Mono',monospace; font-size:.66rem; color:var(--paper-dim); margin-bottom:1.1rem; }
@@ -252,18 +271,6 @@
     content:'CLEAR'; position:absolute; left:50%; top:-12px; transform:translateX(-50%);
     font-family:'DM Mono',monospace; font-size:.44rem; letter-spacing:.14em; color:rgba(255,255,255,.4);
   }
-
-  /* The stage mark you're on reacts to every catch — a small inflate and a
-     ring going out. It's the only reward feedback during play, so it has to
-     be visible from across a classroom. */
-  .stagestrip .sm{ position:relative; }
-  .stagestrip .sm.pop svg{ animation:stagePop .5s cubic-bezier(.3,1.6,.5,1); }
-  @keyframes stagePop{ 0%{transform:scale(1)} 35%{transform:scale(1.75)} 100%{transform:scale(1)} }
-  .stagestrip .sm.pop::after{
-    content:''; position:absolute; inset:-4px; border-radius:50%;
-    border:2px solid currentColor; animation:stageRay .55s ease-out forwards;
-  }
-  @keyframes stageRay{ from{opacity:.85; transform:scale(.6)} to{opacity:0; transform:scale(2.4)} }
 
   /* ── PLAY BAR ──
      The definition lives along the bottom of the card, centred, with the
@@ -510,9 +517,11 @@
 <div class="stage">
   <div class="slide-card" id="card">
 
+    <div class="stagebar" id="stagebar"></div>
+    <div class="screens">
+
     <!-- MENU -->
     <section class="screen active" id="menu">
-      <div class="stagebar" id="stagebar"></div>
       <div class="stagecaption" id="stagecaption"></div>
       <div class="trialcard locked" id="trialcard">
         <svg class="icon" viewBox="0 0 24 24"><path id="trialIconPath" d="M2 18l3-11 5 4 4-7 4 7 5-4 3 11H2z" fill="#5a5a52"/></svg>
@@ -591,6 +600,8 @@
       <div class="sumnote" id="sumNote"></div>
     </section>
 
+    </div><!-- /screens -->
+
     <div id="stageup">
       <svg class="ic" id="stageupIcon" viewBox="0 0 24 24"></svg>
       <div class="eyebrow">New stage</div>
@@ -607,10 +618,7 @@
     <div class="score-item"><div class="score-dot ok"></div><span class="score-num" id="barHit">0</span></div>
     <div class="score-item"><div class="score-dot bad"></div><span class="score-num" id="barMiss">0</span></div>
   </div>
-  <div class="barright">
-    <span class="stagestrip" id="stageStrip"></span>
-    <span class="barstage" id="barStage">—</span>
-  </div>
+  <div class="barright"><span class="barstage" id="barStage">—</span></div>
 </div>
 
 <script>
@@ -754,15 +762,29 @@ const starsFor = a => a >= .9 ? '★★★' : a >= .7 ? '★★☆' : a >= CLEAR
 /* ======================================================================
    MENU
 ====================================================================== */
-/* Redrawn on every menu render and at the start of every round. */
-function renderStageStrip(){
+/* The ladder is permanent, so it belongs to no screen: redrawn on every
+   menu render and at the start of every round. */
+function renderStageBar(){
   const idx = currentStageIndex();
-  const wrap = $('stageStrip');
-  wrap.innerHTML = STAGES.map((s,i) =>
-    `<span class="sm${i <= idx ? ' lit' : ''}${i === idx ? ' now' : ''}" style="color:var(--s${i})" title="${s.label}">` +
-    `<svg viewBox="0 0 24 24">${svgIcon(i, i <= idx ? `var(--s${i})` : 'rgba(232,230,225,.5)')}</svg></span>`
-  ).join('');
-  $('barStage').innerHTML = `<b>${STAGES[idx].label}</b> · ${clearedCount()}/${N_GROUPS}`;
+  const cleared = clearedCount();
+  const from = THRESH[idx], to = THRESH[Math.min(4, idx+1)];
+  const pct = to > from ? Math.max(0, Math.min(100, Math.round((cleared-from)/(to-from)*100))) : 100;
+
+  const bar = $('stagebar'); bar.innerHTML = '';
+  STAGES.forEach((st,i) => {
+    if (i > 0){
+      const link = document.createElement('div');
+      link.className = 'stagelink' + (i <= idx ? ' done' : '');
+      bar.appendChild(link);
+    }
+    const node = document.createElement('div');
+    node.className = 'stagenode' + (i < idx ? ' done' : '') + (i === idx ? ' current' : '');
+    if (i === idx) node.style.setProperty('--p', pct);
+    node.innerHTML = `<div class="dot"><svg viewBox="0 0 24 24">${
+      svgIcon(i, i <= idx ? `var(--s${i})` : 'rgba(229,229,231,.35)')}</svg></div><div class="lbl">${st.label}</div>`;
+    bar.appendChild(node);
+  });
+  $('barStage').innerHTML = `<b>${STAGES[idx].label}</b> · ${cleared}/${N_GROUPS}`;
 }
 
 function showScreen(id){
@@ -775,19 +797,6 @@ function renderMenu(){
   document.documentElement.style.setProperty('--screen-accent', 'var(--gold)');
   const stageIdx = currentStageIndex();
   const cleared = clearedCount();
-
-  const bar = $('stagebar'); bar.innerHTML = '';
-  STAGES.forEach((s,i) => {
-    if (i > 0) {
-      const link = document.createElement('div');
-      link.className = 'stagelink' + (i <= stageIdx ? ' done' : '');
-      bar.appendChild(link);
-    }
-    const node = document.createElement('div');
-    node.className = 'stagenode' + (i < stageIdx ? ' done' : '') + (i === stageIdx ? ' current' : '');
-    node.innerHTML = `<div class="dot"><svg viewBox="0 0 24 24">${svgIcon(i, i <= stageIdx ? `var(--s${i})` : 'rgba(229,229,231,.22)')}</svg></div><div class="lbl">${s.label}</div>`;
-    bar.appendChild(node);
-  });
 
   /* Say what to do and what it takes. "Clear a set" means nothing to a
      fifteen-year-old until you tell them the number. */
@@ -804,7 +813,7 @@ function renderMenu(){
   } else {
     cap.innerHTML = `<b>Crown</b> — every set done and the trial passed.`;
   }
-  renderStageStrip();
+  renderStageBar();
   $('barHit').textContent = 0; $('barMiss').textContent = 0;
 
   /* Visible until a set is chosen in this visit. */
@@ -939,7 +948,7 @@ function beginRound(cfg){
   $('field').innerHTML = '';
   hideToast();
 
-  renderStageStrip();
+  renderStageBar();
   showScreen('play');
   newTarget();                       // the definition is already in the strip,
                                      // visible behind the note, so the eye
@@ -1174,7 +1183,7 @@ function syncCounters(){
 
 /* Every catch inflates the stage mark you're on and throws a ring of light. */
 function popStage(){
-  const now = $('stageStrip').querySelector('.sm.now');
+  const now = $('stagebar').querySelector('.stagenode.current');
   if (!now) return;
   now.classList.remove('pop');
   void now.offsetWidth;

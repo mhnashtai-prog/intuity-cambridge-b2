@@ -202,7 +202,7 @@
   .mixcard .pct{ font-family:'DM Mono',monospace; font-size:.58rem; color:var(--paper-dim); }
 
   .trialcard{
-    margin-top:1.1rem; border:1px solid rgba(255,217,74,.35); border-radius:12px; padding:1rem 1.1rem;
+    margin-top:.4rem; border:1px solid rgba(255,217,74,.35); border-radius:12px; padding:1rem 1.1rem;
     background:radial-gradient(ellipse at 30% 0%, rgba(255,217,74,.08), transparent 70%);
     display:flex; align-items:center; gap:.9rem; cursor:pointer; transition:transform .12s;
   }
@@ -217,10 +217,53 @@
   .hud .spacer{ flex:1; }
   .hit{ color:var(--clear); } .miss{ color:var(--wrong); } .streak{ color:var(--gold); }
   .streak.hot{ color:var(--mode-accent); }
-  .clock{ font-size:.72rem; padding:.15rem .5rem; border-radius:6px; background:rgba(255,255,255,.04); font-variant-numeric:tabular-nums; }
-  .clock.low{ color:var(--wrong); background:rgba(232,106,92,.12); }
+  /* The clock gains weight as it empties: steady, then amber in the last
+     thirty, then red and beating once a second under fifteen. */
+  .clock{
+    font-family:'Space Grotesk',sans-serif; font-weight:700;
+    font-size:1.05rem; padding:.1rem .55rem .15rem; border-radius:7px;
+    background:rgba(255,255,255,.05); font-variant-numeric:tabular-nums;
+    transition:color .3s, background .3s, font-size .3s;
+  }
+  .clock.warn{ color:#f0a23c; background:rgba(240,162,60,.12); }
+  .clock.low{
+    color:var(--wrong); background:rgba(232,106,92,.16); font-size:1.2rem;
+    animation:clockBeat 1s ease-in-out infinite;
+  }
+  @keyframes clockBeat{ 0%,100%{transform:scale(1)} 12%{transform:scale(1.14)} 26%{transform:scale(1)} }
   .backbtn{ font-family:'DM Mono',monospace; font-size:.62rem; color:var(--paper-faint); letter-spacing:.05em; }
   .backbtn:hover{ color:var(--paper); }
+
+  /* ── ROUND BAR ──
+     Answers the question the round could not: am I winning? The fill is
+     accuracy, the notch is the line you must cross to clear the set, and the
+     colour says which side of it you are on. */
+  .roundbar{
+    position:relative; height:5px; margin:.1rem 1rem .2rem; border-radius:99px;
+    background:rgba(255,255,255,.07); flex-shrink:0;
+  }
+  .roundfill{
+    height:100%; width:0; border-radius:99px; background:var(--wrong);
+    transition:width .35s cubic-bezier(.22,1,.36,1), background .35s, box-shadow .35s;
+  }
+  .roundfill.clearing{ background:var(--clear); box-shadow:0 0 12px rgba(94,211,155,.65); }
+  .roundnotch{ position:absolute; top:-4px; width:2px; height:13px; border-radius:2px; background:rgba(255,255,255,.5); }
+  .roundnotch::after{
+    content:'CLEAR'; position:absolute; left:50%; top:-12px; transform:translateX(-50%);
+    font-family:'DM Mono',monospace; font-size:.44rem; letter-spacing:.14em; color:rgba(255,255,255,.4);
+  }
+
+  /* The stage mark you're on reacts to every catch — a small inflate and a
+     ring going out. It's the only reward feedback during play, so it has to
+     be visible from across a classroom. */
+  .stagestrip .sm{ position:relative; }
+  .stagestrip .sm.pop svg{ animation:stagePop .5s cubic-bezier(.3,1.6,.5,1); }
+  @keyframes stagePop{ 0%{transform:scale(1)} 35%{transform:scale(1.75)} 100%{transform:scale(1)} }
+  .stagestrip .sm.pop::after{
+    content:''; position:absolute; inset:-4px; border-radius:50%;
+    border:2px solid currentColor; animation:stageRay .55s ease-out forwards;
+  }
+  @keyframes stageRay{ from{opacity:.85; transform:scale(.6)} to{opacity:0; transform:scale(2.4)} }
 
   /* ── PLAY BAR ──
      The definition lives along the bottom of the card, centred, with the
@@ -471,18 +514,18 @@
     <section class="screen active" id="menu">
       <div class="stagebar" id="stagebar"></div>
       <div class="stagecaption" id="stagecaption"></div>
+      <div class="trialcard locked" id="trialcard">
+        <svg class="icon" viewBox="0 0 24 24"><path id="trialIconPath" d="M2 18l3-11 5 4 4-7 4 7 5-4 3 11H2z" fill="#5a5a52"/></svg>
+        <div>
+          <div class="tt" id="trialTitle">Final Trial</div>
+          <div class="td" id="trialDesc">—</div>
+        </div>
+      </div>
       <div class="note" id="menuNudge" hidden>
         <span class="note-pin" aria-hidden="true"></span>
         <p class="note-text">Click on a verb above to start</p>
       </div>
 
-      <div class="trialcard locked" id="trialcard">
-        <svg class="icon" viewBox="0 0 24 24"><path id="trialIconPath" d="M2 18l3-11 5 4 4-7 4 7 5-4 3 11H2z" fill="#5a5a52"/></svg>
-        <div>
-          <div class="tt" id="trialTitle">Final Trial — locked</div>
-          <div class="td" id="trialDesc">Clear every set to unlock the Crown trial.</div>
-        </div>
-      </div>
     </section>
 
     <!-- PLAY -->
@@ -493,6 +536,11 @@
         <span id="setLabel" style="font-family:'Space Grotesk',sans-serif;font-size:.6rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.35)"></span>
         <span class="spacer"></span>
         <button class="helpbtn" id="helpBtn" title="How to play">?</button>
+      </div>
+
+      <div class="roundbar">
+        <div class="roundfill" id="roundFill"></div>
+        <span class="roundnotch" id="roundNotch"></span>
       </div>
 
       <div class="field" id="field"></div>
@@ -768,11 +816,14 @@ function renderMenu(){
   const tc = $('trialcard');
   tc.classList.toggle('locked', !all);
   $('trialIconPath').setAttribute('fill', all ? (progress.trialPassed ? 'var(--s4)' : 'var(--gold)') : '#5a5a52');
-  $('trialTitle').textContent = progress.trialPassed ? 'Final Trial — Crown earned' : (all ? 'Final Trial — ready' : 'Final Trial — locked');
+  const left = Math.max(0, N_GROUPS - cleared);
+  $('trialTitle').textContent = progress.trialPassed
+    ? 'You have the Crown'
+    : (all ? 'The Crown is open — take it' : `${left} set${left===1?'':'s'} to go, then the Crown`);
   $('trialDesc').textContent = progress.trialPassed
-    ? `Best score ${Math.round(progress.trialBest*100)}%. Replay any time.`
-    : (all ? `The phrases you've missed most, from every set. Score ${Math.round(TRIAL_THRESHOLD*100)}%+ to earn the Crown.`
-           : 'Clear every set to unlock the Crown trial.');
+    ? `Your best is ${Math.round(progress.trialBest*100)}%. Go again any time.`
+    : (all ? `Your worst phrases from every set, all at once. Get ${Math.round(TRIAL_THRESHOLD*100)}% and it's yours.`
+           : `Win ${left} more set${left===1?'':'s'} and the last one opens up.`);
   tc.onclick = all ? startTrial : null;
 }
 
@@ -881,7 +932,10 @@ function beginRound(cfg){
   $('barHit').textContent = 0; $('barMiss').textContent = 0;
   $('streakLabel').classList.remove('hot');
   $('clockVal').textContent = fmtClock(round.timeLeft);
-  $('clockVal').classList.remove('low');
+  $('clockVal').classList.remove('low','warn');
+  $('roundFill').style.width = '0%';
+  $('roundFill').classList.remove('clearing');
+  $('roundNotch').style.left = Math.round(CLEAR_THRESHOLD*100) + '%';
   $('field').innerHTML = '';
   hideToast();
 
@@ -921,6 +975,7 @@ const fmtClock = s => Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
 function tickClock(){
   round.timeLeft--;
   $('clockVal').textContent = fmtClock(Math.max(0, round.timeLeft));
+  $('clockVal').classList.toggle('warn', round.timeLeft <= 30 && round.timeLeft > 15);
   $('clockVal').classList.toggle('low', round.timeLeft <= 15);
   if (round.timeLeft <= 0) endRound();
 }
@@ -1080,7 +1135,7 @@ function hit(rec){
     burst(rec); removeRec(rec);
     round.hits++; round.streak++;
 
-    syncCounters(); showContext(round.target);
+    syncCounters(); popStage(); showContext(round.target);
     round.coverage.add(round.target.p);
     pstat(round.target.p).hits++; save();
 
@@ -1109,6 +1164,22 @@ function syncCounters(){
   $('missVal').textContent = round.misses; $('barMiss').textContent = round.misses;
   $('streakVal').textContent = round.streak;
   $('streakLabel').classList.toggle('hot', round.streak >= 5);
+
+  const attempts = round.hits + round.misses;
+  const acc = attempts ? round.hits/attempts : 0;
+  const fill = $('roundFill');
+  fill.style.width = Math.round(acc*100) + '%';
+  fill.classList.toggle('clearing', attempts > 0 && acc >= CLEAR_THRESHOLD);
+}
+
+/* Every catch inflates the stage mark you're on and throws a ring of light. */
+function popStage(){
+  const now = $('stageStrip').querySelector('.sm.now');
+  if (!now) return;
+  now.classList.remove('pop');
+  void now.offsetWidth;
+  now.classList.add('pop');
+  setTimeout(() => now.classList.remove('pop'), 560);
 }
 
 let toastTimer;

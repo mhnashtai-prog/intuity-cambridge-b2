@@ -211,9 +211,45 @@
   .backbtn{ font-family:'DM Mono',monospace; font-size:.62rem; color:var(--paper-faint); letter-spacing:.05em; }
   .backbtn:hover{ color:var(--paper); }
 
-  .prompt{ margin:.3rem 1rem 0; padding:.7rem 1rem; text-align:center; border-left:2px solid var(--mode-accent); background:rgba(255,217,74,.05); flex-shrink:0; }
-  .promptlabel{ font-family:'DM Mono',monospace; font-size:.55rem; letter-spacing:.2em; text-transform:uppercase; color:rgba(255,217,74,.65); margin-bottom:.3rem; }
-  .prompttext{ font-size:clamp(.85rem,2.2vw,1rem); }
+  /* The prompt is the question. Until the first catch of a round it is the
+     loudest thing on screen, because a learner arriving cold has to know
+     where to look before anything else makes sense. After one hit they have
+     the loop, and it settles back so the field can breathe. */
+  .prompt{
+    position:relative; margin:.5rem 1rem 0; padding:.85rem 1.1rem; text-align:center;
+    border:1px solid rgba(255,217,74,.18); border-left:3px solid var(--mode-accent);
+    border-radius:8px; background:rgba(255,217,74,.06); flex-shrink:0;
+    transition:background .5s, border-color .5s, box-shadow .5s;
+  }
+  .prompt.waiting{
+    background:rgba(255,217,74,.11);
+    border-color:rgba(255,217,74,.42);
+    animation:promptPulse 2.1s ease-in-out infinite;
+  }
+  @keyframes promptPulse{
+    0%,100%{ box-shadow:0 0 0 0 rgba(255,217,74,0); }
+    50%    { box-shadow:0 0 0 5px rgba(255,217,74,.07); }
+  }
+  .promptlabel{
+    font-family:'Space Grotesk',sans-serif; font-size:.6rem; font-weight:700;
+    letter-spacing:.18em; text-transform:uppercase; color:var(--mode-accent);
+    margin-bottom:.4rem; transition:opacity .4s;
+  }
+  .prompttext{
+    font-family:'DM Sans',sans-serif; font-weight:500;
+    font-size:clamp(1rem,2.8vw,1.35rem); line-height:1.35; color:var(--paper);
+    transition:font-size .4s;
+  }
+  .prompt.settled .prompttext{ font-size:clamp(.9rem,2.3vw,1.1rem); }
+  .prompt.settled .promptlabel{ opacity:.65; }
+
+  /* Shown across the field on a learner's very first round, and never again. */
+  .firsthint{
+    position:absolute; inset:auto 0 42%; z-index:6; text-align:center; pointer-events:none;
+    font-family:'DM Mono',monospace; font-size:.78rem; letter-spacing:.06em;
+    color:rgba(255,217,74,.8); transition:opacity .5s;
+  }
+  .firsthint.gone{ opacity:0; }
 
   .field{ position:relative; flex:1; min-height:0; margin:.6rem .6rem 1rem; overflow:hidden; }
   .field::before{
@@ -321,11 +357,13 @@
         <span class="streak" id="streakLabel">streak <span id="streakVal">0</span></span>
         <span class="clock" id="clockVal">2:00</span>
       </div>
-      <div class="prompt">
-        <div class="promptlabel" id="mixLabel">Match this meaning</div>
+      <div class="prompt" id="promptBox">
+        <div class="promptlabel" id="mixLabel">Tap the phrase that means</div>
         <p class="prompttext" id="promptText">…</p>
       </div>
-      <div class="field" id="field"></div>
+      <div class="field" id="field">
+        <div class="firsthint" id="firstHint">tap the words as they come towards you</div>
+      </div>
       <div class="toast" id="toast"></div>
     </section>
 
@@ -621,12 +659,12 @@ function startGroup(id){
   const g = GROUPS.find(x => x.id === id);
   activeGroupId = id;
   buildTabs();
-  beginRound({ mode:'group', index:id, pool:g.items, label:`${g.label} · match this meaning`, accent:g.color });
+  beginRound({ mode:'group', index:id, pool:g.items, label:`${g.label} — tap the phrase that means`, accent:g.color });
 }
 function startPractice(i){
   activeGroupId = 'p' + i;
   buildTabs();
-  beginRound({ mode:'practice', index:i, pool:PRACTICE_SETS[i], label:`PRACTICE ${i+1} · match this meaning`, accent:'var(--gold)' });
+  beginRound({ mode:'practice', index:i, pool:PRACTICE_SETS[i], label:`PRACTICE ${i+1} — tap the phrase that means`, accent:'var(--gold)' });
 }
 function startTrial(){
   /* Weighted toward phrases this learner has actually missed — the trial is
@@ -641,7 +679,7 @@ function startTrial(){
   });
   const pool = [...new Set(shuffle(bag))].slice(0, 24);
   beginRound({ mode:'trial', index:null, pool: pool.length ? pool : shuffle(FULL_POOL).slice(0,24),
-               label:'FINAL TRIAL · match this meaning', accent:'var(--s4)' });
+               label:'FINAL TRIAL — tap the phrase that means', accent:'var(--s4)' });
 }
 
 function beginRound(cfg){
@@ -663,6 +701,19 @@ function beginRound(cfg){
   $('clockVal').classList.remove('low');
   $('field').innerHTML = '';
   hideToast();
+
+  /* Loud until the first catch of this round. */
+  const box = $('promptBox');
+  box.classList.add('waiting');
+  box.classList.remove('settled');
+
+  /* One sentence of instruction, the first time this learner ever plays. */
+  if (!progress.hintSeen) {
+    const hint = document.createElement('div');
+    hint.className = 'firsthint'; hint.id = 'firstHint';
+    hint.textContent = 'tap the words as they come towards you';
+    $('field').appendChild(hint);
+  }
 
   showScreen('play');
   newTarget();
@@ -835,6 +886,15 @@ function hit(rec){
   if (rec.phrase === round.target.p){
     burst(rec); removeRec(rec);
     round.hits++; round.streak++;
+
+    /* They have the loop now — quieten the prompt and retire the hint. */
+    if (round.hits === 1) {
+      $('promptBox').classList.remove('waiting');
+      $('promptBox').classList.add('settled');
+      const hint = document.getElementById('firstHint');
+      if (hint) { hint.classList.add('gone'); setTimeout(() => hint.remove(), 500); }
+      if (!progress.hintSeen) { progress.hintSeen = true; save(); }
+    }
     syncCounters(); showContext(round.target);
     round.coverage.add(round.target.p);
     pstat(round.target.p).hits++; save();

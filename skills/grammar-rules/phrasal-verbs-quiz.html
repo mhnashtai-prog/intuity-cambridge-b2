@@ -206,6 +206,42 @@ position: relative; width: 100%; max-width: min(94vw, 1200px);
       line-height: 1.75; color: rgba(229,229,231,.55); text-align: center; max-width: 560px;
     }
 
+   /* ── LEARN: informational item strip ──
+       Absolutely positioned so it never shifts the centred sentence. Purely
+       informational: no pointer events, no click target, nothing to tap by
+       mistake. The dot nav below remains the way to move. */
+    .item-strip {
+      position: absolute; top: 1.5rem; left: 1.6rem; right: 1.6rem;
+      display: flex; flex-wrap: wrap; justify-content: center;
+      align-items: baseline; gap: .2rem .5rem;
+      pointer-events: none; user-select: none; z-index: 4;
+    }
+    .item-strip-verb {
+      font-family: 'Space Grotesk', sans-serif; font-size: .56rem; font-weight: 700;
+      letter-spacing: .16em; text-transform: uppercase;
+      color: var(--verb-color, var(--gold)); opacity: .85;
+      margin-right: .25rem;
+    }
+    .item-chip {
+      font-family: 'DM Sans', sans-serif; font-size: .58rem; font-weight: 600;
+      letter-spacing: .1em; text-transform: uppercase;
+      color: rgba(229,229,231,.22); transition: color .3s;
+      white-space: nowrap;
+    }
+    /* The item on screen. Everything else stays quiet so this reads at a
+       glance without the strip competing with the sentence. */
+    .item-chip.current {
+      color: var(--verb-color, var(--gold));
+      border-bottom: 1px solid var(--verb-color, var(--gold));
+      padding-bottom: 1px;
+    }
+    .item-chip.seen { color: rgba(229,229,231,.42); }
+
+    @media(max-width:600px){
+      .item-strip { top: 1rem; left: .8rem; right: .8rem; gap: .15rem .4rem; }
+      .item-chip, .item-strip-verb { font-size: .54rem; letter-spacing: .08em; }
+    }
+   
     /* quiz uses .phrase-text + size classes */
     .quiz-blank {
       display: inline-block; min-width: 80px; border-bottom: 2px solid var(--mode-accent);
@@ -751,9 +787,25 @@ async function loadAll() {
 }
 
 /* ── STABLE ITEM KEY ── (index-based, not particle text — avoids collisions
-   when two items in the same verb share a particle, and survives shuffles) */
+   when two items in the same group share a particle, which is normal in a
+   MIX group, and survives shuffles) */
 function itemKey(vIdx, item) {
   return vIdx + '_' + verbs[vIdx].items.indexOf(item);
+}
+
+/* ── THE VERB FOR ONE ITEM ──
+   Single-verb tabs take the verb from the group. Items in a MIX group carry
+   their own `verb`, and any item needing an inflected form carries `form`,
+   which wins over both. Everything that names the verb of a specific item
+   goes through here. */
+function verbOf(item) {
+  return (item && (item.form || item.verb)) || verbs[verbIdx].id;
+}
+
+/* The citation form — base verb, no inflection. Used in summaries and labels
+   where "COME ACROSS" reads better than "CAME ACROSS". */
+function baseVerbOf(item) {
+  return (item && item.verb) || verbs[verbIdx].id;
 }
 
 /* ── TABS ── */
@@ -844,7 +896,7 @@ function renderSlideInner(s) {
 /* ── LEARN ── */
 function renderLearn(item) {
   const particleUpper = item.particle.toUpperCase();
-  const verbWord = (item.form || verbs[verbIdx].id).toUpperCase();
+  const verbWord = verbOf(item).toUpperCase();
   const posterHtml = item.example
     .toUpperCase()
     .replace('_____', `<span class="verb-word">${verbWord}</span> <span class="particle" data-particle-toggle>${particleUpper}</span>`);
@@ -853,8 +905,24 @@ function renderLearn(item) {
   const size = wordCount <= 8 ? 'size-small' : wordCount <= 16 ? 'size-medium' : 'size-large';
 
   return `
+    ${renderItemStrip(item)}
     <div class="phrase-text ${size}">${posterHtml}</div>
     <div class="meaning-text">${item.meaning}</div>`;
+}
+
+/* Every phrase in the current set, with the one on screen picked out. Learn
+   mode only: in Quiz and Practice this strip would hand over the answer,
+   which matters most in a MIX group where the distractors come from the same
+   verb as the target. */
+function renderItemStrip(currentItem) {
+  const group = verbs[verbIdx];
+  const lead = group.mixed ? '' : `<span class="item-strip-verb">${group.id}</span>`;
+  const chips = group.items.map(it => {
+    const label = group.mixed ? (baseVerbOf(it) + ' ' + it.particle) : it.particle;
+    const cls = it === currentItem ? 'item-chip current' : 'item-chip';
+    return `<span class="${cls}">${label}</span>`;
+  }).join('');
+  return `<div class="item-strip">${lead}${chips}</div>`;
 }
 
 function attachLearnMaskHandlers() {}
@@ -864,7 +932,7 @@ function renderQuiz(item) {
   const opts = shuffled([...item.options]);
   const wordCount = item.example.split(/\s+/).length;
   const size = wordCount <= 8 ? 'size-small' : wordCount <= 16 ? 'size-medium' : 'size-large';
-  const verbWord = (item.form || verbs[verbIdx].id).toUpperCase();
+  const verbWord = verbOf(item).toUpperCase();
   const sentHtml = item.example.toUpperCase().replace('_____',
     `<span class="verb-word">${verbWord}</span> <span class="quiz-blank" id="blankSpan">?</span>`);
   return `
@@ -885,7 +953,7 @@ function renderQuiz(item) {
 function renderGap(item) {
   const wordCount = item.example.split(/\s+/).length;
   const size = wordCount <= 8 ? 'size-small' : wordCount <= 16 ? 'size-medium' : 'size-large';
-  const verbWord = (item.form || verbs[verbIdx].id).toUpperCase();
+  const verbWord = verbOf(item).toUpperCase();
   const sentHtml = item.example.toUpperCase().replace('_____',
     `<span class="verb-word">${verbWord}</span> <span class="gap-blank-marker">_____</span>`);
   return `
@@ -921,7 +989,7 @@ function show(idx, dir) {
         b.classList.remove('correct', 'wrong', 'reveal', 'locked');
       });
       const incomingBlank = els[idx].querySelector('.quiz-blank');
-   if (incomingBlank) { incomingBlank.textContent = '?'; incomingBlank.classList.remove('revealed'); incomingBlank.style.color = ''; }
+      if (incomingBlank) { incomingBlank.textContent = '?'; incomingBlank.classList.remove('revealed'); incomingBlank.style.color = ''; }
       const incomingFb = els[idx].querySelector('.fb-bar');
       if (incomingFb) incomingFb.classList.remove('show');
       const incomingInput = els[idx].querySelector('.gap-input');
@@ -949,7 +1017,7 @@ function show(idx, dir) {
 
   const s = slides[idx];
   document.getElementById('sectionLabel').textContent =
-    s ? (verbs[verbIdx].id + ' ' + s.item.particle).toUpperCase() : '';
+    s ? (baseVerbOf(s.item) + ' ' + s.item.particle).toUpperCase() : '';
 
   updateProgress();
   updateCheckBtn();
@@ -981,7 +1049,6 @@ function chooseOpt(chosen, correct, btn) {
      read, and the old timing gave it less time than a correct one. */
   setTimeout(() => next(), isOk ? 1300 : 2600);
 }
-  
 
 /* ── GAP CHECK ── */
 function handleCheck() {
@@ -994,7 +1061,7 @@ function handleCheck() {
   gapChecked = true;
   inp.classList.add(isOk ? 'correct' : 'wrong');
   inp.disabled = true;
-const hint = document.getElementById('gapHint');
+  const hint = document.getElementById('gapHint');
   if (!isOk && hint) {
     hint.textContent = 'Answer: ' + slides[current].item.particle.toUpperCase();
     hint.classList.add('show-answer');
@@ -1002,7 +1069,7 @@ const hint = document.getElementById('gapHint');
   recordResult(isOk);
   showFeedback(isOk, slides[current].item.particle);
   document.getElementById('checkBtn').style.display = 'none';
-setTimeout(() => next(), isOk ? 1300 : 2600);
+  setTimeout(() => next(), isOk ? 1300 : 2600);
 }
 
 /* ── RESULTS & FEEDBACK ── */
@@ -1032,21 +1099,19 @@ function showFeedback(isOk, particle) {
   bar.classList.add('show');
   icon.textContent = isOk ? '✓' : '✗';
   icon.style.color = isOk ? '#4DC98A' : '#E05555';
+  const item = slides[current]?.item;
+  const meaning = item?.meaning || '';
+  const full = (baseVerbOf(item) + ' ' + particle).toUpperCase();
   if (isOk) {
-    const verb = verbs[verbIdx];
-    const full = verb.id + ' ' + particle;
-    const meaning = slides[current]?.item?.meaning || '';
-    text.innerHTML = `<strong>${full.toUpperCase()}</strong>${meaning ? ' — ' + meaning : ''}`;
-} else {
+    text.innerHTML = `<strong>${full}</strong>${meaning ? ' — ' + meaning : ''}`;
+  } else {
     /* State the form and its meaning rather than deferring to the end screen.
        An error the learner cannot resolve on the spot teaches nothing, and a
        B2 learner whose L1 has no phrasal verbs has no intuition to fall back
        on. */
-    const verb = verbs[verbIdx];
-    const meaning = slides[current]?.item?.meaning || '';
     text.innerHTML =
       '<span style="color:rgba(229,229,231,.45);font-size:.8rem">Answer: </span>' +
-      `<strong>${(verb.id + ' ' + particle).toUpperCase()}</strong>` +
+      `<strong>${full}</strong>` +
       (meaning ? `<span style="color:rgba(229,229,231,.6)"> — ${meaning}</span>` : '');
   }
 }
@@ -1058,7 +1123,8 @@ function showStreak() {
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 2000);
 }
-  /* Reuses the streak flash to explain the jump back; without a word of
+
+/* Reuses the streak flash to explain the jump back; without a word of
    explanation the learner just sees the app throw them somewhere. */
 function showSkipNotice() {
   const el = document.getElementById('streakFlash');
@@ -1074,7 +1140,7 @@ function next() {
     if (roundIdx < gameRounds.length - 1) switchRound(roundIdx + 1);
     return;
   }
- if (busy) return;
+  if (busy) return;
   if (current >= slides.length - 1) {
     if (mode !== 'learn') {
       const firstUnanswered = slides.findIndex(s => !results[itemKey(verbIdx, s.item)]);
@@ -1151,7 +1217,7 @@ function showResults() {
     const tick = r === 'ok' ? '✓' : '✗';
     const delay = i * 40;
     return `<div class="ov-answer-item ${cls}" style="animation-delay:${delay}ms">
-      <span class="ov-answer-verb">${verb.id.toUpperCase()} ${item.particle.toUpperCase()}</span>
+      <span class="ov-answer-verb">${baseVerbOf(item).toUpperCase()} ${item.particle.toUpperCase()}</span>
       <span class="ov-answer-meaning">${item.meaning}</span>
       <span class="ov-answer-tick">${tick}</span>
     </div>`;
@@ -1272,7 +1338,7 @@ function renderReview(s) {
   const resultColor = r === 'ok' ? '#4DC98A' : '#E05555';
   const tick = r === 'ok' ? '✓' : '✗';
 
- const verbWord = (item.form || verbs[verbIdx].id).toUpperCase();
+  const verbWord = verbOf(item).toUpperCase();
   const sentHtml = item.example.toUpperCase().replace('_____',
     `<span class="verb-word" style="color:${resultColor}">${verbWord}</span> <span style="color:${resultColor};font-weight:900;text-decoration:underline;text-underline-offset:4px">${item.particle.toUpperCase()}</span>`);
 
@@ -1351,7 +1417,7 @@ const MODE_ACCENTS = {
   gap:   { color: '#A8E063', rgb: '168,224,99' },
   match: { color: '#FFD94A', rgb: '255,217,74' }
 };
-  const MATCH_ROUND_COLORS = [
+const MATCH_ROUND_COLORS = [
   { color: '#FFD94A', rgb: '255,217,74' },
   { color: '#7dd3fc', rgb: '125,211,252' },
   { color: '#c084fc', rgb: '192,132,252' },
@@ -1393,7 +1459,7 @@ async function setMode(m) {
     document.getElementById('sectionLabel').classList.remove('visible');
     document.getElementById('dotNav').innerHTML = '';
     document.getElementById('progressFill').style.width = '0%';
-  
+
     applyModeAccent();
     await ensureGameData();
     roundIdx = 0; roundResults = {};
@@ -1405,7 +1471,7 @@ async function setMode(m) {
   }
 
   if (leavingMatch) {
-    document.getElementById('slideCard').classList.remove('match-mode')
+    document.getElementById('slideCard').classList.remove('match-mode');
     document.documentElement.classList.remove('match-scroll');
     document.body.classList.remove('match-scroll');
     buildTabs();
@@ -1470,11 +1536,6 @@ function shuffled(a) {
     [b[i], b[j]] = [b[j], b[i]];
   }
   return b;
-}
-
-function hexToRgb(hex) {
-  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return m ? `${parseInt(m[1],16)},${parseInt(m[2],16)},${parseInt(m[3],16)}` : '255,217,74';
 }
 
 /* ── EVENTS ── */
@@ -1583,14 +1644,14 @@ function renderMatchRound() {
       onclick="onChipClick(${p.id}, this)">${p.phrase}</button>`
   ).join('');
 
-const rowsHtml = rows.map((p, i) => `
+  const rowsHtml = rows.map((p, i) => `
     <div class="match-row" data-row-id="${p.id}">
       <div class="match-row-num">${i + 1}</div>
- <div class="match-meaning">${p.meaning} — <span class="match-blank" data-row-id="${p.id}" onclick="onBlankClick(${p.id})"><span class="blank-content">&nbsp;</span></span></div>
+      <div class="match-meaning">${p.meaning} — <span class="match-blank" data-row-id="${p.id}" onclick="onBlankClick(${p.id})"><span class="blank-content">&nbsp;</span></span></div>
     </div>`).join('');
 
   container.innerHTML = `
-    <div class="slide active match-slide"> 
+    <div class="slide active match-slide">
       <div class="match-round-label">ROUND ${roundIdx + 1} / ${gameRounds.length}</div>
       <div class="match-bank">${chipsHtml}</div>
       <div class="match-rows">${rowsHtml}</div>
@@ -1635,14 +1696,12 @@ function onBlankClick(rowId) {
     const chip = document.querySelector(`.match-chip[data-id="${releasedId}"]`);
     if (chip) chip.classList.remove('used');
     blank.classList.remove('filled');
-    blank.style.removeProperty('--row-color');
     blank.querySelector('.blank-content').innerHTML = '_____';
     updateMatchProgress();
-    updateMatchCheckBtn();
     return;
   }
 
-  // No chip selected — nudge, nothing to place
+  // No chip selected — nothing to place
   if (matchSelectedId === null) return;
 
   const chip = document.querySelector(`.match-chip[data-id="${matchSelectedId}"]`);
@@ -1661,14 +1720,6 @@ function onBlankClick(rowId) {
   if (Object.keys(matchAnswers).length === currentPairs().length) {
     setTimeout(checkMatchRound, 250);
   }
-}
-
-function updateMatchCheckBtn() {
-  const btn = document.getElementById('matchCheckBtn');
-  if (!btn) return;
-  const total = currentPairs().length;
-  const filled = Object.keys(matchAnswers).length;
-  btn.disabled = filled < total || matchChecked;
 }
 
 function updateMatchProgress() {

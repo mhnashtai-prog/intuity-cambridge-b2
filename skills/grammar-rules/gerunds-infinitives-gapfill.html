@@ -383,6 +383,21 @@
       padding: 3rem;
       color: #fb923c;
     }
+
+    /* ── PHONE ──
+       16px is the threshold below which iOS zooms the page on focus. It is
+       the one value in this file that should not be in rem. */
+    @media (max-width: 640px) {
+      body { padding: .5rem; }
+      .container { padding: 0 .25rem; }
+      .content-container { padding: 1rem .75rem; }
+      .sentence-text { font-size: .95rem; line-height: 1.6; }
+      .answer-input { font-size: 16px; padding: .3rem .5rem; min-width: 100px; }
+      .test-btn { font-size: .72rem; padding: .3rem .5rem; }
+      .verb-hint { font-size: .75rem; }
+      .footer button { padding: .6rem 1.1rem; font-size: .8rem; }
+    }
+    
   </style>
 </head>
 <body>
@@ -546,10 +561,7 @@
           html += beforeBlank;
           
           if (isChecked) {
-            const correctAnswer = normalizeAnswer(item.answer);
-            const alternative = item.alternativeAnswer ? normalizeAnswer(item.alternativeAnswer) : '';
-            const normalized = normalizeAnswer(userAnswer);
-            const isCorrect = normalized === correctAnswer || (alternative && normalized === alternative);
+        const isCorrect = isAnswerCorrect(item, userAnswer);
             
             const inputClass = isCorrect ? 'answer-input correct' : 'answer-input incorrect';
             html += `<input type="text" class="${inputClass}" value="${userAnswer}" readonly 
@@ -573,27 +585,40 @@
       
       html += '</div>';
       
-      // Footer
-      const answered = Object.keys(userAnswers).filter(k => userAnswers[k].trim()).length;
-      if (answered === test.sentences.length) {
-        html += '<div class="footer visible">';
-        html += '<button class="secondary" onclick="clearAnswers()" ' + (isChecked ? 'disabled' : '') + '>Clear</button>';
-        if (!isChecked) {
-          html += '<button class="primary" onclick="checkAnswers()">Submit</button>';
-        } else {
-          html += '<button class="results" onclick="showModal()">View Results</button>';
-        }
-        html += '</div>';
-      }
-      
+    
+     /* The footer lives in its own container so it can be updated while the
+         student types, without rebuilding — and destroying — the input they
+         are typing into. */
+      html += '<div id="quizFooter"></div>';
+
       container.innerHTML = html;
+      updateFooter();
+    }
+
+    function updateFooter() {
+      const foot = document.getElementById('quizFooter');
+      if (!foot) return;
+      const test = allTests[currentTest];
+      const answered = Object.keys(userAnswers).filter(k => userAnswers[k].trim()).length;
+
+      if (answered < test.sentences.length) { foot.innerHTML = ''; return; }
+
+      foot.innerHTML = '<div class="footer visible">' +
+        `<button class="secondary" onclick="clearAnswers()" ${isChecked ? 'disabled' : ''}>Clear</button>` +
+        (isChecked
+          ? '<button class="results" onclick="showModal()">View Results</button>'
+          : '<button class="primary" onclick="checkAnswers()">Submit</button>') +
+        '</div>';
     }
     
-    function handleInput(idx) {
+   function handleInput(idx) {
       const input = document.getElementById(`input-${idx}`);
       userAnswers[idx] = input.value;
+      /* Grow the box with the answer, but never rebuild the page: rebuilding
+         replaces this very input and the student loses focus mid-word. */
+      input.style.width = Math.max((input.value.length || 3) * 8 + 20, 80) + 'px';
       updateProgressInfo();
-      renderTest();
+      updateFooter();
     }
     
     function normalizeAnswer(answer) {
@@ -606,19 +631,24 @@
       let total = test.sentences.length;
       
       test.sentences.forEach((item, idx) => {
-        const userAnswer = normalizeAnswer(userAnswers[idx] || '');
-        const correctAnswer = normalizeAnswer(item.answer);
-        const alternativeAnswer = item.alternativeAnswer ? 
-          normalizeAnswer(item.alternativeAnswer) : '';
-        
-        const isCorrect = userAnswer === correctAnswer || 
-                          (alternativeAnswer && userAnswer === alternativeAnswer);
-        
-        if (isCorrect) correct++;
+      if (isAnswerCorrect(item, userAnswers[idx])) correct++;
       });
       
       isChecked = true;
       renderTest();
+
+      /* Data may carry `alternatives` (array) or the older single
+       `alternativeAnswer`. Accept either, so a half-updated folder works. */
+    function acceptedAnswers(item) {
+      const list = [item.answer];
+      if (Array.isArray(item.alternatives)) list.push(...item.alternatives);
+      else if (item.alternativeAnswer) list.push(item.alternativeAnswer);
+      return list.filter(Boolean).map(normalizeAnswer);
+    }
+
+    function isAnswerCorrect(item, given) {
+      return acceptedAnswers(item).includes(normalizeAnswer(given || ''));
+    }
       
       // Show results modal
       const percentage = Math.round((correct / total) * 100);

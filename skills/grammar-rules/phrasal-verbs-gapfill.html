@@ -499,325 +499,293 @@
     </div>
   </div>
 
-  <script>
-    let quizData = null;
-    let currentTest = null;
-    let selectedParticle = null;
-    let answers = {};
-    let showingResults = false;
-    let testScores = {};
+ /* ══════════════════════════════════════════════════════════════════════
+   PHRASAL VERBS — GAPFILL
+   A consuming word bank: every particle in the bank is used exactly once,
+   so a wrong placement steals a particle another sentence needs. That makes
+   it harder than choosing from four options per item, and it rewards
+   working the whole set rather than guessing line by line.
 
-    async function loadData() {
-      try {
-        const response = await fetch('../../data/grammar-rules/phrasal-verbs-complete-set.json');
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        
-        const data = await response.json();
-        quizData = data;
-        
-        const saved = localStorage.getItem('phrasal_verbs_progress');
-        if (saved) {
-          testScores = JSON.parse(saved);
-        }
-        
-        renderVerbSelector();
-        
-      } catch (error) {
-        console.error('Error loading data:', error);
-        document.getElementById('contentContainer').innerHTML = `
-          <div class="error">
-            <div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div>
-            <div>Failed to load quiz</div>
-            <div style="font-size: 0.75rem; margin-top: 0.5rem;">${error.message}</div>
-          </div>
-        `;
-      }
+   Reads phrasal-verbs-data.json — the same file the quiz, the game and the
+   explore page use, so a correction lands everywhere at once.
+══════════════════════════════════════════════════════════════════════ */
+
+const DATA_URL = 'phrasal-verbs-data.json';
+
+let GROUPS = [];
+let currentTest = null;      // index into GROUPS
+let selectedParticle = null;
+let answers = {};            // sentence index -> particle string
+let showingResults = false;
+let testScores = {};
+
+/* Items in a MIX group carry their own `verb`; `form` is the inflected verb
+   the sentence needs. The old build printed the group id bare, so a set
+   containing "She takes on…" rendered as "She take on…". */
+const baseVerbOf = (item, group) => item.verb || group.id;
+const formOf     = (item, group) => item.form || item.verb || group.id;
+
+/* ---------- load ---------- */
+async function loadData() {
+  try {
+    const response = await fetch(DATA_URL);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+
+    GROUPS = data.verbs || [];
+    if (!GROUPS.length) throw new Error('no verb groups in data');
+
+    const saved = localStorage.getItem('phrasal_verbs_gapfill_scores');
+    if (saved) testScores = JSON.parse(saved);
+
+    renderVerbSelector();
+
+  } catch (error) {
+    console.error('Error loading data:', DATA_URL, error);
+    document.getElementById('contentContainer').innerHTML = `
+      <div class="error">
+        <div style="font-size:2rem; margin-bottom:1rem;">⚠️</div>
+        <div>Failed to load the quiz</div>
+        <div style="font-size:.75rem; margin-top:.5rem;">${error.message}</div>
+      </div>`;
+  }
+}
+
+function saveProgress() {
+  try {
+    localStorage.setItem('phrasal_verbs_gapfill_scores', JSON.stringify(testScores));
+  } catch (e) { console.error('Error saving progress:', e); }
+}
+
+/* ---------- set selector ---------- */
+/* Straight from the data — seven core verbs and three MIX sets — rather than
+   a hard-coded list of verb names matched against topic strings. */
+function renderVerbSelector() {
+  const container = document.getElementById('verbSelector');
+  container.innerHTML = '';
+
+  GROUPS.forEach((g, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'verb-btn' + (currentTest === i ? ' active' : '');
+    const score = testScores[`set-${g.id}`];
+    btn.textContent = score ? `${g.label} · ${score.percentage}%` : g.label;
+    btn.title = `${g.items.length} phrases`;
+    btn.onclick = () => loadTest(i);
+    container.appendChild(btn);
+  });
+
+  if (currentTest === null) {
+    document.getElementById('contentContainer').innerHTML = `
+      <div class="empty-state">
+        <div style="font-size:1.5rem; margin-bottom:.5rem;">👆</div>
+        <div>Pick a set above to begin</div>
+      </div>`;
+  }
+}
+
+function loadTest(idx) {
+  if (idx < 0 || idx >= GROUPS.length) return;
+  currentTest = idx;
+  selectedParticle = null;
+  answers = {};
+  showingResults = false;
+  renderVerbSelector();
+  renderTest();
+  updateProgressInfo();
+}
+
+/* ---------- progress ---------- */
+function updateProgressInfo() {
+  if (currentTest === null) return;
+  const items = GROUPS[currentTest].items;
+  const answered = Object.keys(answers).length;
+
+  document.getElementById('progressInfo').style.display = 'flex';
+  document.getElementById('progressText').textContent = `${answered}/${items.length} answered`;
+
+  const dots = document.getElementById('progressDots');
+  dots.innerHTML = '';
+  for (let i = 0; i < items.length; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'progress-dot' + (answers[i] !== undefined ? ' answered' : '');
+    dots.appendChild(dot);
+  }
+}
+
+/* ---------- render ---------- */
+function renderTest() {
+  if (currentTest === null) return;
+  const group = GROUPS[currentTest];
+  const container = document.getElementById('contentContainer');
+
+  /* One chip per item, not one per distinct particle: a set can legitimately
+     use the same particle twice — TAKE OFF and TAKE OUT are different items,
+     and MIX sets contain CALL UP and GIVE UP together. Counting them means
+     the bank empties exactly as the sentences fill. */
+  const counts = {};
+  group.items.forEach(it => { counts[it.particle] = (counts[it.particle] || 0) + 1; });
+  const particles = Object.keys(counts).sort();
+
+  let html = '';
+  html += '<div class="reference-bank"><div class="bank-title">Particles</div><div class="particle-list">';
+  particles.forEach(p => {
+    const remaining = counts[p] - usedCount(p);
+    const isUsed = remaining <= 0;
+    const cls = `particle-chip ${isUsed ? 'used' : ''} ${selectedParticle === p ? 'selected' : ''}`;
+    const disabled = isUsed || showingResults ? 'disabled' : '';
+    /* Show the count only when a particle appears more than once, so the
+       common case stays clean. */
+    const label = counts[p] > 1 ? `${p} <small>×${Math.max(0, remaining)}</small>` : p;
+    html += `<button class="${cls}" onclick="handleParticleClick('${p.replace(/'/g, "\\'")}')" ${disabled}>${label}</button>`;
+  });
+  html += '</div></div>';
+
+  html += '<div class="sentences">';
+  group.items.forEach((item, idx) => {
+    const userAnswer = answers[idx];
+    const correct = item.particle;
+    const isCorrect = userAnswer === correct;
+
+    /* The verb is printed in the form the sentence actually needs, so a set
+       no longer reads "She take on a lot of responsibility". */
+    const verbWord = formOf(item, group);
+    const parts = item.example.split('_____');
+
+    html += `<div class="sentence-row">`;
+    html += `<div class="question-number${userAnswer ? ' answered' : ''}">${idx + 1}</div>`;
+    html += `<div class="sentence-text">`;
+    html += parts[0];
+    html += `<span class="verb-part">${verbWord}</span> `;
+
+    if (showingResults) {
+      if (userAnswer && !isCorrect) html += `<span class="blank incorrect">${userAnswer}</span> `;
+      html += `<span class="blank correct">${correct}</span>`;
+    } else if (userAnswer) {
+      html += `<span class="blank filled" onclick="handleBlankClick(${idx})">${userAnswer}</span>`;
+    } else {
+      html += `<span class="blank" onclick="handleBlankClick(${idx})">_____</span>`;
     }
 
-    function saveProgress() {
-      try {
-        localStorage.setItem('phrasal_verbs_progress', JSON.stringify(testScores));
-      } catch (e) {
-        console.error('Error saving progress:', e);
-      }
-    }
+    html += parts[1] || '';
+    html += `</div></div>`;
+  });
+  html += '</div>';
 
-    function renderVerbSelector() {
-      if (!quizData) return;
-      
-      const container = document.getElementById('verbSelector');
-      container.innerHTML = '';
-      
-      // Get all test identifiers
-      const testButtons = [];
-      
-      // Single verb tests
-      ['take', 'go', 'look', 'get', 'keep', 'put', 'turn'].forEach(verb => {
-        const setIndex = quizData.sets.findIndex(s => s.topic.toLowerCase().includes(verb));
-        if (setIndex >= 0) {
-          testButtons.push({
-            label: verb.toUpperCase(),
-            index: setIndex,
-            verb: verb
-          });
-        }
-      });
-      
-      // Mixed tests
-      [1, 2, 3].forEach(mixNum => {
-        const setIndex = quizData.sets.findIndex(s => s.topic.includes(`Mixed ${mixNum}`));
-        if (setIndex >= 0) {
-          testButtons.push({
-            label: `MIX ${mixNum}`,
-            index: setIndex,
-            verb: null
-          });
-        }
-      });
-      
-      testButtons.forEach(btn => {
-        const button = document.createElement('button');
-        button.className = 'verb-btn';
-        if (currentTest === btn.index) {
-          button.classList.add('active');
-        }
-        button.textContent = btn.label;
-        button.onclick = () => loadTest(btn.index);
-        container.appendChild(button);
-      });
-      
-      if (currentTest === null) {
-        document.getElementById('contentContainer').innerHTML = `
-          <div class="empty-state">
-            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">👆</div>
-            <div>Select a verb or mixed test above to begin</div>
-          </div>
-        `;
-      }
-    }
+  const answered = Object.keys(answers).length;
+  if (answered === group.items.length) {
+    html += '<div class="footer visible">';
+    html += `<button class="secondary" onclick="clearAnswers()" ${showingResults ? 'disabled' : ''}>Clear</button>`;
+    html += showingResults
+      ? '<button class="results" onclick="showModal()">View results</button>'
+      : '<button class="primary" onclick="submitAndScore()">Submit</button>';
+    html += '</div>';
+  }
 
-    function loadTest(testIdx) {
-      if (!quizData || testIdx < 0 || testIdx >= quizData.sets.length) return;
-      
-      currentTest = testIdx;
-      selectedParticle = null;
-      answers = {};
-      showingResults = false;
-      
-      renderVerbSelector();
-      renderTest();
-      updateProgressInfo();
-    }
+  container.innerHTML = html;
+}
 
-    function updateProgressInfo() {
-      if (!quizData || currentTest === null) return;
-      
-      const testData = quizData.sets[currentTest];
-      const answered = Object.keys(answers).length;
-      const total = testData.sentences.length;
-      
-      document.getElementById('progressInfo').style.display = 'flex';
-      document.getElementById('progressText').textContent = `${answered}/${total} answered`;
-      
-      const dotsContainer = document.getElementById('progressDots');
-      dotsContainer.innerHTML = '';
-      
-      for (let i = 0; i < total; i++) {
-        const dot = document.createElement('div');
-        dot.className = 'progress-dot';
-        if (answers[i] !== undefined) {
-          dot.classList.add('answered');
-        }
-        dotsContainer.appendChild(dot);
-      }
-    }
+/* ---------- interaction ---------- */
+function usedCount(particle) {
+  return Object.values(answers).filter(a => a === particle).length;
+}
 
-    function renderTest() {
-      if (!quizData || currentTest === null) return;
-      
-      const testData = quizData.sets[currentTest];
-      const container = document.getElementById('contentContainer');
-      
-      let html = '';
-      
-      // Reference Bank with Particles
-      html += '<div class="reference-bank">';
-      html += '<div class="bank-title">Particles</div>';
-      
-      const allParticles = new Set();
-      Object.values(testData.verbs).forEach(particles => {
-        particles.forEach(p => allParticles.add(p));
-      });
-      
-      html += '<div class="particle-list">';
-      Array.from(allParticles).sort().forEach(particle => {
-        const isUsed = isParticleUsed(particle);
-        const isSelected = selectedParticle === particle;
-        const classes = `particle-chip ${isUsed ? 'used' : ''} ${isSelected ? 'selected' : ''}`;
-        const disabled = isUsed || showingResults ? 'disabled' : '';
-        html += `<button class="${classes}" onclick="handleParticleClick('${particle}')" ${disabled}>${particle}</button>`;
-      });
-      html += '</div>';
-      html += '</div>';
-      
-      // Sentences
-      html += '<div class="sentences">';
-      testData.sentences.forEach((sentence, idx) => {
-        const userAnswer = answers[idx];
-        const correctAnswer = sentence.answer.split(' ')[1];
-        const verbPart = sentence.verb;
-        const isCorrect = userAnswer === correctAnswer;
-        const parts = sentence.text.split('_____');
-        
-        const numClass = userAnswer ? 'question-number answered' : 'question-number';
-        
-        html += `<div class="sentence-row">`;
-        html += `<div class="${numClass}">${idx + 1}</div>`;
-        html += `<div class="sentence-text">`;
-        html += parts[0];
-        html += `<span class="verb-part">${verbPart}</span> `;
-        
-        if (showingResults) {
-          if (userAnswer && !isCorrect) {
-            html += `<span class="blank incorrect">${userAnswer}</span>`;
-          }
-          html += `<span class="blank correct">${correctAnswer}</span>`;
-        } else if (userAnswer) {
-          html += `<span class="blank filled" onclick="handleBlankClick(${idx})">${userAnswer}</span>`;
-        } else {
-          html += `<span class="blank" onclick="handleBlankClick(${idx})">_____</span>`;
-        }
-        
-        html += parts[1] || '';
-        html += `</div>`;
-        html += `</div>`;
-      });
-      html += '</div>';
-      
-      // Footer
-      const answered = Object.keys(answers).length;
-      if (answered === testData.sentences.length) {
-        html += '<div class="footer visible">';
-        html += '<button class="secondary" onclick="clearAnswers()" ' + (showingResults ? 'disabled' : '') + '>Clear</button>';
-        if (!showingResults) {
-          html += '<button class="primary" onclick="submitAndScore()">Submit</button>';
-        } else {
-          html += '<button class="results" onclick="showModal()">View Results</button>';
-        }
-        html += '</div>';
-      }
-      
-      container.innerHTML = html;
-    }
+function particleExhausted(particle) {
+  const group = GROUPS[currentTest];
+  const total = group.items.filter(it => it.particle === particle).length;
+  return usedCount(particle) >= total;
+}
 
-    function handleParticleClick(particle) {
-      if (showingResults || isParticleUsed(particle)) return;
-      selectedParticle = selectedParticle === particle ? null : particle;
-      renderTest();
-    }
+function handleParticleClick(particle) {
+  if (showingResults || particleExhausted(particle)) return;
+  selectedParticle = selectedParticle === particle ? null : particle;
+  renderTest();
+}
 
-    function handleBlankClick(sentenceIdx) {
-      if (showingResults) return;
+function handleBlankClick(idx) {
+  if (showingResults) return;
 
-      if (answers[sentenceIdx]) {
-        delete answers[sentenceIdx];
-        renderTest();
-        updateProgressInfo();
-        return;
-      }
+  /* Tapping a filled blank returns its particle to the bank. */
+  if (answers[idx]) {
+    delete answers[idx];
+    renderTest();
+    updateProgressInfo();
+    return;
+  }
+  if (!selectedParticle) return;
 
-      if (selectedParticle) {
-        answers[sentenceIdx] = selectedParticle;
-        selectedParticle = null;
-        renderTest();
-        updateProgressInfo();
-      }
-    }
+  answers[idx] = selectedParticle;
+  selectedParticle = null;
+  renderTest();
+  updateProgressInfo();
+}
 
-    function isParticleUsed(particle) {
-      return Object.values(answers).some(ans => ans === particle);
-    }
+function clearAnswers() {
+  if (showingResults) return;
+  if (!confirm('Clear all answers?')) return;
+  answers = {};
+  selectedParticle = null;
+  renderTest();
+  updateProgressInfo();
+}
 
-    function clearAnswers() {
-      if (showingResults) return;
-      if (confirm('Clear all answers?')) {
-        answers = {};
-        selectedParticle = null;
-        renderTest();
-        updateProgressInfo();
-      }
-    }
+/* ---------- scoring ---------- */
+function submitAndScore() {
+  if (currentTest === null) return;
+  const group = GROUPS[currentTest];
+  let correct = 0;
 
-    function submitAndScore() {
-      if (!quizData || currentTest === null) return;
-      
-      const testData = quizData.sets[currentTest];
-      let correct = 0;
-      let total = testData.sentences.length;
-      
-      testData.sentences.forEach((sentence, idx) => {
-        const userAnswer = answers[idx];
-        const correctAnswer = sentence.answer.split(' ')[1];
-        if (userAnswer && userAnswer === correctAnswer) {
-          correct++;
-        }
-      });
-      
-      const percentage = Math.round((correct / total) * 100);
-      
-      testScores[`test${currentTest}`] = {
-        correct,
-        total,
-        percentage,
-        timestamp: new Date().toISOString()
-      };
-      
-      saveProgress();
-      
-      showingResults = true;
-      renderTest();
-      renderVerbSelector();
-      
-      showModal();
-    }
+  /* Compare the whole particle, not the second word of the answer. The old
+     build split on a space, so "look forward to" was marked against
+     "forward" alone and every multi-word particle was unmarkable. */
+  group.items.forEach((item, idx) => {
+    if (answers[idx] === item.particle) correct++;
+  });
 
-    function showModal() {
-      if (currentTest === null || !testScores[`test${currentTest}`]) return;
-      
-      const score = testScores[`test${currentTest}`];
-      const testData = quizData.sets[currentTest];
-      
-      document.getElementById('modalSubtitle').textContent = testData.topic;
-      document.getElementById('scoreNumber').textContent = `${score.correct}/${score.total}`;
-      document.getElementById('scoreLabel').textContent = `${score.percentage}% Correct`;
-      
-      // Show/hide next button
-      const nextBtn = document.getElementById('nextTestBtn');
-      if (currentTest < quizData.sets.length - 1) {
-        nextBtn.style.display = 'block';
-      } else {
-        nextBtn.style.display = 'none';
-      }
-      
-      document.getElementById('scoreModal').classList.add('active');
-    }
+  const total = group.items.length;
+  const percentage = Math.round(correct / total * 100);
 
-    function closeModal() {
-      document.getElementById('scoreModal').classList.remove('active');
-    }
+  testScores[`set-${group.id}`] = {
+    correct, total, percentage, timestamp: new Date().toISOString()
+  };
+  saveProgress();
 
-    function nextTest() {
-      closeModal();
-      if (currentTest < quizData.sets.length - 1) {
-        loadTest(currentTest + 1);
-      }
-    }
+  showingResults = true;
+  renderTest();
+  renderVerbSelector();
+  showModal();
+}
 
-    document.getElementById('scoreModal').addEventListener('click', function(e) {
-      if (e.target === this) closeModal();
-    });
+function showModal() {
+  if (currentTest === null) return;
+  const group = GROUPS[currentTest];
+  const score = testScores[`set-${group.id}`];
+  if (!score) return;
 
-    window.addEventListener('load', loadData);
+  document.getElementById('modalSubtitle').textContent =
+    `${group.label} · ${group.items.length} phrases`;
+  document.getElementById('scoreNumber').textContent = `${score.correct}/${score.total}`;
+  document.getElementById('scoreLabel').textContent = `${score.percentage}% correct`;
+
+  document.getElementById('nextTestBtn').style.display =
+    currentTest < GROUPS.length - 1 ? 'block' : 'none';
+
+  document.getElementById('scoreModal').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('scoreModal').classList.remove('active');
+}
+
+function nextTest() {
+  closeModal();
+  if (currentTest < GROUPS.length - 1) loadTest(currentTest + 1);
+}
+
+document.getElementById('scoreModal').addEventListener('click', function (e) {
+  if (e.target === this) closeModal();
+});
+
+window.addEventListener('load', loadData);
   </script>
 </body>
 </html>

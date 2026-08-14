@@ -811,7 +811,7 @@
         <div class="modal-card">
           
           <!-- SOUND ICON -->
-          <div class="sound-icon active" id="soundIcon" title="Toggle sound">
+          <div class="sound-icon active" id="soundIcon" title="Toggle sound" hidden hidden>
             <span id="soundEmoji">🔊</span>
           </div>
 
@@ -877,7 +877,9 @@ let currentIndex = 0;
 let isPlaying = false;
 let playInterval = null;
 let viewMode = 'watch';
-let soundEnabled = true;
+/* Speech synthesis was removed: it behaved unpredictably across school
+   devices, and the students it was meant to help did not use it. */
+    let soundEnabled = false;
 let currentUtterance = null;
 let speechFinished = true;
 let slides = [];
@@ -938,31 +940,6 @@ function switchMainMode(mode) {
       }
     }
   }
-}
-
-// ==================== VOICE LOADING ====================
-let voicesLoaded = false;
-if ('speechSynthesis' in window) {
-  const loadVoices = () => {
-    const voices = speechSynthesis.getVoices();
-    if (voices.length > 0) {
-      voicesLoaded = true;
-      console.log('Available voices:', voices.map(v => `${v.name} (${v.lang})`).join(', '));
-    }
-  };
-  
-  loadVoices();
-  
-  if (speechSynthesis.onvoiceschanged !== undefined) {
-    speechSynthesis.onvoiceschanged = loadVoices;
-  }
-  
-  // iOS activation
-  document.addEventListener('click', function enableVoices() {
-    const utterance = new SpeechSynthesisUtterance('');
-    utterance.volume = 0;
-    speechSynthesis.speak(utterance);
-  }, { once: true });
 }
 
 // ==================== INITIALIZE ====================
@@ -1132,7 +1109,6 @@ function loadCategory(verbOrVerbs, type) {
 
 // ==================== VIEW MODE TOGGLE ====================
 function toggleViewMode() {
-  speechSynthesis.cancel();
   speechFinished = true;
   
   if (isPlaying) pause();
@@ -1162,26 +1138,7 @@ function setupToggle() {
   document.getElementById('viewModeToggle').addEventListener('click', toggleViewMode);
 }
 
-// ==================== SOUND ====================
-function toggleSound() {
-  soundEnabled = !soundEnabled;
-  const soundIcon = document.getElementById('soundIcon');
-  const soundEmoji = document.getElementById('soundEmoji');
-  
-  if (soundEnabled) {
-    soundIcon.classList.add('active');
-    soundIcon.classList.remove('muted');
-    soundEmoji.textContent = '🔊';
-    soundIcon.title = 'Sound ON';
-  } else {
-    soundIcon.classList.remove('active');
-    soundIcon.classList.add('muted');
-    soundEmoji.textContent = '🔇';
-    soundIcon.title = 'Sound OFF';
-    speechSynthesis.cancel();
-    speechFinished = true;
-  }
-}
+/* toggleSound() removed with the speech it controlled. */
 
 // ==================== RENDER ====================
 function buildListMode() {
@@ -1234,7 +1191,6 @@ function renderWatchSlide() {
   const data = slides[currentIndex];
   const content = document.getElementById('cardContent');
   
-  speechSynthesis.cancel();
   speechFinished = false;
   
   content.classList.remove('show');
@@ -1272,65 +1228,13 @@ function renderWatchSlide() {
   }, 500);
 }
 
-function speak(data) {
-  if (!('speechSynthesis' in window) || !soundEnabled) {
-    speechFinished = true;
-    return;
-  }
-  
-  speechSynthesis.cancel();
-  speechFinished = false;
-  
-  function stripHTML(html) {
-    const tmp = document.createElement('div');
-    tmp.innerHTML = html;
-    return tmp.textContent || tmp.innerText || '';
-  }
-  
-  let textToSpeak = data.expression;
-  if (data.meaning) textToSpeak += `. ${data.meaning}`;
-  
-  if (data.normal && data.inverted) {
-    textToSpeak += `. ${stripHTML(data.normal)}. ${stripHTML(data.inverted)}`;
-  } else if (data.example) {
-    textToSpeak += `. ${stripHTML(data.example)}`;
-  }
-  
-  currentUtterance = new SpeechSynthesisUtterance(textToSpeak);
-  currentUtterance.lang = 'en-GB';
-  currentUtterance.rate = 0.85;
-  currentUtterance.pitch = 1.0;
-  currentUtterance.volume = 1.0;
-
-  const voices = speechSynthesis.getVoices();
-  if (voices.length > 0) {
-    let selectedVoice = voices.find(v => 
-      v.lang.includes('en-GB') && 
-      (v.name.includes('Female') || v.name.includes('female'))
-    );
-    
-    if (!selectedVoice) selectedVoice = voices.find(v => v.lang.includes('en-GB'));
-    if (!selectedVoice) selectedVoice = voices.find(v => v.lang === 'en-GB');
-    if (!selectedVoice) selectedVoice = voices.find(v => v.lang.startsWith('en'));
-    
-    if (selectedVoice) {
-      currentUtterance.voice = selectedVoice;
+/* Speech synthesis was removed: it behaved unpredictably across school
+   devices, and the students it was meant to help did not use it. */
+    function speak() {
+      /* `speechFinished` must still be set, or watch mode waits forever
+         for an utterance that will never arrive. */
+      speechFinished = true;
     }
-  }
-  
-  currentUtterance.onend = () => {
-    speechFinished = true;
-  };
-  
-  currentUtterance.onerror = (error) => {
-    speechFinished = true;
-    console.error('Speech error:', error);
-  };
-  
-  setTimeout(() => {
-    speechSynthesis.speak(currentUtterance);
-  }, 50);
-}
 
 // ==================== CONTROLS ====================
 function repeatSlide() {
@@ -1392,9 +1296,6 @@ function pause() {
     playInterval = null;
   }
   
-  if (window.speechSynthesis) {
-    window.speechSynthesis.cancel();
-  }
   speechFinished = true;
 }
 
@@ -1402,7 +1303,6 @@ function pause() {
 document.getElementById('repeatBtn').addEventListener('click', repeatSlide);
 document.getElementById('playBtn').addEventListener('click', togglePlay);
 document.getElementById('pauseBtn').addEventListener('click', pause);
-document.getElementById('soundIcon').addEventListener('click', toggleSound);
 
 document.addEventListener('keydown', (e) => {
   if (viewMode === 'watch' && currentMainMode === 'explore') {
@@ -1412,9 +1312,6 @@ document.addEventListener('keydown', (e) => {
     }
     if (e.key === 'r' || e.key === 'R') {
       repeatSlide();
-    }
-    if (e.key === 's' || e.key === 'S') {
-      toggleSound();
     }
     if (e.key === 'ArrowRight' && currentIndex < slides.length - 1) {
       if (isPlaying) pause();
@@ -1429,14 +1326,6 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Load voices
-if ('speechSynthesis' in window) {
-  window.speechSynthesis.onvoiceschanged = () => {
-    const voices = speechSynthesis.getVoices();
-    console.log('Voices loaded:', voices.length);
-    voicesLoaded = true;
-  };
-}
 
 // ==================== START ====================
 init();

@@ -138,6 +138,22 @@
 
     function indexRules(data) {
       RULE_INDEX = {};
+
+      /* A topic may file its rules as sections in an array, each with a
+         `structure` and the `explanation` of when to use it. Index those
+         first so an item whose `rule` is a structure can show the reason
+         behind it. */
+      if (Array.isArray(data.rules)) {
+        for (const section of data.rules) {
+          if (section && section.structure) {
+            RULE_INDEX[section.structure.trim().toLowerCase()] = {
+              pattern: section.structure,
+              example: section.explanation
+            };
+          }
+        }
+      }
+
       const cats = (data.rules && data.rules.categories) || [];
       for (const cat of cats) {
         for (const group of ['verbs', 'phrases', 'prepositions', 'go_activities']) {

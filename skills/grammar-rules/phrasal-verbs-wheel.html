@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>INTUITY — Phrasal Verbs Wheel</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family:-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+    background:#0d0d0d;
+    background-image:radial-gradient(circle at 20% 50%, rgba(201,169,97,.04) 0%, transparent 50%),
+                     radial-gradient(circle at 80% 80%, rgba(201,169,97,.03) 0%, transparent 50%);
+    min-height:100vh; color:#e5e5e5; padding:1rem;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  .stage { width:100%; max-width:46rem; }
+
+  /* ── status bar ── */
+  .bar {
+    display:flex; align-items:center; justify-content:space-between;
+    font-size:.6875rem; letter-spacing:.06em; text-transform:uppercase;
+    color:#636366; margin-bottom:.75rem; padding:0 .25rem;
+  }
+  .bar strong { color:#C9A961; font-weight:600; }
+  .timer { font-variant-numeric:tabular-nums; font-size:.9375rem; color:#e5e5e5; font-weight:600; }
+  .timer.low { color:#ef4444; }
+
+  /* ── the wheel ──
+     A paternoster, not a turning disc: the slats travel upward and the
+     words stay horizontal. A rotating disc would put text at every angle
+     and squash the slats at top and bottom to nothing — unreadable for a
+     learner decoding an unfamiliar phrase, which is the one thing this
+     screen exists to make easy. */
+  .wheel {
+    position:relative; height:26rem; overflow:hidden;
+    border:1px solid rgba(201,169,97,.25); border-radius:1.25rem;
+    background:rgba(28,28,30,.6);
+    box-shadow:0 8px 32px rgba(0,0,0,.4);
+    perspective:900px;
+  }
+
+  /* the curve is suggested by shading at the rim, not by rotating the text */
+  .wheel::before, .wheel::after {
+    content:''; position:absolute; left:0; right:0; height:5.5rem;
+    pointer-events:none; z-index:3;
+  }
+  .wheel::before { top:0;    background:linear-gradient(to bottom, #0f0f10 5%, rgba(15,15,16,.75) 45%, transparent 100%); }
+  .wheel::after  { bottom:0; background:linear-gradient(to top,    #0f0f10 5%, rgba(15,15,16,.75) 45%, transparent 100%); }
+
+  .slat {
+    position:absolute; left:1rem; right:1rem; height:4.25rem;
+    display:flex; align-items:center; justify-content:center;
+    border-radius:.625rem; cursor:pointer;
+    background:linear-gradient(180deg, rgba(60,58,54,.55) 0%, rgba(38,37,35,.55) 100%);
+    border:1px solid rgba(201,169,97,.18);
+    border-top:1px solid rgba(255,255,255,.06);
+    will-change:transform;
+    transition:background .18s ease, border-color .18s ease, box-shadow .18s ease;
+  }
+  .slat:hover { border-color:rgba(201,169,97,.45); }
+
+  .phrase {
+    font-size:1.5rem; font-weight:700; letter-spacing:.02em;
+    color:#C9A961; text-transform:uppercase;
+    text-shadow:0 1px 0 rgba(0,0,0,.5);
+    pointer-events:none;
+  }
+
+  .slat.hit {
+    background:linear-gradient(180deg, rgba(132,204,22,.35) 0%, rgba(101,163,13,.3) 100%);
+    border-color:#84cc16; box-shadow:0 0 24px rgba(132,204,22,.35);
+  }
+  .slat.hit .phrase { color:#bef264; }
+  .slat.miss {
+    background:linear-gradient(180deg, rgba(239,68,68,.3) 0%, rgba(185,28,28,.28) 100%);
+    border-color:#ef4444;
+  }
+  .slat.miss .phrase { color:#fca5a5; }
+
+  /* a phrase that has come round again after being missed */
+  .slat.again { border-color:rgba(201,169,97,.5); }
+  .slat.again .phrase::after {
+    content:'↻'; margin-left:.5rem; font-size:.875rem; opacity:.55;
+  }
+
+  /* ── prompt ── */
+  .prompt {
+    text-align:center; margin-top:1rem; padding:1rem .75rem;
+    border-top:1px solid rgba(84,84,88,.3);
+  }
+  .prompt .lead {
+    font-size:.625rem; letter-spacing:.12em; text-transform:uppercase;
+    color:#C9A961; margin-bottom:.375rem;
+  }
+  .prompt .meaning { font-size:1.0625rem; line-height:1.5; color:#f1f5f9; }
+
+  .verdict { height:1.25rem; margin-top:.5rem; font-size:.8125rem; font-weight:600; }
+  .verdict.good { color:#84cc16; }
+  .verdict.bad  { color:#ef4444; }
+
+  .controls { display:flex; justify-content:center; gap:.75rem; margin-top:1rem; }
+  button {
+    padding:.625rem 1.25rem; border-radius:.75rem; font:inherit;
+    font-size:.8125rem; font-weight:600; cursor:pointer;
+    background:rgba(201,169,97,.22); color:#C9A961;
+    border:1px solid rgba(201,169,97,.4); transition:all .2s ease;
+  }
+  button:hover { background:rgba(201,169,97,.34); }
+  button.ghost { background:rgba(99,99,102,.22); color:#aeaeb2; border-color:rgba(99,99,102,.25); }
+
+  select {
+    padding:.5rem .75rem; border-radius:.625rem; font:inherit; font-size:.8125rem;
+    background:rgba(99,99,102,.22); color:#e5e5e5;
+    border:1px solid rgba(99,99,102,.3);
+  }
+
+  /* ── end card ── */
+  .over {
+    display:none; position:absolute; inset:0; z-index:5;
+    background:rgba(13,13,13,.94); backdrop-filter:blur(8px);
+    flex-direction:column; align-items:center; justify-content:center; gap:.5rem;
+    border-radius:1.25rem; padding:1.5rem;
+  }
+  .over.show { display:flex; }
+  .over .score { font-size:3rem; font-weight:700; color:#C9A961; }
+  .over .sub { font-size:.8125rem; color:#8e8e93; }
+  .over .list {
+    margin-top:.75rem; max-height:9rem; overflow:auto; width:100%;
+    font-size:.8125rem; color:#aeaeb2; text-align:center; line-height:1.7;
+  }
+  .over .list b { color:#fca5a5; font-weight:600; }
+
+  .loading, .error { text-align:center; padding:3rem; color:#8e8e93; }
+  .error { color:#fb923c; }
+
+  @media (max-width:640px) {
+    body { padding:.5rem; }
+    .wheel { height:22rem; }
+    .slat { height:3.5rem; left:.5rem; right:.5rem; }
+    .phrase { font-size:1.125rem; }
+    .prompt .meaning { font-size:.9375rem; }
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="bar">
+    <div><strong id="hits">0</strong> hit &nbsp; <strong id="misses">0</strong> missed</div>
+    <div><span id="setLabel">—</span></div>
+    <div>streak <strong id="streak">0</strong> &nbsp;&nbsp; <span class="timer" id="timer">2:00</span></div>
+  </div>
+
+  <div class="wheel" id="wheel">
+    <div class="loading" id="loading">Loading…</div>
+    <div class="over" id="over">
+      <div class="score" id="finalScore">0</div>
+      <div class="sub" id="finalSub"></div>
+      <div class="list" id="finalList"></div>
+      <div class="controls"><button onclick="start()">Go again</button></div>
+    </div>
+  </div>
+
+  <div class="prompt">
+    <div class="lead">Tap the phrase that means</div>
+    <div class="meaning" id="meaning">…</div>
+    <div class="verdict" id="verdict"></div>
+  </div>
+
+  <div class="controls">
+    <select id="setPicker" onchange="start()"></select>
+    <button class="ghost" onclick="start()">Restart</button>
+  </div>
+</div>
+
+<script>
+/* ─────────────────────────────────────────────────────────────
+   A wheel instead of falling targets.
+
+   The shooting version let a phrase drift past unseen: a child who
+   hesitated on TAKE ABACK might never meet it again, while TAKE APART
+   came round three times. Exposure was random, so practice was unequal
+   and nothing could be measured.
+
+   Here every phrase in the set rides the wheel, and with five slats
+   turning it returns roughly every fourth — the same spacing the old
+   game achieved by hand, now guaranteed by the geometry rather than
+   by chance. A phrase answered correctly leaves and a fresh one takes
+   its place; a phrase missed stays aboard and comes round again.
+   ───────────────────────────────────────────────────────────── */
+
+const DATA_URL = '../../data/grammar-rules/phrasal-verbs-data.json';
+const SLATS     = 5;        // visible at once → a phrase returns every ~4th
+const CYCLE_MS  = 3400;     // time for one slat to travel a full lane
+const ROUND_MS  = 120000;   // two minutes
+
+let GROUPS = [], pool = [], slats = [], target = null;
+let hits = 0, misses = 0, streak = 0, best = 0, missedPhrases = [];
+let raf = null, endsAt = 0, running = false;
+
+/* MIX groups carry their own verb per item; the rest take the group label. */
+function phraseOf(group, item) {
+  const verb = (item.verb || group.label || '').trim();
+  return (verb + ' ' + item.particle).toUpperCase();
+}
+
+async function load() {
+  try {
+    const res = await fetch(DATA_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    GROUPS = data.groups || [];
+    if (!GROUPS.length) throw new Error('no groups in data');
+
+    const picker = document.getElementById('setPicker');
+    picker.innerHTML = GROUPS.map((g, i) =>
+      `<option value="${i}">${g.label || g.id}</option>`).join('');
+    document.getElementById('loading').remove();
+    start();
+  } catch (err) {
+    document.getElementById('loading').outerHTML =
+      '<div class="error">Could not load the phrases<br><small>' + err.message + '</small></div>';
+  }
+}
+
+function start() {
+  const group = GROUPS[+document.getElementById('setPicker').value] || GROUPS[0];
+  document.getElementById('setLabel').textContent = group.label || group.id;
+
+  /* every item in the set goes into the pool, shuffled — nothing is
+     favoured and nothing is skipped */
+  pool = group.items
+    .filter(it => it.meaning && it.particle)
+    .map(it => ({ phrase: phraseOf(group, it), meaning: it.meaning, seen: 0 }));
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+
+  hits = misses = streak = best = 0;
+  missedPhrases = [];
+  paint();
+  document.getElementById('over').classList.remove('show');
+  document.getElementById('verdict').textContent = '';
+
+  const wheel = document.getElementById('wheel');
+  wheel.querySelectorAll('.slat').forEach(s => s.remove());
+
+  /* stagger the slats evenly around the loop so the wheel arrives
+     already turning rather than starting empty */
+  slats = [];
+  for (let i = 0; i < SLATS; i++) {
+    const el = document.createElement('div');
+    el.className = 'slat';
+    el.innerHTML = '<span class="phrase"></span>';
+    el.addEventListener('click', () => choose(slat));
+    const slat = { el, entry: null, offset: i / SLATS };
+    wheel.appendChild(el);
+    slats.push(slat);
+    fill(slat, nextEntry());
+  }
+
+  pickTarget();
+  endsAt = performance.now() + ROUND_MS;
+  running = true;
+  if (raf) cancelAnimationFrame(raf);
+  tick();
+}
+
+/* Draw from the pool in order, so the whole set is offered before
+   anything repeats. A missed phrase is pushed back a few places rather
+   than to the end, so it returns while it is still fresh. */
+function nextEntry() {
+  if (!pool.length) return null;
+  const entry = pool.shift();
+  entry.seen++;
+  return entry;
+}
+
+function fill(slat, entry) {
+  slat.entry = entry;
+  slat.el.querySelector('.phrase').textContent = entry ? entry.phrase : '';
+  slat.el.classList.remove('hit', 'miss');
+  slat.el.classList.toggle('again', !!entry && entry.seen > 1);
+}
+
+function pickTarget() {
+  const aboard = slats.map(s => s.entry).filter(Boolean);
+  if (!aboard.length) return;
+  /* prefer a phrase that has been missed before, otherwise the one that
+     has been aboard longest */
+  const missedFirst = aboard.filter(e => e.missed);
+  target = (missedFirst.length ? missedFirst : aboard)[
+    Math.floor(Math.random() * (missedFirst.length ? missedFirst.length : aboard.length))];
+  document.getElementById('meaning').textContent = target.meaning;
+}
+
+function choose(slat) {
+  if (!running || !slat.entry || !target) return;
+  const verdict = document.getElementById('verdict');
+
+  if (slat.entry === target) {
+    hits++; streak++; best = Math.max(best, streak);
+    slat.el.classList.add('hit');
+    verdict.textContent = 'Yes — ' + slat.entry.phrase;
+    verdict.className = 'verdict good';
+    const done = slat.entry;
+    setTimeout(() => { if (slats.includes(slat)) fill(slat, nextEntry()); }, 260);
+    /* a phrase answered right leaves the wheel; if the pool empties the
+       set simply comes round again */
+    if (!pool.length) refillPool([done]);
+  } else {
+    misses++; streak = 0;
+    slat.el.classList.add('miss');
+    target.missed = true;
+    if (!missedPhrases.includes(target.phrase)) missedPhrases.push(target.phrase);
+    verdict.textContent = 'Not that one — ' + target.meaning.split(';')[0];
+    verdict.className = 'verdict bad';
+    setTimeout(() => slat.el.classList.remove('miss'), 400);
+  }
+  paint();
+  pickTarget();
+}
+
+function refillPool(extra) {
+  const aboard = new Set(slats.map(s => s.entry && s.entry.phrase));
+  const back = (extra || []).filter(e => !aboard.has(e.phrase));
+  pool.push(...back);
+}
+
+function paint() {
+  document.getElementById('hits').textContent = hits;
+  document.getElementById('misses').textContent = misses;
+  document.getElementById('streak').textContent = streak;
+}
+
+function tick() {
+  const wheel = document.getElementById('wheel');
+  const H = wheel.clientHeight;
+  const slatH = slats[0] ? slats[0].el.offsetHeight : 68;
+  const lane = H + slatH;                    // travel from below the frame to above it
+  const now = performance.now();
+
+  for (const slat of slats) {
+    /* position is a pure function of the clock, so the wheel never drifts */
+    const t = ((now / CYCLE_MS) + slat.offset) % 1;
+    const y = H - t * lane;                  // rising
+    slat.el.style.transform = 'translateY(' + y.toFixed(1) + 'px)';
+
+    /* a slat that has left the top re-enters at the bottom with a new phrase */
+    if (t < 0.02 && slat.el.dataset.cycled !== '1') {
+      slat.el.dataset.cycled = '1';
+      if (slat.entry && slat.entry !== target) {
+        const carried = slat.entry;
+        if (carried.missed) { carried.seen++; pool.push(carried); }
+        fill(slat, nextEntry() || carried);
+      }
+      if (!pool.length) refillPool(slats.map(s => s.entry).filter(Boolean));
+    }
+    if (t > 0.1) slat.el.dataset.cycled = '0';
+  }
+
+  const left = Math.max(0, endsAt - now);
+  const secs = Math.ceil(left / 1000);
+  const tEl = document.getElementById('timer');
+  tEl.textContent = Math.floor(secs / 60) + ':' + String(secs % 60).padStart(2, '0');
+  tEl.classList.toggle('low', secs <= 15);
+
+  if (left <= 0) return finish();
+  raf = requestAnimationFrame(tick);
+}
+
+function finish() {
+  running = false;
+  const total = hits + misses;
+  document.getElementById('finalScore').textContent = hits;
+  document.getElementById('finalSub').textContent =
+    total ? hits + ' of ' + total + ' — best streak ' + best : 'no answers this round';
+  document.getElementById('finalList').innerHTML = missedPhrases.length
+    ? 'Worth another look: ' + missedPhrases.map(p => '<b>' + p + '</b>').join(', ')
+    : 'Nothing missed.';
+  document.getElementById('over').classList.add('show');
+}
+
+window.addEventListener('load', load);
+</script>
+</body>
+</html>

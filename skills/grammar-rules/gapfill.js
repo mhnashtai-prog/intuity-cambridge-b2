@@ -33,7 +33,12 @@
     function normalizeAnswer(answer) {
       return String(answer || '')
         .toLowerCase()
-        .replace(/[\u2018\u2019\u201B\u02BC]/g, "'")
+        /* Anything a keyboard might produce where an apostrophe belongs.
+           Phones give curly quotes; a Portuguese or Spanish layout gives the
+           acute accent from the dead key beside Enter, so "can´t" has to
+           match "can't" or every negative marks wrong for a learner using
+           the keyboard in front of them. */
+        .replace(/[\u2018\u2019\u201A\u201B\u02BC\u02B9\u02BB\u00B4\u0060\u00AB\u00BB\u2032]/g, "'")
         .trim()
         .replace(/\s+/g, ' ');
     }

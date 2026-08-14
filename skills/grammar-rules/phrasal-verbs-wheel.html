@@ -47,17 +47,37 @@
     content:''; position:absolute; left:0; right:0; height:5.5rem;
     pointer-events:none; z-index:3;
   }
-  .wheel::before { top:0;    background:linear-gradient(to bottom, #0f0f10 5%, rgba(15,15,16,.75) 45%, transparent 100%); }
-  .wheel::after  { bottom:0; background:linear-gradient(to top,    #0f0f10 5%, rgba(15,15,16,.75) 45%, transparent 100%); }
+  /* Words arrive out of shadow at the top and are swallowed by it at the
+     bottom. The fades do the work a real wheel's rim does: they make the
+     loop feel continuous without ever showing the back of it. */
+  .wheel::before { top:0;    background:linear-gradient(to bottom, #0f0f10 4%, rgba(15,15,16,.78) 42%, transparent 100%); }
+  .wheel::after  { bottom:0; background:linear-gradient(to top,    #0f0f10 8%, rgba(15,15,16,.85) 46%, transparent 100%); }
+
+  /* the side rails: the frame the steps are mounted on */
+  .rail {
+    position:absolute; top:0; bottom:0; width:.5rem; z-index:4; pointer-events:none;
+    background:linear-gradient(90deg, rgba(201,169,97,.28), rgba(201,169,97,.06));
+  }
+  .rail.left  { left:0;  border-right:1px solid rgba(201,169,97,.22); }
+  .rail.right { right:0; transform:scaleX(-1); border-right:1px solid rgba(201,169,97,.22); }
+
+  /* the reading line — where a word is most legible and most urgent */
+  .mark {
+    position:absolute; left:0; right:0; bottom:5.25rem; height:1px; z-index:4;
+    background:linear-gradient(90deg, transparent, rgba(201,169,97,.35), transparent);
+    pointer-events:none;
+  }
 
   .slat {
-    position:absolute; left:1rem; right:1rem; height:4.25rem;
+    position:absolute; left:1rem; height:4.25rem;
     display:flex; align-items:center; justify-content:center;
     border-radius:.625rem; cursor:pointer;
     background:linear-gradient(180deg, rgba(60,58,54,.55) 0%, rgba(38,37,35,.55) 100%);
     border:1px solid rgba(201,169,97,.18);
     border-top:1px solid rgba(255,255,255,.06);
-    will-change:transform;
+    will-change:transform, opacity;
+    transform-origin:50% 50%;
+    backface-visibility:hidden;
     transition:background .18s ease, border-color .18s ease, box-shadow .18s ease;
   }
   .slat:hover { border-color:rgba(201,169,97,.45); }
@@ -154,6 +174,9 @@
   </div>
 
   <div class="wheel" id="wheel">
+    <div class="rail left"></div>
+    <div class="rail right"></div>
+    <div class="mark"></div>
     <div class="loading" id="loading">Loading…</div>
     <div class="over" id="over">
       <div class="score" id="finalScore">0</div>
@@ -256,7 +279,7 @@ function start() {
     el.className = 'slat';
     el.innerHTML = '<span class="phrase"></span>';
     el.addEventListener('click', () => choose(slat));
-    const slat = { el, entry: null, offset: i / SLATS };
+    const slat = { el, entry: null, offset: 1 - (i / SLATS) };
     wheel.appendChild(el);
     slats.push(slat);
     fill(slat, nextEntry());
@@ -340,17 +363,41 @@ function tick() {
   const wheel = document.getElementById('wheel');
   const H = wheel.clientHeight;
   const slatH = slats[0] ? slats[0].el.offsetHeight : 68;
-  const lane = H + slatH;                    // travel from below the frame to above it
+  const lane = H + slatH;
   const now = performance.now();
 
   for (const slat of slats) {
-    /* position is a pure function of the clock, so the wheel never drifts */
+    /* Position is a pure function of the clock, so the wheel never drifts
+       and every word gets exactly the same time on screen. */
     const t = ((now / CYCLE_MS) + slat.offset) % 1;
-    const y = H - t * lane;                  // rising
-    slat.el.style.transform = 'translateY(' + y.toFixed(1) + 'px)';
 
-    /* a slat that has left the top re-enters at the bottom with a new phrase */
-    if (t < 0.02 && slat.el.dataset.cycled !== '1') {
+    /* Descending: a step enters above the frame and leaves below it. The
+       child's attention settles at the bottom, where a word is about to
+       go — the pressure comes from disappearance, not from speed. */
+    const y = t * lane - slatH;
+
+    /* The steps face the viewer almost square-on. `depth` peaks at the
+       middle of the travel and falls away at both ends, so a step is
+       widest and most frontal where it is being read, and only slightly
+       foreshortened as it arrives and leaves. The text itself never
+       rotates: a phrase at an angle is a phrase a learner has to decode
+       twice. */
+    const p     = (y + slatH / 2) / H;             // 0 at top, 1 at bottom
+    const depth = Math.sin(Math.max(0, Math.min(1, p)) * Math.PI);
+    const scale = 0.88 + 0.12 * depth;
+    const tilt  = (0.5 - p) * 18;                  // degrees, gentle
+    const inset = (1 - depth) * 26;                // px, the rim curving away
+
+    slat.el.style.transform =
+      'translate3d(' + inset.toFixed(1) + 'px,' + y.toFixed(1) + 'px,0)' +
+      ' rotateX(' + tilt.toFixed(1) + 'deg) scale(' + scale.toFixed(3) + ')';
+    slat.el.style.width = 'calc(100% - ' + (inset * 2).toFixed(1) + 'px)';
+    slat.el.style.opacity = (0.35 + 0.65 * depth).toFixed(2);
+    slat.el.style.zIndex = Math.round(depth * 10);
+
+    /* A step that has left the bottom is refilled out of sight before it
+       reappears at the top. */
+    if (t > 0.98 && slat.el.dataset.cycled !== '1') {
       slat.el.dataset.cycled = '1';
       if (slat.entry && slat.entry !== target) {
         const carried = slat.entry;
@@ -359,7 +406,7 @@ function tick() {
       }
       if (!pool.length) refillPool(slats.map(s => s.entry).filter(Boolean));
     }
-    if (t > 0.1) slat.el.dataset.cycled = '0';
+    if (t < 0.9) slat.el.dataset.cycled = '0';
   }
 
   const left = Math.max(0, endsAt - now);

@@ -410,7 +410,21 @@
     content:''; position:absolute; inset:0; pointer-events:none; z-index:5;
     background:radial-gradient(ellipse at 50% 40%, transparent 40%, rgba(18,18,20,.9) 100%);
   }
-  .word{ position:absolute; left:0; top:0; will-change:transform,opacity,filter; white-space:nowrap; cursor:pointer; }
+  /* Each phrase rides a rectangular plate — a step of the wheel. One face
+     for all of them: the old game varied the font per word, which made the
+     shape of the word part of the puzzle. On a wheel the phrase is the only
+     thing that should be read, so the type stays out of the way. */
+  .word{
+    position:absolute; left:0; top:0; cursor:pointer; white-space:nowrap;
+    will-change:transform,opacity;
+    display:flex; align-items:center; justify-content:center;
+    padding:.8rem 1rem; border-radius:.5rem;
+    font-family:'Space Grotesk',sans-serif; font-weight:700; letter-spacing:.02em;
+    background:linear-gradient(180deg, rgba(62,60,56,.62), rgba(38,37,35,.62));
+    border:1px solid rgba(201,169,97,.22);
+    border-top-color:rgba(255,255,255,.08);
+    box-shadow:0 6px 18px rgba(0,0,0,.45);
+  }
   .word.wrong{ color:var(--wrong)!important; }
   .spark{ position:absolute; width:5px; height:5px; border-radius:50%; pointer-events:none; z-index:4; }
 
@@ -1033,14 +1047,8 @@ function tickRestCounters(){
 }
 
 /* ---------- field ---------- */
-const STYLES = [
-  { family:"'Space Grotesk',sans-serif", weight:700, style:'normal', case:'upper', tracking:'.01em', sizeMul:1.00 },
-  { family:"'Fraunces',serif",           weight:600, style:'italic', case:'title', tracking:'0em',   sizeMul:1.05 },
-  { family:"'Archivo Black',sans-serif", weight:400, style:'normal', case:'upper', tracking:'-.01em',sizeMul:0.92 },
-  { family:"'Bungee',cursive",           weight:400, style:'normal', case:'upper', tracking:'0em',   sizeMul:0.85 },
-  { family:"'Caveat',cursive",           weight:700, style:'normal', case:'title', tracking:'.01em', sizeMul:1.35 },
-];
-const styledText = (p,c) => c === 'title' ? p.toLowerCase().replace(/\b\w/g, x => x.toUpperCase()) : p;
+/* The five display faces that used to vary per word are gone. On a wheel the
+   phrase is the only thing to read, so one face carries all of them. */
 
 function decoyItem(){
   /* Two thirds of the time pull something from the target's own set: a
@@ -1094,21 +1102,19 @@ function spawnWord(){
   const field = $('field');
   const el = document.createElement('div');
   el.className = 'word';
-  const v = pick(STYLES);
-  el.textContent = styledText(item.p, v.case);
-  el.style.fontFamily = v.family; el.style.fontWeight = v.weight; el.style.fontStyle = v.style;
-  el.style.letterSpacing = v.tracking; el.style.color = item.color;
+  el.textContent = item.p;
+  el.style.color = item.color;
 
-  /* One turn of the wheel is a word's whole life, so every phrase is on
-     screen exactly as long as any other. A streak still quickens the turn
-     slightly, but never enough to outrun a reader. */
+  /* One turn of the wheel is a word's whole life, and every word gets the
+     same turn — otherwise a longer-lived phrase drifts into the step below
+     it and the two collide. A streak still quickens the wheel slightly, but
+     never enough to outrun a reader. */
   const pace = Math.max(0.82, 1 - round.streak * 0.015);
-  const isTarget = item.p === round.target.p;
-  const life = WHEEL.cycle * pace * (isTarget ? round.targetLifeBonus : 1);
+  const life = WHEEL.cycle * pace;
 
   field.appendChild(el);
   const rec = { el, lane: freeLane(), born: performance.now(), life,
-                phrase: item.p, item, dead: false, sizeMul: v.sizeMul };
+                phrase: item.p, item, dead: false };
   round.live.add(rec);
   el.onclick = () => hit(rec);
 }
@@ -1139,6 +1145,7 @@ function frame(now){
     r.tilt    = (1 - p) * 12;                            // square on by the time it is read
     r.inset   = (1 - p) * fw * 0.06;                     // the rim drawing in at the top
     r.opacity = Math.min(1, t * 6) * (0.5 + 0.5 * p);    // brightest at the foot
+    r.p = p;
     r.y = y;
   });
 
@@ -1148,7 +1155,9 @@ function frame(now){
       ' translate(' + (fw / 2 + r.inset).toFixed(1) + 'px,' + r.y.toFixed(1) + 'px)' +
       ' rotateX(' + r.tilt.toFixed(1) + 'deg) scale(' + r.scale.toFixed(3) + ')';
     r.el.style.opacity  = r.opacity;
-    r.el.style.fontSize = (26 * r.sizeMul) + 'px';
+    /* Narrow at the crown, wide at the foot — the receding staircase. */
+    r.el.style.width    = (38 + 50 * r.p).toFixed(1) + '%';
+    r.el.style.fontSize = 'clamp(.8rem, 2.4vw, 1.4rem)';
     r.el.style.zIndex   = Math.floor(r.scale * 100);
   });
 

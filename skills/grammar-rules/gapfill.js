@@ -105,16 +105,32 @@
       return { text: text.replace(re, '<span class="main-verb">$&</span>'), hit: true };
     }
 
-    /* The cue verb can sit either side of the gap, so walk the segments in
-       reading order and stop at the first match. */
-    function highlightSegments(segments, verb) {
-      let found = false;
-      return segments.map(function (segment) {
-        if (found) return segment;
-        const result = highlightOnce(segment, verb);
-        found = result.hit;
-        return result.text;
-      });
+    /* A cue can sit either side of the gap, so walk the segments in reading
+       order and stop at the first match.
+
+       An item may also carry several cues rather than one: a tense is often
+       forced by a pair of time markers ("for" … "now"), and highlighting only
+       the first would point at half the evidence. Each cue is matched once,
+       independently. */
+    function cuesOf(item) {
+      const raw = item.highlightVerb !== undefined ? item.highlightVerb : item.keywords;
+      if (Array.isArray(raw)) return raw.filter(Boolean);
+      return raw ? [raw] : [];
+    }
+
+    function highlightSegments(segments, cues) {
+      const list = Array.isArray(cues) ? cues : (cues ? [cues] : []);
+      let out = segments.slice();
+      for (const cue of list) {
+        let found = false;
+        out = out.map(function (segment) {
+          if (found) return segment;
+          const result = highlightOnce(segment, cue);
+          found = result.hit;
+          return result.text;
+        });
+      }
+      return out;
     }
 
     /* One parser for both shapes. Two-blank items may or may not carry a
@@ -130,6 +146,12 @@
       }
       m = item.text.match(/(.*?)_____ \(([^)]+)\)(.*)/);
       if (m) return { blanks: 1, pre: m[1], hint: m[2], post: m[3] };
+      /* Not every gap names a verb. Linking words, relative pronouns and
+         articles are asked for with a bare gap — "She _____ speaks Spanish"
+         — and those items used to vanish from the page because the parser
+         insisted on a bracketed hint. */
+      m = item.text.match(/(.*?)_____(.*)/);
+      if (m) return { blanks: 1, pre: m[1], hint: '', post: m[2] };
       return null;
     }
 
@@ -300,7 +322,7 @@
           const parts = value.split('/');
           const first = (parts[0] || '').trim();
           const second = (parts[1] || '').trim();
-          const seg = highlightSegments([parsed.pre, parsed.mid, parsed.post], item.highlightVerb);
+          const seg = highlightSegments([parsed.pre, parsed.mid, parsed.post], cuesOf(item));
 
           html += seg[0];
           html += inputHtml(cls, 'input-' + idx + '-1', first, 60, 'handleTwoBlankInput(' + idx + ')');
@@ -312,14 +334,16 @@
           if (parsed.hint) html += ' <span class="verb-hint">[' + escapeHtml(parsed.hint) + ']</span>';
           html += seg[2];
         } else {
-          const seg = highlightSegments([parsed.pre, parsed.post], item.highlightVerb);
+          const seg = highlightSegments([parsed.pre, parsed.post], cuesOf(item));
 
           html += seg[0];
           html += inputHtml(cls, 'input-' + idx + '-1', value, 80, 'handleInput(' + idx + ')');
           if (isChecked && !correct) {
             html += '<span class="correct-answer">' + escapeHtml(item.answer) + '</span>';
           }
-          html += ' <span class="verb-hint">[' + escapeHtml(parsed.hint) + ']</span>';
+          if (parsed.hint) {
+            html += ' <span class="verb-hint">[' + escapeHtml(parsed.hint) + ']</span>';
+          }
           html += seg[1];
         }
 

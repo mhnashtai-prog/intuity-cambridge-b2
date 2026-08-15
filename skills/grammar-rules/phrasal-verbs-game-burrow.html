@@ -446,7 +446,20 @@
   }
 
   .word.wrong{ color:var(--wrong)!important; }
-  .spark{ position:absolute; width:5px; height:5px; border-radius:50%; pointer-events:none; z-index:4; }
+  .spark{ position:absolute; width:5px; height:5px; border-radius:50%; pointer-events:none; z-index:8; }
+  .fw-flash{
+    width:70px; height:70px; border-radius:50%; z-index:9;
+    background:radial-gradient(circle, #fff 0%, #FFD94A 35%, rgba(255,217,74,0) 70%);
+  }
+  .fw-ring{
+    width:60px; height:60px; border-radius:50%; background:none;
+    border:3px solid rgba(255,217,74,.85); box-shadow:0 0 22px rgba(255,217,74,.5);
+  }
+  .fw-star{ border-radius:50%; }
+  .fw-crackle{
+    width:3px; height:3px; border-radius:50%; background:#fff;
+    box-shadow:0 0 8px #fff, 0 0 14px #FFD94A;
+  }
 
   /* The toast used to sit at the foot of the field, directly over the
      definition strip — so the reward for a right answer covered the next
@@ -460,6 +473,27 @@
     opacity:0; transition:opacity .2s, transform .2s; pointer-events:none; z-index:9;
   }
   .toast.show{ opacity:1; transform:translate(-50%,0); }
+
+  /* ── A MARK FALLS ── */
+  .tierbanner{
+    position:absolute; left:50%; top:44%; z-index:10; pointer-events:none;
+    display:flex; align-items:center; gap:.6rem;
+    font-family:'Space Grotesk',sans-serif; font-weight:900;
+    font-size:clamp(1.6rem,5vw,2.8rem); letter-spacing:.16em; text-transform:uppercase;
+    opacity:0; transform:translate(-50%,-50%) scale(.7);
+    transition:opacity .25s ease, transform .45s cubic-bezier(.2,1.6,.4,1);
+    text-shadow:0 0 26px currentColor;
+  }
+  .tierbanner svg{ width:1em; height:1em; }
+  .tierbanner.show{ opacity:1; transform:translate(-50%,-50%) scale(1); }
+
+  /* the whole card takes the new colour for a beat */
+  .slide-card.tierflash{ animation:tierFlash .9s ease-out; }
+  @keyframes tierFlash{
+    0%   { box-shadow:0 24px 70px rgba(0,0,0,.8), 0 0 0 0 var(--tiercol); }
+    30%  { box-shadow:0 24px 70px rgba(0,0,0,.8), 0 0 90px 12px var(--tiercol); }
+    100% { box-shadow:0 24px 70px rgba(0,0,0,.8), 0 0 80px rgba(201,169,97,.07); }
+  }
   .toast b{ font-family:'Space Grotesk',sans-serif; color:var(--wrong); }
   .toast span{ color:var(--paper-dim); }
   /* There is no good-news toast any more: the strip speaks only on error. */
@@ -606,6 +640,7 @@
 
       <div class="field" id="field">
         <div class="toast" id="toast"></div>
+        <div class="tierbanner" id="tierBanner"></div>
       </div>
 
       <div class="playbar">
@@ -724,6 +759,20 @@ function gradeOf(score){
 }
 const N_PRACTICE      = 4;
 
+/* ── THE FIVE MARKS, PER ROUND ──
+   These used to measure the whole account: clear two sets and you were Ember
+   for good. That is a record, not a game — nothing happened while you played,
+   and a mark you earned last week cannot make this round exciting.
+
+   Now every round climbs the ladder from cold. The thresholds are catches,
+   not accuracy, so the way to rise is to keep finding phrases: a child who
+   is behind can still burn upward in the last thirty seconds, which is the
+   whole point of having a ladder at all.
+
+   The long journey has not gone — it lives in the set scores on the tabs and
+   in the Crown, which still costs every set and a grade A trial. */
+const ROUND_TIERS = [3, 7, 12, 18, 25];
+
 const STAGES = [
   { key:'spark', label:'Spark', color:'var(--s0)', glow:'var(--s0-glow)', desc:'You can spot a phrasal verb when you see one. First sets cleared.' },
   { key:'ember', label:'Ember', color:'var(--s1)', glow:'var(--s1-glow)', desc:'The patterns are starting to stick. Keep clearing sets.' },
@@ -784,15 +833,25 @@ async function boot(){
   GROUPS.forEach(g => g.items.forEach(it => FULL_POOL.push(it)));
   N_GROUPS = GROUPS.length;
 
-  /* Revision: one item from each set in turn, cycling — so a learner who
-     never picks a particular set still meets it, and the sets are built
-     deterministically so "Revision 3" is always the same phrases. */
-  const interleaved = [];
-  for (let row = 0; interleaved.length < FULL_POOL.length; row++) {
-    GROUPS.forEach(g => { if (g.items[row]) interleaved.push(g.items[row]); });
-  }
-  const size = Math.ceil(interleaved.length / N_PRACTICE);
-  for (let i = 0; i < interleaved.length; i += size) PRACTICE_SETS.push(interleaved.slice(i, i + size));
+  /* Revision draws from every set, in proportion to its size.
+
+     It used to interleave by row — item 0 of each group, then item 1, and so
+     on — which looks even but is not: RUN runs out at ten items, PUT at
+     thirteen, while the MIX sets carry twenty-five. Once the short groups
+     were exhausted the later rows came only from the long ones, so Practice 4
+     ended up almost entirely MIX and COME, with no LOOK, PUT or RUN at all.
+
+     Instead each group is cut into N_PRACTICE slices and Practice n takes
+     slice n from every group. Still deterministic, so "Practice 3" is always
+     the same phrases — but now every revision set touches every verb. */
+  for (let k = 0; k < N_PRACTICE; k++) PRACTICE_SETS.push([]);
+  GROUPS.forEach(g => {
+    const n = g.items.length;
+    for (let k = 0; k < N_PRACTICE; k++) {
+      const lo = Math.floor(n * k / N_PRACTICE), hi = Math.floor(n * (k + 1) / N_PRACTICE);
+      for (let j = lo; j < hi; j++) PRACTICE_SETS[k].push(g.items[j]);
+    }
+  });
 
   const s2 = Math.max(1, Math.ceil(N_GROUPS*0.2));
   const s3 = Math.max(s2+1, Math.ceil(N_GROUPS*0.45));
@@ -849,7 +908,44 @@ function svgIcon(i, col){
 ====================================================================== */
 /* The ladder is permanent, so it belongs to no screen: redrawn on every
    menu render and at the start of every round. */
+/* While a round is live the ladder belongs to that round; on the menu it
+   shows the journey through the sets, as before. */
+function roundTier(hits){
+  let t = -1;
+  for (let i = 0; i < ROUND_TIERS.length; i++) if (hits >= ROUND_TIERS[i]) t = i;
+  return t;
+}
+
+function renderRoundBar(){
+  const t = round.tier;
+  const next = ROUND_TIERS[t + 1];
+  const from = t < 0 ? 0 : ROUND_TIERS[t];
+  const pct = next ? Math.max(0, Math.min(100, Math.round((round.hits - from) / (next - from) * 100))) : 100;
+
+  const bar = $('stagebar'); bar.innerHTML = '';
+  STAGES.forEach((st, i) => {
+    if (i > 0){
+      const link = document.createElement('div');
+      link.className = 'stagelink' + (i <= t ? ' done' : '');
+      bar.appendChild(link);
+    }
+    const node = document.createElement('div');
+    node.className = 'stagenode' + (i < t ? ' done' : '') + (i === t + 1 ? ' current' : '') + (i === t ? ' done current' : '');
+    if (i === t + 1) node.style.setProperty('--p', pct);
+    node.innerHTML = '<div class="dot"><svg viewBox="0 0 24 24">' +
+      svgIcon(i, i <= t ? 'var(--s' + i + ')' : 'rgba(229,229,231,.30)') +
+      '</svg></div><div class="lbl">' + STAGES[i].label + '</div>';
+    bar.appendChild(node);
+  });
+
+  /* the bottom bar keeps the long journey, so both are visible at once */
+  const cleared = clearedCount();
+  $('barStage').innerHTML = '<b>' + (t >= 0 ? STAGES[t].label : '—') + '</b> · this round &nbsp;|&nbsp; ' +
+    cleared + '/' + N_GROUPS + ' sets';
+}
+
 function renderStageBar(){
+  if (round && round.running) return renderRoundBar();
   const idx = currentStageIndex();
   const cleared = clearedCount();
   const from = THRESH[idx], to = THRESH[Math.min(4, idx+1)];
@@ -1019,7 +1115,7 @@ function beginRound(cfg){
     mode:cfg.mode, index:cfg.index, poolItems:cfg.pool, active:[...cfg.pool], resting:[],
     exposure:{}, weight:{}, coverage:new Set(),
     target:null, targetSpawned:false, forceIn:0, targetLifeBonus:1,
-    hits:0, misses:0, streak:0, timeLeft:ROUND_SECONDS,
+    hits:0, misses:0, streak:0, timeLeft:ROUND_SECONDS, tier:-1,
     live:new Set(), spawnTimer:null, clockTimer:null, rafId:null, running:false
   };
   cfg.pool.forEach(it => { round.exposure[it.p] = 0; round.weight[it.p] = 1; });
@@ -1284,7 +1380,7 @@ function hit(rec){
        appearance is itself the signal. The spark, the streak and the stage
        pop carry the congratulation. Examples belong in Learn, where a
        reader can dwell on them. */
-    syncCounters(); popStage(); hideToast();
+    syncCounters(); popStage(); hideToast(); checkTier();
     round.coverage.add(round.target.p);
     pstat(round.target.p).hits++; save();
 
@@ -1322,6 +1418,49 @@ function syncCounters(){
 }
 
 /* Every catch inflates the stage mark you're on and throws a ring of light. */
+/* Something has to happen when a mark falls, or the ladder is decoration.
+   The whole card takes the new colour for a moment, the mark swells, and the
+   name of the stage crosses the field. It never blocks: the round keeps
+   running underneath, because stopping the game to congratulate someone is
+   how you make a reward feel like an interruption. */
+function checkTier(){
+  const t = roundTier(round.hits);
+  if (t <= round.tier) return;
+  round.tier = t;
+  const st = STAGES[t];
+
+  renderRoundBar();
+  document.documentElement.style.setProperty('--screen-accent', st.color);
+
+  const card = $('card');
+  card.classList.remove('tierflash'); void card.offsetWidth; card.classList.add('tierflash');
+  card.style.setProperty('--tiercol', st.glow);
+
+  const b = $('tierBanner');
+  b.innerHTML = '<svg viewBox="0 0 24 24">' + svgIcon(t, st.color) + '</svg><span>' + st.label + '</span>';
+  b.style.color = st.color;
+  b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+  setTimeout(() => b.classList.remove('show'), 1500);
+
+  /* a spray of light from the middle of the field */
+  const field = $('field');
+  for (let i = 0; i < 26; i++){
+    const p = document.createElement('div');
+    p.className = 'spark';
+    p.style.left = (field.clientWidth / 2) + 'px';
+    p.style.top  = (field.clientHeight / 2) + 'px';
+    p.style.background = i % 3 ? st.color : '#fff';
+    p.style.transition = 'transform .8s cubic-bezier(.2,.7,.3,1), opacity .8s ease-out';
+    field.appendChild(p);
+    const a = Math.random() * Math.PI * 2, d = 60 + Math.random() * 190;
+    requestAnimationFrame(() => {
+      p.style.transform = 'translate(' + (Math.cos(a)*d) + 'px,' + (Math.sin(a)*d) + 'px) scale(' + (0.6 + Math.random()) + ')';
+      p.style.opacity = '0';
+    });
+    setTimeout(() => p.remove(), 820);
+  }
+}
+
 function popStage(){
   const now = $('stagebar').querySelector('.stagenode.current');
   if (!now) return;
@@ -1338,23 +1477,90 @@ function showToast(html){
 }
 const hideToast = () => $('toast').classList.remove('show');
 
+/* ── THE BURST ──
+   A shell, not a sputter. Three things happen at once and a fourth follows:
+   a flash of light at the point of the catch, a spray of stars thrown out on
+   trails that arc and fall under gravity, and a ring that expands and thins —
+   then, a quarter of a second later, the crackle.
+
+   Children who grow up watching the Funchal New Year know what a firework
+   looks like, and a polite little puff of dots does not read as one. */
 function burst(rec){
   const field = $('field');
   const r = rec.el.getBoundingClientRect(), f = field.getBoundingClientRect();
-  const cx = r.left-f.left+r.width/2, cy = r.top-f.top+r.height/2;
+  const cx = r.left - f.left + r.width / 2;
+  const cy = r.top  - f.top  + r.height / 2;
+
   rec.el.animate(
-    [{transform:rec.el.style.transform, opacity:1},{transform:rec.el.style.transform+' scale(1.6)', opacity:0}],
-    {duration:260, easing:'ease-out'});
-  const cols = ['#C9A961','#FFD94A','#5ED39B','#e5e5e7'];
-  for (let i=0;i<10;i++){
-    const s = document.createElement('div'); s.className = 'spark';
-    s.style.left = cx+'px'; s.style.top = cy+'px'; s.style.background = pick(cols);
-    s.style.transition = 'transform .5s ease-out, opacity .5s ease-out';
-    field.appendChild(s);
-    const a = Math.random()*Math.PI*2, d = 30+Math.random()*46;
-    requestAnimationFrame(()=>{ s.style.transform = `translate(${Math.cos(a)*d}px,${Math.sin(a)*d}px)`; s.style.opacity = '0'; });
-    setTimeout(()=>s.remove(), 520);
+    [{ transform: rec.el.style.transform, opacity:1 },
+     { transform: rec.el.style.transform + ' scale(1.5)', opacity:0 }],
+    { duration:300, easing:'ease-out' });
+
+  const COLS = ['#FFD94A','#C9A961','#5ED39B','#ff7a45','#ffffff','#7dd3fc'];
+
+  /* the flash — everything for one frame, gone by the next */
+  const flash = document.createElement('div');
+  flash.className = 'spark fw-flash';
+  flash.style.left = cx + 'px'; flash.style.top = cy + 'px';
+  field.appendChild(flash);
+  flash.animate([{ transform:'translate(-50%,-50%) scale(.2)', opacity:1 },
+                 { transform:'translate(-50%,-50%) scale(3.4)', opacity:0 }],
+                { duration:420, easing:'cubic-bezier(.1,.8,.2,1)' });
+  setTimeout(() => flash.remove(), 440);
+
+  /* the ring */
+  const ring = document.createElement('div');
+  ring.className = 'spark fw-ring';
+  ring.style.left = cx + 'px'; ring.style.top = cy + 'px';
+  field.appendChild(ring);
+  ring.animate([{ transform:'translate(-50%,-50%) scale(.15)', opacity:.9, borderWidth:'3px' },
+                { transform:'translate(-50%,-50%) scale(2.6)', opacity:0,  borderWidth:'1px' }],
+               { duration:640, easing:'cubic-bezier(.1,.7,.2,1)' });
+  setTimeout(() => ring.remove(), 660);
+
+  /* the stars: thrown out fast, slowing as they climb, then falling */
+  const N = 46;
+  for (let i = 0; i < N; i++){
+    const p = document.createElement('div');
+    p.className = 'spark fw-star';
+    const col = COLS[(Math.random() * COLS.length) | 0];
+    const size = 3 + Math.random() * 4;
+    p.style.cssText += 'left:' + cx + 'px; top:' + cy + 'px; width:' + size + 'px; height:' + size +
+      'px; background:' + col + '; box-shadow:0 0 ' + (size * 2.5) + 'px ' + col + ';';
+    field.appendChild(p);
+
+    const ang = Math.random() * Math.PI * 2;
+    const dist = 70 + Math.random() * 190;
+    const dx = Math.cos(ang) * dist, dy = Math.sin(ang) * dist;
+    const fall = 60 + Math.random() * 90;          // gravity, once the throw is spent
+    const dur  = 780 + Math.random() * 520;
+
+    p.animate([
+      { transform:'translate(-50%,-50%) translate(0,0) scale(1.15)', opacity:1 },
+      { transform:'translate(-50%,-50%) translate(' + (dx*0.62).toFixed(0) + 'px,' +
+                  (dy*0.62 - 12).toFixed(0) + 'px) scale(1)', opacity:1, offset:0.42 },
+      { transform:'translate(-50%,-50%) translate(' + dx.toFixed(0) + 'px,' +
+                  (dy + fall).toFixed(0) + 'px) scale(.25)', opacity:0 }
+    ], { duration:dur, easing:'cubic-bezier(.12,.75,.3,1)' });
+    setTimeout(() => p.remove(), dur + 30);
   }
+
+  /* the crackle, a beat later — the part that makes people look up twice */
+  setTimeout(() => {
+    for (let i = 0; i < 18; i++){
+      const c = document.createElement('div');
+      c.className = 'spark fw-crackle';
+      const ang = Math.random() * Math.PI * 2, d = 30 + Math.random() * 120;
+      c.style.cssText += 'left:' + (cx + Math.cos(ang) * d * 0.5) + 'px; top:' +
+                         (cy + Math.sin(ang) * d * 0.5) + 'px;';
+      field.appendChild(c);
+      c.animate([{ opacity:0, transform:'translate(-50%,-50%) scale(.4)' },
+                 { opacity:1, transform:'translate(-50%,-50%) scale(1.3)', offset:0.25 },
+                 { opacity:0, transform:'translate(-50%,-50%) scale(.3)' }],
+                { duration:320 + Math.random() * 260, easing:'ease-out' });
+      setTimeout(() => c.remove(), 620);
+    }
+  }, 230);
 }
 
 /* ======================================================================
@@ -1422,8 +1628,10 @@ function renderSummary(res){
     : `${score} <span class="gr">${grade.letter}</span>`;
   v.className = 'sumverdict ' + grade.cls;
 
+  const reached = round.tier >= 0 ? STAGES[round.tier].label : null;
   $('sumStars').innerHTML = round.mode === 'trial' && res.cleared
-    ? '' : `<span class="gradeword">${grade.word}</span>`;
+    ? '' : `<span class="gradeword">${grade.word}</span>` +
+           (reached ? ` <span class="gradeword" style="color:${STAGES[round.tier].color}">· ${reached}</span>` : '');
   $('sumHits').textContent = round.hits;
   $('sumMiss').textContent = round.misses;
   $('sumAcc').textContent = Math.round(res.accuracy*100) + '%';

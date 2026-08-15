@@ -1,339 +1,3688 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>INTUITY — Sort the verbs</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-  *,*::before,*::after{ margin:0; padding:0; box-sizing:border-box; }
-  :root{
-    --gold:#C9A961; --accent:#FFD94A;
-    --ing:#5ED39B; --to:#7dd3fc; --bare:#f0a23c;
-    --paper:#e5e5e7; --dim:rgba(229,229,231,.55); --faint:rgba(229,229,231,.28);
-    --wrong:#E86A5C; --header-h:104px; --bar-h:34px;
-  }
-  html,body{ width:100%; height:100%; overflow:hidden; background:#0d0d0d; }
-  body{ font-family:'DM Sans',sans-serif; color:var(--paper); user-select:none; -webkit-user-select:none; }
-  button{ font:inherit; color:inherit; background:none; border:none; cursor:pointer; }
-
-  .header{
-    position:fixed; top:0; left:0; right:0; z-index:20; height:var(--header-h);
-    display:flex; flex-direction:column; gap:.35rem; padding:.5rem 1.25rem .4rem;
-    background:rgba(13,13,13,.9); backdrop-filter:blur(20px);
-    border-bottom:1px solid rgba(255,255,255,.06);
-  }
-  .htop{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; }
-  .back{ justify-self:start; text-decoration:none; font-family:'Space Grotesk',sans-serif;
-         font-size:.6rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.3); }
-  .back:hover{ color:rgba(255,255,255,.7); }
-  .title{ display:flex; flex-direction:column; align-items:center; line-height:1.1; }
-  .title b{ font-family:'Space Grotesk',sans-serif; font-size:1rem; font-weight:900; letter-spacing:.22em; color:var(--gold); }
-  .title span{ font-size:.56rem; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:rgba(255,255,255,.32); margin-top:.1rem; }
-  .hud{ display:flex; justify-content:center; gap:1.4rem; font-family:'DM Mono',monospace; font-size:.68rem; color:var(--dim); }
-  .hud b{ color:var(--paper); font-variant-numeric:tabular-nums; }
-  .hud .left{ color:var(--gold); }
-
-  .stage{ position:fixed; top:var(--header-h); left:0; right:0; bottom:var(--bar-h);
-          display:flex; flex-direction:column; padding:.6rem; gap:.6rem; }
-
-  /* ── the card ── */
-  .cardwrap{ flex:1; display:flex; align-items:center; justify-content:center; min-height:0; position:relative; }
-  .card{
-    position:relative; width:min(88vw,560px); text-align:center;
-    padding:1.6rem 2rem 1.7rem; border-radius:1rem;
-    background:linear-gradient(157deg,#3a3833,#2a2926 55%,#201f1d);
-    border:1px solid rgba(201,169,97,.3); border-top-color:rgba(255,255,255,.14);
-    box-shadow:0 .5rem 1.4rem rgba(0,0,0,.55), 0 1.2rem 3rem rgba(0,0,0,.45);
-    transition:transform .28s cubic-bezier(.2,.9,.3,1), opacity .28s;
-  }
-  /* The whole sentence, not just the trigger. A student meeting "insist on"
-     in isolation is learning a list; meeting it in "He insisted on _____ the
-     bill" is meeting the language. The gap is the only thing emphasised —
-     the words around it are context, and should read as context. */
-  .card .sentence{
-    font-family:'DM Sans',sans-serif; font-weight:400; line-height:1.5;
-    font-size:clamp(1rem,3.6vw,1.35rem); color:var(--paper);
-  }
-  .card .sentence b{
-    font-family:'Space Grotesk',sans-serif; font-weight:700; color:var(--gold);
-  }
-  .card .sentence i{
-    font-style:normal; letter-spacing:.1em; color:rgba(229,229,231,.3);
-    padding:0 .1em;
-  }
-  .card .seen{ margin-top:.5rem; font-family:'DM Mono',monospace; font-size:.6rem;
-               letter-spacing:.14em; text-transform:uppercase; color:var(--faint); }
-  .card .seen.again{ color:var(--accent); }
-  .card.gone-ing{ transform:translateX(-46vw) rotate(-13deg); opacity:0; }
-  .card.gone-to{ transform:translateY(-40vh) scale(.8); opacity:0; }
-  .card.gone-bare{ transform:translateX(46vw) rotate(13deg); opacity:0; }
-  .card.shake{ animation:shake .4s; }
-  @keyframes shake{ 0%,100%{transform:translateX(0)} 20%{transform:translateX(-11px)} 40%{transform:translateX(9px)} 60%{transform:translateX(-6px)} 80%{transform:translateX(4px)} }
-
-  /* ── the answer, shown only when wrong ── */
-  .why{
-    position:absolute; left:50%; bottom:.2rem; transform:translate(-50%,8px);
-    max-width:min(92%,520px); text-align:center; opacity:0; pointer-events:none;
-    transition:opacity .2s, transform .2s;
-  }
-  .why.show{ opacity:1; transform:translate(-50%,0); }
-  .why .rule{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:.8rem; color:var(--wrong); }
-  .why .eg{ font-size:.78rem; color:var(--dim); font-style:italic; margin-top:.2rem; }
-
-  /* ── the piles ── */
-  .piles{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:.6rem; flex-shrink:0; }
-  .pile{
-    padding:.9rem .5rem 1rem; border-radius:.8rem; text-align:center;
-    border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.03);
-    transition:all .15s;
-  }
-  .pile:hover{ background:rgba(255,255,255,.07); }
-  .pile .form{ font-family:'Space Grotesk',sans-serif; font-weight:900; font-size:clamp(1rem,3.4vw,1.4rem); }
-  .pile .name{ font-family:'DM Mono',monospace; font-size:.58rem; letter-spacing:.1em;
-               text-transform:uppercase; color:var(--faint); margin-top:.2rem; }
-  .pile .tally{ font-family:'DM Mono',monospace; font-size:.62rem; color:var(--dim); margin-top:.35rem; }
-  .p-ing .form{ color:var(--ing); }  .p-ing{ border-color:rgba(94,211,155,.3); }
-  .p-to  .form{ color:var(--to); }   .p-to { border-color:rgba(125,211,252,.3); }
-  .p-bare .form{ color:var(--bare); } .p-bare{ border-color:rgba(240,162,60,.3); }
-  .pile.hit{ animation:pop .35s; }
-  @keyframes pop{ 50%{ transform:scale(1.07); } }
-
-  .bottom{
-    position:fixed; bottom:0; left:0; right:0; height:var(--bar-h); padding:.3rem 1rem;
-    display:flex; align-items:center; justify-content:space-between;
-    background:rgba(13,13,13,.9); border-top:1px solid rgba(255,255,255,.06);
-    font-family:'DM Mono',monospace; font-size:.64rem; color:var(--faint);
-  }
-  .track{ flex:1; height:4px; margin:0 1rem; border-radius:99px; background:rgba(255,255,255,.08); }
-  .fill{ height:100%; border-radius:99px; background:var(--gold); width:0; transition:width .35s; }
-
-  /* ── done ── */
-  .done{
-    position:fixed; inset:0; z-index:30; display:none; flex-direction:column;
-    align-items:center; justify-content:center; gap:.4rem; text-align:center; padding:2rem;
-    background:rgba(8,8,9,.95); backdrop-filter:blur(6px);
-  }
-  .done.show{ display:flex; }
-  .done .score{ font-family:'Space Grotesk',sans-serif; font-weight:900;
-                font-size:clamp(2.4rem,9vw,3.6rem); color:var(--accent); }
-  .done .sub{ font-family:'DM Mono',monospace; font-size:.72rem; letter-spacing:.14em;
-              text-transform:uppercase; color:var(--dim); }
-  .done .list{ margin-top:1rem; max-width:32rem; font-size:.8rem; color:var(--dim); line-height:1.9; }
-  .done .list b{ color:var(--gold); font-weight:600; }
-  .done button{
-    margin-top:1.4rem; padding:.7rem 1.8rem; border-radius:99px;
-    background:var(--accent); color:#12100a; font-weight:700; font-size:.78rem;
-    letter-spacing:.1em; text-transform:uppercase;
-  }
-  .loading{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:.8rem; }
-  .err{ color:var(--wrong); text-align:center; max-width:30rem; line-height:1.7; padding:2rem; }
-</style>
-</head>
-<body>
-
-<header class="header">
-  <div class="htop">
-    <a class="back" href="/?openModal=grammar">← Grammar</a>
-    <div class="title"><b>INTUITY</b><span>Gerunds &amp; Infinitives</span></div>
-    <div></div>
-  </div>
-  <div class="hud">
-    <span><b id="right">0</b> right</span>
-    <span><b id="wrong">0</b> wrong</span>
-    <span class="left"><b id="left">0</b> to go</span>
-  </div>
-</header>
-
-<div class="stage">
-  <div class="cardwrap">
-    <div class="card" id="card"><div class="sentence" id="sentence">…</div><div class="seen" id="seen"></div></div>
-    <div class="why" id="why"></div>
-  </div>
-
-  <div class="piles">
-    <button class="pile p-ing"  onclick="choose('-ing')"><div class="form" id="f-ing">…</div><div class="name">gerund</div><div class="tally" id="t-ing">0</div></button>
-    <button class="pile p-to"   onclick="choose('to')"><div class="form" id="f-to">…</div><div class="name">infinitive</div><div class="tally" id="t-to">0</div></button>
-    <button class="pile p-bare" onclick="choose('bare')"><div class="form" id="f-bare">…</div><div class="name">no “to”</div><div class="tally" id="t-bare">0</div></button>
-  </div>
-</div>
-
-<div class="bottom">
-  <span id="streakLabel">streak 0</span>
-  <div class="track"><div class="fill" id="fill"></div></div>
-  <span id="deckLabel">—</span>
-</div>
-
-<div class="done" id="done">
-  <div class="score" id="doneScore">0</div>
-  <div class="sub" id="doneSub"></div>
-  <div class="list" id="doneList"></div>
-  <button onclick="start()">Go again</button>
-</div>
-
-<div class="loading" id="loading">Loading the deck…</div>
-
-<script>
-/* ======================================================================
-   SORT THE VERBS
-
-   The gap-fill asks a student to write "considering" when the only thing
-   being tested is whether `consider` takes -ing. All the effort goes into
-   the spelling, which is not the thing being learned.
-
-   Here the card says one word and there are three piles. The decision is
-   the whole exercise, so a student makes thirty or forty of them in the
-   time the gap-fill allowed ten — and this part of the topic is memory,
-   which needs encounters rather than explanations.
-
-   A card answered right leaves the deck. A card answered wrong goes back
-   in, four places down, and returns while the correction is still warm. A
-   round ends when the deck is empty, so it ends in mastery rather than
-   when a clock runs out.
-====================================================================== */
-
-/* The topic keeps one data file, as every topic does: the deck lives inside
-   it under `sorting`, beside the rules, the practice and the gap-fill. A
-   separate deck file would be a second source of truth for the same verbs,
-   and the moment one was corrected the other would be wrong. */
-const DATA_URL = '../../data/grammar-rules/gerunds-infinitives-complete.json';
-
-let DECK = [], queue = [], current = null;
-let right = 0, wrong = 0, streak = 0, best = 0, total = 0;
-let missed = new Map(), locked = false;
-
-const $ = id => document.getElementById(id);
-
-async function boot(){
-  try{
-    const res = await fetch(DATA_URL);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const d = await res.json();
-    DECK = (d.sorting && d.sorting.cards) || d.cards || [];
-    if (!DECK.length) throw new Error('no cards in the deck');
-    $('loading').remove();
-    start();
-  }catch(e){
-    $('loading').innerHTML = '<p class="err">Could not load <b>' + DATA_URL + '</b>.<br>' +
-      'Open this from the site rather than as a local file — browsers block file:// requests.</p>';
+{
+  "title": "Gerunds & Infinitives - B2 First (EXPANDED)",
+  "level": "B2",
+  "version": "2.0",
+  "rules": {
+    "categories": [
+      {
+        "id": "gerund-only",
+        "title": "GERUND ONLY",
+        "subtitle": "Verbs that take -ing",
+        "verbs": [
+          {
+            "verb": "enjoy",
+            "pattern": "enjoy + gerund",
+            "example": "I enjoy swimming every morning.",
+            "negative": "I enjoy to swim ✗"
+          },
+          {
+            "verb": "finish",
+            "pattern": "finish + gerund",
+            "example": "She finished writing the report.",
+            "negative": "She finished to write ✗"
+          },
+          {
+            "verb": "avoid",
+            "pattern": "avoid + gerund",
+            "example": "Try to avoid making mistakes.",
+            "negative": "Try to avoid to make ✗"
+          },
+          {
+            "verb": "consider",
+            "pattern": "consider + gerund",
+            "example": "I'm considering changing jobs.",
+            "negative": "I'm considering to change ✗"
+          },
+          {
+            "verb": "mind",
+            "pattern": "mind + gerund",
+            "example": "Would you mind opening the window?",
+            "negative": "Would you mind to open ✗"
+          },
+          {
+            "verb": "suggest",
+            "pattern": "suggest + gerund",
+            "example": "I suggest leaving early.",
+            "negative": "I suggest to leave ✗"
+          },
+          {
+            "verb": "recommend",
+            "pattern": "recommend + gerund",
+            "example": "I recommend trying the fish.",
+            "negative": "I recommend to try ✗"
+          },
+          {
+            "verb": "practice",
+            "pattern": "practice + gerund",
+            "example": "She practices playing piano daily.",
+            "negative": "She practices to play ✗"
+          },
+          {
+            "verb": "miss",
+            "pattern": "miss + gerund",
+            "example": "I miss living in Paris.",
+            "negative": "I miss to live ✗"
+          },
+          {
+            "verb": "deny",
+            "pattern": "deny + gerund",
+            "example": "He denied stealing the money.",
+            "negative": "He denied to steal ✗"
+          },
+          {
+            "verb": "admit",
+            "pattern": "admit + gerund",
+            "example": "She admitted making a mistake.",
+            "negative": "She admitted to make ✗"
+          },
+          {
+            "verb": "postpone",
+            "pattern": "postpone + gerund",
+            "example": "They postponed having the meeting.",
+            "negative": "They postponed to have ✗"
+          },
+          {
+            "verb": "dislike",
+            "pattern": "dislike + gerund",
+            "example": "I dislike getting up early.",
+            "negative": "I dislike to get up ✗"
+          },
+          {
+            "verb": "fancy",
+            "pattern": "fancy + gerund",
+            "example": "Do you fancy going out tonight?",
+            "negative": "Do you fancy to go ✗"
+          },
+          {
+            "verb": "imagine",
+            "pattern": "imagine + gerund",
+            "example": "I can't imagine living without music.",
+            "negative": "I can't imagine to live ✗"
+          },
+          {
+            "verb": "involve",
+            "pattern": "involve + gerund",
+            "example": "The job involves traveling a lot.",
+            "negative": "The job involves to travel ✗"
+          },
+          {
+            "verb": "risk",
+            "pattern": "risk + gerund",
+            "example": "Don't risk losing everything.",
+            "negative": "Don't risk to lose ✗"
+          },
+          {
+            "verb": "delay",
+            "pattern": "delay + gerund",
+            "example": "We delayed making the decision.",
+            "negative": "We delayed to make ✗"
+          },
+          {
+            "verb": "resist",
+            "pattern": "resist + gerund",
+            "example": "I couldn't resist eating the chocolate.",
+            "negative": "I couldn't resist to eat ✗"
+          },
+          {
+            "verb": "recall",
+            "pattern": "recall + gerund",
+            "example": "I don't recall seeing him there.",
+            "negative": "I don't recall to see ✗"
+          },
+          {
+            "verb": "resent",
+            "pattern": "resent + gerund",
+            "example": "She resented having to work late.",
+            "negative": "She resented to have ✗"
+          },
+          {
+            "verb": "tolerate",
+            "pattern": "tolerate + gerund",
+            "example": "I won't tolerate being treated badly.",
+            "negative": "I won't tolerate to be ✗"
+          },
+          {
+            "verb": "justify",
+            "pattern": "justify + gerund",
+            "example": "How can you justify spending so much?",
+            "negative": "How can you justify to spend ✗"
+          },
+          {
+            "verb": "mention",
+            "pattern": "mention + gerund",
+            "example": "She mentioned seeing you yesterday.",
+            "negative": "She mentioned to see ✗"
+          },
+          {
+            "verb": "detest",
+            "pattern": "detest + gerund",
+            "example": "I detest doing housework.",
+            "negative": "I detest to do ✗"
+          },
+          {
+            "verb": "dread",
+            "pattern": "dread + gerund",
+            "example": "I dread going to the dentist.",
+            "negative": "I dread to go ✗"
+          },
+          {
+            "verb": "escape",
+            "pattern": "escape + gerund",
+            "example": "He narrowly escaped being injured.",
+            "negative": "He narrowly escaped to be ✗"
+          },
+          {
+            "verb": "quit",
+            "pattern": "quit + gerund",
+            "example": "I quit smoking last year.",
+            "negative": "I quit to smoke ✗"
+          }
+        ],
+        "phrases": [
+          {
+            "phrase": "can't help",
+            "pattern": "can't help + gerund",
+            "example": "I can't help laughing when I see him.",
+            "meaning": "unable to stop yourself from doing something"
+          },
+          {
+            "phrase": "can't stand",
+            "pattern": "can't stand + gerund",
+            "example": "I can't stand waiting in queues.",
+            "meaning": "strongly dislike"
+          },
+          {
+            "phrase": "give up",
+            "pattern": "give up + gerund",
+            "example": "I gave up smoking last year.",
+            "meaning": "stop doing something permanently"
+          },
+          {
+            "phrase": "keep (on)",
+            "pattern": "keep (on) + gerund",
+            "example": "Keep on trying and you'll succeed.",
+            "meaning": "continue doing something"
+          },
+          {
+            "phrase": "it's (no) use",
+            "pattern": "it's (no) use + gerund",
+            "example": "It's no use crying over spilt milk.",
+            "meaning": "there's no point"
+          },
+          {
+            "phrase": "it's (not) worth",
+            "pattern": "it's (not) worth + gerund",
+            "example": "It's worth visiting the museum.",
+            "meaning": "valuable or useful to do"
+          },
+          {
+            "phrase": "be busy",
+            "pattern": "be busy + gerund",
+            "example": "She's busy preparing for the exam.",
+            "meaning": "occupied with an activity"
+          },
+          {
+            "phrase": "have difficulty",
+            "pattern": "have difficulty + gerund",
+            "example": "I have difficulty understanding him.",
+            "meaning": "find something hard to do"
+          },
+          {
+            "phrase": "spend time",
+            "pattern": "spend time + gerund",
+            "example": "I spend hours reading every day.",
+            "meaning": "use time doing something"
+          },
+          {
+            "phrase": "waste time",
+            "pattern": "waste time + gerund",
+            "example": "Stop wasting time watching TV.",
+            "meaning": "use time unproductively"
+          },
+          {
+            "phrase": "feel like",
+            "pattern": "feel like + gerund",
+            "example": "I don't feel like going out tonight.",
+            "meaning": "want to do something"
+          },
+          {
+            "phrase": "it's no good",
+            "pattern": "it's no good + gerund",
+            "example": "It's no good complaining about the weather.",
+            "meaning": "there's no point, it won't help"
+          },
+          {
+            "phrase": "there's no point (in)",
+            "pattern": "there's no point (in) + gerund",
+            "example": "There's no point in arguing with him.",
+            "meaning": "it's useless"
+          },
+          {
+            "phrase": "have trouble",
+            "pattern": "have trouble + gerund",
+            "example": "I have trouble sleeping at night.",
+            "meaning": "find something difficult"
+          },
+          {
+            "phrase": "can't bear",
+            "pattern": "can't bear + gerund",
+            "example": "I can't bear watching horror movies.",
+            "meaning": "unable to tolerate"
+          }
+        ],
+        "prepositions": [
+          {
+            "pattern": "interested in",
+            "example": "I'm interested in learning Japanese.",
+            "note": "ALL prepositions take gerunds"
+          },
+          {
+            "pattern": "good at",
+            "example": "She's good at solving problems."
+          },
+          {
+            "pattern": "tired of",
+            "example": "I'm tired of waiting for him."
+          },
+          {
+            "pattern": "look forward to",
+            "example": "I look forward to seeing you."
+          },
+          {
+            "pattern": "instead of",
+            "example": "Instead of complaining, do something."
+          },
+          {
+            "pattern": "fond of",
+            "example": "I'm fond of reading detective novels."
+          },
+          {
+            "pattern": "keen on",
+            "example": "He's keen on playing football."
+          },
+          {
+            "pattern": "succeed in",
+            "example": "She succeeded in passing the exam."
+          },
+          {
+            "pattern": "insist on",
+            "example": "He insisted on paying the bill."
+          },
+          {
+            "pattern": "apologize for",
+            "example": "She apologized for being late."
+          },
+          {
+            "pattern": "afraid of",
+            "example": "I'm afraid of losing my job."
+          },
+          {
+            "pattern": "accused of",
+            "example": "He was accused of stealing."
+          },
+          {
+            "pattern": "capable of",
+            "example": "She's capable of doing better."
+          },
+          {
+            "pattern": "responsible for",
+            "example": "Who's responsible for making dinner?"
+          },
+          {
+            "pattern": "famous for",
+            "example": "Italy is famous for making great wine."
+          },
+          {
+            "pattern": "sorry for",
+            "example": "I'm sorry for shouting at you."
+          },
+          {
+            "pattern": "worried about",
+            "example": "I'm worried about failing the exam."
+          },
+          {
+            "pattern": "excited about",
+            "example": "She's excited about traveling abroad."
+          },
+          {
+            "pattern": "serious about",
+            "example": "Are you serious about learning French?"
+          },
+          {
+            "pattern": "used to",
+            "example": "I'm not used to getting up early."
+          },
+          {
+            "pattern": "accustomed to",
+            "example": "He's accustomed to working alone."
+          },
+          {
+            "pattern": "object to",
+            "example": "I object to being treated like a child."
+          },
+          {
+            "pattern": "prevent from",
+            "example": "Nothing can prevent me from succeeding."
+          },
+          {
+            "pattern": "prohibit from",
+            "example": "Smoking is prohibited from entering."
+          }
+        ],
+        "go_activities": {
+          "title": "GO + Gerund (Activities)",
+          "pattern": "go + gerund (for activities)",
+          "examples": [
+            "go swimming",
+            "go shopping",
+            "go fishing",
+            "go skiing",
+            "go dancing",
+            "go running",
+            "go hiking",
+            "go cycling",
+            "go jogging",
+            "go sailing"
+          ],
+          "note": "Used for recreational activities"
+        }
+      },
+      {
+        "id": "infinitive-only",
+        "title": "INFINITIVE ONLY",
+        "subtitle": "Verbs that take to + verb",
+        "verbs": [
+          {
+            "verb": "want",
+            "pattern": "want + to infinitive",
+            "example": "I want to learn French.",
+            "negative": "I want learning ✗"
+          },
+          {
+            "verb": "need",
+            "pattern": "need + to infinitive",
+            "example": "You need to study harder.",
+            "negative": "You need studying ✗"
+          },
+          {
+            "verb": "decide",
+            "pattern": "decide + to infinitive",
+            "example": "She decided to move to London.",
+            "negative": "She decided moving ✗"
+          },
+          {
+            "verb": "plan",
+            "pattern": "plan + to infinitive",
+            "example": "We're planning to buy a house.",
+            "negative": "We're planning buying ✗"
+          },
+          {
+            "verb": "hope",
+            "pattern": "hope + to infinitive",
+            "example": "I hope to see you soon.",
+            "negative": "I hope seeing ✗"
+          },
+          {
+            "verb": "expect",
+            "pattern": "expect + to infinitive",
+            "example": "I expect to arrive at 8pm.",
+            "negative": "I expect arriving ✗"
+          },
+          {
+            "verb": "promise",
+            "pattern": "promise + to infinitive",
+            "example": "I promise to call you tomorrow.",
+            "negative": "I promise calling ✗"
+          },
+          {
+            "verb": "refuse",
+            "pattern": "refuse + to infinitive",
+            "example": "He refused to answer the question.",
+            "negative": "He refused answering ✗"
+          },
+          {
+            "verb": "offer",
+            "pattern": "offer + to infinitive",
+            "example": "She offered to help me.",
+            "negative": "She offered helping ✗"
+          },
+          {
+            "verb": "manage",
+            "pattern": "manage + to infinitive",
+            "example": "I managed to finish on time.",
+            "negative": "I managed finishing ✗"
+          },
+          {
+            "verb": "afford",
+            "pattern": "afford + to infinitive",
+            "example": "I can't afford to buy a car.",
+            "negative": "I can't afford buying ✗"
+          },
+          {
+            "verb": "agree",
+            "pattern": "agree + to infinitive",
+            "example": "They agreed to meet at noon.",
+            "negative": "They agreed meeting ✗"
+          },
+          {
+            "verb": "learn",
+            "pattern": "learn + to infinitive",
+            "example": "I'm learning to play guitar.",
+            "negative": "I'm learning playing ✗"
+          },
+          {
+            "verb": "fail",
+            "pattern": "fail + to infinitive",
+            "example": "He failed to pass the exam.",
+            "negative": "He failed passing ✗"
+          },
+          {
+            "verb": "appear",
+            "pattern": "appear + to infinitive",
+            "example": "He appears to be happy.",
+            "negative": "He appears being ✗"
+          },
+          {
+            "verb": "seem",
+            "pattern": "seem + to infinitive",
+            "example": "She seems to understand.",
+            "negative": "She seems understanding ✗"
+          },
+          {
+            "verb": "tend",
+            "pattern": "tend + to infinitive",
+            "example": "I tend to forget names.",
+            "negative": "I tend forgetting ✗"
+          },
+          {
+            "verb": "claim",
+            "pattern": "claim + to infinitive",
+            "example": "He claims to be an expert.",
+            "negative": "He claims being ✗"
+          },
+          {
+            "verb": "choose",
+            "pattern": "choose + to infinitive",
+            "example": "I chose to study medicine.",
+            "negative": "I chose studying ✗"
+          },
+          {
+            "verb": "dare",
+            "pattern": "dare + to infinitive",
+            "example": "She didn't dare to speak.",
+            "negative": "She didn't dare speaking ✗"
+          },
+          {
+            "verb": "deserve",
+            "pattern": "deserve + to infinitive",
+            "example": "You deserve to win.",
+            "negative": "You deserve winning ✗"
+          },
+          {
+            "verb": "prepare",
+            "pattern": "prepare + to infinitive",
+            "example": "We're preparing to leave.",
+            "negative": "We're preparing leaving ✗"
+          },
+          {
+            "verb": "pretend",
+            "pattern": "pretend + to infinitive",
+            "example": "He pretended to be asleep.",
+            "negative": "He pretended being ✗"
+          },
+          {
+            "verb": "guarantee",
+            "pattern": "guarantee + to infinitive",
+            "example": "I guarantee to finish on time.",
+            "negative": "I guarantee finishing ✗"
+          },
+          {
+            "verb": "hesitate",
+            "pattern": "hesitate + to infinitive",
+            "example": "Don't hesitate to ask questions.",
+            "negative": "Don't hesitate asking ✗"
+          },
+          {
+            "verb": "struggle",
+            "pattern": "struggle + to infinitive",
+            "example": "I struggled to open the jar.",
+            "negative": "I struggled opening ✗"
+          },
+          {
+            "verb": "threaten",
+            "pattern": "threaten + to infinitive",
+            "example": "He threatened to call the police.",
+            "negative": "He threatened calling ✗"
+          },
+          {
+            "verb": "arrange",
+            "pattern": "arrange + to infinitive",
+            "example": "We arranged to meet at 7pm.",
+            "negative": "We arranged meeting ✗"
+          },
+          {
+            "verb": "attempt",
+            "pattern": "attempt + to infinitive",
+            "example": "They attempted to climb Everest.",
+            "negative": "They attempted climbing ✗"
+          },
+          {
+            "verb": "volunteer",
+            "pattern": "volunteer + to infinitive",
+            "example": "She volunteered to help.",
+            "negative": "She volunteered helping ✗"
+          },
+          {
+            "verb": "swear",
+            "pattern": "swear + to infinitive",
+            "example": "I swear to tell the truth.",
+            "negative": "I swear telling ✗"
+          },
+          {
+            "verb": "demand",
+            "pattern": "demand + to infinitive",
+            "example": "He demanded to see the manager.",
+            "negative": "He demanded seeing ✗"
+          },
+          {
+            "verb": "seek",
+            "pattern": "seek + to infinitive",
+            "example": "We seek to improve quality.",
+            "negative": "We seek improving ✗"
+          },
+          {
+            "verb": "intend",
+            "pattern": "intend + to infinitive",
+            "example": "I intend to finish by Friday.",
+            "negative": "I intend finishing ✗"
+          },
+          {
+            "verb": "consent",
+            "pattern": "consent + to infinitive",
+            "example": "She consented to marry him.",
+            "negative": "She consented marrying ✗"
+          }
+        ],
+        "adjectives": [
+          {
+            "pattern": "difficult to",
+            "example": "This exercise is difficult to understand.",
+            "note": "Adjectives + infinitive"
+          },
+          {
+            "pattern": "easy to",
+            "example": "English is easy to learn."
+          },
+          {
+            "pattern": "hard to",
+            "example": "It's hard to believe the news."
+          },
+          {
+            "pattern": "impossible to",
+            "example": "It's impossible to finish today."
+          },
+          {
+            "pattern": "important to",
+            "example": "It's important to eat healthy food."
+          },
+          {
+            "pattern": "necessary to",
+            "example": "It's necessary to book in advance."
+          },
+          {
+            "pattern": "nice to",
+            "example": "It's nice to see you again."
+          },
+          {
+            "pattern": "pleased to",
+            "example": "I'm pleased to meet you."
+          },
+          {
+            "pattern": "surprised to",
+            "example": "I was surprised to hear the news."
+          },
+          {
+            "pattern": "ready to",
+            "example": "Are you ready to order?"
+          },
+          {
+            "pattern": "happy to",
+            "example": "I'm happy to help you."
+          },
+          {
+            "pattern": "willing to",
+            "example": "Are you willing to compromise?"
+          },
+          {
+            "pattern": "eager to",
+            "example": "She's eager to start the project."
+          },
+          {
+            "pattern": "afraid to",
+            "example": "Don't be afraid to ask questions."
+          },
+          {
+            "pattern": "reluctant to",
+            "example": "He was reluctant to leave."
+          }
+        ],
+        "purpose": [
+          {
+            "pattern": "to + infinitive (purpose)",
+            "example": "I came here to study English.",
+            "note": "Use infinitive to express purpose"
+          },
+          {
+            "pattern": "in order to",
+            "example": "She works hard in order to succeed."
+          },
+          {
+            "pattern": "so as to",
+            "example": "I left early so as to avoid traffic."
+          }
+        ]
+      },
+      {
+        "id": "both-same",
+        "title": "BOTH (Same Meaning)",
+        "subtitle": "Verbs that accept both forms",
+        "verbs": [
+          {
+            "verb": "like",
+            "pattern": "like + gerund / infinitive",
+            "example1": "I like swimming.",
+            "example2": "I like to swim.",
+            "note": "Both forms = same meaning"
+          },
+          {
+            "verb": "love",
+            "pattern": "love + gerund / infinitive",
+            "example1": "She loves dancing.",
+            "example2": "She loves to dance."
+          },
+          {
+            "verb": "hate",
+            "pattern": "hate + gerund / infinitive",
+            "example1": "I hate waiting.",
+            "example2": "I hate to wait."
+          },
+          {
+            "verb": "prefer",
+            "pattern": "prefer + gerund / infinitive",
+            "example1": "I prefer walking.",
+            "example2": "I prefer to walk."
+          },
+          {
+            "verb": "start",
+            "pattern": "start + gerund / infinitive",
+            "example1": "It started raining.",
+            "example2": "It started to rain."
+          },
+          {
+            "verb": "begin",
+            "pattern": "begin + gerund / infinitive",
+            "example1": "She began singing.",
+            "example2": "She began to sing."
+          },
+          {
+            "verb": "continue",
+            "pattern": "continue + gerund / infinitive",
+            "example1": "He continued working.",
+            "example2": "He continued to work."
+          },
+          {
+            "verb": "can't bear",
+            "pattern": "can't bear + gerund / infinitive",
+            "example1": "I can't bear waiting.",
+            "example2": "I can't bear to wait."
+          },
+          {
+            "verb": "propose",
+            "pattern": "propose + gerund / infinitive",
+            "example1": "I propose leaving early.",
+            "example2": "I propose to leave early."
+          }
+        ]
+      },
+      {
+        "id": "both-different",
+        "title": "BOTH (Different Meanings)",
+        "subtitle": "Meaning changes with form",
+        "critical": true,
+        "verbs": [
+          {
+            "verb": "stop",
+            "gerund": {
+              "form": "stop + gerund",
+              "meaning": "quit/cease an activity",
+              "example": "I stopped smoking. (I don't smoke anymore)"
+            },
+            "infinitive": {
+              "form": "stop + to infinitive",
+              "meaning": "pause to do something else",
+              "example": "I stopped to smoke. (I paused my activity to have a cigarette)"
+            }
+          },
+          {
+            "verb": "remember",
+            "gerund": {
+              "form": "remember + gerund",
+              "meaning": "recall a past action",
+              "example": "I remember meeting him. (I have a memory of when we met)"
+            },
+            "infinitive": {
+              "form": "remember + to infinitive",
+              "meaning": "not forget to do something",
+              "example": "Remember to meet him at 5pm. (Don't forget this future action)"
+            }
+          },
+          {
+            "verb": "forget",
+            "gerund": {
+              "form": "forget + gerund",
+              "meaning": "unable to recall a past action",
+              "example": "I'll never forget visiting Paris. (I have a lasting memory)"
+            },
+            "infinitive": {
+              "form": "forget + to infinitive",
+              "meaning": "fail to do something",
+              "example": "I forgot to visit my grandmother. (I didn't do it)"
+            }
+          },
+          {
+            "verb": "try",
+            "gerund": {
+              "form": "try + gerund",
+              "meaning": "experiment with something",
+              "example": "Try adding more salt. (Test this approach)"
+            },
+            "infinitive": {
+              "form": "try + to infinitive",
+              "meaning": "make an effort/attempt",
+              "example": "I tried to open the door. (I attempted but maybe failed)"
+            }
+          },
+          {
+            "verb": "regret",
+            "gerund": {
+              "form": "regret + gerund",
+              "meaning": "feel sorry about a past action",
+              "example": "I regret telling him the secret. (I'm sorry I did it)"
+            },
+            "infinitive": {
+              "form": "regret + to infinitive",
+              "meaning": "be sorry to say (formal)",
+              "example": "I regret to inform you that you failed. (Formal announcement)"
+            }
+          },
+          {
+            "verb": "go on",
+            "gerund": {
+              "form": "go on + gerund",
+              "meaning": "continue the same activity",
+              "example": "She went on talking for hours. (Continued talking)"
+            },
+            "infinitive": {
+              "form": "go on + to infinitive",
+              "meaning": "do something next/after",
+              "example": "After school, he went on to study medicine. (Next stage of life)"
+            }
+          },
+          {
+            "verb": "mean",
+            "gerund": {
+              "form": "mean + gerund",
+              "meaning": "involve/result in",
+              "example": "This job means traveling a lot. (It involves traveling)"
+            },
+            "infinitive": {
+              "form": "mean + to infinitive",
+              "meaning": "intend to do something",
+              "example": "I meant to call you yesterday. (I intended to but didn't)"
+            }
+          }
+        ]
+      },
+      {
+        "id": "special-cases",
+        "title": "SPECIAL CASES",
+        "subtitle": "Exceptions & unique patterns",
+        "patterns": [
+          {
+            "pattern": "make + object + infinitive (no to)",
+            "examples": [
+              "My parents made me study hard.",
+              "The teacher made us repeat the exercise."
+            ],
+            "note": "Causative: someone forces another to do something"
+          },
+          {
+            "pattern": "let + object + infinitive (no to)",
+            "examples": [
+              "My parents let me go to the party.",
+              "The teacher let us leave early."
+            ],
+            "note": "Permission: someone allows another to do something"
+          },
+          {
+            "pattern": "would rather + infinitive (no to)",
+            "examples": [
+              "I'd rather stay home than go out.",
+              "Would you rather walk or take the bus?"
+            ],
+            "note": "Preference"
+          },
+          {
+            "pattern": "had better + infinitive (no to)",
+            "examples": [
+              "You'd better study for the exam.",
+              "We'd better leave now or we'll be late."
+            ],
+            "note": "Strong advice"
+          },
+          {
+            "pattern": "see/hear/watch + object + gerund OR infinitive",
+            "gerund_example": "I saw him crossing the street. (Action in progress)",
+            "infinitive_example": "I saw him cross the street. (Complete action)",
+            "note": "Perception verbs: gerund = ongoing, infinitive = completed"
+          },
+          {
+            "pattern": "need/want/require + gerund (passive meaning)",
+            "examples": [
+              "The car needs washing. (= needs to be washed)",
+              "Your hair wants cutting. (= needs to be cut)",
+              "This room requires cleaning. (= needs to be cleaned)"
+            ],
+            "note": "Gerund has passive meaning after these verbs"
+          },
+          {
+            "pattern": "possessive + gerund",
+            "examples": [
+              "I don't mind his/him coming late.",
+              "She appreciated my/me helping her."
+            ],
+            "note": "Formal: possessive (his/my), Informal: object (him/me)"
+          }
+        ]
+      }
+    ]
+  },
+  "practice": {
+    "tests": [
+      {
+        "id": "gerund-only-1",
+        "title": "GERUND 1",
+        "transformations": [
+          {
+            "id": 1,
+            "sentence1": "I really enjoy reading science fiction novels.",
+            "keyWord": "FOND",
+            "sentence2": "I am _____ science fiction novels.",
+            "answer": "fond of reading",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 2,
+            "sentence1": "She finished the project and submitted it on time.",
+            "keyWord": "DONE",
+            "sentence2": "She was _____ the project on time.",
+            "answer": "done with finishing",
+            "alternativeAnswers": [
+              "finished with completing"
+            ]
+          },
+          {
+            "id": 3,
+            "sentence1": "Try not to make the same mistake again.",
+            "keyWord": "AVOID",
+            "sentence2": "Try to _____ the same mistake again.",
+            "answer": "avoid making",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 4,
+            "sentence1": "I'm thinking about moving to another city.",
+            "keyWord": "CONSIDERING",
+            "sentence2": "I'm _____ to another city.",
+            "answer": "considering moving",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 5,
+            "sentence1": "Would it be OK if I opened the window?",
+            "keyWord": "MIND",
+            "sentence2": "Would you _____ the window?",
+            "answer": "mind opening",
+            "alternativeAnswers": [
+              "mind me opening"
+            ]
+          },
+          {
+            "id": 6,
+            "sentence1": "Why don't we leave a bit earlier than planned?",
+            "keyWord": "SUGGEST",
+            "sentence2": "I _____ a bit earlier than planned.",
+            "answer": "suggest leaving",
+            "alternativeAnswers": [
+              "suggest we leave"
+            ]
+          },
+          {
+            "id": 7,
+            "sentence1": "You should definitely try the chocolate cake.",
+            "keyWord": "RECOMMEND",
+            "sentence2": "I _____ the chocolate cake.",
+            "answer": "recommend trying",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 8,
+            "sentence1": "She plays the piano every single day.",
+            "keyWord": "PRACTICES",
+            "sentence2": "She _____ the piano every day.",
+            "answer": "practices playing",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 9,
+            "sentence1": "I really miss my life in London.",
+            "keyWord": "LIVING",
+            "sentence2": "I really miss _____ in London.",
+            "answer": "living",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 10,
+            "sentence1": "He said he didn't take the money.",
+            "keyWord": "DENIED",
+            "sentence2": "He _____ the money.",
+            "answer": "denied taking",
+            "alternativeAnswers": [
+              "denied stealing"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "gerund-only-2",
+        "title": "GERUND 2",
+        "transformations": [
+          {
+            "id": 11,
+            "sentence1": "I don't like getting up early in winter.",
+            "keyWord": "DISLIKE",
+            "sentence2": "I _____ early in winter.",
+            "answer": "dislike getting up",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 12,
+            "sentence1": "Do you want to go to the cinema tonight?",
+            "keyWord": "FANCY",
+            "sentence2": "Do you _____ to the cinema tonight?",
+            "answer": "fancy going",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 13,
+            "sentence1": "I can't think what life would be like without music.",
+            "keyWord": "IMAGINE",
+            "sentence2": "I can't _____ without music.",
+            "answer": "imagine living",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 14,
+            "sentence1": "The project requires a lot of international travel.",
+            "keyWord": "INVOLVES",
+            "sentence2": "The project _____ a lot internationally.",
+            "answer": "involves traveling",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 15,
+            "sentence1": "If you drive too fast, you might lose your license.",
+            "keyWord": "RISK",
+            "sentence2": "Don't _____ your license by driving fast.",
+            "answer": "risk losing",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 16,
+            "sentence1": "We put off making the final decision.",
+            "keyWord": "DELAYED",
+            "sentence2": "We _____ the final decision.",
+            "answer": "delayed making",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 17,
+            "sentence1": "I couldn't stop myself from buying the dress.",
+            "keyWord": "RESIST",
+            "sentence2": "I couldn't _____ the dress.",
+            "answer": "resist buying",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 18,
+            "sentence1": "I don't remember seeing him at the party.",
+            "keyWord": "RECALL",
+            "sentence2": "I don't _____ him at the party.",
+            "answer": "recall seeing",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 19,
+            "sentence1": "She hates having to work on weekends.",
+            "keyWord": "RESENTS",
+            "sentence2": "She _____ work on weekends.",
+            "answer": "resents having to",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 20,
+            "sentence1": "I can't put up with being lied to.",
+            "keyWord": "TOLERATE",
+            "sentence2": "I won't _____ lied to.",
+            "answer": "tolerate being",
+            "alternativeAnswers": []
+          }
+        ]
+      },
+      {
+        "id": "infinitive-only-1",
+        "title": "INFINITIVE 1",
+        "transformations": [
+          {
+            "id": 21,
+            "sentence1": "I'd like to learn French next year.",
+            "keyWord": "WANT",
+            "sentence2": "I _____ French next year.",
+            "answer": "want to learn",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 22,
+            "sentence1": "It's necessary for you to study harder.",
+            "keyWord": "NEED",
+            "sentence2": "You _____ harder.",
+            "answer": "need to study",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 23,
+            "sentence1": "She made the decision to move to London.",
+            "keyWord": "DECIDED",
+            "sentence2": "She _____ to London.",
+            "answer": "decided to move",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 24,
+            "sentence1": "We have intentions of buying a house next year.",
+            "keyWord": "PLANNING",
+            "sentence2": "We're _____ a house next year.",
+            "answer": "planning to buy",
+            "alternativeAnswers": [
+              "planning on buying"
+            ]
+          },
+          {
+            "id": 25,
+            "sentence1": "I expect that I'll see you at the party.",
+            "keyWord": "HOPE",
+            "sentence2": "I _____ you at the party.",
+            "answer": "hope to see",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 26,
+            "sentence1": "I anticipate arriving around 8pm.",
+            "keyWord": "EXPECT",
+            "sentence2": "I _____ around 8pm.",
+            "answer": "expect to arrive",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 27,
+            "sentence1": "I give you my word that I'll call tomorrow.",
+            "keyWord": "PROMISE",
+            "sentence2": "I _____ you tomorrow.",
+            "answer": "promise to call",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 28,
+            "sentence1": "He said he wouldn't answer the question.",
+            "keyWord": "REFUSED",
+            "sentence2": "He _____ the question.",
+            "answer": "refused to answer",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 29,
+            "sentence1": "She said she would help me with the project.",
+            "keyWord": "OFFERED",
+            "sentence2": "She _____ me with the project.",
+            "answer": "offered to help",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 30,
+            "sentence1": "I succeeded in finishing the work on time.",
+            "keyWord": "MANAGED",
+            "sentence2": "I _____ the work on time.",
+            "answer": "managed to finish",
+            "alternativeAnswers": []
+          }
+        ]
+      },
+      {
+        "id": "infinitive-only-2",
+        "title": "INFINITIVE 2",
+        "transformations": [
+          {
+            "id": 31,
+            "sentence1": "It looks like he's very happy.",
+            "keyWord": "APPEARS",
+            "sentence2": "He _____ very happy.",
+            "answer": "appears to be",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 32,
+            "sentence1": "It looks as though she understands the problem.",
+            "keyWord": "SEEMS",
+            "sentence2": "She _____ the problem.",
+            "answer": "seems to understand",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 33,
+            "sentence1": "I often forget people's names.",
+            "keyWord": "TEND",
+            "sentence2": "I _____ people's names.",
+            "answer": "tend to forget",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 34,
+            "sentence1": "He says he's an expert in computers.",
+            "keyWord": "CLAIMS",
+            "sentence2": "He _____ an expert in computers.",
+            "answer": "claims to be",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 35,
+            "sentence1": "I selected medicine as my university subject.",
+            "keyWord": "CHOSE",
+            "sentence2": "I _____ medicine at university.",
+            "answer": "chose to study",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 36,
+            "sentence1": "You've earned the right to win this competition.",
+            "keyWord": "DESERVE",
+            "sentence2": "You _____ this competition.",
+            "answer": "deserve to win",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 37,
+            "sentence1": "We're getting ready to leave for the airport.",
+            "keyWord": "PREPARING",
+            "sentence2": "We're _____ for the airport.",
+            "answer": "preparing to leave",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 38,
+            "sentence1": "He acted as if he was sleeping.",
+            "keyWord": "PRETENDED",
+            "sentence2": "He _____ asleep.",
+            "answer": "pretended to be",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 39,
+            "sentence1": "Don't be afraid to ask for help.",
+            "keyWord": "HESITATE",
+            "sentence2": "Don't _____ for help.",
+            "answer": "hesitate to ask",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 40,
+            "sentence1": "I had great difficulty opening the jar.",
+            "keyWord": "STRUGGLED",
+            "sentence2": "I _____ the jar.",
+            "answer": "struggled to open",
+            "alternativeAnswers": []
+          }
+        ]
+      },
+      {
+        "id": "both-same",
+        "title": "BOTH FORMS",
+        "transformations": [
+          {
+            "id": 41,
+            "sentence1": "Swimming in the ocean is something I enjoy.",
+            "keyWord": "LIKE",
+            "sentence2": "I _____ in the ocean.",
+            "answer": "like swimming",
+            "alternativeAnswers": [
+              "like to swim"
+            ]
+          },
+          {
+            "id": 42,
+            "sentence1": "Dancing is her passion.",
+            "keyWord": "LOVES",
+            "sentence2": "She _____ dancing.",
+            "answer": "loves",
+            "alternativeAnswers": [
+              "loves to dance"
+            ]
+          },
+          {
+            "id": 43,
+            "sentence1": "Waiting in queues is something I dislike intensely.",
+            "keyWord": "HATE",
+            "sentence2": "I _____ in queues.",
+            "answer": "hate waiting",
+            "alternativeAnswers": [
+              "hate to wait"
+            ]
+          },
+          {
+            "id": 44,
+            "sentence1": "I'd choose walking over driving.",
+            "keyWord": "PREFER",
+            "sentence2": "I _____ to driving.",
+            "answer": "prefer walking",
+            "alternativeAnswers": [
+              "prefer to walk"
+            ]
+          },
+          {
+            "id": 45,
+            "sentence1": "The rain began falling at 3pm.",
+            "keyWord": "STARTED",
+            "sentence2": "It _____ at 3pm.",
+            "answer": "started raining",
+            "alternativeAnswers": [
+              "started to rain"
+            ]
+          },
+          {
+            "id": 46,
+            "sentence1": "She commenced singing at a young age.",
+            "keyWord": "BEGAN",
+            "sentence2": "She _____ at a young age.",
+            "answer": "began singing",
+            "alternativeAnswers": [
+              "began to sing"
+            ]
+          },
+          {
+            "id": 47,
+            "sentence1": "Despite the interruption, he carried on working.",
+            "keyWord": "CONTINUED",
+            "sentence2": "He _____ despite the interruption.",
+            "answer": "continued working",
+            "alternativeAnswers": [
+              "continued to work"
+            ]
+          },
+          {
+            "id": 48,
+            "sentence1": "I can't tolerate being lied to.",
+            "keyWord": "BEAR",
+            "sentence2": "I can't _____ lied to.",
+            "answer": "bear being",
+            "alternativeAnswers": [
+              "bear to be"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "meaning-changes",
+        "title": "MEANINGS",
+        "transformations": [
+          {
+            "id": 49,
+            "sentence1": "I quit smoking five years ago.",
+            "keyWord": "STOPPED",
+            "sentence2": "I _____ five years ago.",
+            "answer": "stopped smoking",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 50,
+            "sentence1": "I paused my work to have a cigarette.",
+            "keyWord": "STOPPED",
+            "sentence2": "I stopped my work _____ a cigarette.",
+            "answer": "to have",
+            "alternativeAnswers": [
+              "to smoke"
+            ]
+          },
+          {
+            "id": 51,
+            "sentence1": "I have a clear memory of our first meeting.",
+            "keyWord": "REMEMBER",
+            "sentence2": "I _____ you for the first time.",
+            "answer": "remember meeting",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 52,
+            "sentence1": "Don't forget you have to meet him at 5pm.",
+            "keyWord": "REMEMBER",
+            "sentence2": "_____ him at 5pm.",
+            "answer": "remember to meet",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 53,
+            "sentence1": "My visit to Paris will always stay in my memory.",
+            "keyWord": "FORGET",
+            "sentence2": "I'll never _____ Paris.",
+            "answer": "forget visiting",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 54,
+            "sentence1": "I didn't remember to visit my grandmother.",
+            "keyWord": "FORGOT",
+            "sentence2": "I _____ my grandmother.",
+            "answer": "forgot to visit",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 55,
+            "sentence1": "As an experiment, add some more salt to the dish.",
+            "keyWord": "TRY",
+            "sentence2": "_____ some more salt to the dish.",
+            "answer": "try adding",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 56,
+            "sentence1": "I made an effort to open the door but it was locked.",
+            "keyWord": "TRIED",
+            "sentence2": "I _____ the door but it was locked.",
+            "answer": "tried to open",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 57,
+            "sentence1": "I'm sorry that I told him the secret.",
+            "keyWord": "REGRET",
+            "sentence2": "I _____ him the secret.",
+            "answer": "regret telling",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 58,
+            "sentence1": "I'm sorry to say that you didn't pass the exam.",
+            "keyWord": "REGRET",
+            "sentence2": "I _____ inform you that you failed.",
+            "answer": "regret to",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 59,
+            "sentence1": "She continued speaking for another hour.",
+            "keyWord": "WENT",
+            "sentence2": "She _____ for another hour.",
+            "answer": "went on talking",
+            "alternativeAnswers": [
+              "went on speaking"
+            ]
+          },
+          {
+            "id": 60,
+            "sentence1": "After university, he became a doctor.",
+            "keyWord": "WENT",
+            "sentence2": "After university, he _____ medicine.",
+            "answer": "went on to study",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 61,
+            "sentence1": "This position involves a lot of travel.",
+            "keyWord": "MEANS",
+            "sentence2": "This position _____ a lot.",
+            "answer": "means traveling",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 62,
+            "sentence1": "I intended to phone you yesterday but forgot.",
+            "keyWord": "MEANT",
+            "sentence2": "I _____ you yesterday but forgot.",
+            "answer": "meant to phone",
+            "alternativeAnswers": [
+              "meant to call"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "special-mixed",
+        "title": "SPECIAL",
+        "transformations": [
+          {
+            "id": 63,
+            "sentence1": "My parents forced me to study medicine.",
+            "keyWord": "MADE",
+            "sentence2": "My parents _____ medicine.",
+            "answer": "made me study",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 64,
+            "sentence1": "My parents allowed me to travel alone.",
+            "keyWord": "LET",
+            "sentence2": "My parents _____ alone.",
+            "answer": "let me travel",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 65,
+            "sentence1": "I'd prefer to stay home instead of going out.",
+            "keyWord": "RATHER",
+            "sentence2": "I'd _____ home than go out.",
+            "answer": "rather stay",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 66,
+            "sentence1": "It would be wise to leave now.",
+            "keyWord": "BETTER",
+            "sentence2": "We'd _____ now.",
+            "answer": "better leave",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 67,
+            "sentence1": "I observed him while he was crossing the street.",
+            "keyWord": "SAW",
+            "sentence2": "I _____ the street.",
+            "answer": "saw him crossing",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 68,
+            "sentence1": "I watched the entire action of him opening the door.",
+            "keyWord": "SAW",
+            "sentence2": "I _____ the door.",
+            "answer": "saw him open",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 69,
+            "sentence1": "Someone should wash this car.",
+            "keyWord": "NEEDS",
+            "sentence2": "This car _____ washing.",
+            "answer": "needs",
+            "alternativeAnswers": []
+          },
+          {
+            "id": 70,
+            "sentence1": "I don't object to his late arrival.",
+            "keyWord": "MIND",
+            "sentence2": "I don't _____ late.",
+            "answer": "mind his coming",
+            "alternativeAnswers": [
+              "mind him coming"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "gapfill": {
+    "tests": [
+      {
+        "id": "gerund-only-1",
+        "title": "GERUND 1",
+        "focus": "Common gerund verbs",
+        "sentences": [
+          {
+            "id": 1,
+            "text": "I really enjoy _____ (read) detective novels in my free time.",
+            "answer": "reading",
+            "alternatives": [],
+            "highlightVerb": "enjoy",
+            "verb": "read",
+            "rule": "enjoy + gerund"
+          },
+          {
+            "id": 2,
+            "text": "She finished _____ (write) her dissertation last month.",
+            "answer": "writing",
+            "alternatives": [],
+            "highlightVerb": "finished",
+            "verb": "write",
+            "rule": "finish + gerund"
+          },
+          {
+            "id": 3,
+            "text": "Try to avoid _____ (make) the same mistakes again.",
+            "answer": "making",
+            "alternatives": [],
+            "highlightVerb": "avoid",
+            "verb": "make",
+            "rule": "avoid + gerund"
+          },
+          {
+            "id": 4,
+            "text": "I'm considering _____ (move) to another city for work.",
+            "answer": "moving",
+            "alternatives": [],
+            "highlightVerb": "considering",
+            "verb": "move",
+            "rule": "consider + gerund"
+          },
+          {
+            "id": 5,
+            "text": "Would you mind _____ (close) the window? It's quite cold.",
+            "answer": "closing",
+            "alternatives": [],
+            "highlightVerb": "mind",
+            "verb": "close",
+            "rule": "mind + gerund"
+          },
+          {
+            "id": 6,
+            "text": "I suggest _____ (leave) a bit earlier to avoid traffic.",
+            "answer": "leaving",
+            "alternatives": [],
+            "highlightVerb": "suggest",
+            "verb": "leave",
+            "rule": "suggest + gerund"
+          },
+          {
+            "id": 7,
+            "text": "The doctor recommended _____ (take) vitamins daily.",
+            "answer": "taking",
+            "alternatives": [],
+            "highlightVerb": "recommended",
+            "verb": "take",
+            "rule": "recommend + gerund"
+          },
+          {
+            "id": 8,
+            "text": "She practices _____ (play) the violin for two hours every day.",
+            "answer": "playing",
+            "alternatives": [],
+            "highlightVerb": "practices",
+            "verb": "play",
+            "rule": "practice + gerund"
+          },
+          {
+            "id": 9,
+            "text": "I really miss _____ (live) by the beach.",
+            "answer": "living",
+            "alternatives": [],
+            "highlightVerb": "miss",
+            "verb": "live",
+            "rule": "miss + gerund"
+          },
+          {
+            "id": 10,
+            "text": "He denied _____ (steal) the money from the office.",
+            "answer": "stealing",
+            "alternatives": [],
+            "highlightVerb": "denied",
+            "verb": "steal",
+            "rule": "deny + gerund"
+          }
+        ]
+      },
+      {
+        "id": "gerund-only-2",
+        "title": "GERUND 2",
+        "focus": "More gerund verbs",
+        "sentences": [
+          {
+            "id": 11,
+            "text": "I dislike _____ (get) up early in winter.",
+            "answer": "getting",
+            "alternatives": [],
+            "highlightVerb": "dislike",
+            "verb": "get",
+            "rule": "dislike + gerund"
+          },
+          {
+            "id": 12,
+            "text": "Do you fancy _____ (go) to the cinema tonight?",
+            "answer": "going",
+            "alternatives": [],
+            "highlightVerb": "fancy",
+            "verb": "go",
+            "rule": "fancy + gerund"
+          },
+          {
+            "id": 13,
+            "text": "I can't imagine _____ (live) in such a cold climate.",
+            "answer": "living",
+            "alternatives": [],
+            "highlightVerb": "imagine",
+            "verb": "live",
+            "rule": "imagine + gerund"
+          },
+          {
+            "id": 14,
+            "text": "This project involves _____ (work) with international teams.",
+            "answer": "working",
+            "alternatives": [],
+            "highlightVerb": "involves",
+            "verb": "work",
+            "rule": "involve + gerund"
+          },
+          {
+            "id": 15,
+            "text": "You risk _____ (lose) everything if you're not careful.",
+            "answer": "losing",
+            "alternatives": [],
+            "highlightVerb": "risk",
+            "verb": "lose",
+            "rule": "risk + gerund"
+          },
+          {
+            "id": 16,
+            "text": "They delayed _____ (announce) the results until today.",
+            "answer": "announcing",
+            "alternatives": [],
+            "highlightVerb": "delayed",
+            "verb": "announce",
+            "rule": "delay + gerund"
+          },
+          {
+            "id": 17,
+            "text": "I couldn't resist _____ (buy) those shoes on sale.",
+            "answer": "buying",
+            "alternatives": [],
+            "highlightVerb": "resist",
+            "verb": "buy",
+            "rule": "resist + gerund"
+          },
+          {
+            "id": 18,
+            "text": "I don't recall _____ (meet) him before.",
+            "answer": "meeting",
+            "alternatives": [],
+            "highlightVerb": "recall",
+            "verb": "meet",
+            "rule": "recall + gerund"
+          },
+          {
+            "id": 19,
+            "text": "She resents _____ (have) to work on weekends.",
+            "answer": "having",
+            "alternatives": [],
+            "highlightVerb": "resents",
+            "verb": "have",
+            "rule": "resent + gerund"
+          },
+          {
+            "id": 20,
+            "text": "I won't tolerate _____ (be) spoken to like that.",
+            "answer": "being",
+            "alternatives": [],
+            "highlightVerb": "tolerate",
+            "verb": "be",
+            "rule": "tolerate + gerund"
+          }
+        ]
+      },
+      {
+        "id": "gerund-phrases",
+        "title": "PHRASES",
+        "focus": "Gerund phrases",
+        "sentences": [
+          {
+            "id": 21,
+            "text": "I can't help _____ (laugh) when I watch comedy shows.",
+            "answer": "laughing",
+            "alternatives": [],
+            "highlightVerb": "can't help",
+            "verb": "laugh",
+            "rule": "can't help + gerund"
+          },
+          {
+            "id": 22,
+            "text": "I can't stand _____ (wait) in long queues at the supermarket.",
+            "answer": "waiting",
+            "alternatives": [],
+            "highlightVerb": "can't stand",
+            "verb": "wait",
+            "rule": "can't stand + gerund"
+          },
+          {
+            "id": 23,
+            "text": "I gave up _____ (try) to fix my old computer.",
+            "answer": "trying",
+            "alternatives": [],
+            "highlightVerb": "gave up",
+            "verb": "try",
+            "rule": "give up + gerund"
+          },
+          {
+            "id": 24,
+            "text": "Keep on _____ (practice) and you'll get better.",
+            "answer": "practicing",
+            "alternatives": [],
+            "highlightVerb": "keep on",
+            "verb": "practice",
+            "rule": "keep on + gerund"
+          },
+          {
+            "id": 25,
+            "text": "It's no use _____ (complain) about the weather.",
+            "answer": "complaining",
+            "alternatives": [],
+            "highlightVerb": "it's no use",
+            "verb": "complain",
+            "rule": "it's no use + gerund"
+          },
+          {
+            "id": 26,
+            "text": "The museum is definitely worth _____ (visit).",
+            "answer": "visiting",
+            "alternatives": [],
+            "highlightVerb": "worth",
+            "verb": "visit",
+            "rule": "worth + gerund"
+          },
+          {
+            "id": 27,
+            "text": "She's busy _____ (prepare) for her final exams.",
+            "answer": "preparing",
+            "alternatives": [],
+            "highlightVerb": "busy",
+            "verb": "prepare",
+            "rule": "be busy + gerund"
+          },
+          {
+            "id": 28,
+            "text": "I have difficulty _____ (understand) his strong accent.",
+            "answer": "understanding",
+            "alternatives": [],
+            "highlightVerb": "have difficulty",
+            "verb": "understand",
+            "rule": "have difficulty + gerund"
+          },
+          {
+            "id": 29,
+            "text": "I don't feel like _____ (go) out tonight.",
+            "answer": "going",
+            "alternatives": [],
+            "highlightVerb": "feel like",
+            "verb": "go",
+            "rule": "feel like + gerund"
+          },
+          {
+            "id": 30,
+            "text": "There's no point in _____ (argue) with him.",
+            "answer": "arguing",
+            "alternatives": [],
+            "highlightVerb": "there's no point in",
+            "verb": "argue",
+            "rule": "there's no point (in) + gerund"
+          }
+        ]
+      },
+      {
+        "id": "prepositions",
+        "title": "PREPOSITIONS",
+        "focus": "Preposition + gerund",
+        "sentences": [
+          {
+            "id": 31,
+            "text": "I'm very interested in _____ (learn) about different cultures.",
+            "answer": "learning",
+            "alternatives": [],
+            "highlightVerb": "interested in",
+            "verb": "learn",
+            "rule": "interested in + gerund"
+          },
+          {
+            "id": 32,
+            "text": "She's really good at _____ (solve) complex mathematical problems.",
+            "answer": "solving",
+            "alternatives": [],
+            "highlightVerb": "good at",
+            "verb": "solve",
+            "rule": "good at + gerund"
+          },
+          {
+            "id": 33,
+            "text": "I'm tired of _____ (listen) to your excuses.",
+            "answer": "listening",
+            "alternatives": [],
+            "highlightVerb": "tired of",
+            "verb": "listen",
+            "rule": "tired of + gerund"
+          },
+          {
+            "id": 34,
+            "text": "I'm looking forward to _____ (see) you at the party.",
+            "answer": "seeing",
+            "alternatives": [],
+            "highlightVerb": "looking forward to",
+            "verb": "see",
+            "rule": "look forward to + gerund"
+          },
+          {
+            "id": 35,
+            "text": "I'm afraid of _____ (lose) my job in the recession.",
+            "answer": "losing",
+            "alternatives": [],
+            "highlightVerb": "afraid of",
+            "verb": "lose",
+            "rule": "afraid of + gerund"
+          },
+          {
+            "id": 36,
+            "text": "She's worried about _____ (fail) the exam.",
+            "answer": "failing",
+            "alternatives": [],
+            "highlightVerb": "worried about",
+            "verb": "fail",
+            "rule": "worried about + gerund"
+          },
+          {
+            "id": 37,
+            "text": "Are you serious about _____ (study) medicine?",
+            "answer": "studying",
+            "alternatives": [],
+            "highlightVerb": "serious about",
+            "verb": "study",
+            "rule": "serious about + gerund"
+          },
+          {
+            "id": 38,
+            "text": "I'm not used to _____ (work) night shifts.",
+            "answer": "working",
+            "alternatives": [],
+            "highlightVerb": "used to",
+            "verb": "work",
+            "rule": "used to + gerund"
+          },
+          {
+            "id": 39,
+            "text": "She apologized for _____ (arrive) so late.",
+            "answer": "arriving",
+            "alternatives": [],
+            "highlightVerb": "apologized for",
+            "verb": "arrive",
+            "rule": "apologize for + gerund"
+          },
+          {
+            "id": 40,
+            "text": "He insisted on _____ (pay) for everyone's dinner.",
+            "answer": "paying",
+            "alternatives": [],
+            "highlightVerb": "insisted on",
+            "verb": "pay",
+            "rule": "insist on + gerund"
+          }
+        ]
+      },
+      {
+        "id": "infinitive-only-1",
+        "title": "INFINITIVE 1",
+        "focus": "Common infinitive verbs",
+        "sentences": [
+          {
+            "id": 41,
+            "text": "I want _____ (travel) around the world someday.",
+            "answer": "to travel",
+            "alternatives": [],
+            "highlightVerb": "want",
+            "verb": "travel",
+            "rule": "want + to infinitive"
+          },
+          {
+            "id": 42,
+            "text": "You need _____ (study) harder if you want to pass.",
+            "answer": "to study",
+            "alternatives": [],
+            "highlightVerb": "need",
+            "verb": "study",
+            "rule": "need + to infinitive"
+          },
+          {
+            "id": 43,
+            "text": "She decided _____ (accept) the job offer in London.",
+            "answer": "to accept",
+            "alternatives": [],
+            "highlightVerb": "decided",
+            "verb": "accept",
+            "rule": "decide + to infinitive"
+          },
+          {
+            "id": 44,
+            "text": "We're planning _____ (visit) Japan next spring.",
+            "answer": "to visit",
+            "alternatives": [],
+            "highlightVerb": "planning",
+            "verb": "visit",
+            "rule": "plan + to infinitive"
+          },
+          {
+            "id": 45,
+            "text": "I hope _____ (hear) from you soon.",
+            "answer": "to hear",
+            "alternatives": [],
+            "highlightVerb": "hope",
+            "verb": "hear",
+            "rule": "hope + to infinitive"
+          },
+          {
+            "id": 46,
+            "text": "I expect _____ (finish) the project by Friday.",
+            "answer": "to finish",
+            "alternatives": [],
+            "highlightVerb": "expect",
+            "verb": "finish",
+            "rule": "expect + to infinitive"
+          },
+          {
+            "id": 47,
+            "text": "I promise _____ (call) you as soon as I arrive.",
+            "answer": "to call",
+            "alternatives": [],
+            "highlightVerb": "promise",
+            "verb": "call",
+            "rule": "promise + to infinitive"
+          },
+          {
+            "id": 48,
+            "text": "He refused _____ (answer) any more questions.",
+            "answer": "to answer",
+            "alternatives": [],
+            "highlightVerb": "refused",
+            "verb": "answer",
+            "rule": "refuse + to infinitive"
+          },
+          {
+            "id": 49,
+            "text": "She offered _____ (help) me with my homework.",
+            "answer": "to help",
+            "alternatives": [],
+            "highlightVerb": "offered",
+            "verb": "help",
+            "rule": "offer + to infinitive"
+          },
+          {
+            "id": 50,
+            "text": "I managed _____ (complete) all the work before the deadline.",
+            "answer": "to complete",
+            "alternatives": [],
+            "highlightVerb": "managed",
+            "verb": "complete",
+            "rule": "manage + to infinitive"
+          }
+        ]
+      },
+      {
+        "id": "infinitive-only-2",
+        "title": "INFINITIVE 2",
+        "focus": "More infinitive verbs",
+        "sentences": [
+          {
+            "id": 51,
+            "text": "He appears _____ (be) very happy with the results.",
+            "answer": "to be",
+            "alternatives": [],
+            "highlightVerb": "appears",
+            "verb": "be",
+            "rule": "appear + to infinitive"
+          },
+          {
+            "id": 52,
+            "text": "She seems _____ (understand) the problem now.",
+            "answer": "to understand",
+            "alternatives": [],
+            "highlightVerb": "seems",
+            "verb": "understand",
+            "rule": "seem + to infinitive"
+          },
+          {
+            "id": 53,
+            "text": "I tend _____ (forget) people's names easily.",
+            "answer": "to forget",
+            "alternatives": [],
+            "highlightVerb": "tend",
+            "verb": "forget",
+            "rule": "tend + to infinitive"
+          },
+          {
+            "id": 54,
+            "text": "He claims _____ (be) an expert in artificial intelligence.",
+            "answer": "to be",
+            "alternatives": [],
+            "highlightVerb": "claims",
+            "verb": "be",
+            "rule": "claim + to infinitive"
+          },
+          {
+            "id": 55,
+            "text": "I chose _____ (study) medicine because I want to help people.",
+            "answer": "to study",
+            "alternatives": [],
+            "highlightVerb": "chose",
+            "verb": "study",
+            "rule": "choose + to infinitive"
+          },
+          {
+            "id": 56,
+            "text": "You deserve _____ (win) after all your hard work.",
+            "answer": "to win",
+            "alternatives": [],
+            "highlightVerb": "deserve",
+            "verb": "win",
+            "rule": "deserve + to infinitive"
+          },
+          {
+            "id": 57,
+            "text": "We're preparing _____ (leave) for the airport.",
+            "answer": "to leave",
+            "alternatives": [],
+            "highlightVerb": "preparing",
+            "verb": "leave",
+            "rule": "prepare + to infinitive"
+          },
+          {
+            "id": 58,
+            "text": "He pretended _____ (be) asleep when I came in.",
+            "answer": "to be",
+            "alternatives": [],
+            "highlightVerb": "pretended",
+            "verb": "be",
+            "rule": "pretend + to infinitive"
+          },
+          {
+            "id": 59,
+            "text": "Don't hesitate _____ (ask) if you need any help.",
+            "answer": "to ask",
+            "alternatives": [],
+            "highlightVerb": "hesitate",
+            "verb": "ask",
+            "rule": "hesitate + to infinitive"
+          },
+          {
+            "id": 60,
+            "text": "I struggled _____ (open) the tightly sealed jar.",
+            "answer": "to open",
+            "alternatives": [],
+            "highlightVerb": "struggled",
+            "verb": "open",
+            "rule": "struggle + to infinitive"
+          }
+        ]
+      },
+      {
+        "id": "adjectives",
+        "title": "ADJECTIVES",
+        "focus": "Adjective + infinitive",
+        "sentences": [
+          {
+            "id": 61,
+            "text": "This math problem is difficult _____ (solve).",
+            "answer": "to solve",
+            "alternatives": [],
+            "highlightVerb": "difficult",
+            "verb": "solve",
+            "rule": "adjective + to infinitive"
+          },
+          {
+            "id": 62,
+            "text": "English grammar is easy _____ (learn) with practice.",
+            "answer": "to learn",
+            "alternatives": [],
+            "highlightVerb": "easy",
+            "verb": "learn",
+            "rule": "adjective + to infinitive"
+          },
+          {
+            "id": 63,
+            "text": "It's hard _____ (believe) what happened yesterday.",
+            "answer": "to believe",
+            "alternatives": [],
+            "highlightVerb": "hard",
+            "verb": "believe",
+            "rule": "adjective + to infinitive"
+          },
+          {
+            "id": 64,
+            "text": "It's impossible _____ (finish) all this work in one day.",
+            "answer": "to finish",
+            "alternatives": [],
+            "highlightVerb": "impossible",
+            "verb": "finish",
+            "rule": "adjective + to infinitive"
+          },
+          {
+            "id": 65,
+            "text": "It's important _____ (arrive) on time for the interview.",
+            "answer": "to arrive",
+            "alternatives": [],
+            "highlightVerb": "important",
+            "verb": "arrive",
+            "rule": "adjective + to infinitive"
+          },
+          {
+            "id": 66,
+            "text": "I'm happy _____ (help) you with your project.",
+            "answer": "to help",
+            "alternatives": [],
+            "highlightVerb": "happy",
+            "verb": "help",
+            "rule": "adjective + to infinitive"
+          },
+          {
+            "id": 67,
+            "text": "She's willing _____ (work) overtime this week.",
+            "answer": "to work",
+            "alternatives": [],
+            "highlightVerb": "willing",
+            "verb": "work",
+            "rule": "adjective + to infinitive"
+          },
+          {
+            "id": 68,
+            "text": "They're eager _____ (start) the new project.",
+            "answer": "to start",
+            "alternatives": [],
+            "highlightVerb": "eager",
+            "verb": "start",
+            "rule": "adjective + to infinitive"
+          },
+          {
+            "id": 69,
+            "text": "Don't be afraid _____ (make) mistakes when learning.",
+            "answer": "to make",
+            "alternatives": [],
+            "highlightVerb": "afraid",
+            "verb": "make",
+            "rule": "adjective + to infinitive"
+          },
+          {
+            "id": 70,
+            "text": "He was reluctant _____ (leave) his comfortable job.",
+            "answer": "to leave",
+            "alternatives": [],
+            "highlightVerb": "reluctant",
+            "verb": "leave",
+            "rule": "adjective + to infinitive"
+          }
+        ]
+      },
+      {
+        "id": "both-same",
+        "title": "BOTH FORMS",
+        "focus": "Same meaning - both correct",
+        "sentences": [
+          {
+            "id": 71,
+            "text": "I like _____ (swim) in the ocean during summer.",
+            "answer": "swimming",
+            "alternatives": [
+              "to swim"
+            ],
+            "highlightVerb": "like",
+            "verb": "swim",
+            "rule": "like + gerund/infinitive"
+          },
+          {
+            "id": 72,
+            "text": "She loves _____ (dance) to Latin music.",
+            "answer": "dancing",
+            "alternatives": [
+              "to dance"
+            ],
+            "highlightVerb": "loves",
+            "verb": "dance",
+            "rule": "love + gerund/infinitive"
+          },
+          {
+            "id": 73,
+            "text": "I hate _____ (wait) in long queues.",
+            "answer": "waiting",
+            "alternatives": [
+              "to wait"
+            ],
+            "highlightVerb": "hate",
+            "verb": "wait",
+            "rule": "hate + gerund/infinitive"
+          },
+          {
+            "id": 74,
+            "text": "I prefer _____ (walk) to driving when possible.",
+            "answer": "walking",
+            "alternatives": [
+              "to walk"
+            ],
+            "highlightVerb": "prefer",
+            "verb": "walk",
+            "rule": "prefer + gerund/infinitive"
+          },
+          {
+            "id": 75,
+            "text": "It started _____ (rain) heavily around 3pm.",
+            "answer": "raining",
+            "alternatives": [
+              "to rain"
+            ],
+            "highlightVerb": "started",
+            "verb": "rain",
+            "rule": "start + gerund/infinitive"
+          },
+          {
+            "id": 76,
+            "text": "She began _____ (learn) piano at age five.",
+            "answer": "learning",
+            "alternatives": [
+              "to learn"
+            ],
+            "highlightVerb": "began",
+            "verb": "learn",
+            "rule": "begin + gerund/infinitive"
+          },
+          {
+            "id": 77,
+            "text": "He continued _____ (work) despite feeling tired.",
+            "answer": "working",
+            "alternatives": [
+              "to work"
+            ],
+            "highlightVerb": "continued",
+            "verb": "work",
+            "rule": "continue + gerund/infinitive"
+          },
+          {
+            "id": 78,
+            "text": "I can't bear _____ (see) animals suffer.",
+            "answer": "seeing",
+            "alternatives": [
+              "to see"
+            ],
+            "highlightVerb": "can't bear",
+            "verb": "see",
+            "rule": "can't bear + gerund/infinitive"
+          }
+        ]
+      },
+      {
+        "id": "meaning-changes-1",
+        "title": "MEANING 1",
+        "focus": "stop / remember / forget",
+        "sentences": [
+          {
+            "id": 79,
+            "text": "I stopped _____ (smoke) five years ago. [quit permanently]",
+            "answer": "smoking",
+            "alternatives": [],
+            "highlightVerb": "stopped",
+            "verb": "smoke",
+            "rule": "stop + gerund = quit"
+          },
+          {
+            "id": 80,
+            "text": "I stopped _____ (buy) milk on my way home. [paused to do it]",
+            "answer": "to buy",
+            "alternatives": [],
+            "highlightVerb": "stopped",
+            "verb": "buy",
+            "rule": "stop + infinitive = pause"
+          },
+          {
+            "id": 81,
+            "text": "I remember _____ (meet) him at the conference last year. [past memory]",
+            "answer": "meeting",
+            "alternatives": [],
+            "highlightVerb": "remember",
+            "verb": "meet",
+            "rule": "remember + gerund = recall past"
+          },
+          {
+            "id": 82,
+            "text": "Remember _____ (lock) the door when you leave. [don't forget]",
+            "answer": "to lock",
+            "alternatives": [],
+            "highlightVerb": "remember",
+            "verb": "lock",
+            "rule": "remember + infinitive = future action"
+          },
+          {
+            "id": 83,
+            "text": "I'll never forget _____ (visit) the Taj Mahal. [lasting memory]",
+            "answer": "visiting",
+            "alternatives": [],
+            "highlightVerb": "forget",
+            "verb": "visit",
+            "rule": "forget + gerund = recall past"
+          },
+          {
+            "id": 84,
+            "text": "I forgot _____ (call) my mother yesterday. [didn't do it]",
+            "answer": "to call",
+            "alternatives": [],
+            "highlightVerb": "forgot",
+            "verb": "call",
+            "rule": "forget + infinitive = fail to do"
+          },
+          {
+            "id": 85,
+            "text": "She stopped _____ (work) at that company last month. [quit]",
+            "answer": "working",
+            "alternatives": [],
+            "highlightVerb": "stopped",
+            "verb": "work",
+            "rule": "stop + gerund = quit"
+          },
+          {
+            "id": 86,
+            "text": "We stopped _____ (have) lunch at a nice restaurant. [paused]",
+            "answer": "to have",
+            "alternatives": [],
+            "highlightVerb": "stopped",
+            "verb": "have",
+            "rule": "stop + infinitive = pause"
+          }
+        ]
+      },
+      {
+        "id": "meaning-changes-2",
+        "title": "MEANING 2",
+        "focus": "try / regret / go on / mean",
+        "sentences": [
+          {
+            "id": 87,
+            "text": "Try _____ (add) more salt if it tastes bland. [experiment]",
+            "answer": "adding",
+            "alternatives": [],
+            "highlightVerb": "try",
+            "verb": "add",
+            "rule": "try + gerund = experiment"
+          },
+          {
+            "id": 88,
+            "text": "I tried _____ (open) the door but it was locked. [attempted]",
+            "answer": "to open",
+            "alternatives": [],
+            "highlightVerb": "tried",
+            "verb": "open",
+            "rule": "try + infinitive = attempt"
+          },
+          {
+            "id": 89,
+            "text": "I regret _____ (tell) him the secret. [sorry about past]",
+            "answer": "telling",
+            "alternatives": [],
+            "highlightVerb": "regret",
+            "verb": "tell",
+            "rule": "regret + gerund = sorry"
+          },
+          {
+            "id": 90,
+            "text": "I regret _____ (inform) you that you failed. [formal announcement]",
+            "answer": "to inform",
+            "alternatives": [],
+            "highlightVerb": "regret",
+            "verb": "inform",
+            "rule": "regret + infinitive = formal"
+          },
+          {
+            "id": 91,
+            "text": "She went on _____ (talk) for another hour. [continued]",
+            "answer": "talking",
+            "alternatives": [],
+            "highlightVerb": "went on",
+            "verb": "talk",
+            "rule": "go on + gerund = continue"
+          },
+          {
+            "id": 92,
+            "text": "After school, he went on _____ (study) medicine. [next stage]",
+            "answer": "to study",
+            "alternatives": [],
+            "highlightVerb": "went on",
+            "verb": "study",
+            "rule": "go on + infinitive = next"
+          },
+          {
+            "id": 93,
+            "text": "This job means _____ (travel) abroad frequently. [involves]",
+            "answer": "traveling",
+            "alternatives": [],
+            "highlightVerb": "means",
+            "verb": "travel",
+            "rule": "mean + gerund = involve"
+          },
+          {
+            "id": 94,
+            "text": "I meant _____ (phone) you yesterday. [intended to]",
+            "answer": "to phone",
+            "alternatives": [],
+            "highlightVerb": "meant",
+            "verb": "phone",
+            "rule": "mean + infinitive = intend"
+          }
+        ]
+      },
+      {
+        "id": "special-cases",
+        "title": "SPECIAL",
+        "focus": "make/let/would rather/had better/need",
+        "sentences": [
+          {
+            "id": 95,
+            "text": "My parents made me _____ (study) medicine. [forced]",
+            "answer": "study",
+            "alternatives": [],
+            "highlightVerb": "me",
+            "verb": "study",
+            "rule": "make + infinitive (no to)"
+          },
+          {
+            "id": 96,
+            "text": "My parents let me _____ (go) to the party. [allowed]",
+            "answer": "go",
+            "alternatives": [],
+            "highlightVerb": "let",
+            "verb": "go",
+            "rule": "let + infinitive (no to)"
+          },
+          {
+            "id": 97,
+            "text": "I'd rather _____ (stay) home tonight. [preference]",
+            "answer": "stay",
+            "alternatives": [],
+            "highlightVerb": "rather",
+            "verb": "stay",
+            "rule": "would rather + infinitive (no to)"
+          },
+          {
+            "id": 98,
+            "text": "You'd better _____ (hurry) or you'll be late. [advice]",
+            "answer": "hurry",
+            "alternatives": [],
+            "highlightVerb": "better",
+            "verb": "hurry",
+            "rule": "had better + infinitive (no to)"
+          },
+          {
+            "id": 99,
+            "text": "I saw him _____ (cross) the street. [action in progress]",
+            "answer": "crossing",
+            "alternatives": [],
+            "highlightVerb": "him",
+            "verb": "cross",
+            "rule": "see + gerund = ongoing"
+          },
+          {
+            "id": 100,
+            "text": "The car needs _____ (wash). [passive meaning]",
+            "answer": "washing",
+            "alternatives": [],
+            "highlightVerb": "needs",
+            "verb": "wash",
+            "rule": "need + gerund = passive"
+          }
+        ]
+      },
+      {
+        "id": "mixed-comprehensive",
+        "title": "MIXED",
+        "focus": "All types combined",
+        "sentences": [
+          {
+            "id": 101,
+            "text": "I enjoy _____ (read) science fiction in my spare time.",
+            "answer": "reading",
+            "alternatives": [],
+            "highlightVerb": "enjoy",
+            "verb": "read",
+            "rule": "enjoy + gerund"
+          },
+          {
+            "id": 102,
+            "text": "She decided _____ (accept) the job offer.",
+            "answer": "to accept",
+            "alternatives": [],
+            "highlightVerb": "decided",
+            "verb": "accept",
+            "rule": "decide + to infinitive"
+          },
+          {
+            "id": 103,
+            "text": "He loves _____ (play) football on weekends.",
+            "answer": "playing",
+            "alternatives": [
+              "to play"
+            ],
+            "highlightVerb": "loves",
+            "verb": "play",
+            "rule": "love + gerund/infinitive"
+          },
+          {
+            "id": 104,
+            "text": "I stopped _____ (drink) coffee after 6pm. [quit habit]",
+            "answer": "drinking",
+            "alternatives": [],
+            "highlightVerb": "stopped",
+            "verb": "drink",
+            "rule": "stop + gerund = quit"
+          },
+          {
+            "id": 105,
+            "text": "This book is easy _____ (read) and understand.",
+            "answer": "to read",
+            "alternatives": [],
+            "highlightVerb": "easy",
+            "verb": "read",
+            "rule": "adjective + to infinitive"
+          },
+          {
+            "id": 106,
+            "text": "I'm interested in _____ (learn) new languages.",
+            "answer": "learning",
+            "alternatives": [],
+            "highlightVerb": "interested in",
+            "verb": "learn",
+            "rule": "interested in + gerund"
+          },
+          {
+            "id": 107,
+            "text": "She promised _____ (call) me tomorrow morning.",
+            "answer": "to call",
+            "alternatives": [],
+            "highlightVerb": "promised",
+            "verb": "call",
+            "rule": "promise + to infinitive"
+          },
+          {
+            "id": 108,
+            "text": "I can't stand _____ (wait) in traffic jams.",
+            "answer": "waiting",
+            "alternatives": [],
+            "highlightVerb": "can't stand",
+            "verb": "wait",
+            "rule": "can't stand + gerund"
+          },
+          {
+            "id": 109,
+            "text": "Remember _____ (buy) milk on your way home. [don't forget]",
+            "answer": "to buy",
+            "alternatives": [],
+            "highlightVerb": "remember",
+            "verb": "buy",
+            "rule": "remember + infinitive = future"
+          },
+          {
+            "id": 110,
+            "text": "My teacher made me _____ (rewrite) the entire essay. [forced]",
+            "answer": "rewrite",
+            "alternatives": [],
+            "highlightVerb": "me",
+            "verb": "rewrite",
+            "rule": "make + infinitive (no to)"
+          }
+        ]
+      }
+    ]
+  },
+  "sorting": {
+    "note": "Each card shows a real stem and the three forms the verb could take, so the student chooses the form rather than naming a category — the decision the exam actually asks for. Two of the three forms come straight from the answer in the gap-fill data; only the unused one is built. Triggers that take both forms with different meanings are held back for the contrast game.",
+    "piles": {
+      "-ing": "gerund",
+      "to": "infinitive",
+      "bare": "bare infinitive"
+    },
+    "cards": [
+      {
+        "trigger": "enjoy",
+        "stem": "I really enjoy",
+        "verb": "read",
+        "forms": {
+          "-ing": "reading",
+          "to": "to read",
+          "bare": "read"
+        },
+        "pile": "-ing",
+        "rule": "enjoy + gerund",
+        "example": "I really enjoy reading detective novels in my free time.",
+        "tail": "detective novels in my free time."
+      },
+      {
+        "trigger": "finish",
+        "stem": "She finished",
+        "verb": "write",
+        "forms": {
+          "-ing": "writing",
+          "to": "to write",
+          "bare": "write"
+        },
+        "pile": "-ing",
+        "rule": "finish + gerund",
+        "example": "She finished writing her dissertation last month.",
+        "tail": "her dissertation last month."
+      },
+      {
+        "trigger": "avoid",
+        "stem": "Try to avoid",
+        "verb": "make",
+        "forms": {
+          "-ing": "making",
+          "to": "to make",
+          "bare": "make"
+        },
+        "pile": "-ing",
+        "rule": "avoid + gerund",
+        "example": "Try to avoid making the same mistakes again.",
+        "tail": "the same mistakes again."
+      },
+      {
+        "trigger": "consider",
+        "stem": "I'm considering",
+        "verb": "move",
+        "forms": {
+          "-ing": "moving",
+          "to": "to move",
+          "bare": "move"
+        },
+        "pile": "-ing",
+        "rule": "consider + gerund",
+        "example": "I'm considering moving to another city for work.",
+        "tail": "to another city for work."
+      },
+      {
+        "trigger": "mind",
+        "stem": "Would you mind",
+        "verb": "close",
+        "forms": {
+          "-ing": "closing",
+          "to": "to close",
+          "bare": "close"
+        },
+        "pile": "-ing",
+        "rule": "mind + gerund",
+        "example": "Would you mind closing the window? It's quite cold.",
+        "tail": "the window? It's quite cold."
+      },
+      {
+        "trigger": "suggest",
+        "stem": "I suggest",
+        "verb": "leave",
+        "forms": {
+          "-ing": "leaving",
+          "to": "to leave",
+          "bare": "leave"
+        },
+        "pile": "-ing",
+        "rule": "suggest + gerund",
+        "example": "I suggest leaving a bit earlier to avoid traffic.",
+        "tail": "a bit earlier to avoid traffic."
+      },
+      {
+        "trigger": "recommend",
+        "stem": "The doctor recommended",
+        "verb": "take",
+        "forms": {
+          "-ing": "taking",
+          "to": "to take",
+          "bare": "take"
+        },
+        "pile": "-ing",
+        "rule": "recommend + gerund",
+        "example": "The doctor recommended taking vitamins daily.",
+        "tail": "vitamins daily."
+      },
+      {
+        "trigger": "practice",
+        "stem": "She practices",
+        "verb": "play",
+        "forms": {
+          "-ing": "playing",
+          "to": "to play",
+          "bare": "play"
+        },
+        "pile": "-ing",
+        "rule": "practice + gerund",
+        "example": "She practices playing the violin for two hours every day.",
+        "tail": "the violin for two hours every day."
+      },
+      {
+        "trigger": "miss",
+        "stem": "I really miss",
+        "verb": "live",
+        "forms": {
+          "-ing": "living",
+          "to": "to live",
+          "bare": "live"
+        },
+        "pile": "-ing",
+        "rule": "miss + gerund",
+        "example": "I really miss living by the beach.",
+        "tail": "by the beach."
+      },
+      {
+        "trigger": "deny",
+        "stem": "He denied",
+        "verb": "steal",
+        "forms": {
+          "-ing": "stealing",
+          "to": "to steal",
+          "bare": "steal"
+        },
+        "pile": "-ing",
+        "rule": "deny + gerund",
+        "example": "He denied stealing the money from the office.",
+        "tail": "the money from the office."
+      },
+      {
+        "trigger": "dislike",
+        "stem": "I dislike",
+        "verb": "get",
+        "forms": {
+          "-ing": "getting",
+          "to": "to get",
+          "bare": "get"
+        },
+        "pile": "-ing",
+        "rule": "dislike + gerund",
+        "example": "I dislike getting up early in winter.",
+        "tail": "up early in winter."
+      },
+      {
+        "trigger": "fancy",
+        "stem": "Do you fancy",
+        "verb": "go",
+        "forms": {
+          "-ing": "going",
+          "to": "to go",
+          "bare": "go"
+        },
+        "pile": "-ing",
+        "rule": "fancy + gerund",
+        "example": "Do you fancy going to the cinema tonight?",
+        "tail": "to the cinema tonight?"
+      },
+      {
+        "trigger": "imagine",
+        "stem": "I can't imagine",
+        "verb": "live",
+        "forms": {
+          "-ing": "living",
+          "to": "to live",
+          "bare": "live"
+        },
+        "pile": "-ing",
+        "rule": "imagine + gerund",
+        "example": "I can't imagine living in such a cold climate.",
+        "tail": "in such a cold climate."
+      },
+      {
+        "trigger": "involve",
+        "stem": "This project involves",
+        "verb": "work",
+        "forms": {
+          "-ing": "working",
+          "to": "to work",
+          "bare": "work"
+        },
+        "pile": "-ing",
+        "rule": "involve + gerund",
+        "example": "This project involves working with international teams.",
+        "tail": "with international teams."
+      },
+      {
+        "trigger": "risk",
+        "stem": "You risk",
+        "verb": "lose",
+        "forms": {
+          "-ing": "losing",
+          "to": "to lose",
+          "bare": "lose"
+        },
+        "pile": "-ing",
+        "rule": "risk + gerund",
+        "example": "You risk losing everything if you're not careful.",
+        "tail": "everything if you're not careful."
+      },
+      {
+        "trigger": "delay",
+        "stem": "They delayed",
+        "verb": "announce",
+        "forms": {
+          "-ing": "announcing",
+          "to": "to announce",
+          "bare": "announce"
+        },
+        "pile": "-ing",
+        "rule": "delay + gerund",
+        "example": "They delayed announcing the results until today.",
+        "tail": "the results until today."
+      },
+      {
+        "trigger": "resist",
+        "stem": "I couldn't resist",
+        "verb": "buy",
+        "forms": {
+          "-ing": "buying",
+          "to": "to buy",
+          "bare": "buy"
+        },
+        "pile": "-ing",
+        "rule": "resist + gerund",
+        "example": "I couldn't resist buying those shoes on sale.",
+        "tail": "those shoes on sale."
+      },
+      {
+        "trigger": "recall",
+        "stem": "I don't recall",
+        "verb": "meet",
+        "forms": {
+          "-ing": "meeting",
+          "to": "to meet",
+          "bare": "meet"
+        },
+        "pile": "-ing",
+        "rule": "recall + gerund",
+        "example": "I don't recall meeting him before.",
+        "tail": "him before."
+      },
+      {
+        "trigger": "resent",
+        "stem": "She resents",
+        "verb": "have",
+        "forms": {
+          "-ing": "having",
+          "to": "to have",
+          "bare": "have"
+        },
+        "pile": "-ing",
+        "rule": "resent + gerund",
+        "example": "She resents having to work on weekends.",
+        "tail": "to work on weekends."
+      },
+      {
+        "trigger": "tolerate",
+        "stem": "I won't tolerate",
+        "verb": "be",
+        "forms": {
+          "-ing": "being",
+          "to": "to be",
+          "bare": "be"
+        },
+        "pile": "-ing",
+        "rule": "tolerate + gerund",
+        "example": "I won't tolerate being spoken to like that.",
+        "tail": "spoken to like that."
+      },
+      {
+        "trigger": "can't help",
+        "stem": "I can't help",
+        "verb": "laugh",
+        "forms": {
+          "-ing": "laughing",
+          "to": "to laugh",
+          "bare": "laugh"
+        },
+        "pile": "-ing",
+        "rule": "can't help + gerund",
+        "example": "I can't help laughing when I watch comedy shows.",
+        "tail": "when I watch comedy shows."
+      },
+      {
+        "trigger": "can't stand",
+        "stem": "I can't stand",
+        "verb": "wait",
+        "forms": {
+          "-ing": "waiting",
+          "to": "to wait",
+          "bare": "wait"
+        },
+        "pile": "-ing",
+        "rule": "can't stand + gerund",
+        "example": "I can't stand waiting in long queues at the supermarket.",
+        "tail": "in long queues at the supermarket."
+      },
+      {
+        "trigger": "give up",
+        "stem": "I gave up",
+        "verb": "try",
+        "forms": {
+          "-ing": "trying",
+          "to": "to try",
+          "bare": "try"
+        },
+        "pile": "-ing",
+        "rule": "give up + gerund",
+        "example": "I gave up trying to fix my old computer.",
+        "tail": "to fix my old computer."
+      },
+      {
+        "trigger": "keep on",
+        "stem": "Keep on",
+        "verb": "practice",
+        "forms": {
+          "-ing": "practicing",
+          "to": "to practice",
+          "bare": "practice"
+        },
+        "pile": "-ing",
+        "rule": "keep on + gerund",
+        "example": "Keep on practicing and you'll get better.",
+        "tail": "and you'll get better."
+      },
+      {
+        "trigger": "it's no use",
+        "stem": "It's no use",
+        "verb": "complain",
+        "forms": {
+          "-ing": "complaining",
+          "to": "to complain",
+          "bare": "complain"
+        },
+        "pile": "-ing",
+        "rule": "it's no use + gerund",
+        "example": "It's no use complaining about the weather.",
+        "tail": "about the weather."
+      },
+      {
+        "trigger": "worth",
+        "stem": "The museum is definitely worth",
+        "verb": "visit",
+        "forms": {
+          "-ing": "visiting",
+          "to": "to visit",
+          "bare": "visit"
+        },
+        "pile": "-ing",
+        "rule": "worth + gerund",
+        "example": "The museum is definitely worth visiting.",
+        "tail": "."
+      },
+      {
+        "trigger": "be busy",
+        "stem": "She's busy",
+        "verb": "prepare",
+        "forms": {
+          "-ing": "preparing",
+          "to": "to prepare",
+          "bare": "prepare"
+        },
+        "pile": "-ing",
+        "rule": "be busy + gerund",
+        "example": "She's busy preparing for her final exams.",
+        "tail": "for her final exams."
+      },
+      {
+        "trigger": "have difficulty",
+        "stem": "I have difficulty",
+        "verb": "understand",
+        "forms": {
+          "-ing": "understanding",
+          "to": "to understand",
+          "bare": "understand"
+        },
+        "pile": "-ing",
+        "rule": "have difficulty + gerund",
+        "example": "I have difficulty understanding his strong accent.",
+        "tail": "his strong accent."
+      },
+      {
+        "trigger": "feel like",
+        "stem": "I don't feel like",
+        "verb": "go",
+        "forms": {
+          "-ing": "going",
+          "to": "to go",
+          "bare": "go"
+        },
+        "pile": "-ing",
+        "rule": "feel like + gerund",
+        "example": "I don't feel like going out tonight.",
+        "tail": "out tonight."
+      },
+      {
+        "trigger": "there's no point (in)",
+        "stem": "There's no point in",
+        "verb": "argue",
+        "forms": {
+          "-ing": "arguing",
+          "to": "to argue",
+          "bare": "argue"
+        },
+        "pile": "-ing",
+        "rule": "there's no point (in) + gerund",
+        "example": "There's no point in arguing with him.",
+        "tail": "with him."
+      },
+      {
+        "trigger": "interested in",
+        "stem": "I'm very interested in",
+        "verb": "learn",
+        "forms": {
+          "-ing": "learning",
+          "to": "to learn",
+          "bare": "learn"
+        },
+        "pile": "-ing",
+        "rule": "interested in + gerund",
+        "example": "I'm very interested in learning about different cultures.",
+        "tail": "about different cultures."
+      },
+      {
+        "trigger": "good at",
+        "stem": "She's really good at",
+        "verb": "solve",
+        "forms": {
+          "-ing": "solving",
+          "to": "to solve",
+          "bare": "solve"
+        },
+        "pile": "-ing",
+        "rule": "good at + gerund",
+        "example": "She's really good at solving complex mathematical problems.",
+        "tail": "complex mathematical problems."
+      },
+      {
+        "trigger": "tired of",
+        "stem": "I'm tired of",
+        "verb": "listen",
+        "forms": {
+          "-ing": "listening",
+          "to": "to listen",
+          "bare": "listen"
+        },
+        "pile": "-ing",
+        "rule": "tired of + gerund",
+        "example": "I'm tired of listening to your excuses.",
+        "tail": "to your excuses."
+      },
+      {
+        "trigger": "look forward to",
+        "stem": "I'm looking forward to",
+        "verb": "see",
+        "forms": {
+          "-ing": "seeing",
+          "to": "to see",
+          "bare": "see"
+        },
+        "pile": "-ing",
+        "rule": "look forward to + gerund",
+        "example": "I'm looking forward to seeing you at the party.",
+        "tail": "you at the party."
+      },
+      {
+        "trigger": "afraid of",
+        "stem": "I'm afraid of",
+        "verb": "lose",
+        "forms": {
+          "-ing": "losing",
+          "to": "to lose",
+          "bare": "lose"
+        },
+        "pile": "-ing",
+        "rule": "afraid of + gerund",
+        "example": "I'm afraid of losing my job in the recession.",
+        "tail": "my job in the recession."
+      },
+      {
+        "trigger": "worried about",
+        "stem": "She's worried about",
+        "verb": "fail",
+        "forms": {
+          "-ing": "failing",
+          "to": "to fail",
+          "bare": "fail"
+        },
+        "pile": "-ing",
+        "rule": "worried about + gerund",
+        "example": "She's worried about failing the exam.",
+        "tail": "the exam."
+      },
+      {
+        "trigger": "serious about",
+        "stem": "Are you serious about",
+        "verb": "study",
+        "forms": {
+          "-ing": "studying",
+          "to": "to study",
+          "bare": "study"
+        },
+        "pile": "-ing",
+        "rule": "serious about + gerund",
+        "example": "Are you serious about studying medicine?",
+        "tail": "medicine?"
+      },
+      {
+        "trigger": "used to",
+        "stem": "I'm not used to",
+        "verb": "work",
+        "forms": {
+          "-ing": "working",
+          "to": "to work",
+          "bare": "work"
+        },
+        "pile": "-ing",
+        "rule": "used to + gerund",
+        "example": "I'm not used to working night shifts.",
+        "tail": "night shifts."
+      },
+      {
+        "trigger": "apologize for",
+        "stem": "She apologized for",
+        "verb": "arrive",
+        "forms": {
+          "-ing": "arriving",
+          "to": "to arrive",
+          "bare": "arrive"
+        },
+        "pile": "-ing",
+        "rule": "apologize for + gerund",
+        "example": "She apologized for arriving so late.",
+        "tail": "so late."
+      },
+      {
+        "trigger": "insist on",
+        "stem": "He insisted on",
+        "verb": "pay",
+        "forms": {
+          "-ing": "paying",
+          "to": "to pay",
+          "bare": "pay"
+        },
+        "pile": "-ing",
+        "rule": "insist on + gerund",
+        "example": "He insisted on paying for everyone's dinner.",
+        "tail": "for everyone's dinner."
+      },
+      {
+        "trigger": "want",
+        "stem": "I want",
+        "verb": "travel",
+        "forms": {
+          "-ing": "travelling",
+          "to": "to travel",
+          "bare": "travel"
+        },
+        "pile": "to",
+        "rule": "want + to infinitive",
+        "example": "I want to travel around the world someday.",
+        "tail": "around the world someday."
+      },
+      {
+        "trigger": "decide",
+        "stem": "She decided",
+        "verb": "accept",
+        "forms": {
+          "-ing": "accepting",
+          "to": "to accept",
+          "bare": "accept"
+        },
+        "pile": "to",
+        "rule": "decide + to infinitive",
+        "example": "She decided to accept the job offer in London.",
+        "tail": "the job offer in London."
+      },
+      {
+        "trigger": "plan",
+        "stem": "We're planning",
+        "verb": "visit",
+        "forms": {
+          "-ing": "visiting",
+          "to": "to visit",
+          "bare": "visit"
+        },
+        "pile": "to",
+        "rule": "plan + to infinitive",
+        "example": "We're planning to visit Japan next spring.",
+        "tail": "Japan next spring."
+      },
+      {
+        "trigger": "hope",
+        "stem": "I hope",
+        "verb": "hear",
+        "forms": {
+          "-ing": "hearing",
+          "to": "to hear",
+          "bare": "hear"
+        },
+        "pile": "to",
+        "rule": "hope + to infinitive",
+        "example": "I hope to hear from you soon.",
+        "tail": "from you soon."
+      },
+      {
+        "trigger": "expect",
+        "stem": "I expect",
+        "verb": "finish",
+        "forms": {
+          "-ing": "finishing",
+          "to": "to finish",
+          "bare": "finish"
+        },
+        "pile": "to",
+        "rule": "expect + to infinitive",
+        "example": "I expect to finish the project by Friday.",
+        "tail": "the project by Friday."
+      },
+      {
+        "trigger": "promise",
+        "stem": "I promise",
+        "verb": "call",
+        "forms": {
+          "-ing": "calling",
+          "to": "to call",
+          "bare": "call"
+        },
+        "pile": "to",
+        "rule": "promise + to infinitive",
+        "example": "I promise to call you as soon as I arrive.",
+        "tail": "you as soon as I arrive."
+      },
+      {
+        "trigger": "refuse",
+        "stem": "He refused",
+        "verb": "answer",
+        "forms": {
+          "-ing": "answering",
+          "to": "to answer",
+          "bare": "answer"
+        },
+        "pile": "to",
+        "rule": "refuse + to infinitive",
+        "example": "He refused to answer any more questions.",
+        "tail": "any more questions."
+      },
+      {
+        "trigger": "offer",
+        "stem": "She offered",
+        "verb": "help",
+        "forms": {
+          "-ing": "helping",
+          "to": "to help",
+          "bare": "help"
+        },
+        "pile": "to",
+        "rule": "offer + to infinitive",
+        "example": "She offered to help me with my homework.",
+        "tail": "me with my homework."
+      },
+      {
+        "trigger": "manage",
+        "stem": "I managed",
+        "verb": "complete",
+        "forms": {
+          "-ing": "completing",
+          "to": "to complete",
+          "bare": "complete"
+        },
+        "pile": "to",
+        "rule": "manage + to infinitive",
+        "example": "I managed to complete all the work before the deadline.",
+        "tail": "all the work before the deadline."
+      },
+      {
+        "trigger": "appear",
+        "stem": "He appears",
+        "verb": "be",
+        "forms": {
+          "-ing": "being",
+          "to": "to be",
+          "bare": "be"
+        },
+        "pile": "to",
+        "rule": "appear + to infinitive",
+        "example": "He appears to be very happy with the results.",
+        "tail": "very happy with the results."
+      },
+      {
+        "trigger": "seem",
+        "stem": "She seems",
+        "verb": "understand",
+        "forms": {
+          "-ing": "understanding",
+          "to": "to understand",
+          "bare": "understand"
+        },
+        "pile": "to",
+        "rule": "seem + to infinitive",
+        "example": "She seems to understand the problem now.",
+        "tail": "the problem now."
+      },
+      {
+        "trigger": "tend",
+        "stem": "I tend",
+        "verb": "forget",
+        "forms": {
+          "-ing": "forgetting",
+          "to": "to forget",
+          "bare": "forget"
+        },
+        "pile": "to",
+        "rule": "tend + to infinitive",
+        "example": "I tend to forget people's names easily.",
+        "tail": "people's names easily."
+      },
+      {
+        "trigger": "claim",
+        "stem": "He claims",
+        "verb": "be",
+        "forms": {
+          "-ing": "being",
+          "to": "to be",
+          "bare": "be"
+        },
+        "pile": "to",
+        "rule": "claim + to infinitive",
+        "example": "He claims to be an expert in artificial intelligence.",
+        "tail": "an expert in artificial intelligence."
+      },
+      {
+        "trigger": "choose",
+        "stem": "I chose",
+        "verb": "study",
+        "forms": {
+          "-ing": "studying",
+          "to": "to study",
+          "bare": "study"
+        },
+        "pile": "to",
+        "rule": "choose + to infinitive",
+        "example": "I chose to study medicine because I want to help people.",
+        "tail": "medicine because I want to help people."
+      },
+      {
+        "trigger": "deserve",
+        "stem": "You deserve",
+        "verb": "win",
+        "forms": {
+          "-ing": "winning",
+          "to": "to win",
+          "bare": "win"
+        },
+        "pile": "to",
+        "rule": "deserve + to infinitive",
+        "example": "You deserve to win after all your hard work.",
+        "tail": "after all your hard work."
+      },
+      {
+        "trigger": "prepare",
+        "stem": "We're preparing",
+        "verb": "leave",
+        "forms": {
+          "-ing": "leaving",
+          "to": "to leave",
+          "bare": "leave"
+        },
+        "pile": "to",
+        "rule": "prepare + to infinitive",
+        "example": "We're preparing to leave for the airport.",
+        "tail": "for the airport."
+      },
+      {
+        "trigger": "pretend",
+        "stem": "He pretended",
+        "verb": "be",
+        "forms": {
+          "-ing": "being",
+          "to": "to be",
+          "bare": "be"
+        },
+        "pile": "to",
+        "rule": "pretend + to infinitive",
+        "example": "He pretended to be asleep when I came in.",
+        "tail": "asleep when I came in."
+      },
+      {
+        "trigger": "hesitate",
+        "stem": "Don't hesitate",
+        "verb": "ask",
+        "forms": {
+          "-ing": "asking",
+          "to": "to ask",
+          "bare": "ask"
+        },
+        "pile": "to",
+        "rule": "hesitate + to infinitive",
+        "example": "Don't hesitate to ask if you need any help.",
+        "tail": "if you need any help."
+      },
+      {
+        "trigger": "struggle",
+        "stem": "I struggled",
+        "verb": "open",
+        "forms": {
+          "-ing": "opening",
+          "to": "to open",
+          "bare": "open"
+        },
+        "pile": "to",
+        "rule": "struggle + to infinitive",
+        "example": "I struggled to open the tightly sealed jar.",
+        "tail": "the tightly sealed jar."
+      },
+      {
+        "trigger": "adjective",
+        "stem": "This math problem is difficult",
+        "verb": "solve",
+        "forms": {
+          "-ing": "solving",
+          "to": "to solve",
+          "bare": "solve"
+        },
+        "pile": "to",
+        "rule": "adjective + to infinitive",
+        "example": "This math problem is difficult to solve.",
+        "tail": "."
+      },
+      {
+        "trigger": "like",
+        "stem": "I like",
+        "verb": "swim",
+        "forms": {
+          "-ing": "swimming",
+          "to": "to swim",
+          "bare": "swim"
+        },
+        "pile": "-ing",
+        "rule": "like + gerund/infinitive",
+        "example": "I like swimming in the ocean during summer.",
+        "tail": "in the ocean during summer."
+      },
+      {
+        "trigger": "love",
+        "stem": "She loves",
+        "verb": "dance",
+        "forms": {
+          "-ing": "dancing",
+          "to": "to dance",
+          "bare": "dance"
+        },
+        "pile": "-ing",
+        "rule": "love + gerund/infinitive",
+        "example": "She loves dancing to Latin music.",
+        "tail": "to Latin music."
+      },
+      {
+        "trigger": "hate",
+        "stem": "I hate",
+        "verb": "wait",
+        "forms": {
+          "-ing": "waiting",
+          "to": "to wait",
+          "bare": "wait"
+        },
+        "pile": "-ing",
+        "rule": "hate + gerund/infinitive",
+        "example": "I hate waiting in long queues.",
+        "tail": "in long queues."
+      },
+      {
+        "trigger": "prefer",
+        "stem": "I prefer",
+        "verb": "walk",
+        "forms": {
+          "-ing": "walking",
+          "to": "to walk",
+          "bare": "walk"
+        },
+        "pile": "-ing",
+        "rule": "prefer + gerund/infinitive",
+        "example": "I prefer walking to driving when possible.",
+        "tail": "to driving when possible."
+      },
+      {
+        "trigger": "start",
+        "stem": "It started",
+        "verb": "rain",
+        "forms": {
+          "-ing": "raining",
+          "to": "to rain",
+          "bare": "rain"
+        },
+        "pile": "-ing",
+        "rule": "start + gerund/infinitive",
+        "example": "It started raining heavily around 3pm.",
+        "tail": "heavily around 3pm."
+      },
+      {
+        "trigger": "begin",
+        "stem": "She began",
+        "verb": "learn",
+        "forms": {
+          "-ing": "learning",
+          "to": "to learn",
+          "bare": "learn"
+        },
+        "pile": "-ing",
+        "rule": "begin + gerund/infinitive",
+        "example": "She began learning piano at age five.",
+        "tail": "piano at age five."
+      },
+      {
+        "trigger": "continue",
+        "stem": "He continued",
+        "verb": "work",
+        "forms": {
+          "-ing": "working",
+          "to": "to work",
+          "bare": "work"
+        },
+        "pile": "-ing",
+        "rule": "continue + gerund/infinitive",
+        "example": "He continued working despite feeling tired.",
+        "tail": "despite feeling tired."
+      },
+      {
+        "trigger": "can't bear",
+        "stem": "I can't bear",
+        "verb": "see",
+        "forms": {
+          "-ing": "seeing",
+          "to": "to see",
+          "bare": "see"
+        },
+        "pile": "-ing",
+        "rule": "can't bear + gerund/infinitive",
+        "example": "I can't bear seeing animals suffer.",
+        "tail": "animals suffer."
+      },
+      {
+        "trigger": "make",
+        "stem": "My parents made me",
+        "verb": "study",
+        "forms": {
+          "-ing": "studying",
+          "to": "to study",
+          "bare": "study"
+        },
+        "pile": "bare",
+        "rule": "make + infinitive (no to)",
+        "example": "My parents made me study medicine. [forced]",
+        "tail": "medicine. [forced]"
+      },
+      {
+        "trigger": "let",
+        "stem": "My parents let me",
+        "verb": "go",
+        "forms": {
+          "-ing": "going",
+          "to": "to go",
+          "bare": "go"
+        },
+        "pile": "bare",
+        "rule": "let + infinitive (no to)",
+        "example": "My parents let me go to the party. [allowed]",
+        "tail": "to the party. [allowed]"
+      },
+      {
+        "trigger": "would rather",
+        "stem": "I'd rather",
+        "verb": "stay",
+        "forms": {
+          "-ing": "staying",
+          "to": "to stay",
+          "bare": "stay"
+        },
+        "pile": "bare",
+        "rule": "would rather + infinitive (no to)",
+        "example": "I'd rather stay home tonight. [preference]",
+        "tail": "home tonight. [preference]"
+      },
+      {
+        "trigger": "had better",
+        "stem": "You'd better",
+        "verb": "hurry",
+        "forms": {
+          "-ing": "hurrying",
+          "to": "to hurry",
+          "bare": "hurry"
+        },
+        "pile": "bare",
+        "rule": "had better + infinitive (no to)",
+        "example": "You'd better hurry or you'll be late. [advice]",
+        "tail": "or you'll be late. [advice]"
+      },
+      {
+        "trigger": "see",
+        "stem": "I saw him",
+        "verb": "cross",
+        "forms": {
+          "-ing": "crossing",
+          "to": "to cross",
+          "bare": "cross"
+        },
+        "pile": "-ing",
+        "rule": "see + gerund = ongoing",
+        "example": "I saw him crossing the street. [action in progress]",
+        "tail": "the street. [action in progress]"
+      }
+    ],
+    "heldBack": [
+      "forget",
+      "go on",
+      "mean",
+      "need",
+      "regret",
+      "remember",
+      "stop",
+      "try"
+    ]
   }
 }
-
-function start(){
-  /* Ordered by how often the trigger appears in the corpus, then shuffled
-     within that, so the most useful verbs come up early — a student who
-     stops halfway has still met the ones that matter most. */
-  const top = DECK.slice(0, 40);
-  queue = shuffle(top);
-  total = queue.length;
-  right = wrong = streak = best = 0;
-  missed = new Map();
-  ['ing','to','bare'].forEach(p => $('t-' + p).textContent = '0');
-  $('done').classList.remove('show');
-  paint();
-  next();
-}
-
-const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[b[i],b[j]]=[b[j],b[i]];} return b; };
-
-function next(){
-  hideWhy();
-  if (!queue.length) return finish();
-  current = queue.shift();
-  const card = $('card');
-  card.className = 'card';
-  /* The stem is the real thing a student meets — "He insisted on" — and the
-     three buttons are the three forms that could follow it. Choosing the form
-     is the decision the exam asks for; naming the category is not. */
-  /* the trigger in gold, the gap greyed, the rest in reading weight */
-  const stem = current.stem || current.trigger || '';
-  const trig = current.trigger || '';
-  /* The trigger is stored as a lemma but appears inflected in the sentence —
-     `finish` in the data, "She finished" on the page. So the last few words
-     of the stem are bolded rather than the lemma matched, which highlights
-     the trigger as the student actually meets it. */
-  const words = stem.split(/\s+/);
-  const n = Math.min(trig.split(/\s+/).length, words.length);
-  const lit = n
-    ? esc(words.slice(0, words.length - n).join(' ')) + ' <b>' +
-      esc(words.slice(words.length - n).join(' ')) + '</b>'
-    : esc(stem);
-  $('sentence').innerHTML = lit + ' <i>_____</i> ' + esc(current.tail || '');
-  $('f-ing').textContent  = current.forms ? current.forms['-ing'] : '-ing';
-  $('f-to').textContent   = current.forms ? current.forms['to']   : 'to …';
-  $('f-bare').textContent = current.forms ? current.forms['bare'] : 'bare';
-  const again = missed.has(current.trigger);
-  $('seen').textContent = again ? 'seen before — think again' : '';
-  $('seen').className = 'seen' + (again ? ' again' : '');
-  paint();
-  locked = false;
-}
-
-function choose(pile){
-  if (locked || !current) return;
-  locked = true;
-
-  if (pile === current.pile){
-    right++; streak++; best = Math.max(best, streak);
-    $('t-' + pile.replace('-','')).textContent =
-      (+$('t-' + pile.replace('-','')).textContent) + 1;
-    const p = document.querySelector('.p-' + pile.replace('-',''));
-    p.classList.remove('hit'); void p.offsetWidth; p.classList.add('hit');
-    $('card').classList.add('gone-' + pile.replace('-',''));
-    setTimeout(next, 260);
-  } else {
-    wrong++; streak = 0;
-    missed.set(current.trigger, current);
-    $('card').classList.add('shake');
-    showWhy(current);
-    /* back into the deck four places down: near enough that the correction
-       is still in mind, far enough that it is recall and not echo */
-    const at = Math.min(4, queue.length);
-    queue.splice(at, 0, current);
-    setTimeout(next, 2100);
-  }
-  paint();
-}
-
-function showWhy(c){
-  const w = $('why');
-  const right = c.forms ? c.forms[c.pile] : '';
-  w.innerHTML = '<div class="rule">' + esc(c.rule) + '</div>' +
-                (right ? '<div class="eg">' + esc(((c.stem||'') + ' ' + right + ' ' + (c.tail||'')).replace(/\s+/g,' ').trim()) + '</div>' : '');
-  w.classList.add('show');
-}
-const hideWhy = () => $('why').classList.remove('show');
-const esc = t => String(t).replace(/[&<>]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
-
-function paint(){
-  $('right').textContent = right;
-  $('wrong').textContent = wrong;
-  $('left').textContent = queue.length;
-  $('streakLabel').textContent = 'streak ' + streak;
-  $('deckLabel').textContent = right + ' of ' + total + ' sorted';
-  $('fill').style.width = total ? Math.round(right / total * 100) + '%' : '0%';
-}
-
-function finish(){
-  const pct = right + wrong ? right / (right + wrong) : 0;
-  $('doneScore').textContent = Math.round(pct * 100) + '%';
-  $('doneSub').textContent = right + ' sorted · best streak ' + best;
-  const list = [...missed.values()];
-  $('doneList').innerHTML = list.length
-    ? 'Worth another look: ' + list.map(c => '<b>' + esc(c.trigger) + '</b> + ' +
-        esc(c.forms ? c.forms[c.pile] : c.pile)).join(' · ')
-    : 'Nothing missed — the whole deck first time.';
-  $('done').classList.add('show');
-}
-
-/* keys for anyone on a laptop: left, up, right */
-document.addEventListener('keydown', e => {
-  if (e.key === 'ArrowLeft')  choose('-ing');
-  if (e.key === 'ArrowUp')    choose('to');
-  if (e.key === 'ArrowRight') choose('bare');
-});
-
-boot();
-</script>
-</body>
-</html>

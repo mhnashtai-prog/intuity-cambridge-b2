@@ -410,46 +410,22 @@
     content:''; position:absolute; inset:0; pointer-events:none; z-index:5;
     background:radial-gradient(ellipse at 50% 40%, transparent 40%, rgba(18,18,20,.9) 100%);
   }
-  /* ══════════════ DOMINO TILES ══════════════
-     Each phrase now rides an actual domino: matte black lacquer, a bevelled
-     ivory spine down the middle (the real tile's divider), four pip dots
-     sunk into the corners, and a bottom edge that catches light the way a
-     tile standing on its end does. The word sits across both halves — it is
-     the one marking on the tile, not a substitute for the pips. */
+  /* Each phrase rides a rectangular plate — a step of the wheel. One face
+     for all of them: the old game varied the font per word, which made the
+     shape of the word part of the puzzle. On a wheel the phrase is the only
+     thing that should be read, so the type stays out of the way. */
   .word{
     position:absolute; left:0; top:0; cursor:pointer; white-space:nowrap;
     will-change:transform,opacity;
     display:flex; align-items:center; justify-content:center;
-    padding:.85rem 1.1rem; border-radius:.6rem; min-width:110px;
+    padding:.8rem 1rem; border-radius:.5rem;
     font-family:'Space Grotesk',sans-serif; font-weight:700; letter-spacing:.02em;
-    color:#f2ede0;
-    background:
-      radial-gradient(circle at 14% 18%, rgba(255,255,255,.55) 0 2.6px, transparent 3.4px),
-      radial-gradient(circle at 86% 18%, rgba(255,255,255,.55) 0 2.6px, transparent 3.4px),
-      radial-gradient(circle at 14% 82%, rgba(255,255,255,.55) 0 2.6px, transparent 3.4px),
-      radial-gradient(circle at 86% 82%, rgba(255,255,255,.55) 0 2.6px, transparent 3.4px),
-      linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,0) 30%),
-      linear-gradient(160deg, #2a2a28 0%, #131311 55%, #060605 100%);
-    border:1px solid rgba(0,0,0,.7);
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,.22),
-      inset 0 -10px 14px rgba(0,0,0,.55),
-      inset 0 0 0 1px rgba(255,255,255,.04),
-      0 3px 0 rgba(0,0,0,.55),
-      0 14px 22px rgba(0,0,0,.55);
-  }
-  /* the ivory spine splitting the tile into its two halves */
-  .word::before{
-    content:''; position:absolute; left:9%; right:9%; top:50%; height:2px;
-    transform:translateY(-1px); border-radius:2px;
-    background:linear-gradient(90deg, transparent, rgba(240,232,214,.55) 12%, rgba(240,232,214,.85) 50%, rgba(240,232,214,.55) 88%, transparent);
-    box-shadow:0 1px 0 rgba(0,0,0,.6);
+    background:linear-gradient(180deg, rgba(62,60,56,.62), rgba(38,37,35,.62));
+    border:1px solid rgba(201,169,97,.22);
+    border-top-color:rgba(255,255,255,.08);
+    box-shadow:0 6px 18px rgba(0,0,0,.45);
   }
   .word.wrong{ color:var(--wrong)!important; }
-  .word.wrong::after{
-    content:''; position:absolute; inset:0; border-radius:inherit;
-    background:rgba(232,106,92,.22); border:1px solid rgba(232,106,92,.6);
-  }
   .spark{ position:absolute; width:5px; height:5px; border-radius:50%; pointer-events:none; z-index:4; }
 
   /* The toast used to sit at the foot of the field, directly over the
@@ -1151,23 +1127,9 @@ function decoyItem(){
    is about to go. The pressure comes from disappearance, not from speed. */
 const WHEEL = { steps: 5, cycle: 9200 };   // ms for one full turn
 
-/* ── THE SWIRL ──
-   Every tile follows the SAME curve — a shallow S that bends hard near the
-   crown and straightens out by the foot, the way the photographed chain
-   bends away into the distance and runs dead straight into the nearest
-   tile. Because the curve is a pure function of depth (p), tiles spawned
-   moments apart sit at different points along it and the whole set of
-   live tiles traces the arc as a single chain, exactly as in a still photo
-   of falling dominoes — no per-tile randomness, just depth. */
-function curveSway(p){
-  return (1 - p) * Math.sin(p * Math.PI * 1.6 + 0.6);   // 0 at the foot, curls hardest near the crown
-}
-
 function freeLane(){
-  /* A fresh tile still needs to avoid landing exactly on top of one just
-     spawned — it enters slightly off the curve and is drawn onto it as it
-     falls (see the lane-nudge fade in frame()), joining the chain rather
-     than sitting in a fixed parallel track. */
+  /* Lanes are spaced evenly around the turn; take whichever sits furthest
+     from any word already riding, so the steps never bunch together. */
   const used = [...round.live].filter(r => !r.dead).map(r => r.lane);
   let best = 0, bestGap = -1;
   for (let i = 0; i < WHEEL.steps; i++){
@@ -1233,49 +1195,23 @@ function frame(now){
        be swallowed. The text itself never turns: a phrase set at an angle
        is one a learner has to decode twice. */
     const p = Math.max(0, Math.min(1, y / fh));          // 0 at the crown, 1 at the foot
-    /* With the width now fixed rather than field-relative, the near/far
-       growth comes entirely from scale — pushed wider here than before so
-       the approach still reads clearly. */
-    r.scale   = 0.5 + 0.62 * Math.pow(p, 0.85);
+    r.scale   = 0.84 * Math.pow(1.05, p * (WHEEL.steps - 1));
     r.tilt    = (1 - p) * 12;                            // square on by the time it is read
-    r.inset   = (1 - p) * fw * 0.05;                     // the rim drawing in at the top
+    r.inset   = (1 - p) * fw * 0.06;                     // the rim drawing in at the top
     r.opacity = Math.min(1, t * 6) * (0.5 + 0.5 * p);    // brightest at the foot
     r.p = p;
     r.y = y;
-
-    /* Swirl: the shared S-curve, in pixels for this field's width. Modest,
-       now that tiles are a fixed size — enough to trace a bend, not enough
-       to march a tile off the edge of the field. */
-    r.sway = curveSway(p) * fw * 0.15;
-
-    /* The lane nudge that keeps a just-spawned tile clear of its neighbour
-       fades out as the tile falls, so by mid-descent every tile has been
-       drawn onto the one shared curve. */
-    r.laneNudge = (r.lane - 0.5) * fw * 0.07 * (1 - p);
-
-    /* Bank each tile to face along the curve's tangent — a domino chain
-       leans into its own bend rather than staying screen-square. Estimated
-       by sampling the curve just behind and ahead of this tile's depth. */
-    const s0 = curveSway(Math.max(0, p - 0.04)), s1 = curveSway(Math.min(1, p + 0.04));
-    r.bank = Math.max(-11, Math.min(11, (s1 - s0) * -60));
   });
 
   [...round.live].filter(r => !r.dead).forEach(r => {
-    const x = fw / 2 + r.inset + r.sway + r.laneNudge;
     r.el.style.transform =
       'translate(-50%,-50%)' +
-      ' translate(' + x.toFixed(1) + 'px,' + r.y.toFixed(1) + 'px)' +
-      ' rotateX(' + r.tilt.toFixed(1) + 'deg)' +
-      ' rotateZ(' + r.bank.toFixed(1) + 'deg)' +
-      ' scale(' + r.scale.toFixed(3) + ')';
+      ' translate(' + (fw / 2 + r.inset).toFixed(1) + 'px,' + r.y.toFixed(1) + 'px)' +
+      ' rotateX(' + r.tilt.toFixed(1) + 'deg) scale(' + r.scale.toFixed(3) + ')';
     r.el.style.opacity  = r.opacity;
-    /* Compact, fixed-ish footprint — a real domino doesn't stretch as it
-       nears you, it just gets bigger, and that growth already comes from
-       r.scale below. A width tied to field-% here is what turned banked
-       tiles into long crossing bars; capped like this they stay tile-shaped
-       at every point on the curve. */
-    r.el.style.width    = (30 + 8 * r.p).toFixed(1) + '%';
-    r.el.style.fontSize = 'clamp(.75rem, 2vw, 1.15rem)';
+    /* Narrow at the crown, wide at the foot — the receding staircase. */
+    r.el.style.width    = (38 + 50 * r.p).toFixed(1) + '%';
+    r.el.style.fontSize = 'clamp(.8rem, 2.4vw, 1.4rem)';
     r.el.style.zIndex   = Math.floor(r.scale * 100);
   });
 

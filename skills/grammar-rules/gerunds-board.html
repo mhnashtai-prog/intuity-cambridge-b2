@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>INTUITY — The Board</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{ margin:0; padding:0; box-sizing:border-box; }
+  :root{
+    --gold:#C9A961; --accent:#FFD94A;
+    --ing:#5ED39B; --to:#7dd3fc; --bare:#f0a23c;
+    --paper:#e5e5e7; --dim:rgba(229,229,231,.55); --faint:rgba(229,229,231,.26);
+    --wrong:#E86A5C;
+    --s0:#cdbf8e; --s1:#e8935a; --s2:#ff7a45; --s3:#ff4d4d; --s4:#ffd94a;
+    --header-h:104px; --bar-h:34px;
+  }
+  html,body{ width:100%; height:100%; overflow:hidden; background:#0d0d0d; }
+  body{ font-family:'DM Sans',sans-serif; color:var(--paper); user-select:none; -webkit-user-select:none; }
+  button{ font:inherit; color:inherit; background:none; border:none; cursor:pointer; }
+
+  .header{
+    position:fixed; top:0; left:0; right:0; z-index:20; height:var(--header-h);
+    display:flex; flex-direction:column; gap:.4rem; padding:.5rem 1.25rem .4rem;
+    background:rgba(13,13,13,.9); backdrop-filter:blur(20px);
+    border-bottom:1px solid rgba(255,255,255,.06);
+  }
+  .htop{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; }
+  .back{ justify-self:start; text-decoration:none; font-family:'Space Grotesk',sans-serif;
+         font-size:.6rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.3); }
+  .title{ display:flex; flex-direction:column; align-items:center; line-height:1.1; }
+  .title b{ font-family:'Space Grotesk',sans-serif; font-size:1rem; font-weight:900; letter-spacing:.22em; color:var(--gold); }
+  .title span{ font-size:.56rem; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:rgba(255,255,255,.32); margin-top:.1rem; }
+
+  /* the five marks, per round — the same ladder the phrasal game climbs */
+  .ladder{ display:flex; align-items:center; justify-content:center; gap:.5rem; }
+  .mark{ display:flex; flex-direction:column; align-items:center; gap:.15rem; width:38px; }
+  .mark .dot{ width:16px; height:16px; border-radius:50%; background:rgba(229,229,231,.18); transition:all .3s; }
+  .mark .lbl{ font-family:'DM Mono',monospace; font-size:.42rem; letter-spacing:.08em;
+              text-transform:uppercase; color:var(--faint); }
+  .mark.done .dot{ box-shadow:0 0 12px currentColor; }
+  .mark.done .lbl{ color:var(--dim); }
+  .link{ width:14px; height:1px; background:rgba(255,255,255,.1); }
+  .link.done{ background:var(--gold); }
+
+  .stage{ position:fixed; top:var(--header-h); left:0; right:0; bottom:var(--bar-h);
+          padding:.8rem; display:flex; align-items:center; justify-content:center; }
+  .board{
+    position:relative; width:100%; height:100%;
+    display:grid; gap:clamp(.4rem,1.4vw,.85rem);
+    grid-template-columns:repeat(auto-fit, minmax(clamp(54px,8vw,92px), 1fr));
+    align-content:center; justify-items:center;
+  }
+
+  /* ── a circle ── */
+  .circle{
+    position:relative; width:100%; aspect-ratio:1; max-width:96px;
+    border-radius:50%; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; text-align:center;
+    background:linear-gradient(157deg,#33312d,#26251f 60%,#1c1b18);
+    border:1px solid rgba(201,169,97,.22); border-top-color:rgba(255,255,255,.09);
+    box-shadow:0 .25rem .7rem rgba(0,0,0,.5);
+    transition:transform .25s cubic-bezier(.2,1.5,.4,1), border-color .2s, box-shadow .25s;
+    font-family:'DM Mono',monospace; font-size:.72rem; color:var(--faint);
+  }
+  .circle:hover{ transform:translateY(-3px); border-color:rgba(201,169,97,.55); }
+  .circle.done{
+    cursor:default; border-color:rgba(94,211,155,.5);
+    background:linear-gradient(157deg,#24382f,#1b2b25 60%,#16211d);
+    box-shadow:0 .25rem .7rem rgba(0,0,0,.5), 0 0 14px rgba(94,211,155,.18);
+  }
+  .circle.done:hover{ transform:none; }
+  .circle .word{
+    font-family:'Space Grotesk',sans-serif; font-weight:700;
+    font-size:clamp(.6rem,1.6vw,.9rem); color:var(--ing);
+    padding:0 .35rem; line-height:1.15; word-break:break-word;
+  }
+  .circle.flip{ animation:flip .5s; }
+  @keyframes flip{ 50%{ transform:rotateY(90deg) scale(.9); } 100%{ transform:none; } }
+  .circle.failed{ animation:fail .45s; }
+  @keyframes fail{ 0%,100%{transform:none} 25%{transform:translateX(-7px) rotate(-4deg)}
+                   50%{transform:translateX(6px) rotate(3deg)} 75%{transform:translateX(-3px)} }
+
+  /* ── the card ── */
+  .veil{
+    position:fixed; inset:0; z-index:30; display:none; align-items:center; justify-content:center;
+    background:rgba(8,8,9,.78); backdrop-filter:blur(4px); padding:1rem;
+  }
+  .veil.show{ display:flex; }
+  .panel{
+    width:min(92vw,560px); text-align:center; padding:1.3rem 1.5rem 1.4rem; border-radius:1rem;
+    background:linear-gradient(157deg,#3a3833,#2a2926 55%,#201f1d);
+    border:1px solid rgba(201,169,97,.32); border-top-color:rgba(255,255,255,.14);
+    box-shadow:0 1.2rem 3rem rgba(0,0,0,.6);
+    animation:rise .26s cubic-bezier(.2,1.2,.4,1);
+  }
+  @keyframes rise{ from{ opacity:0; transform:translateY(14px) scale(.97); } }
+  .panel.bad{ animation:bad .5s; border-color:var(--wrong); }
+  @keyframes bad{ 0%,100%{transform:none} 15%{transform:translateX(-14px)} 32%{transform:translateX(12px)}
+                  50%{transform:translateX(-8px)} 70%{transform:translateX(5px)} }
+  .sentence{ font-size:clamp(1rem,3.6vw,1.3rem); line-height:1.5; }
+  .sentence b{ font-family:'Space Grotesk',sans-serif; font-weight:700; color:var(--gold); }
+  .sentence i{ font-style:normal; letter-spacing:.1em; color:rgba(229,229,231,.3); }
+  .forms{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:.5rem; margin-top:1.1rem; }
+  .form{
+    padding:.75rem .3rem .8rem; border-radius:.7rem; text-align:center;
+    border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.03); transition:all .15s;
+  }
+  .form:hover{ background:rgba(255,255,255,.08); }
+  .form .w{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:clamp(.85rem,2.9vw,1.1rem); }
+  .form .k{ font-family:'DM Mono',monospace; font-size:.52rem; letter-spacing:.1em;
+            text-transform:uppercase; color:var(--faint); margin-top:.2rem; }
+  .f-ing .w{ color:var(--ing); } .f-to .w{ color:var(--to); } .f-bare .w{ color:var(--bare); }
+  .rule{ margin-top:.9rem; min-height:1.1rem; font-size:.78rem; color:var(--wrong); font-weight:600; opacity:0; transition:opacity .2s; }
+  .rule.show{ opacity:1; }
+
+  .bottom{
+    position:fixed; bottom:0; left:0; right:0; height:var(--bar-h); padding:.3rem 1rem;
+    display:flex; align-items:center; justify-content:space-between;
+    background:rgba(13,13,13,.9); border-top:1px solid rgba(255,255,255,.06);
+    font-family:'DM Mono',monospace; font-size:.64rem; color:var(--faint);
+  }
+  .track{ flex:1; height:4px; margin:0 1rem; border-radius:99px; background:rgba(255,255,255,.08); }
+  .fill{ height:100%; border-radius:99px; background:var(--gold); width:0; transition:width .4s; }
+
+  /* ── a mark falls ── */
+  .banner{
+    position:fixed; left:50%; top:46%; z-index:40; pointer-events:none;
+    display:flex; align-items:center; gap:.6rem;
+    font-family:'Space Grotesk',sans-serif; font-weight:900;
+    font-size:clamp(1.6rem,6vw,3rem); letter-spacing:.16em; text-transform:uppercase;
+    opacity:0; transform:translate(-50%,-50%) scale(.7);
+    transition:opacity .25s, transform .45s cubic-bezier(.2,1.6,.4,1);
+    text-shadow:0 0 26px currentColor;
+  }
+  .banner.show{ opacity:1; transform:translate(-50%,-50%) scale(1); }
+
+  /* ── the burst ── */
+  .spark{ position:absolute; width:5px; height:5px; border-radius:50%; pointer-events:none; z-index:25; }
+  .fw-flash{ width:70px; height:70px; border-radius:50%; z-index:26;
+             background:radial-gradient(circle,#fff 0%,#FFD94A 35%,rgba(255,217,74,0) 70%); }
+  .fw-ring{ width:60px; height:60px; border-radius:50%;
+            border:3px solid rgba(255,217,74,.85); box-shadow:0 0 22px rgba(255,217,74,.5); }
+  .fw-crackle{ width:3px; height:3px; border-radius:50%; background:#fff; box-shadow:0 0 8px #fff,0 0 14px #FFD94A; }
+
+  .done-screen{
+    position:fixed; inset:0; z-index:50; display:none; flex-direction:column;
+    align-items:center; justify-content:center; gap:.5rem; text-align:center; padding:2rem;
+    background:rgba(8,8,9,.95); backdrop-filter:blur(6px);
+  }
+  .done-screen.show{ display:flex; }
+  .done-screen .big{ font-family:'Space Grotesk',sans-serif; font-weight:900;
+                     font-size:clamp(2.4rem,9vw,3.6rem); color:var(--accent); }
+  .done-screen .sub{ font-family:'DM Mono',monospace; font-size:.72rem; letter-spacing:.14em;
+                     text-transform:uppercase; color:var(--dim); }
+  .done-screen button{ margin-top:1.4rem; padding:.7rem 1.8rem; border-radius:99px;
+                       background:var(--accent); color:#12100a; font-weight:700;
+                       font-size:.78rem; letter-spacing:.1em; text-transform:uppercase; }
+  .loading{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:.8rem; }
+  .err{ color:var(--wrong); text-align:center; max-width:30rem; line-height:1.7; padding:2rem; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="htop">
+    <a class="back" href="/?openModal=grammar">← Grammar</a>
+    <div class="title"><b>INTUITY</b><span>Gerunds &amp; Infinitives</span></div>
+    <div></div>
+  </div>
+  <div class="ladder" id="ladder"></div>
+</header>
+
+<div class="stage"><div class="board" id="board"></div></div>
+
+<div class="bottom">
+  <span id="tally">0 open</span>
+  <div class="track"><div class="fill" id="fill"></div></div>
+  <span id="goal">0 of 30</span>
+</div>
+
+<div class="veil" id="veil">
+  <div class="panel" id="panel">
+    <div class="sentence" id="sentence">…</div>
+    <div class="forms">
+      <button class="form f-ing"  onclick="answer('-ing')"><div class="w" id="w-ing">…</div><div class="k">gerund</div></button>
+      <button class="form f-to"   onclick="answer('to')"><div class="w" id="w-to">…</div><div class="k">infinitive</div></button>
+      <button class="form f-bare" onclick="answer('bare')"><div class="w" id="w-bare">…</div><div class="k">no “to”</div></button>
+    </div>
+    <div class="rule" id="rule"></div>
+  </div>
+</div>
+
+<div class="banner" id="banner"></div>
+
+<div class="done-screen" id="doneScreen">
+  <div class="big" id="doneBig">30</div>
+  <div class="sub" id="doneSub"></div>
+  <button onclick="start()">New board</button>
+</div>
+
+<div class="loading" id="loading">Loading the board…</div>
+
+<script>
+/* ======================================================================
+   THE BOARD
+
+   Thirty-six circles, face down. The child chooses which to turn — that
+   choice is the difference between this and the sorting deck, where the
+   next card is handed to them. A board can be worked at from the easy
+   corners inward, and being allowed to pick is most of what makes a board
+   feel like a game rather than a test.
+
+   Open a circle and the sentence comes up as a card. Right, and the circle
+   keeps the word: the board fills with the answers you have earned, so
+   progress is the picture in front of you and not a number in a corner.
+   Wrong, and the circle turns back over — nothing is lost but the turn,
+   and the same circle can be tried again later.
+====================================================================== */
+
+const DATA_URL = '../../data/grammar-rules/gerunds-infinitives-complete.json';
+const SLOTS = 36;
+const GOAL  = 30;
+
+/* The same five marks the phrasal game climbs, spaced across the goal so
+   the first arrives early enough to be believed in. */
+const MARKS = [
+  { at:5,  label:'Spark', col:'var(--s0)' },
+  { at:10, label:'Ember', col:'var(--s1)' },
+  { at:16, label:'Flame', col:'var(--s2)' },
+  { at:23, label:'Blaze', col:'var(--s3)' },
+  { at:30, label:'Crown', col:'var(--s4)' },
+];
+
+let DECK = [], slots = [], open = null, mark = -1, done = 0, tries = 0, locked = false;
+const $ = id => document.getElementById(id);
+const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[b[i],b[j]]=[b[j],b[i]];} return b; };
+
+async function boot(){
+  try{
+    const res = await fetch(DATA_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    DECK = (d.sorting && d.sorting.cards) || [];
+    if (!DECK.length) throw new Error('no cards in the data');
+    $('loading').remove();
+    start();
+  }catch(e){
+    $('loading').innerHTML = '<p class="err">Could not load <b>' + DATA_URL + '</b>.<br>' +
+      'Open this from the site rather than as a local file — browsers block file:// requests.</p>';
+  }
+}
+
+function start(){
+  const picked = shuffle(DECK).slice(0, SLOTS);
+  slots = picked.map(card => ({ card, done:false }));
+  mark = -1; done = 0; tries = 0; locked = false;
+  $('doneScreen').classList.remove('show');
+  $('veil').classList.remove('show');
+  drawLadder(); drawBoard(); paint();
+}
+
+function drawBoard(){
+  const b = $('board'); b.innerHTML = '';
+  slots.forEach((s, i) => {
+    const el = document.createElement('div');
+    el.className = 'circle';
+    el.id = 'c' + i;
+    el.textContent = String(i + 1);
+    el.onclick = () => openCircle(i);
+    b.appendChild(el);
+  });
+}
+
+function drawLadder(){
+  const l = $('ladder'); l.innerHTML = '';
+  MARKS.forEach((m, i) => {
+    if (i){ const k = document.createElement('div'); k.className = 'link' + (i <= mark ? ' done' : ''); l.appendChild(k); }
+    const el = document.createElement('div');
+    el.className = 'mark' + (i <= mark ? ' done' : '');
+    el.innerHTML = '<div class="dot" style="' + (i <= mark ? 'background:' + m.col + ';color:' + m.col : '') + '"></div>' +
+                   '<div class="lbl">' + m.label + '</div>';
+    l.appendChild(el);
+  });
+}
+
+function openCircle(i){
+  if (locked || slots[i].done) return;
+  open = i;
+  const c = slots[i].card;
+  const stem = c.stem || c.trigger || '', trig = c.trigger || '';
+  const words = stem.split(/\s+/);
+  const n = Math.min(trig.split(/\s+/).length, words.length);
+  $('sentence').innerHTML = esc(words.slice(0, words.length - n).join(' ')) +
+    ' <b>' + esc(words.slice(words.length - n).join(' ')) + '</b> <i>_____</i> ' + esc(c.tail || '');
+  $('w-ing').textContent  = c.forms['-ing'];
+  $('w-to').textContent   = c.forms['to'];
+  $('w-bare').textContent = c.forms['bare'];
+  $('rule').textContent = ''; $('rule').classList.remove('show');
+  $('veil').classList.add('show');
+}
+
+function answer(pile){
+  if (open === null || locked) return;
+  locked = true;
+  tries++;
+  const slot = slots[open], c = slot.card, el = $('c' + open);
+
+  if (pile === c.pile){
+    slot.done = true; done++;
+    el.className = 'circle done flip';
+    el.innerHTML = '<span class="word">' + esc(c.forms[c.pile]) + '</span>';
+    $('veil').classList.remove('show');
+    setTimeout(() => burst(el), 60);
+    checkMark();
+    open = null; locked = false;
+    paint();
+    if (done >= GOAL) setTimeout(finish, 900);
+  } else {
+    /* Frightful, but brief. The rule appears, the panel recoils, and the
+       circle turns face down again — the turn is spent, nothing else. */
+    const p = $('panel');
+    p.classList.remove('bad'); void p.offsetWidth; p.classList.add('bad');
+    $('rule').textContent = c.rule;
+    $('rule').classList.add('show');
+    el.classList.remove('failed'); void el.offsetWidth; el.classList.add('failed');
+    setTimeout(() => {
+      $('veil').classList.remove('show');
+      p.classList.remove('bad');
+      open = null; locked = false;
+      paint();
+    }, 1600);
+  }
+}
+
+function checkMark(){
+  let m = -1;
+  MARKS.forEach((x, i) => { if (done >= x.at) m = i; });
+  if (m <= mark) return;
+  mark = m;
+  drawLadder();
+  const b = $('banner');
+  b.textContent = MARKS[m].label;
+  b.style.color = MARKS[m].col;
+  b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+  setTimeout(() => b.classList.remove('show'), 1400);
+}
+
+function paint(){
+  $('tally').textContent = (SLOTS - done) + ' left on the board';
+  $('goal').textContent = done + ' of ' + GOAL;
+  $('fill').style.width = Math.min(100, done / GOAL * 100) + '%';
+}
+
+function finish(){
+  $('doneBig').textContent = done;
+  const acc = tries ? Math.round(done / tries * 100) : 0;
+  $('doneSub').textContent = 'circles turned · ' + acc + '% first-time right';
+  $('doneScreen').classList.add('show');
+}
+
+/* ── the burst, fired at the circle that was won ── */
+function burst(el){
+  const stage = document.querySelector('.stage');
+  const s = stage.getBoundingClientRect(), r = el.getBoundingClientRect();
+  const cx = r.left - s.left + r.width / 2, cy = r.top - s.top + r.height / 2;
+  const COLS = ['#FFD94A','#C9A961','#5ED39B','#ff7a45','#ffffff','#7dd3fc'];
+
+  const flash = document.createElement('div');
+  flash.className = 'spark fw-flash';
+  flash.style.left = cx + 'px'; flash.style.top = cy + 'px';
+  stage.appendChild(flash);
+  flash.animate([{ transform:'translate(-50%,-50%) scale(.2)', opacity:1 },
+                 { transform:'translate(-50%,-50%) scale(3.2)', opacity:0 }],
+                { duration:420, easing:'cubic-bezier(.1,.8,.2,1)' });
+  setTimeout(() => flash.remove(), 440);
+
+  const ring = document.createElement('div');
+  ring.className = 'spark fw-ring';
+  ring.style.left = cx + 'px'; ring.style.top = cy + 'px';
+  stage.appendChild(ring);
+  ring.animate([{ transform:'translate(-50%,-50%) scale(.15)', opacity:.9 },
+                { transform:'translate(-50%,-50%) scale(2.4)', opacity:0 }],
+               { duration:620, easing:'cubic-bezier(.1,.7,.2,1)' });
+  setTimeout(() => ring.remove(), 640);
+
+  for (let i = 0; i < 40; i++){
+    const p = document.createElement('div');
+    p.className = 'spark';
+    const col = COLS[(Math.random()*COLS.length)|0], size = 3 + Math.random()*4;
+    p.style.cssText += 'left:'+cx+'px; top:'+cy+'px; width:'+size+'px; height:'+size+
+      'px; background:'+col+'; box-shadow:0 0 '+(size*2.5)+'px '+col+';';
+    stage.appendChild(p);
+    const a = Math.random()*Math.PI*2, d = 60 + Math.random()*170;
+    const dx = Math.cos(a)*d, dy = Math.sin(a)*d;
+    const fall = 55 + Math.random()*85, dur = 760 + Math.random()*500;
+    p.animate([
+      { transform:'translate(-50%,-50%) translate(0,0) scale(1.15)', opacity:1 },
+      { transform:'translate(-50%,-50%) translate('+(dx*.62).toFixed(0)+'px,'+(dy*.62-12).toFixed(0)+'px) scale(1)', opacity:1, offset:.42 },
+      { transform:'translate(-50%,-50%) translate('+dx.toFixed(0)+'px,'+(dy+fall).toFixed(0)+'px) scale(.25)', opacity:0 }
+    ], { duration:dur, easing:'cubic-bezier(.12,.75,.3,1)' });
+    setTimeout(() => p.remove(), dur + 30);
+  }
+
+  setTimeout(() => {
+    for (let i = 0; i < 16; i++){
+      const c = document.createElement('div');
+      c.className = 'spark fw-crackle';
+      const a = Math.random()*Math.PI*2, d = 26 + Math.random()*110;
+      c.style.left = (cx + Math.cos(a)*d*.5)+'px'; c.style.top = (cy + Math.sin(a)*d*.5)+'px';
+      stage.appendChild(c);
+      c.animate([{opacity:0,transform:'translate(-50%,-50%) scale(.4)'},
+                 {opacity:1,transform:'translate(-50%,-50%) scale(1.3)',offset:.25},
+                 {opacity:0,transform:'translate(-50%,-50%) scale(.3)'}],
+                {duration:300+Math.random()*250, easing:'ease-out'});
+      setTimeout(() => c.remove(), 600);
+    }
+  }, 220);
+}
+
+/* tapping the dark closes the card without spending the turn */
+$('veil').addEventListener('click', e => {
+  if (e.target === $('veil') && !locked){ $('veil').classList.remove('show'); open = null; }
+});
+
+boot();
+</script>
+</body>
+</html>

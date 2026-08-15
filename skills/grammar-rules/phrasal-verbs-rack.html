@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>INTUITY — The Rack</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{ margin:0; padding:0; box-sizing:border-box; }
+  :root{
+    --gold:#C9A961; --accent:#FFD94A; --ok:#3f9d6d; --bad:#E86A5C;
+    --ink:#1b1b1f; --plate:#2c4a9e;            /* biro blue, as on the cards */
+    --card:#f6f2e6; --card-edge:#ddd6c2;
+    --paper:#e5e5e7; --dim:rgba(229,229,231,.55); --faint:rgba(229,229,231,.26);
+    --header-h:92px; --foot-h:104px;
+  }
+  html,body{ width:100%; height:100%; overflow:hidden; background:#0d0d0d; }
+  body{ font-family:'DM Sans',sans-serif; color:var(--paper); user-select:none; -webkit-user-select:none; }
+  button{ font:inherit; color:inherit; background:none; border:none; cursor:pointer; }
+
+  .header{
+    position:fixed; top:0; left:0; right:0; z-index:20; height:var(--header-h);
+    display:flex; flex-direction:column; gap:.35rem; padding:.5rem 1.25rem .4rem;
+    background:rgba(13,13,13,.9); backdrop-filter:blur(20px);
+    border-bottom:1px solid rgba(255,255,255,.06);
+  }
+  .htop{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; }
+  .back{ justify-self:start; text-decoration:none; font-family:'Space Grotesk',sans-serif;
+         font-size:.6rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.3); }
+  .title{ display:flex; flex-direction:column; align-items:center; line-height:1.1; }
+  .title b{ font-family:'Space Grotesk',sans-serif; font-size:1rem; font-weight:900; letter-spacing:.22em; color:var(--gold); }
+  .title span{ font-size:.56rem; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:rgba(255,255,255,.32); margin-top:.1rem; }
+  .hud{ display:flex; justify-content:center; gap:1.3rem; font-family:'DM Mono',monospace; font-size:.66rem; color:var(--dim); }
+  .hud b{ color:var(--paper); font-variant-numeric:tabular-nums; }
+  .hud .kept b{ color:var(--ok); } .hud .fell b{ color:var(--bad); }
+
+  /* ── the rack ──
+     A tray of cards standing in slots. The frame is what stops this reading
+     as a page of vocabulary: cards have edges, they lean, and they can fall
+     over — none of which a list on a worksheet can do. */
+  .stage{
+    position:fixed; top:var(--header-h); left:0; right:0; bottom:var(--foot-h);
+    display:flex; align-items:center; justify-content:center; padding:.5rem .7rem;
+    background:
+      radial-gradient(ellipse at 50% 10%, rgba(201,169,97,.08), transparent 60%),
+      radial-gradient(ellipse at 50% 100%, rgba(0,0,0,.55), transparent 60%);
+  }
+  .rack{
+    display:grid; gap:.45rem; width:100%; max-width:62rem; height:100%;
+    grid-template-columns:repeat(8, 1fr); grid-auto-rows:1fr;
+    perspective:900px;
+  }
+  @media(max-width:900px){ .rack{ grid-template-columns:repeat(4, 1fr); } }
+
+  .card{
+    position:relative; border-radius:.35rem; cursor:pointer;
+    background:linear-gradient(178deg, var(--card) 0%, #ece7d7 100%);
+    border:1px solid var(--card-edge);
+    box-shadow:0 .28rem .55rem rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.7);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:.25rem .2rem .05rem;
+    transform-origin:50% 100%;
+    transition:transform .16s cubic-bezier(.2,1.4,.4,1), box-shadow .16s, filter .3s;
+  }
+  .card:hover{ transform:translateY(-4px) rotate(-.6deg); box-shadow:0 .5rem 1rem rgba(0,0,0,.6); }
+
+  /* the verb in ink, the particle on the blue plate — the two halves of the
+     phrase, told apart by colour rather than by a label */
+  .card .verb{
+    font-family:'Space Grotesk',sans-serif; font-weight:900; color:var(--ink);
+    font-size:clamp(.6rem,1.5vw,.92rem); letter-spacing:.01em; line-height:1;
+    text-align:center; margin-bottom:.2rem;
+  }
+  .card .plate{
+    width:100%; margin-top:auto; border-radius:.15rem;
+    background:var(--plate); color:#fff;
+    font-family:'Space Grotesk',sans-serif; font-weight:700;
+    font-size:clamp(.5rem,1.25vw,.76rem); letter-spacing:.02em;
+    padding:.16rem .1rem .2rem; text-align:center; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis;
+  }
+
+  /* claimed: it stays standing, and says so */
+  .card.kept{ cursor:default; border-color:var(--ok); }
+  .card.kept::after{
+    content:'✓'; position:absolute; top:.1rem; right:.22rem;
+    font-size:.7rem; font-weight:900; color:var(--ok);
+  }
+  .card.kept:hover{ transform:none; }
+  .card.kept .plate{ background:var(--ok); }
+
+  /* fallen: it tips forward out of the rack and lies face down */
+  .card.fell{
+    cursor:default; pointer-events:none;
+    transform:rotateX(78deg) translateY(26%) scale(.94);
+    filter:grayscale(1) brightness(.45);
+    box-shadow:0 .1rem .3rem rgba(0,0,0,.7);
+  }
+  .card.fell .plate{ background:#6b6b6b; }
+  .card.wobble{ animation:wobble .5s; }
+  @keyframes wobble{ 0%,100%{ transform:none } 25%{ transform:rotate(-4deg) } 60%{ transform:rotate(3deg) } }
+
+  /* ── the footer: the definition, and the deal ── */
+  .foot{
+    position:fixed; bottom:0; left:0; right:0; height:var(--foot-h);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.4rem;
+    padding:.5rem 1rem; text-align:center;
+    background:rgba(13,13,13,.94); backdrop-filter:blur(20px);
+    border-top:1px solid rgba(201,169,97,.22);
+    background-image:linear-gradient(180deg, rgba(201,169,97,.07), transparent 45%);
+  }
+  .ask{ font-family:'DM Mono',monospace; font-size:.54rem; letter-spacing:.16em;
+        text-transform:uppercase; color:var(--gold); }
+  .clue{ font-size:clamp(.9rem,2.8vw,1.15rem); line-height:1.35; max-width:46rem; color:var(--paper); }
+  .clue.waiting{ color:var(--faint); }
+  .deal{
+    padding:.5rem 1.6rem; border-radius:99px; background:var(--accent); color:#12100a;
+    font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:.7rem;
+    letter-spacing:.14em; text-transform:uppercase;
+  }
+  .deal.quiet{ background:none; color:var(--dim); border:1px solid rgba(255,255,255,.16); }
+
+  .banner{
+    position:fixed; left:50%; top:42%; z-index:40; pointer-events:none;
+    font-family:'Space Grotesk',sans-serif; font-weight:900;
+    font-size:clamp(1.3rem,4.5vw,2.2rem); letter-spacing:.14em; text-transform:uppercase;
+    opacity:0; transform:translate(-50%,-50%) scale(.8);
+    transition:opacity .2s, transform .4s cubic-bezier(.2,1.6,.4,1); text-shadow:0 0 22px currentColor;
+  }
+  .banner.show{ opacity:1; transform:translate(-50%,-50%) scale(1); }
+
+  .spark{ position:absolute; width:5px; height:5px; border-radius:50%; pointer-events:none; z-index:30; }
+  .fw-flash{ width:64px; height:64px; border-radius:50%;
+             background:radial-gradient(circle,#fff 0%,#FFD94A 35%,rgba(255,217,74,0) 70%); }
+  .fw-crackle{ width:3px; height:3px; border-radius:50%; background:#fff; box-shadow:0 0 8px #fff; }
+
+  .over{
+    position:fixed; inset:0; z-index:50; display:none; flex-direction:column;
+    align-items:center; justify-content:center; gap:.4rem; text-align:center; padding:2rem;
+    background:rgba(8,8,9,.95); backdrop-filter:blur(6px);
+  }
+  .over.show{ display:flex; }
+  .over .big{ font-family:'Space Grotesk',sans-serif; font-weight:900;
+              font-size:clamp(2.2rem,8vw,3.4rem); color:var(--accent); }
+  .over .sub{ font-family:'DM Mono',monospace; font-size:.7rem; letter-spacing:.14em;
+              text-transform:uppercase; color:var(--dim); }
+  .over button{ margin-top:1.3rem; padding:.7rem 1.8rem; border-radius:99px;
+                background:var(--accent); color:#12100a; font-weight:700;
+                font-size:.76rem; letter-spacing:.1em; text-transform:uppercase; }
+
+  .loading{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:.8rem; }
+  .err{ color:var(--bad); text-align:center; max-width:30rem; line-height:1.7; padding:2rem; }
+
+  body.embedded{ --header-h:38px; }
+  body.embedded .htop{ display:none; }
+  body.embedded .header{ padding:.28rem 1rem .22rem; justify-content:center; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="htop">
+    <a class="back" href="/?openModal=grammar">← Grammar</a>
+    <div class="title"><b>INTUITY</b><span>Phrasal Verbs</span></div>
+    <div></div>
+  </div>
+  <div class="hud">
+    <span class="kept"><b id="kept">0</b> kept</span>
+    <span class="fell"><b id="fell">0</b> fallen</span>
+    <span><b id="standing">16</b> standing</span>
+  </div>
+</header>
+
+<div class="stage"><div class="rack" id="rack"></div></div>
+
+<div class="foot">
+  <div class="ask" id="ask">press deal</div>
+  <div class="clue waiting" id="clue">sixteen phrasal verbs — one chance at each</div>
+  <button class="deal" id="dealBtn" onclick="deal()">Deal</button>
+</div>
+
+<div class="banner" id="banner"></div>
+<div class="over" id="over">
+  <div class="big" id="overBig">0</div>
+  <div class="sub" id="overSub"></div>
+  <button onclick="start()">New rack</button>
+</div>
+<div class="loading" id="loading">Loading…</div>
+
+<script>
+/* ======================================================================
+   THE RACK
+
+   Sixteen phrasal verbs standing in a tray. Press deal and a meaning comes
+   up in the footer; find the card it belongs to.
+
+   One chance. A right card is claimed and stays standing with a tick; a
+   wrong one tips forward and lies face down, out of the game — and the
+   meaning that was asked goes unclaimed with it. That is the whole tension:
+   the cost of a guess is not a point, it is a card you can no longer win.
+
+   Sixteen at once also makes this the hardest of the phrasal games. There
+   is no bank to narrow the field and no elimination to lean on: the child
+   either knows the phrase or does not.
+====================================================================== */
+
+const DATA_URL = '../../data/grammar-rules/phrasal-verbs-data.json';
+const SIZE = 16;
+
+let POOL = [], cards = [], target = null, locked = false;
+let kept = 0, fell = 0;
+
+const $ = id => document.getElementById(id);
+const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[b[i],b[j]]=[b[j],b[i]];} return b; };
+/* One sense. The footer is a clue, not a dictionary entry. */
+const firstSense = m => String(m).split(';')[0].trim();
+
+async function boot(){
+  try{
+    const res = await fetch(DATA_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    (d.groups || []).forEach(g => (g.items || []).forEach(it => {
+      if (it.particle && it.meaning)
+        POOL.push({ verb:(it.verb || g.label || g.id).toUpperCase(),
+                    particle: it.particle.toLowerCase(),
+                    meaning: it.meaning });
+    }));
+    if (POOL.length < SIZE) throw new Error('not enough phrases');
+    $('loading').remove();
+    start();
+  }catch(e){
+    $('loading').innerHTML = '<p class="err">Could not load <b>' + DATA_URL + '</b>.<br>' +
+      'Open this from the site rather than as a local file — browsers block file:// requests.</p>';
+  }
+}
+
+function start(){
+  /* No two cards may share a verb: with "take off" and "take up" both on the
+     rack a clue about one is half a clue about the other, and the game stops
+     being about meaning. */
+  const seen = new Set(), picked = [];
+  for (const p of shuffle(POOL)){
+    if (picked.length === SIZE) break;
+    if (seen.has(p.verb)) continue;
+    seen.add(p.verb); picked.push(p);
+  }
+  while (picked.length < SIZE) picked.push(shuffle(POOL)[0]);
+
+  cards = picked.map(p => ({ ...p, state:'up' }));
+  kept = fell = 0; target = null; locked = false;
+  $('over').classList.remove('show');
+  drawRack(); paint();
+  $('ask').textContent = 'press deal';
+  $('clue').textContent = 'sixteen phrasal verbs — one chance at each';
+  $('clue').classList.add('waiting');
+  $('dealBtn').textContent = 'Deal';
+  $('dealBtn').classList.remove('quiet');
+}
+
+function drawRack(){
+  const r = $('rack'); r.innerHTML = '';
+  cards.forEach((c, i) => {
+    const el = document.createElement('div');
+    el.className = 'card'; el.id = 'k' + i;
+    el.innerHTML = '<div class="verb">' + esc(c.verb) + '</div>' +
+                   '<div class="plate">' + esc(c.particle) + '</div>';
+    el.onclick = () => choose(i);
+    r.appendChild(el);
+  });
+}
+
+function deal(){
+  if (locked) return;
+  const live = cards.map((c, i) => ({ c, i })).filter(x => x.c.state === 'up');
+  if (!live.length) return over();
+  const pickOne = live[(Math.random() * live.length) | 0];
+  target = pickOne.i;
+  $('ask').textContent = 'which card means';
+  $('clue').textContent = firstSense(cards[target].meaning);
+  $('clue').classList.remove('waiting');
+  $('dealBtn').textContent = 'skip';
+  $('dealBtn').classList.add('quiet');
+}
+
+function choose(i){
+  if (locked || target === null) return;
+  const c = cards[i];
+  if (c.state !== 'up') return;
+  locked = true;
+  const el = $('k' + i);
+
+  if (i === target){
+    c.state = 'kept'; kept++;
+    el.classList.add('kept');
+    burst(el);
+    flash('kept', 'var(--ok)');
+    target = null;
+    setTimeout(() => { locked = false; paint(); nextOrEnd(); }, 700);
+  } else {
+    /* The card tips out of the rack. The one that was asked for is left
+       standing — so the meaning can still be won later, but this card is
+       gone for good. */
+    c.state = 'fell'; fell++;
+    el.classList.add('wobble');
+    setTimeout(() => { el.classList.remove('wobble'); el.classList.add('fell'); }, 260);
+    flash(esc(cards[target].verb + ' ' + cards[target].particle), 'var(--bad)');
+    target = null;
+    setTimeout(() => { locked = false; paint(); nextOrEnd(); }, 1500);
+  }
+}
+
+function nextOrEnd(){
+  const live = cards.filter(c => c.state === 'up').length;
+  if (!live) return over();
+  $('ask').textContent = 'press deal';
+  $('clue').textContent = live + ' still standing';
+  $('clue').classList.add('waiting');
+  $('dealBtn').textContent = 'Deal';
+  $('dealBtn').classList.remove('quiet');
+}
+
+function paint(){
+  $('kept').textContent = kept;
+  $('fell').textContent = fell;
+  $('standing').textContent = cards.filter(c => c.state === 'up').length;
+}
+
+function over(){
+  $('overBig').textContent = kept + ' / ' + SIZE;
+  $('overSub').textContent = fell ? fell + (fell === 1 ? ' card lost' : ' cards lost') : 'the whole rack';
+  $('over').classList.add('show');
+}
+
+function flash(text, col){
+  const b = $('banner');
+  b.textContent = text; b.style.color = col;
+  b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+  setTimeout(() => b.classList.remove('show'), 1100);
+}
+
+function burst(el){
+  const stage = document.querySelector('.stage');
+  const s = stage.getBoundingClientRect(), r = el.getBoundingClientRect();
+  const cx = r.left - s.left + r.width/2, cy = r.top - s.top + r.height/2;
+  const COLS = ['#FFD94A','#C9A961','#5ED39B','#ff7a45','#ffffff','#7dd3fc'];
+
+  const f = document.createElement('div');
+  f.className = 'spark fw-flash';
+  f.style.left = cx+'px'; f.style.top = cy+'px';
+  stage.appendChild(f);
+  f.animate([{transform:'translate(-50%,-50%) scale(.2)',opacity:1},
+             {transform:'translate(-50%,-50%) scale(3)',opacity:0}],
+            {duration:400,easing:'cubic-bezier(.1,.8,.2,1)'});
+  setTimeout(()=>f.remove(),420);
+
+  for (let i=0;i<36;i++){
+    const p = document.createElement('div');
+    p.className = 'spark';
+    const col = COLS[(Math.random()*COLS.length)|0], size = 3+Math.random()*3.5;
+    p.style.cssText += 'left:'+cx+'px; top:'+cy+'px; width:'+size+'px; height:'+size+
+      'px; background:'+col+'; box-shadow:0 0 '+(size*2.5)+'px '+col+';';
+    stage.appendChild(p);
+    const a = Math.random()*Math.PI*2, d = 55+Math.random()*160;
+    const dx = Math.cos(a)*d, dy = Math.sin(a)*d, fall = 50+Math.random()*80;
+    const dur = 740+Math.random()*460;
+    p.animate([
+      {transform:'translate(-50%,-50%) translate(0,0) scale(1.1)',opacity:1},
+      {transform:'translate(-50%,-50%) translate('+(dx*.62).toFixed(0)+'px,'+(dy*.62-10).toFixed(0)+'px) scale(1)',opacity:1,offset:.42},
+      {transform:'translate(-50%,-50%) translate('+dx.toFixed(0)+'px,'+(dy+fall).toFixed(0)+'px) scale(.25)',opacity:0}
+    ],{duration:dur,easing:'cubic-bezier(.12,.75,.3,1)'});
+    setTimeout(()=>p.remove(),dur+30);
+  }
+
+  setTimeout(()=>{
+    for (let i=0;i<14;i++){
+      const c = document.createElement('div');
+      c.className = 'spark fw-crackle';
+      const a = Math.random()*Math.PI*2, d = 24+Math.random()*90;
+      c.style.left = (cx+Math.cos(a)*d*.5)+'px'; c.style.top = (cy+Math.sin(a)*d*.5)+'px';
+      stage.appendChild(c);
+      c.animate([{opacity:0,transform:'translate(-50%,-50%) scale(.4)'},
+                 {opacity:1,transform:'translate(-50%,-50%) scale(1.3)',offset:.25},
+                 {opacity:0,transform:'translate(-50%,-50%) scale(.3)'}],
+                {duration:290+Math.random()*230,easing:'ease-out'});
+      setTimeout(()=>c.remove(),580);
+    }
+  },210);
+}
+
+if (window.self !== window.top) document.body.classList.add('embedded');
+boot();
+</script>
+</body>
+</html>

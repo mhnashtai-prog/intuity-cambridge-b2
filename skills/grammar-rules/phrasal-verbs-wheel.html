@@ -420,7 +420,7 @@
     position:absolute; left:0; top:0; cursor:pointer; white-space:nowrap;
     will-change:transform,opacity;
     display:flex; align-items:center; justify-content:center;
-    padding:.85rem 1.1rem; border-radius:.6rem;
+    padding:.85rem 1.1rem; border-radius:.6rem; min-width:110px;
     font-family:'Space Grotesk',sans-serif; font-weight:700; letter-spacing:.02em;
     color:#f2ede0;
     background:
@@ -1233,26 +1233,31 @@ function frame(now){
        be swallowed. The text itself never turns: a phrase set at an angle
        is one a learner has to decode twice. */
     const p = Math.max(0, Math.min(1, y / fh));          // 0 at the crown, 1 at the foot
-    r.scale   = 0.84 * Math.pow(1.05, p * (WHEEL.steps - 1));
+    /* With the width now fixed rather than field-relative, the near/far
+       growth comes entirely from scale — pushed wider here than before so
+       the approach still reads clearly. */
+    r.scale   = 0.5 + 0.62 * Math.pow(p, 0.85);
     r.tilt    = (1 - p) * 12;                            // square on by the time it is read
-    r.inset   = (1 - p) * fw * 0.06;                     // the rim drawing in at the top
+    r.inset   = (1 - p) * fw * 0.05;                     // the rim drawing in at the top
     r.opacity = Math.min(1, t * 6) * (0.5 + 0.5 * p);    // brightest at the foot
     r.p = p;
     r.y = y;
 
-    /* Swirl: the shared S-curve, in pixels for this field's width. */
-    r.sway = curveSway(p) * fw * 0.30;
+    /* Swirl: the shared S-curve, in pixels for this field's width. Modest,
+       now that tiles are a fixed size — enough to trace a bend, not enough
+       to march a tile off the edge of the field. */
+    r.sway = curveSway(p) * fw * 0.15;
 
     /* The lane nudge that keeps a just-spawned tile clear of its neighbour
        fades out as the tile falls, so by mid-descent every tile has been
        drawn onto the one shared curve. */
-    r.laneNudge = (r.lane - 0.5) * fw * 0.16 * (1 - p);
+    r.laneNudge = (r.lane - 0.5) * fw * 0.07 * (1 - p);
 
     /* Bank each tile to face along the curve's tangent — a domino chain
        leans into its own bend rather than staying screen-square. Estimated
        by sampling the curve just behind and ahead of this tile's depth. */
     const s0 = curveSway(Math.max(0, p - 0.04)), s1 = curveSway(Math.min(1, p + 0.04));
-    r.bank = Math.max(-16, Math.min(16, (s1 - s0) * -95));
+    r.bank = Math.max(-11, Math.min(11, (s1 - s0) * -60));
   });
 
   [...round.live].filter(r => !r.dead).forEach(r => {
@@ -1264,9 +1269,13 @@ function frame(now){
       ' rotateZ(' + r.bank.toFixed(1) + 'deg)' +
       ' scale(' + r.scale.toFixed(3) + ')';
     r.el.style.opacity  = r.opacity;
-    /* Narrow at the crown, wide at the foot — the receding staircase. */
-    r.el.style.width    = (38 + 50 * r.p).toFixed(1) + '%';
-    r.el.style.fontSize = 'clamp(.8rem, 2.4vw, 1.4rem)';
+    /* Compact, fixed-ish footprint — a real domino doesn't stretch as it
+       nears you, it just gets bigger, and that growth already comes from
+       r.scale below. A width tied to field-% here is what turned banked
+       tiles into long crossing bars; capped like this they stay tile-shaped
+       at every point on the curve. */
+    r.el.style.width    = (30 + 8 * r.p).toFixed(1) + '%';
+    r.el.style.fontSize = 'clamp(.75rem, 2vw, 1.15rem)';
     r.el.style.zIndex   = Math.floor(r.scale * 100);
   });
 

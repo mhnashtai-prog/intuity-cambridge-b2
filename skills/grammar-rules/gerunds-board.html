@@ -45,16 +45,19 @@
 
   .stage{ position:fixed; top:var(--header-h); left:0; right:0; bottom:var(--bar-h);
           padding:.8rem; display:flex; align-items:center; justify-content:center; }
+  /* The columns are worked out in JS from the space actually available.
+     Left to wrap on its own the grid ran to four rows in a frame two rows
+     tall, and the circles below the fold could never be reached — a board
+     you cannot finish is worse than a smaller board. */
   .board{
     position:relative; width:100%; height:100%;
-    display:grid; gap:clamp(.4rem,1.4vw,.85rem);
-    grid-template-columns:repeat(auto-fit, minmax(clamp(54px,8vw,92px), 1fr));
-    align-content:center; justify-items:center;
+    display:grid; gap:var(--gap,.6rem);
+    align-content:center; justify-content:center; justify-items:center;
   }
 
   /* ── a circle ── */
   .circle{
-    position:relative; width:100%; aspect-ratio:1; max-width:96px;
+    position:relative; width:var(--size,72px); height:var(--size,72px);
     border-radius:50%; cursor:pointer;
     display:flex; align-items:center; justify-content:center; text-align:center;
     background:linear-gradient(157deg,#33312d,#26251f 60%,#1c1b18);
@@ -72,11 +75,29 @@
   .circle.done:hover{ transform:none; }
   .circle .word{
     font-family:'Space Grotesk',sans-serif; font-weight:700;
-    font-size:clamp(.6rem,1.6vw,.9rem); color:var(--ing);
+    font-size:var(--word,.8rem); color:var(--ing);
     padding:0 .35rem; line-height:1.15; word-break:break-word;
   }
   .circle.flip{ animation:flip .5s; }
   @keyframes flip{ 50%{ transform:rotateY(90deg) scale(.9); } 100%{ transform:none; } }
+  /* A circle that was missed keeps a small cross. The turn can be taken
+     again — nothing is locked — but the board stops being able to lie: a
+     child who guessed their way to thirty can see that they did, and so
+     can anyone looking over their shoulder. */
+  .circle.missed{ border-color:rgba(232,106,92,.45); }
+  .circle.missed::after{
+    content:'✕'; position:absolute; top:6%; right:8%;
+    font-family:'DM Mono',monospace; font-size:calc(var(--size,72px) * .2);
+    line-height:1; color:var(--wrong); opacity:.85; pointer-events:none;
+  }
+  /* Won at the second attempt: the word is kept, but in amber rather than
+     green, so first-time knowledge and eventual knowledge look different
+     on the board without one of them being marked as failure. */
+  .circle.done.second{ border-color:rgba(240,162,60,.5);
+    background:linear-gradient(157deg,#3a3226,#2b241b 60%,#211c15); }
+  .circle.done.second .word{ color:var(--bare); }
+  .circle.done.second::after{ content:none; }
+
   .circle.failed{ animation:fail .45s; }
   @keyframes fail{ 0%,100%{transform:none} 25%{transform:translateX(-7px) rotate(-4deg)}
                    50%{transform:translateX(6px) rotate(3deg)} 75%{transform:translateX(-3px)} }
@@ -156,6 +177,18 @@
   .done-screen button{ margin-top:1.4rem; padding:.7rem 1.8rem; border-radius:99px;
                        background:var(--accent); color:#12100a; font-weight:700;
                        font-size:.78rem; letter-spacing:.1em; text-transform:uppercase; }
+
+  /* ── EMBEDDED ──
+     These pages are opened both on their own and inside the rules page,
+     where the title, the subtitle and the back link are already on screen
+     directly above. Repeating them costs about seventy pixels of a frame
+     that has barely two hundred to give — and on this page those pixels
+     are circles a child can reach. */
+  body.embedded{ --header-h:44px; }
+  body.embedded .htop{ display:none; }
+  body.embedded .header{ padding:.3rem 1rem .25rem; gap:0; justify-content:center; }
+  body.embedded .stage{ padding:.45rem; }
+
   .loading{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:.8rem; }
   .err{ color:var(--wrong); text-align:center; max-width:30rem; line-height:1.7; padding:2rem; }
 </style>
@@ -232,7 +265,7 @@ const MARKS = [
   { at:30, label:'Crown', col:'var(--s4)' },
 ];
 
-let DECK = [], slots = [], open = null, mark = -1, done = 0, tries = 0, locked = false;
+let DECK = [], slots = [], open = null, mark = -1, done = 0, clean = 0, tries = 0, locked = false;
 const $ = id => document.getElementById(id);
 const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[b[i],b[j]]=[b[j],b[i]];} return b; };
@@ -254,11 +287,33 @@ async function boot(){
 
 function start(){
   const picked = shuffle(DECK).slice(0, SLOTS);
-  slots = picked.map(card => ({ card, done:false }));
-  mark = -1; done = 0; tries = 0; locked = false;
+  slots = picked.map(card => ({ card, done:false, missed:false }));
+  mark = -1; done = 0; clean = 0; tries = 0; locked = false;
   $('doneScreen').classList.remove('show');
   $('veil').classList.remove('show');
   drawLadder(); drawBoard(); paint();
+}
+
+/* Every circle must be reachable, so the layout is solved rather than left
+   to wrap: find the column count that makes the circles largest while still
+   fitting the height, then set the size from whichever dimension binds. */
+function layout(){
+  const b = $('board');
+  const w = b.clientWidth, h = b.clientHeight;
+  if (!w || !h) return;
+  let best = { size:0, cols:1 };
+  for (let cols = 1; cols <= SLOTS; cols++){
+    const rows = Math.ceil(SLOTS / cols);
+    const gap  = 8;
+    const size = Math.min((w - gap * (cols - 1)) / cols, (h - gap * (rows - 1)) / rows);
+    if (size > best.size) best = { size, cols };
+  }
+  const size = Math.max(34, Math.min(96, Math.floor(best.size) - 2));
+  b.style.setProperty('--size', size + 'px');
+  b.style.setProperty('--gap', Math.max(4, Math.round(size * 0.12)) + 'px');
+  b.style.gridTemplateColumns = 'repeat(' + best.cols + ', ' + size + 'px)';
+  /* the word has to fit inside the circle, whatever size it ended up */
+  b.style.setProperty('--word', Math.max(8, Math.round(size * 0.19)) + 'px');
 }
 
 function drawBoard(){
@@ -271,7 +326,10 @@ function drawBoard(){
     el.onclick = () => openCircle(i);
     b.appendChild(el);
   });
+  layout();
 }
+
+window.addEventListener('resize', layout);
 
 function drawLadder(){
   const l = $('ladder'); l.innerHTML = '';
@@ -309,7 +367,8 @@ function answer(pile){
 
   if (pile === c.pile){
     slot.done = true; done++;
-    el.className = 'circle done flip';
+    if (!slot.missed) clean++;
+    el.className = 'circle done flip' + (slot.missed ? ' second' : '');
     el.innerHTML = '<span class="word">' + esc(c.forms[c.pile]) + '</span>';
     $('veil').classList.remove('show');
     setTimeout(() => burst(el), 60);
@@ -324,6 +383,8 @@ function answer(pile){
     p.classList.remove('bad'); void p.offsetWidth; p.classList.add('bad');
     $('rule').textContent = c.rule;
     $('rule').classList.add('show');
+    slot.missed = true;
+    el.classList.add('missed');
     el.classList.remove('failed'); void el.offsetWidth; el.classList.add('failed');
     setTimeout(() => {
       $('veil').classList.remove('show');
@@ -348,15 +409,17 @@ function checkMark(){
 }
 
 function paint(){
-  $('tally').textContent = (SLOTS - done) + ' left on the board';
+  /* Both numbers, always: how many are turned, and how many were turned
+     without a stumble. The second is the one that means something. */
+  $('tally').textContent = clean + ' first time';
   $('goal').textContent = done + ' of ' + GOAL;
   $('fill').style.width = Math.min(100, done / GOAL * 100) + '%';
 }
 
 function finish(){
   $('doneBig').textContent = done;
-  const acc = tries ? Math.round(done / tries * 100) : 0;
-  $('doneSub').textContent = 'circles turned · ' + acc + '% first-time right';
+  const acc = done ? Math.round(clean / done * 100) : 0;
+  $('doneSub').textContent = 'circles turned · ' + clean + ' first time · ' + acc + '% clean';
   $('doneScreen').classList.add('show');
 }
 
@@ -423,6 +486,10 @@ function burst(el){
 $('veil').addEventListener('click', e => {
   if (e.target === $('veil') && !locked){ $('veil').classList.remove('show'); open = null; }
 });
+
+/* The page cannot know it is embedded until it runs, so the class is set
+   here rather than guessed in the markup. */
+if (window.self !== window.top) document.body.classList.add('embedded');
 
 boot();
 </script>

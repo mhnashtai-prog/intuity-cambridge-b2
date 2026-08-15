@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>INTUITY — Sort the verbs</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{ margin:0; padding:0; box-sizing:border-box; }
+  :root{
+    --gold:#C9A961; --accent:#FFD94A;
+    --ing:#5ED39B; --to:#7dd3fc; --bare:#f0a23c;
+    --paper:#e5e5e7; --dim:rgba(229,229,231,.55); --faint:rgba(229,229,231,.28);
+    --wrong:#E86A5C; --header-h:104px; --bar-h:34px;
+  }
+  html,body{ width:100%; height:100%; overflow:hidden; background:#0d0d0d; }
+  body{ font-family:'DM Sans',sans-serif; color:var(--paper); user-select:none; -webkit-user-select:none; }
+  button{ font:inherit; color:inherit; background:none; border:none; cursor:pointer; }
+
+  .header{
+    position:fixed; top:0; left:0; right:0; z-index:20; height:var(--header-h);
+    display:flex; flex-direction:column; gap:.35rem; padding:.5rem 1.25rem .4rem;
+    background:rgba(13,13,13,.9); backdrop-filter:blur(20px);
+    border-bottom:1px solid rgba(255,255,255,.06);
+  }
+  .htop{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; }
+  .back{ justify-self:start; text-decoration:none; font-family:'Space Grotesk',sans-serif;
+         font-size:.6rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.3); }
+  .back:hover{ color:rgba(255,255,255,.7); }
+  .title{ display:flex; flex-direction:column; align-items:center; line-height:1.1; }
+  .title b{ font-family:'Space Grotesk',sans-serif; font-size:1rem; font-weight:900; letter-spacing:.22em; color:var(--gold); }
+  .title span{ font-size:.56rem; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:rgba(255,255,255,.32); margin-top:.1rem; }
+  .hud{ display:flex; justify-content:center; gap:1.4rem; font-family:'DM Mono',monospace; font-size:.68rem; color:var(--dim); }
+  .hud b{ color:var(--paper); font-variant-numeric:tabular-nums; }
+  .hud .left{ color:var(--gold); }
+
+  .stage{ position:fixed; top:var(--header-h); left:0; right:0; bottom:var(--bar-h);
+          display:flex; flex-direction:column; padding:.6rem; gap:.6rem; }
+
+  /* ── the card ── */
+  .cardwrap{ flex:1; display:flex; align-items:center; justify-content:center; min-height:0; position:relative; }
+  .card{
+    position:relative; min-width:min(78vw,320px); text-align:center;
+    padding:1.6rem 2rem 1.7rem; border-radius:1rem;
+    background:linear-gradient(157deg,#3a3833,#2a2926 55%,#201f1d);
+    border:1px solid rgba(201,169,97,.3); border-top-color:rgba(255,255,255,.14);
+    box-shadow:0 .5rem 1.4rem rgba(0,0,0,.55), 0 1.2rem 3rem rgba(0,0,0,.45);
+    transition:transform .28s cubic-bezier(.2,.9,.3,1), opacity .28s;
+  }
+  .card .trigger{
+    font-family:'Space Grotesk',sans-serif; font-weight:700; letter-spacing:.01em;
+    font-size:clamp(1.6rem,7vw,2.6rem); color:var(--gold);
+  }
+  .card .seen{ margin-top:.5rem; font-family:'DM Mono',monospace; font-size:.6rem;
+               letter-spacing:.14em; text-transform:uppercase; color:var(--faint); }
+  .card .seen.again{ color:var(--accent); }
+  .card.gone-ing{ transform:translateX(-46vw) rotate(-13deg); opacity:0; }
+  .card.gone-to{ transform:translateY(-40vh) scale(.8); opacity:0; }
+  .card.gone-bare{ transform:translateX(46vw) rotate(13deg); opacity:0; }
+  .card.shake{ animation:shake .4s; }
+  @keyframes shake{ 0%,100%{transform:translateX(0)} 20%{transform:translateX(-11px)} 40%{transform:translateX(9px)} 60%{transform:translateX(-6px)} 80%{transform:translateX(4px)} }
+
+  /* ── the answer, shown only when wrong ── */
+  .why{
+    position:absolute; left:50%; bottom:.2rem; transform:translate(-50%,8px);
+    max-width:min(92%,520px); text-align:center; opacity:0; pointer-events:none;
+    transition:opacity .2s, transform .2s;
+  }
+  .why.show{ opacity:1; transform:translate(-50%,0); }
+  .why .rule{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:.8rem; color:var(--wrong); }
+  .why .eg{ font-size:.78rem; color:var(--dim); font-style:italic; margin-top:.2rem; }
+
+  /* ── the piles ── */
+  .piles{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:.6rem; flex-shrink:0; }
+  .pile{
+    padding:.9rem .5rem 1rem; border-radius:.8rem; text-align:center;
+    border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.03);
+    transition:all .15s;
+  }
+  .pile:hover{ background:rgba(255,255,255,.07); }
+  .pile .form{ font-family:'Space Grotesk',sans-serif; font-weight:900; font-size:clamp(1rem,3.4vw,1.4rem); }
+  .pile .name{ font-family:'DM Mono',monospace; font-size:.58rem; letter-spacing:.1em;
+               text-transform:uppercase; color:var(--faint); margin-top:.2rem; }
+  .pile .tally{ font-family:'DM Mono',monospace; font-size:.62rem; color:var(--dim); margin-top:.35rem; }
+  .p-ing .form{ color:var(--ing); }  .p-ing{ border-color:rgba(94,211,155,.3); }
+  .p-to  .form{ color:var(--to); }   .p-to { border-color:rgba(125,211,252,.3); }
+  .p-bare .form{ color:var(--bare); } .p-bare{ border-color:rgba(240,162,60,.3); }
+  .pile.hit{ animation:pop .35s; }
+  @keyframes pop{ 50%{ transform:scale(1.07); } }
+
+  .bottom{
+    position:fixed; bottom:0; left:0; right:0; height:var(--bar-h); padding:.3rem 1rem;
+    display:flex; align-items:center; justify-content:space-between;
+    background:rgba(13,13,13,.9); border-top:1px solid rgba(255,255,255,.06);
+    font-family:'DM Mono',monospace; font-size:.64rem; color:var(--faint);
+  }
+  .track{ flex:1; height:4px; margin:0 1rem; border-radius:99px; background:rgba(255,255,255,.08); }
+  .fill{ height:100%; border-radius:99px; background:var(--gold); width:0; transition:width .35s; }
+
+  /* ── done ── */
+  .done{
+    position:fixed; inset:0; z-index:30; display:none; flex-direction:column;
+    align-items:center; justify-content:center; gap:.4rem; text-align:center; padding:2rem;
+    background:rgba(8,8,9,.95); backdrop-filter:blur(6px);
+  }
+  .done.show{ display:flex; }
+  .done .score{ font-family:'Space Grotesk',sans-serif; font-weight:900;
+                font-size:clamp(2.4rem,9vw,3.6rem); color:var(--accent); }
+  .done .sub{ font-family:'DM Mono',monospace; font-size:.72rem; letter-spacing:.14em;
+              text-transform:uppercase; color:var(--dim); }
+  .done .list{ margin-top:1rem; max-width:32rem; font-size:.8rem; color:var(--dim); line-height:1.9; }
+  .done .list b{ color:var(--gold); font-weight:600; }
+  .done button{
+    margin-top:1.4rem; padding:.7rem 1.8rem; border-radius:99px;
+    background:var(--accent); color:#12100a; font-weight:700; font-size:.78rem;
+    letter-spacing:.1em; text-transform:uppercase;
+  }
+  .loading{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:.8rem; }
+  .err{ color:var(--wrong); text-align:center; max-width:30rem; line-height:1.7; padding:2rem; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="htop">
+    <a class="back" href="/?openModal=grammar">← Grammar</a>
+    <div class="title"><b>INTUITY</b><span>Gerunds &amp; Infinitives</span></div>
+    <div></div>
+  </div>
+  <div class="hud">
+    <span><b id="right">0</b> right</span>
+    <span><b id="wrong">0</b> wrong</span>
+    <span class="left"><b id="left">0</b> to go</span>
+  </div>
+</header>
+
+<div class="stage">
+  <div class="cardwrap">
+    <div class="card" id="card"><div class="trigger" id="trigger">…</div><div class="seen" id="seen"></div></div>
+    <div class="why" id="why"></div>
+  </div>
+
+  <div class="piles">
+    <button class="pile p-ing"  onclick="choose('-ing')"><div class="form">-ing</div><div class="name">gerund</div><div class="tally" id="t-ing">0</div></button>
+    <button class="pile p-to"   onclick="choose('to')"><div class="form">to …</div><div class="name">infinitive</div><div class="tally" id="t-to">0</div></button>
+    <button class="pile p-bare" onclick="choose('bare')"><div class="form">bare</div><div class="name">no “to”</div><div class="tally" id="t-bare">0</div></button>
+  </div>
+</div>
+
+<div class="bottom">
+  <span id="streakLabel">streak 0</span>
+  <div class="track"><div class="fill" id="fill"></div></div>
+  <span id="deckLabel">—</span>
+</div>
+
+<div class="done" id="done">
+  <div class="score" id="doneScore">0</div>
+  <div class="sub" id="doneSub"></div>
+  <div class="list" id="doneList"></div>
+  <button onclick="start()">Go again</button>
+</div>
+
+<div class="loading" id="loading">Loading the deck…</div>
+
+<script>
+/* ======================================================================
+   SORT THE VERBS
+
+   The gap-fill asks a student to write "considering" when the only thing
+   being tested is whether `consider` takes -ing. All the effort goes into
+   the spelling, which is not the thing being learned.
+
+   Here the card says one word and there are three piles. The decision is
+   the whole exercise, so a student makes thirty or forty of them in the
+   time the gap-fill allowed ten — and this part of the topic is memory,
+   which needs encounters rather than explanations.
+
+   A card answered right leaves the deck. A card answered wrong goes back
+   in, four places down, and returns while the correction is still warm. A
+   round ends when the deck is empty, so it ends in mastery rather than
+   when a clock runs out.
+====================================================================== */
+
+const DATA_URL = '../../data/grammar-rules/gerunds-sorting-deck.json';
+
+let DECK = [], queue = [], current = null;
+let right = 0, wrong = 0, streak = 0, best = 0, total = 0;
+let missed = new Map(), locked = false;
+
+const $ = id => document.getElementById(id);
+
+async function boot(){
+  try{
+    const res = await fetch(DATA_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    DECK = d.cards || [];
+    if (!DECK.length) throw new Error('no cards in the deck');
+    $('loading').remove();
+    start();
+  }catch(e){
+    $('loading').innerHTML = '<p class="err">Could not load <b>' + DATA_URL + '</b>.<br>' +
+      'Open this from the site rather than as a local file — browsers block file:// requests.</p>';
+  }
+}
+
+function start(){
+  /* Ordered by how often the trigger appears in the corpus, then shuffled
+     within that, so the most useful verbs come up early — a student who
+     stops halfway has still met the ones that matter most. */
+  const top = DECK.slice(0, 40);
+  queue = shuffle(top);
+  total = queue.length;
+  right = wrong = streak = best = 0;
+  missed = new Map();
+  ['ing','to','bare'].forEach(p => $('t-' + p).textContent = '0');
+  $('done').classList.remove('show');
+  paint();
+  next();
+}
+
+const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[b[i],b[j]]=[b[j],b[i]];} return b; };
+
+function next(){
+  hideWhy();
+  if (!queue.length) return finish();
+  current = queue.shift();
+  const card = $('card');
+  card.className = 'card';
+  $('trigger').textContent = current.trigger;
+  const again = missed.has(current.trigger);
+  $('seen').textContent = again ? 'seen before — think again' : '';
+  $('seen').className = 'seen' + (again ? ' again' : '');
+  paint();
+  locked = false;
+}
+
+function choose(pile){
+  if (locked || !current) return;
+  locked = true;
+
+  if (pile === current.pile){
+    right++; streak++; best = Math.max(best, streak);
+    $('t-' + pile.replace('-','')).textContent =
+      (+$('t-' + pile.replace('-','')).textContent) + 1;
+    const p = document.querySelector('.p-' + pile.replace('-',''));
+    p.classList.remove('hit'); void p.offsetWidth; p.classList.add('hit');
+    $('card').classList.add('gone-' + pile.replace('-',''));
+    setTimeout(next, 260);
+  } else {
+    wrong++; streak = 0;
+    missed.set(current.trigger, current);
+    $('card').classList.add('shake');
+    showWhy(current);
+    /* back into the deck four places down: near enough that the correction
+       is still in mind, far enough that it is recall and not echo */
+    const at = Math.min(4, queue.length);
+    queue.splice(at, 0, current);
+    setTimeout(next, 2100);
+  }
+  paint();
+}
+
+function showWhy(c){
+  const w = $('why');
+  w.innerHTML = '<div class="rule">' + esc(c.rule) + '</div>' +
+                (c.example ? '<div class="eg">' + esc(c.example) + '</div>' : '');
+  w.classList.add('show');
+}
+const hideWhy = () => $('why').classList.remove('show');
+const esc = t => String(t).replace(/[&<>]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
+
+function paint(){
+  $('right').textContent = right;
+  $('wrong').textContent = wrong;
+  $('left').textContent = queue.length;
+  $('streakLabel').textContent = 'streak ' + streak;
+  $('deckLabel').textContent = right + ' of ' + total + ' sorted';
+  $('fill').style.width = total ? Math.round(right / total * 100) + '%' : '0%';
+}
+
+function finish(){
+  const pct = right + wrong ? right / (right + wrong) : 0;
+  $('doneScore').textContent = Math.round(pct * 100) + '%';
+  $('doneSub').textContent = right + ' sorted · best streak ' + best;
+  const list = [...missed.values()];
+  $('doneList').innerHTML = list.length
+    ? 'Worth another look: ' + list.map(c => '<b>' + esc(c.trigger) + '</b> + ' +
+        esc(c.pile === 'bare' ? 'bare infinitive' : c.pile === 'to' ? 'infinitive' : 'gerund')).join(' · ')
+    : 'Nothing missed — the whole deck first time.';
+  $('done').classList.add('show');
+}
+
+/* keys for anyone on a laptop: left, up, right */
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft')  choose('-ing');
+  if (e.key === 'ArrowUp')    choose('to');
+  if (e.key === 'ArrowRight') choose('bare');
+});
+
+boot();
+</script>
+</body>
+</html>

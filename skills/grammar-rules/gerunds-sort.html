@@ -40,16 +40,27 @@
   /* ── the card ── */
   .cardwrap{ flex:1; display:flex; align-items:center; justify-content:center; min-height:0; position:relative; }
   .card{
-    position:relative; min-width:min(78vw,320px); text-align:center;
+    position:relative; width:min(88vw,560px); text-align:center;
     padding:1.6rem 2rem 1.7rem; border-radius:1rem;
     background:linear-gradient(157deg,#3a3833,#2a2926 55%,#201f1d);
     border:1px solid rgba(201,169,97,.3); border-top-color:rgba(255,255,255,.14);
     box-shadow:0 .5rem 1.4rem rgba(0,0,0,.55), 0 1.2rem 3rem rgba(0,0,0,.45);
     transition:transform .28s cubic-bezier(.2,.9,.3,1), opacity .28s;
   }
-  .card .trigger{
-    font-family:'Space Grotesk',sans-serif; font-weight:700; letter-spacing:.01em;
-    font-size:clamp(1.6rem,7vw,2.6rem); color:var(--gold);
+  /* The whole sentence, not just the trigger. A student meeting "insist on"
+     in isolation is learning a list; meeting it in "He insisted on _____ the
+     bill" is meeting the language. The gap is the only thing emphasised —
+     the words around it are context, and should read as context. */
+  .card .sentence{
+    font-family:'DM Sans',sans-serif; font-weight:400; line-height:1.5;
+    font-size:clamp(1rem,3.6vw,1.35rem); color:var(--paper);
+  }
+  .card .sentence b{
+    font-family:'Space Grotesk',sans-serif; font-weight:700; color:var(--gold);
+  }
+  .card .sentence i{
+    font-style:normal; letter-spacing:.1em; color:rgba(229,229,231,.3);
+    padding:0 .1em;
   }
   .card .seen{ margin-top:.5rem; font-family:'DM Mono',monospace; font-size:.6rem;
                letter-spacing:.14em; text-transform:uppercase; color:var(--faint); }
@@ -136,14 +147,14 @@
 
 <div class="stage">
   <div class="cardwrap">
-    <div class="card" id="card"><div class="trigger" id="trigger">…</div><div class="seen" id="seen"></div></div>
+    <div class="card" id="card"><div class="sentence" id="sentence">…</div><div class="seen" id="seen"></div></div>
     <div class="why" id="why"></div>
   </div>
 
   <div class="piles">
-    <button class="pile p-ing"  onclick="choose('-ing')"><div class="form">-ing</div><div class="name">gerund</div><div class="tally" id="t-ing">0</div></button>
-    <button class="pile p-to"   onclick="choose('to')"><div class="form">to …</div><div class="name">infinitive</div><div class="tally" id="t-to">0</div></button>
-    <button class="pile p-bare" onclick="choose('bare')"><div class="form">bare</div><div class="name">no “to”</div><div class="tally" id="t-bare">0</div></button>
+    <button class="pile p-ing"  onclick="choose('-ing')"><div class="form" id="f-ing">…</div><div class="name">gerund</div><div class="tally" id="t-ing">0</div></button>
+    <button class="pile p-to"   onclick="choose('to')"><div class="form" id="f-to">…</div><div class="name">infinitive</div><div class="tally" id="t-to">0</div></button>
+    <button class="pile p-bare" onclick="choose('bare')"><div class="form" id="f-bare">…</div><div class="name">no “to”</div><div class="tally" id="t-bare">0</div></button>
   </div>
 </div>
 
@@ -231,7 +242,26 @@ function next(){
   current = queue.shift();
   const card = $('card');
   card.className = 'card';
-  $('trigger').textContent = current.trigger;
+  /* The stem is the real thing a student meets — "He insisted on" — and the
+     three buttons are the three forms that could follow it. Choosing the form
+     is the decision the exam asks for; naming the category is not. */
+  /* the trigger in gold, the gap greyed, the rest in reading weight */
+  const stem = current.stem || current.trigger || '';
+  const trig = current.trigger || '';
+  /* The trigger is stored as a lemma but appears inflected in the sentence —
+     `finish` in the data, "She finished" on the page. So the last few words
+     of the stem are bolded rather than the lemma matched, which highlights
+     the trigger as the student actually meets it. */
+  const words = stem.split(/\s+/);
+  const n = Math.min(trig.split(/\s+/).length, words.length);
+  const lit = n
+    ? esc(words.slice(0, words.length - n).join(' ')) + ' <b>' +
+      esc(words.slice(words.length - n).join(' ')) + '</b>'
+    : esc(stem);
+  $('sentence').innerHTML = lit + ' <i>_____</i> ' + esc(current.tail || '');
+  $('f-ing').textContent  = current.forms ? current.forms['-ing'] : '-ing';
+  $('f-to').textContent   = current.forms ? current.forms['to']   : 'to …';
+  $('f-bare').textContent = current.forms ? current.forms['bare'] : 'bare';
   const again = missed.has(current.trigger);
   $('seen').textContent = again ? 'seen before — think again' : '';
   $('seen').className = 'seen' + (again ? ' again' : '');
@@ -267,8 +297,9 @@ function choose(pile){
 
 function showWhy(c){
   const w = $('why');
+  const right = c.forms ? c.forms[c.pile] : '';
   w.innerHTML = '<div class="rule">' + esc(c.rule) + '</div>' +
-                (c.example ? '<div class="eg">' + esc(c.example) + '</div>' : '');
+                (right ? '<div class="eg">' + esc(((c.stem||'') + ' ' + right + ' ' + (c.tail||'')).replace(/\s+/g,' ').trim()) + '</div>' : '');
   w.classList.add('show');
 }
 const hideWhy = () => $('why').classList.remove('show');
@@ -290,7 +321,7 @@ function finish(){
   const list = [...missed.values()];
   $('doneList').innerHTML = list.length
     ? 'Worth another look: ' + list.map(c => '<b>' + esc(c.trigger) + '</b> + ' +
-        esc(c.pile === 'bare' ? 'bare infinitive' : c.pile === 'to' ? 'infinitive' : 'gerund')).join(' · ')
+        esc(c.forms ? c.forms[c.pile] : c.pile)).join(' · ')
     : 'Nothing missed — the whole deck first time.';
   $('done').classList.add('show');
 }

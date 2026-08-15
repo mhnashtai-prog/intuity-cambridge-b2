@@ -1137,7 +1137,7 @@ function decoyItem(){
    on to the reader, and are swallowed at the foot. Every phrase gets the
    same time on screen, and the eye can rest at the bottom, where a word
    is about to go. The pressure comes from disappearance, not from speed. */
-const WHEEL = { steps: 4, cycle: 16000 };   // spaced so the next tile is readable behind
+const WHEEL = { steps: 4, cycle: 20000 };   // a long parade across three rows
 
 function freeLane(){
   /* Lanes are spaced evenly around the turn; take whichever sits furthest
@@ -1194,43 +1194,48 @@ function frame(now){
     const t = (now - r.born) / r.life;
     if (t >= 1){ expire(r); return; }
 
-    /* The tiles run as a chain, not a column: they cross the screen as well
-       as coming toward the reader, so the eye follows a path instead of
-       waiting at one spot — the scanning the falling-words version had,
-       without its randomness.
+    /* ── THE TRACK ──
+       The tiles no longer come at the reader; they parade across it. Three
+       rows, each running against the last — over, turn, back, turn, over
+       again to the finish — so a phrase is horizontal and legible for its
+       whole life instead of only at the moment it arrives.
 
-       The line starts out to the left at the back, swings right through the
-       middle distance and returns left as it arrives, so the nearest tile
-       lands low and left. */
-    /* Spacing is spread slightly toward the near end rather than bunched
-       there: the tiles are biggest as they arrive, so that is exactly where
-       they need the most room. */
-    const e = Math.pow(t, 1.20);
-    const p = Math.max(0, Math.min(1, e));
+       It buys time. On the old chain a word crossed the field in one pass;
+       here it travels three, and the reader can look away and come back to
+       it. */
+    const ROWS = 3;
 
-    /* The snake is back, and it is not decoration: horizontal separation is
-       half of what stops the tiles burying each other. Without it the whole
-       job falls to vertical spacing, and the field is short. */
-    r.x = fw * (0.5 - 0.26 * Math.cos(t * 2 * Math.PI));
-    r.y = fh * (0.05 + 0.85 * e);
+    /* Eased so the parade slows as it goes: brisk when a tile enters, slow
+       and deliberate by the time it reaches the finish, which is where the
+       decision actually gets made. */
+    const u = 1 - Math.pow(1 - t, 1.75);
 
-    /* Distance is carried by blur more than by size — it is what makes the
-       photograph read as depth, and it costs one filter. The near tiles, the
-       ones a reader must actually decide about, stay perfectly sharp. */
-    /* The tiles no longer touch: there is clear air between them, so the
-       one behind can be read while the one in front is still being decided
-       about. Four on the chain rather than five buys that room while keeping
-       them almost exactly as large. */
-    r.scale   = 0.85 + 0.638 * e;
+    const seg  = u * ROWS;
+    const row  = Math.min(ROWS - 1, Math.floor(seg));
+    const f    = seg - row;
 
-    /* Blur belongs to the far distance only. It used to linger past the
-       halfway mark, which meant a reader was still decoding a soft word at
-       the moment they should have been deciding about it. It is gone by the
-       time a tile is anywhere near reachable. */
-    r.blur    = Math.max(0, (0.32 - t) * 7);
-    r.tiltX   = (1 - e) * 16;
-    r.tiltZ   = ((r.x / fw) - 0.5) * 9;             // the tile leans with the curve
-    r.opacity = Math.min(1, t * 5);
+    /* A tile runs to the edge over the first 84% of a row, then holds there
+       while it drops to the next — which is what draws the rounded corner at
+       each end rather than a hard right angle. */
+    const run  = Math.min(1, f / 0.84);
+    const turn = f <= 0.84 ? 0 : (f - 0.84) / 0.16;
+    const ease = turn * turn * (3 - 2 * turn);          // smoothstep on the corner
+
+    const marginX = 0.14, spanX = 1 - marginX * 2;
+    const lane = (row % 2 === 0) ? marginX + run * spanX
+                                 : (1 - marginX) - run * spanX;
+
+    r.x = fw * lane;
+    r.y = fh * (0.10 + (row + ease) * (0.80 / ROWS));
+
+    /* Nothing is hidden on the way in. Blur was carrying depth on the old
+       chain, but on a track there is no distance to describe — and a word a
+       reader cannot read is a word that may as well not be there. */
+    r.blur    = 0;
+    r.scale   = 0.90 + 0.32 * u;                        // grows gently as it advances
+    r.tiltX   = 0;
+    r.tiltZ   = (row % 2 === 0 ? 1 : -1) * 1.5;         // the tile leans into its direction
+    r.opacity = Math.min(1, t * 12);
   });
 
   [...round.live].filter(r => !r.dead).forEach(r => {

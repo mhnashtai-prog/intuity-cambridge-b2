@@ -14,7 +14,15 @@
        differs is the verb. Rack claims a finished card; here the card
        arrives incomplete and you build it. The blue plate is the particle,
        everywhere in the app. */
-    --ink:#17171a; --plate:#2c4a9e;
+    /* The egg's fill says what state the particle is in; the word on it is
+       always the app's gold. The fills are deeper than they look elsewhere
+       because gold on a light green or a bright red is unreadable — at
+       these depths the word carries. */
+    --ink:#17171a;
+    --egg-free:#223a7d;      /* in the bank, waiting */
+    --egg-right:#1f5c3d;     /* placed correctly */
+    --egg-lost:#8e2a21;      /* the card that could not be finished */
+    --plate:#2c4a9e;
     --card:#d5cfbb; --card-edge:#b3ac95;
     --paper:#e5e5e7; --dim:rgba(229,229,231,.55); --faint:rgba(229,229,231,.26);
     --header-h:96px; --bank-h:92px;
@@ -106,11 +114,11 @@
   .ring{
     position:relative; z-index:2; white-space:nowrap;
     display:inline-flex; align-items:center; justify-content:center;
-    padding:.2rem .95rem .26rem; border-radius:999px;
-    background:var(--gold); color:#17171a;
+    padding:.22rem 1rem .28rem; border-radius:999px;
+    background:var(--egg-right); color:var(--gold);
     font-family:'Space Grotesk',sans-serif; font-weight:900;
     font-size:clamp(1rem,4vw,1.35rem); letter-spacing:.01em; line-height:1;
-    box-shadow:0 2px 5px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.4);
+    box-shadow:0 2px 6px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.14);
   }
   .pole.pegged{ border-color:var(--ok); }
   .pole.pegged .spike{ border-color:transparent; background:none; box-shadow:none; }
@@ -121,7 +129,7 @@
      the child is told which verb they lost and what it needed. Being
      stranded in front of an unanswerable pole teaches nothing. */
   .pole.lost{ border-color:var(--bad); filter:grayscale(.55) brightness(.82); }
-  .pole.lost .ring{ background:var(--bad); }   /* the ink stays dark on every egg */
+  .pole.lost .ring{ background:var(--egg-lost); }
   .pole.lost .spike{ border-color:transparent; background:none; box-shadow:none; }
 
   .pole.reject{ animation:reject .45s; border-color:var(--bad); }
@@ -148,17 +156,23 @@
               text-transform:uppercase; color:var(--faint); }
   .chips{ display:flex; flex-wrap:wrap; justify-content:center; gap:.35rem; max-width:60rem; }
   /* A plate in the bank is the same object it will become on the card. */
+  /* In the bank the egg is blue: available, not yet placed. Picking one up
+     does not change its colour — it lifts and takes a bright rim, so the
+     fill can go on meaning state and nothing else. */
   .chip{
-    padding:.3rem .95rem .36rem; border-radius:999px; white-space:nowrap;
+    padding:.32rem 1rem .38rem; border-radius:999px; white-space:nowrap;
     font-family:'Space Grotesk',sans-serif; font-weight:900; font-size:clamp(.9rem,3vw,1.15rem);
-    background:var(--gold); color:#17171a;
-    border:1px solid rgba(0,0,0,.25);
-    box-shadow:0 2px 6px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.4);
+    background:var(--egg-free); color:var(--gold);
+    border:1px solid rgba(255,255,255,.1);
+    box-shadow:0 2px 6px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.12);
     transition:all .15s;
   }
   .chip:hover{ transform:translateY(-2px); }
-  .chip.picked{ background:var(--accent); transform:translateY(-4px) scale(1.08);
-                box-shadow:0 5px 14px rgba(255,217,74,.45); }
+  .chip.picked{
+    transform:translateY(-5px) scale(1.08);
+    border-color:var(--accent);
+    box-shadow:0 0 0 2px var(--accent), 0 6px 16px rgba(255,217,74,.4);
+  }
   .chip.spent{ display:none; }
 
   .deal{
@@ -523,54 +537,91 @@ function flash(text, col){
   setTimeout(() => b.classList.remove('show'), 1000);
 }
 
-/* ── the burst, at the ring that just landed ── */
+/* ── THE BURST ──
+   Bigger than the others, on purpose: in Pegs a correct answer completes a
+   card, and completion deserves more noise than a tap. Three shells rather
+   than one, thrown from the egg that just landed — a fast white core, a
+   wide slow canopy, and a late crackle over the top. The card kicks once
+   underneath it, which is what sells a bang more than any number of
+   particles. */
 function burst(el){
   const stage = document.querySelector('.stage');
   const s = stage.getBoundingClientRect(), r = el.getBoundingClientRect();
-  const cx = r.left - s.left + r.width/2, cy = r.top - s.top + r.height/2 + stage.scrollTop;
-  const COLS = ['#FFD94A','#C9A961','#5ED39B','#ff7a45','#ffffff','#7dd3fc'];
+  const cx = r.left - s.left + r.width / 2;
+  const cy = r.top - s.top + r.height / 2 + stage.scrollTop;
+  const COLS = ['#FFD94A','#C9A961','#5ED39B','#ff7a45','#ffffff','#7dd3fc','#ffb347'];
 
+  /* the card takes the hit */
+  const card = el.closest ? el.closest('.pole') : null;
+  if (card) card.animate(
+    [{ transform:'scale(1)' }, { transform:'scale(1.06)', offset:.25 }, { transform:'scale(1)' }],
+    { duration:340, easing:'cubic-bezier(.2,1.6,.4,1)' });
+
+  /* the flash */
   const f = document.createElement('div');
   f.className = 'spark fw-flash';
   f.style.left = cx+'px'; f.style.top = cy+'px';
   stage.appendChild(f);
-  f.animate([{transform:'translate(-50%,-50%) scale(.2)',opacity:1},
-             {transform:'translate(-50%,-50%) scale(3)',opacity:0}],
-            {duration:380,easing:'cubic-bezier(.1,.8,.2,1)'});
-  setTimeout(()=>f.remove(),400);
+  f.animate([{ transform:'translate(-50%,-50%) scale(.15)', opacity:1 },
+             { transform:'translate(-50%,-50%) scale(4.2)', opacity:0 }],
+            { duration:460, easing:'cubic-bezier(.1,.8,.2,1)' });
+  setTimeout(() => f.remove(), 480);
 
-  for (let i=0;i<32;i++){
-    const p = document.createElement('div');
-    p.className = 'spark';
-    const col = COLS[(Math.random()*COLS.length)|0], size = 3+Math.random()*3.5;
-    p.style.cssText += 'left:'+cx+'px; top:'+cy+'px; width:'+size+'px; height:'+size+
-      'px; background:'+col+'; box-shadow:0 0 '+(size*2.5)+'px '+col+';';
-    stage.appendChild(p);
-    const a = Math.random()*Math.PI*2, d = 50+Math.random()*140;
-    const dx = Math.cos(a)*d, dy = Math.sin(a)*d, fall = 45+Math.random()*70;
-    const dur = 700+Math.random()*420;
-    p.animate([
-      {transform:'translate(-50%,-50%) translate(0,0) scale(1.1)',opacity:1},
-      {transform:'translate(-50%,-50%) translate('+(dx*.62).toFixed(0)+'px,'+(dy*.62-10).toFixed(0)+'px) scale(1)',opacity:1,offset:.42},
-      {transform:'translate(-50%,-50%) translate('+dx.toFixed(0)+'px,'+(dy+fall).toFixed(0)+'px) scale(.25)',opacity:0}
-    ],{duration:dur,easing:'cubic-bezier(.12,.75,.3,1)'});
-    setTimeout(()=>p.remove(),dur+30);
-  }
+  /* two rings, the second a beat behind the first */
+  [0, 130].forEach((delay, k) => setTimeout(() => {
+    const ring = document.createElement('div');
+    ring.className = 'spark fw-ring';
+    ring.style.left = cx+'px'; ring.style.top = cy+'px';
+    stage.appendChild(ring);
+    ring.animate([{ transform:'translate(-50%,-50%) scale(.12)', opacity:.95 },
+                  { transform:'translate(-50%,-50%) scale(' + (3 + k) + ')', opacity:0 }],
+                 { duration:700 + k*180, easing:'cubic-bezier(.1,.7,.2,1)' });
+    setTimeout(() => ring.remove(), 900 + k*180);
+  }, delay));
 
-  setTimeout(()=>{
-    for (let i=0;i<12;i++){
+  /* the core: fast, tight, white-hot */
+  shell(stage, cx, cy, 26, 40, 120, 520, ['#ffffff','#FFD94A']);
+  /* the canopy: wide, slow, coloured, and it falls */
+  setTimeout(() => shell(stage, cx, cy, 46, 90, 260, 1150, COLS), 90);
+
+  /* the crackle */
+  setTimeout(() => {
+    for (let i = 0; i < 22; i++){
       const c = document.createElement('div');
       c.className = 'spark fw-crackle';
-      const a = Math.random()*Math.PI*2, d = 22+Math.random()*80;
-      c.style.left = (cx+Math.cos(a)*d*.5)+'px'; c.style.top = (cy+Math.sin(a)*d*.5)+'px';
+      const a = Math.random()*Math.PI*2, d = 30 + Math.random()*150;
+      c.style.left = (cx + Math.cos(a)*d*.55)+'px';
+      c.style.top  = (cy + Math.sin(a)*d*.55)+'px';
       stage.appendChild(c);
-      c.animate([{opacity:0,transform:'translate(-50%,-50%) scale(.4)'},
-                 {opacity:1,transform:'translate(-50%,-50%) scale(1.3)',offset:.25},
+      c.animate([{opacity:0,transform:'translate(-50%,-50%) scale(.3)'},
+                 {opacity:1,transform:'translate(-50%,-50%) scale(1.5)',offset:.22},
                  {opacity:0,transform:'translate(-50%,-50%) scale(.3)'}],
-                {duration:280+Math.random()*220,easing:'ease-out'});
-      setTimeout(()=>c.remove(),560);
+                {duration:300+Math.random()*300, easing:'ease-out'});
+      setTimeout(() => c.remove(), 640);
     }
-  },200);
+  }, 300);
+}
+
+/* one burst of stars: count, nearest and furthest throw, how long they live */
+function shell(stage, cx, cy, n, near, far, life, cols){
+  for (let i = 0; i < n; i++){
+    const p = document.createElement('div');
+    p.className = 'spark';
+    const col = cols[(Math.random()*cols.length)|0];
+    const size = 3 + Math.random()*4.5;
+    p.style.cssText += 'left:'+cx+'px; top:'+cy+'px; width:'+size+'px; height:'+size+
+      'px; background:'+col+'; box-shadow:0 0 '+(size*3)+'px '+col+';';
+    stage.appendChild(p);
+    const a = Math.random()*Math.PI*2, d = near + Math.random()*(far-near);
+    const dx = Math.cos(a)*d, dy = Math.sin(a)*d;
+    const fall = 50 + Math.random()*110, dur = life * (.75 + Math.random()*.5);
+    p.animate([
+      { transform:'translate(-50%,-50%) translate(0,0) scale(1.3)', opacity:1 },
+      { transform:'translate(-50%,-50%) translate('+(dx*.6).toFixed(0)+'px,'+(dy*.6-14).toFixed(0)+'px) scale(1)', opacity:1, offset:.4 },
+      { transform:'translate(-50%,-50%) translate('+dx.toFixed(0)+'px,'+(dy+fall).toFixed(0)+'px) scale(.2)', opacity:0 }
+    ], { duration:dur, easing:'cubic-bezier(.1,.75,.3,1)' });
+    setTimeout(() => p.remove(), dur + 40);
+  }
 }
 
 if (window.self !== window.top) document.body.classList.add('embedded');

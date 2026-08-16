@@ -201,13 +201,18 @@
 /* ======================================================================
    THE HUNT
 
-   A snake, four particles on the board, one verb overhead. Only the
-   particle that completes the verb overhead is the right catch — eat it
-   and the snake grows, the score climbs, and a new verb drops in. Eat the
-   wrong one and a life is spent, but the run goes on. Run into the wall
-   or into your own tail and the run ends outright, the way it always does
-   in this game — that part was never negotiable, and the pressure it
-   creates is the whole reason this plays differently from Rack or Descent.
+   A snake, one verb overhead, and four particles sitting at four fixed
+   compass points around the centre — up, down, left, right. The spots
+   never move; only which particle occupies which spot changes each
+   round. That means a child only ever has to check the same four places
+   instead of scanning the whole board for a target that's jumping
+   around — steering the snake is hard enough on its own. Eat the
+   particle that completes the verb overhead and the snake grows, the
+   score climbs, and a new verb drops in. Eat the wrong one and a life
+   is spent, but the run goes on. Run into the wall or into your own
+   tail and the run ends outright, the way it always does in this game —
+   that part was never negotiable, and the pressure it creates is the
+   whole reason this plays differently from Rack or Descent.
 
    Same eggs, same ladder, same Cambridge scale as every other phrasal-verb
    game in the set — a child who has played one already knows how to read
@@ -220,7 +225,7 @@ const TICK_START = 150;     // ms per move, at the start
 const TICK_MIN   = 82;      // ms per move, at full speed
 const SPEED_STEP = 6;       // ms shaved off per speed-up
 const SPEED_EVERY= 4;       // correct catches between speed-ups
-const CANDIDATES = 4;       // particles on the board at once
+const CANDIDATES = 4;       // particles on the board at once — one per compass point
 const LIVES_START= 3;
 const MARKS  = [3, 7, 12, 18, 26];
 const NAMES  = ['Spark','Ember','Flame','Blaze','Crown'];
@@ -284,6 +289,21 @@ function fitCanvas(){
   draw();
 }
 
+/* the four fixed compass points particles live at — same four cells
+   every round, regardless of grid size. Only fitCanvas/gridSize changes
+   COLS/ROWS, so these are recomputed from that, never randomised. */
+function fixedSlots(){
+  const cx = (COLS/2)|0, cy = (ROWS/2)|0;
+  const mx = Math.max(1, Math.round(COLS*0.16));
+  const my = Math.max(1, Math.round(ROWS*0.16));
+  return {
+    up:    { x:cx,        y:my          },
+    down:  { x:cx,        y:ROWS-1-my   },
+    left:  { x:mx,        y:cy          },
+    right: { x:COLS-1-mx, y:cy          }
+  };
+}
+
 function start(){
   [COLS, ROWS] = gridSize();
   const cx = (COLS/2)|0, cy = (ROWS/2)|0;
@@ -322,7 +342,9 @@ function checkMark(){
   flash(NAMES[m], 'var(--s' + m + ')');
 }
 
-/* one verb, four particle-candidates scattered on empty cells */
+/* one verb, four particle-candidates dropped onto the four fixed compass
+   points. Which particle lands on which point is reshuffled every round,
+   but the four points themselves never move. */
 function spawnRound(){
   target = POOL[(Math.random() * POOL.length) | 0];
   const kin = shuffle(POOL.filter(p => p.verb === target.verb && p.particle !== target.particle));
@@ -334,14 +356,24 @@ function spawnRound(){
     if (!seenParticles.has(p.particle)){ seenParticles.add(p.particle); cards.push({ verb:target.verb, particle:p.particle, meaning:target.meaning }); }
   }
 
-  const occupied = new Set(snake.map(s => s.x + ',' + s.y));
+  const slots = fixedSlots();
+  const order = shuffle(['up', 'down', 'left', 'right']);
   food = [];
-  shuffle(cards).forEach(c => {
-    let x, y, tries = 0;
-    do { x = (Math.random()*COLS)|0; y = (Math.random()*ROWS)|0; tries++; }
-    while ((occupied.has(x+','+y) || food.some(f=>f.x===x&&f.y===y)) && tries < 200);
-    occupied.add(x+','+y);
-    food.push({ x, y, particle:c.particle, correct: c.particle === target.particle });
+  shuffle(cards).forEach((c, i) => {
+    const key = order[i];
+    let { x, y } = slots[key];
+    // if the snake's own body currently covers a slot, nudge along that
+    // slot's axis until clear — the four *directions* stay fixed even
+    // when the exact cell has to shift a step to dodge the snake.
+    let tries = 0;
+    while (snake.some(s => s.x === x && s.y === y) && tries < 40){
+      if (key === 'up') y = Math.min(ROWS - 1, y + 1);
+      else if (key === 'down') y = Math.max(0, y - 1);
+      else if (key === 'left') x = Math.min(COLS - 1, x + 1);
+      else x = Math.max(0, x - 1);
+      tries++;
+    }
+    food.push({ x, y, particle: c.particle, correct: c.particle === target.particle, slot: key });
   });
 
   $('clueVerb').textContent = target.verb;

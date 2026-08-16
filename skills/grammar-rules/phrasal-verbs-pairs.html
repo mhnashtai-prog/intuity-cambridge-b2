@@ -48,22 +48,6 @@
   .link{ width:10px; height:1px; background:rgba(255,255,255,.1); }
   .link.done{ background:var(--gold); }
 
-  /* the two seats, side by side; in solo play only the left one shows */
-  .seats{ display:flex; align-items:center; justify-content:center; gap:.5rem; }
-  .seat{
-    display:flex; align-items:baseline; gap:.4rem; padding:.2rem .7rem; border-radius:99px;
-    font-family:'DM Mono',monospace; font-size:.66rem; color:var(--faint);
-    border:1px solid transparent; transition:all .25s;
-  }
-  .seat b{ font-family:'Space Grotesk',sans-serif; font-size:.9rem; font-weight:700; color:var(--dim); }
-  .seat.turn{ border-color:currentColor; background:rgba(255,255,255,.05); }
-  .seat.p1.turn{ color:var(--p1); } .seat.p1.turn b{ color:var(--p1); }
-  .seat.p2.turn{ color:var(--p2); } .seat.p2.turn b{ color:var(--p2); }
-  .modebtn{ font-family:'DM Mono',monospace; font-size:.58rem; letter-spacing:.1em;
-            text-transform:uppercase; color:var(--faint); padding:.2rem .6rem;
-            border:1px solid rgba(255,255,255,.14); border-radius:99px; }
-  .modebtn:hover{ color:var(--paper); }
-
   .stage{
     position:fixed; top:var(--header-h); left:0; right:0; bottom:var(--foot-h);
     display:flex; align-items:center; justify-content:center; padding:.5rem .7rem;
@@ -73,9 +57,10 @@
   }
   .grid{
     display:grid; gap:.4rem; width:100%; max-width:64rem; height:100%;
-    grid-template-columns:repeat(6,1fr); grid-auto-rows:1fr; perspective:1000px;
+    grid-template-columns:repeat(5,1fr); grid-auto-rows:1fr; perspective:1000px;
   }
   @media(max-width:760px){ .grid{ grid-template-columns:repeat(4,1fr); } }
+  @media(max-width:420px){ .grid{ grid-template-columns:repeat(3,1fr); } }
 
   /* ── a tile ── */
   .tile{ position:relative; cursor:pointer; transform-style:preserve-3d;
@@ -87,14 +72,27 @@
     display:flex; flex-direction:column; align-items:center; justify-content:center;
     padding:.2rem .25rem; overflow:hidden;
   }
-  /* the back: the polka dots of every memory game ever printed */
+  /* The back of every memory card used to be identical, which made the
+     first flip of a turn a coin toss: a child could not tell a phrase from
+     a meaning until they had spent it. Marking the backs turns the game
+     from luck into memory — you know you want one of each, so the only
+     question left is where you saw it. */
   .back{
     background:
-      radial-gradient(circle at 50% 50%, rgba(255,255,255,.85) 1.6px, transparent 1.7px) 0 0/10px 10px,
+      radial-gradient(circle at 50% 50%, rgba(255,255,255,.7) 1.5px, transparent 1.6px) 0 0/11px 11px,
       linear-gradient(160deg,#b5322c,#8d211c);
     border:1px solid rgba(0,0,0,.4);
     box-shadow:0 .22rem .45rem rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.18);
   }
+  .back .mark-badge{
+    border-radius:999px; padding:.2rem .6rem .24rem; text-align:center;
+    font-family:'Space Grotesk',sans-serif; font-weight:900; line-height:1.05;
+    font-size:clamp(.4rem,1.35vw,.58rem); letter-spacing:.05em; text-transform:uppercase;
+    box-shadow:0 1px 3px rgba(0,0,0,.45);
+    max-width:88%;
+  }
+  .back.is-phrase .mark-badge{ background:var(--egg-free); color:var(--egg-word); }
+  .back.is-gloss  .mark-badge{ background:var(--card); color:var(--ink); }
   .front{
     transform:rotateY(180deg);
     background:linear-gradient(178deg,var(--card),#c4bda6);
@@ -190,11 +188,7 @@
     <div></div>
   </div>
   <div class="ladder" id="ladder"></div>
-  <div class="seats">
-    <div class="seat p1 turn" id="seat1"><span id="name1">You</span> <b id="score1">0</b></div>
-    <div class="seat p2" id="seat2" hidden><span>Player 2</span> <b id="score2">0</b></div>
-    <button class="modebtn" id="modeBtn" onclick="toggleMode()">2 players</button>
-  </div>
+
 </header>
 
 <div class="stage"><div class="grid" id="grid"></div></div>
@@ -232,20 +226,24 @@
    and takes it away again — here the board is only as good as what they
    held on to, which is closer to what learning vocabulary actually is.
 
-   And it takes two players, which none of the others do. Match and you go
-   again; miss and the other seat takes over. That is the rule Concentration
-   has always used, and it is what makes a good memory pay.
+   Ten pairs, twenty tiles, and the backs are marked so a child knows which
+   kind each one is: the game is where you saw it, not what it might be.
 ====================================================================== */
 
 const DATA_URL = '../../data/grammar-rules/phrasal-verbs-data.json';
-const PAIRS = 12;
+/* Ten pairs, twenty tiles — five across and four down, which fills the
+   frame instead of stretching into a column. */
+const PAIRS = 10;
 
 let POOL = [], tiles = [], flipped = [], locked = false;
-let players = 1, turn = 0, score = [0,0], turns = 0, found = 0;
+/* One player. It was built to take two, sharing a screen, but a child who
+   opens this alone should not find half the interface waiting for a partner
+   who is not coming — and the solo game was always the real one. */
+let turns = 0, found = 0;
 
 /* Boards are kept, as deals are in Pegs and racks in Rack. */
 let history = [], at = -1, boards = 1, mark = -1;
-const MARKS = [2, 4, 6, 9, 12];
+const MARKS = [2, 4, 6, 8, 10];
 const NAMES = ['Spark','Ember','Flame','Blaze','Crown'];
 
 const $ = id => document.getElementById(id);
@@ -308,7 +306,7 @@ function lay(picked){
   });
   tiles = shuffle(tiles);
 
-  flipped = []; locked = false; turn = 0; score = [0,0]; turns = 0; found = 0; mark = -1;
+  flipped = []; locked = false; turns = 0; found = 0; mark = -1;
   $('over').classList.remove('show');
   drawLadder(); draw(); paint();
 }
@@ -341,7 +339,11 @@ function draw(){
     const face = t.kind === 'phrase'
       ? '<div class="verb">' + esc(t.data.verb) + '</div><div class="plate">' + esc(t.data.particle) + '</div>'
       : '<div class="gloss">' + esc(t.data.meaning) + '</div>';
-    el.innerHTML = '<div class="face back"></div><div class="face front">' + face + '</div>';
+    const badge = t.kind === 'phrase'
+      ? '<span class="mark-badge">phrasal verb</span>'
+      : '<span class="mark-badge">definition</span>';
+    el.innerHTML = '<div class="face back is-' + t.kind + '">' + badge + '</div>' +
+                   '<div class="face front">' + face + '</div>';
     el.onclick = () => flip(i);
     g.appendChild(el);
   });
@@ -363,7 +365,7 @@ function flip(i){
 
   if (match){
     a.state = b.state = 'gone';
-    score[turn]++; found++;
+    found++;
     flipped.forEach(x => $('t' + x).classList.add('gone'));
     burst($('t' + flipped[0]));
     flash(a.data.verb + ' ' + a.data.particle, 'var(--ok)');
@@ -378,34 +380,20 @@ function flip(i){
         $('t' + x).classList.remove('up','miss');
       });
       flipped = []; locked = false;
-      if (players === 2){ turn = 1 - turn; }
       paint();
     }, 1150);
   }
 }
 
 function paint(){
-  $('score1').textContent = score[0];
-  $('score2').textContent = score[1];
-  $('seat1').classList.toggle('turn', players === 1 || turn === 0);
-  $('seat2').classList.toggle('turn', players === 2 && turn === 1);
   $('turns').textContent = turns + (turns === 1 ? ' turn' : ' turns');
   $('found').textContent = found + ' of ' + PAIRS + ' pairs';
   $('fill').style.width = (found / PAIRS * 100) + '%';
 }
 
-function toggleMode(){
-  players = players === 1 ? 2 : 1;
-  $('seat2').hidden = players === 1;
-  $('name1').textContent = players === 2 ? 'Player 1' : 'You';
-  $('modeBtn').textContent = players === 2 ? '1 player' : '2 players';
-  turn = 0;
-  start();
-}
-
 /* The Cambridge scale, as everywhere else. For a memory board the accuracy
-   worth scoring is turns against a perfect memory: twelve pairs in twelve
-   turns is 100%, twenty-four turns is 50%. */
+   worth scoring is turns against a perfect memory: ten pairs in ten turns is
+   100%, twenty turns is 50%. */
 function scale(acc){
   const A = [[0,140],[0.60,160],[0.72,173],[0.80,180],[1,190]];
   for (let i=1;i<A.length;i++){
@@ -417,22 +405,13 @@ function scale(acc){
 const grade = s => s>=180?['A','Excellent']:s>=173?['B','Very good']:s>=160?['C','Pass']:['D','Try again'];
 
 function over(){
-  if (window.INTUITY) INTUITY.session('phrasal-verbs', 'pairs',
-    { pairs: found, turns: turns, players: players });
+  if (window.INTUITY) INTUITY.session('phrasal-verbs', 'pairs', { pairs: found, turns: turns });
 
-  if (players === 2){
-    const win = score[0] === score[1] ? 'A draw'
-              : score[0] > score[1] ? 'Player 1 wins' : 'Player 2 wins';
-    $('overBig').className = 'big';
-    $('overBig').textContent = score[0] + ' – ' + score[1];
-    $('overSub').textContent = win + ' · ' + turns + ' turns · board ' + boards;
-  } else {
-    const acc = turns ? PAIRS / turns : 0;
-    const sc = scale(acc), [letter, word] = grade(sc);
-    $('overBig').className = 'big g-' + letter.toLowerCase();
-    $('overBig').innerHTML = sc + '<span class="gr">' + letter + '</span>';
-    $('overSub').textContent = word + ' · ' + turns + ' turns for twelve pairs · board ' + boards;
-  }
+  const acc = turns ? PAIRS / turns : 0;
+  const sc = scale(acc), [letter, word] = grade(sc);
+  $('overBig').className = 'big g-' + letter.toLowerCase();
+  $('overBig').innerHTML = sc + '<span class="gr">' + letter + '</span>';
+  $('overSub').textContent = word + ' · ' + turns + ' turns for ten pairs · board ' + boards;
   $('backBtn').disabled = at <= 0;
   $('over').classList.add('show');
 }

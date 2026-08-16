@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>INTUITY — Pairs</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{ margin:0; padding:0; box-sizing:border-box; }
+  :root{
+    --gold:#C9A961; --accent:#FFD94A; --ok:#abc32f; --bad:#ff9248;
+    /* The same three eggs as Pegs, Rack and Descent. */
+    --ink:#17171a;
+    --egg-free:#61b5ed; --egg-right:#abc32f; --egg-lost:#ff9248; --egg-word:#2f3540;
+    --s0:#cdbf8e; --s1:#e8935a; --s2:#ff7a45; --s3:#ff4d4d; --s4:#ffd94a;
+    /* Aged card stock rather than office paper: the old value was so near
+       white that a rack of sixteen glared, and the blue plates had nothing
+       to sit against. */
+    --card:#d5cfbb; --card-edge:#b3ac95;
+    --p1:#FFD94A; --p2:#7dd3fc;
+    --paper:#e5e5e7; --dim:rgba(229,229,231,.55); --faint:rgba(229,229,231,.26);
+    --header-h:92px; --foot-h:52px;
+  }
+  html,body{ width:100%; height:100%; overflow:hidden; background:#0d0d0d; }
+  body{ font-family:'DM Sans',sans-serif; color:var(--paper); user-select:none; -webkit-user-select:none; }
+  button{ font:inherit; color:inherit; background:none; border:none; cursor:pointer; }
+
+  .header{
+    position:fixed; top:0; left:0; right:0; z-index:20; height:var(--header-h);
+    display:flex; flex-direction:column; gap:.3rem; padding:.45rem 1.25rem .35rem;
+    background:rgba(13,13,13,.9); backdrop-filter:blur(20px);
+    border-bottom:1px solid rgba(255,255,255,.06);
+  }
+  .htop{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; }
+  .back{ justify-self:start; text-decoration:none; font-family:'Space Grotesk',sans-serif;
+         font-size:.6rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.3); }
+  .title{ display:flex; flex-direction:column; align-items:center; line-height:1.1; }
+  .title b{ font-family:'Space Grotesk',sans-serif; font-size:1rem; font-weight:900; letter-spacing:.22em; color:var(--gold); }
+  .title span{ font-size:.56rem; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:rgba(255,255,255,.32); margin-top:.1rem; }
+
+  .ladder{ display:flex; align-items:center; justify-content:center; gap:.4rem; }
+  .mark{ display:flex; flex-direction:column; align-items:center; gap:.1rem; width:34px; }
+  .mark .dot{ width:12px; height:12px; border-radius:50%; background:rgba(229,229,231,.16); transition:all .3s; }
+  .mark .lbl{ font-family:'DM Mono',monospace; font-size:.38rem; letter-spacing:.08em;
+              text-transform:uppercase; color:var(--faint); }
+  .mark.done .dot{ box-shadow:0 0 10px currentColor; }
+  .mark.done .lbl{ color:var(--dim); }
+  .link{ width:10px; height:1px; background:rgba(255,255,255,.1); }
+  .link.done{ background:var(--gold); }
+
+  /* the two seats, side by side; in solo play only the left one shows */
+  .seats{ display:flex; align-items:center; justify-content:center; gap:.5rem; }
+  .seat{
+    display:flex; align-items:baseline; gap:.4rem; padding:.2rem .7rem; border-radius:99px;
+    font-family:'DM Mono',monospace; font-size:.66rem; color:var(--faint);
+    border:1px solid transparent; transition:all .25s;
+  }
+  .seat b{ font-family:'Space Grotesk',sans-serif; font-size:.9rem; font-weight:700; color:var(--dim); }
+  .seat.turn{ border-color:currentColor; background:rgba(255,255,255,.05); }
+  .seat.p1.turn{ color:var(--p1); } .seat.p1.turn b{ color:var(--p1); }
+  .seat.p2.turn{ color:var(--p2); } .seat.p2.turn b{ color:var(--p2); }
+  .modebtn{ font-family:'DM Mono',monospace; font-size:.58rem; letter-spacing:.1em;
+            text-transform:uppercase; color:var(--faint); padding:.2rem .6rem;
+            border:1px solid rgba(255,255,255,.14); border-radius:99px; }
+  .modebtn:hover{ color:var(--paper); }
+
+  .stage{
+    position:fixed; top:var(--header-h); left:0; right:0; bottom:var(--foot-h);
+    display:flex; align-items:center; justify-content:center; padding:.5rem .7rem;
+    background:
+      radial-gradient(ellipse at 50% 8%, rgba(201,169,97,.08), transparent 60%),
+      radial-gradient(ellipse at 50% 100%, rgba(0,0,0,.55), transparent 60%);
+  }
+  .grid{
+    display:grid; gap:.4rem; width:100%; max-width:64rem; height:100%;
+    grid-template-columns:repeat(6,1fr); grid-auto-rows:1fr; perspective:1000px;
+  }
+  @media(max-width:760px){ .grid{ grid-template-columns:repeat(4,1fr); } }
+
+  /* ── a tile ── */
+  .tile{ position:relative; cursor:pointer; transform-style:preserve-3d;
+         transition:transform .42s cubic-bezier(.3,1.1,.4,1); border-radius:.35rem; }
+  .tile.up{ transform:rotateY(180deg); }
+  .tile.gone{ pointer-events:none; }
+  .face{
+    position:absolute; inset:0; border-radius:.35rem; backface-visibility:hidden;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:.2rem .25rem; overflow:hidden;
+  }
+  /* the back: the polka dots of every memory game ever printed */
+  .back{
+    background:
+      radial-gradient(circle at 50% 50%, rgba(255,255,255,.85) 1.6px, transparent 1.7px) 0 0/10px 10px,
+      linear-gradient(160deg,#b5322c,#8d211c);
+    border:1px solid rgba(0,0,0,.4);
+    box-shadow:0 .22rem .45rem rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.18);
+  }
+  .front{
+    transform:rotateY(180deg);
+    background:linear-gradient(178deg,var(--card),#c4bda6);
+    border:1px solid var(--card-edge);
+    box-shadow:0 .22rem .45rem rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.7);
+  }
+  .tile:not(.up):hover{ transform:translateY(-3px); }
+
+  .front .verb{
+    font-family:'Space Grotesk',sans-serif; font-weight:900; color:var(--ink);
+    font-size:clamp(.85rem,3.4vw,1.15rem); line-height:1.05; text-align:center;
+  }
+  /* an egg, as everywhere else */
+  .front .plate{
+    margin-top:.22rem; border-radius:999px; align-self:center;
+    background:var(--egg-free); color:var(--egg-word);
+    font-family:'Space Grotesk',sans-serif; font-weight:900;
+    font-size:clamp(.62rem,2.5vw,.82rem); line-height:1;
+    padding:.16rem .6rem .2rem; text-align:center; white-space:nowrap;
+    max-width:100%; overflow:hidden; text-overflow:ellipsis;
+    box-shadow:0 1px 3px rgba(0,0,0,.3);
+  }
+  .front .gloss{
+    font-family:'DM Sans',sans-serif; color:#2b2924; text-align:center;
+    font-size:clamp(.58rem,2.2vw,.78rem); line-height:1.25;
+    display:-webkit-box; -webkit-line-clamp:5; -webkit-box-orient:vertical; overflow:hidden;
+  }
+  /* claimed tiles keep their face but step back out of the way */
+  .tile.gone .front{ opacity:.42; border-color:var(--ok); }
+  .tile.gone .front .plate{ background:var(--egg-right); color:#000; }
+  .tile.miss .front{ animation:missShake .5s; border-color:var(--bad); }
+  @keyframes missShake{ 0%,100%{transform:rotateY(180deg)} 25%{transform:rotateY(180deg) translateX(-6px)} 60%{transform:rotateY(180deg) translateX(5px)} }
+
+  .foot{
+    position:fixed; bottom:0; left:0; right:0; height:var(--foot-h);
+    display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.3rem 1rem;
+    background:rgba(13,13,13,.94); border-top:1px solid rgba(201,169,97,.2);
+    font-family:'DM Mono',monospace; font-size:.64rem; color:var(--faint);
+  }
+  .track{ flex:1; height:4px; border-radius:99px; background:rgba(255,255,255,.08); }
+  .fill{ height:100%; border-radius:99px; background:var(--gold); width:0; transition:width .4s; }
+
+  .banner{
+    position:fixed; left:50%; top:44%; z-index:40; pointer-events:none; text-align:center;
+    font-family:'Space Grotesk',sans-serif; font-weight:900;
+    font-size:clamp(1.2rem,4vw,2rem); letter-spacing:.12em; text-transform:uppercase;
+    opacity:0; transform:translate(-50%,-50%) scale(.8);
+    transition:opacity .2s, transform .4s cubic-bezier(.2,1.6,.4,1); text-shadow:0 0 22px currentColor;
+  }
+  .banner.show{ opacity:1; transform:translate(-50%,-50%) scale(1); }
+
+  .spark{ position:absolute; width:5px; height:5px; border-radius:50%; pointer-events:none; z-index:30; }
+  .fw-flash{ width:60px; height:60px; border-radius:50%;
+             background:radial-gradient(circle,#fff 0%,#FFD94A 35%,rgba(255,217,74,0) 70%); }
+
+  .over{
+    position:fixed; inset:0; z-index:50; display:none; flex-direction:column;
+    align-items:center; justify-content:center; gap:.35rem; text-align:center; padding:2rem;
+    background:rgba(8,8,9,.95); backdrop-filter:blur(6px);
+  }
+  .over.show{ display:flex; }
+  .over .big{ font-family:'Space Grotesk',sans-serif; font-weight:900;
+              font-size:clamp(2rem,7vw,3.2rem); color:var(--accent); }
+  .over .sub{ font-family:'DM Mono',monospace; font-size:.7rem; letter-spacing:.14em;
+              text-transform:uppercase; color:var(--dim); }
+  .acts{ display:flex; gap:.6rem; flex-wrap:wrap; justify-content:center; margin-top:1.2rem; }
+  .over .go{ padding:.7rem 1.7rem; border-radius:99px; background:var(--accent); color:#12100a;
+             font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:.74rem;
+             letter-spacing:.1em; text-transform:uppercase; }
+  .over .quiet{ padding:.7rem 1.5rem; border-radius:99px; color:var(--dim);
+                border:1px solid rgba(255,255,255,.16); font-size:.72rem;
+                letter-spacing:.08em; text-transform:uppercase; }
+  .over .quiet:hover{ color:var(--paper); }
+  .over .quiet[disabled]{ opacity:.3; cursor:default; }
+  .over .away{ margin-top:.9rem; font-size:.66rem; border:none; }
+  .over .big .gr{ font-size:.5em; margin-left:.3rem; vertical-align:.35em; }
+  .g-a{ color:var(--s4); } .g-b{ color:var(--egg-right); } .g-c{ color:#7dd3fc; } .g-d{ color:var(--egg-lost); }
+
+  .loading{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:.8rem; }
+  .err{ color:var(--bad); text-align:center; max-width:30rem; line-height:1.7; padding:2rem; }
+
+  body.embedded{ --header-h:40px; }
+  body.embedded .htop{ display:none; }
+  body.embedded .header{ padding:.28rem 1rem .22rem; justify-content:center; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="htop">
+    <a class="back" href="/?openModal=grammar">← Grammar</a>
+    <div class="title"><b>INTUITY</b><span>Phrasal Verbs</span></div>
+    <div></div>
+  </div>
+  <div class="ladder" id="ladder"></div>
+  <div class="seats">
+    <div class="seat p1 turn" id="seat1"><span id="name1">You</span> <b id="score1">0</b></div>
+    <div class="seat p2" id="seat2" hidden><span>Player 2</span> <b id="score2">0</b></div>
+    <button class="modebtn" id="modeBtn" onclick="toggleMode()">2 players</button>
+  </div>
+</header>
+
+<div class="stage"><div class="grid" id="grid"></div></div>
+
+<div class="foot">
+  <span id="turns">0 turns</span>
+  <div class="track"><div class="fill" id="fill"></div></div>
+  <span id="found">0 of 12 pairs</span>
+</div>
+
+<div class="banner" id="banner"></div>
+<div class="over" id="over">
+  <div class="big" id="overBig"></div>
+  <div class="sub" id="overSub"></div>
+  <div class="acts">
+    <button class="quiet" id="backBtn" onclick="backBoard()">← Before</button>
+    <button class="quiet" onclick="repeatBoard()">↻ This board again</button>
+    <button class="go" onclick="nextBoard()">Next board →</button>
+  </div>
+  <button class="quiet away" onclick="location.href='phrasal-verbs-play.html'">Back to phrasal verbs</button>
+</div>
+<div class="loading" id="loading">Loading…</div>
+
+<script src="intuity-log.js"></script>
+<script>
+/* ======================================================================
+   PAIRS
+
+   Twenty-four tiles face down: twelve phrasal verbs and the twelve meanings
+   that belong to them. Turn two. A phrase with its own meaning stays face
+   up; anything else goes back over.
+
+   This is the only one of the games that asks a child to remember something
+   from a previous turn. Every other one puts the question in front of them
+   and takes it away again — here the board is only as good as what they
+   held on to, which is closer to what learning vocabulary actually is.
+
+   And it takes two players, which none of the others do. Match and you go
+   again; miss and the other seat takes over. That is the rule Concentration
+   has always used, and it is what makes a good memory pay.
+====================================================================== */
+
+const DATA_URL = '../../data/grammar-rules/phrasal-verbs-data.json';
+const PAIRS = 12;
+
+let POOL = [], tiles = [], flipped = [], locked = false;
+let players = 1, turn = 0, score = [0,0], turns = 0, found = 0;
+
+/* Boards are kept, as deals are in Pegs and racks in Rack. */
+let history = [], at = -1, boards = 1, mark = -1;
+const MARKS = [2, 4, 6, 9, 12];
+const NAMES = ['Spark','Ember','Flame','Blaze','Crown'];
+
+const $ = id => document.getElementById(id);
+const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[b[i],b[j]]=[b[j],b[i]];} return b; };
+/* One sense: a tile is a few centimetres across and a three-clause gloss
+   cannot be read on it, let alone remembered. */
+const firstSense = m => String(m).split(';')[0].trim();
+
+async function boot(){
+  try{
+    const res = await fetch(DATA_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    (d.groups || []).forEach(g => (g.items || []).forEach(it => {
+      if (it.particle && it.meaning)
+        POOL.push({ verb:(it.verb || g.label || g.id).toUpperCase(),
+                    particle: it.particle.toLowerCase(),
+                    meaning: firstSense(it.meaning) });
+    }));
+    if (POOL.length < PAIRS) throw new Error('not enough phrases');
+    $('loading').remove();
+    start();
+  }catch(e){
+    $('loading').innerHTML = '<p class="err">Could not load <b>' + DATA_URL + '</b>.<br>' +
+      'Open this from the site rather than as a local file — browsers block file:// requests.</p>';
+  }
+}
+
+function start(){
+  /* Glosses that fit a tile, and no two phrases sharing a verb — but drawn
+     at random from everything that qualifies. Sorting by length looked
+     sensible and quietly dealt the twelve shortest definitions in the whole
+     corpus every time: "to explode", "to arrive", the same trivial board on
+     every visit. A limit is a filter, not an ordering. */
+  const seen = new Set(), picked = [];
+  for (const p of shuffle(POOL)){
+    if (picked.length === PAIRS) break;
+    if (seen.has(p.verb)) continue;
+    if (p.meaning.length < 12 || p.meaning.length > 58) continue;
+    seen.add(p.verb); picked.push(p);
+  }
+  while (picked.length < PAIRS){
+    const p = shuffle(POOL)[0];
+    if (!seen.has(p.verb)){ seen.add(p.verb); picked.push(p); }
+  }
+
+  history = history.slice(0, at + 1);
+  history.push(picked);
+  at = history.length - 1;
+  lay(picked);
+}
+
+/* Set a remembered board out again, all face down. */
+function lay(picked){
+  tiles = [];
+  picked.forEach((p, i) => {
+    tiles.push({ pair:i, kind:'phrase', data:p, state:'down' });
+    tiles.push({ pair:i, kind:'gloss',  data:p, state:'down' });
+  });
+  tiles = shuffle(tiles);
+
+  flipped = []; locked = false; turn = 0; score = [0,0]; turns = 0; found = 0; mark = -1;
+  $('over').classList.remove('show');
+  drawLadder(); draw(); paint();
+}
+
+function drawLadder(){
+  const l = $('ladder'); l.innerHTML = '';
+  NAMES.forEach((n, i) => {
+    if (i){ const k = document.createElement('div'); k.className = 'link' + (i <= mark ? ' done' : ''); l.appendChild(k); }
+    const el = document.createElement('div');
+    el.className = 'mark' + (i <= mark ? ' done' : '');
+    el.innerHTML = '<div class="dot" style="' + (i <= mark ? 'background:var(--s'+i+');color:var(--s'+i+')' : '') +
+                   '"></div><div class="lbl">' + n + '</div>';
+    l.appendChild(el);
+  });
+}
+
+function checkMark(){
+  let m = -1;
+  MARKS.forEach((n, i) => { if (found >= n) m = i; });
+  if (m <= mark) return;
+  mark = m; drawLadder();
+  flash(NAMES[m], 'var(--s' + m + ')');
+}
+
+function draw(){
+  const g = $('grid'); g.innerHTML = '';
+  tiles.forEach((t, i) => {
+    const el = document.createElement('div');
+    el.className = 'tile'; el.id = 't' + i;
+    const face = t.kind === 'phrase'
+      ? '<div class="verb">' + esc(t.data.verb) + '</div><div class="plate">' + esc(t.data.particle) + '</div>'
+      : '<div class="gloss">' + esc(t.data.meaning) + '</div>';
+    el.innerHTML = '<div class="face back"></div><div class="face front">' + face + '</div>';
+    el.onclick = () => flip(i);
+    g.appendChild(el);
+  });
+}
+
+function flip(i){
+  const t = tiles[i];
+  if (locked || t.state !== 'down' || flipped.includes(i)) return;
+  $('t' + i).classList.add('up');
+  flipped.push(i);
+  if (flipped.length < 2) return;
+
+  locked = true; turns++;
+  const [a, b] = flipped.map(x => tiles[x]);
+  const match = a.pair === b.pair && a.kind !== b.kind;
+  /* A pair is logged against the phrase, whichever tile was turned first. */
+  if (window.INTUITY) INTUITY.log('phrasal-verbs',
+    a.data.verb + ' ' + a.data.particle, match, { game:'pairs' });
+
+  if (match){
+    a.state = b.state = 'gone';
+    score[turn]++; found++;
+    flipped.forEach(x => $('t' + x).classList.add('gone'));
+    burst($('t' + flipped[0]));
+    flash(a.data.verb + ' ' + a.data.particle, 'var(--ok)');
+    flipped = []; locked = false;
+    paint(); checkMark();
+    /* Matching earns another turn — the rule that makes remembering pay. */
+    if (found === PAIRS) setTimeout(over, 900);
+  } else {
+    flipped.forEach(x => $('t' + x).classList.add('miss'));
+    setTimeout(() => {
+      flipped.forEach(x => {
+        $('t' + x).classList.remove('up','miss');
+      });
+      flipped = []; locked = false;
+      if (players === 2){ turn = 1 - turn; }
+      paint();
+    }, 1150);
+  }
+}
+
+function paint(){
+  $('score1').textContent = score[0];
+  $('score2').textContent = score[1];
+  $('seat1').classList.toggle('turn', players === 1 || turn === 0);
+  $('seat2').classList.toggle('turn', players === 2 && turn === 1);
+  $('turns').textContent = turns + (turns === 1 ? ' turn' : ' turns');
+  $('found').textContent = found + ' of ' + PAIRS + ' pairs';
+  $('fill').style.width = (found / PAIRS * 100) + '%';
+}
+
+function toggleMode(){
+  players = players === 1 ? 2 : 1;
+  $('seat2').hidden = players === 1;
+  $('name1').textContent = players === 2 ? 'Player 1' : 'You';
+  $('modeBtn').textContent = players === 2 ? '1 player' : '2 players';
+  turn = 0;
+  start();
+}
+
+/* The Cambridge scale, as everywhere else. For a memory board the accuracy
+   worth scoring is turns against a perfect memory: twelve pairs in twelve
+   turns is 100%, twenty-four turns is 50%. */
+function scale(acc){
+  const A = [[0,140],[0.60,160],[0.72,173],[0.80,180],[1,190]];
+  for (let i=1;i<A.length;i++){
+    const [a0,s0]=A[i-1],[a1,s1]=A[i];
+    if (acc<=a1) return Math.round(s0+(acc-a0)/(a1-a0)*(s1-s0));
+  }
+  return 190;
+}
+const grade = s => s>=180?['A','Excellent']:s>=173?['B','Very good']:s>=160?['C','Pass']:['D','Try again'];
+
+function over(){
+  if (window.INTUITY) INTUITY.session('phrasal-verbs', 'pairs',
+    { pairs: found, turns: turns, players: players });
+
+  if (players === 2){
+    const win = score[0] === score[1] ? 'A draw'
+              : score[0] > score[1] ? 'Player 1 wins' : 'Player 2 wins';
+    $('overBig').className = 'big';
+    $('overBig').textContent = score[0] + ' – ' + score[1];
+    $('overSub').textContent = win + ' · ' + turns + ' turns · board ' + boards;
+  } else {
+    const acc = turns ? PAIRS / turns : 0;
+    const sc = scale(acc), [letter, word] = grade(sc);
+    $('overBig').className = 'big g-' + letter.toLowerCase();
+    $('overBig').innerHTML = sc + '<span class="gr">' + letter + '</span>';
+    $('overSub').textContent = word + ' · ' + turns + ' turns for twelve pairs · board ' + boards;
+  }
+  $('backBtn').disabled = at <= 0;
+  $('over').classList.add('show');
+}
+
+function nextBoard(){
+  $('over').classList.remove('show'); boards++;
+  if (at < history.length - 1){ at++; lay(history[at]); }
+  else start();
+}
+
+function backBoard(){
+  if (at <= 0) return;
+  $('over').classList.remove('show'); at--; boards++;
+  lay(history[at]);
+}
+
+/* The same twelve pairs, face down again. A board played once is far easier
+   the second time — which is exactly the point of a memory game. */
+function repeatBoard(){
+  $('over').classList.remove('show'); boards++;
+  lay(history[at]);
+}
+
+function flash(text, col){
+  const b = $('banner');
+  b.textContent = text; b.style.color = col;
+  b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+  setTimeout(() => b.classList.remove('show'), 1000);
+}
+
+function burst(el){
+  const stage = document.querySelector('.stage');
+  const s = stage.getBoundingClientRect(), r = el.getBoundingClientRect();
+  const cx = r.left - s.left + r.width/2, cy = r.top - s.top + r.height/2;
+  const COLS = ['#FFD94A','#C9A961','#5ED39B','#ff7a45','#ffffff','#7dd3fc'];
+
+  const f = document.createElement('div');
+  f.className = 'spark fw-flash';
+  f.style.left = cx+'px'; f.style.top = cy+'px';
+  stage.appendChild(f);
+  f.animate([{transform:'translate(-50%,-50%) scale(.2)',opacity:1},
+             {transform:'translate(-50%,-50%) scale(2.8)',opacity:0}],
+            {duration:380,easing:'cubic-bezier(.1,.8,.2,1)'});
+  setTimeout(()=>f.remove(),400);
+
+  for (let i=0;i<30;i++){
+    const p = document.createElement('div');
+    p.className = 'spark';
+    const col = COLS[(Math.random()*COLS.length)|0], size = 3+Math.random()*3;
+    p.style.cssText += 'left:'+cx+'px; top:'+cy+'px; width:'+size+'px; height:'+size+
+      'px; background:'+col+'; box-shadow:0 0 '+(size*2.5)+'px '+col+';';
+    stage.appendChild(p);
+    const a = Math.random()*Math.PI*2, d = 45+Math.random()*130;
+    const dx = Math.cos(a)*d, dy = Math.sin(a)*d, fall = 40+Math.random()*70;
+    const dur = 700+Math.random()*400;
+    p.animate([
+      {transform:'translate(-50%,-50%) translate(0,0) scale(1.1)',opacity:1},
+      {transform:'translate(-50%,-50%) translate('+(dx*.62).toFixed(0)+'px,'+(dy*.62-10).toFixed(0)+'px) scale(1)',opacity:1,offset:.42},
+      {transform:'translate(-50%,-50%) translate('+dx.toFixed(0)+'px,'+(dy+fall).toFixed(0)+'px) scale(.25)',opacity:0}
+    ],{duration:dur,easing:'cubic-bezier(.12,.75,.3,1)'});
+    setTimeout(()=>p.remove(),dur+30);
+  }
+}
+
+if (window.self !== window.top) document.body.classList.add('embedded');
+boot();
+</script>
+</body>
+</html>

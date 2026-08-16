@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>INTUITY — Grammar Barometer</title>
+<style>
+  *,*::before,*::after{ margin:0; padding:0; box-sizing:border-box; }
+  :root{ --gold:#C9A961; --paper:#e5e5e7; --dim:rgba(229,229,231,.55); --faint:rgba(229,229,231,.28);
+         --a:#FFD94A; --b:#5ED39B; --c:#7dd3fc; --d:#f0a23c; }
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    background:#0d0d0d;
+    background-image:radial-gradient(circle at 20% 50%, rgba(201,169,97,.04) 0%, transparent 50%),
+                     radial-gradient(circle at 80% 80%, rgba(201,169,97,.03) 0%, transparent 50%);
+    min-height:100vh; color:var(--paper); padding:1.5rem 1rem 4rem;
+  }
+  .wrap{ max-width:60rem; margin:0 auto; }
+
+  h1{ font-size:.8rem; font-weight:600; letter-spacing:.18em; text-transform:uppercase;
+      color:var(--gold); text-align:center; }
+  .lede{ text-align:center; font-size:.8125rem; color:var(--dim); margin:.5rem 0 1.75rem; line-height:1.6; }
+
+  button{
+    font:inherit; font-size:.8125rem; font-weight:600; cursor:pointer;
+    padding:.7rem 1.5rem; border-radius:.75rem;
+    background:rgba(201,169,97,.22); color:var(--gold);
+    border:1px solid rgba(201,169,97,.4); transition:all .2s;
+  }
+  button:hover:not(:disabled){ background:rgba(201,169,97,.34); }
+  button:disabled{ opacity:.4; cursor:wait; }
+  .bar{ display:flex; justify-content:center; gap:.75rem; margin-bottom:1.5rem; }
+
+  table{ width:100%; border-collapse:collapse; font-size:.8125rem; }
+  th{
+    text-align:left; font-size:.625rem; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--faint); font-weight:600; padding:.5rem .6rem; border-bottom:1px solid rgba(201,169,97,.2);
+  }
+  td{ padding:.6rem; border-bottom:1px solid rgba(84,84,88,.22); vertical-align:top; }
+  tr.topic{ cursor:pointer; }
+  tr.topic:hover td{ background:rgba(201,169,97,.06); }
+  .num{ font-variant-numeric:tabular-nums; text-align:right; }
+  .name{ font-weight:600; }
+  .score{ font-weight:700; font-size:1rem; }
+  .g-a{ color:var(--a); } .g-b{ color:var(--b); } .g-c{ color:var(--c); } .g-d{ color:var(--d); }
+  .weak{ color:var(--dim); }
+
+  .detail td{ background:rgba(0,0,0,.28); }
+  .measure{ display:flex; align-items:center; gap:.6rem; padding:.15rem 0; font-size:.75rem; }
+  .track{ width:9rem; height:6px; border-radius:99px; background:rgba(255,255,255,.09); flex-shrink:0; }
+  .fill{ height:100%; border-radius:99px; background:var(--gold); }
+  .measure .lbl{ color:var(--dim); }
+  .measure .val{ color:var(--faint); font-variant-numeric:tabular-nums; width:3.2rem; }
+  .costs{ margin-top:.6rem; font-size:.75rem; color:var(--d); line-height:1.7; }
+  .costs b{ color:var(--paper); font-weight:600; }
+
+  .avg{ margin-top:1.25rem; text-align:center; font-size:.8125rem; color:var(--dim); }
+  .avg strong{ font-size:1.5rem; }
+  .status{ text-align:center; color:var(--dim); font-size:.8125rem; padding:2rem 0; }
+  .err{ color:#E86A5C; }
+  .note{ margin-top:2rem; font-size:.75rem; color:var(--faint); line-height:1.8; text-align:center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Grammar Barometer</h1>
+  <p class="lede">
+    Reads every grammar page and data file straight from the live site and scores what can
+    actually be measured.<br>Whether a page is <em>enjoyable</em> is not in here — that part is yours.
+  </p>
+
+  <div class="bar">
+    <button id="run">Take a reading</button>
+  </div>
+
+  <div id="out"><p class="status">Press the button. It takes a few seconds — it is fetching the real files.</p></div>
+
+  <p class="note">
+    Scores use the Cambridge scale: 160 a pass, 173 a B, 180 an A.<br>
+    A weak page is a distance to travel, not a verdict. Click any row for the detail.
+  </p>
+</div>
+
+<script>
+const RAW = 'https://raw.githubusercontent.com/mhnashtai-prog/intuity-cambridge-b2/main';
+
+const TOPICS = ['conditionals','past-modals','passive-voice','gerunds-infinitives',
+                'tenses','comparatives','reported-speech','linking-words',
+                'inversion','miscellaneous','phrasal-verbs'];
+
+/* Each measure names what good looks like and what it is worth. The weights
+   are the argument: reaching the student matters more than polish. */
+const MEASURES = [
+  { key:'data',      max:15, label:'One data file for the topic' },
+  { key:'engine',    max:15, label:'Shares the engine, not a copy of it' },
+  { key:'integrity', max:20, label:'Every item parses and marks itself' },
+  { key:'cues',      max:15, label:'Items show the evidence for the answer' },
+  { key:'explains',  max:15, label:'A wrong answer says why' },
+  { key:'modes',     max:10, label:'More than one way in' },
+  { key:'mobile',    max: 5, label:'Works on a phone' },
+  { key:'quiet',     max: 5, label:'No dead weight' },
+];
+const TOTAL = MEASURES.reduce((n,m) => n + m.max, 0);
+
+function scale(pct){
+  const A = [[0,140],[0.60,160],[0.72,173],[0.80,180],[1,190]];
+  for (let i=1;i<A.length;i++){
+    const [a0,s0]=A[i-1],[a1,s1]=A[i];
+    if (pct<=a1) return Math.round(s0+(pct-a0)/(a1-a0)*(s1-s0));
+  }
+  return 190;
+}
+const grade = s => s>=180?'A':s>=173?'B':s>=160?'C':'D';
+
+async function get(path){
+  try{
+    const r = await fetch(RAW + '/' + path + '?cb=' + Math.random());
+    return r.ok ? await r.text() : null;
+  }catch(e){ return null; }
+}
+
+function parseSentence(item){
+  const t = item.text || '';
+  if (item.blanks === 2){
+    let m = t.match(/(.*?)_____(.*?)_____ \(([^)]+)\)(.*)/);
+    if (m) return { pre:m[1], mid:m[2], post:m[4] };
+    m = t.match(/(.*?)_____(.*?)_____(.*)/);
+    return m ? { pre:m[1], mid:m[2], post:m[3] } : null;
+  }
+  let m = t.match(/(.*?)_____ \(([^)]+)\)(.*)/);
+  if (m) return { pre:m[1], mid:'', post:m[3] };
+  m = t.match(/(.*?)_____(.*)/);
+  return m ? { pre:m[1], mid:'', post:m[2] } : null;
+}
+
+const norm = a => String(a||'').toLowerCase()
+  .replace(/[\u2018\u2019\u201A\u201B\u02BC\u02B9\u02BB\u00B4\u0060\u00AB\u00BB\u2032]/g,"'")
+  .trim().replace(/\s+/g,' ');
+
+function cueLives(item, seg){
+  const raw = item.highlightVerb !== undefined ? item.highlightVerb : item.keywords;
+  const list = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+  if (!list.length) return false;
+  const vis = [seg.pre,seg.mid,seg.post].join(' ');
+  return list.some(c => new RegExp('\\b'+String(c).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i').test(vis));
+}
+
+async function audit(topic){
+  const notes = [], score = {};
+  const pages = {}, refs = new Set();
+
+  for (const p of ['rules','practice','gapfill','play','quiz','explore','game','cinema']){
+    const html = await get('skills/grammar-rules/' + topic + '-' + p + '.html');
+    if (!html) continue;
+    pages[p] = html;
+    (html.match(/[A-Za-z0-9._-]+\.json/g) || [])
+      .filter(j => !/^(response|r|res)\.json$/.test(j)).forEach(j => refs.add(j));
+    const q = html.match(/QUIZ_DATA = '([^']+)'/);
+    if (q) refs.add(q[1] + '.json');
+  }
+  if (!Object.keys(pages).length) return null;
+
+  score.data = refs.size === 1 ? 15 : refs.size === 2 ? 8 : 3;
+  if (refs.size !== 1) notes.push(refs.size + ' data files for one topic');
+
+  const shells = Object.values(pages).filter(h => /QUIZ_DATA/.test(h)).length;
+  const fat = Object.values(pages).filter(h => h.length > 15000 && /<script>/.test(h)).length;
+  score.engine = shells ? 15 : fat > 1 ? 4 : 8;
+  if (!shells) notes.push('no shared engine — ' + fat + ' pages carry their own copy');
+
+  let items=0, parsed=0, selfmark=0, cued=0, explained=0;
+  for (const ref of refs){
+    const raw = await get('data/grammar-rules/' + ref) || await get('skills/grammar-rules/' + ref);
+    if (!raw){ notes.push('missing data file: ' + ref); continue; }
+    let d; try{ d = JSON.parse(raw); }catch(e){ notes.push('invalid JSON: ' + ref); continue; }
+
+    const tests = (d.gapfill && d.gapfill.tests) || d.tests || [];
+    const hasRules = !!d.rules;
+    for (const t of tests) for (const it of (t.sentences || [])){
+      items++;
+      const seg = parseSentence(it);
+      if (!seg) continue;
+      parsed++;
+      const accepted = [it.answer, ...(it.alternatives||[]), it.alternativeAnswer].filter(Boolean).map(norm);
+      if (accepted.includes(norm(it.answer))) selfmark++;
+      if (cueLives(it, seg)) cued++;
+      if (it.rule || (hasRules && it.rule !== undefined)) explained++;
+    }
+
+    /* A topic built round matching rather than gap-filling — phrasal verbs
+       pairs a phrase with a meaning and has no sentence to parse. Measuring
+       it against a gap-fill schema would fail it for being a different, and
+       better, kind of exercise, so it is judged on its own terms. */
+    for (const g of (d.groups || [])) for (const it of (g.items || [])){
+      items++;
+      if (it.particle && it.meaning){ parsed++; selfmark++; }
+      if (it.example) cued++;
+      if (it.meaning) explained++;
+    }
+  }
+
+  const pc = n => items ? n/items : 0;
+  score.integrity = items ? Math.round(20 * (pc(parsed)*0.5 + pc(selfmark)*0.5)) : 0;
+  score.cues      = Math.round(15 * pc(cued));
+  score.explains  = Math.round(15 * pc(explained));
+  if (items && parsed < items)    notes.push((items-parsed) + ' items never render');
+  if (items && cued < items)      notes.push((items-cued) + ' items give no visible evidence');
+  if (items && explained < items) notes.push((items-explained) + ' items explain nothing when wrong');
+
+  score.modes = Math.min(10, Object.keys(pages).length * 3);
+  if (!['game','play','cinema','quiz'].some(k => pages[k])) notes.push('nothing to play — only read and type');
+
+  const mob = Object.values(pages).filter(h => /viewport/.test(h) &&
+    (/@media[^{]*max-width/.test(h) || /gapfill\.css/.test(h))).length;
+  score.mobile = mob === Object.keys(pages).length ? 5 : mob ? 3 : 0;
+
+  const speech = Object.values(pages).some(h => /speechSynthesis/.test(h));
+  score.quiet = speech ? 0 : 5;
+  if (speech) notes.push('still carries speech synthesis');
+
+  const got = MEASURES.reduce((n,m) => n + (score[m.key]||0), 0);
+  const s = scale(got/TOTAL);
+  return { topic, score, scale:s, grade:grade(s), items,
+           modes:Object.keys(pages), notes };
+}
+
+const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+function render(rows){
+  rows.sort((a,b) => b.scale - a.scale);
+  let html = '<table><thead><tr><th>Topic</th><th class="num">Items</th>' +
+             '<th class="num">Score</th><th>Grade</th><th>Weakest measure</th></tr></thead><tbody>';
+
+  rows.forEach((r,i) => {
+    const weakest = MEASURES.map(m => ({ m, share:(r.score[m.key]||0)/m.max }))
+                            .sort((a,b) => a.share - b.share)[0];
+    html += '<tr class="topic" onclick="toggle(' + i + ')">' +
+      '<td class="name">' + esc(r.topic) + '</td>' +
+      '<td class="num">' + r.items + '</td>' +
+      '<td class="num score ' + 'g-' + r.grade.toLowerCase() + '">' + r.scale + '</td>' +
+      '<td class="' + 'g-' + r.grade.toLowerCase() + '">' + r.grade + '</td>' +
+      '<td class="weak">' + (weakest.share >= 1 ? '—' : esc(weakest.m.label)) + '</td></tr>';
+
+    html += '<tr class="detail" id="d' + i + '" style="display:none"><td colspan="5">';
+    MEASURES.forEach(m => {
+      const v = r.score[m.key] || 0, w = Math.round(v/m.max*100);
+      html += '<div class="measure"><div class="track"><div class="fill" style="width:' + w + '%"></div></div>' +
+              '<span class="val">' + v + '/' + m.max + '</span><span class="lbl">' + esc(m.label) + '</span></div>';
+    });
+    if (r.notes.length){
+      html += '<div class="costs"><b>What is costing it:</b><br>' +
+              r.notes.map(n => '· ' + esc(n)).join('<br>') + '</div>';
+    }
+    html += '<div class="costs" style="color:var(--faint)"><b>Ways in:</b> ' + r.modes.join(', ') + '</div>';
+    html += '</td></tr>';
+  });
+
+  html += '</tbody></table>';
+
+  const avg = Math.round(rows.reduce((n,r) => n + r.scale, 0) / rows.length);
+  html += '<p class="avg">Suite average <strong class="g-' + grade(avg).toLowerCase() + '">' +
+          avg + '</strong> <span class="g-' + grade(avg).toLowerCase() + '">' + grade(avg) + '</span></p>';
+
+  const short = rows.filter(r => r.scale < 180);
+  if (short.length){
+    html += '<p class="avg" style="color:var(--d)">To reach 180: ' +
+      short.map(r => esc(r.topic) + ' (' + (180 - r.scale) + ')').join(', ') + '</p>';
+  }
+  document.getElementById('out').innerHTML = html;
+}
+
+function toggle(i){
+  const el = document.getElementById('d' + i);
+  el.style.display = el.style.display === 'none' ? 'table-row' : 'none';
+}
+
+document.getElementById('run').onclick = async function(){
+  this.disabled = true;
+  const out = document.getElementById('out');
+  const rows = [];
+  for (let i = 0; i < TOPICS.length; i++){
+    out.innerHTML = '<p class="status">Reading ' + esc(TOPICS[i]) + ' … (' + (i+1) + ' of ' + TOPICS.length + ')</p>';
+    try{
+      const r = await audit(TOPICS[i]);
+      if (r) rows.push(r);
+    }catch(e){ /* a topic that cannot be read is simply left out of the reading */ }
+  }
+  if (!rows.length){
+    out.innerHTML = '<p class="status err">Nothing could be read. Check you are online — this fetches from GitHub.</p>';
+  } else {
+    render(rows);
+  }
+  this.disabled = false;
+  this.textContent = 'Take another reading';
+};
+</script>
+</body>
+</html>

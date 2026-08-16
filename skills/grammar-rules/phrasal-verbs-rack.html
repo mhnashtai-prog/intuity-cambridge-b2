@@ -8,8 +8,16 @@
 <style>
   *,*::before,*::after{ margin:0; padding:0; box-sizing:border-box; }
   :root{
-    --gold:#C9A961; --accent:#FFD94A; --ok:#3f9d6d; --bad:#E86A5C;
-    --ink:#17171a; --plate:#2c4a9e;            /* biro blue, as on the cards */
+    --gold:#C9A961; --accent:#FFD94A; --ok:#abc32f; --bad:#ff9248;
+    /* The same three eggs as Pegs, meaning the same three things: waiting,
+       right, and lost. A child who has played one game already knows how to
+       read the other, which is worth more than either page looking clever
+       on its own. Gold touches none of the pieces. */
+    --ink:#17171a;
+    --egg-free:#61b5ed;      /* on a card still standing */
+    --egg-right:#abc32f;     /* claimed */
+    --egg-lost:#ff9248;      /* fallen */
+    --egg-word:#2f3540;      /* grey type, until it is claimed */
     /* Aged card stock rather than office paper: the old value was so near
        white that a rack of sixteen glared, and the blue plates had nothing
        to sit against. */
@@ -74,13 +82,16 @@
     font-size:clamp(.95rem,3.6vw,1.25rem); letter-spacing:.01em; line-height:1.05;
     text-align:center; margin-bottom:.2rem;
   }
+  /* An egg, as in Pegs: a rounded pill sized to its own word, sitting on
+     the card rather than banding it. */
   .card .plate{
-    width:100%; margin-top:auto; border-radius:.15rem;
-    background:var(--plate); color:#fff;
-    font-family:'Space Grotesk',sans-serif; font-weight:700;
-    font-size:clamp(.72rem,2.9vw,.95rem); letter-spacing:.02em;
-    padding:.16rem .1rem .2rem; text-align:center; white-space:nowrap;
-    overflow:hidden; text-overflow:ellipsis;
+    margin-top:auto; border-radius:999px; align-self:center;
+    background:var(--egg-free); color:var(--egg-word);
+    font-family:'Space Grotesk',sans-serif; font-weight:900;
+    font-size:clamp(.72rem,2.9vw,.95rem); letter-spacing:.01em; line-height:1;
+    padding:.2rem .7rem .24rem; text-align:center; white-space:nowrap;
+    max-width:100%; overflow:hidden; text-overflow:ellipsis;
+    box-shadow:0 1px 3px rgba(0,0,0,.3);
   }
 
   /* claimed: it stays standing, and says so */
@@ -90,7 +101,7 @@
     font-size:.7rem; font-weight:900; color:var(--ok);
   }
   .card.kept:hover{ transform:none; }
-  .card.kept .plate{ background:var(--ok); }
+  .card.kept .plate{ background:var(--egg-right); color:#000; }
 
   /* fallen: it tips forward out of the rack and lies face down */
   .card.fell{
@@ -99,7 +110,7 @@
     filter:grayscale(1) brightness(.45);
     box-shadow:0 .1rem .3rem rgba(0,0,0,.7);
   }
-  .card.fell .plate{ background:#6b6b6b; }
+  .card.fell .plate{ background:var(--egg-lost); color:#000; }
   .card.wobble{ animation:wobble .5s; }
   @keyframes wobble{ 0%,100%{ transform:none } 25%{ transform:rotate(-4deg) } 60%{ transform:rotate(3deg) } }
 
@@ -147,9 +158,16 @@
               font-size:clamp(2.2rem,8vw,3.4rem); color:var(--accent); }
   .over .sub{ font-family:'DM Mono',monospace; font-size:.7rem; letter-spacing:.14em;
               text-transform:uppercase; color:var(--dim); }
-  .over button{ margin-top:1.3rem; padding:.7rem 1.8rem; border-radius:99px;
-                background:var(--accent); color:#12100a; font-weight:700;
-                font-size:.76rem; letter-spacing:.1em; text-transform:uppercase; }
+  .acts{ display:flex; gap:.6rem; flex-wrap:wrap; justify-content:center; margin-top:1.3rem; }
+  .over .go{ padding:.7rem 1.7rem; border-radius:99px; background:var(--accent); color:#12100a;
+             font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:.74rem;
+             letter-spacing:.1em; text-transform:uppercase; }
+  .over .quiet{ padding:.7rem 1.5rem; border-radius:99px; color:var(--dim);
+                border:1px solid rgba(255,255,255,.16); font-size:.72rem;
+                letter-spacing:.08em; text-transform:uppercase; }
+  .over .quiet:hover{ color:var(--paper); }
+  .over .quiet[disabled]{ opacity:.3; cursor:default; }
+  .over .away{ margin-top:.9rem; font-size:.66rem; border:none; }
 
   .loading{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:.8rem; }
   .err{ color:var(--bad); text-align:center; max-width:30rem; line-height:1.7; padding:2rem; }
@@ -186,7 +204,12 @@
 <div class="over" id="over">
   <div class="big" id="overBig">0</div>
   <div class="sub" id="overSub"></div>
-  <button onclick="start()">New rack</button>
+  <div class="acts">
+    <button class="quiet" id="backBtn" onclick="backRack()">← Before</button>
+    <button class="quiet" onclick="repeatRack()">↻ These sixteen again</button>
+    <button class="go" onclick="nextRack()">Next sixteen →</button>
+  </div>
+  <button class="quiet away" onclick="location.href='phrasal-verbs-play.html'">Back to phrasal verbs</button>
 </div>
 <div class="loading" id="loading">Loading…</div>
 
@@ -213,6 +236,11 @@ const SIZE = 16;
 
 let POOL = [], cards = [], target = null, locked = false;
 let kept = 0, fell = 0;
+
+/* Racks are kept, as deals are in Pegs. A rack where four cards fell is the
+   one worth facing again, and a child should not have to hope the same
+   sixteen come round by chance. */
+let history = [], at = -1, racks = 1;
 
 const $ = id => document.getElementById(id);
 const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -252,6 +280,14 @@ function start(){
   }
   while (picked.length < SIZE) picked.push(shuffle(POOL)[0]);
 
+  history = history.slice(0, at + 1);       // going back then onward starts a branch
+  history.push(picked);
+  at = history.length - 1;
+  lay(picked);
+}
+
+/* Set a remembered rack up again, every card standing. */
+function lay(picked){
   cards = picked.map(p => ({ ...p, state:'up' }));
   kept = fell = 0; target = null; locked = false;
   $('over').classList.remove('show');
@@ -339,8 +375,29 @@ function paint(){
 function over(){
   if (window.INTUITY) INTUITY.session('phrasal-verbs', 'rack', { kept: kept, fell: fell });
   $('overBig').textContent = kept + ' / ' + SIZE;
-  $('overSub').textContent = fell ? fell + (fell === 1 ? ' card lost' : ' cards lost') : 'the whole rack';
+  $('overSub').textContent = (fell ? fell + (fell === 1 ? ' card lost' : ' cards lost')
+                                   : 'the whole rack') + ' · rack ' + racks;
+  $('backBtn').disabled = at <= 0;
   $('over').classList.add('show');
+}
+
+function nextRack(){
+  $('over').classList.remove('show'); racks++;
+  if (at < history.length - 1){ at++; lay(history[at]); }
+  else start();
+}
+
+function backRack(){
+  if (at <= 0) return;
+  $('over').classList.remove('show'); at--; racks++;
+  lay(history[at]);
+}
+
+/* The same sixteen, all standing again — the one to reach for after a rack
+   where cards fell. */
+function repeatRack(){
+  $('over').classList.remove('show'); racks++;
+  lay(history[at]);
 }
 
 function flash(text, col){

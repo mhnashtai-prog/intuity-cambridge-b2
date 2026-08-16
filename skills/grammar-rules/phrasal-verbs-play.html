@@ -8,22 +8,40 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
+    /* was: a plain flowing page with the iframe sized off a hard-coded
+       "calc(100vh - 250px)" guess. On mobile the mode-selector wraps to
+       two or three lines instead of one, so the real chrome above the
+       iframe is taller than 250px and the guess hands the iframe far too
+       little room — which is what made Descent look frozen: the rows were
+       still animating, just inside a sliver a few pixels tall. Now the
+       page is a fixed-height flex column and the iframe area is flex:1,
+       so it always gets exactly what's left over, no matter how many
+       lines the nav wraps to or how tall the phone's address bar makes
+       the viewport. */
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
     body {
       font-family: 'Inter', -apple-system, sans-serif;
       background: #0d0d0d;
       background-image: radial-gradient(circle at 20% 50%, rgba(201, 169, 97, 0.04) 0%, transparent 50%),
                         radial-gradient(circle at 80% 80%, rgba(201, 169, 97, 0.03) 0%, transparent 50%);
       color: #e5e5e5;
-      min-height: 100vh;
-      padding: 1rem;
-      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
     }
 
     .container {
       max-width: 1200px;
       margin: 0 auto;
       width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
       position: relative;
+      padding: 0 1rem;
     }
 
     /* TOP NAVIGATION */
@@ -32,8 +50,8 @@
       justify-content: space-between;
       align-items: center;
       padding: 0.75rem 0;
-      margin-bottom: 1rem;
       gap: 1rem;
+      flex-shrink: 0;
       opacity: 0;
       animation: fadeInDown 0.8s ease forwards;
     }
@@ -91,8 +109,8 @@
     /* HEADER */
     header {
       text-align: center;
-      margin-bottom: 1.5rem;
       padding: 0.5rem 0;
+      flex-shrink: 0;
       opacity: 0;
       animation: fadeIn 0.8s ease 0.2s forwards;
     }
@@ -115,13 +133,16 @@
     .mode-selector-container {
       display: flex;
       justify-content: center;
-      margin-bottom: 1.5rem;
+      flex-shrink: 0;
+      margin-bottom: 1rem;
       opacity: 0;
       animation: fadeIn 0.8s ease 0.4s forwards;
     }
 
     .mode-selector {
       display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
       background: rgba(28, 28, 30, 0.6);
       backdrop-filter: blur(40px);
       border-radius: 999px;
@@ -165,7 +186,8 @@
     .view-mode-container {
       display: flex;
       justify-content: center;
-      margin-bottom: 2rem;
+      flex-shrink: 0;
+      margin-bottom: 1rem;
       opacity: 0;
       animation: fadeIn 0.8s ease 0.6s forwards;
     }
@@ -231,7 +253,7 @@
 
     /* NEXT / PREVIOUS VERB */
     .verb-step { display: none; align-items: center; justify-content: center;
-      gap: 1rem; margin: 0 0 .6rem; }
+      gap: 1rem; margin: 0 0 .6rem; flex-shrink: 0; }
     .verb-step.show { display: flex; }
     .verb-step-btn { width: 2.2rem; height: 2.2rem; border-radius: 50%;
       border: 1px solid rgba(201,169,97,.35); background: rgba(201,169,97,.12);
@@ -251,7 +273,8 @@
       flex-wrap: wrap;
       gap: 1.5rem;
       justify-content: center;
-      margin-bottom: 2.5rem;
+      flex-shrink: 0;
+      margin-bottom: 1.25rem;
       padding: 0;
       opacity: 0;
       animation: fadeIn 0.8s ease 0.8s forwards;
@@ -295,18 +318,26 @@
       background: #C9A961;
     }
 
-    /* CONTENT AREAS */
+    /* CONTENT AREAS — each one fills whatever height is left after the
+       chrome above it, and scrolls internally if its own content (the
+       explore card, the list mode) runs longer than that. */
     .content-area {
       display: none;
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
     }
 
     .content-area.active {
-      display: block;
+      display: flex;
+      flex-direction: column;
     }
 
     /* WATCH MODE */
     .watch-mode {
       display: block;
+      flex: 1;
+      min-height: 0;
     }
 
     .modal-card {
@@ -314,7 +345,7 @@
       border: 1px solid rgba(201, 169, 97, 0.3);
       border-radius: 1.5rem;
       padding: 3.5rem 3rem;
-      min-height: 550px;
+      min-height: 450px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -322,8 +353,6 @@
       position: relative;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8),
                   0 0 40px rgba(201, 169, 97, 0.1);
-      /* was a 1s delay before an 0.8s fade — nearly two seconds of blank
-         card on load, which read as "no data" rather than "arriving" */
       opacity: 0;
       transform: scale(0.95);
       animation: cardAppear 0.5s ease forwards;
@@ -333,8 +362,6 @@
       from { opacity: 0; transform: scale(0.95); }
       to { opacity: 1; transform: scale(1); }
     }
-
-    /* SOUND ICON */
 
     .card-content {
       text-align: center;
@@ -474,8 +501,6 @@
       display: none;
     }
 
-    /* was: opacity 0 with a 1s delay before an 0.8s fade — nearly two seconds
-   of blank panel after the switch, indistinguishable from a freeze */
     .list-mode.show {
       display: block;
       opacity: 1;
@@ -562,10 +587,14 @@
       margin: 0.375rem 0;
     }
 
-    /* IFRAME CONTAINER */
+    /* IFRAME CONTAINER — no more magic-number height guess. This sits
+       inside a .content-area that's already flex:1, so it just needs to
+       fill that area completely; the browser works out how tall that
+       actually is on every device, phone included. */
     .iframe-container {
       width: 100%;
-      min-height: calc(100vh - 250px);
+      flex: 1;
+      min-height: 0;
       border: none;
       border-radius: 1.5rem;
       overflow: hidden;
@@ -574,14 +603,14 @@
     .iframe-container iframe {
       width: 100%;
       height: 100%;
-      min-height: calc(100vh - 250px);
       border: none;
+      display: block;
     }
 
     /* MOBILE RESPONSIVE */
     @media (max-width: 768px) {
-      body {
-        padding: 0.75rem;
+      .container {
+        padding: 0 0.75rem;
       }
 
       .nav-title {
@@ -608,7 +637,7 @@
 
       .modal-card {
         padding: 2rem 1.5rem;
-        min-height: 450px;
+        min-height: 380px;
       }
 
       .expression {
@@ -661,8 +690,8 @@
     }
 
     @media (max-width: 480px) {
-      body {
-        padding: 0.5rem;
+      .container {
+        padding: 0 0.5rem;
       }
 
       .nav-title {
@@ -684,7 +713,7 @@
 
       .modal-card {
         padding: 1.5rem 1rem;
-        min-height: 380px;
+        min-height: 340px;
       }
 
       .expression {
@@ -729,7 +758,7 @@
 </head>
 <body>
   <div class="container">
-    
+
     <!-- TOP NAVIGATION -->
     <div class="top-nav">
       <div class="nav-left">
@@ -785,8 +814,6 @@
     </div>
 
     <!-- CATEGORY SELECTOR (Explore mode only) -->
-    <!-- the tabs alone meant reaching back to the top to change verb; these
-         step through the same list so a student can stay with the card -->
     <div class="verb-step" id="verbStep">
       <button class="verb-step-btn" id="verbPrev" onclick="stepVerb(-1)" aria-label="Previous verb">&#8249;</button>
       <span class="verb-step-now" id="verbNow"></span>
@@ -799,11 +826,11 @@
       <!-- WATCH MODE -->
       <div class="watch-mode" id="watchMode">
         <div class="modal-card">
-          
+
           <div class="card-content" id="cardContent">
             <div class="expression" id="expression"></div>
             <div class="meaning" id="meaning"></div>
-            
+
             <div class="sentence-container" id="normalContainer">
               <div class="sentence-label">NORMAL</div>
               <div class="sentence" id="normalSentence"></div>
@@ -818,8 +845,6 @@
           </div>
 
           <!-- CONTROLS -->
-          <!-- was: repeat / play / a pause button with no listener at all.
-               Now: step back, play-stop, step forward. -->
           <div class="controls">
             <button class="control-btn" id="prevBtn" aria-label="Previous">&#8249;</button>
             <button class="control-btn play" id="playBtn" aria-label="Play">&#9654;</button>
@@ -896,14 +921,8 @@ let currentMainMode = 'explore';
 let GROUPS = [];
 let VERB_ORDER = [];
 
-/* One data file for the whole topic. The quiz page, the game and this page
-   all read it, so a correction lands everywhere at once and the three can
-   never drift apart. It sits beside this HTML, not in ../../data. */
 const JSON_FILE = '../../data/grammar-rules/phrasal-verbs-data.json';
 
-/* Items in a MIX group carry their own `verb`; `form` is the inflected verb
-   the example sentence needs. The phrase label always uses the citation
-   form, the sentence always uses the inflected one. */
 const baseVerbOf = (item, group) => item.verb || group.id;
 const formOf     = (item, group) => item.form || item.verb || group.id;
 
@@ -989,8 +1008,6 @@ async function init() {
     loadCategory(currentCategory);
 
   } catch (error) {
-    /* An alert() blocks the page and tells a student nothing they can act on.
-       Fail visibly and quietly, and keep the detail in the console. */
     console.error('Error loading data:', JSON_FILE, error);
     document.getElementById('subtitle').textContent =
       'Could not load the phrasal verbs data — try reloading.';
@@ -998,9 +1015,6 @@ async function init() {
 }
 
 // ==================== CATEGORY SELECTOR ====================
-/* Straight from the data: seven core verbs and three MIX sets. No filtering
-   for "playable" any more — every pair in this file has both a meaning and
-   a real example sentence, which is what the old page had to work around. */
 function buildCategorySelector() {
   const selector = document.getElementById('categorySelector');
   selector.innerHTML = '';
@@ -1058,10 +1072,6 @@ function loadCategory(groupId) {
     const phrase = `${base} ${item.particle}`;
     const inflected = `${formOf(item, group)} ${item.particle}`;
 
-    /* The old page had a hard-coded table of about forty sentences inside the
-       JavaScript, and invented one when a pair was missing. Every example now
-       comes from the data, with the blank filled by the form the sentence
-       actually needs — "I came across…", not "I come across…". */
     const example = item.example.replace(/_+/,
       `<span class="highlight">${inflected}</span>`);
 
@@ -1121,10 +1131,6 @@ function renderWatchSlide() {
   const data = slides[currentIndex];
   const content = document.getElementById('cardContent');
 
-  /* The fade was written for slide-to-slide transitions: strip `show`, wait
-     500ms, repaint, add `show` back. On the FIRST render there is nothing to
-     fade from, so the card sat empty until pressing play forced a second one.
-     Paint immediately the first time, fade thereafter. */
   const first = !content.classList.contains('show');
   content.classList.remove('show');
 
@@ -1170,8 +1176,6 @@ function play() {
   document.getElementById('playBtn').textContent = '\u25A0';
   syncStepBtns();
 
-  /* Six seconds a slide: long enough to read the meaning and the example,
-     short enough that a teenager does not leave. */
   clearInterval(playInterval);
   playInterval = setInterval(() => {
     if (!isPlaying) { clearInterval(playInterval); return; }
@@ -1202,7 +1206,6 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ==================== START ====================
-/* Bound before the fetch — the switch used to be dead while data loaded. */
 setupToggle();
 init();
   </script>

@@ -55,6 +55,19 @@
   .title b{ font-family:'Space Grotesk',sans-serif; font-size:1rem; font-weight:900; letter-spacing:.22em; color:var(--gold); }
   .title span{ font-size:.56rem; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:rgba(255,255,255,.32); margin-top:.1rem; }
 
+  /* a fresh set of pairs, on demand — not tied to finishing a round */
+  .deal-btn{
+    justify-self:end;
+    padding:.4rem 1rem;
+    border-radius:999px;
+    border:1px solid rgba(201,169,97,.4);
+    color:var(--gold);
+    font-family:'Space Grotesk',sans-serif; font-size:.6rem; font-weight:700;
+    letter-spacing:.08em; text-transform:uppercase;
+    transition:background .15s, border-color .15s;
+  }
+  .deal-btn:hover{ background:rgba(201,169,97,.12); border-color:rgba(201,169,97,.7); }
+
   .ladder{ display:flex; align-items:center; justify-content:center; gap:.4rem; }
   .mark{ display:flex; flex-direction:column; align-items:center; gap:.1rem; width:34px; }
   .mark .dot{ width:12px; height:12px; border-radius:50%; background:rgba(229,229,231,.16); transition:all .3s; }
@@ -144,7 +157,9 @@
   .face.back.is-phrase .mark-badge{ background:var(--egg-free); color:#0d1f2c; }
 
   .face.front{ transform:rotateY(180deg); }
-  .tile:not(.up):hover{ transform:translateY(-3px); }
+  /* tiles are always up now — hover lift replaces the old flip cue */
+  .tile:hover .face.front{ transform:rotateY(180deg) translateY(-3px); }
+  .tile.sel .face.front{ border-color:var(--gold); box-shadow:0 0 0 2px rgba(201,169,97,.5); }
 
   .face.front .verb{
     font-family:'Space Grotesk',sans-serif; font-weight:900; color:var(--disc-ink);
@@ -229,7 +244,7 @@
   <div class="htop">
     <a class="back-link" href="/?openModal=grammar" target="_top">← Grammar</a>
     <div class="title"><b>INTUITY</b><span>Phrasal Verbs</span></div>
-    <div></div>
+    <button class="deal-btn" id="dealBtn" onclick="dealNew()">↻ Deal</button>
   </div>
   <div class="ladder" id="ladder"></div>
 
@@ -343,12 +358,15 @@ function start(){
   lay(picked);
 }
 
-/* Set a remembered board out again, all face down. */
+/* Every tile shows its face from the start — this is a matching task, not
+   a memory task: find the phrase, find its meaning, click both. No flip
+   reveal, no state to hold in your head. A click marks a tile "selected"
+   with a gold ring instead of turning it over. */
 function lay(picked){
   tiles = [];
   picked.forEach((p, i) => {
-    tiles.push({ pair:i, kind:'phrase', data:p, state:'down' });
-    tiles.push({ pair:i, kind:'gloss',  data:p, state:'down' });
+    tiles.push({ pair:i, kind:'phrase', data:p, state:'available' });
+    tiles.push({ pair:i, kind:'gloss',  data:p, state:'available' });
   });
   tiles = shuffle(tiles);
 
@@ -381,54 +399,61 @@ function draw(){
   const g = $('grid'); g.innerHTML = '';
   tiles.forEach((t, i) => {
     const el = document.createElement('div');
-    el.className = 'tile'; el.id = 't' + i;
+    /* "up" permanently — the tile never rotates, it's just always
+       showing its front face from the moment it's dealt. */
+    el.className = 'tile up'; el.id = 't' + i;
     const face = t.kind === 'phrase'
       ? '<div class="verb">' + esc(t.data.verb) + '</div><div class="plate">' + esc(t.data.particle) + '</div>'
       : '<div class="gloss">' + esc(t.data.meaning) + '</div>';
-    const badge = t.kind === 'phrase'
-      ? '<span class="mark-badge">phrasal verb</span>'
-      : '<span class="mark-badge">definition</span>';
-    el.innerHTML = '<div class="face back is-' + t.kind + '">' + badge + '</div>' +
-                   '<div class="face front">' + face + '</div>';
-    el.onclick = () => flip(i);
+    el.innerHTML = '<div class="face front">' + face + '</div>';
+    el.onclick = () => select(i);
     g.appendChild(el);
   });
 }
 
-function flip(i){
+function select(i){
   const t = tiles[i];
-  if (locked || t.state !== 'down' || flipped.includes(i)) return;
-  $('t' + i).classList.add('up');
+  if (locked || t.state !== 'available' || flipped.includes(i)) return;
+  $('t' + i).classList.add('sel');
   flipped.push(i);
   if (flipped.length < 2) return;
 
   locked = true; turns++;
   const [a, b] = flipped.map(x => tiles[x]);
   const match = a.pair === b.pair && a.kind !== b.kind;
-  /* A pair is logged against the phrase, whichever tile was turned first. */
+  /* A pair is logged against the phrase, whichever tile was chosen first. */
   if (window.INTUITY) INTUITY.log('phrasal-verbs',
     a.data.verb + ' ' + a.data.particle, match, { game:'pairs' });
 
   if (match){
     a.state = b.state = 'gone';
     found++;
-    flipped.forEach(x => $('t' + x).classList.add('gone'));
+    flipped.forEach(x => { $('t' + x).classList.remove('sel'); $('t' + x).classList.add('gone'); });
     burst($('t' + flipped[0]));
     flash(a.data.verb + ' ' + a.data.particle, 'var(--ok)');
     flipped = []; locked = false;
     paint(); checkMark();
-    /* Matching earns another turn — the rule that makes remembering pay. */
+    /* Matching earns another turn — the rule that makes it feel rewarded. */
     if (found === PAIRS) setTimeout(over, 900);
   } else {
     flipped.forEach(x => $('t' + x).classList.add('miss'));
     setTimeout(() => {
       flipped.forEach(x => {
-        $('t' + x).classList.remove('up','miss');
+        $('t' + x).classList.remove('sel','miss');
       });
       flipped = []; locked = false;
       paint();
-    }, 1150);
+    }, 700);
   }
+}
+
+/* Fetch a fresh set of 10 pairs on demand — not gated behind finishing
+   the current board, so a child (or a grown-up watching) can just ask for
+   a new deal whenever they want. */
+function dealNew(){
+  if (locked) return;
+  boards++;
+  start();
 }
 
 function paint(){

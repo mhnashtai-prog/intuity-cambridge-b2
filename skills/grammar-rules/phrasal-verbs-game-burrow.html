@@ -18,6 +18,14 @@
     --bar-h:34px;
 
     --clear:#5ED39B; --wrong:#E86A5C;
+    /* The same stock and the same three eggs as Rack and Pegs. This page has
+       the best architecture of any game here — ten sets, revision drawn from
+       every verb, a trial built from a child's own misses — and it was the
+       only one still dressed in the old dark plates. */
+    --ink:#17171a;
+    --card:#d5cfbb; --card-edge:#b3ac95;
+    --egg-free:#61b5ed; --egg-right:#abc32f; --egg-lost:#ff9248;
+    --egg-word:#2f3540;
     --paper:#e5e5e7; --paper-dim:rgba(229,229,231,.55); --paper-faint:rgba(229,229,231,.24);
     --line:rgba(255,255,255,.08);
 
@@ -406,9 +414,11 @@
   .helpbtn:hover{ color:var(--mode-accent); }
 
   .field{ position:relative; flex:1; min-height:0; margin:.6rem .6rem 1rem; overflow:hidden; }
+  /* A softer vignette: pale cards no longer need to be rescued from the
+     background, and a heavy one only dims the words at the edges. */
   .field::before{
     content:''; position:absolute; inset:0; pointer-events:none; z-index:5;
-    background:radial-gradient(ellipse at 50% 40%, transparent 40%, rgba(18,18,20,.9) 100%);
+    background:radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(13,13,15,.75) 100%);
   }
   /* ── BURROWS ──
      A field of holes, and a phrase rises out of one, waits, and drops back.
@@ -420,32 +430,48 @@
   .word{
     position:absolute; left:0; top:0; cursor:pointer; white-space:nowrap;
     will-change:transform,clip-path,opacity;
-    display:flex; align-items:center; justify-content:center;
-    padding:.55rem 1.25rem; border-radius:.4rem;
-    font-family:'Space Grotesk',sans-serif; font-weight:700; letter-spacing:.02em;
-    font-size:clamp(.95rem, 2.4vw, 1.5rem);
-    background:linear-gradient(157deg,#3a3833 0%,#2a2926 55%,#201f1d 100%);
-    border:1px solid rgba(201,169,97,.26);
-    border-top-color:rgba(255,255,255,.13);
-    box-shadow:0 .12em .3em rgba(0,0,0,.5), 0 .3em .8em rgba(0,0,0,.45);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:.18rem; padding:.4rem .9rem .45rem; border-radius:.4rem;
+    background:linear-gradient(178deg, var(--card) 0%, #c4bda6 100%);
+    border:1px solid var(--card-edge);
+    box-shadow:0 .28rem .55rem rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.55);
   }
+  /* the verb in ink, the particle on its egg — the same two-part object the
+     whole app uses for a phrasal verb */
+  .word .pv{
+    font-family:'Space Grotesk',sans-serif; font-weight:900; color:var(--ink);
+    font-size:clamp(.95rem,2.6vw,1.45rem); line-height:1; letter-spacing:.01em;
+  }
+  .word .egg{
+    border-radius:999px; padding:.16rem .7rem .2rem;
+    background:var(--egg-free); color:var(--egg-word);
+    font-family:'Space Grotesk',sans-serif; font-weight:900;
+    font-size:clamp(.78rem,2.1vw,1.05rem); line-height:1;
+    box-shadow:0 1px 3px rgba(0,0,0,.3);
+  }
+  /* caught: the egg turns before the card goes */
+  .word.caught .egg{ background:var(--egg-right); color:#000; }
+  .word.caught{ border-color:var(--egg-right); }
 
   /* The lip of the burrow: drawn over the card, so the phrase appears to
      come up out of the ground rather than to slide over it. */
+  /* The lip has to read against pale card now, not dark plate: a firmer
+     line, with the ground shadow deeper beneath it. */
   .burrow{
     position:absolute; left:0; top:0; z-index:6; pointer-events:none;
-    height:3px; border-radius:2px; transform:translate(-50%,-50%);
-    background:linear-gradient(90deg, transparent, rgba(201,169,97,.5) 18%,
-               rgba(201,169,97,.5) 82%, transparent);
-    box-shadow:0 2px 6px rgba(0,0,0,.7);
+    height:4px; border-radius:2px; transform:translate(-50%,-50%);
+    background:linear-gradient(90deg, transparent, rgba(201,169,97,.75) 16%,
+               rgba(201,169,97,.75) 84%, transparent);
+    box-shadow:0 3px 10px rgba(0,0,0,.85);
   }
   .burrow::after{
-    content:''; position:absolute; left:12%; right:12%; top:3px; height:7px;
-    background:linear-gradient(to bottom, rgba(0,0,0,.55), transparent);
+    content:''; position:absolute; left:10%; right:10%; top:4px; height:11px;
+    background:linear-gradient(to bottom, rgba(0,0,0,.8), transparent);
     border-radius:0 0 50% 50%;
   }
 
-  .word.wrong{ color:var(--wrong)!important; }
+  .word.wrong .egg{ background:var(--egg-lost); color:#000; }
+  .word.wrong{ border-color:var(--egg-lost); }
   .spark{ position:absolute; width:5px; height:5px; border-radius:50%; pointer-events:none; z-index:8; }
   .fw-flash{
     width:70px; height:70px; border-radius:50%; z-index:9;
@@ -822,6 +848,8 @@ async function boot(){
       const base = it.verb || g.id;
       const infl = it.form || base;
       return {
+        v: base.toUpperCase(),
+        pt: it.particle.toLowerCase(),
         p: (base + ' ' + it.particle).toUpperCase(),
         m: it.meaning,
         s: it.example.replace(/_+/, (infl + ' ' + it.particle).toLowerCase()),
@@ -1292,7 +1320,12 @@ function spawnWord(){
   const field = $('field');
   const el = document.createElement('div');
   el.className = 'word';
-  el.textContent = item.p;
+  /* Built from the two halves rather than one string, so the particle can
+     carry its egg — and so the verb always comes first, which a phrasal verb
+     requires and a single label cannot guarantee. */
+  el.innerHTML = '<span class="pv"></span><span class="egg"></span>';
+  el.querySelector('.pv').textContent  = item.v  || item.p;
+  el.querySelector('.egg').textContent = item.pt || '';
   el.style.color = item.color;
 
   /* One turn of the wheel is a word's whole life, and every word gets the
@@ -1369,6 +1402,7 @@ function hit(rec){
   if (rec.dead || !round) return;
 
   if (rec.phrase === round.target.p){
+    rec.el.classList.add('caught');
     burst(rec); removeRec(rec);
     round.hits++; round.streak++;
 

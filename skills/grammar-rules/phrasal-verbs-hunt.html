@@ -69,6 +69,14 @@
       radial-gradient(ellipse at 50% 6%, rgba(201,169,97,.07), transparent 55%),
       radial-gradient(ellipse at 50% 100%, rgba(0,0,0,.5), transparent 60%);
   }
+  .starthint{
+    position:absolute; z-index:10; left:50%; top:50%; transform:translate(-50%,-50%);
+    text-align:center; pointer-events:none; transition:opacity .25s;
+  }
+  .starthint b{ display:block; font-family:'Space Grotesk',sans-serif; font-weight:900;
+                font-size:1.4rem; letter-spacing:.06em; color:var(--gold); margin-bottom:.3rem; }
+  .starthint span{ font-family:'DM Mono',monospace; font-size:.66rem; letter-spacing:.1em;
+                    text-transform:uppercase; color:var(--dim); }
   #board{ width:100%; height:100%; display:block; transition:transform .08s; }
   #board.shake{ animation:shakeCanvas .4s; }
   @keyframes shakeCanvas{ 0%,100%{transform:none} 25%{transform:translateX(-8px)} 60%{transform:translateX(6px)} 80%{transform:translateX(-3px)} }
@@ -156,7 +164,10 @@
   <div class="meaning" id="clueMeaning">loading…</div>
 </div>
 
-<div class="stage"><canvas id="board"></canvas></div>
+<div class="stage">
+  <canvas id="board"></canvas>
+  <div class="starthint" id="startHint"><b>▲ ▼ ◀ ▶</b><span>Move to begin</span></div>
+</div>
 
 <div class="pad" id="pad">
   <button class="up" data-d="0,-1">▲</button>
@@ -231,7 +242,7 @@ const firstSense = m => String(m).split(';')[0].trim();
 let POOL = [];
 let canvas, ctx, COLS, ROWS, cellW, cellH;
 let snake, dir, pendingDir, food, target, tickMs, tickTimer, clockTimer;
-let hits, misses, streak, best, lives, mark, left, running;
+let hits, misses, streak, best, lives, mark, left, running, awaitingStart;
 let startToken = 0;
 
 async function boot(){
@@ -280,21 +291,16 @@ function start(){
   snake = [{x:cx-1,y:cy},{x:cx-2,y:cy},{x:cx-3,y:cy}];
   dir = {x:1,y:0}; pendingDir = null;
   hits = misses = streak = best = 0; lives = LIVES_START; mark = -1; left = ROUND;
-  running = true; tickMs = TICK_START;
+  running = true; tickMs = TICK_START; awaitingStart = true;
   $('over').classList.remove('show');
   drawLadder(); paintHud();
   spawnRound();
   fitCanvas();
   clearInterval(tickTimer); clearInterval(clockTimer);
-
-  const token = ++startToken;
-  flash('ready…', 'var(--gold)');
-  setTimeout(() => {
-    if (token !== startToken || !running) return;
-    flash('go!', 'var(--accent)');
-    tickTimer = setInterval(tick, tickMs);
-    clockTimer = setInterval(clockTick, 1000);
-  }, 900);
+  $('clock').textContent = Math.floor(ROUND/60) + ':' + String(ROUND%60).padStart(2,'0');
+  $('clock').classList.remove('low');
+  $('startHint').style.opacity = '1';
+  ++startToken;
 }
 
 function drawLadder(){
@@ -345,6 +351,15 @@ function spawnRound(){
 
 function setDir(dx, dy){
   if (!running) return;
+  if (awaitingStart){
+    awaitingStart = false;
+    dir = {x:dx, y:dy}; pendingDir = null;
+    $('startHint').style.opacity = '0';
+    flash('go!', 'var(--accent)');
+    tickTimer = setInterval(tick, tickMs);
+    clockTimer = setInterval(clockTick, 1000);
+    return;
+  }
   if (dx === -dir.x && dy === -dir.y) return;   // no reversing into yourself
   pendingDir = {x:dx, y:dy};
 }

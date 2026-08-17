@@ -19,6 +19,7 @@
     --disc-edge: rgba(255,255,255,.09);
     --paper:#e5e5e7; --dim:rgba(229,229,231,.55); --faint:rgba(229,229,231,.26);
     --header-h:132px; --clue-h:92px; --foot-h:56px;
+    --verb-color:#C9A961; --verb-rgb:201,169,97;
   }
   html,body{ width:100%; height:100%; overflow:hidden; background:#0d0d0d; overscroll-behavior:none; }
   body{ font-family:'DM Sans',sans-serif; color:var(--paper); user-select:none; -webkit-user-select:none; touch-action:none; }
@@ -105,9 +106,24 @@
   }
   .cluebar .ask{ font-family:'DM Mono',monospace; font-size:.52rem; letter-spacing:.16em;
                  text-transform:uppercase; color:var(--gold); }
-  .cluebar .row{ display:flex; align-items:baseline; gap:.5rem; }
-  .cluebar .verb{ font-family:'Space Grotesk',sans-serif; font-weight:900; font-size:clamp(1rem,3vw,1.3rem); color:var(--paper); }
-  .cluebar .meaning{ font-size:clamp(.68rem,1.8vw,.82rem); color:var(--dim); max-width:34rem;
+  /* the verb and its meaning read as one line — "LOOK : to search for
+     something" — instead of a headline stacked over a caption. The verb
+     is bold, capitalised, and carries the same colour as its tab in the
+     strip above, so the colour-coding a child already relies on to find
+     a verb continues straight down into what they're actually hunting. */
+  .cluebar .row{ display:flex; align-items:baseline; justify-content:center; gap:.55rem;
+                 max-width:38rem; padding:0 .5rem; }
+  .cluebar .verb{
+    font-family:'Space Grotesk',sans-serif; font-weight:900; letter-spacing:.02em;
+    font-size:clamp(1rem,3vw,1.3rem); text-transform:uppercase;
+    color:var(--verb-color, var(--gold));
+    text-shadow:0 0 18px rgba(var(--verb-rgb, 201,169,97),.35);
+    flex-shrink:0;
+  }
+  .cluebar .colon{ font-family:'Space Grotesk',sans-serif; font-weight:700;
+                    font-size:clamp(.86rem,2.4vw,1.05rem); color:var(--verb-color, var(--gold));
+                    opacity:.55; flex-shrink:0; }
+  .cluebar .meaning{ font-size:clamp(.68rem,1.8vw,.82rem); color:var(--dim); text-align:left;
                       overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
   .stage{
@@ -232,8 +248,9 @@
 <div class="cluebar">
   <div class="ladder" id="ladder"></div>
   <div class="ask">hunt down</div>
-  <div class="row"><span class="verb" id="clueVerb">—</span></div>
-  <div class="meaning" id="clueMeaning">loading…</div>
+  <div class="row">
+    <span class="verb" id="clueVerb">—</span><span class="colon">:</span><span class="meaning" id="clueMeaning">loading…</span>
+  </div>
 </div>
 
 <div class="stage">
@@ -360,6 +377,16 @@ function loadPoolForVerb(idx){
   });
 }
 
+/* carries the active verb's colour from its tab down onto the clue line
+   (and, via the same variables, into the food-pill rendering below) —
+   one colour identity for a verb wherever it appears on the page. */
+function applyVerbColor(idx){
+  const g = GROUPS[idx];
+  if (!g) return;
+  document.documentElement.style.setProperty('--verb-color', g.color);
+  document.documentElement.style.setProperty('--verb-rgb', g.colorRgb);
+}
+
 function buildVerbTabs(){
   const wrap = $('verbTabs'); wrap.innerHTML = '';
   GROUPS.forEach((g, i) => {
@@ -383,6 +410,7 @@ function switchVerb(i){
   activeVerbIdx = i;
   document.querySelectorAll('#verbTabs .vtab').forEach((b, j) => b.classList.toggle('active', j === i));
   loadPoolForVerb(i);
+  applyVerbColor(i);
   history = []; at = -1;
   const u = new URL(location.href);
   u.searchParams.set('verb', GROUPS[i].id);
@@ -420,6 +448,7 @@ async function boot(){
     const wanted = GROUPS.findIndex(g => g.id === urlParams.get('verb'));
     activeVerbIdx = wanted >= 0 ? wanted : 0;
     loadPoolForVerb(activeVerbIdx);
+    applyVerbColor(activeVerbIdx);
     if (POOL.length < CANDIDATES) throw new Error('not enough phrases for this verb');
     buildVerbTabs();
     $('loading').remove();
@@ -805,6 +834,69 @@ function burst(cx, cy, big){
 /* ── rendering ── */
 function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.roundRect(x,y,w,h,r); }
 
+/* a raised, tactile box for one particle — contact shadow underneath,
+   a diagonal light-to-dark fill for volume, a bright bevel stroke along
+   the top-left edge, and a soft inner glow so the surface doesn't read
+   flat even at small sizes. All in the "free" egg blue that already
+   means "unresolved" everywhere else in the app. */
+function drawParticleBox(f){
+  const w = Math.min(cellW*0.86, cellH*1.35), h = cellH*0.72;
+  const x = f.x*cellW + (cellW-w)/2, y = f.y*cellH + (cellH-h)/2;
+  const r = Math.min(w,h)*0.34;
+
+  // 1 — contact shadow, cast from the box, before anything else is drawn
+  ctx.save();
+  ctx.shadowColor = 'rgba(4,10,20,.55)';
+  ctx.shadowBlur = Math.max(8, h*0.4);
+  ctx.shadowOffsetX = h*0.14;
+  ctx.shadowOffsetY = h*0.22;
+  ctx.fillStyle = '#3f93d1';
+  roundRect(x,y,w,h,r); ctx.fill();
+  ctx.restore();
+
+  // 2 — diagonal body: light upper-left face fading to a deeper blue
+  const body = ctx.createLinearGradient(x, y, x+w, y+h);
+  body.addColorStop(0,   '#a9dbfb');
+  body.addColorStop(.42, '#6fbdf0');
+  body.addColorStop(1,   '#3a8fce');
+  ctx.fillStyle = body;
+  roundRect(x,y,w,h,r); ctx.fill();
+
+  // 3 — soft interior glow, off-centre toward the top, for a domed feel
+  ctx.save();
+  roundRect(x,y,w,h,r); ctx.clip();
+  const glow = ctx.createRadialGradient(x+w*0.36, y+h*0.28, 1, x+w*0.36, y+h*0.28, h*1.3);
+  glow.addColorStop(0, 'rgba(255,255,255,.55)');
+  glow.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(x,y,w,h);
+  ctx.restore();
+
+  // 4 — bevel: a bright edge along the top-left, a dark edge along the
+  // bottom-right, echoing the inset/outset pairing of a neumorphic tile
+  ctx.save();
+  roundRect(x,y,w,h,r); ctx.clip();
+  ctx.lineWidth = Math.max(1.4, h*0.07);
+  ctx.strokeStyle = 'rgba(255,255,255,.75)';
+  ctx.beginPath(); ctx.moveTo(x+w*0.06, y+h*0.82); ctx.lineTo(x+w*0.06, y+h*0.18); ctx.lineTo(x+w*0.82, y+h*0.06); ctx.stroke();
+  ctx.strokeStyle = 'rgba(10,30,55,.4)';
+  ctx.beginPath(); ctx.moveTo(x+w*0.18, y+h*0.96); ctx.lineTo(x+w*0.94, y+h*0.96); ctx.lineTo(x+w*0.94, y+h*0.2); ctx.stroke();
+  ctx.restore();
+
+  // 5 — crisp outer edge so the box stays legible against the dark stage
+  ctx.strokeStyle = 'rgba(255,255,255,.28)';
+  ctx.lineWidth = 1;
+  roundRect(x,y,w,h,r); ctx.stroke();
+
+  // 6 — label: a faint low highlight then the ink on top, a cheap emboss
+  ctx.font = '900 ' + Math.max(10, cellH*0.32) + 'px Space Grotesk, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(255,255,255,.5)';
+  ctx.fillText(f.particle, x+w/2, y+h/2+1.6);
+  ctx.fillStyle = COL.eggWord;
+  ctx.fillText(f.particle, x+w/2, y+h/2);
+}
+
 function draw(){
   if (!food || !snake) return;
   const W = cellW*COLS, H = cellH*ROWS;
@@ -816,17 +908,13 @@ function draw(){
     ctx.beginPath(); ctx.arc(cellCenterX(x), cellCenterY(y), 1.4, 0, 7); ctx.fill();
   }
 
-  // food pills
-  food.forEach(f => {
-    const w = cellW*0.94, h = cellH*0.66;
-    const x = f.x*cellW + (cellW-w)/2, y = f.y*cellH + (cellH-h)/2;
-    ctx.fillStyle = COL.eggFree;
-    roundRect(x,y,w,h,h/2); ctx.fill();
-    ctx.fillStyle = COL.eggWord;
-    ctx.font = '900 ' + Math.max(10, cellH*0.34) + 'px Space Grotesk, sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(f.particle, x+w/2, y+h/2+1);
-  });
+  // food — neumorphic boxes, not flat pills: a soft contact shadow gives
+  // them real volume against the dark board, a diagonal gradient plus a
+  // light bevel along the top-left edge reads as a raised, tactile
+  // surface (same language as the tile reference), and a rounded-square
+  // shape rather than a full capsule so they read as "boxes" holding a
+  // particle rather than chips floating on the grid.
+  food.forEach(f => drawParticleBox(f));
 
   // snake, tail to head
   for (let i=snake.length-1; i>=0; i--){

@@ -171,7 +171,19 @@
   .screen.active{ display:flex; }
 
   /* ---------- MENU ---------- */
-  #menu{ overflow-y:auto; padding:.5rem 1.4rem 1.8rem; }
+  #menu{ overflow-y:auto; padding:.5rem 1.4rem 1.8rem; position:relative; }
+
+  /* Phrases drifting behind the ladder and tabs — quiet motion so the menu
+     doesn't sit dead while a learner decides what to play. Purely
+     decorative: z-index behind everything that's actually clickable. */
+  .menu-bg{ position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
+  .drift{
+    position:absolute; font-family:'Space Grotesk',sans-serif; font-weight:700;
+    color:rgba(201,169,97,.10); font-size:1.1rem; white-space:nowrap;
+    animation:driftMove linear infinite;
+  }
+  @keyframes driftMove{ from{ transform:translateX(-15%); } to{ transform:translateX(115%); } }
+  #menu > *:not(.menu-bg){ position:relative; z-index:1; }
 
   /* Small enough to live above the field for a whole round. */
   .stagebar{
@@ -413,6 +425,18 @@
   .helpbtn{ font-family:'DM Mono',monospace; font-size:.66rem; color:var(--paper-faint); }
   .helpbtn:hover{ color:var(--mode-accent); }
 
+  /* sound toggle, same family as the help button beside it */
+  .soundbtn{
+    font-family:'DM Mono',monospace; font-size:.66rem; color:var(--paper-faint);
+    display:flex; align-items:center; gap:.3rem;
+  }
+  .soundbtn:hover{ color:var(--mode-accent); }
+  .soundbtn .sw{
+    width:9px; height:9px; border-radius:50%; border:1px solid rgba(255,255,255,.3);
+    transition:background .15s, border-color .15s;
+  }
+  .soundbtn.on .sw{ background:var(--mode-accent); border-color:var(--mode-accent); box-shadow:0 0 5px rgba(255,217,74,.7); }
+
   .field{ position:relative; flex:1; min-height:0; margin:.6rem .6rem 1rem; overflow:hidden; }
   /* A softer vignette: pale cards no longer need to be rescued from the
      background, and a heavy one only dims the words at the edges. */
@@ -420,6 +444,17 @@
     content:''; position:absolute; inset:0; pointer-events:none; z-index:5;
     background:radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(13,13,15,.75) 100%);
   }
+  /* ── FRENZY ──
+     The last fifteen seconds of a round get their own visible state: a
+     pulsing red edge round the whole field, timed to match the clock's own
+     beat, so the pressure the numbers describe is also something the eye
+     can see without reading a number at all. */
+  .field.frenzy::after{
+    content:''; position:absolute; inset:0; pointer-events:none; z-index:1;
+    box-shadow:inset 0 0 0 2px rgba(232,106,92,.5), inset 0 0 44px rgba(232,106,92,.14);
+    animation:frenzyPulse 1s ease-in-out infinite;
+  }
+  @keyframes frenzyPulse{ 0%,100%{ opacity:.45; } 50%{ opacity:1; } }
   /* ── BURROWS ──
      A field of holes, and a phrase rises out of one, waits, and drops back.
      Nothing travels, so nothing can collide, and a word is fully readable
@@ -472,6 +507,20 @@
 
   .word.wrong .egg{ background:var(--egg-lost); color:#000; }
   .word.wrong{ border-color:var(--egg-lost); }
+
+  /* ── THE GOLDEN WORD ──
+     Rare, unrelated to the definition on screen, and worth chasing for its
+     own sake — the one catch in a round that isn't graded. It never touches
+     accuracy or the scale score, so a miss costs nothing and a catch is
+     pure flair: sound, a bigger burst, a banner of its own. */
+  .word.golden{
+    background:linear-gradient(178deg, #FFE9A8 0%, #F5C542 100%);
+    border-color:#e0aa1f; box-shadow:0 0 0 2px rgba(255,217,74,.4), 0 .3rem .8rem rgba(255,217,74,.4);
+    animation:goldenGlow 1s ease-in-out infinite;
+  }
+  @keyframes goldenGlow{ 0%,100%{ filter:brightness(1); } 50%{ filter:brightness(1.2); } }
+  .word.golden .egg{ background:#7a4b00; color:#FFE9A8; }
+  .word.golden .pv{ color:#3a2a00; }
   .spark{ position:absolute; width:5px; height:5px; border-radius:50%; pointer-events:none; z-index:8; }
   .fw-flash{
     width:70px; height:70px; border-radius:50%; z-index:9;
@@ -634,6 +683,7 @@
 
     <!-- MENU -->
     <section class="screen active" id="menu">
+      <div class="menu-bg" id="menuBg"></div>
       <div class="stagecaption" id="stagecaption"></div>
       <div class="trialcard locked" id="trialcard">
         <svg class="icon" viewBox="0 0 24 24"><path id="trialIconPath" d="M2 18l3-11 5 4 4-7 4 7 5-4 3 11H2z" fill="#5a5a52"/></svg>
@@ -656,6 +706,7 @@
         <span class="spacer"></span>
         <span id="setLabel" style="font-family:'Space Grotesk',sans-serif;font-size:.6rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.35)"></span>
         <span class="spacer"></span>
+        <button class="soundbtn on" id="soundBtn" title="Toggle sound"><span class="sw"></span>sound</button>
         <button class="helpbtn" id="helpBtn" title="How to play">?</button>
       </div>
 
@@ -706,6 +757,7 @@
         <div><b id="sumHits">0</b><span>hit</span></div>
         <div><b id="sumMiss">0</b><span>missed</span></div>
         <div><b id="sumAcc">0%</b><span>accuracy</span></div>
+        <div><b id="sumGold">0</b><span>golden</span></div>
       </div>
       <div class="sumactions">
         <button class="sumbtn primary" id="sumRetry">↺ Retry</button>
@@ -814,6 +866,62 @@ const randInt = (a,b) => a + Math.floor(Math.random()*(b-a+1));
 const pick = a => a[(Math.random()*a.length)|0];
 const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[b[i],b[j]]=[b[j],b[i]];} return b; };
 
+/* ---------- sound engine ----------
+   Synthesised with Web Audio, so there are no sound files to ship and no
+   load to wait on. Every catch, miss, wrong tap and stage-up gets its own
+   short chime; the golden word gets a little fanfare of its own. */
+let actx = null, soundOn = true;
+function ensureAudio(){
+  if (!soundOn) return;
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === 'suspended') actx.resume();
+}
+function tone(freq, dur, {type='sine', vol=0.18, delay=0, slideTo=null} = {}){
+  if (!soundOn || !actx) return;
+  const t0 = actx.currentTime + delay;
+  const osc = actx.createOscillator(), gain = actx.createGain();
+  osc.type = type; osc.frequency.setValueAtTime(freq, t0);
+  if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+  gain.gain.setValueAtTime(0, t0);
+  gain.gain.linearRampToValueAtTime(vol, t0 + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(gain).connect(actx.destination);
+  osc.start(t0); osc.stop(t0 + dur + 0.02);
+}
+const playCatch  = () => { tone(560,.09,{type:'triangle',vol:.16}); tone(840,.14,{type:'triangle',vol:.14,delay:.05}); };
+const playMiss   = () => tone(180,.22,{type:'sawtooth',vol:.12,slideTo:90});
+const playWrong  = () => { tone(220,.12,{type:'square',vol:.09}); tone(160,.16,{type:'square',vol:.08,delay:.05}); };
+const playGolden = () => [660,880,1100,1320].forEach((f,i)=>tone(f,.16,{type:'triangle',vol:.15,delay:i*.06}));
+const playTier   = () => [440,660,880].forEach((f,i)=>tone(f,.22,{type:'sine',vol:.16,delay:i*.08}));
+const playTick   = () => tone(1000,.05,{type:'square',vol:.06});
+const playFrenzyIn = () => tone(300,.5,{type:'sawtooth',vol:.09,slideTo:900});
+
+function setSound(on){
+  soundOn = on;
+  const b = $('soundBtn');
+  if (b){ b.classList.toggle('on', on); b.lastChild.textContent = on ? 'sound' : 'muted'; }
+  if (on) ensureAudio();
+}
+
+/* ---------- menu drift ----------
+   A handful of phrases drift slowly behind the ladder — filled once the
+   data loads, since the pool doesn't exist before then. */
+function seedMenuDrift(){
+  const bg = $('menuBg');
+  if (!bg || !FULL_POOL.length) return;
+  bg.innerHTML = '';
+  for (let i = 0; i < 7; i++){
+    const el = document.createElement('div');
+    el.className = 'drift';
+    el.textContent = pick(FULL_POOL).p;
+    el.style.top = rand(4,94) + '%';
+    el.style.animationDuration = rand(16,30) + 's';
+    el.style.animationDelay = (-rand(0,24)) + 's';
+    el.style.fontSize = rand(.8,1.3) + 'rem';
+    bg.appendChild(el);
+  }
+}
+
 /* ---------- state filled on load ---------- */
 let GROUPS = [], FULL_POOL = [], PRACTICE_SETS = [], THRESH = [], N_GROUPS = 0;
 
@@ -888,6 +996,7 @@ async function boot(){
 
   $('loadingScreen').classList.add('fade');
   setTimeout(() => $('loadingScreen').style.display = 'none', 600);
+  seedMenuDrift();
   renderMenu();
 }
 
@@ -1139,12 +1248,14 @@ function startTrial(){
 }
 
 function beginRound(cfg){
+  ensureAudio();
   round = {
     mode:cfg.mode, index:cfg.index, poolItems:cfg.pool, active:[...cfg.pool], resting:[],
     exposure:{}, weight:{}, coverage:new Set(),
     target:null, targetSpawned:false, forceIn:0, targetLifeBonus:1,
     hits:0, misses:0, streak:0, timeLeft:ROUND_SECONDS, tier:-1,
-    live:new Set(), spawnTimer:null, clockTimer:null, rafId:null, running:false
+    goldenCount:0, frenzy:false, frenzyToken:0,
+    live:new Set(), spawnTimer:null, goldenTimer:null, clockTimer:null, rafId:null, running:false
   };
   cfg.pool.forEach(it => { round.exposure[it.p] = 0; round.weight[it.p] = 1; });
 
@@ -1161,6 +1272,7 @@ function beginRound(cfg){
   /* Clear the words, not the field: the toast lives in here now and must
      survive a fresh round. */
   $('field').querySelectorAll('.word, .spark').forEach(n => n.remove());
+  $('field').classList.remove('frenzy');
   drawBurrows();
   hideToast();
 
@@ -1190,18 +1302,47 @@ function startPlaying(){
   if (!round || round.running) return;
   round.running = true;
   round.rafId = requestAnimationFrame(frame);
-  spawnWord();
-  round.spawnTimer = setInterval(spawnWord, WHEEL.cycle / WHEEL.steps);
+  spawnLoop();
   round.clockTimer = setInterval(tickClock, 1000);
+  scheduleGolden();
 }
 
 const fmtClock = s => Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
 
+/* ── ESCALATING SPAWN RHYTHM ──
+   A fixed interval feels the same in second two as it does in second one
+   hundred. The gap between words tightens as the round runs down — a
+   little in the middle stretch, sharply once the last fifteen seconds
+   (frenzy) begin — so the pace itself carries the pressure the clock is
+   also showing. A hot streak tightens it a touch further still. */
+const FRENZY_AT = 15;
+function currentSpawnDelay(){
+  const base = WHEEL.cycle / WHEEL.steps;
+  const elapsed = ROUND_SECONDS - round.timeLeft;
+  const progress = Math.min(1, elapsed / (ROUND_SECONDS - FRENZY_AT));
+  let delay = base - progress * base * 0.35;
+  if (round.frenzy) delay = base * 0.5;
+  delay -= Math.min(base*0.15, round.streak * 8);
+  return Math.max(base * 0.4, delay);
+}
+function spawnLoop(){
+  if (!round || !round.running) return;
+  spawnWord();
+  round.spawnTimer = setTimeout(spawnLoop, currentSpawnDelay());
+}
+
 function tickClock(){
   round.timeLeft--;
   $('clockVal').textContent = fmtClock(Math.max(0, round.timeLeft));
-  $('clockVal').classList.toggle('warn', round.timeLeft <= 30 && round.timeLeft > 15);
-  $('clockVal').classList.toggle('low', round.timeLeft <= 15);
+  $('clockVal').classList.toggle('warn', round.timeLeft <= 30 && round.timeLeft > FRENZY_AT);
+  $('clockVal').classList.toggle('low', round.timeLeft <= FRENZY_AT);
+
+  if (round.timeLeft <= FRENZY_AT && !round.frenzy){
+    round.frenzy = true;
+    $('field').classList.add('frenzy');
+    playFrenzyIn();
+  }
+  if (round.timeLeft <= 5 && round.timeLeft > 0) playTick();
   if (round.timeLeft <= 0) endRound();
 }
 
@@ -1342,6 +1483,39 @@ function spawnWord(){
   el.onclick = () => hit(rec);
 }
 
+/* ── THE GOLDEN WORD ──
+   Independent of the definition on screen, on its own random schedule, and
+   worth nothing toward accuracy or the scale score — it exists purely so
+   not every second of a round asks for the same kind of attention. Reuses
+   the same burrow field and the same rise/wait/sink physics in frame(), so
+   it costs nothing extra to draw. */
+function scheduleGolden(){
+  if (!round) return;
+  clearTimeout(round.goldenTimer);
+  round.goldenTimer = setTimeout(() => {
+    if (round && round.running && round.timeLeft > 6) spawnGolden();
+    scheduleGolden();
+  }, randInt(11000, 17000));
+}
+
+function spawnGolden(){
+  if (!round) return;
+  const item = pick(round.poolItems.length ? round.poolItems : FULL_POOL);
+  const field = $('field');
+  const el = document.createElement('div');
+  el.className = 'word golden';
+  el.innerHTML = '<span class="pv"></span><span class="egg"></span>';
+  el.querySelector('.pv').textContent  = item.v  || item.p;
+  el.querySelector('.egg').textContent = item.pt || '';
+
+  const life = WHEEL.cycle * 0.8;
+  field.appendChild(el);
+  const rec = { el, burrow: freeBurrow(), born: performance.now(), life,
+                phrase: item.p, item, dead:false, golden:true };
+  round.live.add(rec);
+  el.onclick = () => hit(rec);
+}
+
 function frame(now){
   if (!round) return;
   const field = $('field'), fw = field.clientWidth, fh = field.clientHeight;
@@ -1386,10 +1560,14 @@ const removeRec = r => { r.dead = true; round.live.delete(r); r.el.remove(); };
 function expire(rec){
   if (rec.dead || !round) return;
   removeRec(rec);
+  /* The golden word carries no penalty for being missed — it was never
+     part of the test, only a bonus to notice. */
+  if (rec.golden) return;
   /* A decoy drifting off unclicked is normal traffic, not a failure — it was
      never a word to catch. Only the target expiring counts against you. */
   if (rec.phrase !== round.target.p) return;
   round.misses++; round.streak = 0;
+  playMiss();
   syncCounters();
   /* It got away — bring it back on the very next step but one, while the
      definition is still in mind. */
@@ -1401,10 +1579,24 @@ function expire(rec){
 function hit(rec){
   if (rec.dead || !round) return;
 
+  /* Caught before the target logic — a golden catch never touches hits,
+     misses, streak or accuracy. It is pure flair: its own sound, its own
+     burst, its own banner, and a count that only ever shows up on the
+     summary screen, kept well away from the Cambridge scale. */
+  if (rec.golden){
+    rec.el.classList.add('caught');
+    burst(rec); removeRec(rec);
+    round.goldenCount++;
+    playGolden();
+    flashGoldenBanner();
+    return;
+  }
+
   if (rec.phrase === round.target.p){
     rec.el.classList.add('caught');
     burst(rec); removeRec(rec);
     round.hits++; round.streak++;
+    playCatch();
 
     /* No toast on a right answer. The example sentence used to appear here,
        but it arrived after the learner had already proved they knew the
@@ -1429,6 +1621,7 @@ function hit(rec){
     rec.el.classList.add('wrong');
     setTimeout(() => rec.el.classList.remove('wrong'), 240);
     round.misses++; round.streak = 0;
+    playWrong();
     syncCounters();
     round.weight[round.target.p] = Math.min(5, (round.weight[round.target.p]||1) + 2);
     pstat(round.target.p).misses++; save();
@@ -1462,6 +1655,7 @@ function checkTier(){
   if (t <= round.tier) return;
   round.tier = t;
   const st = STAGES[t];
+  playTier();
 
   renderRoundBar();
   document.documentElement.style.setProperty('--screen-accent', st.color);
@@ -1493,6 +1687,17 @@ function checkTier(){
     });
     setTimeout(() => p.remove(), 820);
   }
+}
+
+/* A quick flash in the same banner the stage marks use, in gold rather
+   than whichever stage colour is current — distinct enough not to be
+   mistaken for a stage-up, brief enough not to block the round. */
+function flashGoldenBanner(){
+  const b = $('tierBanner');
+  b.innerHTML = '<span>✦ GOLDEN ✦</span>';
+  b.style.color = '#FFD94A';
+  b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+  setTimeout(() => b.classList.remove('show'), 1100);
 }
 
 function popStage(){
@@ -1603,7 +1808,8 @@ function burst(rec){
 function stopRound(){
   if (!round) return;
   round.running = false;
-  clearInterval(round.spawnTimer); clearInterval(round.clockTimer); cancelAnimationFrame(round.rafId);
+  clearTimeout(round.spawnTimer); clearTimeout(round.goldenTimer);
+  clearInterval(round.clockTimer); cancelAnimationFrame(round.rafId);
   round.live.forEach(r => r.el.remove()); round.live.clear();
   $('startcard').classList.remove('show');
 }
@@ -1669,6 +1875,7 @@ function renderSummary(res){
   $('sumHits').textContent = round.hits;
   $('sumMiss').textContent = round.misses;
   $('sumAcc').textContent = Math.round(res.accuracy*100) + '%';
+  $('sumGold').textContent = round.goldenCount;
 
   /* Always name the next rung and what it costs — never just the shortfall. */
   const next = score < 160 ? 160 : score < 173 ? 173 : score < 180 ? 180 : null;
@@ -1709,11 +1916,13 @@ $('backBtn').onclick = () => { stopRound(); round = null; renderMenu(); };
    otherwise be no way to read the instruction again. Re-opening pauses. */
 $('helpBtn').onclick = () => {
   if (!round) return;
-  clearInterval(round.spawnTimer); clearInterval(round.clockTimer); cancelAnimationFrame(round.rafId);
+  clearTimeout(round.spawnTimer); clearTimeout(round.goldenTimer);
+  clearInterval(round.clockTimer); cancelAnimationFrame(round.rafId);
   round.running = false;
   $('startcard').classList.add('show');
 };
-$('scGo').onclick = dismissStartCard;
+$('scGo').onclick = () => { ensureAudio(); dismissStartCard(); };
+$('soundBtn').onclick = () => setSound(!soundOn);
 
 document.querySelectorAll('.mode-btn').forEach(b => {
   b.addEventListener('click', () => {
@@ -1730,12 +1939,14 @@ document.querySelectorAll('.mode-btn').forEach(b => {
 document.addEventListener('visibilitychange', () => {
   if (!round || !$('play').classList.contains('active')) return;
   if (document.hidden){
-    clearInterval(round.spawnTimer); clearInterval(round.clockTimer); cancelAnimationFrame(round.rafId);
+    clearTimeout(round.spawnTimer); clearTimeout(round.goldenTimer);
+    clearInterval(round.clockTimer); cancelAnimationFrame(round.rafId);
   } else if (round.running) {
     /* words carry an absolute birth time, so shift them forward by the gap */
-    round.spawnTimer = setInterval(spawnWord, WHEEL.cycle / WHEEL.steps);
+    spawnLoop();
     round.clockTimer = setInterval(tickClock, 1000);
     round.rafId = requestAnimationFrame(frame);
+    scheduleGolden();
   }
 });
 

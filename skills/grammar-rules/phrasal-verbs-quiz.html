@@ -742,6 +742,13 @@ const DATA_URL = '../../data/grammar-rules/phrasal-verbs-data.json';
 const GAME_DATA_URL = '../../data/grammar-rules/phrasal-verbs-data.json';
 const AUTO_MS  = 5500;
 
+/* ── carrying state across pages ──
+   Hunt is a separate file, not a panel inside this single-page app, so
+   the round trip only works if both sides read/write the same query
+   params: `?mode=` and `?verb=`. Landing here from Hunt's mode-selector
+   (or a browser refresh) restores whichever mode/verb sent you here. */
+const urlParams = new URLSearchParams(location.search);
+
 /* ── STATE ── */
 let verbs     = [];          // all verb groups from JSON
 let verbIdx   = 0;           // active verb index
@@ -778,16 +785,24 @@ async function loadAll() {
   /* `groups` is the exercise-group list; the reference list of which
      particles each verb takes is `data.verbs`, a different thing. */
   verbs = data.groups;
+
+  /* Arriving from Hunt (or a refresh) can specify which verb and mode to
+     open on — read them before anything else builds off verbIdx/mode. */
+  const qVerb = urlParams.get('verb');
+  const qMode = urlParams.get('mode');
+  if (qVerb) {
+    const idx = verbs.findIndex(v => v.id === qVerb);
+    if (idx >= 0) verbIdx = idx;
+  }
+  const initialMode = (qMode && ['learn', 'quiz', 'gap', 'match'].includes(qMode)) ? qMode : mode;
+
   buildTabs();
   applyVerbTheme();
-  applyModeAccent();
-  build();
+
   document.getElementById('loadingScreen').classList.add('fade');
-  setTimeout(() => {
+  setTimeout(async () => {
     document.getElementById('loadingScreen').style.display = 'none';
-    paint();
-    show(0, 'none');
-    updateModeBadges();
+    await setMode(initialMode);   // handles build/paint/show for learn/quiz/gap, or the match-mode setup
   }, 600);
 }
 
@@ -1584,8 +1599,15 @@ function clickOpt(i) {
 document.querySelectorAll('.mode-btn').forEach(b =>
   b.addEventListener('click', e => {
     e.stopPropagation();
-    /* Buttons carrying data-href leave the page rather than switching mode. */
-    if (b.dataset.href) { location.href = b.dataset.href; return; }
+    /* Buttons carrying data-href leave the page rather than switching mode.
+       The active verb rides along in the URL so Hunt opens on the same
+       word set instead of resetting to whichever one is first. */
+    if (b.dataset.href) {
+      const url = new URL(b.dataset.href, location.href);
+      if (verbs[verbIdx]) url.searchParams.set('verb', verbs[verbIdx].id);
+      location.href = url.toString();
+      return;
+    }
     setMode(b.dataset.mode);
   })
 );

@@ -130,6 +130,10 @@
                text-transform:uppercase; color:var(--dim); }
   .over .note{ margin-top:.6rem; font-size:.8rem; color:var(--dim); }
   .over .note b{ color:var(--paper); }
+  .over .missed{ margin-top:.9rem; max-width:32rem; font-size:.82rem; line-height:1.8; color:var(--dim); }
+  .over .missed b{ color:var(--gold); font-weight:700; }
+  .over .quiet[disabled]{ opacity:.3; cursor:default; }
+  .over .away{ margin-top:.9rem; font-size:.66rem; border:none; }
   .acts{ display:flex; gap:.6rem; flex-wrap:wrap; justify-content:center; margin-top:1.2rem; }
   .over .go{ padding:.7rem 1.7rem; border-radius:99px; background:var(--accent); color:#12100a;
              font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:.74rem;
@@ -189,10 +193,13 @@
   <div class="score" id="score"></div>
   <div class="word" id="word"></div>
   <div class="note" id="note"></div>
+  <div class="missed" id="missed"></div>
   <div class="acts">
-    <button class="go" onclick="start()">Go again</button>
-    <button class="quiet" onclick="location.href='phrasal-verbs-play.html'">Back to phrasal verbs</button>
+    <button class="quiet" id="backBtn" onclick="backRun()">← Before</button>
+    <button class="quiet" onclick="repeatRun()">↻ Same hunt again</button>
+    <button class="go" onclick="nextRun()">Next hunt →</button>
   </div>
+  <button class="quiet away" onclick="location.href='phrasal-verbs-play.html'">Back to phrasal verbs</button>
 </div>
 
 <div class="loading" id="loading">Loading…</div>
@@ -250,6 +257,19 @@ let snake, dir, pendingDir, food, target, tickMs, tickTimer, clockTimer;
 let hits, misses, streak, best, lives, mark, left, running, awaitingStart;
 let startToken = 0;
 
+/* ── run history ──
+   Each finished (or in-progress) run is a `rounds` recipe: the exact
+   sequence of verb + four-candidate-cards + slot-order that appeared.
+   `history[at]` is the run currently on screen or just finished. Going
+   "Before" steps back and replays an earlier recipe from scratch;
+   "Same hunt again" replays history[at] unchanged; "Next hunt" advances
+   into an already-recorded branch if one exists (from a previous "Before"),
+   otherwise deals a brand new run — same shape as Pegs' deal history. */
+let history = [], at = -1;
+let replayQueue = null, replayIndex = 0;
+let missLog = [];   // {verb, particle} for every wrong catch this run
+let runNum = 1;
+
 async function boot(){
   try{
     const res = await fetch(DATA_URL);
@@ -265,7 +285,7 @@ async function boot(){
     $('loading').remove();
     canvas = $('board'); ctx = canvas.getContext('2d');
     initInput();
-    start();
+    start(true);
     window.addEventListener('resize', fitCanvas);
   }catch(e){
     console.error('The Hunt failed to start:', e);
@@ -295,9 +315,9 @@ function fitCanvas(){
    COLS/ROWS, so these are recomputed from that, never randomised. */
 function fixedSlots(){
   // must match the snake's actual spawn cell in start(): the head sits
-  // at (cx-1, cy), not the raw grid centre — so up/down have to line up
-  // on that same column, or a vertical move sails past them by one cell.
-  const cx = ((COLS/2)|0) - 1, cy = (ROWS/2)|0;
+  // at (cx, cy) now that spawn is a single cell — so up/down have to line
+  // up on that same column, or a vertical move sails past them.
+  const cx = (COLS/2)|0, cy = (ROWS/2)|0;
   const mx = Math.max(1, Math.round(COLS*0.16));
   const my = Math.max(1, Math.round(ROWS*0.16));
   return {
@@ -308,13 +328,34 @@ function fixedSlots(){
   };
 }
 
-function start(){
+function start(fresh){
   [COLS, ROWS] = gridSize();
   const cx = (COLS/2)|0, cy = (ROWS/2)|0;
-  snake = [{x:cx-1,y:cy},{x:cx-2,y:cy},{x:cx-3,y:cy}];
+  // a single cell, not three trailing left — a snake laid out with a body
+  // already left of its head made "press left" an instant self-crash on
+  // move one, so that direction had to be silently blocked before the game
+  // even started. One cell has no body to run into, so every direction,
+  // including left, is a safe opening move.
+  snake = [{x:cx,y:cy}];
   dir = {x:1,y:0}; pendingDir = null;
   hits = misses = streak = best = 0; lives = LIVES_START; mark = -1; left = ROUND;
+  missLog = [];
   running = true; tickMs = TICK_START; awaitingStart = true;
+
+  if (fresh){
+    // starting a genuinely new run: drop any "future" branch past the
+    // point we're at, and open a blank recipe that fills in as rounds
+    // are actually spawned, so "Before" can replay it later.
+    history = history.slice(0, at + 1);
+    history.push({ rounds: [] });
+    at = history.length - 1;
+    replayQueue = null; replayIndex = 0;
+  } else {
+    // replaying history[at]: the same verbs, same candidates, same slot
+    // assignment, in the same order — just like Pegs re-laying a deal.
+    replayQueue = history[at].rounds; replayIndex = 0;
+  }
+
   $('over').classList.remove('show');
   drawLadder(); paintHud();
   spawnRound();
@@ -324,6 +365,23 @@ function start(){
   $('clock').classList.remove('low');
   $('startHint').style.opacity = '1';
   ++startToken;
+}
+
+/* Replay an earlier run, interactively, from the start — same pattern as
+   Pegs' backDeal/repeatDeal/nextDeal. */
+function backRun(){
+  if (at <= 0) return;
+  at--; runNum++;
+  start(false);
+}
+function repeatRun(){
+  runNum++;
+  start(false);
+}
+function nextRun(){
+  runNum++;
+  if (at < history.length - 1){ at++; start(false); }
+  else start(true);
 }
 
 function drawLadder(){
@@ -348,23 +406,36 @@ function checkMark(){
 
 /* one verb, four particle-candidates dropped onto the four fixed compass
    points. Which particle lands on which point is reshuffled every round,
-   but the four points themselves never move. */
+   but the four points themselves never move.
+
+   When replaying a past run (replayQueue set), the exact recipe already
+   recorded is reused instead of rolled again, so "Before" / "Same hunt
+   again" really do hand back the same run. Otherwise a fresh recipe is
+   generated and appended to the current run's history entry so it can be
+   replayed later. */
 function spawnRound(){
-  target = POOL[(Math.random() * POOL.length) | 0];
-  const kin = shuffle(POOL.filter(p => p.verb === target.verb && p.particle !== target.particle));
-  const cards = [target];
-  const seenParticles = new Set([target.particle]);
-  for (const k of kin){ if (cards.length >= CANDIDATES) break; if (seenParticles.has(k.particle)) continue; seenParticles.add(k.particle); cards.push(k); }
-  while (cards.length < CANDIDATES){
-    const p = POOL[(Math.random() * POOL.length) | 0];
-    if (!seenParticles.has(p.particle)){ seenParticles.add(p.particle); cards.push({ verb:target.verb, particle:p.particle, meaning:target.meaning }); }
+  let recipe;
+  if (replayQueue && replayIndex < replayQueue.length){
+    recipe = replayQueue[replayIndex++];
+  } else {
+    target = POOL[(Math.random() * POOL.length) | 0];
+    const kin = shuffle(POOL.filter(p => p.verb === target.verb && p.particle !== target.particle));
+    const cards = [target];
+    const seenParticles = new Set([target.particle]);
+    for (const k of kin){ if (cards.length >= CANDIDATES) break; if (seenParticles.has(k.particle)) continue; seenParticles.add(k.particle); cards.push(k); }
+    while (cards.length < CANDIDATES){
+      const p = POOL[(Math.random() * POOL.length) | 0];
+      if (!seenParticles.has(p.particle)){ seenParticles.add(p.particle); cards.push({ verb:target.verb, particle:p.particle, meaning:target.meaning }); }
+    }
+    recipe = { target, cards: shuffle(cards), order: shuffle(['up', 'down', 'left', 'right']) };
+    if (history[at]) history[at].rounds.push(recipe);
   }
 
+  target = recipe.target;
   const slots = fixedSlots();
-  const order = shuffle(['up', 'down', 'left', 'right']);
   food = [];
-  shuffle(cards).forEach((c, i) => {
-    const key = order[i];
+  recipe.cards.forEach((c, i) => {
+    const key = recipe.order[i];
     let { x, y } = slots[key];
     // if the snake's own body currently covers a slot, nudge along that
     // slot's axis until clear — the four *directions* stay fixed even
@@ -386,7 +457,7 @@ function spawnRound(){
 
 function setDir(dx, dy){
   if (!running) return;
-  if (dx === -dir.x && dy === -dir.y) return;   // no reversing into yourself — applies to the first move too
+  if (!awaitingStart && dx === -dir.x && dy === -dir.y) return;   // no reversing into yourself, once actually moving
   pendingDir = {x:dx, y:dy};
   if (awaitingStart){
     awaitingStart = false;
@@ -452,6 +523,7 @@ function resolve(hit){
     }
   } else {
     misses++; streak = 0; lives--;
+    missLog.push({ verb: target.verb, particle: target.particle });
     flash(target.verb + ' ' + target.particle, 'var(--bad)');
     canvas.classList.remove('shake'); void canvas.offsetWidth; canvas.classList.add('shake');
   }
@@ -506,7 +578,21 @@ function finish(reason){
   $('score').innerHTML = sc + '<span class="gr">' + letter + '</span>';
   $('word').textContent = word + (mark >= 0 ? ' · ' + NAMES[mark] : '');
   $('note').innerHTML = 'The snake ' + REASON[reason] + ' · <b>' + hits + '</b> caught, <b>' + misses +
-    '</b> missed · length <b>' + snake.length + '</b>';
+    '</b> missed · length <b>' + snake.length + '</b> · run <b>' + runNum + '</b>';
+
+  // dedupe missed verb+particle pairs, with a count for repeats — the same
+  // pattern as Pegs naming what was lost and what it needed.
+  const seen = new Map();
+  missLog.forEach(m => {
+    const key = m.verb + ' ' + m.particle;
+    seen.set(key, (seen.get(key) || 0) + 1);
+  });
+  $('missed').innerHTML = seen.size
+    ? 'Worth another look: ' + [...seen].map(([k, n]) =>
+        '<b>' + esc(k) + '</b>' + (n > 1 ? ' ×' + n : '')).join(' · ')
+    : '';
+
+  $('backBtn').disabled = at <= 0;
   $('over').classList.add('show');
 }
 

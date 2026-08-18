@@ -227,8 +227,7 @@
   .fw-flash{ width:56px; height:56px; border-radius:50%;
              background:radial-gradient(circle,#fff 0%,#FFD94A 35%,rgba(255,217,74,0) 70%); }
 
-  .over{
-      /* ── SUMMARY CARD ──
+  /* ── SUMMARY CARD ──
      A floating card, not a takeover: the board stays visible underneath
      through a light scrim, so finishing a run reads as "here's your
      result" rather than "everything just stopped." Sized to content and
@@ -423,6 +422,8 @@ let canvas, ctx, COLS, ROWS, cellW, cellH;
 let snake, dir, pendingDir, food, target, tickMs, tickTimer, clockTimer;
 let hits, misses, streak, best, lives, mark, left, running, awaitingStart, awaitingMove;
 let startToken = 0;
+let recentTargets = [];   // last few target keys, most recent last — kept short so nothing repeats back-to-back
+const NO_REPEAT = 4;      // how many turns a phrase must sit out before it can reappear
 
 /* ── shared verb identity with the hub ──
    The hub's tabs let you drill into one verb at a time; landing here from
@@ -591,6 +592,7 @@ function start(fresh){
   dir = {x:1,y:0}; pendingDir = null;
   hits = misses = streak = best = 0; lives = LIVES_START; mark = -1; left = ROUND;
   missLog = [];
+  recentTargets = [];
   running = true; tickMs = TICK_START; awaitingStart = true;
 
   if (fresh){
@@ -694,7 +696,20 @@ function spawnRound(){
   if (replayQueue && replayIndex < replayQueue.length){
     recipe = replayQueue[replayIndex++];
   } else {
-    target = POOL[(Math.random() * POOL.length) | 0];
+    /* Never repeat a phrase that appeared in the last NO_REPEAT rounds —
+       a small pool under pure random choice can (and did) hand back the
+       exact same definition several turns running, which reads as a
+       broken game rather than a random one to a kid playing it. Falls
+       back to the full pool only if the exclusion would leave nothing
+       to pick from, e.g. a verb with very few phrases. */
+    const avoidCount = Math.min(NO_REPEAT, POOL.length - 1);
+    const avoid = new Set(recentTargets.slice(-avoidCount));
+    const candidates = POOL.filter(p => !avoid.has(p.verb + ' ' + p.particle));
+    const pickFrom = candidates.length ? candidates : POOL;
+    target = pickFrom[(Math.random() * pickFrom.length) | 0];
+    recentTargets.push(target.verb + ' ' + target.particle);
+    if (recentTargets.length > NO_REPEAT) recentTargets.shift();
+
     const kin = shuffle(POOL.filter(p => p.verb === target.verb && p.particle !== target.particle));
     const cards = [target];
     const seenParticles = new Set([target.particle]);

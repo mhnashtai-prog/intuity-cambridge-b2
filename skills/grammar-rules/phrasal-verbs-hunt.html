@@ -228,20 +228,38 @@
              background:radial-gradient(circle,#fff 0%,#FFD94A 35%,rgba(255,217,74,0) 70%); }
 
   .over{
-    position:fixed; inset:0; z-index:50; display:none; flex-direction:column;
-    align-items:center; justify-content:center; gap:.35rem; text-align:center; padding:2rem;
-    background:rgba(8,8,9,.95); backdrop-filter:blur(6px);
+      /* ── SUMMARY CARD ──
+     A floating card, not a takeover: the board stays visible underneath
+     through a light scrim, so finishing a run reads as "here's your
+     result" rather than "everything just stopped." Sized to content and
+     capped narrow, so it never approaches full-screen even on a big
+     display. Built to make a later collapse/dismiss affordance easy —
+     it's already just a positioned card, not a fixed backdrop. */
+  .over{
+    position:fixed; inset:0; z-index:50; display:none;
+    align-items:center; justify-content:center; padding:1.2rem;
+    background:rgba(8,8,9,.35); backdrop-filter:blur(2px);
   }
   .over.show{ display:flex; }
+  .over-card{
+    width:100%; max-width:22rem; max-height:min(78vh, 32rem); overflow-y:auto;
+    display:flex; flex-direction:column; align-items:center; gap:.35rem; text-align:center;
+    padding:1.6rem 1.5rem 1.4rem; border-radius:1.1rem;
+    background:linear-gradient(165deg, rgba(28,28,30,.98), rgba(15,15,17,.99));
+    border:1px solid rgba(201,169,97,.25);
+    box-shadow:0 20px 55px rgba(0,0,0,.6), 0 0 40px rgba(201,169,97,.06);
+    animation:cardIn .28s cubic-bezier(.2,1,.4,1) both;
+  }
+  @keyframes cardIn{ from{ opacity:0; transform:translateY(10px) scale(.97); } to{ opacity:1; transform:none; } }
   .over .score{ font-family:'Space Grotesk',sans-serif; font-weight:900;
-                font-size:clamp(2.4rem,9vw,3.6rem); font-variant-numeric:tabular-nums; }
+                font-size:clamp(2rem,7vw,2.8rem); font-variant-numeric:tabular-nums; }
   .over .score .gr{ font-size:.5em; margin-left:.3rem; vertical-align:.35em; }
   .g-a{ color:var(--s4); } .g-b{ color:var(--egg-right); } .g-c{ color:#7dd3fc; } .g-d{ color:var(--egg-lost); }
   .over .word{ font-family:'DM Mono',monospace; font-size:.7rem; letter-spacing:.16em;
                text-transform:uppercase; color:var(--dim); }
   .over .note{ margin-top:.6rem; font-size:.8rem; color:var(--dim); }
   .over .note b{ color:var(--paper); }
-  .over .missed{ margin-top:.9rem; max-width:32rem; font-size:.82rem; line-height:1.8; color:var(--dim); }
+  .over .missed{ margin-top:.7rem; font-size:.78rem; line-height:1.7; color:var(--dim); }
   .over .missed b{ color:var(--gold); font-weight:700; }
   .over .quiet[disabled]{ opacity:.3; cursor:default; }
   .over .away{ margin-top:.9rem; font-size:.66rem; border:none; }
@@ -322,16 +340,18 @@
 <div class="banner" id="banner"></div>
 
 <div class="over" id="over">
-  <div class="score" id="score"></div>
-  <div class="word" id="word"></div>
-  <div class="note" id="note"></div>
-  <div class="missed" id="missed"></div>
-  <div class="acts">
-    <button class="quiet" id="backBtn" onclick="backRun()">← Before</button>
-    <button class="quiet" onclick="repeatRun()">↻ Same hunt again</button>
-    <button class="go" onclick="nextRun()">Next hunt →</button>
+  <div class="over-card">
+    <div class="score" id="score"></div>
+    <div class="word" id="word"></div>
+    <div class="note" id="note"></div>
+    <div class="missed" id="missed"></div>
+    <div class="acts">
+      <button class="quiet" id="backBtn" onclick="backRun()">← Before</button>
+      <button class="quiet" onclick="repeatRun()">↻ Same hunt again</button>
+      <button class="go" onclick="nextRun()">Next hunt →</button>
+    </div>
+    <button class="quiet away" onclick="goToHub()">Back to phrasal verbs</button>
   </div>
-  <button class="quiet away" onclick="goToHub()">Back to phrasal verbs</button>
 </div>
 
 <div class="loading" id="loading">Loading…</div>
@@ -901,7 +921,15 @@ function clockTick(){
   left--;
   $('clock').textContent = Math.floor(left/60) + ':' + String(left%60).padStart(2,'0');
   $('clock').classList.toggle('low', left <= 15);
-  if (left <= 0){ running = false; clearInterval(tickTimer); clearInterval(clockTimer); finish('time'); }
+  if (left <= 0){
+    running = false;
+    clearInterval(tickTimer); clearInterval(clockTimer);
+    /* If time runs out during the brief pause after a correct catch (the
+       550ms fill-blank celebration before the next round spawns), don't
+       leave the board frozen on that last catch waiting for a round that
+       will never come — go straight to the summary. */
+    setTimeout(() => finish('time'), 260);
+  }
 }
 
 function paintHud(){

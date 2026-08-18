@@ -22,7 +22,7 @@
     --egg-right:#7FB519; --egg-lost:#D96A44; --egg-free:#61B5ED; --egg-word:#0C2B42;
     --shade:62,58,50;
     /* stage chrome — swapped wholesale by the theme picker below */
-    --bg-rgb: 172,169,117;                 /* ← the ground: #B7B7A4 */
+    --bg-rgb: 172,169,117;                 /* ← the ground: #aca975 */
     --hairline: rgba(62,58,50,.16);
     --dot-idle: rgba(38,37,31,.18);
     --divider: rgba(38,37,31,.16);
@@ -127,8 +127,8 @@
   }
   .card .pv{
     position:relative; z-index:1;
-    font-family:'Archivo Black',system-ui,sans-serif; font-weight:900; color:#2563a8;
-    -webkit-text-stroke:0.5px #2563a8;
+    font-family:'Archivo Black',system-ui,sans-serif; font-weight:900; color:var(--ink);
+    -webkit-text-stroke:0.5px var(--ink);
     font-size:clamp(1.05rem,3vw,1.55rem); letter-spacing:-.02em; line-height:1.02;
     text-align:center; padding:0 .15rem;
     transform:translateY(-.9rem);
@@ -322,44 +322,55 @@ const firstSense = m => String(m).split(';')[0].trim();
 
 /* ── celebratory jingle ──
    A tiny Web Audio synth rather than a sound file, so there's nothing to
-   fetch and nothing that can 404. A quick major-triad arpeggio on a
-   correct answer; a fuller ascending run on a streak of 5+, to match the
-   bigger firework burst. Browsers require a user gesture before audio can
-   play, which a card tap already is, so this is created lazily on first
-   use rather than at load. */
+   fetch and nothing that can 404. Each note is two detuned oscillators
+   (a sawtooth core + a triangle doubling an octave up) so it reads as a
+   bright, festive "ta-da" rather than a single soft sine-ish tone.
+   Browsers require a user gesture before audio can play, which a card
+   tap already is, so the context is created lazily on first use. */
 let _actx = null;
 function audioCtx(){
   if (!_actx) _actx = new (window.AudioContext || window.webkitAudioContext)();
   if (_actx.state === 'suspended') _actx.resume();
   return _actx;
 }
+function note(ctx, master, freq, t0, dur, level){
+  const osc1 = ctx.createOscillator();
+  osc1.type = 'sawtooth'; osc1.frequency.setValueAtTime(freq, t0);
+  const osc2 = ctx.createOscillator();
+  osc2.type = 'triangle'; osc2.frequency.setValueAtTime(freq * 2, t0);
+  const g1 = ctx.createGain(), g2 = ctx.createGain();
+  g1.gain.setValueAtTime(0, t0);
+  g1.gain.linearRampToValueAtTime(level, t0 + 0.012);
+  g1.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  g2.gain.setValueAtTime(0, t0);
+  g2.gain.linearRampToValueAtTime(level * 0.5, t0 + 0.012);
+  g2.gain.exponentialRampToValueAtTime(0.001, t0 + dur * 0.7);
+  osc1.connect(g1); g1.connect(master);
+  osc2.connect(g2); g2.connect(master);
+  osc1.start(t0); osc1.stop(t0 + dur + 0.03);
+  osc2.start(t0); osc2.stop(t0 + dur + 0.03);
+}
 function chime(notes, big){
   try{
     const ctx = audioCtx();
     const master = ctx.createGain();
-    master.gain.value = big ? 0.22 : 0.16;
-    master.connect(ctx.destination);
+    master.gain.value = big ? 0.55 : 0.4;
+    const comp = ctx.createDynamicsCompressor();
+    master.connect(comp); comp.connect(ctx.destination);
     const start = ctx.currentTime;
-    notes.forEach((freq, i) => {
-      const t0 = start + i * (big ? 0.09 : 0.075);
-      const dur = big ? 0.34 : 0.26;
-      const osc = ctx.createOscillator();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, t0);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0, t0);
-      g.gain.linearRampToValueAtTime(1, t0 + 0.015);
-      g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
-      osc.connect(g); g.connect(master);
-      osc.start(t0); osc.stop(t0 + dur + 0.02);
-    });
+    const step = big ? 0.1 : 0.085;
+    const dur  = big ? 0.4 : 0.3;
+    notes.forEach((freq, i) => note(ctx, master, freq, start + i * step, dur, 1));
+    /* a bright unison "shimmer" on the final note ties it off like a
+       real fanfare instead of just stopping */
+    const last = start + (notes.length - 1) * step;
+    note(ctx, master, notes[notes.length - 1] * 2, last + 0.03, dur * 0.8, big ? 0.5 : 0.3);
   }catch(e){ /* audio isn't essential — fail silently */ }
 }
-/* C major triad up, octave on top for the plain win; add the fifth and
-   a bright top note for a streak of 5+ so it reads as "more" than the
-   single-hit version, matching the bigger spark burst. */
-const winChime = () => chime([523.25, 659.25, 783.99], false);
-const bigChime = () => chime([392.00, 523.25, 659.25, 783.99, 1046.5], true);
+/* a full ascending major run for every hit, and an even bigger fanfare
+   with a high tonic to top it off on a streak of 5+ */
+const winChime = () => chime([523.25, 659.25, 783.99, 1046.5], false);
+const bigChime = () => chime([392.00, 493.88, 587.33, 698.46, 880.00, 1174.66], true);
 
 async function boot(){
   try{
@@ -587,66 +598,108 @@ function flash(text, col){
   setTimeout(() => b.classList.remove('show'), 1200);
 }
 
-/* Every hit gets a shell, and a run of five gets a bigger one. */
-function burst(el, big){
-  const field = $('field');
-  const f = field.getBoundingClientRect(), r = el.getBoundingClientRect();
-  const cx = r.left - f.left + r.width/2, cy = r.top - f.top + r.height/2;
-  const COLS = ['#FFD94A','#C9A961','#7FB519','#D96A44','#ffffff','#61B5ED'];
+/* ── the firework ──
+   Funchal-on-New-Year's-Eve energy: not one polite pop but several
+   shells going off in quick succession around the card, a bigger flash
+   and ring on each, a much denser field of sparks, and — the part a
+   single burst never had — a lingering field of small twinkling glitter
+   that fades out over a second or so instead of vanishing with the
+   sparks. A streak of 5+ gets more shells, more glitter, and a wider
+   spread so it genuinely reads as a bigger moment. */
+function shell(field, cx, cy, big){
+  const COLS = ['#FFD94A','#C9A961','#7FB519','#D96A44','#ffffff','#61B5ED','#FF4D6A','#B983FF','#FF9F1C'];
 
   const flash = document.createElement('div');
   flash.className = 'spark fw-flash';
   flash.style.left = cx+'px'; flash.style.top = cy+'px';
   field.appendChild(flash);
   flash.animate([{transform:'translate(-50%,-50%) scale(.2)',opacity:1},
-                 {transform:'translate(-50%,-50%) scale('+(big?4.2:3.1)+')',opacity:0}],
-                {duration:big?480:400,easing:'cubic-bezier(.1,.8,.2,1)'});
-  setTimeout(()=>flash.remove(), big?480:360);
+                 {transform:'translate(-50%,-50%) scale('+(big?6.2:4.6)+')',opacity:0}],
+                {duration:big?560:460,easing:'cubic-bezier(.1,.8,.2,1)'});
+  setTimeout(()=>flash.remove(), big?560:440);
 
-  {
+  for (let ringI=0; ringI<(big?2:1); ringI++){
     const ring = document.createElement('div');
     ring.className = 'spark fw-ring';
     ring.style.left = cx+'px'; ring.style.top = cy+'px';
+    ring.style.borderColor = COLS[(Math.random()*COLS.length)|0] + 'e6';
     field.appendChild(ring);
-    ring.animate([{transform:'translate(-50%,-50%) scale(.15)',opacity:.9},
-                  {transform:'translate(-50%,-50%) scale('+(big?4.2:3)+')',opacity:0}],
-                 {duration:big?740:600,easing:'cubic-bezier(.1,.7,.2,1)'});
-    setTimeout(()=>ring.remove(),720);
+    const delay = ringI * 90;
+    setTimeout(() => {
+      ring.animate([{transform:'translate(-50%,-50%) scale(.15)',opacity:.95},
+                    {transform:'translate(-50%,-50%) scale('+(big?6.4:4.8)+')',opacity:0}],
+                   {duration:big?820:660,easing:'cubic-bezier(.1,.7,.2,1)'});
+    }, delay);
+    setTimeout(()=>ring.remove(), 900 + delay);
   }
 
-  const n = big ? 78 : 42;
+  const n = big ? 130 : 80;
   for (let i=0;i<n;i++){
     const p = document.createElement('div');
     p.className = 'spark';
-    const col = COLS[(Math.random()*COLS.length)|0], size = 3+Math.random()*3.5;
+    const col = COLS[(Math.random()*COLS.length)|0], size = 3+Math.random()*4;
     p.style.cssText += 'left:'+cx+'px; top:'+cy+'px; width:'+size+'px; height:'+size+
-      'px; background:'+col+'; box-shadow:0 0 '+(size*2.6)+'px '+col+';';
+      'px; background:'+col+'; box-shadow:0 0 '+(size*2.8)+'px '+col+';';
     field.appendChild(p);
-    const a = Math.random()*Math.PI*2, d = (big?110:75) + Math.random()*(big?260:150);
-    const dx = Math.cos(a)*d, dy = Math.sin(a)*d, fall = 45+Math.random()*80;
-    const dur = (big?900:600)+Math.random()*350;
+    const a = Math.random()*Math.PI*2, d = (big?140:95) + Math.random()*(big?340:210);
+    const dx = Math.cos(a)*d, dy = Math.sin(a)*d, fall = 55+Math.random()*95;
+    const dur = (big?1050:750)+Math.random()*400;
     p.animate([
-      {transform:'translate(-50%,-50%) translate(0,0) scale(1.15)',opacity:1},
-      {transform:'translate(-50%,-50%) translate('+(dx*.6).toFixed(0)+'px,'+(dy*.6-10).toFixed(0)+'px) scale(1)',opacity:1,offset:.42},
-      {transform:'translate(-50%,-50%) translate('+dx.toFixed(0)+'px,'+(dy+fall).toFixed(0)+'px) scale(.25)',opacity:0}
+      {transform:'translate(-50%,-50%) translate(0,0) scale(1.2)',opacity:1},
+      {transform:'translate(-50%,-50%) translate('+(dx*.6).toFixed(0)+'px,'+(dy*.6-10).toFixed(0)+'px) scale(1)',opacity:1,offset:.4},
+      {transform:'translate(-50%,-50%) translate('+dx.toFixed(0)+'px,'+(dy+fall).toFixed(0)+'px) scale(.2)',opacity:0}
     ],{duration:dur,easing:'cubic-bezier(.12,.75,.3,1)'});
     setTimeout(()=>p.remove(),dur+40);
   }
 
-  if (big) setTimeout(() => {
-    for (let i=0;i<14;i++){
-      const c = document.createElement('div');
-      c.className = 'spark fw-crackle';
-      const a = Math.random()*Math.PI*2, d = 25+Math.random()*110;
-      c.style.left = (cx+Math.cos(a)*d*.5)+'px'; c.style.top = (cy+Math.sin(a)*d*.5)+'px';
-      field.appendChild(c);
-      c.animate([{opacity:0,transform:'translate(-50%,-50%) scale(.4)'},
-                 {opacity:1,transform:'translate(-50%,-50%) scale(1.3)',offset:.25},
-                 {opacity:0,transform:'translate(-50%,-50%) scale(.3)'}],
-                {duration:300+Math.random()*220,easing:'ease-out'});
-      setTimeout(()=>c.remove(),560);
-    }
-  }, 220);
+  /* glitter: small bright points that pop in, twinkle (flicker opacity
+     and scale a few times), then fade — scattered widely and lingering
+     well after the main sparks are gone, which is what makes a burst
+     read as "glittery" rather than just "sparky" */
+  const glitterCount = big ? 70 : 40;
+  const glitterSpan = big ? 260 : 170;
+  for (let i=0;i<glitterCount;i++){
+    const gDelay = 120 + Math.random()*(big?650:420);
+    setTimeout(() => {
+      const gl = document.createElement('div');
+      gl.className = 'spark fw-crackle';
+      const a = Math.random()*Math.PI*2, d = Math.random()*glitterSpan;
+      const gx = cx + Math.cos(a)*d, gy = cy + Math.sin(a)*d - Math.random()*40;
+      gl.style.left = gx+'px'; gl.style.top = gy+'px';
+      const col = COLS[(Math.random()*COLS.length)|0];
+      gl.style.background = col; gl.style.boxShadow = '0 0 9px '+col;
+      field.appendChild(gl);
+      const flickers = 2 + ((Math.random()*3)|0);
+      const kf = [{opacity:0, transform:'translate(-50%,-50%) scale(.3)'}];
+      for (let f=0; f<flickers; f++){
+        kf.push({opacity:1, transform:'translate(-50%,-50%) scale(1.4)', offset: undefined});
+        kf.push({opacity:.15, transform:'translate(-50%,-50%) scale(.5)', offset: undefined});
+      }
+      kf.push({opacity:0, transform:'translate(-50%,-50%) scale(.2)'});
+      const dur = 500 + Math.random()*400;
+      gl.animate(kf, {duration:dur, easing:'ease-in-out'});
+      setTimeout(()=>gl.remove(), dur+40);
+    }, gDelay);
+  }
+}
+
+/* Every hit gets a two-shell burst; a run of five or more gets a
+   cascading multi-shell show — several pops around the card in quick
+   succession, like a proper finale rather than a single flash. */
+function burst(el, big){
+  const field = $('field');
+  const f = field.getBoundingClientRect(), r = el.getBoundingClientRect();
+  const cx = r.left - f.left + r.width/2, cy = r.top - f.top + r.height/2;
+
+  const shellCount = big ? 5 : 2;
+  for (let s=0; s<shellCount; s++){
+    setTimeout(() => {
+      const jitter = big ? 55 : 20;
+      const jx = cx + (Math.random()*2-1)*jitter;
+      const jy = cy + (Math.random()*2-1)*jitter*0.6;
+      shell(field, jx, jy, big && s === 0);
+    }, s * (big ? 150 : 110));
+  }
 }
 
 /* A hidden tab should stop rather than run the clock down unseen. */

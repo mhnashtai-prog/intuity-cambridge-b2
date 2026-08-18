@@ -97,28 +97,33 @@
   .link.done{ background:var(--gold); }
 
   /* ── the clue bar ──
-     A plain instruction line ("Form a phrasal verb that means:"), the
-     definition itself, then the verb inside a pill next to a dashed
-     blank for the missing particle. The blank fills solid the moment the
-     right particle is caught, so the reward reads as "you completed the
-     word", not just a colour flash — the goal was ambiguous before this
-     (a colon-separated verb:meaning line reads as a label, not a task);
-     spelling out "form a phrasal verb" up front removes that guesswork
-     for someone opening the page cold. */
+     Instruction and definition now sit on ONE line together — "Form a
+     phrasal verb that means: to enter" — instead of stacking as two
+     separate lines. That reads as a single sentence instead of a label
+     over a value, and it's what actually saves vertical space on phones.
+     The verb sits inside a pill next to a dashed blank for the missing
+     particle. The blank fills solid the moment the right particle is
+     caught, so the reward reads as "you completed the word", not just a
+     colour flash. */
   .cluebar{
     position:fixed; top:var(--header-h); left:0; right:0; height:var(--clue-h); z-index:15;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.2rem;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.3rem;
     background:linear-gradient(180deg, rgba(201,169,97,.09), rgba(13,13,13,.85) 80%);
     border-bottom:1px solid rgba(201,169,97,.22);
-    text-align:center; padding:.3rem 1rem;
+    text-align:center; padding:.35rem 1rem;
+  }
+  .meaningLine{
+    display:flex; flex-wrap:wrap; align-items:baseline; justify-content:center;
+    gap:.4em; max-width:36rem; padding:0 .5rem;
   }
   .instruction{
-    font-family:'DM Mono',monospace; font-size:.5rem; letter-spacing:.14em;
-    text-transform:uppercase; color:rgba(255,255,255,.4);
+    font-family:'DM Mono',monospace; font-size:clamp(.62rem,1.7vw,.72rem);
+    letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.45);
+    white-space:nowrap;
   }
   .cluebar .meaning{
-    font-size:clamp(.7rem,1.9vw,.86rem); color:var(--dim); text-align:center;
-    max-width:34rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    font-size:clamp(.86rem,2.6vw,1.05rem); font-weight:600;
+    color:var(--paper); text-align:center;
   }
   .verbbadge{
     display:flex; align-items:center; gap:.45rem; margin-top:.2rem;
@@ -178,6 +183,17 @@
   .clock{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:.86rem; color:var(--paper); font-variant-numeric:tabular-nums; }
   .clock.low{ color:var(--bad); animation:beat 1s ease-in-out infinite; }
   @keyframes beat{ 0%,100%{transform:scale(1)} 14%{transform:scale(1.16)} 30%{transform:scale(1)} }
+
+  /* ── sound toggle ──
+     Off by default cost nothing to add back in — instead it defaults ON
+     (most kids want the fun) but is one tap away from silence for shared
+     or quiet spaces. Preference persists across visits via localStorage. */
+  .sound-toggle{
+    font-size:.9rem; line-height:1; opacity:.7; padding:.2rem .3rem;
+    border-radius:.4rem; transition:opacity .2s, background .2s; flex-shrink:0;
+  }
+  .sound-toggle:hover{ opacity:1; background:rgba(255,255,255,.08); }
+  .sound-toggle.muted{ opacity:.35; }
 
   /* ── mini-snake progress strip ──
      Grows one segment per correct catch this run, up to MINI_MAX. It
@@ -274,8 +290,8 @@
   .loading{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:.8rem; }
   .err{ color:var(--bad); text-align:center; max-width:30rem; line-height:1.7; padding:2rem; }
 
-  @media(max-width:600px){ :root{ --header-h:116px; --clue-h:126px; } }
-  @media(max-width:420px){ .mini-snake .seg{ width:6px; height:6px; } .foot{ font-size:.58rem; gap:.4rem; } }
+  @media(max-width:600px){ :root{ --header-h:116px; --clue-h:150px; } }
+  @media(max-width:420px){ :root{ --clue-h:158px; } .mini-snake .seg{ width:6px; height:6px; } .foot{ font-size:.58rem; gap:.4rem; } }
 
   body.embedded{ --header-h:40px; }
   body.embedded .header-top{ display:none; }
@@ -316,8 +332,10 @@
 
 <div class="cluebar">
   <div class="ladder" id="ladder"></div>
-  <div class="instruction">Form a phrasal verb that means:</div>
-  <div class="meaning" id="clueMeaning">loading…</div>
+  <div class="meaningLine">
+    <span class="instruction">Form a phrasal verb that means:</span>
+    <span class="meaning" id="clueMeaning">loading…</span>
+  </div>
   <div class="verbbadge">
     <span class="verb" id="clueVerb">—</span>
     <span class="gap" id="clueGap">?</span>
@@ -337,6 +355,7 @@
     <span class="mini-snake" id="miniSnake"></span>
     <span class="dance-avatar" id="danceAvatar">💃</span>
   </span>
+  <button class="sound-toggle" id="soundToggle" aria-label="Toggle sound" title="Sound on/off">🔊</button>
   <span class="clock" id="clock">2:00</span>
 </div>
 
@@ -391,6 +410,11 @@
    particle fills that blank solid, so the reward is literally completing
    the word on screen, not just a colour flash that vanishes.
 
+   Sound is optional: short synthesized tones (no audio files, no network
+   weight) mark a correct catch, a wrong catch, a crash, and a milestone.
+   It defaults on but is one tap away from silence via the footer toggle,
+   and the choice is remembered between visits.
+
    Same eggs, same ladder, same Cambridge scale as every other phrasal-verb
    game in the set — a child who has played one already knows how to read
    this one, they just have to keep the snake alive while they do it.
@@ -428,6 +452,65 @@ let hits, misses, streak, best, lives, mark, left, running, awaitingStart, await
 let startToken = 0;
 let recentTargets = [];   // last few target keys, most recent last — kept short so nothing repeats back-to-back
 const NO_REPEAT = 4;      // how many turns a phrase must sit out before it can reappear
+
+/* ── optional sound ──
+   Short synthesized tones via the Web Audio API — no files to load, no
+   network weight. Defaults on; the footer toggle flips `soundOn` and
+   remembers the choice in localStorage. Browsers block audio until a
+   user gesture, so the first board click (which already exists via
+   setDir) is what actually unlocks playback — no extra handling needed. */
+let soundOn = localStorage.getItem('hunt-sound') !== 'off';
+let audioCtx = null;
+
+function ensureAudio(){
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function beep(freq, dur, type, vol, delay){
+  if (!soundOn) return;
+  ensureAudio();
+  const t0 = audioCtx.currentTime + (delay || 0);
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type || 'sine';
+  osc.frequency.setValueAtTime(freq, t0);
+  gain.gain.setValueAtTime(0, t0);
+  gain.gain.linearRampToValueAtTime(vol || 0.18, t0 + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(t0); osc.stop(t0 + dur + 0.02);
+}
+
+function sfxCorrect(){
+  beep(523, .1, 'triangle', .16);       // C5
+  beep(784, .16, 'triangle', .16, .07); // G5 — quick rising two-note "pop"
+}
+function sfxWrong(){
+  beep(200, .22, 'sawtooth', .12);
+}
+function sfxCrash(){
+  beep(140, .28, 'square', .13);
+  beep(90, .3, 'square', .1, .05);
+}
+function sfxMilestone(){
+  [523,659,784,1047].forEach((f,i)=>beep(f, .14, 'triangle', .15, i*.08)); // little fanfare
+}
+function sfxSpeedUp(){
+  beep(1200, .06, 'sine', .09);         // tiny tick — the game itself just got faster
+}
+
+function initSoundToggle(){
+  const btn = $('soundToggle');
+  const paint = () => { btn.textContent = soundOn ? '🔊' : '🔇'; btn.classList.toggle('muted', !soundOn); };
+  paint();
+  btn.addEventListener('click', () => {
+    soundOn = !soundOn;
+    localStorage.setItem('hunt-sound', soundOn ? 'on' : 'off');
+    if (soundOn) ensureAudio();
+    paint();
+  });
+}
 
 /* ── shared verb identity with the hub ──
    The hub's tabs let you drill into one verb at a time; landing here from
@@ -541,6 +624,7 @@ async function boot(){
     canvas = $('board'); ctx = canvas.getContext('2d');
     initInput();
     initModeNav();
+    initSoundToggle();
     start(true);
     window.addEventListener('resize', fitCanvas);
   }catch(e){
@@ -659,6 +743,7 @@ function checkMark(){
   if (m <= mark) return;
   mark = m; drawLadder();
   flash(NAMES[m], 'var(--s' + m + ')');
+  sfxMilestone();
 }
 
 /* ── footer mini-snake ──
@@ -859,6 +944,7 @@ function loseLife(reason){
   streak = 0;
   paintHud(); updateMiniSnake();
   flash(reason === 'wall' ? 'hit the wall' : 'hit itself', 'var(--bad)');
+  sfxCrash();
   canvas.classList.remove('shake'); void canvas.offsetWidth; canvas.classList.add('shake');
   respawnSnake();
 }
@@ -879,6 +965,7 @@ function resolve(hit){
   if (hit.correct){
     hits++; streak++; best = Math.max(best, streak);
     flash(target.verb + ' ' + target.particle, 'var(--ok)');
+    sfxCorrect();
     burst(cellCenterX(hit.x), cellCenterY(hit.y), streak>0 && streak % 5 === 0);
     checkMark();
 
@@ -902,6 +989,7 @@ function resolve(hit){
     if (hits % SPEED_EVERY === 0 && tickMs > TICK_MIN){
       tickMs = Math.max(TICK_MIN, tickMs - SPEED_STEP);
       clearInterval(tickTimer); tickTimer = setInterval(tick, tickMs);
+      sfxSpeedUp();
     }
     paintHud(); updateMiniSnake();
     const token = startToken;
@@ -924,6 +1012,7 @@ function resolve(hit){
   misses++; streak = 0; lives = Math.max(0, lives - 1);
   missLog.push({ verb: target.verb, particle: target.particle });
   flash(target.verb + ' ' + target.particle, 'var(--bad)');
+  sfxWrong();
   canvas.classList.remove('shake'); void canvas.offsetWidth; canvas.classList.add('shake');
   paintHud(); updateMiniSnake();
   spawnRound();

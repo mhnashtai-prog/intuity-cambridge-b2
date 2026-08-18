@@ -297,6 +297,49 @@
                 letter-spacing:.08em; text-transform:uppercase; }
   .over .quiet:hover{ color:var(--paper); }
 
+  /* ── end-of-run particle recap ──
+     Every particle that exists for this verb in the data, laid out in one
+     row, not just the ones that happened to come up this run. Particles
+     the player actually caught correctly at least once fill solid green
+     — the same "right" colour the eggs already use everywhere else in the
+     app, so the read is consistent. Particles that never came up (or came
+     up but were never caught correctly) keep their neutral, unlit colour,
+     but they are NOT dead ends: they stay clickable/hoverable so a curious
+     or a completionist player can check the definition of exactly the
+     particles they still owe themselves practice on. This is the
+     pedagogical payoff of a timed run — the clock cuts play off, but the
+     recap turns "time's up" into "here's what's left to learn." */
+  .recap{ width:100%; margin-top:.85rem; padding-top:.75rem; border-top:1px dashed rgba(255,255,255,.12); }
+  .recapLabel{
+    font-family:'DM Mono',monospace; font-size:.6rem; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--faint); margin-bottom:.5rem;
+  }
+  .recapRow{ display:flex; flex-wrap:wrap; gap:.4rem; justify-content:center; }
+  .recap-chip{
+    position:relative; display:inline-flex; align-items:center; gap:.3rem;
+    padding:.32rem .68rem; border-radius:999px;
+    font-family:'DM Mono',monospace; font-size:.66rem; font-weight:500;
+    letter-spacing:.04em; text-transform:lowercase;
+    background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.16);
+    color:var(--dim); transition:background .2s, border-color .2s, color .2s, transform .15s;
+  }
+  .recap-chip:hover, .recap-chip:focus-visible{ transform:translateY(-1px); border-color:rgba(255,255,255,.4); color:var(--paper); outline:none; }
+  .recap-chip.done{
+    background:rgba(171,195,47,.22); border-color:var(--egg-right); color:#e8ffb0;
+    box-shadow:0 0 10px rgba(171,195,47,.3);
+  }
+  .recap-chip.done::before{ content:'✓'; font-size:.62em; opacity:.85; }
+  .recap-tip{
+    position:fixed; z-index:60; display:none; pointer-events:none;
+    max-width:14rem; padding:.45rem .65rem; border-radius:.5rem;
+    background:#131315; border:1px solid rgba(201,169,97,.4);
+    color:var(--paper); font-family:'DM Sans',sans-serif; font-size:.68rem; line-height:1.4;
+    text-align:left; text-transform:none; letter-spacing:normal;
+    box-shadow:0 10px 26px rgba(0,0,0,.55);
+  }
+  .recap-tip b{ display:block; color:var(--gold); font-family:'Space Grotesk',sans-serif;
+                font-weight:700; letter-spacing:.03em; text-transform:uppercase; font-size:.62rem; margin-bottom:.15rem; }
+
   .loading{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:.8rem; }
   .err{ color:var(--bad); text-align:center; max-width:30rem; line-height:1.7; padding:2rem; }
 
@@ -377,6 +420,10 @@
     <div class="word" id="word"></div>
     <div class="note" id="note"></div>
     <div class="missed" id="missed"></div>
+    <div class="recap" id="recap">
+      <div class="recapLabel" id="recapLabel">All particles for this verb</div>
+      <div class="recapRow" id="recapRow"></div>
+    </div>
     <div class="acts">
       <button class="quiet" id="backBtn" onclick="backRun()">← Before</button>
       <button class="quiet" onclick="repeatRun()">↻ Same hunt again</button>
@@ -428,6 +475,29 @@
    Same eggs, same ladder, same Cambridge scale as every other phrasal-verb
    game in the set — a child who has played one already knows how to read
    this one, they just have to keep the snake alive while they do it.
+
+   ── directional-particle fix ──
+   Some particles (chiefly "up" and "down") are also literally the words
+   a player uses to steer. Because the four board slots sit at fixed
+   compass points but which particle lands in which slot used to be pure
+   random, a child could see "down" sitting at the LEFT slot while the
+   word they actually need is at the BOTTOM slot — the label and the
+   position fight each other right when the game is leaning hardest on
+   spatial intuition. spawnRound() now pins any candidate whose text is
+   itself a slot name ("up"/"down"/"left"/"right") to that same-named
+   slot whenever that slot is free, and only shuffles the remaining
+   candidates into the remaining slots. A directional word, when it's on
+   the board at all, always sits where it says.
+
+   ── end-of-run particle recap ──
+   When a run ends (time runs out), the summary card now lists every
+   particle that belongs to the active verb in the data file — not just
+   the ones that happened to appear this run. Particles caught correctly
+   at least once this run are filled solid green; everything else keeps
+   its neutral colour but stays interactive — hovering (or tapping, for
+   touch) any chip shows the phrasal verb's definition in a tooltip, so
+   the end screen doubles as a quick reference for what's still worth
+   practising.
 ====================================================================== */
 
 const DATA_URL   = '../../data/grammar-rules/phrasal-verbs-data.json';
@@ -441,6 +511,7 @@ const LIVES_START= 3;
 const MARKS  = [3, 7, 12, 18, 26];
 const NAMES  = ['Spark','Ember','Flame','Blaze','Crown'];
 const MINI_MAX = 12;        // segments in the footer mini-snake before it's "full"
+const SLOT_NAMES = ['up', 'down', 'left', 'right'];
 
 const COL = {
   eggFree:'#61b5ed', eggRight:'#abc32f', eggLost:'#ff9248', eggWord:'#2f3540',
@@ -475,6 +546,10 @@ const NO_REPEAT = 4;      // how many turns a phrase must sit out before it can 
    to chance. */
 let deck = [], deckIndex = 0, lastTargetKey = null;
 let roundLog = [];   // every verb+particle a round actually presented this run, in order — used for the practiced/repeated stat
+
+/* every particle caught CORRECTLY at least once this run — this is what
+   the end-of-run recap lights up green. Reset at the start of every run. */
+let masteredParticles = new Set();
 
 /* ── optional sound ──
    Short synthesized tones via the Web Audio API — no files to load, no
@@ -648,6 +723,7 @@ async function boot(){
     initInput();
     initModeNav();
     initSoundToggle();
+    initRecapTooltip();
     start(true);
     window.addEventListener('resize', fitCanvas);
   }catch(e){
@@ -691,6 +767,30 @@ function fixedSlots(){
   };
 }
 
+/* ── directional-particle fix ──
+   Given this round's four candidate cards, decide which fixed compass
+   slot each one sits at. Any candidate whose particle text IS one of the
+   slot names ("up", "down", "left", "right") is pinned to that same
+   slot, so the word on the board never contradicts the position it sits
+   in. Everything else is shuffled into whichever slots are left. Returns
+   an array parallel to `cards`, e.g. ['up','right','down','left']. */
+function buildSlotOrder(cards){
+  const assigned = new Array(cards.length).fill(null);
+  const usedSlots = new Set();
+  cards.forEach((c, i) => {
+    if (SLOT_NAMES.includes(c.particle) && !usedSlots.has(c.particle)){
+      assigned[i] = c.particle;
+      usedSlots.add(c.particle);
+    }
+  });
+  const remaining = shuffle(SLOT_NAMES.filter(s => !usedSlots.has(s)));
+  let ri = 0;
+  for (let i = 0; i < cards.length; i++){
+    if (assigned[i] === null) assigned[i] = remaining[ri++];
+  }
+  return assigned;
+}
+
 function start(fresh){
   [COLS, ROWS] = gridSize();
   const cx = (COLS/2)|0, cy = (ROWS/2)|0;
@@ -704,8 +804,10 @@ function start(fresh){
   hits = misses = streak = best = 0; lives = LIVES_START; mark = -1; left = ROUND;
   missLog = [];
   roundLog = [];
+  masteredParticles = new Set();
   deck = []; deckIndex = 0; lastTargetKey = null;
   running = true; tickMs = TICK_START; awaitingStart = true;
+  hideRecapTip();
 
   if (fresh){
     // starting a genuinely new run: drop any "future" branch past the
@@ -796,8 +898,9 @@ function updateMiniSnake(){
 }
 
 /* one verb, four particle-candidates dropped onto the four fixed compass
-   points. Which particle lands on which point is reshuffled every round,
-   but the four points themselves never move.
+   points. Which particle lands on which point is reshuffled every round
+   (subject to the directional-word pinning above), but the four points
+   themselves never move.
 
    When replaying a past run (replayQueue set), the exact recipe already
    recorded is reused instead of rolled again, so "Before" / "Same hunt
@@ -841,7 +944,8 @@ function spawnRound(){
       const p = POOL[(Math.random() * POOL.length) | 0];
       if (!seenParticles.has(p.particle)){ seenParticles.add(p.particle); cards.push({ verb:target.verb, particle:p.particle, meaning:target.meaning }); }
     }
-    recipe = { target, cards: shuffle(cards), order: shuffle(['up', 'down', 'left', 'right']) };
+    const shuffledCards = shuffle(cards);
+    recipe = { target, cards: shuffledCards, order: buildSlotOrder(shuffledCards) };
     if (history[at]) history[at].rounds.push(recipe);
   }
 
@@ -999,6 +1103,7 @@ function resolve(hit){
 
   if (hit.correct){
     hits++; streak++; best = Math.max(best, streak);
+    masteredParticles.add(target.particle);
     flash(target.verb + ' ' + target.particle, 'var(--ok)');
     sfxCorrect();
     burst(cellCenterX(hit.x), cellCenterY(hit.y), streak>0 && streak % 5 === 0);
@@ -1103,6 +1208,79 @@ const REASON = {
   empty:'out of lives', time:"time's up"
 };
 
+/* ── recap tooltip ──
+   A single shared tooltip element, positioned above whichever chip is
+   active. Works on hover for a mouse, and on tap for touch: a tap opens
+   it (and closes any other open tooltip), a second tap on the same chip
+   — or a tap anywhere else — closes it. */
+let recapTipEl = null, recapTipOwner = null;
+
+function initRecapTooltip(){
+  recapTipEl = document.createElement('div');
+  recapTipEl.className = 'recap-tip';
+  document.body.appendChild(recapTipEl);
+  document.addEventListener('click', e => {
+    if (recapTipOwner && !e.target.closest('.recap-chip')) hideRecapTip();
+  });
+  window.addEventListener('scroll', hideRecapTip, true);
+}
+
+function showRecapTip(chip){
+  recapTipOwner = chip;
+  recapTipEl.innerHTML = '<b>' + esc(chip.dataset.verb) + '</b>' + esc(chip.dataset.def);
+  recapTipEl.style.display = 'block';
+  const r = chip.getBoundingClientRect();
+  const tw = recapTipEl.offsetWidth, th = recapTipEl.offsetHeight;
+  let left = r.left + r.width / 2 - tw / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+  let top = r.top - th - 9;
+  if (top < 4) top = r.bottom + 9;   // flip below if there's no room above
+  recapTipEl.style.left = left + 'px';
+  recapTipEl.style.top = top + 'px';
+}
+
+function hideRecapTip(){
+  recapTipOwner = null;
+  if (recapTipEl) recapTipEl.style.display = 'none';
+}
+
+/* Build the full-verb particle recap row: every particle in the active
+   verb's data, deduped, in data order. Caught-correctly-this-run
+   particles are marked done (solid green); the rest stay neutral but
+   remain hoverable/tappable for their definition. */
+function renderRecap(){
+  const row = $('recapRow');
+  row.innerHTML = '';
+  const g = GROUPS[activeVerbIdx];
+  const verbLabel = (g && (g.label || g.id)) || (target ? target.verb : '');
+
+  const seenParticles = new Map();   // particle -> meaning, first occurrence wins
+  POOL.forEach(p => { if (!seenParticles.has(p.particle)) seenParticles.set(p.particle, p.meaning); });
+
+  if (!seenParticles.size){ $('recap').style.display = 'none'; return; }
+  $('recap').style.display = '';
+  $('recapLabel').textContent = 'All ' + esc(verbLabel) + ' particles';
+
+  seenParticles.forEach((meaning, particle) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'recap-chip' + (masteredParticles.has(particle) ? ' done' : '');
+    chip.textContent = particle;
+    chip.dataset.verb = verbLabel + ' ' + particle;
+    chip.dataset.def = meaning;
+    chip.setAttribute('aria-label', verbLabel + ' ' + particle + ': ' + meaning);
+    chip.addEventListener('mouseenter', () => showRecapTip(chip));
+    chip.addEventListener('mouseleave', hideRecapTip);
+    chip.addEventListener('focus', () => showRecapTip(chip));
+    chip.addEventListener('blur', hideRecapTip);
+    chip.addEventListener('click', e => {
+      e.stopPropagation();
+      if (recapTipOwner === chip) hideRecapTip(); else showRecapTip(chip);
+    });
+    row.appendChild(chip);
+  });
+}
+
 function finish(reason){
   if (window.INTUITY) INTUITY.session('phrasal-verbs', 'hunt', { hits, misses, best, length: snake.length });
 
@@ -1139,6 +1317,8 @@ function finish(reason){
     ? 'Worth another look: ' + [...seen].map(([k, n]) =>
         '<b>' + esc(k) + '</b>' + (n > 1 ? ' ×' + n : '')).join(' · ')
     : '';
+
+  renderRecap();
 
   $('backBtn').disabled = at <= 0;
   $('over').classList.add('show');

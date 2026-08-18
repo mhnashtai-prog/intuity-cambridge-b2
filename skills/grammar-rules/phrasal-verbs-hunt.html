@@ -463,6 +463,19 @@ let startToken = 0;
 let recentTargets = [];   // last few target keys, most recent last — kept short so nothing repeats back-to-back
 const NO_REPEAT = 4;      // how many turns a phrase must sit out before it can reappear
 
+/* ── full-coverage deck ──
+   Rather than picking a target purely at random each round (which, given
+   enough rounds, could still skip a phrase entirely for the whole run),
+   the pool is shuffled once into a "deck" and drawn from top to bottom —
+   every phrase in the verb's set is practiced exactly once before ANY
+   phrase repeats. When the deck runs out it's reshuffled for another lap
+   (with a small check so the new lap's first card never repeats the
+   previous lap's last card back-to-back). This is what actually
+   guarantees full coverage over a long enough run, instead of leaving it
+   to chance. */
+let deck = [], deckIndex = 0, lastTargetKey = null;
+let roundLog = [];   // every verb+particle a round actually presented this run, in order — used for the practiced/repeated stat
+
 /* ── optional sound ──
    Short synthesized tones via the Web Audio API — no files to load, no
    network weight. Defaults on; the footer toggle flips `soundOn` and
@@ -690,7 +703,8 @@ function start(fresh){
   dir = {x:1,y:0}; pendingDir = null;
   hits = misses = streak = best = 0; lives = LIVES_START; mark = -1; left = ROUND;
   missLog = [];
-  recentTargets = [];
+  roundLog = [];
+  deck = []; deckIndex = 0; lastTargetKey = null;
   running = true; tickMs = TICK_START; awaitingStart = true;
 
   if (fresh){
@@ -802,19 +816,22 @@ function spawnRound(){
   if (replayQueue && replayIndex < replayQueue.length){
     recipe = replayQueue[replayIndex++];
   } else {
-    /* Never repeat a phrase that appeared in the last NO_REPEAT rounds —
-       a small pool under pure random choice can (and did) hand back the
-       exact same definition several turns running, which reads as a
-       broken game rather than a random one to a kid playing it. Falls
-       back to the full pool only if the exclusion would leave nothing
-       to pick from, e.g. a verb with very few phrases. */
-    const avoidCount = Math.min(NO_REPEAT, POOL.length - 1);
-    const avoid = new Set(recentTargets.slice(-avoidCount));
-    const candidates = POOL.filter(p => !avoid.has(p.verb + ' ' + p.particle));
-    const pickFrom = candidates.length ? candidates : POOL;
-    target = pickFrom[(Math.random() * pickFrom.length) | 0];
-    recentTargets.push(target.verb + ' ' + target.particle);
-    if (recentTargets.length > NO_REPEAT) recentTargets.shift();
+    /* Draw the next card from the deck instead of picking at random.
+       Refill and reshuffle only once the deck is empty, so a full lap
+       through every phrase always finishes before any phrase repeats. */
+    if (deckIndex >= deck.length){
+      deck = shuffle(POOL);
+      if (deck.length > 1 && lastTargetKey){
+        const firstKey = deck[0].verb + ' ' + deck[0].particle;
+        if (firstKey === lastTargetKey){
+          const swapIdx = 1 + ((Math.random() * (deck.length - 1)) | 0);
+          [deck[0], deck[swapIdx]] = [deck[swapIdx], deck[0]];
+        }
+      }
+      deckIndex = 0;
+    }
+    target = deck[deckIndex++];
+    lastTargetKey = target.verb + ' ' + target.particle;
 
     const kin = shuffle(POOL.filter(p => p.verb === target.verb && p.particle !== target.particle));
     const cards = [target];
@@ -829,6 +846,7 @@ function spawnRound(){
   }
 
   target = recipe.target;
+  roundLog.push(target.verb + ' ' + target.particle);
   const slots = fixedSlots();
   food = [];
   recipe.cards.forEach((c, i) => {
@@ -1094,8 +1112,21 @@ function finish(reason){
   $('score').className = 'score g-' + letter.toLowerCase();
   $('score').innerHTML = sc + '<span class="gr">' + letter + '</span>';
   $('word').textContent = word + (mark >= 0 ? ' · ' + NAMES[mark] : '');
+
+  // practiced-vs-repeated: how many distinct phrases this run actually
+  // showed (win or lose — every round counts, not just correct catches),
+  // versus how many times a phrase came back around for a second lap.
+  const uniqueSeen = new Set(roundLog);
+  const practiced = uniqueSeen.size;
+  const repeated = roundLog.length - practiced;
+  const coverage = practiced >= POOL.length
+    ? 'full set covered'
+    : (POOL.length - practiced) + ' left to reach';
+
   $('note').innerHTML = 'The snake ' + REASON[reason] + ' · <b>' + hits + '</b> caught, <b>' + misses +
-    '</b> missed · length <b>' + snake.length + '</b> · run <b>' + runNum + '</b>';
+    '</b> missed · length <b>' + snake.length + '</b> · run <b>' + runNum + '</b>' +
+    '<br><b>' + practiced + '</b> of <b>' + POOL.length + '</b> phrases practised' +
+    (repeated ? ' · <b>' + repeated + '</b> repeated' : '') + ' · ' + coverage;
 
   // dedupe missed verb+particle pairs, with a count for repeats — the same
   // pattern as Pegs naming what was lost and what it needed.

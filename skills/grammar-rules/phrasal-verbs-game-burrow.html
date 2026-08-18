@@ -574,7 +574,7 @@
   /* There is no good-news toast any more: the strip speaks only on error. */
 
   /* ---------- SUMMARY ---------- */
-  #summary{ align-items:center; justify-content:center; text-align:center; padding:1.5rem; gap:.4rem; }
+  #summary{ align-items:center; justify-content:center; text-align:center; padding:1.5rem; gap:.4rem; overflow-y:auto; }
   .sumeyebrow{ font-family:'DM Mono',monospace; font-size:.62rem; letter-spacing:.2em; text-transform:uppercase; color:var(--paper-faint); }
   .sumverdict{ font-family:'Space Grotesk',sans-serif; font-weight:900; font-size:clamp(1.6rem,5vw,2.4rem); letter-spacing:-.02em; margin:.3rem 0; }
   /* The score is the headline, the grade letter rides beside it. Colour
@@ -603,6 +603,47 @@
   .sumbtn:hover{ border-color:rgba(255,255,255,.35); color:var(--paper); }
   .sumbtn.primary{ background:var(--mode-accent); color:#0d0d0d; border:2px solid var(--mode-accent); }
   .sumnote{ font-size:.7rem; color:var(--paper-faint); margin-top:1rem; max-width:380px; line-height:1.6; }
+
+  /* ── end-of-run phrase recap ──
+     Every phrase that belongs to the set just played, not just the ones
+     that happened to surface before the clock ran out. A phrase caught
+     correctly at least once this round fills solid green — the same
+     success colour as the hit dot in the bottom bar and the round bar's
+     fill, so the read is consistent with the rest of the page. Everything
+     else keeps its neutral colour but stays interactive: hovering (or
+     tapping, for touch) any chip shows the phrase's definition, so the
+     summary screen becomes a quick reference for exactly what's still
+     worth practising, instead of just a verdict on what already happened. */
+  .recap{ width:100%; max-width:32rem; margin:0 auto; padding-top:.7rem; border-top:1px dashed rgba(255,255,255,.14); }
+  .recapLabel{
+    font-family:'DM Mono',monospace; font-size:.6rem; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--paper-faint); margin-bottom:.5rem;
+  }
+  .recapRow{ display:flex; flex-wrap:wrap; gap:.4rem; justify-content:center; }
+  .recap-chip{
+    position:relative; display:inline-flex; align-items:center; gap:.3rem;
+    padding:.32rem .68rem; border-radius:999px;
+    font-family:'DM Mono',monospace; font-size:.64rem; font-weight:500;
+    letter-spacing:.03em; text-transform:lowercase;
+    background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.16);
+    color:var(--paper-dim); transition:background .2s, border-color .2s, color .2s, transform .15s;
+  }
+  .recap-chip:hover, .recap-chip:focus-visible{ transform:translateY(-1px); border-color:rgba(255,255,255,.4); color:var(--paper); outline:none; }
+  .recap-chip.done{
+    background:rgba(94,211,155,.18); border-color:var(--clear); color:#c9ffe4;
+    box-shadow:0 0 10px rgba(94,211,155,.3);
+  }
+  .recap-chip.done::before{ content:'✓'; font-size:.62em; opacity:.85; }
+  .recap-tip{
+    position:fixed; z-index:60; display:none; pointer-events:none;
+    max-width:14rem; padding:.45rem .65rem; border-radius:.5rem;
+    background:#131315; border:1px solid rgba(201,169,97,.4);
+    color:var(--paper); font-family:'DM Sans',sans-serif; font-size:.68rem; line-height:1.4;
+    text-align:left; text-transform:none; letter-spacing:normal;
+    box-shadow:0 10px 26px rgba(0,0,0,.55);
+  }
+  .recap-tip b{ display:block; color:var(--gold); font-family:'Space Grotesk',sans-serif;
+                font-weight:700; letter-spacing:.03em; text-transform:uppercase; font-size:.62rem; margin-bottom:.15rem; }
 
   /* ---------- STAGE-UP ---------- */
   #stageup{
@@ -764,6 +805,10 @@
         <div><b id="sumAcc">0%</b><span>accuracy</span></div>
         <div><b id="sumGold">0</b><span>golden</span></div>
       </div>
+      <div class="recap" id="recap">
+        <div class="recapLabel" id="recapLabel">All phrases in this set</div>
+        <div class="recapRow" id="recapRow"></div>
+      </div>
       <div class="sumactions">
         <button class="sumbtn primary" id="sumRetry">↺ Retry</button>
         <button class="sumbtn" id="sumNext">Back to map</button>
@@ -800,6 +845,24 @@
    embedded copy: a correction to the data lands here automatically, and the
    two pages can never drift apart. Groups in that file — including the MIX
    sets — are the practice unit, so the game's map matches the quiz's tabs.
+
+   ── note on the directional-collision fix made in Hunt ──
+   Hunt (the snake game) pins particles like "up"/"down" to the
+   same-named fixed compass slot, because that game places candidates at
+   fixed positions that are themselves named after directions. Incoming
+   has no such thing: its nine burrows are plain grid cells with no
+   directional meaning, and a phrase's position never contradicts its
+   text. That bug doesn't exist in this game, so there's nothing to pin
+   here — the fix genuinely doesn't apply.
+
+   ── end-of-run phrase recap ──
+   What DOES carry over is the summary-screen recap. When a round ends,
+   the summary now lists every phrase that belongs to whatever was just
+   played (a single verb's set, a practice mix, or the trial) — not just
+   the ones that happened to surface before time ran out. Phrases caught
+   correctly at least once this round are filled green (round.coverage
+   already tracked this for the old "coverage" stat); everything else
+   stays neutral but is still hoverable/tappable for its definition.
 ====================================================================== */
 
 const DATA_URL = '../../data/grammar-rules/phrasal-verbs-data.json';
@@ -866,6 +929,7 @@ const STAGES = [
 
 /* ---------- helpers ---------- */
 const $ = id => document.getElementById(id);
+const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const rand = (a,b) => a + Math.random()*(b-a);
 const randInt = (a,b) => a + Math.floor(Math.random()*(b-a+1));
 const pick = a => a[(Math.random()*a.length)|0];
@@ -986,6 +1050,7 @@ async function boot(){
 
   $('loadingScreen').classList.add('fade');
   setTimeout(() => $('loadingScreen').style.display = 'none', 600);
+  initRecapTooltip();
   renderMenu();
 }
 
@@ -1263,6 +1328,7 @@ function beginRound(cfg){
   $('field').querySelectorAll('.word, .spark').forEach(n => n.remove());
   $('field').classList.remove('frenzy');
   hideToast();
+  hideRecapTip();
 
   renderStageBar();
   showScreen('play');
@@ -1720,14 +1786,96 @@ function showToast(html){
 }
 const hideToast = () => $('toast').classList.remove('show');
 
-/* ── THE BURST ──
-   A shell, not a sputter. Three things happen at once and a fourth follows:
-   a flash of light at the point of the catch, a spray of stars thrown out on
-   trails that arc and fall under gravity, and a ring that expands and thins —
-   then, a quarter of a second later, the crackle.
+/* ── recap tooltip ──
+   A single shared tooltip element, positioned above whichever chip is
+   active. Works on hover for a mouse, and on tap for touch: a tap opens
+   it (and closes any other open tooltip), a second tap on the same chip
+   — or a tap anywhere else — closes it. Same behaviour as Hunt's recap,
+   so a learner who has used one game already knows how to use the other. */
+let recapTipEl = null, recapTipOwner = null;
 
-   Children who grow up watching the Funchal New Year know what a firework
-   looks like, and a polite little puff of dots does not read as one. */
+function initRecapTooltip(){
+  recapTipEl = document.createElement('div');
+  recapTipEl.className = 'recap-tip';
+  document.body.appendChild(recapTipEl);
+  document.addEventListener('click', e => {
+    if (recapTipOwner && !e.target.closest('.recap-chip')) hideRecapTip();
+  });
+  window.addEventListener('scroll', hideRecapTip, true);
+}
+
+function showRecapTip(chip){
+  recapTipOwner = chip;
+  recapTipEl.innerHTML = '<b>' + esc(chip.dataset.verb) + '</b>' + esc(chip.dataset.def);
+  recapTipEl.style.display = 'block';
+  const r = chip.getBoundingClientRect();
+  const tw = recapTipEl.offsetWidth, th = recapTipEl.offsetHeight;
+  let left = r.left + r.width / 2 - tw / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+  let top = r.top - th - 9;
+  if (top < 4) top = r.bottom + 9;   // flip below if there's no room above
+  recapTipEl.style.left = left + 'px';
+  recapTipEl.style.top = top + 'px';
+}
+
+function hideRecapTip(){
+  recapTipOwner = null;
+  if (recapTipEl) recapTipEl.style.display = 'none';
+}
+
+/* Build the end-of-run phrase recap: every phrase that belongs to whatever
+   was just played (round.poolItems — a single verb's set, a practice mix,
+   or the trial's pool), deduped, in that pool's own order. Phrases caught
+   correctly at least once this run (round.coverage) are marked done; the
+   rest stay neutral but remain hoverable/tappable for their definition.
+   For a single-verb set the chip shows just the particle, since the verb
+   is constant and already named in the label above; for a mixed set
+   (practice or trial) each chip shows the full phrase, since the verb
+   varies from one card to the next. */
+function renderRecap(){
+  const row = $('recapRow');
+  if (!row) return;
+  row.innerHTML = '';
+
+  const seen = new Map();   // phrase key -> { chipText, verb, def }
+  (round.poolItems || []).forEach(it => {
+    if (seen.has(it.p)) return;
+    seen.set(it.p, {
+      chipText: round.mode === 'group' ? it.pt : (it.v.toLowerCase() + ' ' + it.pt),
+      verb: it.v + ' ' + it.pt,
+      def: it.m
+    });
+  });
+
+  if (!seen.size){ $('recap').style.display = 'none'; return; }
+  $('recap').style.display = '';
+
+  const g = round.mode === 'group' ? GROUPS.find(x => x.id === round.index) : null;
+  $('recapLabel').textContent = round.mode === 'group'
+    ? 'All ' + (g ? g.label : '') + ' particles'
+    : round.mode === 'practice' ? 'Phrases in this practice set' : 'Phrases in the trial';
+
+  seen.forEach((info, p) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'recap-chip' + (round.coverage.has(p) ? ' done' : '');
+    chip.textContent = info.chipText;
+    chip.dataset.verb = info.verb;
+    chip.dataset.def = info.def;
+    chip.setAttribute('aria-label', info.verb + ': ' + info.def);
+    chip.addEventListener('mouseenter', () => showRecapTip(chip));
+    chip.addEventListener('mouseleave', hideRecapTip);
+    chip.addEventListener('focus', () => showRecapTip(chip));
+    chip.addEventListener('blur', hideRecapTip);
+    chip.addEventListener('click', e => {
+      e.stopPropagation();
+      if (recapTipOwner === chip) hideRecapTip(); else showRecapTip(chip);
+    });
+    row.appendChild(chip);
+  });
+}
+
+/* ── A MARK FALLS — burst effects unchanged below ── */
 function burst(rec){
   const field = $('field');
   const r = rec.el.getBoundingClientRect(), f = field.getBoundingClientRect();
@@ -1892,6 +2040,8 @@ function renderSummary(res){
         ? `<b>${gap}</b> point${gap === 1 ? '' : 's'} from <b>${next}</b>` +
           ` — grade ${gradeOf(next).letter}. You met ${Math.round(res.coverage*100)}% of this set.`
         : `Top band. You met ${Math.round(res.coverage*100)}% of this set's phrases.`);
+
+  renderRecap();
 
   $('sumRetry').onclick = () => {
     if (round.mode === 'trial') startTrial();

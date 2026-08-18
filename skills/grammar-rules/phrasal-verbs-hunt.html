@@ -401,7 +401,7 @@ const firstSense = m => String(m).split(';')[0].trim();
 let POOL = [];
 let canvas, ctx, COLS, ROWS, cellW, cellH;
 let snake, dir, pendingDir, food, target, tickMs, tickTimer, clockTimer;
-let hits, misses, streak, best, lives, mark, left, running, awaitingStart;
+let hits, misses, streak, best, lives, mark, left, running, awaitingStart, awaitingMove;
 let startToken = 0;
 
 /* ── shared verb identity with the hub ──
@@ -712,11 +712,23 @@ function spawnRound(){
   const gap = $('clueGap');
   gap.textContent = '?';
   gap.classList.remove('filled');
+
+  /* Freeze the snake between rounds and wait for a fresh directional
+     click, exactly like the very first move. Without this, a snake still
+     travelling in its old direction sails straight into whatever spawns
+     next at the same fixed compass point — correct or wrong — with no
+     new input from the player. That's what was causing rounds to resolve
+     themselves and lives to drain in a couple of clicks. */
+  if (!awaitingStart){
+    clearInterval(tickTimer);
+    awaitingMove = true;
+    $('startHint').style.opacity = '1';
+  }
 }
 
 function setDir(dx, dy){
   if (!running) return;
-  if (!awaitingStart && dx === -dir.x && dy === -dir.y) return;   // no reversing into yourself, once actually moving
+  if (!awaitingStart && !awaitingMove && dx === -dir.x && dy === -dir.y) return;   // no reversing into yourself, once actually moving
   pendingDir = {x:dx, y:dy};
   if (awaitingStart){
     awaitingStart = false;
@@ -725,6 +737,14 @@ function setDir(dx, dy){
     flash('go!', 'var(--accent)');
     tickTimer = setInterval(tick, tickMs);
     clockTimer = setInterval(clockTick, 1000);
+  } else if (awaitingMove){
+    /* resuming after a round-to-round pause — the clock keeps running in
+       the background the whole time, only the snake's own tick loop was
+       stopped, so it must NOT be restarted here. */
+    awaitingMove = false;
+    dir = pendingDir; pendingDir = null;
+    $('startHint').style.opacity = '0';
+    tickTimer = setInterval(tick, tickMs);
   }
 }
 
@@ -786,11 +806,15 @@ function tick(){
    respawns so play continues; only running out of lives (or the clock)
    actually ends the run. */
 function loseLife(reason){
-  lives--; streak = 0;
+  /* Lives are feedback, not a game-over condition — the clock alone
+     decides when a round ends, the same as every other phrasal-verb
+     game in the set. Losing a life still stings (streak resets, the
+     board shakes) but the snake always respawns and play continues. */
+  lives = Math.max(0, lives - 1);
+  streak = 0;
   paintHud(); updateMiniSnake();
   flash(reason === 'wall' ? 'hit the wall' : 'hit itself', 'var(--bad)');
   canvas.classList.remove('shake'); void canvas.offsetWidth; canvas.classList.add('shake');
-  if (lives <= 0) return crash(reason);
   respawnSnake();
 }
 
@@ -798,6 +822,9 @@ function respawnSnake(){
   const cx = (COLS/2)|0, cy = (ROWS/2)|0;
   snake = [{x:cx,y:cy}];
   dir = {x:1,y:0}; pendingDir = null;
+  clearInterval(tickTimer);
+  awaitingMove = true;
+  $('startHint').style.opacity = '1';
   draw();
 }
 
@@ -832,18 +859,16 @@ function resolve(hit){
       clearInterval(tickTimer); tickTimer = setInterval(tick, tickMs);
     }
     paintHud(); updateMiniSnake();
-    if (lives <= 0) return crash('empty');
     const token = startToken;
     setTimeout(() => { if (running && token === startToken) spawnRound(); }, 550);
     return;
   }
 
-  misses++; streak = 0; lives--;
+  misses++; streak = 0; lives = Math.max(0, lives - 1);
   missLog.push({ verb: target.verb, particle: target.particle });
   flash(target.verb + ' ' + target.particle, 'var(--bad)');
   canvas.classList.remove('shake'); void canvas.offsetWidth; canvas.classList.add('shake');
   paintHud(); updateMiniSnake();
-  if (lives <= 0) return crash('empty');
   spawnRound();
 }
 

@@ -32,9 +32,6 @@
   body{ font-family:'DM Sans',sans-serif; color:var(--paper); user-select:none; -webkit-user-select:none; }
   button{ font:inherit; color:inherit; background:none; border:none; cursor:pointer; }
 
-  /* Reduced motion: kill CSS transitions/animations globally. The confetti-style
-     bursts are driven by the Web Animations API in JS, not CSS, so they're
-     separately gated behind a JS matchMedia check further down. */
   @media (prefers-reduced-motion: reduce){
     *,*::before,*::after{ animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; scroll-behavior:auto !important; }
   }
@@ -96,16 +93,16 @@
 .card:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
 
 .card .verb{
-  font-family:'Space Grotesk',sans-serif; font-weight:900; color:var(--ink);
-  font-size:clamp(.95rem,3.6vw,1.25rem); letter-spacing:.01em; line-height:1.05;
-  text-align:center; margin-bottom:.2rem;
+  font-family:'Archivo Black',sans-serif; font-weight:400; color:var(--ink);
+  font-size:clamp(1.05rem,4vw,1.4rem); letter-spacing:-.02em; line-height:.92;
+  text-align:center; margin-bottom:.28rem;
 }
   .card .plate{
     margin-top:auto; border-radius:999px; align-self:center;
     background:var(--egg-free); color:var(--egg-word);
-    font-family:'Space Grotesk',sans-serif; font-weight:900;
-    font-size:clamp(.72rem,2.9vw,.95rem); letter-spacing:.01em; line-height:1;
-    padding:.22rem .75rem .26rem; text-align:center; white-space:nowrap;
+    font-family:'Space Grotesk',sans-serif; font-weight:700;
+    font-size:clamp(.6rem,2.1vw,.72rem); letter-spacing:.04em; line-height:1;
+    padding:.16rem .58rem .19rem; text-align:center; white-space:nowrap;
     max-width:100%; overflow:hidden; text-overflow:ellipsis;
     box-shadow:0 1px 3px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.4), inset 0 -2px 3px rgba(0,0,0,.1);
   }
@@ -122,10 +119,7 @@
   .card.kept:hover{ transform:none; }
   .card.kept .plate{ background:var(--egg-right); color:#1c2607; }
 
-  /* fallen: still standing in place and still fully readable — a wrong
-     guess should leave behind the evidence of what the phrase actually
-     was, not hide it. Cracked and red, not face-down and blank. */
- .card.fell{
+  .card.fell{
   position:relative; cursor:default; pointer-events:none;
   background:radial-gradient(120% 140% at 50% 0%, var(--card-fell-1) 0%, var(--card-fell-2) 100%);
   border-color:var(--crack);
@@ -267,30 +261,6 @@
 
 <script src="intuity-log.js"></script>
 <script>
-/* ======================================================================
-   THE RACK
-
-   Sixteen phrasal verbs standing in a tray. Press deal and a meaning comes
-   up in the footer; find the card it belongs to.
-
-   One chance. A right card is claimed and stays standing with a tick; a
-   wrong one cracks — tinted red, marked with a ✕, but left standing and
-   fully readable — and the meaning that was asked goes unclaimed with it.
-   That is the whole tension: the cost of a guess is not a point, it is a
-   card you can no longer win. But the guess still teaches something: the
-   phrase stays on the rack, visibly wrong, instead of disappearing the
-   moment it's needed most.
-
-   The clue order is a shuffled, non-repeating pass through all sixteen
-   cards, not a fresh random draw each time — so "one chance at each" is
-   literally true rather than aspirational copy. A card that falls before
-   its own turn (as the casualty of a wrong guess elsewhere) is skipped
-   when its turn comes, since it's already gone; its meaning simply stays
-   unclaimed for that rack. Only once every card has had its turn does the
-   rack end — and only then does "Next sixteen" reach back into the JSON
-   for a fresh random set.
-====================================================================== */
-
 const DATA_URL = '../../data/grammar-rules/phrasal-verbs-data.json';
 const SIZE = 16;
 const REDUCE_MOTION = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -299,28 +269,13 @@ let POOL = [], cards = [], target = null, locked = false;
 let kept = 0, fell = 0, streak = 0, best = 0;
 let autoDealTimer = null;
 
-/* The shuffled queue of clue order for the current rack, and where we are
-   in it. Rebuilt fresh every time a rack is laid out (new, repeated, or
-   restored from history). */
 let order = [], orderPos = -1;
 
-/* Racks are kept, as deals are in Pegs. A rack where four cards fell is the
-   one worth facing again, and a child should not have to hope the same
-   sixteen come round by chance. */
 let history = [], at = -1, racks = 1;
 
-/* Short, varied lines so the footer doesn't repeat itself into background
-   noise over a long session — encouraging either way, since a "wrong"
-   guess here still leaves you something to learn from, not a strike. */
 const RIGHT_LINES = ['Nice catch!', 'Exactly right!', 'Straight to it!', 'Sharp eyes!', 'Right in one!', 'Got it!'];
 const WRONG_LINES = ['So close — onward!', 'Good guess — next one!', 'Worth remembering!', 'Keep going!'];
 
-/* ── sound ──
-   Two small chimes, synthesised rather than loaded, so there's nothing to
-   fetch and nothing to go stale. Correct is a bright little ascending bell;
-   wrong is a soft two-note dip — a shrug, not a buzzer. Both stay quiet and
-   short on purpose: this plays every few seconds during play, and a sound
-   that grates by the tenth repeat is worse than no sound at all. */
 let actx = null;
 function ensureAudio(){
   if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
@@ -340,21 +295,20 @@ function chime(ctx, freq, startAt, dur, peak, type){
 function playCorrectSound(){
   try{
     const ctx = ensureAudio();
-    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) =>       // C5 E5 G5 C6
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) =>
       chime(ctx, f, i * .075, .55, .1, 'triangle'));
-  }catch(e){ /* audio not available — silent is fine */ }
+  }catch(e){}
 }
 function playIncorrectSound(){
   try{
     const ctx = ensureAudio();
-    chime(ctx, 392.00, 0,   .42, .055, 'sine');               // G4
-    chime(ctx, 329.63, .11, .5,  .05,  'sine');                // E4, gentle dip
+    chime(ctx, 392.00, 0,   .42, .055, 'sine');
+    chime(ctx, 329.63, .11, .5,  .05,  'sine');
   }catch(e){}
 }
 function playStreakSound(n){
   try{
     const ctx = ensureAudio();
-    // a little extra sparkle on top of the correct chime at streak milestones
     [1318.5, 1567.98].forEach((f, i) => chime(ctx, f, .28 + i*.09, .4, .07, 'triangle'));
   }catch(e){}
 }
@@ -363,7 +317,6 @@ const $ = id => document.getElementById(id);
 const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[b[i],b[j]]=[b[j],b[i]];} return b; };
 const pick = arr => arr[(Math.random()*arr.length)|0];
-/* One sense. The footer is a clue, not a dictionary entry. */
 const firstSense = m => String(m).split(';')[0].trim();
 
 async function boot(){
@@ -387,9 +340,6 @@ async function boot(){
 }
 
 function start(){
-  /* No two cards may share a verb: with "take off" and "take up" both on the
-     rack a clue about one is half a clue about the other, and the game stops
-     being about meaning. Drawn fresh at random from the full JSON pool. */
   const seen = new Set(), picked = [];
   for (const p of shuffle(POOL)){
     if (picked.length === SIZE) break;
@@ -398,14 +348,12 @@ function start(){
   }
   while (picked.length < SIZE) picked.push(shuffle(POOL)[0]);
 
-  history = history.slice(0, at + 1);       // going back then onward starts a branch
+  history = history.slice(0, at + 1);
   history.push(picked);
   at = history.length - 1;
   lay(picked);
 }
 
-/* Set a remembered rack up again, every card standing, with a fresh
-   shuffled clue order. */
 function lay(picked){
   cards = picked.map(p => ({ ...p, state:'up' }));
   kept = fell = 0; streak = 0; target = null; locked = false;
@@ -419,7 +367,7 @@ function lay(picked){
   $('dealBtn').textContent = 'Skip wait';
   $('dealBtn').classList.add('quiet');
   clearTimeout(autoDealTimer);
-  autoDealTimer = setTimeout(deal, 500);   // first clue comes on its own
+  autoDealTimer = setTimeout(deal, 500);
 }
 
 function drawRack(){
@@ -439,10 +387,6 @@ function drawRack(){
   });
 }
 
-/* Advance through the shuffled order to the next card that's still
-   standing, skipping any that fell before their turn came up. Ends the
-   rack once the queue is exhausted — the one full cycle through all
-   sixteen is complete either way. */
 function deal(){
   if (locked) return;
   clearTimeout(autoDealTimer);
@@ -470,8 +414,6 @@ function choose(i){
   locked = true;
   const el = $('k' + i);
   $('k' + target).classList.remove('current');
-  /* Logged against the phrase that was asked for, not the card tapped: the
-     question is whether they knew that meaning. */
   const asked = cards[target];
   if (window.INTUITY) INTUITY.log('phrasal-verbs',
     asked.verb + ' ' + asked.particle, i === target, { game:'rack' });
@@ -489,9 +431,6 @@ function choose(i){
     target = null;
     setTimeout(() => { locked = false; paint(); nextOrEnd(true); }, 700);
   } else {
-    /* The card cracks and stays put — the one that was asked for is left
-       standing, so the meaning can still be won later, but this card is
-       gone for good, and it keeps showing what it was. */
     c.state = 'fell'; fell++; streak = 0;
     el.tabIndex = -1;
     el.setAttribute('aria-label', c.verb + ' ' + c.particle + ', already used');
@@ -544,7 +483,7 @@ function praiseFor(k){
 }
 
 function over(){
-  if ($('over').classList.contains('show')) return; // already ended this rack
+  if ($('over').classList.contains('show')) return;
   if (window.INTUITY) INTUITY.session('phrasal-verbs', 'rack', { kept: kept, fell: fell });
   $('overBig').textContent = kept + ' / ' + SIZE;
   $('overPraise').textContent = praiseFor(kept);
@@ -555,8 +494,6 @@ function over(){
   $('over').classList.add('show');
 }
 
-/* Next sixteen: always a fresh random draw from the JSON pool (unless
-   stepping forward into a branch you'd already gone back out of). */
 function nextRack(){
   $('over').classList.remove('show'); racks++;
   if (at < history.length - 1){ at++; lay(history[at]); }
@@ -569,8 +506,6 @@ function backRack(){
   lay(history[at]);
 }
 
-/* The same sixteen, all standing again — the one to reach for after a rack
-   where cards fell. */
 function repeatRack(){
   $('over').classList.remove('show'); racks++;
   lay(history[at]);
@@ -585,12 +520,6 @@ function flash(text, col){
 
 const FW_COLS = ['#FFD94A','#C9A961','#5ED39B','#ff7a45','#ffffff','#7dd3fc','#ff8fd4'];
 
-/* One pop of the firework: a flash, an expanding shockwave ring, a spray of
-   sparks, then a scatter of crackle-pops as they settle. Reusable so a
-   correct answer can fire two of these — a big one on the card, a smaller
-   one a beat later nearby — the way a real firework double-pops. Skipped
-   entirely under reduced motion; the chime, color change and ✓ already
-   carry the "correct" signal without the animation. */
 function pop(stage, cx, cy, scale){
   scale = scale || 1;
 
@@ -656,8 +585,8 @@ function burst(el){
   const s = stage.getBoundingClientRect(), r = el.getBoundingClientRect();
   const cx = r.left - s.left + r.width/2, cy = r.top - s.top + r.height/2;
 
-  pop(stage, cx, cy, 1.35);                                  // the main, bigger pop
-  setTimeout(() => {                                          // a second, smaller
+  pop(stage, cx, cy, 1.35);
+  setTimeout(() => {
     const ox = cx + (Math.random()*140-70), oy = cy + (Math.random()*90-70);
     pop(stage, ox, oy, .7);
   }, 160 + Math.random()*90);

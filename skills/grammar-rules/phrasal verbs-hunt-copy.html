@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>INTUITY — The Hunt</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{ margin:0; padding:0; box-sizing:border-box; }
+  :root{
+    --gold:#C9A961; --accent:#FFD94A; --ok:#abc32f; --bad:#ff9248;
+    /* the same three eggs as every other phrasal-verb game — waiting,
+       right, lost — so a child who has played Rack or Descent already
+       knows how to read this one. */
+    --egg-free:#61b5ed; --egg-right:#abc32f; --egg-lost:#ff9248; --egg-word:#2f3540;
+    --s0:#cdbf8e; --s1:#e8935a; --s2:#ff7a45; --s3:#ff4d4d; --s4:#ffd94a;
+    --disc-face1:#2b2b30; --disc-face2:#1c1c1f; --disc-face3:#131315;
+    --disc-well1:#26262b; --disc-well2:#1a1a1d; --disc-well3:#131315;
+    --disc-edge: rgba(255,255,255,.09);
+    --paper:#e5e5e7; --dim:rgba(229,229,231,.55); --faint:rgba(229,229,231,.26);
+    --header-h:132px; --clue-h:130px; --foot-h:60px;
+    --verb-color:#C9A961; --verb-rgb:201,169,97;
+  }
+  html,body{ width:100%; height:100%; overflow:hidden; background:#0d0d0d; overscroll-behavior:none; }
+  body{ font-family:'DM Sans',sans-serif; color:var(--paper); user-select:none; -webkit-user-select:none; touch-action:none; }
+  button{ font:inherit; color:inherit; background:none; border:none; cursor:pointer; }
+
+  .header{
+    position:fixed; top:0; left:0; right:0; z-index:20; height:var(--header-h);
+    display:flex; flex-direction:column; gap:.3rem; padding:.45rem 1.25rem .35rem;
+    background:rgba(13,13,13,.9); backdrop-filter:blur(20px);
+    border-bottom:1px solid rgba(255,255,255,.06);
+  }
+  .header-top{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; }
+  .back-link{ justify-self:start; text-decoration:none; font-family:'Space Grotesk',sans-serif;
+         font-size:.6rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.3); }
+  .back-link:hover{ color:rgba(255,255,255,.7); }
+  .header-title{ display:flex; flex-direction:column; align-items:center; line-height:1.1; }
+  .app-title{ font-family:'Space Grotesk',sans-serif; font-size:1rem; font-weight:900; letter-spacing:.22em; color:var(--gold); }
+  .app-subtitle{ font-size:.56rem; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:rgba(255,255,255,.32); margin-top:.1rem; }
+  .header-spacer{ justify-self:end; }
+
+  /* mode selector — identical to the hub, so switching modes never feels
+     like leaving the app. "Play" (this page) sits pre-selected; the rest
+     carry the current verb back to the hub so it opens on the same one. */
+  .mode-selector{
+    display:flex; justify-content:center; align-self:center;
+    background:rgba(28,28,30,.6); backdrop-filter:blur(40px);
+    border-radius:999px; border:1px solid rgba(201,169,97,.2); overflow:hidden;
+  }
+  .mode-btn{
+    position:relative; display:flex; align-items:center; gap:.4rem;
+    font-family:'Space Grotesk',sans-serif; font-size:.66rem; font-weight:600;
+    letter-spacing:.04em; text-transform:uppercase;
+    padding:.5rem 1.05rem; border-right:1px solid rgba(84,84,88,.2);
+    background:transparent; color:#636366;
+  }
+  .mode-btn:last-child{ border-right:none; }
+  .mode-btn:hover{ color:#9ca3af; background:rgba(201,169,97,.1); }
+  .mode-icon{ font-size:.82rem; line-height:1; opacity:.55; flex-shrink:0; }
+  .mode-badge{ font-size:.58rem; font-weight:600; color:rgba(255,255,255,.28); font-variant-numeric:tabular-nums; }
+  .mode-btn.active{ background:rgba(201,169,97,.15); color:#C9A961; }
+  .mode-btn.active .mode-icon{ opacity:.9; }
+  .mode-btn.active .mode-badge{ color:rgba(201,169,97,.6); }
+  @media(max-width:760px){ .mode-btn .mode-label{ display:none; } .mode-btn{ padding:.5rem .6rem .5rem .5rem; gap:.4rem; } }
+
+  /* verb tabs — same strip and behaviour as the hub, so landing on Hunt
+     from a given verb, or leaving it, keeps you on that same verb. */
+  .verb-tabs{
+    display:flex; align-items:center; justify-content:center;
+    gap:.28rem; overflow-x:auto; padding:0 .5rem; scrollbar-width:none;
+  }
+  .verb-tabs::-webkit-scrollbar{ display:none; }
+  .vtab{
+    font-family:'Space Grotesk',sans-serif; font-size:.56rem; font-weight:700;
+    letter-spacing:.08em; text-transform:uppercase;
+    padding:.28rem .72rem; border-radius:999px; border:1px solid transparent;
+    background:transparent; color:rgba(255,255,255,.3);
+    white-space:nowrap; flex-shrink:0; transition:all .2s;
+  }
+  .vtab:hover{ color:rgba(255,255,255,.7); border-color:rgba(255,255,255,.15); }
+  .vtab.active{
+    color:var(--verb-color, var(--gold)); border-color:var(--verb-color, var(--gold));
+    background:rgba(var(--verb-rgb, 201,169,97), .12);
+  }
+
+  /* the ladder now lives inside the clue bar, compact enough to sit above
+     the instruction + meaning + verb badge without pushing clue-h too tall */
+  .ladder{ display:flex; align-items:center; justify-content:center; gap:.3rem; margin-bottom:.15rem; }
+  .mark{ display:flex; flex-direction:column; align-items:center; gap:.06rem; width:30px; }
+  .mark .dot{ width:8px; height:8px; border-radius:50%; background:rgba(229,229,231,.16); transition:all .3s; }
+  .mark .lbl{ font-family:'DM Mono',monospace; font-size:.34rem; letter-spacing:.08em;
+              text-transform:uppercase; color:var(--faint); }
+  .mark.done .dot{ box-shadow:0 0 8px currentColor; }
+  .mark.done .lbl{ color:var(--dim); }
+  .link{ width:8px; height:1px; background:rgba(255,255,255,.1); }
+  .link.done{ background:var(--gold); }
+
+  /* ── the clue bar ──
+     Instruction and definition now sit on ONE line together — "Form a
+     phrasal verb that means: to enter" — instead of stacking as two
+     separate lines. That reads as a single sentence instead of a label
+     over a value, and it's what actually saves vertical space on phones.
+     The verb sits inside a pill next to a dashed blank for the missing
+     particle. The blank fills solid the moment the right particle is
+     caught, so the reward reads as "you completed the word", not just a
+     colour flash. */
+  .cluebar{
+    position:fixed; top:var(--header-h); left:0; right:0; height:var(--clue-h); z-index:15;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.3rem;
+    background:linear-gradient(180deg, rgba(201,169,97,.09), rgba(13,13,13,.85) 80%);
+    border-bottom:1px solid rgba(201,169,97,.22);
+    text-align:center; padding:.35rem 1rem;
+  }
+  /* One flowing sentence, not two flex items that can wrap independently
+     of each other — "instruction" and "meaning" now sit inline together
+     like normal text, so they wrap the same way a paragraph would.
+     min-height reserves room for two full lines up front, so a short
+     definition ("to enter") and a long one ("to suddenly affect someone")
+     occupy the SAME block height. Without that, a longer definition
+     wrapping onto a second line changed the total height of this block,
+     and because .cluebar centers its contents vertically, everything
+     below — the verb badge, the blank — jumped up or down depending on
+     how long the current definition happened to be. */
+  .meaningLine{
+    display:block; text-align:center; max-width:36rem; padding:0 .5rem;
+    min-height:2.8em; line-height:1.4;
+  }
+  .instruction{
+    display:inline; font-family:'DM Mono',monospace; font-size:clamp(.62rem,1.7vw,.72rem);
+    letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.45);
+    margin-right:.4em;
+  }
+  .cluebar .meaning{
+    display:inline; font-size:clamp(.86rem,2.6vw,1.05rem); font-weight:600;
+    color:var(--paper);
+  }
+  .verbbadge{
+    display:flex; align-items:center; gap:.45rem; margin-top:.2rem;
+    background:rgba(var(--verb-rgb,201,169,97),.14);
+    border:1px solid rgba(var(--verb-rgb,201,169,97),.4);
+    border-radius:999px; padding:.24rem .8rem .24rem 1rem;
+  }
+  .verbbadge .verb{
+    font-family:'Space Grotesk',sans-serif; font-weight:900; letter-spacing:.03em;
+    font-size:clamp(.92rem,2.6vw,1.18rem); text-transform:uppercase;
+    color:var(--verb-color, var(--gold));
+    text-shadow:0 0 18px rgba(var(--verb-rgb, 201,169,97),.35);
+  }
+  .verbbadge .gap{
+    min-width:2.7em; text-align:center;
+    font-family:'Space Grotesk',sans-serif; font-weight:700;
+    font-size:clamp(.8rem,2.2vw,1rem); text-transform:lowercase;
+    color:rgba(255,255,255,.32);
+    background:rgba(255,255,255,.06);
+    border:1.5px dashed rgba(255,255,255,.3);
+    border-radius:.55rem; padding:.16rem .6rem;
+    transition:background .25s, color .25s, border-color .25s, box-shadow .25s;
+  }
+  .verbbadge .gap.filled{
+    color:#12100a; background:var(--ok); border-color:var(--ok);
+    border-style:solid; box-shadow:0 0 12px rgba(171,195,47,.6);
+  }
+
+  .stage{
+    position:fixed; top:calc(var(--header-h) + var(--clue-h)); left:0; right:0; bottom:var(--foot-h);
+    display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(ellipse at 50% 6%, rgba(201,169,97,.07), transparent 55%),
+      radial-gradient(ellipse at 50% 100%, rgba(0,0,0,.5), transparent 60%);
+  }
+  .starthint{
+    position:absolute; z-index:10; left:50%; bottom:.6rem; transform:translateX(-50%);
+    display:flex; align-items:center; gap:.4rem;
+    text-align:center; pointer-events:none; transition:opacity .25s;
+  }
+  .starthint b{ font-family:'Space Grotesk',sans-serif; font-weight:700;
+                font-size:.68rem; letter-spacing:.04em; color:var(--gold); }
+  .starthint span{ font-family:'DM Mono',monospace; font-size:.56rem; letter-spacing:.08em;
+                    text-transform:uppercase; color:var(--faint); }
+  #board{ width:100%; height:100%; display:block; transition:transform .08s; cursor:pointer; }
+  #board.shake{ animation:shakeCanvas .4s; }
+  @keyframes shakeCanvas{ 0%,100%{transform:none} 25%{transform:translateX(-8px)} 60%{transform:translateX(6px)} 80%{transform:translateX(-3px)} }
+
+  .foot{
+    position:fixed; bottom:0; left:0; right:0; height:var(--foot-h);
+    display:flex; align-items:center; justify-content:space-between; gap:.7rem; padding:.3rem 1rem;
+    background:rgba(13,13,13,.94); border-top:1px solid rgba(201,169,97,.2);
+    font-family:'DM Mono',monospace; font-size:.66rem; color:var(--faint);
+  }
+  .foot b{ color:var(--paper); font-variant-numeric:tabular-nums; }
+  .foot .hit b{ color:var(--ok); } .foot .lives b{ color:var(--bad); } .foot .lives.crit b{ color:var(--bad); animation:beat 1s infinite; }
+  .clock{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:.86rem; color:var(--paper); font-variant-numeric:tabular-nums; }
+  .clock.low{ color:var(--bad); animation:beat 1s ease-in-out infinite; }
+  @keyframes beat{ 0%,100%{transform:scale(1)} 14%{transform:scale(1.16)} 30%{transform:scale(1)} }
+
+  /* ── sound toggle ──
+     Off by default cost nothing to add back in — instead it defaults ON
+     (most kids want the fun) but is one tap away from silence for shared
+     or quiet spaces. Preference persists across visits via localStorage. */
+  .sound-toggle{
+    font-size:.9rem; line-height:1; opacity:.7; padding:.2rem .3rem;
+    border-radius:.4rem; transition:opacity .2s, background .2s; flex-shrink:0;
+  }
+  .sound-toggle:hover{ opacity:1; background:rgba(255,255,255,.08); }
+  .sound-toggle.muted{ opacity:.35; }
+
+  /* ── mini-snake progress strip ──
+     Grows one segment per correct catch this run, up to MINI_MAX. It
+     never shrinks on a miss — it's a running tally of what's gone right,
+     not a live health bar (lives/streak already cover that). If the run
+     stays perfect (no life ever lost) and the strip fills all the way,
+     it stops being a progress bar and starts dancing — a small, silly
+     payoff for a flawless run, separate from the ladder's Bronze→Crown
+     accuracy names. */
+  .mini-snake-wrap{ display:flex; align-items:center; gap:.35rem; }
+  .mini-snake{ display:flex; gap:2.5px; }
+  .mini-snake .seg{
+    width:8px; height:8px; border-radius:2.5px;
+    background:rgba(255,255,255,.08);
+    transition:background .25s, box-shadow .25s;
+  }
+  .mini-snake .seg.on{ background:var(--gold); box-shadow:0 0 5px rgba(201,169,97,.55); }
+  @keyframes miniWiggle{
+    0%,100%{ transform:translateY(0) rotate(0deg); }
+    25%{ transform:translateY(-3px) rotate(-10deg); }
+    75%{ transform:translateY(-3px) rotate(10deg); }
+  }
+  .mini-snake-wrap.dancing .seg.on{ animation:miniWiggle .6s ease-in-out infinite; background:var(--accent); box-shadow:0 0 7px rgba(255,217,74,.75); }
+  .mini-snake-wrap.dancing .seg.on:nth-child(2n){ animation-delay:.08s; }
+  .mini-snake-wrap.dancing .seg.on:nth-child(3n){ animation-delay:.16s; }
+  .mini-snake-wrap.dancing .seg.on:nth-child(4n){ animation-delay:.24s; }
+  .dance-avatar{
+    font-size:.85rem; line-height:1; opacity:0; transform:scale(.4);
+    transition:opacity .3s, transform .3s;
+  }
+  .mini-snake-wrap.dancing .dance-avatar{
+    opacity:1; transform:scale(1);
+    animation:danceBounce .5s ease-in-out infinite alternate;
+  }
+  @keyframes danceBounce{ from{ transform:translateY(0) rotate(-8deg) scale(1); } to{ transform:translateY(-4px) rotate(8deg) scale(1.08); } }
+
+  .banner{
+    position:fixed; left:50%; top:44%; z-index:40; pointer-events:none; text-align:center;
+    font-family:'Space Grotesk',sans-serif; font-weight:900;
+    font-size:clamp(1.1rem,3.8vw,1.9rem); letter-spacing:.1em; text-transform:uppercase;
+    opacity:0; transform:translate(-50%,-50%) scale(.8);
+    transition:opacity .2s, transform .4s cubic-bezier(.2,1.6,.4,1); text-shadow:0 0 22px currentColor;
+  }
+  .banner.show{ opacity:1; transform:translate(-50%,-50%) scale(1); }
+
+  .spark{ position:absolute; width:5px; height:5px; border-radius:50%; pointer-events:none; z-index:30; }
+  .fw-flash{ width:56px; height:56px; border-radius:50%;
+             background:radial-gradient(circle,#fff 0%,#FFD94A 35%,rgba(255,217,74,0) 70%); }
+
+  /* ── SUMMARY CARD ──
+     A floating card, not a takeover: the board stays visible underneath
+     through a light scrim, so finishing a run reads as "here's your
+     result" rather than "everything just stopped." Sized to content and
+     capped narrow, so it never approaches full-screen even on a big
+     display. Built to make a later collapse/dismiss affordance easy —
+     it's already just a positioned card, not a fixed backdrop. */
+  .over{
+    position:fixed; inset:0; z-index:50; display:none;
+    align-items:center; justify-content:center; padding:1.2rem;
+    background:rgba(8,8,9,.35); backdrop-filter:blur(2px);
+  }
+  .over.show{ display:flex; }
+  .over-card{
+    width:100%; max-width:22rem; max-height:min(78vh, 32rem); overflow-y:auto;
+    display:flex; flex-direction:column; align-items:center; gap:.35rem; text-align:center;
+    padding:1.6rem 1.5rem 1.4rem; border-radius:1.1rem;
+    background:linear-gradient(165deg, rgba(28,28,30,.98), rgba(15,15,17,.99));
+    border:1px solid rgba(201,169,97,.25);
+    box-shadow:0 20px 55px rgba(0,0,0,.6), 0 0 40px rgba(201,169,97,.06);
+    animation:cardIn .28s cubic-bezier(.2,1,.4,1) both;
+  }
+  @keyframes cardIn{ from{ opacity:0; transform:translateY(10px) scale(.97); } to{ opacity:1; transform:none; } }
+  .over .score{ font-family:'Space Grotesk',sans-serif; font-weight:900;
+                font-size:clamp(2rem,7vw,2.8rem); font-variant-numeric:tabular-nums; }
+  .over .score .gr{ font-size:.5em; margin-left:.3rem; vertical-align:.35em; }
+  .g-a{ color:var(--s4); } .g-b{ color:var(--egg-right); } .g-c{ color:#7dd3fc; } .g-d{ color:var(--egg-lost); }
+  .over .word{ font-family:'DM Mono',monospace; font-size:.7rem; letter-spacing:.16em;
+               text-transform:uppercase; color:var(--dim); }
+  .over .note{ margin-top:.6rem; font-size:.8rem; color:var(--dim); }
+  .over .note b{ color:var(--paper); }
+  .over .missed{ margin-top:.7rem; font-size:.78rem; line-height:1.7; color:var(--dim); }
+  .over .missed b{ color:var(--gold); font-weight:700; }
+  .over .quiet[disabled]{ opacity:.3; cursor:default; }
+  .over .away{ margin-top:.9rem; font-size:.66rem; border:none; }
+  .acts{ display:flex; gap:.6rem; flex-wrap:wrap; justify-content:center; margin-top:1.2rem; }
+  .over .go{ padding:.7rem 1.7rem; border-radius:99px; background:var(--accent); color:#12100a;
+             font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:.74rem;
+             letter-spacing:.1em; text-transform:uppercase; }
+  .over .quiet{ padding:.7rem 1.5rem; border-radius:99px; color:var(--dim);
+                border:1px solid rgba(255,255,255,.16); font-size:.72rem;
+                letter-spacing:.08em; text-transform:uppercase; }
+  .over .quiet:hover{ color:var(--paper); }
+
+  .loading{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:.8rem; }
+  .err{ color:var(--bad); text-align:center; max-width:30rem; line-height:1.7; padding:2rem; }
+
+  @media(max-width:600px){ :root{ --header-h:116px; --clue-h:150px; } }
+  @media(max-width:420px){ :root{ --clue-h:158px; } .mini-snake .seg{ width:6px; height:6px; } .foot{ font-size:.58rem; gap:.4rem; } }
+
+  body.embedded{ --header-h:40px; }
+  body.embedded .header-top{ display:none; }
+  body.embedded .header{ padding:.28rem 1rem .22rem; justify-content:center; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-top">
+    <a class="back-link" href="/?openModal=grammar" target="_top">← Grammar</a>
+    <div class="header-title"><div class="app-title">INTUITY</div><div class="app-subtitle">Phrasal Verbs</div></div>
+    <div class="header-spacer" aria-hidden="true"></div>
+  </div>
+  <div class="mode-selector" id="modeSelector">
+    <button class="mode-btn" data-href="phrasal-verbs-quiz.html" data-mode="learn">
+      <span class="mode-icon">✎</span><span class="mode-label">Learn</span>
+    </button>
+    <button class="mode-btn" data-href="phrasal-verbs-quiz.html" data-mode="quiz">
+      <span class="mode-icon">⚡</span><span class="mode-label">Quiz</span>
+    </button>
+    <button class="mode-btn" data-href="phrasal-verbs-quiz.html" data-mode="gap">
+      <span class="mode-icon">✍</span><span class="mode-label">Practice</span>
+    </button>
+    <button class="mode-btn" data-href="phrasal-verbs-quiz.html" data-mode="match">
+      <span class="mode-icon">🔗</span><span class="mode-label">Match</span>
+    </button>
+     <button class="mode-btn active"><span class="mode-icon">🎯</span><span class="mode-label">Play</span>
+     <span class="mode-badge">2m</span>
+    </button>
+     <button class="mode-btn" data-href="phrasal-verbs-game-burrow.html"><span class="mode-icon">🕳️</span><span class="mode-label">Play</span>
+      <span class="mode-badge">2m</span>
+     </button>
+  
+  </div>
+  <div class="verb-tabs" id="verbTabs"></div>
+</header>
+
+<div class="cluebar">
+  <div class="ladder" id="ladder"></div>
+  <div class="meaningLine">
+    <span class="instruction">Form a phrasal verb that means:</span>
+    <span class="meaning" id="clueMeaning">loading…</span>
+  </div>
+  <div class="verbbadge">
+    <span class="verb" id="clueVerb">—</span>
+    <span class="gap" id="clueGap">?</span>
+  </div>
+</div>
+
+<div class="stage">
+  <canvas id="board"></canvas>
+  <div class="starthint" id="startHint"><b>Click</b><span>the board to begin</span></div>
+</div>
+
+<div class="foot">
+  <span class="hit"><b id="hits">0</b> caught</span>
+  <span class="lives" id="livesWrap"><b id="lives">3</b> lives</span>
+  <span>streak <b id="streak">0</b></span>
+  <span class="mini-snake-wrap" id="miniSnakeWrap">
+    <span class="mini-snake" id="miniSnake"></span>
+    <span class="dance-avatar" id="danceAvatar">💃</span>
+  </span>
+  <button class="sound-toggle" id="soundToggle" aria-label="Toggle sound" title="Sound on/off">🔊</button>
+  <span class="clock" id="clock">2:00</span>
+</div>
+
+<div class="banner" id="banner"></div>
+
+<div class="over" id="over">
+  <div class="over-card">
+    <div class="score" id="score"></div>
+    <div class="word" id="word"></div>
+    <div class="note" id="note"></div>
+    <div class="missed" id="missed"></div>
+    <div class="acts">
+      <button class="quiet" id="backBtn" onclick="backRun()">← Before</button>
+      <button class="quiet" onclick="repeatRun()">↻ Same hunt again</button>
+      <button class="go" onclick="nextRun()">Next hunt →</button>
+    </div>
+    <button class="quiet away" onclick="goToHub()">Back to phrasal verbs</button>
+  </div>
+</div>
+
+<div class="loading" id="loading">Loading…</div>
+
+<script src="intuity-log.js"></script>
+<script>
+/* ======================================================================
+   THE HUNT
+
+   A snake, one verb overhead, and four particles sitting at four fixed
+   compass points around the centre — up, down, left, right. The spots
+   never move; only which particle occupies which spot changes each
+   round. That means a child only ever has to check the same four places
+   instead of scanning the whole board for a target that's jumping
+   around — steering the snake is hard enough on its own. Eat the
+   particle that completes the verb overhead and the snake grows, the
+   score climbs, and a new verb drops in. Eat the wrong one, hit the
+   wall, or hit your own tail, and a life is spent either way — the
+   snake respawns and the run goes on. Only running out of lives or
+   running out of time actually ends it, the same shape as Pegs: a
+   mistake costs progress, not the whole session, so a stray tap never
+   ends a run outright.
+
+   Steering is click/tap-to-point: click anywhere on the board and the
+   snake turns toward whichever axis (horizontal or vertical) the click
+   sits further along, relative to the snake's own head — no on-screen
+   D-pad, no arrow-key literacy required to understand what to do.
+   Keyboard arrows/WASD and swipe still work underneath for anyone who
+   prefers them.
+
+   The clue bar spells out the task in plain language — "Form a phrasal
+   verb that means: <definition>" — with the verb sitting in a pill next
+   to a dashed blank for the missing particle. Catching the right
+   particle fills that blank solid, so the reward is literally completing
+   the word on screen, not just a colour flash that vanishes.
+
+   Sound is optional: short synthesized tones (no audio files, no network
+   weight) mark a correct catch, a wrong catch, a crash, and a milestone.
+   It defaults on but is one tap away from silence via the footer toggle,
+   and the choice is remembered between visits.
+
+   Same eggs, same ladder, same Cambridge scale as every other phrasal-verb
+   game in the set — a child who has played one already knows how to read
+   this one, they just have to keep the snake alive while they do it.
+====================================================================== */
+
+const DATA_URL   = '../../data/grammar-rules/phrasal-verbs-data.json';
+const ROUND      = 120;     // seconds
+const TICK_START = 150;     // ms per move, at the start
+const TICK_MIN   = 82;      // ms per move, at full speed
+const SPEED_STEP = 6;       // ms shaved off per speed-up
+const SPEED_EVERY= 4;       // correct catches between speed-ups
+const CANDIDATES = 4;       // particles on the board at once — one per compass point
+const LIVES_START= 3;
+const MARKS  = [3, 7, 12, 18, 26];
+const NAMES  = ['Spark','Ember','Flame','Blaze','Crown'];
+const MINI_MAX = 12;        // segments in the footer mini-snake before it's "full"
+
+const COL = {
+  eggFree:'#61b5ed', eggRight:'#abc32f', eggLost:'#ff9248', eggWord:'#2f3540',
+  gold:'#C9A961', accent:'#FFD94A',
+  face1:'#2b2b30', face2:'#1c1c1f', face3:'#131315',
+  well1:'#26262b', well2:'#1a1a1d', well3:'#131315',
+  edge:'rgba(255,255,255,.12)', ink:'#e5e5e7'
+};
+
+const $ = id => document.getElementById(id);
+const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[b[i],b[j]]=[b[j],b[i]];} return b; };
+const firstSense = m => String(m).split(';')[0].trim();
+
+let POOL = [];
+let canvas, ctx, COLS, ROWS, cellW, cellH;
+let snake, dir, pendingDir, food, target, tickMs, tickTimer, clockTimer;
+let hits, misses, streak, best, lives, mark, left, running, awaitingStart, awaitingMove;
+let startToken = 0;
+let recentTargets = [];   // last few target keys, most recent last — kept short so nothing repeats back-to-back
+const NO_REPEAT = 4;      // how many turns a phrase must sit out before it can reappear
+
+/* ── full-coverage deck ──
+   Rather than picking a target purely at random each round (which, given
+   enough rounds, could still skip a phrase entirely for the whole run),
+   the pool is shuffled once into a "deck" and drawn from top to bottom —
+   every phrase in the verb's set is practiced exactly once before ANY
+   phrase repeats. When the deck runs out it's reshuffled for another lap
+   (with a small check so the new lap's first card never repeats the
+   previous lap's last card back-to-back). This is what actually
+   guarantees full coverage over a long enough run, instead of leaving it
+   to chance. */
+let deck = [], deckIndex = 0, lastTargetKey = null;
+let roundLog = [];   // every verb+particle a round actually presented this run, in order — used for the practiced/repeated stat
+
+/* ── optional sound ──
+   Short synthesized tones via the Web Audio API — no files to load, no
+   network weight. Defaults on; the footer toggle flips `soundOn` and
+   remembers the choice in localStorage. Browsers block audio until a
+   user gesture, so the first board click (which already exists via
+   setDir) is what actually unlocks playback — no extra handling needed. */
+let soundOn = localStorage.getItem('hunt-sound') !== 'off';
+let audioCtx = null;
+
+function ensureAudio(){
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function beep(freq, dur, type, vol, delay){
+  if (!soundOn) return;
+  ensureAudio();
+  const t0 = audioCtx.currentTime + (delay || 0);
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type || 'sine';
+  osc.frequency.setValueAtTime(freq, t0);
+  gain.gain.setValueAtTime(0, t0);
+  gain.gain.linearRampToValueAtTime(vol || 0.18, t0 + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(t0); osc.stop(t0 + dur + 0.02);
+}
+
+function sfxCorrect(){
+  beep(523, .1, 'triangle', .16);       // C5
+  beep(784, .16, 'triangle', .16, .07); // G5 — quick rising two-note "pop"
+}
+function sfxWrong(){
+  beep(200, .22, 'sawtooth', .12);
+}
+function sfxCrash(){
+  beep(140, .28, 'square', .13);
+  beep(90, .3, 'square', .1, .05);
+}
+function sfxMilestone(){
+  [523,659,784,1047].forEach((f,i)=>beep(f, .14, 'triangle', .15, i*.08)); // little fanfare
+}
+function sfxSpeedUp(){
+  beep(1200, .06, 'sine', .09);         // tiny tick — the game itself just got faster
+}
+
+function initSoundToggle(){
+  const btn = $('soundToggle');
+  const paint = () => { btn.textContent = soundOn ? '🔊' : '🔇'; btn.classList.toggle('muted', !soundOn); };
+  paint();
+  btn.addEventListener('click', () => {
+    soundOn = !soundOn;
+    localStorage.setItem('hunt-sound', soundOn ? 'on' : 'off');
+    if (soundOn) ensureAudio();
+    paint();
+  });
+}
+
+/* ── shared verb identity with the hub ──
+   The hub's tabs let you drill into one verb at a time; landing here from
+   "Play" should keep that same verb, not dump every verb in the app into
+   one pool. `?verb=<id>` carries it across the navigation; GROUPS holds
+   the full group list so the tab strip and the pool-per-verb switch work
+   the same way the hub's do. */
+const urlParams = new URLSearchParams(location.search);
+let GROUPS = [];
+let activeVerbIdx = 0;
+
+/* ── run history ──
+   Each finished (or in-progress) run is a `rounds` recipe: the exact
+   sequence of verb + four-candidate-cards + slot-order that appeared.
+   `history[at]` is the run currently on screen or just finished. Going
+   "Before" steps back and replays an earlier recipe from scratch;
+   "Same hunt again" replays history[at] unchanged; "Next hunt" advances
+   into an already-recorded branch if one exists (from a previous "Before"),
+   otherwise deals a brand new run — same shape as Pegs' deal history. */
+let history = [], at = -1;
+let replayQueue = null, replayIndex = 0;
+let missLog = [];   // {verb, particle} for every wrong catch this run
+let runNum = 1;
+
+function loadPoolForVerb(idx){
+  POOL = [];
+  const g = GROUPS[idx];
+  (g.items || []).forEach(it => {
+    if (it.particle && it.meaning)
+      POOL.push({ verb: (it.verb || g.label || g.id).toUpperCase(),
+                  particle: it.particle.toLowerCase(),
+                  meaning: firstSense(it.meaning) });
+  });
+}
+
+/* carries the active verb's colour from its tab down onto the clue badge
+   (and, via the same variables, into the food-pill rendering below) —
+   one colour identity for a verb wherever it appears on the page. */
+function applyVerbColor(idx){
+  const g = GROUPS[idx];
+  if (!g) return;
+  document.documentElement.style.setProperty('--verb-color', g.color);
+  document.documentElement.style.setProperty('--verb-rgb', g.colorRgb);
+}
+
+function buildVerbTabs(){
+  const wrap = $('verbTabs'); wrap.innerHTML = '';
+  GROUPS.forEach((g, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'vtab' + (i === activeVerbIdx ? ' active' : '');
+    btn.textContent = g.label;
+    btn.style.setProperty('--verb-color', g.color);
+    btn.style.setProperty('--verb-rgb', g.colorRgb);
+    btn.addEventListener('click', () => switchVerb(i));
+    wrap.appendChild(btn);
+  });
+  wrap.querySelectorAll('.vtab')[activeVerbIdx]?.scrollIntoView({ inline:'center', block:'nearest' });
+}
+
+/* Switching verbs restarts the hunt fresh on the new word set — history is
+   cleared because a replayed recipe from a different verb wouldn't make
+   sense — and the URL updates so a refresh (or a later "Play" from the
+   hub) lands back on the same verb. */
+function switchVerb(i){
+  if (i === activeVerbIdx || !GROUPS[i]) return;
+  activeVerbIdx = i;
+  document.querySelectorAll('#verbTabs .vtab').forEach((b, j) => b.classList.toggle('active', j === i));
+  loadPoolForVerb(i);
+  applyVerbColor(i);
+  history = []; at = -1;
+  const u = new URL(location.href);
+  u.searchParams.set('verb', GROUPS[i].id);
+  window.history.replaceState(null, '', u);
+  start(true);
+}
+
+/* Learn/Quiz/Practice/Match hand off to the hub carrying the active verb,
+   so it opens on the same one instead of resetting to the first tab. */
+function initModeNav(){
+  document.querySelectorAll('.mode-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      if (!b.dataset.href) return;   // "Play" — already here
+      const u = new URL(b.dataset.href, location.href);
+      u.searchParams.set('mode', b.dataset.mode);
+      if (GROUPS[activeVerbIdx]) u.searchParams.set('verb', GROUPS[activeVerbIdx].id);
+      location.href = u.toString();
+    });
+  });
+}
+
+function goToHub(){
+  const u = new URL('phrasal-verbs-quiz.html', location.href);
+  if (GROUPS[activeVerbIdx]) u.searchParams.set('verb', GROUPS[activeVerbIdx].id);
+  location.href = u.toString();
+}
+
+async function boot(){
+  try{
+    const res = await fetch(DATA_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    GROUPS = d.groups || [];
+    if (!GROUPS.length) throw new Error('no verb groups in the data');
+    const wanted = GROUPS.findIndex(g => g.id === urlParams.get('verb'));
+    activeVerbIdx = wanted >= 0 ? wanted : 0;
+    loadPoolForVerb(activeVerbIdx);
+    applyVerbColor(activeVerbIdx);
+    if (POOL.length < CANDIDATES) throw new Error('not enough phrases for this verb');
+    buildVerbTabs();
+    $('loading').remove();
+    canvas = $('board'); ctx = canvas.getContext('2d');
+    initInput();
+    initModeNav();
+    initSoundToggle();
+    start(true);
+    window.addEventListener('resize', fitCanvas);
+  }catch(e){
+    console.error('The Hunt failed to start:', e);
+    const el = $('loading') || document.body.appendChild(Object.assign(document.createElement('div'), {id:'loading', className:'loading'}));
+    el.innerHTML = '<p class="err">Something went wrong starting the game.<br>' + esc(e.message || e) + '</p>';
+  }
+}
+
+function gridSize(){
+  const w = window.innerWidth;
+  if (w < 480) return [11, 15];
+  if (w < 760) return [15, 13];
+  return [20, 12];
+}
+
+function fitCanvas(){
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr; canvas.height = rect.height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cellW = rect.width / COLS; cellH = rect.height / ROWS;
+  draw();
+}
+
+/* the four fixed compass points particles live at — same four cells
+   every round, regardless of grid size. Only fitCanvas/gridSize changes
+   COLS/ROWS, so these are recomputed from that, never randomised. */
+function fixedSlots(){
+  // must match the snake's actual spawn cell in start(): the head sits
+  // at (cx, cy) now that spawn is a single cell — so up/down have to line
+  // up on that same column, or a vertical move sails past them.
+  const cx = (COLS/2)|0, cy = (ROWS/2)|0;
+  const mx = Math.max(1, Math.round(COLS*0.16));
+  const my = Math.max(1, Math.round(ROWS*0.16));
+  return {
+    up:    { x:cx,        y:my          },
+    down:  { x:cx,        y:ROWS-1-my   },
+    left:  { x:mx,        y:cy          },
+    right: { x:COLS-1-mx, y:cy          }
+  };
+}
+
+function start(fresh){
+  [COLS, ROWS] = gridSize();
+  const cx = (COLS/2)|0, cy = (ROWS/2)|0;
+  // a single cell, not three trailing left — a snake laid out with a body
+  // already left of its head made "press left" an instant self-crash on
+  // move one, so that direction had to be silently blocked before the game
+  // even started. One cell has no body to run into, so every direction,
+  // including left, is a safe opening move.
+  snake = [{x:cx,y:cy}];
+  dir = {x:1,y:0}; pendingDir = null;
+  hits = misses = streak = best = 0; lives = LIVES_START; mark = -1; left = ROUND;
+  missLog = [];
+  roundLog = [];
+  deck = []; deckIndex = 0; lastTargetKey = null;
+  running = true; tickMs = TICK_START; awaitingStart = true;
+
+  if (fresh){
+    // starting a genuinely new run: drop any "future" branch past the
+    // point we're at, and open a blank recipe that fills in as rounds
+    // are actually spawned, so "Before" can replay it later.
+    history = history.slice(0, at + 1);
+    history.push({ rounds: [] });
+    at = history.length - 1;
+    replayQueue = null; replayIndex = 0;
+  } else {
+    // replaying history[at]: the same verbs, same candidates, same slot
+    // assignment, in the same order — just like Pegs re-laying a deal.
+    replayQueue = history[at].rounds; replayIndex = 0;
+  }
+ 
+  $('over').classList.remove('show');
+  drawLadder(); paintHud(); updateMiniSnake();
+  fitCanvas();
+  spawnRound();
+  clearInterval(tickTimer); clearInterval(clockTimer);
+  $('clock').textContent = Math.floor(ROUND/60) + ':' + String(ROUND%60).padStart(2,'0');
+  $('clock').classList.remove('low');
+  $('startHint').style.opacity = '1';
+  ++startToken;
+}
+
+/* Replay an earlier run, interactively, from the start — same pattern as
+   Pegs' backDeal/repeatDeal/nextDeal. */
+function backRun(){
+  if (at <= 0) return;
+  at--; runNum++;
+  start(false);
+}
+function repeatRun(){
+  runNum++;
+  start(false);
+}
+function nextRun(){
+  runNum++;
+  if (at < history.length - 1){ at++; start(false); }
+  else start(true);
+}
+
+function drawLadder(){
+  const l = $('ladder'); l.innerHTML = '';
+  NAMES.forEach((n, i) => {
+    if (i){ const k = document.createElement('div'); k.className = 'link' + (i <= mark ? ' done' : ''); l.appendChild(k); }
+    const el = document.createElement('div');
+    el.className = 'mark' + (i <= mark ? ' done' : '');
+    el.innerHTML = '<div class="dot" style="' + (i <= mark ? 'background:var(--s'+i+');color:var(--s'+i+')' : '') +
+                   '"></div><div class="lbl">' + n + '</div>';
+    l.appendChild(el);
+  });
+}
+
+function checkMark(){
+  let m = -1;
+  MARKS.forEach((n, i) => { if (hits >= n) m = i; });
+  if (m <= mark) return;
+  mark = m; drawLadder();
+  flash(NAMES[m], 'var(--s' + m + ')');
+  sfxMilestone();
+}
+
+/* ── footer mini-snake ──
+   One segment lights up per correct catch this run, capped at MINI_MAX.
+   It only ever grows within a run (reset happens in start()), so it
+   reads as "how far this run has gone", not a live health readout —
+   lives and streak already do that job. If every segment is lit *and*
+   no life has been lost yet, the strip stops being a progress bar and
+   starts dancing: a small, silly payoff reserved for a genuinely flawless
+   run, distinct from the ladder's accuracy-based Bronze→Crown marks. */
+function updateMiniSnake(){
+  const track = $('miniSnake');
+  const filled = Math.min(hits, MINI_MAX);
+  if (track.childElementCount !== MINI_MAX){
+    track.innerHTML = '';
+    for (let i = 0; i < MINI_MAX; i++){
+      const s = document.createElement('span');
+      s.className = 'seg';
+      track.appendChild(s);
+    }
+  }
+  [...track.children].forEach((seg, i) => seg.classList.toggle('on', i < filled));
+
+  const perfect = filled >= MINI_MAX && lives === LIVES_START;
+  $('miniSnakeWrap').classList.toggle('dancing', perfect);
+}
+
+/* one verb, four particle-candidates dropped onto the four fixed compass
+   points. Which particle lands on which point is reshuffled every round,
+   but the four points themselves never move.
+
+   When replaying a past run (replayQueue set), the exact recipe already
+   recorded is reused instead of rolled again, so "Before" / "Same hunt
+   again" really do hand back the same run. Otherwise a fresh recipe is
+   generated and appended to the current run's history entry so it can be
+   replayed later. */
+function spawnRound(){
+  // Bumping this on every round change — not just on a brand new run —
+  // is what actually closes the race: if a correct catch's delayed
+  // 550ms respawn is still pending when a wrong catch, wall hit, or
+  // self hit advances the round first, that stale delayed callback now
+  // sees a mismatched token and skips instead of yanking the snake back
+  // to centre and re-spawning a round that's already moved on.
+  ++startToken;
+  let recipe;
+  if (replayQueue && replayIndex < replayQueue.length){
+    recipe = replayQueue[replayIndex++];
+  } else {
+    /* Draw the next card from the deck instead of picking at random.
+       Refill and reshuffle only once the deck is empty, so a full lap
+       through every phrase always finishes before any phrase repeats. */
+    if (deckIndex >= deck.length){
+      deck = shuffle(POOL);
+      if (deck.length > 1 && lastTargetKey){
+        const firstKey = deck[0].verb + ' ' + deck[0].particle;
+        if (firstKey === lastTargetKey){
+          const swapIdx = 1 + ((Math.random() * (deck.length - 1)) | 0);
+          [deck[0], deck[swapIdx]] = [deck[swapIdx], deck[0]];
+        }
+      }
+      deckIndex = 0;
+    }
+    target = deck[deckIndex++];
+    lastTargetKey = target.verb + ' ' + target.particle;
+
+    const kin = shuffle(POOL.filter(p => p.verb === target.verb && p.particle !== target.particle));
+    const cards = [target];
+    const seenParticles = new Set([target.particle]);
+    for (const k of kin){ if (cards.length >= CANDIDATES) break; if (seenParticles.has(k.particle)) continue; seenParticles.add(k.particle); cards.push(k); }
+    while (cards.length < CANDIDATES){
+      const p = POOL[(Math.random() * POOL.length) | 0];
+      if (!seenParticles.has(p.particle)){ seenParticles.add(p.particle); cards.push({ verb:target.verb, particle:p.particle, meaning:target.meaning }); }
+    }
+    recipe = { target, cards: shuffle(cards), order: shuffle(['up', 'down', 'left', 'right']) };
+    if (history[at]) history[at].rounds.push(recipe);
+  }
+
+  target = recipe.target;
+  roundLog.push(target.verb + ' ' + target.particle);
+  const slots = fixedSlots();
+  food = [];
+  recipe.cards.forEach((c, i) => {
+    const key = recipe.order[i];
+    let { x, y } = slots[key];
+    // if the snake's own body currently covers a slot, nudge along that
+    // slot's axis until clear — the four *directions* stay fixed even
+    // when the exact cell has to shift a step to dodge the snake.
+    let tries = 0;
+    while (snake.some(s => s.x === x && s.y === y) && tries < 40){
+      if (key === 'up') y = Math.min(ROWS - 1, y + 1);
+      else if (key === 'down') y = Math.max(0, y - 1);
+      else if (key === 'left') x = Math.min(COLS - 1, x + 1);
+      else x = Math.max(0, x - 1);
+      tries++;
+    }
+    food.push({ x, y, particle: c.particle, correct: c.particle === target.particle, slot: key });
+  });
+
+  $('clueVerb').textContent = target.verb;
+  $('clueMeaning').textContent = target.meaning;
+  const gap = $('clueGap');
+  gap.textContent = '?';
+  gap.classList.remove('filled');
+
+  /* Freeze the snake between rounds and wait for a fresh directional
+     click, exactly like the very first move. Without this, a snake still
+     travelling in its old direction sails straight into whatever spawns
+     next at the same fixed compass point — correct or wrong — with no
+     new input from the player. That's what was causing rounds to resolve
+     themselves and lives to drain in a couple of clicks. */
+  if (!awaitingStart){
+    clearInterval(tickTimer);
+    awaitingMove = true;
+    $('startHint').style.opacity = '1';
+  }
+
+  /* The tick loop — the only other place draw() normally runs — is
+     paused right now, so without this the new food boxes are placed in
+     memory but never actually painted; the board just sits on its last
+     frame and looks frozen even though a new round has genuinely begun. */
+  draw();
+}
+
+function setDir(dx, dy){
+  if (!running) return;
+  if (!awaitingStart && !awaitingMove && dx === -dir.x && dy === -dir.y) return;   // no reversing into yourself, once actually moving
+  pendingDir = {x:dx, y:dy};
+  if (awaitingStart){
+    awaitingStart = false;
+    dir = pendingDir; pendingDir = null;
+    $('startHint').style.opacity = '0';
+    flash('go!', 'var(--accent)');
+    tickTimer = setInterval(tick, tickMs);
+    clockTimer = setInterval(clockTick, 1000);
+  } else if (awaitingMove){
+    /* resuming after a round-to-round pause — the clock keeps running in
+       the background the whole time, only the snake's own tick loop was
+       stopped, so it must NOT be restarted here. */
+    awaitingMove = false;
+    dir = pendingDir; pendingDir = null;
+    $('startHint').style.opacity = '0';
+    tickTimer = setInterval(tick, tickMs);
+  }
+}
+
+function initInput(){
+  window.addEventListener('keydown', e => {
+    const k = e.key;
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d','W','A','S','D'].includes(k)) e.preventDefault();
+    if (k==='ArrowUp'||k==='w'||k==='W') setDir(0,-1);
+    else if (k==='ArrowDown'||k==='s'||k==='S') setDir(0,1);
+    else if (k==='ArrowLeft'||k==='a'||k==='A') setDir(-1,0);
+    else if (k==='ArrowRight'||k==='d'||k==='D') setDir(1,0);
+  });
+
+  let tx=0, ty=0;
+  canvas.addEventListener('touchstart', e => { const t=e.touches[0]; tx=t.clientX; ty=t.clientY; }, {passive:true});
+  canvas.addEventListener('touchend', e => {
+    const t = e.changedTouches[0]; const dx = t.clientX - tx, dy = t.clientY - ty;
+    if (Math.max(Math.abs(dx),Math.abs(dy)) < 18) return;
+    if (Math.abs(dx) > Math.abs(dy)) setDir(dx>0?1:-1, 0); else setDir(0, dy>0?1:-1);
+  }, {passive:true});
+
+  // click/tap-to-point: click anywhere on the board and the snake turns
+  // toward whichever axis — horizontal or vertical — the click sits
+  // further along, relative to the snake's current head. Replaces the
+  // on-screen D-pad entirely; no arrow glyphs to learn, just "click where
+  // you want it to go."
+  canvas.addEventListener('pointerdown', e => {
+    if (!snake || !snake.length) return;
+    const rect = canvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    const headX = cellCenterX(snake[0].x), headY = cellCenterY(snake[0].y);
+    const dx = cx - headX, dy = cy - headY;
+    if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return;   // clicked right on the head — ignore
+    if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? 1 : -1, 0);
+    else setDir(0, dy > 0 ? 1 : -1);
+  });
+}
+
+function tick(){
+  if (!running) return;
+  if (pendingDir){ dir = pendingDir; pendingDir = null; }
+  const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+  if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) return loseLife('wall');
+  if (snake.some((s,i) => i < snake.length-1 && s.x===head.x && s.y===head.y)) return loseLife('self');
+
+  snake.unshift(head);
+
+  const hit = food.find(f => f.x===head.x && f.y===head.y);
+  if (hit) resolve(hit); else snake.pop();
+
+  draw();
+}
+
+/* A wall or its own tail used to end the run outright, first mistake or
+   not — one small steering slip cost exactly as much as running out of
+   lives, which made a single mis-tap feel as final as a genuinely bad
+   run. Now it costs a life, same as a wrong catch, and the snake
+   respawns so play continues; only running out of lives (or the clock)
+   actually ends the run. */
+function loseLife(reason){
+  /* Lives are feedback, not a game-over condition — the clock alone
+     decides when a round ends, the same as every other phrasal-verb
+     game in the set. Losing a life still stings (streak resets, the
+     board shakes) but the snake always respawns and play continues. */
+  lives = Math.max(0, lives - 1);
+  streak = 0;
+  paintHud(); updateMiniSnake();
+  flash(reason === 'wall' ? 'hit the wall' : 'hit itself', 'var(--bad)');
+  sfxCrash();
+  canvas.classList.remove('shake'); void canvas.offsetWidth; canvas.classList.add('shake');
+  respawnSnake();
+}
+
+function respawnSnake(){
+  const cx = (COLS/2)|0, cy = (ROWS/2)|0;
+  snake = [{x:cx,y:cy}];
+  dir = {x:1,y:0}; pendingDir = null;
+  clearInterval(tickTimer);
+  awaitingMove = true;
+  $('startHint').style.opacity = '1';
+  draw();
+}
+
+function resolve(hit){
+  if (window.INTUITY) INTUITY.log('phrasal-verbs', target.verb + ' ' + target.particle, hit.correct, { game:'hunt' });
+
+  if (hit.correct){
+    hits++; streak++; best = Math.max(best, streak);
+    flash(target.verb + ' ' + target.particle, 'var(--ok)');
+    sfxCorrect();
+    burst(cellCenterX(hit.x), cellCenterY(hit.y), streak>0 && streak % 5 === 0);
+    checkMark();
+
+    // fill the blank in the verb badge — the visible reward for catching
+    // the right particle is completing the phrasal verb on screen, so
+    // give it a beat before the next word replaces it.
+    const gap = $('clueGap');
+    gap.textContent = hit.particle;
+    gap.classList.add('filled');
+
+     // clear the rest of this round's boxes immediately. The snake keeps
+    // moving during the fill-blank delay below, and if the old boxes were
+    // left on the board it could plough into one of them — including a
+    // wrong one — before the next round even spawns, burning lives on
+    // collisions the player never intended. Emptying food (and redrawing)
+    // right away means there's nothing left to hit until spawnRound()
+    // actually places the next set.
+    food = [];
+    draw();
+
+    if (hits % SPEED_EVERY === 0 && tickMs > TICK_MIN){
+      tickMs = Math.max(TICK_MIN, tickMs - SPEED_STEP);
+      clearInterval(tickTimer); tickTimer = setInterval(tick, tickMs);
+      sfxSpeedUp();
+    }
+    paintHud(); updateMiniSnake();
+    const token = startToken;
+    setTimeout(() => {
+      if (!running || token !== startToken) return;
+      /* Every round starts fresh from the centre, win or lose — not just
+         on a miss. A snake left wherever it finished eating could end up
+         sitting right beside where the next round's boxes spawn (the
+         four points are fixed, the snake isn't), and a box drawn at up
+         to 2.7x a cell's width can visually swallow a snake sitting one
+         cell away even with no real grid collision. Re-centring removes
+         the ambiguity entirely: the snake is never anywhere near a fixed
+         point except by choice, once it's moving again. */
+      respawnSnake();
+      spawnRound();
+    }, 550);
+    return;
+  }
+
+  misses++; streak = 0; lives = Math.max(0, lives - 1);
+  missLog.push({ verb: target.verb, particle: target.particle });
+  flash(target.verb + ' ' + target.particle, 'var(--bad)');
+  sfxWrong();
+  canvas.classList.remove('shake'); void canvas.offsetWidth; canvas.classList.add('shake');
+  paintHud(); updateMiniSnake();
+  // Without this, the snake stayed wherever it caught the wrong particle
+  // (and had already grown by one cell, since only a miss — not a wrong
+  // catch — used to pop the tail). That left it sitting stuck next to
+  // whichever fixed slot it had just eaten from, instead of resetting to
+  // the centre like every other outcome (correct catch, wall, self) does.
+  respawnSnake();
+  spawnRound();
+}
+
+function crash(reason){
+  running = false;
+  clearInterval(tickTimer); clearInterval(clockTimer);
+  canvas.classList.remove('shake'); void canvas.offsetWidth; canvas.classList.add('shake');
+  setTimeout(() => finish(reason), 420);
+}
+
+function clockTick(){
+  left--;
+  $('clock').textContent = Math.floor(left/60) + ':' + String(left%60).padStart(2,'0');
+  $('clock').classList.toggle('low', left <= 15);
+  if (left <= 0){
+    running = false;
+    clearInterval(tickTimer); clearInterval(clockTimer);
+    /* If time runs out during the brief pause after a correct catch (the
+       550ms fill-blank celebration before the next round spawns), don't
+       leave the board frozen on that last catch waiting for a round that
+       will never come — go straight to the summary. */
+    setTimeout(() => finish('time'), 260);
+  }
+}
+
+function paintHud(){
+  $('hits').textContent = hits;
+  $('lives').textContent = lives;
+  $('livesWrap').classList.toggle('crit', lives <= 1);
+  $('streak').textContent = streak;
+}
+
+function scale(acc){
+  const A = [[0,140],[0.60,160],[0.72,173],[0.80,180],[1,190]];
+  for (let i=1;i<A.length;i++){
+    const [a0,s0]=A[i-1],[a1,s1]=A[i];
+    if (acc<=a1) return Math.round(s0+(acc-a0)/(a1-a0)*(s1-s0));
+  }
+  return 190;
+}
+const grade = s => s>=180?['A','Excellent']:s>=173?['B','Very good']:s>=160?['C','Pass']:['D','Try again'];
+
+const REASON = {
+  wall:'ran into the wall', self:'ran into itself',
+  empty:'out of lives', time:"time's up"
+};
+
+function finish(reason){
+  if (window.INTUITY) INTUITY.session('phrasal-verbs', 'hunt', { hits, misses, best, length: snake.length });
+
+  const total = hits + misses;
+  const acc = total ? hits/total : 0;
+  const sc = scale(acc), [letter, word] = grade(sc);
+  $('score').className = 'score g-' + letter.toLowerCase();
+  $('score').innerHTML = sc + '<span class="gr">' + letter + '</span>';
+  $('word').textContent = word + (mark >= 0 ? ' · ' + NAMES[mark] : '');
+
+  // practiced-vs-repeated: how many distinct phrases this run actually
+  // showed (win or lose — every round counts, not just correct catches),
+  // versus how many times a phrase came back around for a second lap.
+  const uniqueSeen = new Set(roundLog);
+  const practiced = uniqueSeen.size;
+  const repeated = roundLog.length - practiced;
+  const coverage = practiced >= POOL.length
+    ? 'full set covered'
+    : (POOL.length - practiced) + ' left to reach';
+
+  $('note').innerHTML = 'The snake ' + REASON[reason] + ' · <b>' + hits + '</b> caught, <b>' + misses +
+    '</b> missed · length <b>' + snake.length + '</b> · run <b>' + runNum + '</b>' +
+    '<br><b>' + practiced + '</b> of <b>' + POOL.length + '</b> phrases practised' +
+    (repeated ? ' · <b>' + repeated + '</b> repeated' : '') + ' · ' + coverage;
+
+  // dedupe missed verb+particle pairs, with a count for repeats — the same
+  // pattern as Pegs naming what was lost and what it needed.
+  const seen = new Map();
+  missLog.forEach(m => {
+    const key = m.verb + ' ' + m.particle;
+    seen.set(key, (seen.get(key) || 0) + 1);
+  });
+  $('missed').innerHTML = seen.size
+    ? 'Worth another look: ' + [...seen].map(([k, n]) =>
+        '<b>' + esc(k) + '</b>' + (n > 1 ? ' ×' + n : '')).join(' · ')
+    : '';
+
+  $('backBtn').disabled = at <= 0;
+  $('over').classList.add('show');
+}
+
+function flash(text, col){
+  const b = $('banner');
+  b.textContent = text; b.style.color = col;
+  b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+  setTimeout(() => b.classList.remove('show'), 900);
+}
+
+function cellCenterX(gx){ return (gx + .5) * cellW; }
+function cellCenterY(gy){ return (gy + .5) * cellH; }
+
+function burst(cx, cy, big){
+  const stage = document.querySelector('.stage');
+  const COLS_ = ['#FFD94A','#C9A961','#5ED39B','#ff7a45','#ffffff','#7dd3fc'];
+
+  const f = document.createElement('div');
+  f.className = 'spark fw-flash';
+  f.style.left = cx+'px'; f.style.top = cy+'px';
+  stage.appendChild(f);
+  f.animate([{transform:'translate(-50%,-50%) scale(.2)',opacity:1},
+             {transform:'translate(-50%,-50%) scale('+(big?3.2:2.2)+')',opacity:0}],
+            {duration:big?420:320,easing:'cubic-bezier(.1,.8,.2,1)'});
+  setTimeout(()=>f.remove(), big?440:340);
+
+  const n = big ? 34 : 16;
+  for (let i=0;i<n;i++){
+    const p = document.createElement('div');
+    p.className = 'spark';
+    const col = COLS_[(Math.random()*COLS_.length)|0], size = 3+Math.random()*3;
+    p.style.cssText += 'left:'+cx+'px; top:'+cy+'px; width:'+size+'px; height:'+size+
+      'px; background:'+col+'; box-shadow:0 0 '+(size*2.5)+'px '+col+';';
+    stage.appendChild(p);
+    const a = Math.random()*Math.PI*2, d = 40+Math.random()*(big?150:90);
+    const dx = Math.cos(a)*d, dy = Math.sin(a)*d, fall = 40+Math.random()*60;
+    const dur = 650+Math.random()*380;
+    p.animate([
+      {transform:'translate(-50%,-50%) translate(0,0) scale(1.1)',opacity:1},
+      {transform:'translate(-50%,-50%) translate('+(dx*.62).toFixed(0)+'px,'+(dy*.62-8).toFixed(0)+'px) scale(1)',opacity:1,offset:.42},
+      {transform:'translate(-50%,-50%) translate('+dx.toFixed(0)+'px,'+(dy+fall).toFixed(0)+'px) scale(.25)',opacity:0}
+    ],{duration:dur,easing:'cubic-bezier(.12,.75,.3,1)'});
+    setTimeout(()=>p.remove(),dur+30);
+  }
+}
+
+/* ── rendering ── */
+function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.roundRect(x,y,w,h,r); }
+
+/* a raised, tactile box for one particle — contact shadow underneath,
+   a diagonal light-to-dark fill for volume, a bright bevel stroke along
+   the top-left edge, and a soft inner glow so the surface doesn't read
+   flat even at small sizes. All in the "free" egg blue that already
+   means "unresolved" everywhere else in the app. */
+function drawParticleBox(f){
+  // sized off the smaller of the two cell dimensions rather than a
+  // fraction of one cell — the box is meant to read as a real object on
+  // the board, not a chip pinned inside a single grid square, so it's
+  // allowed to spill into the empty space around its compass point.
+  const unit = Math.min(cellW, cellH);
+  const w = Math.min(unit*2.7, cellW*3.2);
+  const h = Math.min(unit*2.0, cellH*2.6);
+  const x = f.x*cellW + (cellW-w)/2, y = f.y*cellH + (cellH-h)/2;
+  const r = Math.min(w,h)*0.3;
+
+  // 1 — contact shadow, cast from the box, before anything else is drawn
+  ctx.save();
+  ctx.shadowColor = 'rgba(4,10,20,.55)';
+  ctx.shadowBlur = Math.max(10, h*0.32);
+  ctx.shadowOffsetX = h*0.12;
+  ctx.shadowOffsetY = h*0.18;
+  ctx.fillStyle = '#3f93d1';
+  roundRect(x,y,w,h,r); ctx.fill();
+  ctx.restore();
+
+  // 2 — diagonal body: light upper-left face fading to a deeper blue
+  const body = ctx.createLinearGradient(x, y, x+w, y+h);
+  body.addColorStop(0,   '#a9dbfb');
+  body.addColorStop(.42, '#6fbdf0');
+  body.addColorStop(1,   '#3a8fce');
+  ctx.fillStyle = body;
+  roundRect(x,y,w,h,r); ctx.fill();
+
+  // 3 — soft interior glow, off-centre toward the top, for a domed feel
+  ctx.save();
+  roundRect(x,y,w,h,r); ctx.clip();
+  const glow = ctx.createRadialGradient(x+w*0.36, y+h*0.28, 1, x+w*0.36, y+h*0.28, h*1.3);
+  glow.addColorStop(0, 'rgba(255,255,255,.55)');
+  glow.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(x,y,w,h);
+  ctx.restore();
+
+  // 4 — bevel: a bright edge along the top-left, a dark edge along the
+  // bottom-right, echoing the inset/outset pairing of a neumorphic tile
+  ctx.save();
+  roundRect(x,y,w,h,r); ctx.clip();
+  ctx.lineWidth = Math.max(1.6, h*0.045);
+  ctx.strokeStyle = 'rgba(255,255,255,.75)';
+  ctx.beginPath(); ctx.moveTo(x+w*0.06, y+h*0.82); ctx.lineTo(x+w*0.06, y+h*0.18); ctx.lineTo(x+w*0.82, y+h*0.06); ctx.stroke();
+  ctx.strokeStyle = 'rgba(10,30,55,.4)';
+  ctx.beginPath(); ctx.moveTo(x+w*0.18, y+h*0.96); ctx.lineTo(x+w*0.94, y+h*0.96); ctx.lineTo(x+w*0.94, y+h*0.2); ctx.stroke();
+  ctx.restore();
+
+  // 5 — crisp outer edge so the box stays legible against the dark stage
+  ctx.strokeStyle = 'rgba(255,255,255,.28)';
+  ctx.lineWidth = 1;
+  roundRect(x,y,w,h,r); ctx.stroke();
+
+  // 6 — label: a faint low highlight then the ink on top, a cheap emboss
+  ctx.font = '900 ' + Math.max(14, unit*0.62) + 'px Space Grotesk, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(255,255,255,.5)';
+  ctx.fillText(f.particle, x+w/2, y+h/2+1.6);
+  ctx.fillStyle = COL.eggWord;
+  ctx.fillText(f.particle, x+w/2, y+h/2);
+}
+
+function draw(){
+  if (!food || !snake) return;
+  const W = cellW*COLS, H = cellH*ROWS;
+  ctx.clearRect(0,0,W,H);
+
+  // faint dot grid
+  ctx.fillStyle = 'rgba(255,255,255,.035)';
+  for (let x=0;x<COLS;x++) for (let y=0;y<ROWS;y++){
+    ctx.beginPath(); ctx.arc(cellCenterX(x), cellCenterY(y), 1.4, 0, 7); ctx.fill();
+  }
+
+  // food — neumorphic boxes, not flat pills: a soft contact shadow gives
+  // them real volume against the dark board, a diagonal gradient plus a
+  // light bevel along the top-left edge reads as a raised, tactile
+  // surface (same language as the tile reference), and a rounded-square
+  // shape rather than a full capsule so they read as "boxes" holding a
+  // particle rather than chips floating on the grid.
+  food.forEach(f => drawParticleBox(f));
+
+  // snake, tail to head
+  for (let i=snake.length-1; i>=0; i--){
+    const s = snake[i], isHead = i===0;
+    const w = cellW*0.88, h = cellH*0.88;
+    const x = s.x*cellW + (cellW-w)/2, y = s.y*cellH + (cellH-h)/2;
+    const grad = ctx.createLinearGradient(x,y,x+w,y+h);
+    if (isHead){ grad.addColorStop(0, COL.gold); grad.addColorStop(1, '#8f7745'); }
+    else { grad.addColorStop(0, COL.face1); grad.addColorStop(1, COL.face3); }
+    ctx.fillStyle = grad;
+    roundRect(x,y,w,h, Math.min(w,h)*0.32); ctx.fill();
+    ctx.strokeStyle = isHead ? 'rgba(255,255,255,.35)' : COL.edge;
+    ctx.lineWidth = 1; ctx.stroke();
+  }
+}
+
+const __params = new URLSearchParams(location.search);
+if (__params.get('standalone') !== '1' && window.self !== window.top) document.body.classList.add('embedded');
+
+boot();
+</script>
+</body>
+</html>

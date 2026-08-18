@@ -127,9 +127,9 @@
   }
   .card .pv{
     position:relative; z-index:1;
-    font-family:'Archivo Black',system-ui,sans-serif; font-weight:900; color:var(--ink);
-    -webkit-text-stroke:0.4px var(--ink);
-    font-size:clamp(.9rem,2.6vw,1.3rem); letter-spacing:-.02em; line-height:1.02;
+    font-family:'Archivo Black',system-ui,sans-serif; font-weight:900; color:#2563a8;
+    -webkit-text-stroke:0.5px #2563a8;
+    font-size:clamp(1.05rem,3vw,1.55rem); letter-spacing:-.02em; line-height:1.02;
     text-align:center; padding:0 .15rem;
     transform:translateY(-.9rem);
   }
@@ -320,6 +320,47 @@ const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'
 const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[b[i],b[j]]=[b[j],b[i]];} return b; };
 const firstSense = m => String(m).split(';')[0].trim();
 
+/* ── celebratory jingle ──
+   A tiny Web Audio synth rather than a sound file, so there's nothing to
+   fetch and nothing that can 404. A quick major-triad arpeggio on a
+   correct answer; a fuller ascending run on a streak of 5+, to match the
+   bigger firework burst. Browsers require a user gesture before audio can
+   play, which a card tap already is, so this is created lazily on first
+   use rather than at load. */
+let _actx = null;
+function audioCtx(){
+  if (!_actx) _actx = new (window.AudioContext || window.webkitAudioContext)();
+  if (_actx.state === 'suspended') _actx.resume();
+  return _actx;
+}
+function chime(notes, big){
+  try{
+    const ctx = audioCtx();
+    const master = ctx.createGain();
+    master.gain.value = big ? 0.22 : 0.16;
+    master.connect(ctx.destination);
+    const start = ctx.currentTime;
+    notes.forEach((freq, i) => {
+      const t0 = start + i * (big ? 0.09 : 0.075);
+      const dur = big ? 0.34 : 0.26;
+      const osc = ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, t0);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(1, t0 + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      osc.connect(g); g.connect(master);
+      osc.start(t0); osc.stop(t0 + dur + 0.02);
+    });
+  }catch(e){ /* audio isn't essential — fail silently */ }
+}
+/* C major triad up, octave on top for the plain win; add the fifth and
+   a bright top note for a streak of 5+ so it reads as "more" than the
+   single-hit version, matching the bigger spark burst. */
+const winChime = () => chime([523.25, 659.25, 783.99], false);
+const bigChime = () => chime([392.00, 523.25, 659.25, 783.99, 1046.5], true);
+
 async function boot(){
   try{
     const res = await fetch(DATA_URL);
@@ -462,7 +503,9 @@ function answer(rec, i, cardEl){
     rec.el.querySelectorAll('.card').forEach((el, k) => {
       if (rec.cards[k].particle !== rec.target.particle) el.classList.add('wrong');
     });
-    burst(cardEl, streak >= 5);
+    const big = streak >= 5;
+    burst(cardEl, big);
+    big ? bigChime() : winChime();
     checkMark();
   } else {
     misses++; streak = 0;

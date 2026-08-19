@@ -14,8 +14,8 @@
        --shade is the card colour darkened heavily, as r,g,b, and tints
        every shadow so the cards sit in the scene rather than on it. */
     --ground:#F0EFEA;
-    --card:#EDD5C1;
-    --shade:120,96,74;
+    --card:#D5D9DA;
+    --shade:70,78,82;
 
     --ink:#241F19;
     --ink-soft:rgba(36,31,25,.58);
@@ -56,26 +56,54 @@
   @media(min-width:34rem){ .board{ grid-template-columns:repeat(3,1fr); gap:.7rem; } }
   @media(min-width:52rem){ .board{ grid-template-columns:repeat(4,1fr); } }
 
+  /* A card has two faces and turns between them. Face down it shows only
+     an arrow, so a child cannot read twelve definitions and answer by
+     elimination — the board becomes a set of choices, not a wall of text. */
   .cue{
-    position:relative;
-    background:var(--card); border-radius:var(--r);
-    box-shadow:3px 5px 12px rgba(var(--shade),.30);
-    padding:.7rem .65rem .6rem;
-    display:flex; flex-direction:column; gap:.5rem;
-    min-height:7.2rem; text-align:left;
-    transition:transform .14s var(--spring), box-shadow .14s, opacity .3s;
+    position:relative; min-height:7.4rem;
+    background:none; padding:0; border:none;
+    perspective:900px;
+    transition:transform .14s var(--spring);
   }
-  .cue:hover:not(.done){ transform:translateY(-3px); box-shadow:4px 7px 16px rgba(var(--shade),.34); }
-  .cue:active:not(.done){ transform:translateY(2px) scale(.98); box-shadow:2px 3px 7px rgba(var(--shade),.30); }
-  .cue:focus-visible{ outline:2px solid var(--ink); outline-offset:2px; }
+  .cue:hover:not(.done){ transform:translateY(-3px); }
+  .cue:active:not(.done){ transform:translateY(2px) scale(.98); }
+  .cue:focus-visible{ outline:2px solid var(--ink); outline-offset:3px; border-radius:var(--r); }
 
-  .cue .def{
+  .inner{
+    position:absolute; inset:0;
+    transform-style:preserve-3d;
+    transition:transform .55s cubic-bezier(.3,.9,.3,1);
+  }
+  .cue.flipped .inner{ transform:rotateY(180deg); }
+
+  .back, .front{
+    position:absolute; inset:0;
+    border-radius:var(--r); background:var(--card);
+    box-shadow:3px 5px 12px rgba(var(--shade),.30);
+    -webkit-backface-visibility:hidden; backface-visibility:hidden;
+    overflow:hidden;
+  }
+  .back{ display:flex; align-items:center; justify-content:center; }
+  .front{
+    transform:rotateY(180deg);
+    padding:.7rem .65rem .6rem;
+    display:flex; flex-direction:column; gap:.5rem; text-align:left;
+  }
+  .cue:hover:not(.done) .back{ box-shadow:4px 7px 16px rgba(var(--shade),.34); }
+
+  .arrow{ width:38%; max-width:2.6rem; opacity:.42; }
+  .cue:hover:not(.done) .arrow{ opacity:.72; }
+  .arrow path, .arrow circle{ stroke:var(--ink); fill:none; stroke-width:2.4;
+    stroke-linecap:round; stroke-linejoin:round; }
+  .arrow circle{ stroke-width:1.6; opacity:.5; }
+
+  .front .def{
     flex:1; font-size:clamp(.66rem,2.5vw,.78rem); line-height:1.35;
     color:var(--ink); font-weight:500;
   }
 
   /* the footer: the phrase, with one half missing */
-  .cue .phrase{
+  .front .phrase{
     display:flex; align-items:center; justify-content:center;
     gap:.35rem; flex-wrap:wrap;
     border-top:1px solid var(--hair); padding-top:.5rem;
@@ -100,11 +128,44 @@
     min-width:3.4rem; height:1.25rem;
   }
 
-  .cue.done{ cursor:default; opacity:.9; }
+  .cue.done{ cursor:default; }
+
+  /* A turned card is a reference from here on, so the phrase is always in
+     its true dress — black verb, blue egg. Whether the child got it is a
+     bar down the edge of the card, never a colour on the word. Pumpkin on
+     the answer would say "not this", which is the opposite of the truth. */
+  .cue.right .front{ box-shadow:3px 5px 12px rgba(var(--shade),.30), inset 4px 0 0 var(--egg-right); }
+  .cue.lost  .front{ box-shadow:3px 5px 12px rgba(var(--shade),.30), inset 4px 0 0 var(--egg-lost); }
   .cue.right .fill{ background:var(--egg-right); color:var(--egg-right-ink); }
   .cue.right .fill.as-verb{ background:none; color:#3E5A0C; }
-  .cue.lost  .fill{ background:var(--egg-lost); color:var(--egg-lost-ink); }
-  .cue.lost  .fill.as-verb{ background:none; color:var(--egg-lost); }
+
+  /* What they typed, kept under the phrase and struck through: a child
+     should be able to see the gap between what they wrote and what was
+     wanted, not just be told the answer. */
+  .said{
+    font-size:.6rem; color:var(--egg-lost); text-align:center;
+    text-decoration:line-through; opacity:.85; margin-top:-.28rem;
+    padding-right:2.2rem;   /* clear of the stamp */
+  }
+
+  /* Only on a card they missed. Its job is to say "the phrase printed here
+     is the right one" — which a card they got themselves does not need to
+     be told. Lands as the flip finishes. */
+  .stamp{
+    position:absolute; right:.5rem; bottom:.45rem;
+    font-family:'DM Mono',monospace; font-size:.56rem; font-weight:500;
+    letter-spacing:.1em;
+    color:rgba(36,31,25,.5);
+    border:1.5px solid rgba(36,31,25,.32);
+    border-radius:.35rem; padding:.1rem .3rem .12rem;
+    transform:rotate(-7deg);
+    animation:stampIn .34s cubic-bezier(.2,1.6,.4,1) .42s backwards;
+  }
+  @keyframes stampIn{
+    from{ transform:rotate(-22deg) scale(1.9); opacity:0 }
+    60%{  transform:rotate(-4deg) scale(.94); opacity:1 }
+    to{   transform:rotate(-7deg) scale(1); opacity:1 }
+  }
   .cue.shake{ animation:shake .42s; }
   @keyframes shake{ 25%{transform:translateX(-8px)} 60%{transform:translateX(6px)} }
 
@@ -226,6 +287,14 @@ const DATA  = 'phrasal-verbs-data.json';
 const SIZE  = 12;
 const VERBS = 6;          /* of the twelve, this many hide the verb */
 
+/* The face-down mark: a card waiting to be turned. */
+const ARROW =
+  '<svg class="arrow" viewBox="0 0 48 48" aria-hidden="true">' +
+    '<circle cx="24" cy="24" r="20"></circle>' +
+    '<path d="M16 24h16"></path>' +
+    '<path d="M25 17l7 7-7 7"></path>' +
+  '</svg>';
+
 const $ = id => document.getElementById(id);
 const esc = t => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const firstSense = m => String(m).split(';')[0].trim();
@@ -247,7 +316,7 @@ function norm(s){
     .replace(/\s+/g, ' ');
 }
 
-let POOL = [], cards = [], open = null, locked = false;
+let POOL = [], cards = [], open = null, locked = false, cols = 2;
 let right = 0, wrong = 0, missed = [];
 
 async function boot(){
@@ -292,9 +361,32 @@ function start(){
     if (seen.has(k)) continue;
     seen.add(k); picked.push(p);
   }
-  /* Exactly six of each, then shuffled, so the two kinds are mixed across
-     the board rather than sitting in blocks. */
-  cards = shuffle(picked.map((p, i) => ({ ...p, askVerb: i < VERBS, done:false, got:false })));
+  /* The two kinds sit in a fixed checkerboard: a row runs verb, particle,
+     verb, particle, and the next row starts on the other foot. The column
+     count is decided once per deal and pinned, or the pattern would break
+     the moment a phone is turned sideways. */
+  cols = window.innerWidth < 544 ? 2 : window.innerWidth < 832 ? 3 : 4;
+  const board = $('board');
+  board.style.gridTemplateColumns = 'repeat(' + cols + ',1fr)';
+
+  const order = shuffle(picked);
+  const wantVerb = [];
+  for (let i = 0; i < SIZE; i++){
+    const row = Math.floor(i / cols), col = i % cols;
+    wantVerb.push((row + col) % 2 === 0);
+  }
+  /* Six of each, so hand the verb slots to the first six and the particle
+     slots to the rest — the checkerboard decides position, not proportion. */
+  const verbSlots = wantVerb.filter(Boolean).length;
+  let vLeft = Math.min(VERBS, verbSlots), pLeft = SIZE - Math.min(VERBS, verbSlots);
+  cards = wantVerb.map((wants, i) => {
+    let askVerb;
+    if (wants && vLeft > 0){ askVerb = true; vLeft--; }
+    else if (!wants && pLeft > 0){ askVerb = false; pLeft--; }
+    else if (vLeft > 0){ askVerb = true; vLeft--; }
+    else { askVerb = false; pLeft--; }
+    return { ...order[i], askVerb: askVerb, done:false, got:false };
+  });
   right = 0; wrong = 0; missed = []; open = null; locked = false;
   $('over').classList.remove('show');
   $('veil').classList.remove('show');
@@ -306,10 +398,13 @@ function draw(){
   cards.forEach((c, i) => {
     const el = document.createElement('button');
     el.className = 'cue'; el.id = 'c' + i;
-    el.setAttribute('aria-label', firstSense(c.meaning) + ', type the missing ' + (c.askVerb ? 'verb' : 'particle'));
+    /* Face down, so the label says nothing about what is on it. */
+    el.setAttribute('aria-label', 'Card ' + (i + 1) + ', face down');
     el.innerHTML =
-      '<span class="def">' + esc(firstSense(c.meaning)) + '</span>' +
-      '<span class="phrase">' + face(c) + '</span>';
+      '<span class="inner">' +
+        '<span class="back">' + ARROW + '</span>' +
+        '<span class="front" id="f' + i + '"></span>' +
+      '</span>';
     el.onclick = () => openCard(i);
     b.appendChild(el);
   });
@@ -317,13 +412,17 @@ function draw(){
 
 /* The card's footer: the half that is there, and a blank shaped like the
    half that is not. */
-function face(c, filled){
+/* Three states: the blank card, the card they got (the supplied half wears
+   green), and the card they missed (the phrase is simply correct — the bar
+   down the edge carries the bad news). */
+function face(c, filled, ok){
+  const cls = ok ? ' fill' : '';
   const verb = c.askVerb
-    ? (filled ? '<span class="verb fill as-verb">' + esc(filled) + '</span>' : '<span class="gap"></span>')
+    ? (filled ? '<span class="verb' + cls + ' as-verb">' + esc(c.verb) + '</span>' : '<span class="gap"></span>')
     : '<span class="verb">' + esc(c.verb) + '</span>';
   const part = c.askVerb
     ? '<span class="egg">' + esc(c.particle) + '</span>'
-    : (filled ? '<span class="egg fill">' + esc(filled) + '</span>' : '<span class="gap egg-gap"></span>');
+    : (filled ? '<span class="egg' + cls + '">' + esc(c.particle) + '</span>' : '<span class="gap egg-gap"></span>');
   return verb + part;
 }
 
@@ -363,9 +462,14 @@ function check(){
 
   c.done = true; c.got = ok;
   const el = $('c' + i);
-  el.innerHTML = '<span class="def">' + esc(firstSense(c.meaning)) + '</span>' +
-                 '<span class="phrase">' + face(c, ok ? typed : want) + '</span>';
-  el.classList.add('done');
+  /* Fill the front, then turn the card. It sits face up from here on. */
+  $('f' + i).innerHTML =
+    '<span class="def">' + esc(firstSense(c.meaning)) + '</span>' +
+    '<span class="phrase">' + face(c, want, ok) + '</span>' +
+    (ok ? '' : '<span class="said">' + esc(typed) + '</span>' +
+                '<span class="stamp">OK</span>');
+  el.setAttribute('aria-label', c.verb + ' ' + c.particle + ', ' + (ok ? 'right' : 'missed'));
+  el.classList.add('done', 'flipped');
   el.classList.add(ok ? 'right' : 'lost');
 
   if (ok){
@@ -385,7 +489,7 @@ function check(){
     p.classList.remove('bad'); void p.offsetWidth; p.classList.add('bad');
     $('lab').textContent = 'it was';
     $('pphrase').innerHTML = '<span class="verb">' + esc(c.verb) + '</span>' +
-      '<span class="egg" style="background:var(--egg-lost);color:var(--egg-lost-ink)">' + esc(c.particle) + '</span>';
+      '<span class="egg">' + esc(c.particle) + '</span>';
     $('pdef').innerHTML = c.example
       ? esc(c.example).replace(/_+/, '<b>' + esc(c.verb + ' ' + c.particle) + '</b>')
       : esc(firstSense(c.meaning));

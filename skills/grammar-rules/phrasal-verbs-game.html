@@ -1248,8 +1248,21 @@ function project(r, u, vx, vy){
 
 /* How far the drawn position moves when the destination is nudged one pixel.
    The collision pass needs it: it pushes destinations, not positions, so a
-   nudge must be divided by this to land where it intended. */
-const pull = u => Math.max(0.20, START*(1-u)*(1-u) + 1.2*u*(1-u) + u*u);
+   nudge must be divided by this to land where it intended.
+
+   Floored at 0.5, not 0.2. At 0.2 a three-pixel correction on a distant word
+   became a fifteen-pixel jump to its destination, which overshot, which was
+   corrected back the next frame — the trembling. A far word simply cannot be
+   moved much on screen, and pretending otherwise is what shook the field. */
+const pull = u => Math.max(0.50, START*(1-u)*(1-u) + 1.2*u*(1-u) + u*u);
+
+/* Separation is applied gently and only when it is worth applying. Without a
+   deadband two words resting at exactly their minimum distance push each
+   other every frame for ever; without damping each push overshoots and the
+   pair oscillate. Both together are what make a field settle. */
+const DEADBAND = 3;     // px of overlap tolerated before anything moves
+const DAMP     = 0.30;  // fraction of the needed correction applied per pass
+const MAX_NUDGE = 5;    // px a destination may move in one pass
 
 function frame(now){
   if (!round) return;
@@ -1274,21 +1287,22 @@ function frame(now){
     r.u = t*t;                       // eased, and matched to the growth curve
     const pt = project(r, r.u, fcx, fcy);
     r.x = pt.x; r.y = pt.y;
-    r.radius = r.phrase.length * 6.5 * r.scale * r.sizeMul + 14;
+    /* The radius follows the drawn size, but the early growth curve made
+       distant words claim as much space as near ones, so the whole field
+       was permanently in contact. Scaled back at the far end. */
+    r.radius = r.phrase.length * 5.6 * r.scale * r.sizeMul + 10;
     r.opacity = Math.min(1, t*2.4);
     r.blur = Math.max(0, 2.4 - t*10);
   });
 
-  /* Three relaxation passes. One pass only half-separates a cluster, since
-     moving A off B pushes it into C and there is no second chance to notice.
-     Three settles a seven-word field and costs nothing at this scale. */
+  /* Two damped passes. Three undamped ones fought each other. */
   const arr = [...round.live].filter(r => !r.dead);
-  for (let pass=0; pass<3; pass++)
+  for (let pass=0; pass<2; pass++)
   for (let i=0;i<arr.length;i++) for (let j=i+1;j<arr.length;j++){
     const a=arr[i], b=arr[j];
     const dx=b.x-a.x, dy=b.y-a.y, dist=Math.hypot(dx,dy)||0.01;
-    const minDist=(a.radius+b.radius)*0.98;
-    if (dist < minDist){
+    const minDist=(a.radius+b.radius)*0.92;
+    if (dist < minDist - DEADBAND){
       /* Push the DESTINATIONS apart, not the drawn positions. Nudging x/y
          did nothing once the projection was added, because x/y are derived
          fresh from tx/ty on every frame — so each separation was computed
@@ -1297,8 +1311,11 @@ function frame(now){
          lands where the push intended at its current distance. */
       const overlap=minDist-dist, nx=dx/dist, ny=dy/dist, aShare=b.scale/(a.scale+b.scale);
       const pa = pull(a.u || 0), pb = pull(b.u || 0);
-      a.tx-=nx*overlap*aShare*0.5/pa;      a.ty-=ny*overlap*aShare*0.5/pa;
-      b.tx+=nx*overlap*(1-aShare)*0.5/pb;  b.ty+=ny*overlap*(1-aShare)*0.5/pb;
+      const cap = v => Math.max(-MAX_NUDGE, Math.min(MAX_NUDGE, v));
+      const ma = cap(overlap * aShare * DAMP / pa);
+      const mb = cap(overlap * (1-aShare) * DAMP / pb);
+      a.tx -= nx*ma;  a.ty -= ny*ma;
+      b.tx += nx*mb;  b.ty += ny*mb;
       const A = project(a, a.u || 0, fcx, fcy), B = project(b, b.u || 0, fcx, fcy);
       a.x = A.x; a.y = A.y; b.x = B.x; b.y = B.y;
     }

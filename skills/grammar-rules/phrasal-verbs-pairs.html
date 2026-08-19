@@ -134,13 +134,16 @@
      its true dress — black verb, blue egg. Whether the child got it is a
      bar down the edge of the card, never a colour on the word. Pumpkin on
      the answer would say "not this", which is the opposite of the truth. */
-  .cue.right .front{ box-shadow:3px 5px 12px rgba(var(--shade),.30), inset 4px 0 0 var(--egg-right); }
-  .cue.lost  .front{ box-shadow:3px 5px 12px rgba(var(--shade),.30), inset 4px 0 0 var(--egg-lost); }
+  .cue.right  .front{ box-shadow:3px 5px 12px rgba(var(--shade),.30), inset 4px 0 0 var(--egg-right); }
+  .cue.lost   .front{ box-shadow:3px 5px 12px rgba(var(--shade),.30), inset 4px 0 0 var(--egg-lost); }
+  /* Helped: settled, correct, but not earned. A quiet bar, not a colour of
+     its own — green is for what they found themselves. */
+  .cue.helped .front{ box-shadow:3px 5px 12px rgba(var(--shade),.30), inset 4px 0 0 rgba(36,31,25,.34); }
   /* Green is the card, not the half the child happened to type. Marking
      only the typed half meant a verb-blank card kept a blue egg while a
      particle-blank card went green — two different pictures for the same
      result. The egg is the state, as everywhere else in the suite. */
-  .cue.right .egg{ background:var(--egg-right); color:var(--egg-right-ink); }
+  .cue.right:not(.helped) .egg{ background:var(--egg-right); color:var(--egg-right-ink); }
 
   /* What they typed, kept under the phrase and struck through: a child
      should be able to see the gap between what they wrote and what was
@@ -180,6 +183,7 @@
   }
   .veil.show{ display:flex; }
   .panel{
+    position:relative;
     width:min(22rem,92vw); background:var(--card); border-radius:22px;
     box-shadow:6px 10px 26px rgba(0,0,0,.35);
     padding:1.1rem 1.1rem 1.2rem;
@@ -188,6 +192,37 @@
   }
   @keyframes pop{ from{ transform:scale(.92); opacity:0 } to{ transform:none; opacity:1 } }
   .panel.bad{ animation:shake .42s; }
+
+  /* ── the hint badge ───────────────────────────────────────────────────
+     Offered only inside a card the child has already opened, never on the
+     board: help should arrive when they are stuck on something specific.
+     Graded — a letter first, the whole list only if that is not enough. */
+  .hint{
+    position:absolute; top:.6rem; right:.7rem;
+    font-family:'DM Mono',monospace; font-size:.56rem; letter-spacing:.12em;
+    text-transform:uppercase; color:rgba(36,31,25,.5);
+    border:1.5px solid rgba(36,31,25,.28); border-radius:.4rem;
+    padding:.18rem .42rem .2rem;
+  }
+  .hint:hover{ color:var(--ink); border-color:rgba(36,31,25,.55); }
+  .hint.gone{ display:none; }
+
+  .letter{
+    font-family:'Archivo Black',system-ui,sans-serif; font-size:1.1rem;
+    color:var(--ink); letter-spacing:.3em; text-transform:uppercase;
+    opacity:.75;
+  }
+  .list{
+    display:flex; flex-wrap:wrap; gap:.3rem; justify-content:center;
+    max-height:8.4rem; overflow-y:auto; padding:.15rem;
+  }
+  .list button{
+    font-size:.72rem; font-weight:700; border-radius:999px;
+    padding:.24rem .6rem .28rem;
+    background:rgba(36,31,25,.08); color:var(--ink);
+  }
+  .list button:hover{ background:var(--egg); color:var(--egg-ink); }
+  .list button:active{ transform:scale(.94); }
 
   .panel .lab{
     font-family:'DM Mono',monospace; font-size:.54rem; letter-spacing:.16em;
@@ -264,9 +299,11 @@
 
 <div class="veil" id="veil">
   <div class="panel" id="panel">
+    <button class="hint" id="hint">hint</button>
     <div class="lab" id="lab"></div>
     <div class="def" id="pdef"></div>
     <div class="phrase" id="pphrase"></div>
+    <div id="help"></div>
     <button class="go" id="check">Check</button>
   </div>
 </div>
@@ -330,7 +367,9 @@ function norm(s){
 }
 
 let POOL = [], cards = [], open = null, locked = false, cols = 2;
-let right = 0, wrong = 0, missed = [];
+let right = 0, wrong = 0, helped = 0, missed = [];
+let level = 0;              /* 0 none, 1 first letter, 2 the whole list */
+let VERB_LIST = [], PART_LIST = [];
 
 async function boot(){
   try{
@@ -347,6 +386,10 @@ async function boot(){
       });
     }));
     if (POOL.length < SIZE) throw new Error('not enough phrases');
+    /* The closed sets behind the game: 21 verbs, 37 particles. Built from
+       the data rather than typed out, so they cannot fall out of step. */
+    VERB_LIST = [...new Set(POOL.map(p => p.verb))].sort();
+    PART_LIST = [...new Set(POOL.map(p => p.particle))].sort();
     start();
   }catch(e){
     $('board').innerHTML = '<p class="load">Could not load <b>' + esc(DATA) + '</b>.<br>' +
@@ -400,7 +443,7 @@ function start(){
     else { askVerb = false; pLeft--; }
     return { ...order[i], askVerb: askVerb, done:false, got:false };
   });
-  right = 0; wrong = 0; missed = []; open = null; locked = false;
+  right = 0; wrong = 0; helped = 0; missed = []; open = null; locked = false;
   $('over').classList.remove('show');
   $('veil').classList.remove('show');
   draw(); tally();
@@ -441,7 +484,10 @@ function face(c, filled){
 
 function tally(){
   $('score').textContent = right + '/' + SIZE;
-  $('sub').textContent = wrong ? '  ·  ' + wrong + ' missed' : '';
+  const bits = [];
+  if (helped) bits.push(helped + ' helped');
+  if (wrong)  bits.push(wrong + ' missed');
+  $('sub').textContent = bits.length ? '  ·  ' + bits.join(' · ') : '';
 }
 
 function openCard(i){
@@ -456,6 +502,10 @@ function openCard(i){
     : '<span class="verb">' + esc(c.verb) + '</span>' +
       '<input class="slot as-egg" id="in" placeholder="" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Type the particle">';
   $('panel').classList.remove('bad');
+  level = 0;
+  $('help').innerHTML = '';
+  $('hint').classList.remove('gone');
+  $('hint').textContent = 'hint';
   $('veil').classList.add('show');
   const box = $('in');
   box.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); check(); } });
@@ -476,7 +526,10 @@ function check(){
 
   const ok = accepted(c).has(typed);
   const want = c.askVerb ? c.verb : c.particle;
-  log(c.verb + ' ' + c.particle, ok, { game:'pairs', asked: c.askVerb ? 'verb' : 'particle' });
+  /* helped is logged separately from right/wrong, so October has three
+     buckets rather than two: found it, found it with the list, missed it. */
+  log(c.verb + ' ' + c.particle, ok,
+      { game:'pairs', asked: c.askVerb ? 'verb' : 'particle', helped: !!c.helped, level: level });
 
   c.done = true; c.got = ok;
   const el = $('c' + i);
@@ -489,14 +542,17 @@ function check(){
   el.setAttribute('aria-label', c.verb + ' ' + c.particle + ', ' + (ok ? 'right' : 'missed'));
   el.classList.add('done', 'flipped');
   el.classList.add(ok ? 'right' : 'lost');
+  if (c.helped) el.classList.add('helped');
 
   if (ok){
-    right++;
+    /* Right either way, but a helped card costs the green egg and the
+       score — the firework too, since that celebrates something earned. */
+    if (c.helped) helped++; else right++;
     sfx('correct');
     $('veil').classList.remove('show');
     open = null; locked = false;
     tally();
-    setTimeout(() => burst(el), 50);
+    if (!c.helped) setTimeout(() => burst(el), 50);
     if (cards.every(x => x.done)) setTimeout(over, 900);
   } else {
     /* Brief and plain: the wrong sound, the answer in pumpkin, and the
@@ -522,9 +578,44 @@ function check(){
   }
 }
 
+/* A letter, then the list. Either one marks the card as helped: it will
+   still be right, still chime, but it will not go green and it will not
+   score. Retrieval with a narrowed set is still retrieval — being handed
+   the answer is not — so it counts for something, just not for everything. */
+function hint(){
+  if (open === null || locked) return;
+  const c = cards[open];
+  c.helped = true;
+  level++;
+  const want = c.askVerb ? c.verb : c.particle;
+
+  if (level === 1){
+    $('help').innerHTML = '<div class="letter">' + esc(want[0]) + '</div>';
+    $('hint').textContent = 'list';
+    $('in').focus();
+    return;
+  }
+
+  const words = c.askVerb ? VERB_LIST : PART_LIST;
+  const box = document.createElement('div');
+  box.className = 'list';
+  words.forEach(w => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = w;
+    /* Choosing from the list commits: it fills the blank and answers, so
+       the list cannot be walked through one word at a time. */
+    b.onclick = () => { $('in').value = w; check(); };
+    box.appendChild(b);
+  });
+  $('help').innerHTML = '';
+  $('help').appendChild(box);
+  $('hint').classList.add('gone');
+}
+$('hint').addEventListener('click', hint);
+
 $('panel').addEventListener('click', e => {
   const box = $('in');
-  if (box && e.target !== box && e.target.id !== 'check') box.focus();
+  if (box && e.target !== box && e.target.id !== 'check' && e.target.id !== 'hint' && e.target.tagName !== 'BUTTON') box.focus();
 });
 $('check').addEventListener('click', check);
 $('veil').addEventListener('click', e => {
@@ -558,10 +649,12 @@ function burst(el){
 
 function over(){
   try{ if (window.INTUITY) INTUITY.session('phrasal-verbs','pairs',{ right:right, wrong:wrong }); }catch(e){}
-  $('overBig').textContent = wrong === 0 ? 'clean' : right + '/' + SIZE;
-  $('overSub').textContent = wrong === 0
+  $('overBig').textContent = (wrong === 0 && helped === 0) ? 'clean' : right + '/' + SIZE;
+  $('overSub').textContent = (wrong === 0 && helped === 0)
     ? 'twelve phrases typed from memory, first time'
-    : right + ' typed from memory · ' + wrong + ' missed';
+    : right + ' from memory' +
+      (helped ? ' · ' + helped + ' with help' : '') +
+      (wrong ? ' · ' + wrong + ' missed' : '');
   const seen = new Set(), lines = [];
   missed.forEach(c => {
     const k = c.verb + ' ' + c.particle;

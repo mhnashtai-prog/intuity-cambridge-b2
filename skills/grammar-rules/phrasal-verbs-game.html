@@ -1132,17 +1132,35 @@ const NEIGHBOUR_CLEAR = 0.34;   // a neighbouring lane must be this far along
 
 let lanes = [];          // one record per lane, or null when free
 
-/* Four vanishing points rather than one, about 3mm apart on a laptop, cycled
-   across the lanes. A single origin makes every ray a spoke of one wheel and
-   the eye reads it as a diagram; four origins a hair apart break that up
-   without anyone being able to say why, and the angles vary slightly along
-   each lane's length. */
-const ORIGINS = [-11, -4, 4, 11];        // px offsets across
-const ORIGINS_Y = [0, -5, -9, -3];       // and a little up
+/* Several vanishing points rather than one. A single origin makes every ray
+   a spoke of one wheel and the eye reads it as a diagram; a cluster of
+   origins breaks that up without anyone being able to say why, and every
+   lane leaves at a slightly different angle.
+
+   Two dials. ORIGIN_N is how many points there are, ORIGIN_SPREAD how far
+   apart the outermost two sit, in pixels — roughly 3mm to the centimetre on
+   a laptop. Six points across 34px is a visible fan while still reading as
+   one place on the horizon; push the spread much past the width of a word
+   and the lanes stop looking related at all.
+
+   Six against nine lanes is deliberate: the counts share no factor, so the
+   pairing of lane to origin does not repeat until the whole cycle does. */
+const ORIGIN_N      = 6;
+const ORIGIN_SPREAD = 34;
+
+const ORIGINS = Array.from({length: ORIGIN_N}, (_, k) => {
+  const f = ORIGIN_N === 1 ? 0.5 : k / (ORIGIN_N - 1);   // 0 … 1
+  return {
+    x: (f - 0.5) * ORIGIN_SPREAD,
+    /* A shallow arc rather than a straight row, so the points differ in
+       depth as well as across — the outer ones sit a little further off. */
+    y: -Math.sin(f * Math.PI) * ORIGIN_SPREAD * 0.34
+  };
+});
 
 function laneGeometry(i, fw, fh){
-  const o  = i % ORIGINS.length;
-  const vx = fw * 0.5 + ORIGINS[o], vy = -fh * 0.16 + ORIGINS_Y[o];
+  const o  = ORIGINS[i % ORIGINS.length];
+  const vx = fw * 0.5 + o.x, vy = -fh * 0.16 + o.y;
   const a  = (-FAN/2 + FAN * (i + 0.5) / LANES) * Math.PI / 180;
   const dx = Math.sin(a), dy = Math.cos(a);
   /* How far along this ray until it leaves the usable field. */

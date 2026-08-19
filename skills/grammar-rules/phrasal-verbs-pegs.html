@@ -236,6 +236,8 @@
 </div>
 <div class="loading" id="loading">Loading…</div>
 
+<script src="intuity-log.js"></script>
+<script src="intuity-sound.js"></script>
 <script>
 const DATA_URL = '../../data/grammar-rules/phrasal-verbs-data.json';
 const PER_DEAL = 9;
@@ -248,6 +250,14 @@ const $ = id => document.getElementById(id);
 const firstSense = m => String(m).split(';')[0].trim();
 const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[b[i],b[j]]=[b[j],b[i]];} return b; };
+
+/* Sound and the item log both live in shared files, so a change reaches
+   every game in the suite at once. Both calls are guarded — a missing or
+   404'd file must never throw inside a click handler and freeze the
+   board, which is exactly what happened once before sound was wrapped
+   like this in Rack. */
+function sfx(cue){ try{ if (window.SFX && typeof SFX[cue] === 'function') SFX[cue](); }catch(e){} }
+function log(item, ok, extra){ try{ if (window.INTUITY) INTUITY.log('phrasal-verbs', item, ok, extra); }catch(e){} }
 
 async function boot(){
   try{
@@ -335,6 +345,8 @@ function peg(i){
   if (chip.p === slot.particle){
     locked = true;
     slot.done = true; chip.spent = true; pegged++;
+    log(slot.verb + ' ' + slot.particle, true, { game:'pegs' });
+    sfx('correct');
     const pole = $('p' + i);
     pole.classList.add('pegged');
     pole.classList.remove('armed');
@@ -350,13 +362,14 @@ function peg(i){
   } else {
     locked = true;
     chip.spent = true; dropped++;
+    sfx('wrong');
     const pole = $('p' + i);
     pole.classList.remove('reject'); void pole.offsetWidth; pole.classList.add('reject');
     flash('lost: ' + chip.p, 'var(--bad)');
     picked = null;
     setTimeout(() => {
       const closed = closeStranded();
-      if (closed) flash(closed === 1 ? 'one verb lost' : closed + ' verbs lost', 'var(--bad)');
+      if (closed) { sfx('crash'); flash(closed === 1 ? 'one verb lost' : closed + ' verbs lost', 'var(--bad)'); }
       locked = false; drawBank(); paint();
       if (round.every(r => r.done || r.lost)) setTimeout(endDeal, 1100);
     }, 520);
@@ -371,6 +384,7 @@ function closeStranded(){
     const at = left.indexOf(r.particle);
     if (at === -1){
       r.lost = true; closed++;
+      log(r.verb + ' ' + r.particle, false, { game:'pegs' });
       const pole = $('p' + i);
       if (pole){
         pole.classList.add('lost');
@@ -395,6 +409,7 @@ function paint(){
 }
 
 function cleared(){
+  sfx('fanfare');
   flash('all nine', 'var(--ok)');
   setTimeout(() => finishDeal(true), 1100);
 }
@@ -405,6 +420,7 @@ function endDeal(){
 
 function finishDeal(clean){
   const lost = round.filter(r => r.lost);
+  try{ if (window.INTUITY) INTUITY.session('phrasal-verbs', 'pegs', { pegged: pegged, dropped: dropped, lost: lost.length }); }catch(e){}
   $('overBig').textContent = (PER_DEAL - lost.length) + ' / ' + PER_DEAL;
   $('overSub').textContent = clean
     ? 'the whole board · deal ' + deals

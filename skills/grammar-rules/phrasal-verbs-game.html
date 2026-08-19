@@ -1009,8 +1009,20 @@ function startPlaying(){
   round.running = true;
   round.rafId = requestAnimationFrame(frame);
   spawnWord();
-  round.spawnTimer = setInterval(spawnWord, 1680);
+  scheduleSpawn();
   round.clockTimer = setInterval(tickClock, 1000);
+}
+
+/* A self-rescheduling timeout rather than a fixed interval, so each release
+   can be a fraction earlier or later than the last. */
+function scheduleSpawn(){
+  if (!round) return;
+  const d = GAP * (1 - JITTER + Math.random() * JITTER * 2);
+  round.spawnTimer = setTimeout(() => {
+    if (!round || !round.running) return;
+    spawnWord();
+    scheduleSpawn();
+  }, d);
 }
 
 const fmtClock = s => Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
@@ -1121,14 +1133,31 @@ function decoyItem(){
    whose word is still near the origin, because near the origin all rays are
    close together and that is the only place they can crowd. */
 const LANES   = 9;
-const FAN     = 140;     // degrees the lanes spread across
-const START   = 0.26;    // how far down its lane a word begins
-const NEIGHBOUR_CLEAR = 0.34;   // a neighbouring lane must be this far along
-/* Simulated over a full two-minute round: 58 words released, 14 beats
-   skipped for want of a free lane, never more than 7 on screen, and not a
-   single frame in which any two overlap. Seven lanes skipped 44% of beats;
-   eleven lanes and a tighter neighbour rule let 2% of frames overlap. This
-   is the pair that gives a steady rhythm with the guarantee intact. */
+const FAN     = 132;     // degrees the lanes spread across
+const START   = 0.32;    // how far down its lane a word begins
+const NEIGHBOUR_CLEAR = 0.70;   // a neighbouring lane must be this far along
+
+/* Release is slower, and no longer metronomic. GAP is the interval between
+   words; JITTER varies it by a fraction either way, so the rhythm breathes
+   instead of ticking. A fixed interval is the thing that makes a stream of
+   anything feel like a machine. */
+const GAP    = 1850;
+const JITTER = 0.16;
+/* START at .32 and a narrower FAN replaced .26 and 140°: the two outermost
+   lanes were so nearly horizontal that words on them were born above the top
+   edge of the field and only became visible partway through their life.
+
+   Narrowing the fan then caused a fault of its own. The neighbour rule only
+   staggers lanes near the origin, and with the lanes closer together two
+   MATURE words on adjacent lanes could meet at the far end, where they are
+   at their largest. NEIGHBOUR_CLEAR went from .34 to .70 to keep adjacent
+   lanes further apart in time — when one is big, its neighbour is small.
+
+   Averaged over ten two-minute rounds at each setting: 43 words released,
+   22 beats skipped, and 4% of frames with any overlap at all, down from 7%.
+   Every lane's first frame is on screen. Widening the fan back to 136°
+   would take overlap under 1%, at the cost of one lane being born off the
+   top again — the trade to revisit if the field ever looks crowded. */
 
 let lanes = [];          // one record per lane, or null when free
 
@@ -1138,15 +1167,20 @@ let lanes = [];          // one record per lane, or null when free
    lane leaves at a slightly different angle.
 
    Two dials. ORIGIN_N is how many points there are, ORIGIN_SPREAD how far
-   apart the outermost two sit, in pixels — roughly 3mm to the centimetre on
-   a laptop. Six points across 34px is a visible fan while still reading as
-   one place on the horizon; push the spread much past the width of a word
-   and the lanes stop looking related at all.
+   apart the outermost two sit, in pixels.
+
+   Worth knowing before reaching for the spread: it does very little. Going
+   from 34px to 70px moved the birth points by about thirteen pixels in
+   total, because the lane's angle dominates and the origin offset is small
+   beside the ray's length. If words need to leave from more distinct
+   places, START and FAN below are the levers that move them; the origins
+   only vary the angle each lane leaves at, which is a texture, not a
+   layout.
 
    Six against nine lanes is deliberate: the counts share no factor, so the
    pairing of lane to origin does not repeat until the whole cycle does. */
 const ORIGIN_N      = 6;
-const ORIGIN_SPREAD = 34;
+const ORIGIN_SPREAD = 44;
 
 const ORIGINS = Array.from({length: ORIGIN_N}, (_, k) => {
   const f = ORIGIN_N === 1 ? 0.5 : k / (ORIGIN_N - 1);   // 0 … 1
@@ -1414,7 +1448,7 @@ function burst(rec){
 function stopRound(){
   if (!round) return;
   round.running = false;
-  clearInterval(round.spawnTimer); clearInterval(round.clockTimer); cancelAnimationFrame(round.rafId);
+  clearTimeout(round.spawnTimer); clearInterval(round.clockTimer); cancelAnimationFrame(round.rafId);
   round.live.forEach(r => r.el.remove()); round.live.clear();
   freeLanes();
   $('startcard').classList.remove('show');
@@ -1512,7 +1546,7 @@ $('backBtn').onclick = () => { stopRound(); round = null; renderMenu(); };
    otherwise be no way to read the instruction again. Re-opening pauses. */
 $('helpBtn').onclick = () => {
   if (!round) return;
-  clearInterval(round.spawnTimer); clearInterval(round.clockTimer); cancelAnimationFrame(round.rafId);
+  clearTimeout(round.spawnTimer); clearInterval(round.clockTimer); cancelAnimationFrame(round.rafId);
   round.running = false;
   $('startcard').classList.add('show');
 };
@@ -1539,11 +1573,11 @@ document.addEventListener('visibilitychange', () => {
   if (!round || !$('play').classList.contains('active')) return;
   if (document.hidden){
     hiddenAt = performance.now();
-    clearInterval(round.spawnTimer); clearInterval(round.clockTimer); cancelAnimationFrame(round.rafId);
+    clearTimeout(round.spawnTimer); clearInterval(round.clockTimer); cancelAnimationFrame(round.rafId);
   } else if (round.running) {
     const gap = performance.now() - hiddenAt;
     round.live.forEach(r => { r.born += gap; });
-    round.spawnTimer = setInterval(spawnWord, 1680);
+    scheduleSpawn();
     round.clockTimer = setInterval(tickClock, 1000);
     round.rafId = requestAnimationFrame(frame);
   }

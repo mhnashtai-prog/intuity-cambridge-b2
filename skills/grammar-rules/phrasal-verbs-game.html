@@ -961,7 +961,7 @@ function startTrial(){
 function beginRound(cfg){
   round = {
     mode:cfg.mode, index:cfg.index, poolItems:cfg.pool, active:[...cfg.pool], resting:[],
-    exposure:{}, weight:{}, coverage:new Set(),
+    exposure:{}, weight:{}, coverage:new Set(), recent:[],
     target:null, targetSpawned:false, forceIn:0, targetLifeBonus:1,
     hits:0, misses:0, streak:0, timeLeft:ROUND_SECONDS,
     live:new Set(), spawnTimer:null, clockTimer:null, rafId:null, running:false
@@ -1023,15 +1023,37 @@ function tickClock(){
   if (round.timeLeft <= 0) endRound();
 }
 
+/* No phrase may be the target again within NO_REPEAT turns. A missed phrase
+   has its weight raised so it comes back soon — but "soon" was letting it be
+   drawn again immediately, and since an expiry did not choose a new target
+   at all, one definition could sit there for four turns running. That reads
+   as the game being stuck, or as an accusation.
+
+   The bar is lifted only if it would leave nothing to choose from: a set of
+   six phrases cannot honour a five-deep exclusion, so it honours as much of
+   it as it can. */
+const NO_REPEAT = 5;
+
 function weightedPick(){
-  const bag = [];
-  round.active.forEach(it => { for(let i=0;i<round.weight[it.p];i++) bag.push(it); });
-  return bag.length ? bag[(Math.random()*bag.length)|0] : (round.active[0] || round.poolItems[0]);
+  const recent = round.recent || [];
+  for (let back = Math.min(NO_REPEAT, recent.length); back >= 0; back--){
+    const barred = new Set(recent.slice(-back));
+    const bag = [];
+    round.active.forEach(it => {
+      if (barred.has(it.p)) return;
+      for (let i = 0; i < round.weight[it.p]; i++) bag.push(it);
+    });
+    if (bag.length) return bag[(Math.random()*bag.length)|0];
+  }
+  return round.active[0] || round.poolItems[0];
 }
 
 function newTarget(){
   if (!round.active.length) refillFromResting();
   round.target = weightedPick();
+  round.recent = round.recent || [];
+  round.recent.push(round.target.p);
+  if (round.recent.length > NO_REPEAT) round.recent.shift();
   $('promptText').textContent = round.target.m;
   round.targetSpawned = false;
   /* Some glosses pack two or three senses into one line. That's more to hold
@@ -1110,8 +1132,17 @@ const NEIGHBOUR_CLEAR = 0.34;   // a neighbouring lane must be this far along
 
 let lanes = [];          // one record per lane, or null when free
 
+/* Four vanishing points rather than one, about 3mm apart on a laptop, cycled
+   across the lanes. A single origin makes every ray a spoke of one wheel and
+   the eye reads it as a diagram; four origins a hair apart break that up
+   without anyone being able to say why, and the angles vary slightly along
+   each lane's length. */
+const ORIGINS = [-11, -4, 4, 11];        // px offsets across
+const ORIGINS_Y = [0, -5, -9, -3];       // and a little up
+
 function laneGeometry(i, fw, fh){
-  const vx = fw * 0.5, vy = -fh * 0.16;
+  const o  = i % ORIGINS.length;
+  const vx = fw * 0.5 + ORIGINS[o], vy = -fh * 0.16 + ORIGINS_Y[o];
   const a  = (-FAN/2 + FAN * (i + 0.5) / LANES) * Math.PI / 180;
   const dx = Math.sin(a), dy = Math.cos(a);
   /* How far along this ray until it leaves the usable field. */
@@ -1238,10 +1269,13 @@ function expire(rec){
   round.misses++; round.streak = 0;
   sfx('crash');
   syncCounters();
-  round.targetSpawned = false; round.forceIn = randInt(2,3);
   round.weight[round.target.p] = Math.min(5, (round.weight[round.target.p]||1) + 2);
   pstat(round.target.p).misses++;
   log(round.target.p, false, { game:'incoming', mode: round.mode, expired: true });
+  /* Move on. Leaving the target unchanged after an expiry is what let one
+     definition sit on screen turn after turn: the weight bump already brings
+     it back within a few turns, which is the right kind of second chance. */
+  newTarget();
 }
 
 function hit(rec){

@@ -1170,7 +1170,33 @@ function spawnWord(){
     el.remove();
     return;
   }
-  const {x,y} = spot;
+  /* ── THE RAY ──────────────────────────────────────────────────────────
+     The vanishing point used to be the middle of the field, which meant a
+     word destined for the middle had almost no ray to travel: it inflated
+     on the spot while a word heading for a corner streaked across. Same
+     growth, wildly different travel.
+
+     Two corrections. The vanishing point sits ABOVE the field, so every ray
+     runs downward and outward and none is short by accident. And a floor is
+     put under the ray length — a destination closer than MIN_RAY is pushed
+     outward along its own direction until it clears it. Growth and travel
+     are then matched for every word on screen. */
+  const _fw = field.clientWidth, _fh = field.clientHeight;
+  const vx = _fw * 0.5, vy = -_fh * 0.14;
+  const MIN_RAY = _fh * 0.86;
+
+  let x = spot.x, y = spot.y;
+  let rdx = x - vx, rdy = y - vy;
+  let L = Math.hypot(rdx, rdy) || 1;
+  if (L < MIN_RAY){
+    const k = MIN_RAY / L;
+    x = vx + rdx * k;
+    y = vy + rdy * k;
+    /* Extending can overshoot the frame; pull it back inside and accept the
+       slightly shorter ray rather than parking a word off-screen. */
+    x = Math.min(_fw*0.92, Math.max(_fw*0.08, x));
+    y = Math.min(_fh*0.92, Math.max(_fh*0.20, y));
+  }
   /* Slower overall, and a streak now speeds things up far more gently. The
      old floor of .78 meant the field became unreadable exactly when a child
      started succeeding, which punished the run it was meant to reward. */
@@ -1185,22 +1211,69 @@ function spawnWord(){
   el.onclick = () => hit(rec);
 }
 
+/* ── THE PATH ────────────────────────────────────────────────────────────
+   A straight ray spends the word's whole life getting nearer and bigger at
+   the same time, and a word is at its least readable exactly while it is
+   still small. Bending the path buys time without slowing anything down:
+   the word lifts toward the horizon first, then comes down and out at you,
+   so the same growth is spread over a longer journey.
+
+   A quadratic Bézier — start near the vanishing point, end at the
+   destination, control point lifted above the midpoint by a fraction of the
+   ray's own length, so a long ray arcs more than a short one. */
+const START = 0.20;   // how far down its ray a word begins
+const ARC   = 0.55;   // bow of the path, as a fraction of the ray's length
+
+function project(r, u, vx, vy){
+  const sx = vx + (r.tx - vx) * START, sy = vy + (r.ty - vy) * START;
+  const ex = r.tx, ey = r.ty;
+  const dx = ex - sx, dy = ey - sy;
+  const L  = Math.hypot(dx, dy) || 1;
+
+  /* The control point is offset PERPENDICULAR to the ray, not straight up.
+     Lifting it vertically did nothing for a word whose ray already pointed
+     straight down — measured at exactly 0% extra path — and those are the
+     central words that needed it most. Perpendicular bows every path by the
+     same proportion whatever its direction, and the sign is chosen so the
+     bow is always the upward one. */
+  let px = -dy / L, py = dx / L;
+  if (py > 0){ px = -px; py = -py; }
+
+  const cx = (sx + ex) / 2 + px * L * ARC;
+  const cy = (sy + ey) / 2 + py * L * ARC;
+  const m  = 1 - u;
+  return { x: m*m*sx + 2*m*u*cx + u*u*ex,
+           y: m*m*sy + 2*m*u*cy + u*u*ey };
+}
+
+/* How far the drawn position moves when the destination is nudged one pixel.
+   The collision pass needs it: it pushes destinations, not positions, so a
+   nudge must be divided by this to land where it intended. */
+const pull = u => Math.max(0.20, START*(1-u)*(1-u) + 1.2*u*(1-u) + u*u);
+
 function frame(now){
   if (!round) return;
-  const _f = $('field'), fcx = _f.clientWidth/2, fcy = _f.clientHeight/2;
+  /* The same vanishing point the spawner used: above the top edge, so every
+     word arrives from over the horizon rather than out of the middle. */
+  const _f = $('field'), fcx = _f.clientWidth*0.5, fcy = -_f.clientHeight*0.14;
   round.live.forEach(r => {
     if (r.dead) return;
     const t = (now - r.born) / r.life;
     if (t >= 1){ expire(r); return; }
-    r.scale = 0.15 + t*t*2.1;
+    /* Readable sooner. The old quadratic left a word tiny for most of its
+       life and then rushed it at you at the end — so the moment it became
+       legible was the moment it was about to leave. It now reaches usable
+       size early and spends the rest of its journey closing in, which is
+       where the extra reading time actually comes from. */
+    r.scale = 0.30 + Math.pow(t, 1.45) * 1.95;
     /* Angle of projection: a word travels outward along its own ray from the
        middle of the field as it grows, rather than swelling on the spot.
        That is what makes it read as coming towards you.
        `k` is kept on the record because the collision pass below has to
        undo it — it nudges destinations, not positions. */
-    r.k = 0.30 + 0.70*t*t;
-    r.x = fcx + (r.tx - fcx) * r.k;
-    r.y = fcy + (r.ty - fcy) * r.k;
+    r.u = t*t;                       // eased, and matched to the growth curve
+    const pt = project(r, r.u, fcx, fcy);
+    r.x = pt.x; r.y = pt.y;
     r.radius = r.phrase.length * 6.5 * r.scale * r.sizeMul + 14;
     r.opacity = Math.min(1, t*2.4);
     r.blur = Math.max(0, 2.4 - t*10);
@@ -1223,11 +1296,11 @@ function frame(now){
          nudge divided by k moves the destination far enough that the word
          lands where the push intended at its current distance. */
       const overlap=minDist-dist, nx=dx/dist, ny=dy/dist, aShare=b.scale/(a.scale+b.scale);
-      const ka = Math.max(.3, a.k || 1), kb = Math.max(.3, b.k || 1);
-      a.tx-=nx*overlap*aShare*0.5/ka;      a.ty-=ny*overlap*aShare*0.5/ka;
-      b.tx+=nx*overlap*(1-aShare)*0.5/kb;  b.ty+=ny*overlap*(1-aShare)*0.5/kb;
-      a.x = fcx + (a.tx-fcx)*ka; a.y = fcy + (a.ty-fcy)*ka;
-      b.x = fcx + (b.tx-fcx)*kb; b.y = fcy + (b.ty-fcy)*kb;
+      const pa = pull(a.u || 0), pb = pull(b.u || 0);
+      a.tx-=nx*overlap*aShare*0.5/pa;      a.ty-=ny*overlap*aShare*0.5/pa;
+      b.tx+=nx*overlap*(1-aShare)*0.5/pb;  b.ty+=ny*overlap*(1-aShare)*0.5/pb;
+      const A = project(a, a.u || 0, fcx, fcy), B = project(b, b.u || 0, fcx, fcy);
+      a.x = A.x; a.y = A.y; b.x = B.x; b.y = B.y;
     }
   }
   const field = $('field'), fw = field.clientWidth, fh = field.clientHeight;

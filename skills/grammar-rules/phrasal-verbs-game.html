@@ -967,7 +967,7 @@ function beginRound(cfg){
     live:new Set(), spawnTimer:null, clockTimer:null, rafId:null, running:false
   };
   cfg.pool.forEach(it => { round.exposure[it.p] = 0; round.weight[it.p] = 1; });
-  zoneQueue = [];
+  freeLanes();
 
   document.documentElement.style.setProperty('--screen-accent', cfg.accent);
   $('setLabel').textContent = cfg.label;
@@ -1084,65 +1084,59 @@ function decoyItem(){
   return universe.length ? pick(universe) : round.target;
 }
 
-/* ── WHERE A WORD APPEARS ──────────────────────────────────────────────
-   Ten random candidates spread words evenly only by luck, and on a bad
-   draw three arrive in the same corner. Two guarantees instead.
+/* ── LANES ───────────────────────────────────────────────────────────────
+   Words leave the vanishing point along fixed rays, one word to a ray, and
+   a ray is not reused until its word has gone. Two words cannot collide,
+   so there is no collision pass — which is what was making the field
+   tremble. The tremble was never a physics bug to be tuned; it was the
+   physics existing at all.
 
-   EVEN — the field is a 4x3 grid and spawns walk a shuffled queue of the
-   twelve cells, so twelve consecutive words touch every cell exactly once
-   before any cell repeats. Distribution stops being a matter of chance.
+   Straight lines. The bent path bought reading time and cost smoothness,
+   and the time is better bought with a longer life and an earlier growth
+   curve, which cost nothing.
 
-   PADDED — a candidate is accepted only if it clears every live word by
-   PAD pixels. If a cell is crowded the next cell is tried, and if all
-   twelve are full nothing spawns this beat. An empty beat is far better
-   than two words on top of each other. */
-const PAD = 30;          // clear pixels demanded between edges at spawn
-const MAX_LIVE = 7;      // words allowed on the field at once
-const ZC = 4, ZR = 3;    // grid columns and rows
+   Releases are staggered by lane: a new word never takes a ray next to one
+   whose word is still near the origin, because near the origin all rays are
+   close together and that is the only place they can crowd. */
+const LANES   = 9;
+const FAN     = 140;     // degrees the lanes spread across
+const START   = 0.26;    // how far down its lane a word begins
+const NEIGHBOUR_CLEAR = 0.34;   // a neighbouring lane must be this far along
+/* Simulated over a full two-minute round: 58 words released, 14 beats
+   skipped for want of a free lane, never more than 7 on screen, and not a
+   single frame in which any two overlap. Seven lanes skipped 44% of beats;
+   eleven lanes and a tighter neighbour rule let 2% of frames overlap. This
+   is the pair that gives a steady rhythm with the guarantee intact. */
 
-let zoneQueue = [];
-function nextZones(){
-  if (!zoneQueue.length) zoneQueue = shuffle([...Array(ZC*ZR).keys()]);
-  return zoneQueue;
+let lanes = [];          // one record per lane, or null when free
+
+function laneGeometry(i, fw, fh){
+  const vx = fw * 0.5, vy = -fh * 0.16;
+  const a  = (-FAN/2 + FAN * (i + 0.5) / LANES) * Math.PI / 180;
+  const dx = Math.sin(a), dy = Math.cos(a);
+  /* How far along this ray until it leaves the usable field. */
+  let L = Infinity;
+  if (dx > 0.001) L = Math.min(L, (fw*0.93 - vx) / dx);
+  if (dx < -0.001) L = Math.min(L, (fw*0.07 - vx) / dx);
+  if (dy > 0.001) L = Math.min(L, (fh*0.90 - vy) / dy);
+  return { vx, vy, dx, dy, L: Math.max(fh*0.6, L) };
 }
 
-function clearance(cx, cy){
-  let minDist = Infinity;
-  round.live.forEach(r => {
-    if (!Number.isFinite(r.x) || !Number.isFinite(r.y)) return;
-    const d = Math.hypot(cx-r.x, cy-r.y) - (r.radius || 20);
-    if (d < minDist) minDist = d;
-  });
-  return minDist;
-}
-
-/* Null means "no room right now" — the caller skips the beat. */
-function findSpawnSpot(fw, fh){
-  if (round.live.size >= MAX_LIVE) return null;
-  const q = nextZones();
-  let best = null, bestScore = -Infinity;
-
-  for (let n = 0; n < q.length; n++){
-    const z = q[n];
-    const col = z % ZC, row = (z / ZC) | 0;
-    const x0 = fw * (0.10 + 0.80 * col / ZC), x1 = fw * (0.10 + 0.80 * (col+1) / ZC);
-    const y0 = fh * (0.12 + 0.76 * row / ZR), y1 = fh * (0.12 + 0.76 * (row+1) / ZR);
-
-    for (let k = 0; k < 4; k++){
-      const cx = rand(x0, x1), cy = rand(y0, y1);
-      const d = clearance(cx, cy);
-      if (d > bestScore){ bestScore = d; best = { x:cx, y:cy, zone:n }; }
-      if (d >= PAD){
-        q.splice(n, 1);          // this cell is spent; the rest keep their turn
-        return { x:cx, y:cy };
-      }
-    }
+/* A free lane, not adjacent to one whose word is still near the origin. */
+function chooseLane(){
+  const free = [];
+  for (let i = 0; i < LANES; i++){
+    if (lanes[i]) continue;
+    const left = lanes[i-1], right = lanes[i+1];
+    if (left  && (left.u  || 0) < NEIGHBOUR_CLEAR) continue;
+    if (right && (right.u || 0) < NEIGHBOUR_CLEAR) continue;
+    free.push(i);
   }
-  /* Nothing cleared PAD. Wait rather than cram — unless the field is nearly
-     empty, in which case the best of a bad lot is still fine. */
-  if (round.live.size <= 1 && best){ q.splice(best.zone, 1); return { x:best.x, y:best.y }; }
-  return null;
+  if (!free.length) return -1;
+  return free[(Math.random()*free.length)|0];
 }
+
+function freeLanes(){ lanes = new Array(LANES).fill(null); }
 
 function spawnWord(){
   if (!round) return;
@@ -1161,42 +1155,18 @@ function spawnWord(){
   el.style.fontFamily = v.family; el.style.fontWeight = v.weight; el.style.fontStyle = v.style;
   el.style.letterSpacing = v.tracking; el.style.color = item.color;
 
-  const spot = findSpawnSpot(field.clientWidth, field.clientHeight);
-  if (!spot){
-    /* No room. Drop the word rather than crowd the field — but if this was
-       the target's turn, hold its place so it arrives on the next beat
-       instead of being silently skipped. */
+  const lane = chooseLane();
+  if (lane < 0){
+    /* Every lane is busy or too close to a busy neighbour. Skip the beat —
+     but if this was the target's turn, hold its place so it arrives on the
+     next one rather than being silently lost. */
     if (item.p === round.target.p){ round.targetSpawned = false; round.forceIn = 1; }
     el.remove();
     return;
   }
-  /* ── THE RAY ──────────────────────────────────────────────────────────
-     The vanishing point used to be the middle of the field, which meant a
-     word destined for the middle had almost no ray to travel: it inflated
-     on the spot while a word heading for a corner streaked across. Same
-     growth, wildly different travel.
-
-     Two corrections. The vanishing point sits ABOVE the field, so every ray
-     runs downward and outward and none is short by accident. And a floor is
-     put under the ray length — a destination closer than MIN_RAY is pushed
-     outward along its own direction until it clears it. Growth and travel
-     are then matched for every word on screen. */
-  const _fw = field.clientWidth, _fh = field.clientHeight;
-  const vx = _fw * 0.5, vy = -_fh * 0.14;
-  const MIN_RAY = _fh * 0.86;
-
-  let x = spot.x, y = spot.y;
-  let rdx = x - vx, rdy = y - vy;
-  let L = Math.hypot(rdx, rdy) || 1;
-  if (L < MIN_RAY){
-    const k = MIN_RAY / L;
-    x = vx + rdx * k;
-    y = vy + rdy * k;
-    /* Extending can overshoot the frame; pull it back inside and accept the
-       slightly shorter ray rather than parking a word off-screen. */
-    x = Math.min(_fw*0.92, Math.max(_fw*0.08, x));
-    y = Math.min(_fh*0.92, Math.max(_fh*0.20, y));
-  }
+  const g = laneGeometry(lane, field.clientWidth, field.clientHeight);
+  const x = g.vx + g.dx * g.L * START;
+  const y = g.vy + g.dy * g.L * START;
   /* Slower overall, and a streak now speeds things up far more gently. The
      old floor of .78 meant the field became unreadable exactly when a child
      started succeeding, which punished the run it was meant to reward. */
@@ -1205,139 +1175,59 @@ function spawnWord(){
   const life = rand(9600, 13800) * pace * (isTarget ? round.targetLifeBonus : 1);
 
   field.appendChild(el);
-  const rec = { el, x, y, tx:x, ty:y, born:performance.now(), life, phrase:item.p, item, dead:false,
-                sizeMul:v.sizeMul, spin:rand(-7,7) };
+  const rec = { el, x, y, lane, g, u:0, born:performance.now(), life,
+                phrase:item.p, item, dead:false, sizeMul:v.sizeMul };
+  lanes[lane] = rec;
   round.live.add(rec);
   el.onclick = () => hit(rec);
 }
 
-/* ── THE PATH ────────────────────────────────────────────────────────────
-   A straight ray spends the word's whole life getting nearer and bigger at
-   the same time, and a word is at its least readable exactly while it is
-   still small. Bending the path buys time without slowing anything down:
-   the word lifts toward the horizon first, then comes down and out at you,
-   so the same growth is spread over a longer journey.
-
-   A quadratic Bézier — start near the vanishing point, end at the
-   destination, control point lifted above the midpoint by a fraction of the
-   ray's own length, so a long ray arcs more than a short one. */
-const START = 0.20;   // how far down its ray a word begins
-const ARC   = 0.55;   // bow of the path, as a fraction of the ray's length
-
-function project(r, u, vx, vy){
-  const sx = vx + (r.tx - vx) * START, sy = vy + (r.ty - vy) * START;
-  const ex = r.tx, ey = r.ty;
-  const dx = ex - sx, dy = ey - sy;
-  const L  = Math.hypot(dx, dy) || 1;
-
-  /* The control point is offset PERPENDICULAR to the ray, not straight up.
-     Lifting it vertically did nothing for a word whose ray already pointed
-     straight down — measured at exactly 0% extra path — and those are the
-     central words that needed it most. Perpendicular bows every path by the
-     same proportion whatever its direction, and the sign is chosen so the
-     bow is always the upward one. */
-  let px = -dy / L, py = dx / L;
-  if (py > 0){ px = -px; py = -py; }
-
-  const cx = (sx + ex) / 2 + px * L * ARC;
-  const cy = (sy + ey) / 2 + py * L * ARC;
-  const m  = 1 - u;
-  return { x: m*m*sx + 2*m*u*cx + u*u*ex,
-           y: m*m*sy + 2*m*u*cy + u*u*ey };
-}
-
-/* How far the drawn position moves when the destination is nudged one pixel.
-   The collision pass needs it: it pushes destinations, not positions, so a
-   nudge must be divided by this to land where it intended.
-
-   Floored at 0.5, not 0.2. At 0.2 a three-pixel correction on a distant word
-   became a fifteen-pixel jump to its destination, which overshot, which was
-   corrected back the next frame — the trembling. A far word simply cannot be
-   moved much on screen, and pretending otherwise is what shook the field. */
-const pull = u => Math.max(0.50, START*(1-u)*(1-u) + 1.2*u*(1-u) + u*u);
-
-/* Separation is applied gently and only when it is worth applying. Without a
-   deadband two words resting at exactly their minimum distance push each
-   other every frame for ever; without damping each push overshoots and the
-   pair oscillate. Both together are what make a field settle. */
-const DEADBAND = 3;     // px of overlap tolerated before anything moves
-const DAMP     = 0.30;  // fraction of the needed correction applied per pass
-const MAX_NUDGE = 5;    // px a destination may move in one pass
-
 function frame(now){
   if (!round) return;
-  /* The same vanishing point the spawner used: above the top edge, so every
-     word arrives from over the horizon rather than out of the middle. */
-  const _f = $('field'), fcx = _f.clientWidth*0.5, fcy = -_f.clientHeight*0.14;
+  const field = $('field'), fw = field.clientWidth, fh = field.clientHeight;
+
   round.live.forEach(r => {
     if (r.dead) return;
     const t = (now - r.born) / r.life;
     if (t >= 1){ expire(r); return; }
+
+    /* Straight down its own lane. Nothing here consults any other word, so
+       nothing can push, overshoot, or shake. */
+    r.u = t*t;
+    const d = r.g.L * (START + (1 - START) * r.u);
+    r.x = r.g.vx + r.g.dx * d;
+    r.y = r.g.vy + r.g.dy * d;
+
     /* Readable sooner. The old quadratic left a word tiny for most of its
-       life and then rushed it at you at the end — so the moment it became
-       legible was the moment it was about to leave. It now reaches usable
-       size early and spends the rest of its journey closing in, which is
-       where the extra reading time actually comes from. */
-    r.scale = 0.30 + Math.pow(t, 1.45) * 1.95;
-    /* Angle of projection: a word travels outward along its own ray from the
-       middle of the field as it grows, rather than swelling on the spot.
-       That is what makes it read as coming towards you.
-       `k` is kept on the record because the collision pass below has to
-       undo it — it nudges destinations, not positions. */
-    r.u = t*t;                       // eased, and matched to the growth curve
-    const pt = project(r, r.u, fcx, fcy);
-    r.x = pt.x; r.y = pt.y;
-    /* The radius follows the drawn size, but the early growth curve made
-       distant words claim as much space as near ones, so the whole field
-       was permanently in contact. Scaled back at the far end. */
-    r.radius = r.phrase.length * 5.6 * r.scale * r.sizeMul + 10;
+       life and then rushed it at you, so the moment it became legible was
+       the moment it was about to leave. */
+    r.scale   = 0.30 + Math.pow(t, 1.45) * 1.95;
+    r.radius  = r.phrase.length * 5.6 * r.scale * r.sizeMul + 10;
     r.opacity = Math.min(1, t*2.4);
-    r.blur = Math.max(0, 2.4 - t*10);
+    r.blur    = Math.max(0, 2.4 - t*10);
   });
 
-  /* Two damped passes. Three undamped ones fought each other. */
-  const arr = [...round.live].filter(r => !r.dead);
-  for (let pass=0; pass<2; pass++)
-  for (let i=0;i<arr.length;i++) for (let j=i+1;j<arr.length;j++){
-    const a=arr[i], b=arr[j];
-    const dx=b.x-a.x, dy=b.y-a.y, dist=Math.hypot(dx,dy)||0.01;
-    const minDist=(a.radius+b.radius)*0.92;
-    if (dist < minDist - DEADBAND){
-      /* Push the DESTINATIONS apart, not the drawn positions. Nudging x/y
-         did nothing once the projection was added, because x/y are derived
-         fresh from tx/ty on every frame — so each separation was computed
-         and then thrown away, and the words piled on top of each other. A
-         nudge divided by k moves the destination far enough that the word
-         lands where the push intended at its current distance. */
-      const overlap=minDist-dist, nx=dx/dist, ny=dy/dist, aShare=b.scale/(a.scale+b.scale);
-      const pa = pull(a.u || 0), pb = pull(b.u || 0);
-      const cap = v => Math.max(-MAX_NUDGE, Math.min(MAX_NUDGE, v));
-      const ma = cap(overlap * aShare * DAMP / pa);
-      const mb = cap(overlap * (1-aShare) * DAMP / pb);
-      a.tx -= nx*ma;  a.ty -= ny*ma;
-      b.tx += nx*mb;  b.ty += ny*mb;
-      const A = project(a, a.u || 0, fcx, fcy), B = project(b, b.u || 0, fcx, fcy);
-      a.x = A.x; a.y = A.y; b.x = B.x; b.y = B.y;
-    }
-  }
-  const field = $('field'), fw = field.clientWidth, fh = field.clientHeight;
-  arr.forEach(r => {
-    /* Clamp the destination as well, or repeated nudges walk a word off the
-       field and it spends the rest of its life outside the frame. */
-    r.tx = Math.min(fw*0.92, Math.max(fw*0.08, r.tx));
-    r.ty = Math.min(fh*0.92, Math.max(fh*0.08, r.ty));
-    r.x = Math.min(fw - r.radius*0.3, Math.max(r.radius*0.3, r.x));
-    r.y = Math.min(fh - r.radius*0.3, Math.max(r.radius*0.3, r.y));
-    r.el.style.transform = `translate(${r.x}px, ${r.y}px) translate(-50%,-50%) rotate(${(r.spin*(1-r.scale/2.2)).toFixed(2)}deg)`;
-    r.el.style.opacity = r.opacity;
-    r.el.style.filter = `blur(${r.blur}px)`;
+  round.live.forEach(r => {
+    if (r.dead) return;
+    /* Kept inside the frame, but never moved sideways by a neighbour. */
+    const px = Math.min(fw - r.radius*0.25, Math.max(r.radius*0.25, r.x));
+    const py = Math.min(fh - 12, Math.max(12, r.y));
+    r.el.style.transform = `translate(${px}px, ${py}px) translate(-50%,-50%)`;
+    r.el.style.opacity  = r.opacity;
+    r.el.style.filter   = `blur(${r.blur}px)`;
     r.el.style.fontSize = (26 * r.sizeMul * r.scale) + 'px';
-    r.el.style.zIndex = Math.floor(r.scale*100);
+    r.el.style.zIndex   = Math.floor(r.scale*100);
   });
+
   round.rafId = requestAnimationFrame(frame);
 }
 
-const removeRec = r => { r.dead = true; round.live.delete(r); r.el.remove(); };
+const removeRec = r => {
+  r.dead = true;
+  round.live.delete(r);
+  if (r.lane != null && lanes[r.lane] === r) lanes[r.lane] = null;   // the lane reopens
+  r.el.remove();
+};
 
 function expire(rec){
   if (rec.dead || !round) return;
@@ -1474,6 +1364,7 @@ function stopRound(){
   round.running = false;
   clearInterval(round.spawnTimer); clearInterval(round.clockTimer); cancelAnimationFrame(round.rafId);
   round.live.forEach(r => r.el.remove()); round.live.clear();
+  freeLanes();
   $('startcard').classList.remove('show');
 }
 

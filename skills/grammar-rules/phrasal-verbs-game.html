@@ -621,6 +621,8 @@
   <div class="barright"><span class="barstage" id="barStage">—</span></div>
 </div>
 
+<script src="intuity-log.js"></script>
+<script src="intuity-sound.js"></script>
 <script>
 /* ======================================================================
    INCOMING — words rise out of the dark and grow as they close in.
@@ -651,6 +653,11 @@ const STAGES = [
 
 /* ---------- helpers ---------- */
 const $ = id => document.getElementById(id);
+
+/* Sound and logging are decoration and neither may ever throw: a 404 on a
+   sound file once froze a game mid-answer, and that must not repeat. */
+function sfx(cue){ try{ if (window.SFX && typeof SFX[cue] === 'function') SFX[cue](); }catch(e){} }
+function log(item, ok, extra){ try{ if (window.INTUITY) INTUITY.log('phrasal-verbs', item, ok, extra); }catch(e){} }
 const rand = (a,b) => a + Math.random()*(b-a);
 const randInt = (a,b) => a + Math.floor(Math.random()*(b-a+1));
 const pick = a => a[(Math.random()*a.length)|0];
@@ -978,7 +985,7 @@ function startPlaying(){
   round.running = true;
   round.rafId = requestAnimationFrame(frame);
   spawnWord();
-  round.spawnTimer = setInterval(spawnWord, 1480);
+  round.spawnTimer = setInterval(spawnWord, 1680);
   round.clockTimer = setInterval(tickClock, 1000);
 }
 
@@ -1029,12 +1036,14 @@ function tickRestCounters(){
 }
 
 /* ---------- field ---------- */
+/* Three faces, not five. A starfield of novelty types reads as noise; what
+   should vary is weight and size, so the eye sorts words by distance rather
+   than by typeface. Caveat's 1.35 multiplier was making handwriting the
+   biggest thing on screen regardless of how far away it was supposed to be. */
 const STYLES = [
-  { family:"'Space Grotesk',sans-serif", weight:700, style:'normal', case:'upper', tracking:'.01em', sizeMul:1.00 },
-  { family:"'Fraunces',serif",           weight:600, style:'italic', case:'title', tracking:'0em',   sizeMul:1.05 },
-  { family:"'Archivo Black',sans-serif", weight:400, style:'normal', case:'upper', tracking:'-.01em',sizeMul:0.92 },
-  { family:"'Bungee',cursive",           weight:400, style:'normal', case:'upper', tracking:'0em',   sizeMul:0.85 },
-  { family:"'Caveat',cursive",           weight:700, style:'normal', case:'title', tracking:'.01em', sizeMul:1.35 },
+  { family:"'Archivo Black',sans-serif", weight:400, style:'normal', case:'upper', tracking:'-.01em', sizeMul:1.00 },
+  { family:"'Space Grotesk',sans-serif", weight:800, style:'normal', case:'upper', tracking:'.01em',  sizeMul:0.96 },
+  { family:"'Fraunces',serif",           weight:600, style:'italic', case:'title', tracking:'0em',    sizeMul:1.08 },
 ];
 const styledText = (p,c) => c === 'title' ? p.toLowerCase().replace(/\b\w/g, x => x.toUpperCase()) : p;
 
@@ -1079,23 +1088,33 @@ function spawnWord(){
   el.style.letterSpacing = v.tracking; el.style.color = item.color;
 
   const {x,y} = findSpawnSpot(field.clientWidth, field.clientHeight);
-  const pace = Math.max(0.78, 1 - round.streak*0.02);
+  /* Slower overall, and a streak now speeds things up far more gently. The
+     old floor of .78 meant the field became unreadable exactly when a child
+     started succeeding, which punished the run it was meant to reward. */
+  const pace = Math.max(0.88, 1 - round.streak*0.012);
   const isTarget = item.p === round.target.p;
-  const life = rand(6200, 9200) * pace * (isTarget ? round.targetLifeBonus : 1);
+  const life = rand(8200, 12000) * pace * (isTarget ? round.targetLifeBonus : 1);
 
   field.appendChild(el);
-  const rec = { el, x, y, born:performance.now(), life, phrase:item.p, item, dead:false, sizeMul:v.sizeMul };
+  const rec = { el, x, y, tx:x, ty:y, born:performance.now(), life, phrase:item.p, item, dead:false,
+                sizeMul:v.sizeMul, spin:rand(-7,7) };
   round.live.add(rec);
   el.onclick = () => hit(rec);
 }
 
 function frame(now){
   if (!round) return;
+  const _f = $('field'), fcx = _f.clientWidth/2, fcy = _f.clientHeight/2;
   round.live.forEach(r => {
     if (r.dead) return;
     const t = (now - r.born) / r.life;
     if (t >= 1){ expire(r); return; }
     r.scale = 0.15 + t*t*2.1;
+    /* Angle of projection: a word travels outward along its own ray from the
+       middle of the field as it grows, rather than swelling on the spot.
+       That is what makes it read as coming towards you. */
+    r.x = fcx + (r.tx - fcx) * (0.30 + 0.70*t*t);
+    r.y = fcy + (r.ty - fcy) * (0.30 + 0.70*t*t);
     r.radius = r.phrase.length * 6.5 * r.scale * r.sizeMul + 14;
     r.opacity = Math.min(1, t*2.4);
     r.blur = Math.max(0, 2.4 - t*10);
@@ -1116,10 +1135,10 @@ function frame(now){
   arr.forEach(r => {
     r.x = Math.min(fw - r.radius*0.3, Math.max(r.radius*0.3, r.x));
     r.y = Math.min(fh - r.radius*0.3, Math.max(r.radius*0.3, r.y));
-    r.el.style.transform = `translate(${r.x}px, ${r.y}px) translate(-50%,-50%)`;
+    r.el.style.transform = `translate(${r.x}px, ${r.y}px) translate(-50%,-50%) rotate(${(r.spin*(1-r.scale/2.2)).toFixed(2)}deg)`;
     r.el.style.opacity = r.opacity;
     r.el.style.filter = `blur(${r.blur}px)`;
-    r.el.style.fontSize = (22 * r.sizeMul * r.scale) + 'px';
+    r.el.style.fontSize = (26 * r.sizeMul * r.scale) + 'px';
     r.el.style.zIndex = Math.floor(r.scale*100);
   });
   round.rafId = requestAnimationFrame(frame);
@@ -1134,10 +1153,12 @@ function expire(rec){
      never a word to catch. Only the target expiring counts against you. */
   if (rec.phrase !== round.target.p) return;
   round.misses++; round.streak = 0;
+  sfx('crash');
   syncCounters();
   round.targetSpawned = false; round.forceIn = randInt(2,3);
   round.weight[round.target.p] = Math.min(5, (round.weight[round.target.p]||1) + 2);
   pstat(round.target.p).misses++;
+  log(round.target.p, false, { game:'incoming', mode: round.mode, expired: true });
 }
 
 function hit(rec){
@@ -1146,10 +1167,12 @@ function hit(rec){
   if (rec.phrase === round.target.p){
     burst(rec); removeRec(rec);
     round.hits++; round.streak++;
+    sfx(round.streak >= 4 ? 'fanfare' : 'correct');
 
     syncCounters(); popStage(); showContext(round.target);
     round.coverage.add(round.target.p);
     pstat(round.target.p).hits++; save();
+    log(round.target.p, true, { game:'incoming', mode: round.mode });
 
     round.exposure[round.target.p]++;
     round.weight[round.target.p] = Math.max(1, round.weight[round.target.p] - 1);
@@ -1162,9 +1185,11 @@ function hit(rec){
     rec.el.classList.add('wrong');
     setTimeout(() => rec.el.classList.remove('wrong'), 240);
     round.misses++; round.streak = 0;
+    sfx('wrong');
     syncCounters();
     round.weight[round.target.p] = Math.min(5, (round.weight[round.target.p]||1) + 2);
     pstat(round.target.p).misses++; save();
+    log(round.target.p, false, { game:'incoming', mode: round.mode, chose: rec.phrase });
     /* Name what the wrong word actually means. The error becomes input
        rather than a counter ticking up. */
     showToast(`<b>${rec.phrase}</b><span> = ${rec.item.m}</span>`);
@@ -1207,22 +1232,44 @@ function showContext(item){
 }
 const hideToast = () => $('toast').classList.remove('show');
 
+const FW = ['#FFD94A','#C9A961','#7FB519','#D96A44','#ffffff','#61B5ED'];
 function burst(rec){
   const field = $('field');
   const r = rec.el.getBoundingClientRect(), f = field.getBoundingClientRect();
   const cx = r.left-f.left+r.width/2, cy = r.top-f.top+r.height/2;
   rec.el.animate(
-    [{transform:rec.el.style.transform, opacity:1},{transform:rec.el.style.transform+' scale(1.6)', opacity:0}],
-    {duration:260, easing:'ease-out'});
-  const cols = ['#C9A961','#FFD94A','#5ED39B','#e5e5e7'];
-  for (let i=0;i<10;i++){
-    const s = document.createElement('div'); s.className = 'spark';
-    s.style.left = cx+'px'; s.style.top = cy+'px'; s.style.background = pick(cols);
-    s.style.transition = 'transform .5s ease-out, opacity .5s ease-out';
-    field.appendChild(s);
-    const a = Math.random()*Math.PI*2, d = 30+Math.random()*46;
-    requestAnimationFrame(()=>{ s.style.transform = `translate(${Math.cos(a)*d}px,${Math.sin(a)*d}px)`; s.style.opacity = '0'; });
-    setTimeout(()=>s.remove(), 520);
+    [{transform:rec.el.style.transform, opacity:1},
+     {transform:rec.el.style.transform+' scale(1.7)', opacity:0}],
+    {duration:280, easing:'ease-out'});
+
+  const flash = document.createElement('div');
+  flash.className = 'spark';
+  flash.style.cssText = 'left:'+cx+'px;top:'+cy+'px;width:60px;height:60px;' +
+    'background:radial-gradient(circle,#fff 0%,#FFD94A 38%,rgba(255,217,74,0) 72%)';
+  field.appendChild(flash);
+  flash.animate([{transform:'translate(-50%,-50%) scale(.2)',opacity:1},
+                 {transform:'translate(-50%,-50%) scale(2.6)',opacity:0}],
+                {duration:240,easing:'cubic-bezier(.1,.8,.2,1)'}).onfinish = () => flash.remove();
+
+  /* Streaks thrown evenly round the shell, decelerating and sagging under
+     gravity as they fade — a firework rather than a puff of confetti. */
+  const n = 26;
+  for (let i=0;i<n;i++){
+    const a = (Math.PI*2*i)/n + rand(-.14,.14), col = pick(FW), deg = a*180/Math.PI;
+    const p = document.createElement('div');
+    p.style.cssText = 'position:absolute;z-index:6;pointer-events:none;left:'+cx+'px;top:'+cy+
+      'px;width:10px;height:2.2px;border-radius:2px;background:linear-gradient(90deg,'+col+
+      ',rgba(255,255,255,0));box-shadow:0 0 5px '+col+';transform:translate(-50%,-50%) rotate('+deg+'deg)';
+    field.appendChild(p);
+    const speed = 70+Math.random()*60, dx = Math.cos(a), dy = Math.sin(a), steps = [];
+    for (let k=0;k<=6;k++){
+      const t = k/6, dist = speed*t*(1-t*0.28), g = 40*t*t;
+      steps.push({
+        transform:'translate(-50%,-50%) translate('+(dx*dist).toFixed(1)+'px,'+(dy*dist+g).toFixed(1)+'px) rotate('+deg+'deg)',
+        opacity: t < .55 ? 1 : Math.max(0, 1-(t-.55)/.45)
+      });
+    }
+    p.animate(steps, { duration:620+Math.random()*260, easing:'linear' }).onfinish = () => p.remove();
   }
 }
 
@@ -1266,6 +1313,8 @@ function endRound(){
     if (cleared) progress.trialPassed = true;
   }
   save();
+  try{ if (window.INTUITY) INTUITY.session('phrasal-verbs','incoming',
+    { mode: round.mode, hits: round.hits, misses: round.misses, accuracy: accuracy }); }catch(e){}
 
   renderSummary({ accuracy, cleared, coverage });
   const after = currentStageIndex();
@@ -1338,15 +1387,20 @@ document.querySelectorAll('.mode-btn').forEach(b => {
   });
 });
 
-/* Pause cleanly when the tab is hidden — otherwise the clock runs down while
-   the animation frame is frozen. */
+/* Pause cleanly when the tab is hidden. The old handler said it shifted the
+   words forward by the gap and then never did: every live word came back
+   with t >= 1 and expired on the next frame, so a child returning to the tab
+   lost the target and took an unearned miss. Every time. */
+let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
   if (!round || !$('play').classList.contains('active')) return;
   if (document.hidden){
+    hiddenAt = performance.now();
     clearInterval(round.spawnTimer); clearInterval(round.clockTimer); cancelAnimationFrame(round.rafId);
   } else if (round.running) {
-    /* words carry an absolute birth time, so shift them forward by the gap */
-    round.spawnTimer = setInterval(spawnWord, 1480);
+    const gap = performance.now() - hiddenAt;
+    round.live.forEach(r => { r.born += gap; });
+    round.spawnTimer = setInterval(spawnWord, 1680);
     round.clockTimer = setInterval(tickClock, 1000);
     round.rafId = requestAnimationFrame(frame);
   }

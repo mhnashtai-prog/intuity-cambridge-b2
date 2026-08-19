@@ -204,8 +204,18 @@
     background:rgba(36,31,25,.09); color:var(--ink); caret-color:var(--egg);
     box-shadow:inset 0 -2px 0 rgba(36,31,25,.3);
   }
-  input.slot::placeholder{ color:rgba(36,31,25,.25); }
+  input.slot::placeholder{ color:rgba(36,31,25,.22); }
   input.slot:focus{ background:rgba(97,181,237,.2); box-shadow:inset 0 -2px 0 var(--egg); }
+
+  /* The field is focused the moment the panel opens, but a native caret in
+     an empty box reads as a form sitting still. While it is empty the rule
+     under it blinks, so the blank itself says "type here". The blink stops
+     on the first keystroke, when it has done its job. */
+  input.slot:focus:not(.typed){ animation:caret 1.06s steps(1) infinite; }
+  @keyframes caret{
+    0%,49%  { box-shadow:inset 0 -3px 0 var(--egg); }
+    50%,100%{ box-shadow:inset 0 -3px 0 rgba(97,181,237,.12); }
+  }
   input.as-verb{
     font-family:'Archivo Black',system-ui,sans-serif; font-size:1.5rem;
     letter-spacing:-.03em; text-transform:uppercase;
@@ -441,15 +451,20 @@ function openCard(i){
   $('lab').textContent = c.askVerb ? 'which verb' : 'which particle';
   $('pdef').textContent = firstSense(c.meaning);
   $('pphrase').innerHTML = c.askVerb
-    ? '<input class="slot as-verb" id="in" placeholder="?" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Type the verb">' +
+    ? '<input class="slot as-verb" id="in" placeholder="" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Type the verb">' +
       '<span class="egg">' + esc(c.particle) + '</span>'
     : '<span class="verb">' + esc(c.verb) + '</span>' +
-      '<input class="slot as-egg" id="in" placeholder="?" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Type the particle">';
+      '<input class="slot as-egg" id="in" placeholder="" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Type the particle">';
   $('panel').classList.remove('bad');
   $('veil').classList.add('show');
   const box = $('in');
   box.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); check(); } });
+  box.addEventListener('input', () => box.classList.toggle('typed', box.value.length > 0));
+  /* Focused straight away, inside the tap, so a phone keyboard is allowed
+     to open — then again on the next frame, since the panel is still
+     animating in and some browsers drop a focus set mid-animation. */
   box.focus();
+  requestAnimationFrame(() => { if (open === i) box.focus(); });
 }
 
 function check(){
@@ -507,6 +522,10 @@ function check(){
   }
 }
 
+$('panel').addEventListener('click', e => {
+  const box = $('in');
+  if (box && e.target !== box && e.target.id !== 'check') box.focus();
+});
 $('check').addEventListener('click', check);
 $('veil').addEventListener('click', e => {
   if (e.target === $('veil') && !locked){ $('veil').classList.remove('show'); open = null; }

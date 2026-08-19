@@ -55,7 +55,7 @@
   .hud .kept b{ color:var(--ok); } .hud .fell b{ color:var(--bad); }
   .streak{
     display:flex; align-items:center; gap:.28rem; padding:.12rem .5rem .14rem; border-radius:99px;
-    background:rgba(255,217,74,.14); border:1px solid rgba(255,217,74,.4); color:var(--accent);
+    background:#312C22; border:1px solid rgba(201,169,97,.32); color:#C9A961;
     font-weight:600; opacity:0; transform:scale(.85); transition:opacity .2s, transform .25s cubic-bezier(.2,1.6,.4,1);
   }
   .streak.show{ opacity:1; transform:scale(1); }
@@ -117,16 +117,16 @@
 }
   .card.fell .verb{ color:rgba(38,37,31,.40); }
   .card.fell .plate{ background:var(--egg-lost); color:#3D1207; }
+  .card.answer .plate{ background:var(--egg-lost); color:#3D1207; }
   .card.wobble{ animation:wobble .5s; }
   @keyframes wobble{ 0%,100%{ transform:none } 25%{ transform:rotate(-4deg) } 60%{ transform:rotate(3deg) } }
 
-  .card.current{
-    box-shadow:0 0 0 2px #6E5B2C, 3px 5px 11px rgba(var(--shade),.34);
-    animation:breathe 1.8s ease-in-out infinite;
-  }
-  @keyframes breathe{
-    0%,100%{ box-shadow:0 0 0 2px #6E5B2C, 3px 5px 11px rgba(var(--shade),.34); }
-    50%{ box-shadow:0 0 0 2px #C9A961, 3px 5px 11px rgba(var(--shade),.34); }
+  /* .current used to ring the card being asked about — which is the answer.
+     The definition box is the only cue now. The breathing lives there. */
+  .cue.live{ animation:cueBreathe 2.4s ease-in-out infinite; }
+  @keyframes cueBreathe{
+    0%,100%{ border-color:rgba(201,169,97,.28); }
+    50%{ border-color:rgba(201,169,97,.55); }
   }
 
   .foot{
@@ -260,6 +260,7 @@
 <div class="loading" id="loading">Loading…</div>
 
 <script src="intuity-log.js"></script>
+<script src="intuity-sound.js"></script>
 <script>
 const DATA_URL = '../../data/grammar-rules/phrasal-verbs-data.json';
 const SIZE = 16;
@@ -267,6 +268,8 @@ const REDUCE_MOTION = window.matchMedia && matchMedia('(prefers-reduced-motion: 
 
 let POOL = [], cards = [], target = null, locked = false;
 let kept = 0, fell = 0, streak = 0, best = 0;
+const MAX_MISS = 2;      /* attempts before a card falls */
+const RETRY_GAP = 4;     /* turns before a missed card is asked again */
 let autoDealTimer = null;
 
 let order = [], orderPos = -1;
@@ -277,44 +280,12 @@ const RIGHT_LINES = ['Nice catch!', 'Exactly right!', 'Straight to it!', 'Sharp 
 const WRONG_LINES = ['So close — onward!', 'Good guess — next one!', 'Worth remembering!', 'Keep going!'];
 
 let actx = null;
-function ensureAudio(){
-  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-  if (actx.state === 'suspended') actx.resume();
-  return actx;
-}
-function chime(ctx, freq, startAt, dur, peak, type){
-  const osc = ctx.createOscillator(), gain = ctx.createGain();
-  osc.type = type || 'sine'; osc.frequency.value = freq;
-  osc.connect(gain); gain.connect(ctx.destination);
-  const t0 = ctx.currentTime + startAt;
-  gain.gain.setValueAtTime(0, t0);
-  gain.gain.linearRampToValueAtTime(peak, t0 + .018);
-  gain.gain.exponentialRampToValueAtTime(.0001, t0 + dur);
-  osc.start(t0); osc.stop(t0 + dur + .03);
-}
-/* Two notes, quiet and short. Four rising notes at .1 peak announced every
-   single card; the firework does the celebrating now, so the sound only has
-   to confirm. */
-function playCorrectSound(){
-  try{
-    const ctx = ensureAudio();
-    chime(ctx, 783.99, 0,    .22, .038, 'sine');
-    chime(ctx, 1046.5, .055, .26, .030, 'sine');
-  }catch(e){}
-}
-function playIncorrectSound(){
-  try{
-    const ctx = ensureAudio();
-    chime(ctx, 392.00, 0,   .42, .055, 'sine');
-    chime(ctx, 329.63, .11, .5,  .05,  'sine');
-  }catch(e){}
-}
-function playStreakSound(n){
-  try{
-    const ctx = ensureAudio();
-    [1318.5, 1567.98].forEach((f, i) => chime(ctx, f, .24 + i*.075, .26, .034, 'sine'));
-  }catch(e){}
-}
+/* Sound now lives in intuity-sound.js, so every page in the suite plays the
+   same cues and a change reaches all of them. The canonical pop — C5 then G5
+   — came from Hunt. */
+function playCorrectSound(){ SFX.correct(); }
+function playIncorrectSound(){ SFX.wrong(); }
+function playStreakSound(){ SFX.fanfare(); }
 
 const $ = id => document.getElementById(id);
 const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -392,19 +363,16 @@ function drawRack(){
 function deal(){
   if (locked) return;
   clearTimeout(autoDealTimer);
-  if (target !== null){
-    $('k' + target).classList.remove('current');
-    order.push(order[orderPos]);
-  }
+  if (target !== null) order.push(order[orderPos]);   /* skipped: ask it again later */
   orderPos++;
   while (orderPos < order.length && cards[order[orderPos]].state !== 'up') orderPos++;
   if (orderPos >= order.length) return over();
 
   target = order[orderPos];
-  $('k' + target).classList.add('current');
   $('ask').textContent = 'which card means';
   $('clue').textContent = firstSense(cards[target].meaning);
   $('clue').classList.remove('waiting');
+  $('cue').classList.add('live');
   wobble();
   $('dealBtn').textContent = 'Skip';
   $('dealBtn').classList.add('quiet');
@@ -434,28 +402,48 @@ function choose(i){
     el.classList.add('kept');
     el.tabIndex = -1;
     el.setAttribute('aria-label', c.verb + ' ' + c.particle + ', kept');
-    playCorrectSound();
-    if (streak >= 3 && streak % 3 === 0) playStreakSound(streak);
+    /* One event, one sound. A streak milestone is still a correct answer,
+       just a bigger one — so it gets the fanfare instead of the chime rather
+       than both at once, which is what made the doubled jingle. */
+    if (streak >= 3 && streak % 3 === 0) playStreakSound(); else playCorrectSound();
     burst(el);
     flash(pick(RIGHT_LINES), 'var(--ok)');
     updateStreak();
     target = null;
     setTimeout(() => { locked = false; paint(); nextOrEnd(true); }, 700);
   } else {
-    c.state = 'fell'; fell++; streak = 0;
-    el.tabIndex = -1;
-    el.setAttribute('aria-label', c.verb + ' ' + c.particle + ', already used');
+    /* The card the child touched is not the card at stake, so it stays on the
+       rack — taking it would delete a question they never got to answer.
+       What costs them is the asked card: shown now, asked again a few turns
+       later, and only after MAX_MISS attempts does it fall. */
+    streak = 0;
+    const asked = cards[target], t = target;
+    asked.misses = (asked.misses || 0) + 1;
+    const gone = asked.misses >= MAX_MISS;
+
     playIncorrectSound();
     updateStreak();
-    if (REDUCE_MOTION){
-      el.classList.add('fell');
-    } else {
+    if (!REDUCE_MOTION){
       el.classList.add('wobble');
-      setTimeout(() => { el.classList.remove('wobble'); el.classList.add('fell'); }, 260);
+      setTimeout(() => el.classList.remove('wobble'), 420);
     }
-    flash(esc(cards[target].verb + ' ' + cards[target].particle), 'var(--bad)');
+    flash(esc(asked.verb + ' ' + asked.particle), 'var(--bad)');
+    $('k' + t).classList.add('answer');
+
+    if (gone){
+      asked.state = 'fell'; fell++;
+      const ae = $('k' + t);
+      ae.tabIndex = -1;
+      ae.setAttribute('aria-label', asked.verb + ' ' + asked.particle + ', lost');
+    } else {
+      order.splice(Math.min(orderPos + RETRY_GAP, order.length), 0, t);
+    }
     target = null;
-    setTimeout(() => { locked = false; paint(); nextOrEnd(false); }, 1500);
+    setTimeout(() => {
+      $('k' + t).classList.remove('answer');
+      if (gone) $('k' + t).classList.add('fell');
+      locked = false; paint(); nextOrEnd(false);
+    }, 1100);
   }
 }
 
@@ -470,6 +458,7 @@ function nextOrEnd(wasCorrect){
   const live = cards.filter(c => c.state === 'up').length;
   if (!live) return over();
   const line = wasCorrect === null ? '' : (wasCorrect ? pick(RIGHT_LINES) : pick(WRONG_LINES));
+  $('cue').classList.remove('live');
   $('ask').textContent = 'next up';
   $('clue').textContent = (line ? line + ' · ' : '') + live + ' still standing';
   $('clue').classList.add('waiting');

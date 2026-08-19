@@ -960,6 +960,7 @@ function beginRound(cfg){
     live:new Set(), spawnTimer:null, clockTimer:null, rafId:null, running:false
   };
   cfg.pool.forEach(it => { round.exposure[it.p] = 0; round.weight[it.p] = 1; });
+  zoneQueue = [];
 
   document.documentElement.style.setProperty('--screen-accent', cfg.accent);
   $('setLabel').textContent = cfg.label;
@@ -1075,15 +1076,64 @@ function decoyItem(){
   return universe.length ? pick(universe) : round.target;
 }
 
+/* ── WHERE A WORD APPEARS ──────────────────────────────────────────────
+   Ten random candidates spread words evenly only by luck, and on a bad
+   draw three arrive in the same corner. Two guarantees instead.
+
+   EVEN — the field is a 4x3 grid and spawns walk a shuffled queue of the
+   twelve cells, so twelve consecutive words touch every cell exactly once
+   before any cell repeats. Distribution stops being a matter of chance.
+
+   PADDED — a candidate is accepted only if it clears every live word by
+   PAD pixels. If a cell is crowded the next cell is tried, and if all
+   twelve are full nothing spawns this beat. An empty beat is far better
+   than two words on top of each other. */
+const PAD = 30;          // clear pixels demanded between edges at spawn
+const MAX_LIVE = 7;      // words allowed on the field at once
+const ZC = 4, ZR = 3;    // grid columns and rows
+
+let zoneQueue = [];
+function nextZones(){
+  if (!zoneQueue.length) zoneQueue = shuffle([...Array(ZC*ZR).keys()]);
+  return zoneQueue;
+}
+
+function clearance(cx, cy){
+  let minDist = Infinity;
+  round.live.forEach(r => {
+    if (!Number.isFinite(r.x) || !Number.isFinite(r.y)) return;
+    const d = Math.hypot(cx-r.x, cy-r.y) - (r.radius || 20);
+    if (d < minDist) minDist = d;
+  });
+  return minDist;
+}
+
+/* Null means "no room right now" — the caller skips the beat. */
 function findSpawnSpot(fw, fh){
-  let best = null, bestScore = -1;
-  for (let i=0;i<10;i++){
-    const cx = rand(fw*.18, fw*.82), cy = rand(fh*.15, fh*.8);
-    let minDist = Infinity;
-    round.live.forEach(r => { const d = Math.hypot(cx-r.x, cy-r.y) - (r.radius||20); if (d < minDist) minDist = d; });
-    if (minDist > bestScore){ bestScore = minDist; best = {x:cx, y:cy}; }
+  if (round.live.size >= MAX_LIVE) return null;
+  const q = nextZones();
+  let best = null, bestScore = -Infinity;
+
+  for (let n = 0; n < q.length; n++){
+    const z = q[n];
+    const col = z % ZC, row = (z / ZC) | 0;
+    const x0 = fw * (0.10 + 0.80 * col / ZC), x1 = fw * (0.10 + 0.80 * (col+1) / ZC);
+    const y0 = fh * (0.12 + 0.76 * row / ZR), y1 = fh * (0.12 + 0.76 * (row+1) / ZR);
+
+    for (let k = 0; k < 4; k++){
+      const cx = rand(x0, x1), cy = rand(y0, y1);
+      const d = clearance(cx, cy);
+      if (d > bestScore){ bestScore = d; best = { x:cx, y:cy, zone:n }; }
+      if (d >= PAD){
+        q.splice(n, 1);          // this cell is spent; the rest keep their turn
+        return { x:cx, y:cy };
+      }
+    }
   }
-  return best;
+  /* Nothing cleared PAD. Wait rather than cram — unless the field is nearly
+     empty, in which case the best of a bad lot is still fine. */
+  if (round.live.size <= 1 && best){ q.splice(best.zone, 1); return { x:best.x, y:best.y }; }
+  return null;
 }
 
 function spawnWord(){
@@ -1096,14 +1146,23 @@ function spawnWord(){
   if (item.p === round.target.p) round.targetSpawned = true;
 
   const field = $('field');
-  const el = document.createElement('div');
+  const el = document.createElement('div');   // discarded below if there is no room
   el.className = 'word';
   const v = pick(STYLES);
   el.textContent = styledText(item.p, v.case);
   el.style.fontFamily = v.family; el.style.fontWeight = v.weight; el.style.fontStyle = v.style;
   el.style.letterSpacing = v.tracking; el.style.color = item.color;
 
-  const {x,y} = findSpawnSpot(field.clientWidth, field.clientHeight);
+  const spot = findSpawnSpot(field.clientWidth, field.clientHeight);
+  if (!spot){
+    /* No room. Drop the word rather than crowd the field — but if this was
+       the target's turn, hold its place so it arrives on the next beat
+       instead of being silently skipped. */
+    if (item.p === round.target.p){ round.targetSpawned = false; round.forceIn = 1; }
+    el.remove();
+    return;
+  }
+  const {x,y} = spot;
   /* Slower overall, and a streak now speeds things up far more gently. The
      old floor of .78 meant the field became unreadable exactly when a child
      started succeeding, which punished the run it was meant to reward. */
@@ -1128,27 +1187,47 @@ function frame(now){
     r.scale = 0.15 + t*t*2.1;
     /* Angle of projection: a word travels outward along its own ray from the
        middle of the field as it grows, rather than swelling on the spot.
-       That is what makes it read as coming towards you. */
-    r.x = fcx + (r.tx - fcx) * (0.30 + 0.70*t*t);
-    r.y = fcy + (r.ty - fcy) * (0.30 + 0.70*t*t);
+       That is what makes it read as coming towards you.
+       `k` is kept on the record because the collision pass below has to
+       undo it — it nudges destinations, not positions. */
+    r.k = 0.30 + 0.70*t*t;
+    r.x = fcx + (r.tx - fcx) * r.k;
+    r.y = fcy + (r.ty - fcy) * r.k;
     r.radius = r.phrase.length * 6.5 * r.scale * r.sizeMul + 14;
     r.opacity = Math.min(1, t*2.4);
     r.blur = Math.max(0, 2.4 - t*10);
   });
 
+  /* Three relaxation passes. One pass only half-separates a cluster, since
+     moving A off B pushes it into C and there is no second chance to notice.
+     Three settles a seven-word field and costs nothing at this scale. */
   const arr = [...round.live].filter(r => !r.dead);
+  for (let pass=0; pass<3; pass++)
   for (let i=0;i<arr.length;i++) for (let j=i+1;j<arr.length;j++){
     const a=arr[i], b=arr[j];
     const dx=b.x-a.x, dy=b.y-a.y, dist=Math.hypot(dx,dy)||0.01;
-    const minDist=(a.radius+b.radius)*0.85;
+    const minDist=(a.radius+b.radius)*0.98;
     if (dist < minDist){
+      /* Push the DESTINATIONS apart, not the drawn positions. Nudging x/y
+         did nothing once the projection was added, because x/y are derived
+         fresh from tx/ty on every frame — so each separation was computed
+         and then thrown away, and the words piled on top of each other. A
+         nudge divided by k moves the destination far enough that the word
+         lands where the push intended at its current distance. */
       const overlap=minDist-dist, nx=dx/dist, ny=dy/dist, aShare=b.scale/(a.scale+b.scale);
-      a.x-=nx*overlap*aShare*0.5; a.y-=ny*overlap*aShare*0.5;
-      b.x+=nx*overlap*(1-aShare)*0.5; b.y+=ny*overlap*(1-aShare)*0.5;
+      const ka = Math.max(.3, a.k || 1), kb = Math.max(.3, b.k || 1);
+      a.tx-=nx*overlap*aShare*0.5/ka;      a.ty-=ny*overlap*aShare*0.5/ka;
+      b.tx+=nx*overlap*(1-aShare)*0.5/kb;  b.ty+=ny*overlap*(1-aShare)*0.5/kb;
+      a.x = fcx + (a.tx-fcx)*ka; a.y = fcy + (a.ty-fcy)*ka;
+      b.x = fcx + (b.tx-fcx)*kb; b.y = fcy + (b.ty-fcy)*kb;
     }
   }
   const field = $('field'), fw = field.clientWidth, fh = field.clientHeight;
   arr.forEach(r => {
+    /* Clamp the destination as well, or repeated nudges walk a word off the
+       field and it spends the rest of its life outside the frame. */
+    r.tx = Math.min(fw*0.92, Math.max(fw*0.08, r.tx));
+    r.ty = Math.min(fh*0.92, Math.max(fh*0.08, r.ty));
     r.x = Math.min(fw - r.radius*0.3, Math.max(r.radius*0.3, r.x));
     r.y = Math.min(fh - r.radius*0.3, Math.max(r.radius*0.3, r.y));
     r.el.style.transform = `translate(${r.x}px, ${r.y}px) translate(-50%,-50%) rotate(${(r.spin*(1-r.scale/2.2)).toFixed(2)}deg)`;

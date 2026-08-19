@@ -117,7 +117,7 @@
 }
   .card.fell .verb{ color:rgba(38,37,31,.40); }
   .card.fell .plate{ background:var(--egg-lost); color:#3D1207; }
-  .card.answer .plate{ background:var(--egg-lost); color:#3D1207; }
+  .card.answer{ box-shadow:0 0 0 2px #312C22, 3px 5px 11px rgba(var(--shade),.34); }
   .card.wobble{ animation:wobble .5s; }
   @keyframes wobble{ 0%,100%{ transform:none } 25%{ transform:rotate(-4deg) } 60%{ transform:rotate(3deg) } }
 
@@ -268,7 +268,6 @@ const REDUCE_MOTION = window.matchMedia && matchMedia('(prefers-reduced-motion: 
 
 let POOL = [], cards = [], target = null, locked = false;
 let kept = 0, fell = 0, streak = 0, best = 0;
-const MAX_MISS = 2;      /* attempts before a card falls */
 const RETRY_GAP = 4;     /* turns before a missed card is asked again */
 let autoDealTimer = null;
 
@@ -401,7 +400,6 @@ function choose(i){
   if (c.state !== 'up') return;
   locked = true;
   const el = $('k' + i);
-  $('k' + target).classList.remove('current');
   const asked = cards[target];
   if (window.INTUITY) INTUITY.log('phrasal-verbs',
     asked.verb + ' ' + asked.particle, i === target, { game:'rack' });
@@ -421,36 +419,35 @@ function choose(i){
     target = null;
     setTimeout(() => { locked = false; paint(); nextOrEnd(true); }, 700);
   } else {
-    /* The card the child touched is not the card at stake, so it stays on the
-       rack — taking it would delete a question they never got to answer.
-       What costs them is the asked card: shown now, asked again a few turns
-       later, and only after MAX_MISS attempts does it fall. */
+    /* The card the child touched wobbles, turns pumpkin and is out for the
+       rest of the round. The card that was asked about is not lost with it —
+       it comes back a few turns later, so the one phrase they got wrong is
+       the one phrase they meet twice. Attrition is guaranteed either way,
+       since every miss takes a card off the rack, so the round always ends. */
     streak = 0;
-    const asked = cards[target], t = target;
-    asked.misses = (asked.misses || 0) + 1;
-    const gone = asked.misses >= MAX_MISS;
+    const t = target;
+    c.state = 'fell'; fell++;
+    el.tabIndex = -1;
+    el.setAttribute('aria-label', c.verb + ' ' + c.particle + ', out');
 
     playIncorrectSound();
     updateStreak();
-    if (!REDUCE_MOTION){
+    if (REDUCE_MOTION){
+      el.classList.add('fell');
+    } else {
       el.classList.add('wobble');
-      setTimeout(() => el.classList.remove('wobble'), 420);
+      setTimeout(() => { el.classList.remove('wobble'); el.classList.add('fell'); }, 420);
     }
+
+    /* The right card is shown in the cue's own brown, never in pumpkin —
+       pumpkin means lost, and this is the opposite of lost. */
     flash(esc(asked.verb + ' ' + asked.particle), 'var(--bad)');
     $('k' + t).classList.add('answer');
+    order.splice(Math.min(orderPos + RETRY_GAP, order.length), 0, t);
 
-    if (gone){
-      asked.state = 'fell'; fell++;
-      const ae = $('k' + t);
-      ae.tabIndex = -1;
-      ae.setAttribute('aria-label', asked.verb + ' ' + asked.particle + ', lost');
-    } else {
-      order.splice(Math.min(orderPos + RETRY_GAP, order.length), 0, t);
-    }
     target = null;
     setTimeout(() => {
       $('k' + t).classList.remove('answer');
-      if (gone) $('k' + t).classList.add('fell');
       locked = false; paint(); nextOrEnd(false);
     }, 1100);
   }

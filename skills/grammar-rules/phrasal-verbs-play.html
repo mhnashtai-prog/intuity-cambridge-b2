@@ -23,6 +23,11 @@
       overflow: hidden;
     }
 
+    :root {
+      --verb-color: #C9A961;
+      --verb-rgb: 201, 169, 97;
+    }
+
     body {
       font-family: 'Inter', -apple-system, sans-serif;
       background: #0d0d0d;
@@ -256,11 +261,11 @@
       gap: 1rem; margin: 0 0 .6rem; flex-shrink: 0; }
     .verb-step.show { display: flex; }
     .verb-step-btn { width: 2.2rem; height: 2.2rem; border-radius: 50%;
-      border: 1px solid rgba(201,169,97,.35); background: rgba(201,169,97,.12);
-      color: #C9A961; font-size: 1.15rem; line-height: 1; cursor: pointer;
+      border: 1px solid rgba(var(--verb-rgb), .35); background: rgba(var(--verb-rgb), .12);
+      color: var(--verb-color); font-size: 1.15rem; line-height: 1; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
-      transition: background .15s, transform .12s; }
-    .verb-step-btn:hover { background: rgba(201,169,97,.28); }
+      transition: background .15s, transform .12s, border-color .3s, color .3s; }
+    .verb-step-btn:hover { background: rgba(var(--verb-rgb), .28); }
     .verb-step-btn:active { transform: scale(.92); }
     .verb-step-btn:disabled { opacity: .25; cursor: default; }
     .verb-step-now { font-family: 'Space Grotesk', sans-serif; font-size: .78rem;
@@ -292,7 +297,7 @@
       cursor: pointer;
       font-size: 0.875rem;
       font-weight: 500;
-      transition: all 0.3s ease;
+      transition: color 0.3s ease, font-weight 0.3s ease;
       text-transform: lowercase;
       letter-spacing: 0.02em;
       font-family: 'Inter', sans-serif;
@@ -300,11 +305,11 @@
     }
 
     .category-btn:hover {
-      color: #9ca3af;
+      color: var(--verb-color, #9ca3af);
     }
 
     .category-btn.active {
-      color: #C9A961;
+      color: var(--verb-color, #C9A961);
       font-weight: 600;
     }
 
@@ -315,7 +320,8 @@
       left: 0;
       right: 0;
       height: 2px;
-      background: #C9A961;
+      background: var(--verb-color, #C9A961);
+      transition: background 0.3s ease;
     }
 
     /* CONTENT AREAS — each one fills whatever height is left after the
@@ -356,6 +362,18 @@
       opacity: 0;
       transform: scale(0.95);
       animation: cardAppear 0.5s ease forwards;
+      overflow: hidden;
+    }
+
+    /* Top accent bar — tints with the active verb family, mirroring the
+       quiz card's own accent stripe. Purely decorative; nothing else about
+       the card's layout or behaviour changes. */
+    .modal-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: var(--verb-color, #C9A961);
+      opacity: .7;
+      transition: background .4s;
     }
 
     @keyframes cardAppear {
@@ -926,6 +944,19 @@ const JSON_FILE = '../../data/grammar-rules/phrasal-verbs-data.json';
 const baseVerbOf = (item, group) => item.verb || group.id;
 const formOf     = (item, group) => item.form || item.verb || group.id;
 
+/* ── VERB THEME ──
+   Mirrors the quiz app: each group in the JSON already carries `color` /
+   `colorRgb`, so the active family's identity colour is pushed onto the
+   root as CSS custom properties. Everything that should pick it up
+   (category tabs, the verb-step pill, the explore card's accent bar)
+   references var(--verb-color)/var(--verb-rgb) in the stylesheet above;
+   nothing else reads these vars, so no other mode is affected. */
+function applyVerbTheme(group) {
+  if (!group) return;
+  document.documentElement.style.setProperty('--verb-color', group.color || '#C9A961');
+  document.documentElement.style.setProperty('--verb-rgb', group.colorRgb || '201, 169, 97');
+}
+
 // ==================== MAIN MODE SWITCHING ====================
 function switchMainMode(mode) {
   if (mode === currentMainMode) return;
@@ -1025,6 +1056,13 @@ function buildCategorySelector() {
     btn.className = 'category-btn' + (index === 0 ? ' active' : '');
     btn.textContent = g.label.toLowerCase();
     btn.dataset.group = g.id;
+    /* Each tab carries its own family colour so its hover/active state
+       (see .category-btn:hover / .category-btn.active in the stylesheet)
+       reads it straight off the button rather than only off the shared
+       root theme — the same per-item colouring the quiz page's verb tabs
+       use. */
+    if (g.color) btn.style.setProperty('--verb-color', g.color);
+    if (g.colorRgb) btn.style.setProperty('--verb-rgb', g.colorRgb);
     btn.onclick = () => selectCategory(g.id);
     selector.appendChild(btn);
   });
@@ -1066,6 +1104,8 @@ function loadCategory(groupId) {
   const group = GROUPS.find(g => g.id === groupId);
   slides = [];
   if (!group) return;
+
+  applyVerbTheme(group);
 
   group.items.forEach(item => {
     const base = baseVerbOf(item, group);

@@ -495,6 +495,10 @@ position: relative; width: 100%; max-width: min(94vw, 1200px);
     }
     .ov-answer-item.ok  .ov-answer-verb { color: #4DC98A; }
     .ov-answer-item.err .ov-answer-verb { color: #E05555; }
+    .ov-answer-given {
+      font-family: 'DM Sans', sans-serif; font-size: .62rem; font-style: italic;
+      color: rgba(224,85,85,.75); text-align: right; max-width: 58%;
+    }
     .ov-answer-meaning {
       font-family: 'DM Sans', sans-serif; font-size: .7rem; color: rgba(229,229,231,.32);
       text-align: right; max-width: 58%; line-height: 1.4;
@@ -773,6 +777,47 @@ let answered  = false;
 let gapChecked = false;
 let reviewMode = false;
 
+/* ── HELPERS ──
+   Every slide in a set is built into the DOM at once by paint(), and
+   renderQuiz/renderGap give each slide's blank/input/feedback elements the
+   same id ("blankSpan", "gapInput", "fbBar" …). getElementById only ever
+   returns the FIRST match in the document, so any lookup by that id always
+   hit slide 0's copy — meaning the reveal, the feedback banner, and the
+   1/2/3/4 keyboard shortcuts silently acted on a hidden slide for anyone
+   not currently on the first item. Scoping every lookup to the one slide
+   carrying .active fixes all of that at once. */
+function activeSlideEl(){ return document.querySelector('.slide.active'); }
+function esc(t){ return String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ── LOCAL PERSISTENCE ──
+   Everything a student has answered — and, critically, what they actually
+   typed or picked — lives here, keyed per verb and per mode so Quiz and
+   Practice keep independent progress the way their separate badges already
+   imply. Guarded throughout: private browsing, a blocked iframe, or a full
+   storage quota must fail silently rather than break the page. */
+const LS_KEY = 'intuity-pv-results';
+function loadStore(){
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(e){ return {}; }
+}
+function saveStore(all){
+  try { localStorage.setItem(LS_KEY, JSON.stringify(all)); } catch(e){ /* ignore */ }
+}
+function storeSlot(vIdx, m){ return (verbs[vIdx] ? verbs[vIdx].id : vIdx) + ':' + m; }
+function persistResults(){
+  const all = loadStore();
+  all[storeSlot(verbIdx, mode)] = results;
+  saveStore(all);
+}
+function restoreResults(){
+  const all = loadStore();
+  results = all[storeSlot(verbIdx, mode)] || {};
+}
+function clearStoredResults(){
+  const all = loadStore();
+  delete all[storeSlot(verbIdx, mode)];
+  saveStore(all);
+}
+
 /* ── MATCH MODE STATE ── */
 let gameRounds  = [];
 let gameLoaded  = false;
@@ -784,7 +829,21 @@ let matchChecked = false;     // has this round been checked/scored
 
 /* ── LOAD ── */
 async function loadAll() {
-  const data = await fetch(DATA_URL).then(r => r.json());
+  let data;
+  try {
+    const res = await fetch(DATA_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    data = await res.json();
+  } catch (e) {
+    /* Previously an unguarded fetch: a failed load left the spinner
+       running forever with nothing to tell the student what happened. */
+    const ls = document.getElementById('loadingScreen');
+    ls.innerHTML = '<div style="max-width:26rem;text-align:center;padding:2rem;' +
+      'font-family:\'DM Sans\',sans-serif;color:#E05555;line-height:1.7">' +
+      'Could not load the phrasal verb data.<br>' +
+      '<span style="color:rgba(229,229,231,.5);font-size:.85rem">Check the connection and reload the page.</span></div>';
+    return;
+  }
   /* `groups` is the exercise-group list; the reference list of which
      particles each verb takes is `data.verbs`, a different thing. */
   verbs = data.groups;
@@ -855,11 +914,8 @@ function applyVerbTheme() {
 function switchVerb(i) {
   verbIdx = i;
   current = 0; prev = -1; answered = false; gapChecked = false;
-  // Clear per-verb results so previous runs never bleed into new session
-  reviewMode = false;
-  results = {}; scoreOk = 0; scoreErr = 0; streak = 0;
-  document.getElementById('scoreOk').textContent  = 0;
-  document.getElementById('scoreErr').textContent = 0;
+  reviewMode = false; streak = 0;
+  restoreResults(); recalcScore();   // pick up whatever was already answered for this verb, rather than wiping it
   document.querySelectorAll('.vtab').forEach((b, j) => b.classList.toggle('active', j === i));
   applyVerbTheme();
   build(); paint(); show(0, 'none'); resetAuto();
@@ -893,8 +949,8 @@ function paint() {
     const key = itemKey(verbIdx, s.item);
     const r = results[key];
     let cls = 'dot';
-    if (r === 'ok')  cls += ' ok';
-    if (r === 'err') cls += ' err';
+    if (r && r.ok)  cls += ' ok';
+    if (r && !r.ok) cls += ' err';
     return `<div class="${cls}" data-dot="${i}"></div>`;
   }).join('');
 
@@ -998,6 +1054,9 @@ function show(idx, dir) {
   if (!slides.length) return;
   const els  = document.querySelectorAll('.slide');
   const dots = document.querySelectorAll('.dot');
+  const s = slides[idx];
+  const key = s ? itemKey(verbIdx, s.item) : null;
+  const saved = key ? results[key] : null;
 
   if (prev >= 0 && prev !== idx && els[prev]) {
     els[prev].classList.remove('active');
@@ -1007,7 +1066,42 @@ function show(idx, dir) {
     }
   }
   if (els[idx]) {
-    if (!reviewMode) {
+    if (!reviewMode && saved) {
+      /* Already answered this one — show it exactly as it was left, not
+         blank. This is the actual fix for "I typed a word, went back, and
+         it was gone": the slide used to be unconditionally reset here. */
+      if (s.type === 'quiz') {
+        const correct = s.item.particle;
+        els[idx].querySelectorAll('.qopt').forEach(b => {
+          b.classList.add('locked');
+          const opt = b.dataset.opt;
+          if (opt === saved.given && !saved.ok) b.classList.add('wrong');
+          else if (opt === correct) b.classList.add(saved.ok ? 'correct' : 'reveal');
+        });
+        const blank = els[idx].querySelector('.quiz-blank');
+        if (blank) {
+          blank.textContent = correct.toUpperCase();
+          blank.classList.add('revealed');
+          if (!saved.ok) blank.style.color = '#4DC98A';
+        }
+      } else if (s.type === 'gap') {
+        const inp = els[idx].querySelector('.gap-input');
+        if (inp) { inp.value = saved.given || ''; inp.classList.add(saved.ok ? 'correct' : 'wrong'); inp.disabled = true; }
+        const hint = els[idx].querySelector('.gap-hint');
+        if (!saved.ok && hint) {
+          hint.textContent = 'Answer: ' + s.item.particle.toUpperCase();
+          hint.classList.add('show-answer');
+        }
+      }
+      const bar = els[idx].querySelector('.fb-bar');
+      if (bar) {
+        bar.classList.add('show');
+        const icon = els[idx].querySelector('.fb-icon');
+        const text = els[idx].querySelector('.fb-text');
+        if (icon) { icon.textContent = saved.ok ? '✓' : '✗'; icon.style.color = saved.ok ? '#4DC98A' : '#E05555'; }
+        if (text) text.innerHTML = feedbackHTML(saved.ok, s.item.particle, s.item);
+      }
+    } else if (!reviewMode) {
       els[idx].querySelectorAll('.qopt').forEach(b => {
         b.classList.remove('correct', 'wrong', 'reveal', 'locked');
       });
@@ -1029,7 +1123,7 @@ function show(idx, dir) {
       els[idx].style.cssText = '';
       if (mode === 'gap') {
         const inp = els[idx].querySelector('.gap-input');
-        if (inp) setTimeout(() => inp.focus(), 80);
+        if (inp && !inp.disabled) setTimeout(() => inp.focus(), 80);
       }
     }));
   }
@@ -1038,9 +1132,13 @@ function show(idx, dir) {
   document.getElementById('prevBtn').disabled = idx === 0;
   document.getElementById('nextBtn').disabled = idx === slides.length - 1;
 
-  const s = slides[idx];
   document.getElementById('sectionLabel').textContent =
     s ? (baseVerbOf(s.item) + ' ' + s.item.particle).toUpperCase() : '';
+
+  /* A restored slide is already decided — lock the guards that would
+     otherwise let a stray tap or Enter re-trigger scoring on it. */
+  if (s && s.type === 'quiz') answered   = !reviewMode && !!saved;
+  else if (s && s.type === 'gap') gapChecked = !reviewMode && !!saved;
 
   updateProgress();
   updateCheckBtn();
@@ -1052,8 +1150,9 @@ function chooseOpt(chosen, correct, btn) {
   if (answered) return;
   answered = true;
   const isOk = chosen === correct;
-  const blank = document.getElementById('blankSpan');
-  document.querySelectorAll('.qopt').forEach(b => {
+  const slideEl = activeSlideEl();
+  const blank = slideEl ? slideEl.querySelector('.quiz-blank') : null;
+  (slideEl ? slideEl.querySelectorAll('.qopt') : []).forEach(b => {
     b.classList.add('locked');
     const opt = b.dataset.opt;
     if (opt === chosen && !isOk) b.classList.add('wrong');
@@ -1066,7 +1165,7 @@ function chooseOpt(chosen, correct, btn) {
     blank.classList.add('revealed');
     if (!isOk) blank.style.color = '#4DC98A';
   }
-  recordResult(isOk);
+  recordResult(isOk, chosen);
   showFeedback(isOk, correct);
   /* Longer pause on a miss: the wrong answer is the moment there is most to
      read, and the old timing gave it less time than a correct one. */
@@ -1076,29 +1175,32 @@ function chooseOpt(chosen, correct, btn) {
 /* ── GAP CHECK ── */
 function handleCheck() {
   if (mode !== 'gap' || gapChecked) return;
-  const inp = document.getElementById('gapInput');
+  const slideEl = activeSlideEl();
+  const inp = slideEl ? slideEl.querySelector('.gap-input') : null;
   if (!inp) return;
-  const val = inp.value.trim().toLowerCase();
+  const given = inp.value.trim();
+  const val = given.toLowerCase();
   const correct = slides[current].item.particle.toLowerCase();
   const isOk = val === correct;
   gapChecked = true;
   inp.classList.add(isOk ? 'correct' : 'wrong');
   inp.disabled = true;
-  const hint = document.getElementById('gapHint');
+  const hint = slideEl ? slideEl.querySelector('.gap-hint') : null;
   if (!isOk && hint) {
     hint.textContent = 'Answer: ' + slides[current].item.particle.toUpperCase();
     hint.classList.add('show-answer');
   }
-  recordResult(isOk);
+  recordResult(isOk, given);
   showFeedback(isOk, slides[current].item.particle);
   document.getElementById('checkBtn').style.display = 'none';
   setTimeout(() => next(), isOk ? 1300 : 2600);
 }
 
 /* ── RESULTS & FEEDBACK ── */
-function recordResult(isOk) {
+function recordResult(isOk, given) {
   const key = itemKey(verbIdx, slides[current].item);
-  results[key] = isOk ? 'ok' : 'err';
+  results[key] = { ok: isOk, given: given || '' };   // was a bare 'ok'/'err' string — now remembers the answer itself
+  persistResults();
   recalcScore();
   refreshDots();
   updateProgress();
@@ -1109,34 +1211,34 @@ function recordResult(isOk) {
 
 function recalcScore() {
   scoreOk = 0; scoreErr = 0;
-  Object.values(results).forEach(r => { if (r === 'ok') scoreOk++; else if (r === 'err') scoreErr++; });
+  Object.values(results).forEach(r => { if (r && r.ok) scoreOk++; else if (r) scoreErr++; });
   document.getElementById('scoreOk').textContent  = scoreOk;
   document.getElementById('scoreErr').textContent = scoreErr;
 }
 
+function feedbackHTML(isOk, particle, item) {
+  const meaning = item?.meaning || '';
+  const full = (baseVerbOf(item) + ' ' + particle).toUpperCase();
+  if (isOk) return `<strong>${full}</strong>${meaning ? ' — ' + meaning : ''}`;
+  /* State the form and its meaning rather than deferring to the end screen.
+     An error the learner cannot resolve on the spot teaches nothing, and a
+     B2 learner whose L1 has no phrasal verbs has no intuition to fall back
+     on. */
+  return '<span style="color:rgba(229,229,231,.45);font-size:.8rem">Answer: </span>' +
+    `<strong>${full}</strong>` +
+    (meaning ? `<span style="color:rgba(229,229,231,.6)"> — ${meaning}</span>` : '');
+}
+
 function showFeedback(isOk, particle) {
-  const bar  = document.getElementById('fbBar');
-  const icon = document.getElementById('fbIcon');
-  const text = document.getElementById('fbText');
+  const slideEl = activeSlideEl();
+  const bar  = slideEl ? slideEl.querySelector('.fb-bar')  : null;
+  const icon = slideEl ? slideEl.querySelector('.fb-icon') : null;
+  const text = slideEl ? slideEl.querySelector('.fb-text') : null;
   if (!bar) return;
   bar.classList.add('show');
   icon.textContent = isOk ? '✓' : '✗';
   icon.style.color = isOk ? '#4DC98A' : '#E05555';
-  const item = slides[current]?.item;
-  const meaning = item?.meaning || '';
-  const full = (baseVerbOf(item) + ' ' + particle).toUpperCase();
-  if (isOk) {
-    text.innerHTML = `<strong>${full}</strong>${meaning ? ' — ' + meaning : ''}`;
-  } else {
-    /* State the form and its meaning rather than deferring to the end screen.
-       An error the learner cannot resolve on the spot teaches nothing, and a
-       B2 learner whose L1 has no phrasal verbs has no intuition to fall back
-       on. */
-    text.innerHTML =
-      '<span style="color:rgba(229,229,231,.45);font-size:.8rem">Answer: </span>' +
-      `<strong>${full}</strong>` +
-      (meaning ? `<span style="color:rgba(229,229,231,.6)"> — ${meaning}</span>` : '');
-  }
+  text.innerHTML = feedbackHTML(isOk, particle, slides[current]?.item);
 }
 
 function showStreak() {
@@ -1209,7 +1311,8 @@ function showResults() {
   const total = verb.items.length;
   let ok = 0;
   verb.items.forEach(item => {
-    if (results[itemKey(verbIdx, item)] === 'ok') ok++;
+    const r = results[itemKey(verbIdx, item)];
+    if (r && r.ok) ok++;
   });
   const pct = Math.round(ok / total * 100);
   const perfect = pct === 100;
@@ -1224,7 +1327,7 @@ function showResults() {
 
   document.getElementById('ovBars').innerHTML = verb.items.map(item => {
     const r = results[itemKey(verbIdx, item)];
-    const bg = r === 'ok' ? '#4DC98A' : r === 'err' ? '#E05555' : 'rgba(255,255,255,.1)';
+    const bg = !r ? 'rgba(255,255,255,.1)' : r.ok ? '#4DC98A' : '#E05555';
     return `<div class="ov-bar" style="background:${bg}"></div>`;
   }).join('');
 
@@ -1235,13 +1338,15 @@ function showResults() {
     : 'Go back to Learn mode to build the pattern first.';
 
   document.getElementById('ovAnswers').innerHTML = verb.items.map((item, i) => {
-    const r = results[itemKey(verbIdx, item)] || 'unanswered';
-    const cls = r === 'ok' ? 'ok' : 'err';
-    const tick = r === 'ok' ? '✓' : '✗';
+    const r = results[itemKey(verbIdx, item)];
+    const cls = r && r.ok ? 'ok' : 'err';
+    const tick = r && r.ok ? '✓' : '✗';
+    const given = r && !r.ok && r.given
+      ? `<span class="ov-answer-given">you wrote "${esc(r.given.toUpperCase())}"</span>` : '';
     const delay = i * 40;
     return `<div class="ov-answer-item ${cls}" style="animation-delay:${delay}ms">
       <span class="ov-answer-verb">${baseVerbOf(item).toUpperCase()} ${item.particle.toUpperCase()}</span>
-      <span class="ov-answer-meaning">${item.meaning}</span>
+      <span class="ov-answer-meaning">${item.meaning}</span>${given}
       <span class="ov-answer-tick">${tick}</span>
     </div>`;
   }).join('');
@@ -1326,6 +1431,7 @@ function restart() {
   }
 
   reviewMode = false;
+  clearStoredResults();
   results = {}; scoreOk = 0; scoreErr = 0; streak = 0;
   document.getElementById('scoreOk').textContent = 0;
   document.getElementById('scoreErr').textContent = 0;
@@ -1356,21 +1462,30 @@ function renderReview(s) {
   const { item } = s;
   const key = itemKey(verbIdx, item);
   const r = results[key];
+  const isOk = !!(r && r.ok);
   const wordCount = item.example.split(/\s+/).length;
   const size = wordCount <= 8 ? 'size-small' : wordCount <= 16 ? 'size-medium' : 'size-large';
-  const resultColor = r === 'ok' ? '#4DC98A' : '#E05555';
-  const tick = r === 'ok' ? '✓' : '✗';
+  const resultColor = isOk ? '#4DC98A' : '#E05555';
+  const tick = isOk ? '✓' : '✗';
 
   const verbWord = verbOf(item).toUpperCase();
   const sentHtml = item.example.toUpperCase().replace('_____',
     `<span class="verb-word" style="color:${resultColor}">${verbWord}</span> <span style="color:${resultColor};font-weight:900;text-decoration:underline;text-underline-offset:4px">${item.particle.toUpperCase()}</span>`);
+
+  /* The review screen used to show only the correct particle plus a
+     tick/cross — never what the student actually chose or typed, so
+     there was nothing here to actually review. */
+  const givenHtml = (!isOk && r && r.given)
+    ? `<div style="font-family:'DM Sans',sans-serif;font-size:.7rem;font-style:italic;color:rgba(224,85,85,.75);margin-top:.15rem">you wrote "${esc(r.given.toUpperCase())}"</div>`
+    : '';
 
   return `
     <div class="phrase-text ${size}" style="opacity:.9">${sentHtml}</div>
     <div style="display:flex;align-items:center;gap:.6rem;margin-top:.2rem">
       <span style="font-size:1.1rem;color:${resultColor}">${tick}</span>
       <span style="font-family:'DM Sans',sans-serif;font-size:.82rem;color:rgba(229,229,231,.45);line-height:1.5">${item.meaning}</span>
-    </div>`;
+    </div>
+    ${givenHtml}`;
 }
 
 /* ── CHECK BTN (learn/quiz/gap bottom bar) ── */
@@ -1466,10 +1581,9 @@ async function setMode(m) {
   const leavingMatch = (mode === 'match' && m !== 'match');
   mode = m;
   document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
-  reviewMode = false;
-  results = {}; scoreOk = 0; scoreErr = 0; streak = 0;
-  document.getElementById('scoreOk').textContent  = 0;
-  document.getElementById('scoreErr').textContent = 0;
+  reviewMode = false; streak = 0;
+  if (m === 'match') { results = {}; scoreOk = 0; scoreErr = 0; document.getElementById('scoreOk').textContent = 0; document.getElementById('scoreErr').textContent = 0; }
+  else { restoreResults(); recalcScore(); }   // pick up whatever was already answered in this mode, rather than wiping it
   document.getElementById('checkBtn').style.display = 'none';
   stopAuto(); autoOn = false;
   document.getElementById('autoRow').classList.remove('on');
@@ -1484,7 +1598,16 @@ async function setMode(m) {
     document.getElementById('progressFill').style.width = '0%';
 
     applyModeAccent();
-    await ensureGameData();
+    const gotData = await ensureGameData();
+    if (!gotData) {
+      document.getElementById('slidesContainer').innerHTML =
+        '<div style="max-width:22rem;text-align:center;margin:3rem auto;' +
+        'font-family:\'DM Sans\',sans-serif;color:#E05555;line-height:1.7">' +
+        'Could not load the match data.<br>' +
+        '<span style="color:rgba(229,229,231,.5);font-size:.85rem">Check the connection and try again.</span></div>';
+      updateModeBadges();
+      return;
+    }
     roundIdx = 0; roundResults = {};
     matchChecked = false; matchAnswers = {}; matchSelectedId = null;
     buildRoundTabs();
@@ -1538,8 +1661,8 @@ function refreshDots() {
     const r = results[key];
     d.className = 'dot';
     if (i === current) d.classList.add('active');
-    else if (r === 'ok') d.classList.add('ok');
-    else if (r === 'err') d.classList.add('err');
+    else if (r && r.ok) d.classList.add('ok');
+    else if (r && !r.ok) d.classList.add('err');
   });
 }
 
@@ -1595,7 +1718,8 @@ document.addEventListener('keydown', e => {
 });
 
 function clickOpt(i) {
-  const opts = document.querySelectorAll('.qopt');
+  const slideEl = activeSlideEl();
+  const opts = slideEl ? slideEl.querySelectorAll('.qopt') : [];
   if (opts[i] && !opts[i].classList.contains('locked')) opts[i].click();
 }
 
@@ -1631,10 +1755,17 @@ document.getElementById('autoRow').addEventListener('click', e => { e.stopPropag
    so the definition itself must still be read to make the match. */
 
 async function ensureGameData() {
-  if (gameLoaded) return;
-  const data = await fetch(GAME_DATA_URL).then(r => r.json());
-  gameRounds = data.game;
-  gameLoaded = true;
+  if (gameLoaded) return true;
+  try {
+    const res = await fetch(GAME_DATA_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    gameRounds = data.game;
+    gameLoaded = true;
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 /* Round tabs reuse the .vtab strip that normally lists verbs */

@@ -49,7 +49,7 @@
     display:flex; flex-direction:column; align-items:stretch; gap:.4rem;
     padding:.5rem 1.25rem .4rem;
     background:rgba(13,13,13,.88); backdrop-filter:blur(20px);
-    border-bottom:1px solid rgba(255,255,255,.06); height:var(--header-h);
+    border-bottom:1px solid rgba(255,255,255,.06);
   }
   .header-top{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; }
   .header-title{ display:flex; flex-direction:column; align-items:center; line-height:1.1; }
@@ -64,7 +64,7 @@
   .header-spacer{ justify-self:end; }
 
   .mode-selector{
-    display:flex; justify-content:center; align-self:center;
+    display:flex; flex-wrap:wrap; justify-content:center; align-self:center;
     background:rgba(28,28,30,.6); backdrop-filter:blur(40px);
     border-radius:999px; border:1px solid rgba(201,169,97,.2); overflow:hidden;
   }
@@ -82,9 +82,11 @@
   .mode-btn.active .mode-icon{ opacity:.9; }
   .mode-badge{ font-size:.58rem; font-weight:600; color:rgba(255,255,255,.28); font-variant-numeric:tabular-nums; }
   .mode-btn.active .mode-badge{ color:rgba(201,169,97,.6); }
+  /* The label used to be hidden below 760px, which left six buttons
+     identified only by an emoji — two of them the same word. Keep the
+     words and let the row wrap instead. */
   @media(max-width:760px){
-    .mode-btn .mode-label{ display:none; }
-    .mode-btn{ padding:.5rem .6rem .5rem .5rem; }
+    .mode-btn{ padding:.42rem .62rem; font-size:.6rem; gap:.3rem; }
   }
 
   /* ── SET TABS — the quiz page's verb strip, same construction.
@@ -92,10 +94,9 @@
      sets are navigation, so they belong in the header with the other
      navigation, and the card is left for the thing being played. */
   .verb-tabs{
-    display:flex; align-items:center; justify-content:center;
-    gap:.28rem; overflow-x:auto; padding:0 .5rem; scrollbar-width:none;
+    display:flex; flex-wrap:wrap; align-items:center; justify-content:center;
+    gap:.28rem .28rem; padding:0 .5rem;
   }
-  .verb-tabs::-webkit-scrollbar{ display:none; }
   .vtab{
     font-family:'Space Grotesk',sans-serif; font-size:.56rem; font-weight:700;
     letter-spacing:.08em; text-transform:uppercase;
@@ -119,7 +120,14 @@
      thing: no set colour, a quieter face, and a rule before them. */
   .vtab.practice{ font-family:'DM Mono',monospace; font-weight:400; letter-spacing:.1em; }
   .vtab.practice.active{ color:var(--mode-accent); border-color:var(--mode-accent); }
+  /* On one line this is a hairline between the taught sets and the mixed
+     practice sets. Once the strip wraps a vertical rule lands in a random
+     place, so below 600px it becomes a full-width break instead. */
   .tabdiv{ width:1px; height:14px; background:rgba(255,255,255,.14); margin:0 .35rem; flex-shrink:0; }
+  @media(max-width:600px){
+    .tabdiv{ flex-basis:100%; width:auto; height:0; margin:.1rem 0 0;
+             border-top:1px solid rgba(255,255,255,.1); }
+  }
 
   /* ── STAGE + CARD — same frame the quiz uses ── */
   .stage{
@@ -693,6 +701,9 @@
     box-shadow:0 -4px 16px rgba(255,217,74,.05);
   }
 
+  /* Starting value only — syncHeaderHeight() measures the real header
+     after layout and after the webfonts land, so a wrapped mode row or a
+     wrapped set strip pushes the card down instead of being clipped. */
   @media(max-width:600px){
     :root{ --header-h:100px; }
     #menu{ padding:.9rem .9rem 1.4rem; }
@@ -982,6 +993,26 @@ let GROUPS = [], FULL_POOL = [], PRACTICE_SETS = [], THRESH = [], N_GROUPS = 0;
 /* ======================================================================
    LOAD
 ====================================================================== */
+/* The header grows: the mode row and the set strip both wrap onto extra
+   lines on a narrow phone. It used to be pinned to a hardcoded height, so
+   whatever wrapped sat underneath the card. Measure it instead. */
+function syncHeaderHeight(){
+  const h = document.querySelector('.header');
+  if (!h) return;
+  document.documentElement.style.setProperty('--header-h', h.offsetHeight + 'px');
+}
+window.addEventListener('resize', syncHeaderHeight);
+window.addEventListener('orientationchange', () => setTimeout(syncHeaderHeight, 120));
+/* Space Grotesk arrives after first paint and re-wraps the strip. */
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncHeaderHeight);
+if (window.ResizeObserver){
+  const __ro = new ResizeObserver(() => syncHeaderHeight());
+  document.addEventListener('DOMContentLoaded', () => {
+    const h = document.querySelector('.header');
+    if (h) __ro.observe(h);
+  });
+}
+
 async function boot(){
   let data;
   try {
@@ -1264,8 +1295,10 @@ function buildTabs(){
     wrap.appendChild(btn);
   });
 
-  const on = wrap.querySelector('.vtab.active');
-  if (on) on.scrollIntoView({ inline:'center', block:'nearest' });
+  /* No scrollIntoView: the strip wraps now, so every set is already on
+     screen and scrolling one into view would only shift the fixed layout.
+     Re-measure instead — a rebuild can change how many lines it takes. */
+  syncHeaderHeight();
 }
 
 /* ======================================================================
@@ -2108,6 +2141,7 @@ document.addEventListener('visibilitychange', () => {
    holes were drawn using the old size — without this they stay pinned
    to stale coordinates and the round looks frozen after a rotation. */
 window.addEventListener('resize', () => {
+  syncHeaderHeight();
   if (round && $('play').classList.contains('active')) {
     drawBurrows();
   }

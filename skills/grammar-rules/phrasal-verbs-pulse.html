@@ -261,7 +261,23 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
    the player HEARS go away.
    ══════════════════════════════════════════════════════════════════════ */
 
-const DATA_URL   = '../../data/grammar-rules/phrasal-verbs-data.json';
+/* A silent failure is the worst outcome for a page a teacher opens in
+   front of a class: put whatever went wrong on screen where it can be read
+   and reported. */
+window.addEventListener('error', e => {
+  const box = document.getElementById('startIn');
+  if (box) box.innerHTML = '<p class="err"><b>Pulse hit an error.</b><br>' +
+    String(e.message || e).replace(/[<>]/g,'') + '<br><span style="opacity:.6">' +
+    ((e.filename||'').split('/').pop() + ':' + (e.lineno||'?')) + '</span></p>';
+});
+
+/* Two places the data can live in this repo: the shared /data folder the
+   other games use, and a sibling copy in this same folder. Try both, so a
+   publishing gap in one does not blank the page. */
+const DATA_URLS = [
+  '../../data/grammar-rules/phrasal-verbs-data.json',
+  './phrasal-verbs-data.json'
+];
 const BPM        = 92;
 const BEAT       = 60000 / BPM;        // ms
 const FALL_BEATS = 3;                  // beats a card takes to reach the strike line
@@ -704,14 +720,18 @@ window.addEventListener('resize', syncHeader);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncHeader);
 
 async function boot(){
-  let d;
-  try{
-    const res = await fetch(DATA_URL);
-    if (!res.ok) throw new Error('HTTP '+res.status);
-    d = await res.json();
-  }catch(e){
-    $('startIn').innerHTML = '<p class="err">Could not load the phrasal verb data.<br>'+
-      'Open this from the site rather than as a local file.</p>';
+  let d = null, tried = [];
+  for (const u of DATA_URLS){
+    try{
+      const res = await fetch(u);
+      if (!res.ok) throw new Error('HTTP '+res.status);
+      d = await res.json();
+      break;
+    }catch(e){ tried.push(u + ' → ' + (e.message||e)); }
+  }
+  if (!d){
+    $('startIn').innerHTML = '<p class="err"><b>Could not load the phrasal verb data.</b><br>'+
+      tried.map(t=>t.replace(/[<>]/g,'')).join('<br>')+'</p>';
     return;
   }
   GROUPS = (d.groups||[]).filter(g=>!g.mixed);

@@ -433,7 +433,7 @@
   .toast.good{ border-left-color:var(--clear); } .toast.good b{ color:var(--clear); }
 
   /* ---------- SUMMARY ---------- */
-  #summary{ align-items:center; justify-content:center; text-align:center; padding:1.5rem; gap:.4rem; }
+  #summary{ align-items:center; justify-content:center; text-align:center; padding:1.5rem; gap:.4rem; overflow-y:auto; }
   .sumeyebrow{ font-family:'DM Mono',monospace; font-size:.62rem; letter-spacing:.2em; text-transform:uppercase; color:var(--paper-faint); }
   .sumverdict{ font-family:'Space Grotesk',sans-serif; font-weight:900; font-size:clamp(1.6rem,5vw,2.4rem); letter-spacing:-.02em; margin:.3rem 0; }
   .sumverdict.cleared{ color:var(--clear); } .sumverdict.short{ color:var(--wrong); }
@@ -441,6 +441,43 @@
   .sumstats{ display:flex; gap:1.6rem; margin:.9rem 0 1.2rem; font-family:'DM Mono',monospace; font-size:.72rem; color:var(--paper-dim); }
   .sumstats div{ display:flex; flex-direction:column; align-items:center; gap:.15rem; }
   .sumstats b{ font-family:'Space Grotesk',sans-serif; font-size:1.15rem; color:var(--paper); }
+
+  /* ── end-of-run phrase recap ──
+     Every phrase in the pool just played, deduped. A phrase caught
+     correctly at least once this round (round.coverage) fills solid green;
+     everything else stays neutral but is still hoverable/tappable for its
+     definition — same behaviour as Hunt and Burrow. */
+  .recap{ width:100%; max-width:32rem; margin:0 auto; padding-top:.7rem; border-top:1px dashed rgba(255,255,255,.14); }
+  .recapLabel{
+    font-family:'DM Mono',monospace; font-size:.6rem; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--paper-faint); margin-bottom:.5rem;
+  }
+  .recapRow{ display:flex; flex-wrap:wrap; gap:.4rem; justify-content:center; }
+  .recap-chip{
+    position:relative; display:inline-flex; align-items:center; gap:.3rem;
+    padding:.32rem .68rem; border-radius:999px;
+    font-family:'DM Mono',monospace; font-size:.64rem; font-weight:500;
+    letter-spacing:.03em; text-transform:lowercase;
+    background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.16);
+    color:var(--paper-dim); transition:background .2s, border-color .2s, color .2s, transform .15s;
+  }
+  .recap-chip:hover, .recap-chip:focus-visible{ transform:translateY(-1px); border-color:rgba(255,255,255,.4); color:var(--paper); outline:none; }
+  .recap-chip.done{
+    background:rgba(94,211,155,.18); border-color:var(--clear); color:#c9ffe4;
+    box-shadow:0 0 10px rgba(94,211,155,.3);
+  }
+  .recap-chip.done::before{ content:'✓'; font-size:.62em; opacity:.85; }
+  .recap-tip{
+    position:fixed; z-index:60; display:none; pointer-events:none;
+    max-width:14rem; padding:.45rem .65rem; border-radius:.5rem;
+    background:#131315; border:1px solid rgba(201,169,97,.4);
+    color:var(--paper); font-family:'DM Sans',sans-serif; font-size:.68rem; line-height:1.4;
+    text-align:left; text-transform:none; letter-spacing:normal;
+    box-shadow:0 10px 26px rgba(0,0,0,.55);
+  }
+  .recap-tip b{ display:block; color:var(--gold); font-family:'Space Grotesk',sans-serif;
+                font-weight:700; letter-spacing:.03em; text-transform:uppercase; font-size:.62rem; margin-bottom:.15rem; }
+
   .sumactions{ display:flex; gap:.6rem; margin-top:.2rem; flex-wrap:wrap; justify-content:center; }
   .sumbtn{
     font-family:'Space Grotesk',sans-serif; font-size:.62rem; font-weight:700; letter-spacing:.15em; text-transform:uppercase;
@@ -616,6 +653,10 @@
         <div><b id="sumMiss">0</b><span>missed</span></div>
         <div><b id="sumAcc">0%</b><span>accuracy</span></div>
       </div>
+      <div class="recap" id="recap">
+        <div class="recapLabel" id="recapLabel">Phrases in this set</div>
+        <div class="recapRow" id="recapRow"></div>
+      </div>
       <div class="sumactions">
         <button class="sumbtn primary" id="sumRetry">↺ Retry</button>
         <button class="sumbtn" id="sumNext">Back to map</button>
@@ -676,6 +717,7 @@ const STAGES = [
 
 /* ---------- helpers ---------- */
 const $ = id => document.getElementById(id);
+const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 
 /* Sound and logging are decoration and neither may ever throw: a 404 on a
    sound file once froze a game mid-answer, and that must not repeat. */
@@ -688,6 +730,81 @@ const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Ma
 
 /* ---------- state filled on load ---------- */
 let GROUPS = [], FULL_POOL = [], PRACTICE_SETS = [], THRESH = [], N_GROUPS = 0;
+
+/* ---------- recap tooltip (shared by the summary screen's phrase chips) ---------- */
+let recapTipEl = null, recapTipOwner = null;
+
+function initRecapTooltip(){
+  recapTipEl = document.createElement('div');
+  recapTipEl.className = 'recap-tip';
+  document.body.appendChild(recapTipEl);
+  document.addEventListener('click', e => {
+    if (recapTipOwner && !e.target.closest('.recap-chip')) hideRecapTip();
+  });
+  window.addEventListener('scroll', hideRecapTip, true);
+}
+
+function showRecapTip(chip){
+  recapTipOwner = chip;
+  recapTipEl.innerHTML = '<b>' + esc(chip.dataset.verb) + '</b>' + esc(chip.dataset.def);
+  recapTipEl.style.display = 'block';
+  const r = chip.getBoundingClientRect();
+  const tw = recapTipEl.offsetWidth, th = recapTipEl.offsetHeight;
+  let left = r.left + r.width / 2 - tw / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+  let top = r.top - th - 9;
+  if (top < 4) top = r.bottom + 9;
+  recapTipEl.style.left = left + 'px';
+  recapTipEl.style.top = top + 'px';
+}
+
+function hideRecapTip(){
+  recapTipOwner = null;
+  if (recapTipEl) recapTipEl.style.display = 'none';
+}
+
+/* Builds the end-of-run phrase recap from round.poolItems (the set just
+   played) and round.coverage (phrases caught at least once this round).
+   Stars' items don't split verb/particle the way Burrow's do, so a chip
+   is just the phrase itself, lowercased. */
+function renderRecap(){
+  const row = $('recapRow');
+  if (!row) return;
+  row.innerHTML = '';
+
+  const seen = new Map();
+  (round.poolItems || []).forEach(it => {
+    if (seen.has(it.p)) return;
+    seen.set(it.p, it.m);
+  });
+
+  if (!seen.size){ $('recap').style.display = 'none'; return; }
+  $('recap').style.display = '';
+
+  const g = round.mode === 'group' ? GROUPS.find(x => x.id === round.index) : null;
+  $('recapLabel').textContent = round.mode === 'group'
+    ? 'All ' + (g ? g.label : '') + ' phrases'
+    : round.mode === 'practice' ? 'Phrases in this practice set' : 'Phrases in the trial';
+
+  seen.forEach((def, phrase) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'recap-chip' + (round.coverage.has(phrase) ? ' done' : '');
+    chip.textContent = phrase.toLowerCase();
+    chip.dataset.verb = phrase;
+    chip.dataset.def = def;
+    chip.setAttribute('aria-label', phrase + ': ' + def);
+    chip.addEventListener('mouseenter', () => showRecapTip(chip));
+    chip.addEventListener('mouseleave', hideRecapTip);
+    chip.addEventListener('focus', () => showRecapTip(chip));
+    chip.addEventListener('blur', hideRecapTip);
+    chip.addEventListener('click', e => {
+      e.stopPropagation();
+      if (recapTipOwner === chip) hideRecapTip(); else showRecapTip(chip);
+    });
+    row.appendChild(chip);
+  });
+}
 
 /* ======================================================================
    LOAD
@@ -748,6 +865,7 @@ async function boot(){
 
   $('loadingScreen').classList.add('fade');
   setTimeout(() => $('loadingScreen').style.display = 'none', 600);
+  initRecapTooltip();
   renderMenu();
 }
 
@@ -981,6 +1099,7 @@ function beginRound(cfg){
   $('roundNotch').style.left = Math.round(CLEAR_THRESHOLD*100) + '%';
   $('field').innerHTML = '';
   hideToast();
+  hideRecapTip();
 
   renderStageBar();
   showScreen('play');
@@ -1511,6 +1630,8 @@ function renderSummary(res){
   $('sumHits').textContent = round.hits;
   $('sumMiss').textContent = round.misses;
   $('sumAcc').textContent = Math.round(res.accuracy*100) + '%';
+
+  renderRecap();
 
   $('sumNote').textContent = res.cleared
     ? (round.mode === 'trial'

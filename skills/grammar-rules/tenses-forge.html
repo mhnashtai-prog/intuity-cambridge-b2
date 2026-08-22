@@ -181,7 +181,7 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
   display:flex;flex-direction:column;gap:.4rem;padding:.5rem .7rem .6rem;
   background:rgba(13,13,13,.96);border-top:1px solid rgba(255,255,255,.08)}
 .bank-tray{flex:1;min-height:0;overflow-y:auto;display:flex;flex-wrap:wrap;align-content:flex-start;
-  gap:.4rem;padding:.15rem .1rem}
+  justify-content:center;gap:.4rem;padding:.15rem .1rem}
 .tile{
   touch-action:none;user-select:none;-webkit-user-select:none;
   display:inline-flex;align-items:center;justify-content:center;min-width:2.6em;height:2.1em;
@@ -356,25 +356,6 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
 <div class="loading" id="loading">Loading…</div>
 
 <script>
-/* ══════════════════════════════════════════════════════════════════════
-   WORD FORGE — same boss-duel shell and combat model as Duel, but the
-   answer is built, not picked. Every question gives a word bank (the
-   right words plus decoys); the student drags — or taps, which is just a
-   zero-distance drag — tiles into an ordered blank inside the sentence,
-   can rearrange freely, then presses Check to resolve.
-
-   Reads its own tense-forge-data.json (NOT the same file as Rush/Mill/
-   Duel — those give four whole-phrase options; this needs a per-item word
-   bank and an ordered multi-word answer, which is a different shape).
-   Expected item shape:
-     { "cue": "HE", "after": "all morning.",
-       "mark": ["yet"],
-       "answer": ["has","been","driving"],
-       "bank": ["has","have","had","will","be","been","drive","drove","driving"],
-       "note": "present perfect continuous — action still going" }
-   `answer` may also be given as a single space-separated string.
-   ══════════════════════════════════════════════════════════════════════ */
-
 window.addEventListener('error', e => {
   const l = document.getElementById('loading');
   if (l && l.style.display !== 'none') l.innerHTML =
@@ -402,13 +383,11 @@ let bossHP = BOSS_MAX, playerHP = PLAYER_MAX, overdriveReady = false, overdriveM
 let qStart = 0, qDur = 0;
 let curItems = null, curItem = null;
 
-/* board state for the active question */
 let bank = [], slots = [], usedIdx = new Set(), resolved = false;
 
 const NO_REPEAT = 4;
 let recentIdx = [];
 
-/* ── MEMORY: own namespace, misses come back sooner ── */
 const MEM_KEY = 'intuity-forge-mem';
 function loadMem(){ try{ return JSON.parse(localStorage.getItem(MEM_KEY)||'{}'); }catch(e){ return {}; } }
 function saveMem(m){ try{ localStorage.setItem(MEM_KEY,JSON.stringify(m)); }catch(e){} }
@@ -423,7 +402,6 @@ function weightOf(it, mem){
   return e ? 1 + Math.min(6, e.miss*3) : 2;
 }
 
-/* ── AUDIO ── */
 let ac = null, master = null, musicOn = localStorage.getItem('intuity-forge-sound') !== 'off';
 function audio(){
   if (!ac){
@@ -465,7 +443,6 @@ function sfxVictory(){ if(!ac)return; const t=ac.currentTime;
 function sfxDefeat(){ if(!ac)return; const t=ac.currentTime;
   [392,349,293,220].forEach((f,i)=>tone(f,.5,'sawtooth',.14,t+i*.14,f*.7)); }
 
-/* ── DATA ── */
 function bankSatisfies(bankArr, answerArr){
   const have = {}; bankArr.forEach(w=>{ const k=w.toLowerCase(); have[k]=(have[k]||0)+1; });
   const need = {}; answerArr.forEach(w=>{ const k=w.toLowerCase(); need[k]=(need[k]||0)+1; });
@@ -504,7 +481,6 @@ function markHTML(text, marks){
   return s;
 }
 
-/* ── PHASE ── */
 function phaseOf(hp){
   const f = hp / BOSS_MAX;
   if (f > .66) return { name:'calm',      color:'#C9A961', dmgMult:1,   timeMult:1   };
@@ -526,7 +502,6 @@ function firstTouch(){
   $('tapStart').classList.add('gone');
 }
 
-/* ══════════════════════════ BOARD (bank + slots) ══════════════════════════ */
 function renderSentence(item){
   $('cueText').innerHTML = markHTML(item.cue, item.mark) + (item.cue ? ' ' : '');
   $('afterText').innerHTML = ' ' + markHTML(item.after, item.mark);
@@ -567,8 +542,7 @@ function unplaceSlot(slotIdx){
 }
 function refreshBoard(){ renderTray(); renderSlots(); updateCheckState(); }
 
-/* ---------- pointer-based drag, doubles as tap when movement is tiny ---------- */
-let drag = null; /* {source:'bank'|'slot', bankIdx?, slotIdx?, word, ghost, startX, startY, pointerId} */
+let drag = null;
 
 function beginDrag(e, source, idx, word, srcEl){
   if (resolved) return;
@@ -609,7 +583,6 @@ function onDragEnd(e){
   if (resolved) return;
 
   if (!d.moved){
-    /* tap gesture */
     sfxClick();
     if (d.source === 'bank'){
       const idx = firstEmptySlot();
@@ -621,7 +594,6 @@ function onDragEnd(e){
     return;
   }
 
-  /* drag gesture: resolve by final drop point */
   const el = document.elementFromPoint(e.clientX, e.clientY);
   const box = el && el.closest ? el.closest('.slotbox') : null;
   const inTray = el && el.closest ? el.closest('.bank-tray') : null;
@@ -630,7 +602,7 @@ function onDragEnd(e){
   if (box){
     const targetIdx = +box.dataset.slot;
     if (d.source === 'bank'){
-      if (slots[targetIdx]) unplaceSlot(targetIdx);      // bump occupant back to bank
+      if (slots[targetIdx]) unplaceSlot(targetIdx);
       placeTile(d.bankIdx, targetIdx);
     } else if (d.source === 'slot' && targetIdx !== d.slotIdx){
       const moving = slots[d.slotIdx];
@@ -641,7 +613,6 @@ function onDragEnd(e){
   } else if (inTray && d.source === 'slot'){
     unplaceSlot(d.slotIdx);
   }
-  /* dropped anywhere else invalid: state unchanged */
   refreshBoard();
 }
 
@@ -653,7 +624,6 @@ $('slotRow').addEventListener('pointerdown', e=>{
   const box = e.target.closest('.slotbox.filled'); if (!box) return;
   beginDrag(e, 'slot', +box.dataset.slot, box.textContent, box);
 });
-/* keyboard fallback: Enter/Space on a focused tile or filled slot = tap */
 $('bankTray').addEventListener('keydown', e=>{
   if (e.key !== 'Enter' && e.key !== ' ') return;
   const tile = e.target.closest('.tile'); if (!tile || resolved) return;
@@ -676,7 +646,6 @@ $('clearBtn').addEventListener('click', ()=>{
 });
 $('checkBtn').addEventListener('click', ()=>{ if (!resolved) submitAnswer(false); });
 
-/* ══════════════════════════ ROUND ══════════════════════════ */
 function startRound(){
   const g = GROUPS[groupIdx];
   const items = itemsOf(g);
@@ -736,8 +705,6 @@ function submitAnswer(timedOut){
   noteResult(item, ok);
   try{ if (window.INTUITY) INTUITY.log('tenses', item.group+':'+item.idx, ok, {game:'forge'}); }catch(e){}
 
-  /* mark each slot right/wrong against the correct sequence, and fill any
-     empty slot with what should have been there */
   const row = $('slotRow'); row.innerHTML = '';
   item.answer.forEach((w,i)=>{
     const box = document.createElement('span');
@@ -828,7 +795,6 @@ function banner(txt,col){
   setTimeout(()=>b.classList.remove('show'),850);
 }
 
-/* fireworks on a correct build — bigger and rowdier than a normal hit spark */
 const FW_COLS = ['#FFD94A','#C9A961','#5ED39B','#61b5ed','#ffffff','#c084fc'];
 function fireworks(){
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -856,7 +822,6 @@ function fireworks(){
   }
 }
 
-/* ── SUMMARY ── */
 function scale(acc){
   const A = [[0,140],[.60,160],[.72,173],[.80,180],[1,190]];
   for (let i=1;i<A.length;i++){
@@ -896,7 +861,6 @@ function finish(outcome){
   $('over').classList.add('show');
 }
 
-/* ── TABS ── */
 function buildTabs(){
   const mem = loadMem(), wrap = $('setTabs');
   wrap.innerHTML = '';
@@ -919,7 +883,6 @@ function switchGroup(i){
   startRound();
 }
 
-/* ── MUTE ── */
 function setMute(on){
   musicOn = on; localStorage.setItem('intuity-forge-sound', on?'on':'off');
   $('muteBtn').textContent = on ? '🔊' : '🔈';
@@ -927,7 +890,6 @@ function setMute(on){
 $('muteBtn').addEventListener('click', ()=> setMute(!musicOn));
 setMute(musicOn);
 
-/* ── EVENTS ── */
 document.addEventListener('keydown', e => { if (e.key === 'Escape') $('over').classList.remove('show'); });
 $('closeX').addEventListener('click', () => $('over').classList.remove('show'));
 $('over').addEventListener('click', e => { if (e.target === $('over')) $('over').classList.remove('show'); });
@@ -935,7 +897,6 @@ $('againBtn').addEventListener('click', () => { $('over').classList.remove('show
 $('nextBtn').addEventListener('click', () => { const n=(groupIdx+1)%GROUPS.length; switchGroup(n); });
 $('hubBtn').addEventListener('click', () => { (window.top||window).location.href = '/?openModal=grammar'; });
 
-/* ── BOOT ── */
 async function boot(){
   let data;
   try {

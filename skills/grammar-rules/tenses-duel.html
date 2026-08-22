@@ -364,7 +364,16 @@ const clamp = (n,lo,hi) => Math.max(lo,Math.min(hi,n));
 
 let GROUPS = [], groupIdx = 0;
 let running = false, started = false, rafId = null;
-let lanes = [], curItem = null, lastIdx = -1;
+let lanes = [], curItem = null;
+/* No item may be the target again within NO_REPEAT turns — same fix as
+   Incoming's weightedPick. Weighting toward missed items (weightOf) and
+   "don't repeat the last one" (the old lastIdx check) fight each other:
+   a heavily-missed item's weight can be 4x a fresh one's, so barring only
+   the single previous question still let it resurface every 2-3 turns.
+   The bar is relaxed a turn at a time rather than dropped outright, so a
+   small set (say 5 items) still gets *some* spacing instead of none. */
+const NO_REPEAT = 4;
+let recentIdx = [];
 let score = 0, combo = 0, bestCombo = 0, hits = 0, misses = 0, missLog = [];
 let bossHP = BOSS_MAX, playerHP = PLAYER_MAX, overdriveReady = false, overdriveMark = 0;
 let qStart = 0, qDur = 0, qTimerId = null;
@@ -435,16 +444,23 @@ function itemsOf(g){
 }
 function pickNext(items){
   const mem = loadMem();
-  let idx = -1, tries = 0;
-  do {
-    const bag = items.map((it,i)=>({i,w:weightOf(it,mem)}));
-    const total = bag.reduce((s,x)=>s+x.w,0);
-    let r = Math.random()*total, c = 0;
-    for (const x of bag){ c += x.w; if (r<=c){ idx = x.i; break; } }
-    tries++;
-  } while (idx === lastIdx && items.length > 1 && tries < 8);
-  lastIdx = idx;
-  return items[idx < 0 ? 0 : idx];
+  for (let back = Math.min(NO_REPEAT, recentIdx.length); back >= 0; back--){
+    const barred = new Set(recentIdx.slice(recentIdx.length - back));
+    const bag = [];
+    items.forEach((it,i) => {
+      if (barred.has(i)) return;
+      const w = weightOf(it,mem);
+      for (let k=0;k<w;k++) bag.push(i);
+    });
+    if (bag.length){
+      const idx = bag[(Math.random()*bag.length)|0];
+      recentIdx.push(idx); if (recentIdx.length > NO_REPEAT) recentIdx.shift();
+      return items[idx];
+    }
+  }
+  const idx = (Math.random()*items.length)|0;
+  recentIdx.push(idx); if (recentIdx.length > NO_REPEAT) recentIdx.shift();
+  return items[idx];
 }
 function sentenceHTML(item, slotContent){
   let s = esc(item.cue) + (item.cue ? ' ' : '') +
@@ -498,7 +514,7 @@ function startRound(){
   const g = GROUPS[groupIdx];
   const items = itemsOf(g);
   score = 0; combo = 0; bestCombo = 0; hits = 0; misses = 0; missLog = [];
-  bossHP = BOSS_MAX; playerHP = PLAYER_MAX; overdriveReady = false; overdriveMark = 0; lastIdx = -1;
+  bossHP = BOSS_MAX; playerHP = PLAYER_MAX; overdriveReady = false; overdriveMark = 0; recentIdx = [];
   $('score').textContent = '0'; setCombo(0);
   $('bossName').textContent = g.label.toUpperCase();
   $('logFeed').innerHTML = '';

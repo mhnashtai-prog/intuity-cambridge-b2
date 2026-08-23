@@ -57,16 +57,17 @@
   .stage.on{display:block;}
   .road{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
   .road line{stroke:var(--rule);stroke-width:1;}
-  .road .centre{stroke:var(--rule);stroke-dasharray:4 10;}
-  .road .vp{fill:var(--ink);}
+  .road .centre{stroke:#BFB3A0;stroke-dasharray:5 12;stroke-width:1.5;}
+  .road .vp{fill:#8a7f6d;}
 
   .sign{position:absolute;cursor:pointer;display:flex;flex-direction:column;
-    background:var(--paper);padding:9px 10px;
+    background:var(--paper);padding:10px 12px;border-radius:3px;
+    box-shadow:0 3px 14px rgba(58,47,34,.30);
     transition:left .5s var(--spring),right .5s var(--spring),top .5s var(--spring),
                width .5s var(--spring),opacity .3s ease;}
   .sign::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
     width:max(100%,44px);height:max(100%,44px);}
-  .sign .cue{color:var(--hot);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+  .sign .cue{color:var(--hot);line-height:1.05;overflow-wrap:break-word;max-width:100%;}
   .sign.right{align-items:flex-end;text-align:right;}
   .sign .line{margin-top:5px;color:var(--soft);line-height:1.32;font-weight:400;}
   .sign .line b{font-weight:700;color:var(--ink);}
@@ -142,7 +143,12 @@ const CATEGORY = P.get('category') || 'present';
 const TENSE    = P.get('tense')    || 'simple';
 const JSON_URL = P.get('json')     || '../../data/grammar-rules/tenses-rules.json';
 const START    = P.get('section') !== null ? parseInt(P.get('section'),10) : null;
-const SHRINK   = 0.62;
+/* Signs hang at full size. Depth is carried by where they sit along the
+   road and by the converging road lines behind them — not by shrinking
+   the text, which made the far ones unreadable. */
+const ROW_STEP = 0.34;   // how far up the road each row sits
+const LEAN     = 0.10;   // slight inward lean per row
+const SIZE_FADE= 0.055;  // barely-there width taper
 
 let tense = null, useCases = [], secIdx = null;
 let cards = [], placements = [], activeCard = null, activeIsPlaced = false, done = false;
@@ -251,22 +257,59 @@ function layout(){
   const narrow = w < 620;
   G = { w, h, narrow,
         perSide: narrow ? 2 : 3,
-        vpx: w*0.5, vpy: h*0.15,
-        baseY: h*0.56,
-        baseW: narrow ? Math.min(w*0.44,180) : Math.min(w*0.30,220),
-        edge: 6 };
+        vpx: w*0.5, vpy: h*0.13,
+        baseY: h*0.52,
+        baseW: narrow ? Math.min(w*0.45,190) : Math.min(w*0.31,230),
+        edge: 8 };
   const svg = $('road');
+  const kerb = G.narrow ? 44 : 78;
   svg.setAttribute('viewBox','0 0 '+w+' '+h);
+
+  /* Layers, back to front: far light, two walls, pavements, road.
+     Every shade is a tint of the same warm ground, so the street reads
+     as one material lit differently rather than as coloured panels. */
   svg.innerHTML =
-    '<line x1="'+G.edge+'" y1="'+h+'" x2="'+G.vpx+'" y2="'+G.vpy+'"/>'+
-    '<line x1="'+(w-G.edge)+'" y1="'+h+'" x2="'+G.vpx+'" y2="'+G.vpy+'"/>'+
+    '<defs>'+
+      '<linearGradient id="wl" x1="0" y1="0" x2="0" y2="1">'+
+        '<stop offset="0%" stop-color="#C6BBA9"/><stop offset="100%" stop-color="#A99C86"/></linearGradient>'+
+      '<linearGradient id="wr" x1="0" y1="0" x2="0" y2="1">'+
+        '<stop offset="0%" stop-color="#CFC5B4"/><stop offset="100%" stop-color="#B4A894"/></linearGradient>'+
+      '<linearGradient id="rd" x1="0" y1="1" x2="0" y2="0">'+
+        '<stop offset="0%" stop-color="#D2C8B9"/><stop offset="100%" stop-color="#EDE7DC"/></linearGradient>'+
+      '<linearGradient id="pv" x1="0" y1="1" x2="0" y2="0">'+
+        '<stop offset="0%" stop-color="#C8BDAB"/><stop offset="100%" stop-color="#E2DACD"/></linearGradient>'+
+      '<radialGradient id="hz" cx="50%" cy="50%" r="50%">'+
+        '<stop offset="0%" stop-color="#F6F2EA" stop-opacity=".95"/>'+
+        '<stop offset="100%" stop-color="#F6F2EA" stop-opacity="0"/></radialGradient>'+
+    '</defs>'+
+
+    '<rect x="0" y="0" width="'+w+'" height="'+h+'" fill="#DCD3C6"/>'+
+
+    '<polygon points="0,0 '+G.vpx+','+G.vpy+' '+G.edge+','+h+' 0,'+h+'" fill="url(#wl)"/>'+
+    '<polygon points="'+w+',0 '+G.vpx+','+G.vpy+' '+(w-G.edge)+','+h+' '+w+','+h+'" fill="url(#wr)"/>'+
+
+    '<polygon points="'+G.edge+','+h+' '+G.vpx+','+G.vpy+' '+(G.edge+kerb)+','+h+'" fill="url(#pv)"/>'+
+    '<polygon points="'+(w-G.edge)+','+h+' '+G.vpx+','+G.vpy+' '+(w-G.edge-kerb)+','+h+'" fill="url(#pv)"/>'+
+
+    '<polygon points="'+(G.edge+kerb)+','+h+' '+G.vpx+','+G.vpy+' '+(w-G.edge-kerb)+','+h+'" fill="url(#rd)"/>'+
+
+    '<circle cx="'+G.vpx+'" cy="'+G.vpy+'" r="'+Math.min(w,h)*0.28+'" fill="url(#hz)"/>'+
+
+    '<line x1="'+(G.edge+kerb)+'" y1="'+h+'" x2="'+G.vpx+'" y2="'+G.vpy+'" stroke="#B0A290" stroke-width="1"/>'+
+    '<line x1="'+(w-G.edge-kerb)+'" y1="'+h+'" x2="'+G.vpx+'" y2="'+G.vpy+'" stroke="#B0A290" stroke-width="1"/>'+
     '<line class="centre" x1="'+G.vpx+'" y1="'+h+'" x2="'+G.vpx+'" y2="'+G.vpy+'"/>'+
     '<circle class="vp" cx="'+G.vpx+'" cy="'+G.vpy+'" r="2.5"/>';
 }
 function slotAt(side, depth){
-  const t = Math.pow(SHRINK, depth);
+  const yT = Math.max(0.12, 1 - depth*ROW_STEP);
+  const xT = 1 - depth*LEAN;
   const ax = side ? G.w - G.edge : G.edge;
-  return { x: G.vpx + (ax - G.vpx)*t, y: G.vpy + (G.baseY - G.vpy)*t, t, w: G.baseW*t };
+  return {
+    x: G.vpx + (ax - G.vpx)*xT,
+    y: G.vpy + (G.baseY - G.vpy)*yT,
+    t: 1 - depth*SIZE_FADE,
+    w: G.baseW * (1 - depth*SIZE_FADE)
+  };
 }
 
 /* ---------------- render ---------------- */
@@ -289,14 +332,15 @@ function renderSigns(){
     const el = document.createElement('div');
     el.className = 'sign' + (p.side ? ' right' : '');
     el.style.width = s.w+'px';
-    el.style.top = (s.y - s.w*0.32)+'px';
+    el.style.top = (s.y - 34)+'px';
     if(p.side) el.style.right = (G.w - s.x)+'px'; else el.style.left = s.x+'px';
 
-    const cueSize = Math.max(10, Math.round(24*s.t));
-    let html = '<div class="cue display" style="font-size:'+cueSize+'px">'+c.cue+'</div>';
-    const bodySize = Math.round(14*s.t);
-    if(bodySize >= 11)
-      html += '<div class="line" style="font-size:'+bodySize+'px">'+mark(c.text, c.markers)+'</div>';
+    // Fixed type sizes — every hanging sign stays fully readable.
+    const cueSize  = G.narrow ? 15 : 17;
+    const bodySize = G.narrow ? 12.5 : 13.5;
+    const html =
+      '<div class="cue display" style="font-size:'+cueSize+'px">'+c.cue+'</div>'+
+      '<div class="line" style="font-size:'+bodySize+'px">'+mark(c.text, c.markers)+'</div>';
 
     el.innerHTML = html;
     el.onclick = () => retrieve(p.c);

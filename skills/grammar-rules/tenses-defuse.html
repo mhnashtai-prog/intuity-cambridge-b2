@@ -395,7 +395,13 @@ window.addEventListener('error', e => {
     '<br><span style="opacity:.6">' + ((e.filename||'').split('/').pop()+':'+(e.lineno||'?')) + '</span></p>';
 });
 
-const DATA_URL = new URLSearchParams(location.search).get('data') || '../../data/grammar-rules/tense-rush-data.json';
+/* Defusal is a game mode, not a teaching mode — it should draw from the
+   blind "Mix" sets (see build_mix_sets.py) so the set-tabs don't leak the
+   correct tense before the learner reads the sentence. Explore/Practice/
+   Quiz keep pointing at the original tense-labeled file, where knowing
+   the category up front is appropriate scaffolding. Override with
+   ?data=... if you need to point at a specific file for testing. */
+const DATA_URL = new URLSearchParams(location.search).get('data') || '../../data/grammar-rules/tense-mix-data.json';
 
 const WIRE_N = 4;
 const WIRE_VARS = ['--w1','--w2','--w3','--w4'];
@@ -415,6 +421,14 @@ let running = false, started = false, rafId = null;
 let wires = [], curItem = null, resolved = false;
 const NO_REPEAT = 4;
 let recentIdx = [];
+/* Retrieval-practice tracking, reset every run. seenThisRun records the
+   array-position (within curItems) of every item served so far, in order.
+   missedThisRun records positions the learner got wrong, and a position
+   is retired from it the moment they answer that item correctly — once
+   it's no longer shaky, forcing it back every 4th question stops helping
+   and starts feeling repetitive. */
+const REPEAT_EVERY = 4;
+let seenThisRun = [], missedThisRun = [], qCount = 0;
 let score = 0, streak = 0, bestStreak = 0, hits = 0, misses = 0, missLog = [];
 let threatHP = THREAT_MAX, playerHP = PLAYER_MAX, overdriveReady = false, overdriveMark = 0;
 let qStart = 0, qDur = 0, lastTickSecond = -1;
@@ -508,6 +522,21 @@ function pickNext(items){
   recentIdx.push(idx); if (recentIdx.length > NO_REPEAT) recentIdx.shift();
   return items[idx];
 }
+/* Every REPEAT_EVERY-th question, resurface something already met this run
+   instead of drawing fresh. Prefers a still-shaky item (one the learner
+   got wrong and hasn't since corrected); falls back to any earlier item
+   if nothing is currently missed. The item is served exactly as it was
+   the first time — same cue, same 4 options, no "you've seen this" tag —
+   so answering it is genuine unaided recall, not UI memory. */
+function pickRepeat(items){
+  const last = seenThisRun[seenThisRun.length - 1];
+  const pool = missedThisRun.length ? missedThisRun : seenThisRun;
+  const candidates = pool.filter(i => i !== last);
+  const chosen = candidates.length
+    ? candidates[(Math.random()*candidates.length)|0]
+    : pool[(Math.random()*pool.length)|0];
+  return items[chosen];
+}
 function sentenceHTML(item, slotContent){
   let s = esc(item.cue) + (item.cue ? ' ' : '') +
           '<span class="slot">' + (slotContent ? esc(slotContent) : '????') + '</span> ' +
@@ -564,6 +593,7 @@ function startRun(){
   const items = itemsOf(g);
   score = 0; streak = 0; bestStreak = 0; hits = 0; misses = 0; missLog = [];
   threatHP = THREAT_MAX; playerHP = PLAYER_MAX; overdriveReady = false; overdriveMark = 0; recentIdx = [];
+  seenThisRun = []; missedThisRun = []; qCount = 0;
   curItems = items;
   $('score').textContent = '0'; setStreak(0);
   $('threatName').textContent = g.label.toUpperCase();
@@ -578,7 +608,13 @@ function startRun(){
 }
 let curItems = null;
 function nextBomb(){
-  curItem = pickNext(curItems);
+  qCount++;
+  if (qCount % REPEAT_EVERY === 0 && seenThisRun.length >= 2){
+    curItem = pickRepeat(curItems);
+  } else {
+    curItem = pickNext(curItems);
+    seenThisRun.push(curItems.indexOf(curItem));
+  }
   resolved = false;
   $('device').className = 'device';
   $('sentence').innerHTML = sentenceHTML(curItem);
@@ -634,6 +670,7 @@ function resolveWire(chosen, timedOut){
   if (!running || !curItem || resolved) return;
   resolved = true;
   const item = curItem;
+  const pos = curItems.indexOf(item);
   lockWires();
   const ok = chosen === item.answer;
   const wireEls = $('wires').querySelectorAll('.wire');
@@ -646,6 +683,8 @@ function resolveWire(chosen, timedOut){
 
   if (ok){
     hits++; streak++; bestStreak = Math.max(bestStreak,streak);
+    const mi = missedThisRun.indexOf(pos);
+    if (mi >= 0) missedThisRun.splice(mi,1);
     let mult = streak>=15 ? 2.2 : streak>=10 ? 1.7 : streak>=5 ? 1.3 : 1;
     let isOverdrive = false;
     if (overdriveReady){ mult *= 1.9; isOverdrive = true; overdriveReady = false; }
@@ -674,6 +713,7 @@ function resolveWire(chosen, timedOut){
 
   } else {
     misses++; streak = 0; missLog.push(item);
+    if (pos >= 0 && !missedThisRun.includes(pos)) missedThisRun.push(pos);
     const dmg = Math.round(BASE_PLAYER_DMG * threat.dmgMult);
     playerHP = clamp(playerHP - dmg, 0, PLAYER_MAX);
     $('device').classList.add('wrongflash');

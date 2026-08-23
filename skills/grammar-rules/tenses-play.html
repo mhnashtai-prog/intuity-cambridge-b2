@@ -53,8 +53,10 @@
   .sec.done .tick{background:var(--hot);border-color:var(--hot);}
 
   /* ---------- street ---------- */
-  .stage{position:relative;flex:1;min-height:0;overflow:hidden;touch-action:none;display:none;}
-  .stage.on{display:block;}
+  .play{flex:1;min-height:0;display:none;flex-direction:column;}
+  .play.on{display:flex;}
+  .stage{position:relative;flex:1;min-height:0;overflow:hidden;touch-action:none;}
+  .cardzone{flex:none;touch-action:none;padding:0 14px calc(16px + env(safe-area-inset-bottom,0px));}
   .road{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
   .road line{stroke:var(--rule);stroke-width:1;}
   .road .centre{stroke:#BFB3A0;stroke-dasharray:5 12;stroke-width:1.5;}
@@ -78,21 +80,21 @@
     cursor:pointer;transform:translate(-50%,-50%);padding:10px;}
   .more:hover{color:var(--ink);}
 
-  .card{position:absolute;left:50%;bottom:0;transform:translateX(-50%);
-    width:min(620px,100%);padding:24px 20px calc(20px + env(safe-area-inset-bottom,0px));
-    background:var(--paper);border-radius:14px 14px 0 0;
+  .card{width:min(480px,100%);margin:0 auto;padding:16px 18px 14px;
+    background:var(--paper);border-radius:12px;
+    box-shadow:0 8px 26px rgba(58,47,34,.26);
     transition:transform .42s var(--spring),opacity .3s ease;}
-  .card.in{transform:translateX(-50%) translateY(16px);opacity:0;}
-  .card.out{transform:translateX(-50%) translateY(-50px) scale(.9);opacity:0;}
-  .card .kick{font-size:.58rem;letter-spacing:.18em;text-transform:uppercase;color:var(--mute);margin-bottom:9px;}
-  .card .cue{font-size:clamp(2rem,11vw,3.4rem);color:var(--hot);margin-bottom:16px;
-    border-bottom:3px solid var(--hot);padding-bottom:5px;display:inline-block;max-width:100%;overflow-wrap:break-word;}
-  .card .sentence{font-size:1.44rem;font-weight:400;line-height:1.36;letter-spacing:-.014em;color:var(--soft);}
+  .card.in{transform:translateY(16px);opacity:0;}
+  .card.out{transform:translateY(-46px) scale(.94);opacity:0;}
+  .card .kick{font-size:.54rem;letter-spacing:.18em;text-transform:uppercase;color:var(--mute);margin-bottom:7px;}
+  .card .cue{font-size:clamp(1.4rem,6vw,2.1rem);color:var(--hot);margin-bottom:11px;
+    border-bottom:2px solid var(--hot);padding-bottom:3px;display:inline-block;max-width:100%;overflow-wrap:break-word;}
+  .card .sentence{font-size:1.12rem;font-weight:400;line-height:1.4;letter-spacing:-.01em;color:var(--soft);}
   .card .sentence b{font-weight:700;color:var(--ink);}
-  .card .note{font-size:.8rem;color:var(--mute);line-height:1.55;margin-top:16px;
-    padding-top:13px;border-top:1px solid var(--rule);}
-  .hint{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:18px;
-    font-size:.6rem;letter-spacing:.18em;text-transform:uppercase;color:var(--mute);}
+  .card .note{font-size:.74rem;color:var(--mute);line-height:1.5;margin-top:11px;
+    padding-top:9px;border-top:1px solid var(--rule);}
+  .hint{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:12px;
+    font-size:.55rem;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);}
   .hint span{font-size:.85rem;line-height:1;}
 
   .done{text-align:center;padding:4px 0 2px;}
@@ -130,11 +132,13 @@
 
 <div class="sections" id="sections"></div>
 
-<div class="stage" id="stage">
-  <svg class="road" id="road" preserveAspectRatio="none"></svg>
-  <div id="signLayer"></div>
-  <div id="cardLayer"></div>
-  <div class="sheet" id="sheet"></div>
+<div class="play" id="play">
+  <div class="stage" id="stage">
+    <svg class="road" id="road" preserveAspectRatio="none"></svg>
+    <div id="signLayer"></div>
+    <div class="sheet" id="sheet"></div>
+  </div>
+  <div class="cardzone" id="cardLayer"></div>
 </div>
 
 <script>
@@ -143,12 +147,12 @@ const CATEGORY = P.get('category') || 'present';
 const TENSE    = P.get('tense')    || 'simple';
 const JSON_URL = P.get('json')     || '../../data/grammar-rules/tenses-rules.json';
 const START    = P.get('section') !== null ? parseInt(P.get('section'),10) : null;
-/* Signs hang at full size. Depth is carried by where they sit along the
-   road and by the converging road lines behind them — not by shrinking
-   the text, which made the far ones unreadable. */
-const ROW_STEP = 0.34;   // how far up the road each row sits
-const LEAN     = 0.10;   // slight inward lean per row
-const SIZE_FADE= 0.055;  // barely-there width taper
+/* One ratio drives both axes, so every sign sits exactly on the line
+   running from its side of the road to the vanishing point. Width tapers
+   with depth; type size does not, so the far boards stay readable and
+   simply wrap to more lines. */
+const ROW_STEP  = 0.22;   // depth step along the road
+const WIDTH_TAPER = 0.82; // width multiplier per row back
 
 let tense = null, useCases = [], secIdx = null;
 let cards = [], placements = [], activeCard = null, activeIsPlaced = false, done = false;
@@ -208,7 +212,7 @@ function cueFor(sentence, uc){
 /* ---------------- sections ---------------- */
 function showSections(){
   secIdx = null;
-  $('stage').classList.remove('on');
+  $('play').classList.remove('on');
   $('sections').style.display = '';
   $('back').style.visibility = 'hidden';
   $('title').textContent = tense.name || '';
@@ -242,7 +246,7 @@ function openSection(i){
   placements = []; activeCard = 0; activeIsPlaced = false; done = false;
 
   $('sections').style.display = 'none';
-  $('stage').classList.add('on');
+  $('play').classList.add('on');
   $('back').style.visibility = 'visible';
   $('back').textContent = START !== null ? '\u2190 List' : '\u2190 Sections';
   $('title').textContent = uc.title;
@@ -257,8 +261,8 @@ function layout(){
   const narrow = w < 620;
   G = { w, h, narrow,
         perSide: narrow ? 2 : 3,
-        vpx: w*0.5, vpy: h*0.13,
-        baseY: h*0.52,
+        vpx: w*0.5, vpy: h*0.15,
+        baseY: h*0.72,
         baseW: narrow ? Math.min(w*0.45,190) : Math.min(w*0.31,230),
         edge: 8 };
   const svg = $('road');
@@ -301,14 +305,13 @@ function layout(){
     '<circle class="vp" cx="'+G.vpx+'" cy="'+G.vpy+'" r="2.5"/>';
 }
 function slotAt(side, depth){
-  const yT = Math.max(0.12, 1 - depth*ROW_STEP);
-  const xT = 1 - depth*LEAN;
+  const t  = Math.max(0.15, 1 - depth*ROW_STEP);
   const ax = side ? G.w - G.edge : G.edge;
   return {
-    x: G.vpx + (ax - G.vpx)*xT,
-    y: G.vpy + (G.baseY - G.vpy)*yT,
-    t: 1 - depth*SIZE_FADE,
-    w: G.baseW * (1 - depth*SIZE_FADE)
+    x: G.vpx + (ax - G.vpx)*t,          // on the perspective line
+    y: G.vpy + (G.baseY - G.vpy)*t,     // same ratio, same line
+    t: t,
+    w: G.baseW * Math.pow(WIDTH_TAPER, depth)
   };
 }
 
@@ -332,7 +335,7 @@ function renderSigns(){
     const el = document.createElement('div');
     el.className = 'sign' + (p.side ? ' right' : '');
     el.style.width = s.w+'px';
-    el.style.top = (s.y - 34)+'px';
+    el.style.top = (s.y - 30)+'px';
     if(p.side) el.style.right = (G.w - s.x)+'px'; else el.style.left = s.x+'px';
 
     // Fixed type sizes — every hanging sign stays fully readable.
@@ -447,13 +450,13 @@ function leave(){
 }
 $('back').onclick = leave;
 
-const stage = $('stage');
+const swipeArea = $('play');
 let sx=0, sy=0, tracking=false;
-stage.addEventListener('pointerdown', e => {
+swipeArea.addEventListener('pointerdown', e => {
   if(e.target.closest('.sign, .more, .sheet, .lnk')) return;
   sx = e.clientX; sy = e.clientY; tracking = true;
 });
-stage.addEventListener('pointerup', e => {
+swipeArea.addEventListener('pointerup', e => {
   if(!tracking) return;
   tracking = false;
   const dy = e.clientY - sy, dx = e.clientX - sx;
@@ -463,7 +466,7 @@ stage.addEventListener('pointerup', e => {
   if(Math.abs(dy) < 45 || Math.abs(dx) > Math.abs(dy)) return;
   dy < 0 ? advance() : undo();
 });
-stage.addEventListener('pointercancel', () => { tracking = false; });
+swipeArea.addEventListener('pointercancel', () => { tracking = false; });
 
 document.addEventListener('keydown', e => {
   if(secIdx === null) return;

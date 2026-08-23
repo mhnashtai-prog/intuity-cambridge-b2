@@ -1,139 +1,3708 @@
-#!/usr/bin/env python3
-"""
-build_mix_sets.py — turn a tense-labeled data file into blind "Mix" sets.
-
-WHY
-Duel and Defusal's set-tabs used to be labeled by tense ("Perfect Simple",
-"Past Perfect", etc). That's a leak: the tab tells the learner which of the
-four options is correct before they read the sentence, so the "game" turns
-into "find the option shaped like the tab" instead of testing whether they
-can actually tell the tenses apart from context (time markers, sequencing,
-finished/unfinished periods). Explore/Practice/Quiz are teaching modes, so
-that scaffolding is fine there. The reflex games should be blind.
-
-WHAT THIS DOES
-Takes your existing tense-rush-data.json (an array of tense-labeled groups,
-each with id/label/color/desc/items[]), pools every item from every group,
-shuffles them, and re-chunks them into "Mix 1", "Mix 2", ... sets with no
-tense-revealing label. Each item keeps a `cat` field recording its original
-tense (id + label) — not shown during play, but useful if you ever want a
-"you were tested on: Perfect Simple, Past Perfect, ..." breakdown on the
-post-round summary screen. Nothing about an individual item (cue, after,
-mark, answer, options, note) is changed — only which group it's filed under.
-
-USAGE
-    python3 build_mix_sets.py tense-rush-data.json tense-mix-data.json
-    python3 build_mix_sets.py tense-rush-data.json tense-mix-data.json --per-mix 14
-    python3 build_mix_sets.py tense-rush-data.json tense-mix-data.json --seed 7
-
-The output file is a drop-in replacement for the DATA_URL the game engines
-fetch — point Duel/Defusal at it (they already default to
-'../../data/grammar-rules/tense-mix-data.json' after this update) and
-leave your original tense-rush-data.json untouched for Explore/Practice/
-Quiz, which should keep their labels.
-
-NOTE ON WORD FORGE
-Forge reads a differently-shaped file (tense-forge-data.json, with `bank`/
-`answer` arrays instead of `options`/`answer`). This script only handles
-the options-based shape used by Rush/Duel/Defusal. If you want Forge mixed
-too, say so and it's a small variant of this same script.
-"""
-import json
-import random
-import sys
-import argparse
-
-# A rotating palette independent of any tense — so a color never becomes
-# a de-facto tense label the way "blue = Present Perfect" could.
-MIX_COLORS = [
-    "#61b5ed",  # blue
-    "#c084fc",  # purple
-    "#5ED39B",  # green
-    "#fb923c",  # orange
-    "#E86A5C",  # red
-    "#FFD94A",  # yellow
-    "#C9A961",  # gold
-    "#f472b6",  # pink
+[
+  {
+    "id": "mix-1",
+    "label": "Mix 1",
+    "color": "#61b5ed",
+    "desc": "Every tense, no tab to tell you which — read the sentence.",
+    "items": [
+      {
+        "cue": "He didn't get the part because he",
+        "after": "hard enough for the audition.",
+        "mark": [
+          "because"
+        ],
+        "answer": "hadn't been rehearsing",
+        "options": [
+          "hadn't been rehearsing",
+          "didn't rehearse",
+          "hadn't rehearsed",
+          "wasn't rehearsing"
+        ],
+        "note": "Lack of preparation before a past result → Past Perfect Continuous.",
+        "verb": "rehearse",
+        "forms": [
+          "rehearses",
+          "is rehearsing",
+          "has rehearsed",
+          "will rehearse",
+          "has been rehearsing",
+          "will have rehearsed"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "The concert",
+        "after": "at 8pm tonight.",
+        "mark": [
+          "at 8pm",
+          "tonight"
+        ],
+        "answer": "starts",
+        "options": [
+          "starts",
+          "is starting",
+          "will start",
+          "is going to start"
+        ],
+        "note": "A fixed schedule → Present Simple.",
+        "verb": "start",
+        "forms": [
+          "starts",
+          "is starting",
+          "has started",
+          "will start",
+          "has been starting",
+          "will have started"
+        ],
+        "cat": {
+          "id": "mixadv",
+          "label": "Mixed Advanced"
+        }
+      },
+      {
+        "cue": "We",
+        "after": "for ages — where have you been?",
+        "mark": [
+          "for ages"
+        ],
+        "answer": "have been waiting",
+        "options": [
+          "have been waiting",
+          "waited",
+          "have waited",
+          "were waiting"
+        ],
+        "note": "'for ages' + duration continuing to now → Present Perfect Continuous.",
+        "verb": "wait",
+        "forms": [
+          "waits",
+          "is waiting",
+          "has waited",
+          "will wait",
+          "has been waiting",
+          "will have waited"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      },
+      {
+        "cue": "How long",
+        "after": "Spanish?",
+        "mark": [
+          "How long"
+        ],
+        "answer": "have they been learning",
+        "options": [
+          "have they been learning",
+          "did they learn",
+          "have they learned",
+          "were they learning"
+        ],
+        "note": "'How long' + an activity still ongoing → Present Perfect Continuous.",
+        "verb": "learn",
+        "forms": [
+          "learns",
+          "is learning",
+          "has learned",
+          "will learn",
+          "has been learning",
+          "will have learned"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      },
+      {
+        "cue": "I'll call you as soon as I",
+        "after": "home.",
+        "mark": [
+          "as soon as"
+        ],
+        "answer": "get",
+        "options": [
+          "get",
+          "will get",
+          "am getting",
+          "am going to get"
+        ],
+        "note": "After time conjunctions (as soon as, when, before, until) we use Present Simple, not 'will', even though the meaning is future.",
+        "verb": "get",
+        "forms": [
+          "gets",
+          "is getting",
+          "has gotten",
+          "will get",
+          "has been getting",
+          "will have gotten"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      },
+      {
+        "cue": "I",
+        "after": "sushi before. Is it good?",
+        "mark": [
+          "before"
+        ],
+        "answer": "have never eaten",
+        "options": [
+          "have never eaten",
+          "never ate",
+          "am never eating",
+          "had never eaten"
+        ],
+        "note": "Life experience up to now → Present Perfect, not Past Simple.",
+        "verb": "eat",
+        "forms": [
+          "eats",
+          "is eating",
+          "has eaten",
+          "will eat",
+          "has been eating",
+          "will have eaten"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "His voice was hoarse because he",
+        "after": "for two hours at the concert.",
+        "mark": [
+          "because",
+          "for"
+        ],
+        "answer": "had been singing",
+        "options": [
+          "had been singing",
+          "sang",
+          "had sung",
+          "was singing"
+        ],
+        "note": "Duration explaining a past physical result → Past Perfect Continuous.",
+        "verb": "sing",
+        "forms": [
+          "sings",
+          "is singing",
+          "has sung",
+          "will sing",
+          "has been singing",
+          "will have sung"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "How many countries",
+        "after": "in your life?",
+        "mark": [],
+        "answer": "have you visited",
+        "options": [
+          "have you visited",
+          "did you visit",
+          "are you visiting",
+          "had you visited"
+        ],
+        "note": "'in your life' asks about experience up to now → Present Perfect Simple.",
+        "verb": "visit",
+        "forms": [
+          "visits",
+          "is visiting",
+          "has visited",
+          "will visit",
+          "has been visiting",
+          "will have visited"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "As soon as I",
+        "after": "the news, I called my parents.",
+        "mark": [
+          "As soon as"
+        ],
+        "answer": "heard",
+        "options": [
+          "heard",
+          "was hearing",
+          "had heard",
+          "have heard"
+        ],
+        "note": "A short, complete past action → Past Simple.",
+        "verb": "hear",
+        "forms": [
+          "hears",
+          "is hearing",
+          "has heard",
+          "will hear",
+          "has been hearing",
+          "will have heard"
+        ],
+        "cat": {
+          "id": "narr2",
+          "label": "Narrative Tenses"
+        }
+      },
+      {
+        "cue": "We",
+        "after": "for long when the fire alarm went off.",
+        "mark": [
+          "for long",
+          "when"
+        ],
+        "answer": "hadn't been sitting",
+        "options": [
+          "hadn't been sitting",
+          "didn't sit",
+          "hadn't sat",
+          "weren't sitting"
+        ],
+        "note": "Negative short duration before a past interruption → Past Perfect Continuous.",
+        "verb": "sit",
+        "forms": [
+          "sits",
+          "is sitting",
+          "has sat",
+          "will sit",
+          "has been sitting",
+          "will have sat"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "When the police arrived, the thieves",
+        "after": ".",
+        "mark": [
+          "When"
+        ],
+        "answer": "had already escaped",
+        "options": [
+          "had already escaped",
+          "already escaped",
+          "have already escaped",
+          "were already escaping"
+        ],
+        "note": "The earlier of two past actions → Past Perfect.",
+        "verb": "escape",
+        "forms": [
+          "escapes",
+          "is escaping",
+          "has escaped",
+          "will escape",
+          "has been escaping",
+          "will have escaped"
+        ],
+        "cat": {
+          "id": "narr2",
+          "label": "Narrative Tenses"
+        }
+      },
+      {
+        "cue": "The train",
+        "after": "at 8:30 tomorrow morning.",
+        "mark": [
+          "at 8:30"
+        ],
+        "answer": "leaves",
+        "options": [
+          "leaves",
+          "will leave",
+          "is going to leave",
+          "is leaving"
+        ],
+        "note": "A fixed timetable → Present Simple.",
+        "verb": "leave",
+        "forms": [
+          "leaves",
+          "is leaving",
+          "has left",
+          "will leave",
+          "has been leaving",
+          "will have left"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      },
+      {
+        "cue": "I",
+        "after": "snow before I moved to Canada.",
+        "mark": [
+          "before"
+        ],
+        "answer": "had never seen",
+        "options": [
+          "had never seen",
+          "never saw",
+          "have never seen",
+          "was never seeing"
+        ],
+        "note": "Experience before another past point → Past Perfect.",
+        "verb": "see",
+        "forms": [
+          "sees",
+          "is seeing",
+          "has seen",
+          "will see",
+          "has been seeing",
+          "will have seen"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      },
+      {
+        "cue": "I think the home team",
+        "after": "tonight.",
+        "mark": [
+          "I think",
+          "tonight"
+        ],
+        "answer": "will win",
+        "options": [
+          "will win",
+          "are going to win",
+          "are winning",
+          "win"
+        ],
+        "note": "An opinion-based prediction, no visible evidence → 'will'.",
+        "verb": "win",
+        "forms": [
+          "wins",
+          "is winning",
+          "has won",
+          "will win",
+          "has been winning",
+          "will have won"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      },
+      {
+        "cue": "She told me she",
+        "after": "London before.",
+        "mark": [
+          "before"
+        ],
+        "answer": "had never visited",
+        "options": [
+          "had never visited",
+          "never visited",
+          "has never visited",
+          "was never visiting"
+        ],
+        "note": "Reported speech shifts the tense one step back → Past Perfect.",
+        "verb": "visit",
+        "forms": [
+          "visits",
+          "is visiting",
+          "has visited",
+          "will visit",
+          "has been visiting",
+          "will have visited"
+        ],
+        "cat": {
+          "id": "mixadv",
+          "label": "Mixed Advanced"
+        }
+      },
+      {
+        "cue": "I recognized her because we",
+        "after": "once before.",
+        "mark": [
+          "because",
+          "before"
+        ],
+        "answer": "had met",
+        "options": [
+          "had met",
+          "met",
+          "have met",
+          "were meeting"
+        ],
+        "note": "An earlier past event explaining a later one → Past Perfect.",
+        "verb": "meet",
+        "forms": [
+          "meets",
+          "is meeting",
+          "has met",
+          "will meet",
+          "has been meeting",
+          "will have met"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      }
+    ]
+  },
+  {
+    "id": "mix-2",
+    "label": "Mix 2",
+    "color": "#c084fc",
+    "desc": "Every tense, no tab to tell you which — read the sentence.",
+    "items": [
+      {
+        "cue": "She",
+        "after": "with her parents temporarily while she looks for a flat.",
+        "mark": [
+          "temporarily",
+          "while"
+        ],
+        "answer": "is living",
+        "options": [
+          "is living",
+          "lives",
+          "was living",
+          "has lived"
+        ],
+        "note": "A temporary situation, not a permanent one → Present Continuous.",
+        "verb": "live",
+        "forms": [
+          "lives",
+          "is living",
+          "has lived",
+          "will live",
+          "has been living",
+          "will have lived"
+        ],
+        "cat": {
+          "id": "prescon",
+          "label": "Present Contrast"
+        }
+      },
+      {
+        "cue": "That's the worst movie",
+        "after": "!",
+        "mark": [],
+        "answer": "I have ever seen",
+        "options": [
+          "I have ever seen",
+          "I ever saw",
+          "I am ever seeing",
+          "I had ever seen"
+        ],
+        "note": "Superlative + present perfect: 'the worst ... I have ever seen'.",
+        "verb": "see",
+        "forms": [
+          "sees",
+          "is seeing",
+          "has seen",
+          "will see",
+          "has been seeing",
+          "will have seen"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "Watch out! That vase",
+        "after": "!",
+        "mark": [
+          "Watch out"
+        ],
+        "answer": "is going to fall",
+        "options": [
+          "is going to fall",
+          "will fall",
+          "falls",
+          "is falling"
+        ],
+        "note": "A prediction based on what you can see right now → 'going to'.",
+        "verb": "fall",
+        "forms": [
+          "falls",
+          "is falling",
+          "has fallen",
+          "will fall",
+          "has been falling",
+          "will have fallen"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      },
+      {
+        "cue": "How long",
+        "after": "before she got promoted?",
+        "mark": [
+          "How long",
+          "before"
+        ],
+        "answer": "had she been working",
+        "options": [
+          "had she been working",
+          "did she work",
+          "had she worked",
+          "was she working"
+        ],
+        "note": "'How long...before' asks about duration up to a past point → Past Perfect Continuous.",
+        "verb": "work",
+        "forms": [
+          "works",
+          "is working",
+          "has worked",
+          "will work",
+          "has been working",
+          "will have worked"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "By next June, we",
+        "after": "in this house for ten years.",
+        "mark": [
+          "By next June",
+          "for"
+        ],
+        "answer": "will have lived",
+        "options": [
+          "will have lived",
+          "will have been living",
+          "are living",
+          "have lived"
+        ],
+        "note": "Future Perfect for a state whose duration reaches into the future.",
+        "verb": "live",
+        "forms": [
+          "lives",
+          "is living",
+          "has lived",
+          "will live",
+          "has been living",
+          "will have lived"
+        ],
+        "cat": {
+          "id": "mixadv",
+          "label": "Mixed Advanced"
+        }
+      },
+      {
+        "cue": "This is the best pizza",
+        "after": "!",
+        "mark": [],
+        "answer": "I have ever eaten",
+        "options": [
+          "I have ever eaten",
+          "I ever ate",
+          "I am ever eating",
+          "I had ever eaten"
+        ],
+        "note": "Superlative + present perfect for life experience: 'the best/worst ... (that) I have ever + past participle'.",
+        "verb": "eat",
+        "forms": [
+          "eats",
+          "is eating",
+          "has eaten",
+          "will eat",
+          "has been eating",
+          "will have eaten"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "The Earth",
+        "after": "around the Sun.",
+        "mark": [],
+        "answer": "goes",
+        "options": [
+          "goes",
+          "is going",
+          "went",
+          "has gone"
+        ],
+        "note": "A permanent, timeless fact → Present Simple.",
+        "verb": "go",
+        "forms": [
+          "goes",
+          "is going",
+          "has gone",
+          "will go",
+          "has been going",
+          "will have gone"
+        ],
+        "cat": {
+          "id": "prescon",
+          "label": "Present Contrast"
+        }
+      },
+      {
+        "cue": "How long",
+        "after": "? The streets are completely flooded.",
+        "mark": [
+          "How long"
+        ],
+        "answer": "has it been raining",
+        "options": [
+          "has it been raining",
+          "did it rain",
+          "has it rained",
+          "was it raining"
+        ],
+        "note": "'How long' + visible ongoing evidence → Present Perfect Continuous.",
+        "verb": "rain",
+        "forms": [
+          "rains",
+          "is raining",
+          "has rained",
+          "will rain",
+          "has been raining",
+          "will have rained"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      },
+      {
+        "cue": "I was exhausted because I",
+        "after": "for twelve hours.",
+        "mark": [
+          "because",
+          "for"
+        ],
+        "answer": "had been working",
+        "options": [
+          "had been working",
+          "worked",
+          "had worked",
+          "was working"
+        ],
+        "note": "Duration leading up to a past result → Past Perfect Continuous.",
+        "verb": "work",
+        "forms": [
+          "works",
+          "is working",
+          "has worked",
+          "will work",
+          "has been working",
+          "will have worked"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "They were hungry because they",
+        "after": "for hours.",
+        "mark": [
+          "because",
+          "for"
+        ],
+        "answer": "had been waiting",
+        "options": [
+          "had been waiting",
+          "waited",
+          "had waited",
+          "were waiting"
+        ],
+        "note": "Duration before a past state → Past Perfect Continuous.",
+        "verb": "wait",
+        "forms": [
+          "waits",
+          "is waiting",
+          "has waited",
+          "will wait",
+          "has been waiting",
+          "will have waited"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "I",
+        "after": "three emails this week.",
+        "mark": [
+          "this week"
+        ],
+        "answer": "have sent",
+        "options": [
+          "have sent",
+          "sent",
+          "am sending",
+          "had sent"
+        ],
+        "note": "'this week' as an unfinished period (it's still going on) → Present Perfect Simple, not Past Simple.",
+        "verb": "send",
+        "forms": [
+          "sends",
+          "is sending",
+          "has sent",
+          "will send",
+          "has been sending",
+          "will have sent"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "This is the first time I",
+        "after": "sushi.",
+        "mark": [
+          "first time"
+        ],
+        "answer": "have eaten",
+        "options": [
+          "have eaten",
+          "ate",
+          "am eating",
+          "had eaten"
+        ],
+        "note": "'This is the first time (that)...' is always followed by Present Perfect Simple, not Past Simple.",
+        "verb": "eat",
+        "forms": [
+          "eats",
+          "is eating",
+          "has eaten",
+          "will eat",
+          "has been eating",
+          "will have eaten"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "I don't care how hard it is, I",
+        "after": "this marathon.",
+        "mark": [],
+        "answer": "will finish",
+        "options": [
+          "will finish",
+          "finish",
+          "am finishing",
+          "am going to finish"
+        ],
+        "note": "Determination/a firm intention → 'will'.",
+        "verb": "finish",
+        "forms": [
+          "finishes",
+          "is finishing",
+          "has finished",
+          "will finish",
+          "has been finishing",
+          "will have finished"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      },
+      {
+        "cue": "She was sweating because she",
+        "after": ".",
+        "mark": [
+          "because"
+        ],
+        "answer": "had been running",
+        "options": [
+          "had been running",
+          "ran",
+          "had run",
+          "was running"
+        ],
+        "note": "A recently finished activity with visible past evidence → Past Perfect Continuous.",
+        "verb": "run",
+        "forms": [
+          "runs",
+          "is running",
+          "has run",
+          "will run",
+          "has been running",
+          "will have run"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "I'm exhausted! I",
+        "after": "since 6am this morning.",
+        "mark": [
+          "since"
+        ],
+        "answer": "have been working",
+        "options": [
+          "have been working",
+          "worked",
+          "have worked",
+          "was working"
+        ],
+        "note": "Duration continuing up to now → Present Perfect Continuous.",
+        "verb": "work",
+        "forms": [
+          "works",
+          "is working",
+          "has worked",
+          "will work",
+          "has been working",
+          "will have worked"
+        ],
+        "cat": {
+          "id": "mixadv",
+          "label": "Mixed Advanced"
+        }
+      },
+      {
+        "cue": "By the age of twenty, she",
+        "after": "three languages.",
+        "mark": [
+          "By the age of"
+        ],
+        "answer": "had learned",
+        "options": [
+          "had learned",
+          "learned",
+          "has learned",
+          "was learning"
+        ],
+        "note": "'By + a past deadline' with an achievement completed before it → Past Perfect.",
+        "verb": "learn",
+        "forms": [
+          "learns",
+          "is learning",
+          "has learned",
+          "will learn",
+          "has been learning",
+          "will have learned"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      }
+    ]
+  },
+  {
+    "id": "mix-3",
+    "label": "Mix 3",
+    "color": "#5ED39B",
+    "desc": "Every tense, no tab to tell you which — read the sentence.",
+    "items": [
+      {
+        "cue": "She",
+        "after": "her homework, so she can go out now.",
+        "mark": [
+          "now"
+        ],
+        "answer": "has just finished",
+        "options": [
+          "has just finished",
+          "just finished",
+          "is just finishing",
+          "had just finished"
+        ],
+        "note": "'just' with a result visible now → Present Perfect, not Past Simple.",
+        "verb": "finish",
+        "forms": [
+          "finishes",
+          "is finishing",
+          "has finished",
+          "will finish",
+          "has been finishing",
+          "will have finished"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "My back hurt because I",
+        "after": "at my desk all day.",
+        "mark": [
+          "because",
+          "all day"
+        ],
+        "answer": "had been sitting",
+        "options": [
+          "had been sitting",
+          "sat",
+          "had sat",
+          "was sitting"
+        ],
+        "note": "Duration explaining a past physical result → Past Perfect Continuous.",
+        "verb": "sit",
+        "forms": [
+          "sits",
+          "is sitting",
+          "has sat",
+          "will sit",
+          "has been sitting",
+          "will have sat"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "The children",
+        "after": "in the garden when it started to snow.",
+        "mark": [
+          "when"
+        ],
+        "answer": "were playing",
+        "options": [
+          "were playing",
+          "played",
+          "had played",
+          "have played"
+        ],
+        "note": "Background action already in progress → Past Continuous.",
+        "verb": "play",
+        "forms": [
+          "plays",
+          "is playing",
+          "has played",
+          "will play",
+          "has been playing",
+          "will have played"
+        ],
+        "cat": {
+          "id": "narr2",
+          "label": "Narrative Tenses"
+        }
+      },
+      {
+        "cue": "How long",
+        "after": "when the train finally arrived?",
+        "mark": [
+          "How long",
+          "when"
+        ],
+        "answer": "had they been waiting",
+        "options": [
+          "had they been waiting",
+          "did they wait",
+          "had they waited",
+          "were they waiting"
+        ],
+        "note": "Duration up to a specific past moment → Past Perfect Continuous.",
+        "verb": "wait",
+        "forms": [
+          "waits",
+          "is waiting",
+          "has waited",
+          "will wait",
+          "has been waiting",
+          "will have waited"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "He",
+        "after": "at all, so he failed the exam.",
+        "mark": [
+          "so"
+        ],
+        "answer": "hadn't studied",
+        "options": [
+          "hadn't studied",
+          "didn't study",
+          "hasn't studied",
+          "wasn't studying"
+        ],
+        "note": "The earlier cause of a later past result → Past Perfect.",
+        "verb": "study",
+        "forms": [
+          "studies",
+          "is studying",
+          "has studied",
+          "will study",
+          "has been studying",
+          "will have studied"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      },
+      {
+        "cue": "Don't worry, we",
+        "after": "for long — the bus should be here soon.",
+        "mark": [
+          "for long"
+        ],
+        "answer": "haven't been waiting",
+        "options": [
+          "haven't been waiting",
+          "didn't wait",
+          "haven't waited",
+          "weren't waiting"
+        ],
+        "note": "Negative duration up to now → Present Perfect Continuous.",
+        "verb": "wait",
+        "forms": [
+          "waits",
+          "is waiting",
+          "has waited",
+          "will wait",
+          "has been waiting",
+          "will have waited"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      },
+      {
+        "cue": "She",
+        "after": "in London since she graduated.",
+        "mark": [
+          "since"
+        ],
+        "answer": "has been living",
+        "options": [
+          "has been living",
+          "lived",
+          "has lived",
+          "was living"
+        ],
+        "note": "Temporary ongoing situation since a past point → Present Perfect Continuous.",
+        "verb": "live",
+        "forms": [
+          "lives",
+          "is living",
+          "has lived",
+          "will live",
+          "has been living",
+          "will have lived"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      },
+      {
+        "cue": "He knew London well because he",
+        "after": "there for years.",
+        "mark": [
+          "because",
+          "for"
+        ],
+        "answer": "had been living",
+        "options": [
+          "had been living",
+          "lived",
+          "had lived",
+          "was living"
+        ],
+        "note": "An ongoing situation explaining a past state → Past Perfect Continuous.",
+        "verb": "live",
+        "forms": [
+          "lives",
+          "is living",
+          "has lived",
+          "will live",
+          "has been living",
+          "will have lived"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "After she",
+        "after": "dinner, she went to bed.",
+        "mark": [
+          "After"
+        ],
+        "answer": "had finished",
+        "options": [
+          "had finished",
+          "finished",
+          "has finished",
+          "was finishing"
+        ],
+        "note": "The earlier action in a past sequence → Past Perfect.",
+        "verb": "finish",
+        "forms": [
+          "finishes",
+          "is finishing",
+          "has finished",
+          "will finish",
+          "has been finishing",
+          "will have finished"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      },
+      {
+        "cue": "The roads were icy because it",
+        "after": "all night.",
+        "mark": [
+          "because",
+          "all night"
+        ],
+        "answer": "had been snowing",
+        "options": [
+          "had been snowing",
+          "snowed",
+          "had snowed",
+          "was snowing"
+        ],
+        "note": "Duration explaining visible past evidence → Past Perfect Continuous.",
+        "verb": "snow",
+        "forms": [
+          "snows",
+          "is snowing",
+          "has snowed",
+          "will snow",
+          "has been snowing",
+          "will have snowed"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "The house was dirty because nobody",
+        "after": "it for months.",
+        "mark": [
+          "for",
+          "because"
+        ],
+        "answer": "had cleaned",
+        "options": [
+          "had cleaned",
+          "cleaned",
+          "has cleaned",
+          "was cleaning"
+        ],
+        "note": "Explaining a past state with an even-earlier past action → Past Perfect.",
+        "verb": "clean",
+        "forms": [
+          "cleans",
+          "is cleaning",
+          "has cleaned",
+          "will clean",
+          "has been cleaning",
+          "will have cleaned"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      },
+      {
+        "cue": "I",
+        "after": "before my trip to Spain last year.",
+        "mark": [
+          "before"
+        ],
+        "answer": "had never flown",
+        "options": [
+          "had never flown",
+          "never flew",
+          "have never flown",
+          "was never flying"
+        ],
+        "note": "Experience before another past point → Past Perfect.",
+        "verb": "fly",
+        "forms": [
+          "flies",
+          "is flying",
+          "has flown",
+          "will fly",
+          "has been flying",
+          "will have flown"
+        ],
+        "cat": {
+          "id": "narr2",
+          "label": "Narrative Tenses"
+        }
+      },
+      {
+        "cue": "The ground was wet because it",
+        "after": "all night.",
+        "mark": [
+          "because",
+          "all night"
+        ],
+        "answer": "had been raining",
+        "options": [
+          "had been raining",
+          "rained",
+          "had rained",
+          "was raining"
+        ],
+        "note": "Visible past evidence, explained by duration → Past Perfect Continuous.",
+        "verb": "rain",
+        "forms": [
+          "rains",
+          "is raining",
+          "has rained",
+          "will rain",
+          "has been raining",
+          "will have rained"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "Why",
+        "after": "a suit today? You usually wear jeans.",
+        "mark": [
+          "today",
+          "usually"
+        ],
+        "answer": "are you wearing",
+        "options": [
+          "are you wearing",
+          "do you wear",
+          "were you wearing",
+          "have you worn"
+        ],
+        "note": "A one-off change from the usual → Present Continuous.",
+        "verb": "wear",
+        "forms": [
+          "wears",
+          "is wearing",
+          "has worn",
+          "will wear",
+          "has been wearing",
+          "will have worn"
+        ],
+        "cat": {
+          "id": "prescon",
+          "label": "Present Contrast"
+        }
+      },
+      {
+        "cue": "Why",
+        "after": "so strangely lately? Is everything okay?",
+        "mark": [
+          "lately"
+        ],
+        "answer": "have you been acting",
+        "options": [
+          "have you been acting",
+          "did you act",
+          "have you acted",
+          "were you acting"
+        ],
+        "note": "'lately' + a temporary change in behaviour → Present Perfect Continuous.",
+        "verb": "act",
+        "forms": [
+          "acts",
+          "is acting",
+          "has acted",
+          "will act",
+          "has been acting",
+          "will have acted"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      },
+      {
+        "cue": "I",
+        "after": "late, so don't wait for me.",
+        "mark": [],
+        "answer": "will probably be",
+        "options": [
+          "will probably be",
+          "am probably being",
+          "are going to probably be",
+          "probably am"
+        ],
+        "note": "An opinion-based prediction with an adverb → 'will'.",
+        "verb": "be",
+        "forms": [
+          "is",
+          "is being",
+          "has been",
+          "will be",
+          "has been being",
+          "will have been"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      }
+    ]
+  },
+  {
+    "id": "mix-4",
+    "label": "Mix 4",
+    "color": "#fb923c",
+    "desc": "Every tense, no tab to tell you which — read the sentence.",
+    "items": [
+      {
+        "cue": "At six o'clock, she",
+        "after": "her homework yet.",
+        "mark": [
+          "yet",
+          "At six o'clock"
+        ],
+        "answer": "hadn't finished",
+        "options": [
+          "hadn't finished",
+          "didn't finish",
+          "hasn't finished",
+          "wasn't finishing"
+        ],
+        "note": "'yet' referring back to a past moment → Past Perfect negative.",
+        "verb": "finish",
+        "forms": [
+          "finishes",
+          "is finishing",
+          "has finished",
+          "will finish",
+          "has been finishing",
+          "will have finished"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      },
+      {
+        "cue": "After he",
+        "after": "his studies, he moved to London.",
+        "mark": [
+          "After"
+        ],
+        "answer": "had finished",
+        "options": [
+          "had finished",
+          "finished",
+          "has finished",
+          "was finishing"
+        ],
+        "note": "The earlier action in a past sequence → Past Perfect.",
+        "verb": "finish",
+        "forms": [
+          "finishes",
+          "is finishing",
+          "has finished",
+          "will finish",
+          "has been finishing",
+          "will have finished"
+        ],
+        "cat": {
+          "id": "narr2",
+          "label": "Narrative Tenses"
+        }
+      },
+      {
+        "cue": "I'm hungry. I think I",
+        "after": "a sandwich.",
+        "mark": [
+          "I think"
+        ],
+        "answer": "will make",
+        "options": [
+          "will make",
+          "am making",
+          "make",
+          "am going to make"
+        ],
+        "note": "A decision made on the spot → 'will'.",
+        "verb": "make",
+        "forms": [
+          "makes",
+          "is making",
+          "has made",
+          "will make",
+          "has been making",
+          "will have made"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      },
+      {
+        "cue": "My eyes hurt because I",
+        "after": "for three hours.",
+        "mark": [
+          "for",
+          "because"
+        ],
+        "answer": "have been reading",
+        "options": [
+          "have been reading",
+          "read",
+          "have read",
+          "was reading"
+        ],
+        "note": "Duration explaining a present physical result → Present Perfect Continuous.",
+        "verb": "read",
+        "forms": [
+          "reads",
+          "is reading",
+          "has read",
+          "will read",
+          "has been reading",
+          "will have read"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      },
+      {
+        "cue": "When I arrived at the cinema, the film",
+        "after": "already.",
+        "mark": [
+          "already",
+          "When"
+        ],
+        "answer": "had already started",
+        "options": [
+          "had already started",
+          "already started",
+          "has already started",
+          "was already starting"
+        ],
+        "note": "The earlier of two past actions → Past Perfect, not Past Simple.",
+        "verb": "start",
+        "forms": [
+          "starts",
+          "is starting",
+          "has started",
+          "will start",
+          "has been starting",
+          "will have started"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      },
+      {
+        "cue": "It",
+        "after": "heavily when we left the restaurant.",
+        "mark": [
+          "when"
+        ],
+        "answer": "was raining",
+        "options": [
+          "was raining",
+          "rained",
+          "had rained",
+          "has rained"
+        ],
+        "note": "Background action in progress at a past moment → Past Continuous.",
+        "verb": "rain",
+        "forms": [
+          "rains",
+          "is raining",
+          "has rained",
+          "will rain",
+          "has been raining",
+          "will have rained"
+        ],
+        "cat": {
+          "id": "narr2",
+          "label": "Narrative Tenses"
+        }
+      },
+      {
+        "cue": "",
+        "after": "the Louvre Museum in Paris?",
+        "mark": [
+          "ever"
+        ],
+        "answer": "Have you ever visited",
+        "options": [
+          "Have you ever visited",
+          "Did you ever visit",
+          "Are you ever visiting",
+          "Had you ever visited"
+        ],
+        "note": "A life-experience question → Present Perfect ('Have you ever...?'), not Past Simple.",
+        "verb": "visit",
+        "forms": [
+          "visits",
+          "is visiting",
+          "has visited",
+          "will visit",
+          "has been visiting",
+          "will have visited"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "She",
+        "after": "her report yet.",
+        "mark": [
+          "yet"
+        ],
+        "answer": "hasn't finished",
+        "options": [
+          "hasn't finished",
+          "didn't finish",
+          "isn't finishing",
+          "hadn't finished"
+        ],
+        "note": "'yet' in a negative about the present → Present Perfect Simple, not Past Simple.",
+        "verb": "finish",
+        "forms": [
+          "finishes",
+          "is finishing",
+          "has finished",
+          "will finish",
+          "has been finishing",
+          "will have finished"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "I",
+        "after": "well lately — I keep waking up at 3am.",
+        "mark": [
+          "lately"
+        ],
+        "answer": "haven't been sleeping",
+        "options": [
+          "haven't been sleeping",
+          "didn't sleep",
+          "am not sleeping",
+          "hadn't been sleeping"
+        ],
+        "note": "'lately' + negative, an ongoing pattern → Present Perfect Continuous.",
+        "verb": "sleep",
+        "forms": [
+          "sleeps",
+          "is sleeping",
+          "has slept",
+          "will sleep",
+          "has been sleeping",
+          "will have slept"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      },
+      {
+        "cue": "I promise I",
+        "after": "anyone your secret.",
+        "mark": [
+          "promise"
+        ],
+        "answer": "will never tell",
+        "options": [
+          "will never tell",
+          "never tell",
+          "am never telling",
+          "am never going to tell"
+        ],
+        "note": "A promise → 'will', not 'going to'.",
+        "verb": "tell",
+        "forms": [
+          "tells",
+          "is telling",
+          "has told",
+          "will tell",
+          "has been telling",
+          "will have told"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      },
+      {
+        "cue": "She's exhausted because she",
+        "after": "for an hour.",
+        "mark": [
+          "because"
+        ],
+        "answer": "has been running",
+        "options": [
+          "has been running",
+          "ran",
+          "has run",
+          "was running"
+        ],
+        "note": "Recent activity explaining a present result → Present Perfect Continuous.",
+        "verb": "run",
+        "forms": [
+          "runs",
+          "is running",
+          "has run",
+          "will run",
+          "has been running",
+          "will have run"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      },
+      {
+        "cue": "It was the first time she",
+        "after": "a live orchestra.",
+        "mark": [
+          "It was the first time"
+        ],
+        "answer": "had heard",
+        "options": [
+          "had heard",
+          "heard",
+          "has heard",
+          "was hearing"
+        ],
+        "note": "'It was the first time...' (in the past) is followed by Past Perfect, mirroring 'This is the first time...' + Present Perfect.",
+        "verb": "hear",
+        "forms": [
+          "hears",
+          "is hearing",
+          "has heard",
+          "will hear",
+          "has been hearing",
+          "will have heard"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      },
+      {
+        "cue": "By the time I woke up, everyone",
+        "after": "the house.",
+        "mark": [
+          "By the time"
+        ],
+        "answer": "had left",
+        "options": [
+          "had left",
+          "left",
+          "have left",
+          "were leaving"
+        ],
+        "note": "Completed before another past moment → Past Perfect.",
+        "verb": "leave",
+        "forms": [
+          "leaves",
+          "is leaving",
+          "has left",
+          "will leave",
+          "has been leaving",
+          "will have left"
+        ],
+        "cat": {
+          "id": "narr2",
+          "label": "Narrative Tenses"
+        }
+      },
+      {
+        "cue": "She",
+        "after": "the door when the phone rang.",
+        "mark": [
+          "when"
+        ],
+        "answer": "had hardly closed",
+        "options": [
+          "had hardly closed",
+          "hardly closed",
+          "has hardly closed",
+          "was hardly closing"
+        ],
+        "note": "'hardly...when' — the first event is barely finished before the second interrupts → Past Perfect.",
+        "verb": "close",
+        "forms": [
+          "closes",
+          "is closing",
+          "has closed",
+          "will close",
+          "has been closing",
+          "will have closed"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      },
+      {
+        "cue": "By 2020, she",
+        "after": "at the company for ten years.",
+        "mark": [
+          "By",
+          "for"
+        ],
+        "answer": "had worked",
+        "options": [
+          "had worked",
+          "worked",
+          "has worked",
+          "was working"
+        ],
+        "note": "'By' + a past deadline, with a period completed before it → Past Perfect.",
+        "verb": "work",
+        "forms": [
+          "works",
+          "is working",
+          "has worked",
+          "will work",
+          "has been working",
+          "will have worked"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      },
+      {
+        "cue": "That bag looks heavy —",
+        "after": "for you.",
+        "mark": [],
+        "answer": "I'll carry it",
+        "options": [
+          "I'll carry it",
+          "I carry it",
+          "I'm carrying it",
+          "I'm going to carry it"
+        ],
+        "note": "An offer made at the moment of speaking → 'will' (I'll).",
+        "verb": "carry",
+        "forms": [
+          "carries",
+          "is carrying",
+          "has carried",
+          "will carry",
+          "has been carrying",
+          "will have carried"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      }
+    ]
+  },
+  {
+    "id": "mix-5",
+    "label": "Mix 5",
+    "color": "#E86A5C",
+    "desc": "Every tense, no tab to tell you which — read the sentence.",
+    "items": [
+      {
+        "cue": "My brother",
+        "after": "his passport, so he can't travel.",
+        "mark": [],
+        "answer": "has lost",
+        "options": [
+          "has lost",
+          "lost",
+          "is losing",
+          "had lost"
+        ],
+        "note": "A past action with a present result (he can't travel now) → Present Perfect Simple.",
+        "verb": "lose",
+        "forms": [
+          "loses",
+          "is losing",
+          "has lost",
+          "will lose",
+          "has been losing",
+          "will have lost"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "They met in 2019, so they",
+        "after": "each other for five years now.",
+        "mark": [
+          "for",
+          "now"
+        ],
+        "answer": "have known",
+        "options": [
+          "have known",
+          "knew",
+          "are knowing",
+          "had known"
+        ],
+        "note": "'know' is a state verb; use Present Perfect Simple with 'for' — the period is unfinished, so not Past Simple.",
+        "verb": "know",
+        "forms": [
+          "knows",
+          "is knowing",
+          "has known",
+          "will know",
+          "has been knowing",
+          "will have known"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "It",
+        "after": "all day, so the roads are very wet.",
+        "mark": [
+          "all day",
+          "so"
+        ],
+        "answer": "has been raining",
+        "options": [
+          "has been raining",
+          "rained",
+          "has rained",
+          "was raining"
+        ],
+        "note": "Ongoing activity with visible present evidence → Present Perfect Continuous.",
+        "verb": "rain",
+        "forms": [
+          "rains",
+          "is raining",
+          "has rained",
+          "will rain",
+          "has been raining",
+          "will have rained"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      },
+      {
+        "cue": "She won't leave until he",
+        "after": ".",
+        "mark": [
+          "until"
+        ],
+        "answer": "arrives",
+        "options": [
+          "arrives",
+          "will arrive",
+          "is arriving",
+          "is going to arrive"
+        ],
+        "note": "'until' + Present Simple for a future condition, not 'will'.",
+        "verb": "arrive",
+        "forms": [
+          "arrives",
+          "is arriving",
+          "has arrived",
+          "will arrive",
+          "has been arriving",
+          "will have arrived"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      },
+      {
+        "cue": "I",
+        "after": "that book already, so I don't need to buy it.",
+        "mark": [
+          "already"
+        ],
+        "answer": "have already read",
+        "options": [
+          "have already read",
+          "already read",
+          "am already reading",
+          "had already read"
+        ],
+        "note": "'already' with a present consequence → Present Perfect Simple.",
+        "verb": "read",
+        "forms": [
+          "reads",
+          "is reading",
+          "has read",
+          "will read",
+          "has been reading",
+          "will have read"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "Her eyes were red because she",
+        "after": ".",
+        "mark": [
+          "because"
+        ],
+        "answer": "had been crying",
+        "options": [
+          "had been crying",
+          "cried",
+          "had cried",
+          "was crying"
+        ],
+        "note": "A recently finished activity with visible past evidence → Past Perfect Continuous.",
+        "verb": "cry",
+        "forms": [
+          "cries",
+          "is crying",
+          "has cried",
+          "will cry",
+          "has been crying",
+          "will have cried"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "I",
+        "after": "to visit Japan, and I finally have the chance.",
+        "mark": [],
+        "answer": "have always wanted",
+        "options": [
+          "have always wanted",
+          "always wanted",
+          "am always wanting",
+          "had always wanted"
+        ],
+        "note": "'always' + Present Perfect for something true throughout your life up to now.",
+        "verb": "want",
+        "forms": [
+          "wants",
+          "is wanting",
+          "has wanted",
+          "will want",
+          "has been wanting",
+          "will have wanted"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "How long",
+        "after": "before you passed the exam?",
+        "mark": [
+          "How long",
+          "before"
+        ],
+        "answer": "had you been studying",
+        "options": [
+          "had you been studying",
+          "did you study",
+          "had you studied",
+          "were you studying"
+        ],
+        "note": "'How long' about duration up to a past moment → Past Perfect Continuous.",
+        "verb": "study",
+        "forms": [
+          "studies",
+          "is studying",
+          "has studied",
+          "will study",
+          "has been studying",
+          "will have studied"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "How long",
+        "after": "for the bus?",
+        "mark": [
+          "How long"
+        ],
+        "answer": "have you been waiting",
+        "options": [
+          "have you been waiting",
+          "did you wait",
+          "have you waited",
+          "were you waiting"
+        ],
+        "note": "'How long' about something still in progress → Present Perfect Continuous.",
+        "verb": "wait",
+        "forms": [
+          "waits",
+          "is waiting",
+          "has waited",
+          "will wait",
+          "has been waiting",
+          "will have waited"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      },
+      {
+        "cue": "I",
+        "after": "English for three years, and I still have a lot to learn.",
+        "mark": [
+          "for",
+          "still"
+        ],
+        "answer": "have been studying",
+        "options": [
+          "have been studying",
+          "studied",
+          "have studied",
+          "was studying"
+        ],
+        "note": "Duration continuing up to now → Present Perfect Continuous, not the simple form.",
+        "verb": "study",
+        "forms": [
+          "studies",
+          "is studying",
+          "has studied",
+          "will study",
+          "has been studying",
+          "will have studied"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      },
+      {
+        "cue": "If only I",
+        "after": "to her before she left!",
+        "mark": [
+          "If only"
+        ],
+        "answer": "had listened",
+        "options": [
+          "had listened",
+          "listened",
+          "have listened",
+          "was listening"
+        ],
+        "note": "'If only' + Past Perfect expresses regret about the past, like 'wish'.",
+        "verb": "listen",
+        "forms": [
+          "listens",
+          "is listening",
+          "has listened",
+          "will listen",
+          "has been listening",
+          "will have listened"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      },
+      {
+        "cue": "Until now, nobody",
+        "after": "the truth.",
+        "mark": [
+          "Until now"
+        ],
+        "answer": "has discovered",
+        "options": [
+          "has discovered",
+          "discovered",
+          "is discovering",
+          "had discovered"
+        ],
+        "note": "'until now' marks an unfinished period leading to the present → Present Perfect Simple.",
+        "verb": "discover",
+        "forms": [
+          "discovers",
+          "is discovering",
+          "has discovered",
+          "will discover",
+          "has been discovering",
+          "will have discovered"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "He",
+        "after": "for the company for ten years before he was finally promoted.",
+        "mark": [
+          "for",
+          "before"
+        ],
+        "answer": "had been working",
+        "options": [
+          "had been working",
+          "worked",
+          "had worked",
+          "was working"
+        ],
+        "note": "Duration before another past event → Past Perfect Continuous.",
+        "verb": "work",
+        "forms": [
+          "works",
+          "is working",
+          "has worked",
+          "will work",
+          "has been working",
+          "will have worked"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "I wish I",
+        "after": "harder for the exam.",
+        "mark": [
+          "wish"
+        ],
+        "answer": "had studied",
+        "options": [
+          "had studied",
+          "studied",
+          "have studied",
+          "was studying"
+        ],
+        "note": "'wish' + Past Perfect expresses regret about something in the past.",
+        "verb": "study",
+        "forms": [
+          "studies",
+          "is studying",
+          "has studied",
+          "will study",
+          "has been studying",
+          "will have studied"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      },
+      {
+        "cue": "They",
+        "after": "in this house since 2015.",
+        "mark": [
+          "since"
+        ],
+        "answer": "have lived",
+        "options": [
+          "have lived",
+          "lived",
+          "are living",
+          "had lived"
+        ],
+        "note": "'since' + an unfinished period → Present Perfect Simple.",
+        "verb": "live",
+        "forms": [
+          "lives",
+          "is living",
+          "has lived",
+          "will live",
+          "has been living",
+          "will have lived"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "If it rains tomorrow, we",
+        "after": "the picnic.",
+        "mark": [
+          "If"
+        ],
+        "answer": "will cancel",
+        "options": [
+          "will cancel",
+          "cancel",
+          "are cancelling",
+          "are going to cancel"
+        ],
+        "note": "First conditional: if + present simple, ... will + infinitive, for a likely future result.",
+        "verb": "cancel",
+        "forms": [
+          "cancels",
+          "is cancelling",
+          "has cancelled",
+          "will cancel",
+          "has been cancelling",
+          "will have cancelled"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      }
+    ]
+  },
+  {
+    "id": "mix-6",
+    "label": "Mix 6",
+    "color": "#FFD94A",
+    "desc": "Every tense, no tab to tell you which — read the sentence.",
+    "items": [
+      {
+        "cue": "They've decided they",
+        "after": "a new car next month.",
+        "mark": [
+          "decided",
+          "next month"
+        ],
+        "answer": "are going to buy",
+        "options": [
+          "are going to buy",
+          "will buy",
+          "are buying",
+          "buy"
+        ],
+        "note": "A decided plan → 'going to', not 'will'.",
+        "verb": "buy",
+        "forms": [
+          "buys",
+          "is buying",
+          "has bought",
+          "will buy",
+          "has been buying",
+          "will have bought"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      },
+      {
+        "cue": "We",
+        "after": "three candidates so far, and there are five more interviews to go.",
+        "mark": [
+          "so far"
+        ],
+        "answer": "have interviewed",
+        "options": [
+          "have interviewed",
+          "interviewed",
+          "are interviewing",
+          "had interviewed"
+        ],
+        "note": "'so far' = up to now, an unfinished period → Present Perfect Simple.",
+        "verb": "interview",
+        "forms": [
+          "interviews",
+          "is interviewing",
+          "has interviewed",
+          "will interview",
+          "has been interviewing",
+          "will have interviewed"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "I",
+        "after": ", no matter how many times I fail.",
+        "mark": [],
+        "answer": "will never give up",
+        "options": [
+          "will never give up",
+          "never give up",
+          "am never giving up",
+          "am never going to give up"
+        ],
+        "note": "Strong determination expressed with 'will never'.",
+        "verb": "give",
+        "forms": [
+          "gives",
+          "is giving",
+          "has given",
+          "will give",
+          "has been giving",
+          "will have given"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      },
+      {
+        "cue": "He opened his suitcase and realized he",
+        "after": "his passport at home.",
+        "mark": [],
+        "answer": "had left",
+        "options": [
+          "had left",
+          "left",
+          "has left",
+          "was leaving"
+        ],
+        "note": "Discovering an earlier past action → Past Perfect.",
+        "verb": "leave",
+        "forms": [
+          "leaves",
+          "is leaving",
+          "has left",
+          "will leave",
+          "has been leaving",
+          "will have left"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      },
+      {
+        "cue": "He",
+        "after": "extra hours all week to finish the project.",
+        "mark": [
+          "all week"
+        ],
+        "answer": "has been working",
+        "options": [
+          "has been working",
+          "worked",
+          "has worked",
+          "was working"
+        ],
+        "note": "Duration over an unfinished period ('all week') → Present Perfect Continuous.",
+        "verb": "work",
+        "forms": [
+          "works",
+          "is working",
+          "has worked",
+          "will work",
+          "has been working",
+          "will have worked"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      },
+      {
+        "cue": "I wondered how long",
+        "after": "before I arrived.",
+        "mark": [
+          "wondered",
+          "before"
+        ],
+        "answer": "they had been waiting",
+        "options": [
+          "they had been waiting",
+          "they waited",
+          "they had waited",
+          "they were waiting"
+        ],
+        "note": "'wondered how long' + duration before a past point → Past Perfect Continuous.",
+        "verb": "wait",
+        "forms": [
+          "waits",
+          "is waiting",
+          "has waited",
+          "will wait",
+          "has been waiting",
+          "will have waited"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "No sooner",
+        "after": "than it started to rain.",
+        "mark": [
+          "No sooner",
+          "than"
+        ],
+        "answer": "had we left",
+        "options": [
+          "had we left",
+          "we left",
+          "have we left",
+          "were we leaving"
+        ],
+        "note": "'No sooner...had...than' — an inverted structure for two past events happening in very quick succession.",
+        "verb": "leave",
+        "forms": [
+          "leaves",
+          "is leaving",
+          "has left",
+          "will leave",
+          "has been leaving",
+          "will have left"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      },
+      {
+        "cue": "Listen! Someone",
+        "after": "the piano upstairs.",
+        "mark": [
+          "Listen"
+        ],
+        "answer": "is playing",
+        "options": [
+          "is playing",
+          "plays",
+          "played",
+          "has played"
+        ],
+        "note": "Happening at the exact moment of speaking → Present Continuous.",
+        "verb": "play",
+        "forms": [
+          "plays",
+          "is playing",
+          "has played",
+          "will play",
+          "has been playing",
+          "will have played"
+        ],
+        "cat": {
+          "id": "prescon",
+          "label": "Present Contrast"
+        }
+      },
+      {
+        "cue": "Look at those dark clouds! It",
+        "after": "soon.",
+        "mark": [
+          "Look"
+        ],
+        "answer": "is going to rain",
+        "options": [
+          "is going to rain",
+          "will rain",
+          "rains",
+          "is raining"
+        ],
+        "note": "A prediction with present evidence → 'going to'.",
+        "verb": "rain",
+        "forms": [
+          "rains",
+          "is raining",
+          "has rained",
+          "will rain",
+          "has been raining",
+          "will have rained"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      },
+      {
+        "cue": "He said he",
+        "after": "the email already.",
+        "mark": [
+          "already"
+        ],
+        "answer": "had sent",
+        "options": [
+          "had sent",
+          "sent",
+          "has sent",
+          "was sending"
+        ],
+        "note": "Reported speech shifts Present Perfect back one step → Past Perfect.",
+        "verb": "send",
+        "forms": [
+          "sends",
+          "is sending",
+          "has sent",
+          "will send",
+          "has been sending",
+          "will have sent"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      },
+      {
+        "cue": "He",
+        "after": "abroad until that trip to Italy.",
+        "mark": [
+          "never",
+          "until"
+        ],
+        "answer": "had never traveled",
+        "options": [
+          "had never traveled",
+          "never traveled",
+          "has never traveled",
+          "was never traveling"
+        ],
+        "note": "Experience up to a past point → Past Perfect.",
+        "verb": "travel",
+        "forms": [
+          "travels",
+          "is traveling",
+          "has traveled",
+          "will travel",
+          "has been traveling",
+          "will have traveled"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      },
+      {
+        "cue": "Don't call me between 8 and 9 tomorrow. I",
+        "after": "dinner.",
+        "mark": [
+          "between 8 and 9",
+          "tomorrow"
+        ],
+        "answer": "will be having",
+        "options": [
+          "will be having",
+          "will have",
+          "am having",
+          "am going to have"
+        ],
+        "note": "In progress at a specific future time → Future Continuous.",
+        "verb": "have",
+        "forms": [
+          "has",
+          "is having",
+          "has had",
+          "will have",
+          "has been having",
+          "will have had"
+        ],
+        "cat": {
+          "id": "mixadv",
+          "label": "Mixed Advanced"
+        }
+      },
+      {
+        "cue": "She was angry because someone",
+        "after": "her sandwich.",
+        "mark": [
+          "because"
+        ],
+        "answer": "had eaten",
+        "options": [
+          "had eaten",
+          "ate",
+          "has eaten",
+          "was eating"
+        ],
+        "note": "The cause happened even earlier in the past → Past Perfect.",
+        "verb": "eat",
+        "forms": [
+          "eats",
+          "is eating",
+          "has eaten",
+          "will eat",
+          "has been eating",
+          "will have eaten"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      },
+      {
+        "cue": "We",
+        "after": "Sarah for lunch tomorrow at 1pm.",
+        "mark": [
+          "tomorrow",
+          "at 1pm"
+        ],
+        "answer": "are meeting",
+        "options": [
+          "are meeting",
+          "will meet",
+          "are going to meet",
+          "meet"
+        ],
+        "note": "A fixed personal arrangement with time and place set → Present Continuous.",
+        "verb": "meet",
+        "forms": [
+          "meets",
+          "is meeting",
+          "has met",
+          "will meet",
+          "has been meeting",
+          "will have met"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      },
+      {
+        "cue": "I",
+        "after": "this film so many times I could recite the lines.",
+        "mark": [],
+        "answer": "have watched",
+        "options": [
+          "have watched",
+          "watched",
+          "am watching",
+          "had watched"
+        ],
+        "note": "Repeated action counted up to now ('so many times') → Present Perfect Simple.",
+        "verb": "watch",
+        "forms": [
+          "watches",
+          "is watching",
+          "has watched",
+          "will watch",
+          "has been watching",
+          "will have watched"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "While he",
+        "after": "the car, he cut his finger.",
+        "mark": [
+          "While"
+        ],
+        "answer": "was repairing",
+        "options": [
+          "was repairing",
+          "repaired",
+          "had repaired",
+          "has repaired"
+        ],
+        "note": "Background action interrupted by a short one → Past Continuous.",
+        "verb": "repair",
+        "forms": [
+          "repairs",
+          "is repairing",
+          "has repaired",
+          "will repair",
+          "has been repairing",
+          "will have repaired"
+        ],
+        "cat": {
+          "id": "mixadv",
+          "label": "Mixed Advanced"
+        }
+      }
+    ]
+  },
+  {
+    "id": "mix-7",
+    "label": "Mix 7",
+    "color": "#C9A961",
+    "desc": "Every tense, no tab to tell you which — read the sentence.",
+    "items": [
+      {
+        "cue": "Don't worry, I",
+        "after": "be there on time.",
+        "mark": [],
+        "answer": "will definitely",
+        "options": [
+          "will definitely",
+          "am definitely",
+          "was definitely",
+          "would definitely"
+        ],
+        "note": "'definitely' + 'will' expresses strong certainty about the future.",
+        "verb": "be",
+        "forms": [
+          "is",
+          "is being",
+          "has been",
+          "will be",
+          "has been being",
+          "will have been"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      },
+      {
+        "cue": "The phone is ringing. I",
+        "after": "it.",
+        "mark": [],
+        "answer": "will answer",
+        "options": [
+          "will answer",
+          "am answering",
+          "answer",
+          "am going to answer"
+        ],
+        "note": "A decision made at the moment of speaking → 'will'.",
+        "verb": "answer",
+        "forms": [
+          "answers",
+          "is answering",
+          "has answered",
+          "will answer",
+          "has been answering",
+          "will have answered"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      },
+      {
+        "cue": "She",
+        "after": "this puzzle for two hours, but she still hasn't solved it.",
+        "mark": [
+          "for",
+          "still"
+        ],
+        "answer": "has been doing",
+        "options": [
+          "has been doing",
+          "did",
+          "has done",
+          "was doing"
+        ],
+        "note": "Duration + unfinished result (still hasn't solved it) → Present Perfect Continuous, emphasizing the activity itself.",
+        "verb": "do",
+        "forms": [
+          "does",
+          "is doing",
+          "has done",
+          "will do",
+          "has been doing",
+          "will have done"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      },
+      {
+        "cue": "We",
+        "after": "to contact you all morning!",
+        "mark": [
+          "all morning"
+        ],
+        "answer": "have been trying",
+        "options": [
+          "have been trying",
+          "tried",
+          "have tried",
+          "were trying"
+        ],
+        "note": "Repeated action over a period up to now → Present Perfect Continuous.",
+        "verb": "try",
+        "forms": [
+          "tries",
+          "is trying",
+          "has tried",
+          "will try",
+          "has been trying",
+          "will have tried"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      },
+      {
+        "cue": "She was furious because she",
+        "after": "for the bus for forty minutes.",
+        "mark": [
+          "because",
+          "for"
+        ],
+        "answer": "had been waiting",
+        "options": [
+          "had been waiting",
+          "waited",
+          "had waited",
+          "was waiting"
+        ],
+        "note": "Duration explaining a past emotional reaction → Past Perfect Continuous.",
+        "verb": "wait",
+        "forms": [
+          "waits",
+          "is waiting",
+          "has waited",
+          "will wait",
+          "has been waiting",
+          "will have waited"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "They",
+        "after": "since the sun came up.",
+        "mark": [
+          "since"
+        ],
+        "answer": "have been surfing",
+        "options": [
+          "have been surfing",
+          "surfed",
+          "have surfed",
+          "were surfing"
+        ],
+        "note": "'since' can introduce a clause, not just a date/time — duration to now → Present Perfect Continuous.",
+        "verb": "surf",
+        "forms": [
+          "surfs",
+          "is surfing",
+          "has surfed",
+          "will surf",
+          "has been surfing",
+          "will have surfed"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      },
+      {
+        "cue": "I",
+        "after": "yoga recently — it's really helped my back.",
+        "mark": [
+          "recently"
+        ],
+        "answer": "have been doing",
+        "options": [
+          "have been doing",
+          "did",
+          "have done",
+          "was doing"
+        ],
+        "note": "'recently' + a temporary ongoing habit → Present Perfect Continuous.",
+        "verb": "do",
+        "forms": [
+          "does",
+          "is doing",
+          "has done",
+          "will do",
+          "has been doing",
+          "will have done"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      },
+      {
+        "cue": "While she",
+        "after": "dinner, her husband set the table.",
+        "mark": [
+          "While"
+        ],
+        "answer": "was cooking",
+        "options": [
+          "was cooking",
+          "cooked",
+          "had cooked",
+          "has cooked"
+        ],
+        "note": "Two actions happening at the same time in the past → Past Continuous for both.",
+        "verb": "cook",
+        "forms": [
+          "cooks",
+          "is cooking",
+          "has cooked",
+          "will cook",
+          "has been cooking",
+          "will have cooked"
+        ],
+        "cat": {
+          "id": "narr2",
+          "label": "Narrative Tenses"
+        }
+      },
+      {
+        "cue": "She",
+        "after": "on a special project this month.",
+        "mark": [
+          "this month"
+        ],
+        "answer": "is working",
+        "options": [
+          "is working",
+          "works",
+          "was working",
+          "has worked"
+        ],
+        "note": "A temporary activity around now → Present Continuous.",
+        "verb": "work",
+        "forms": [
+          "works",
+          "is working",
+          "has worked",
+          "will work",
+          "has been working",
+          "will have worked"
+        ],
+        "cat": {
+          "id": "prescon",
+          "label": "Present Contrast"
+        }
+      },
+      {
+        "cue": "She",
+        "after": "a book when the doorbell rang.",
+        "mark": [
+          "when"
+        ],
+        "answer": "was reading",
+        "options": [
+          "was reading",
+          "read",
+          "had read",
+          "has read"
+        ],
+        "note": "Background action in progress, interrupted by a shorter one → Past Continuous.",
+        "verb": "read",
+        "forms": [
+          "reads",
+          "is reading",
+          "has read",
+          "will read",
+          "has been reading",
+          "will have read"
+        ],
+        "cat": {
+          "id": "narr2",
+          "label": "Narrative Tenses"
+        }
+      },
+      {
+        "cue": "By the time you read this, I",
+        "after": "the country.",
+        "mark": [
+          "By the time"
+        ],
+        "answer": "will have already left",
+        "options": [
+          "will have already left",
+          "am already leaving",
+          "will already leave",
+          "have already left"
+        ],
+        "note": "Completed before a future reference point → Future Perfect.",
+        "verb": "leave",
+        "forms": [
+          "leaves",
+          "is leaving",
+          "has left",
+          "will leave",
+          "has been leaving",
+          "will have left"
+        ],
+        "cat": {
+          "id": "mixadv",
+          "label": "Mixed Advanced"
+        }
+      },
+      {
+        "cue": "I",
+        "after": "what you mean.",
+        "mark": [],
+        "answer": "don't understand",
+        "options": [
+          "don't understand",
+          "am not understanding",
+          "didn't understand",
+          "haven't understood"
+        ],
+        "note": "'understand' is a state verb — Present Simple, never continuous.",
+        "verb": "understand",
+        "forms": [
+          "understands",
+          "is understanding",
+          "has understood",
+          "will understand",
+          "has been understanding",
+          "will have understood"
+        ],
+        "cat": {
+          "id": "prescon",
+          "label": "Present Contrast"
+        }
+      },
+      {
+        "cue": "By the time we arrived, they",
+        "after": ".",
+        "mark": [
+          "By the time"
+        ],
+        "answer": "had left",
+        "options": [
+          "had left",
+          "left",
+          "have left",
+          "were leaving"
+        ],
+        "note": "Completed before another past moment → Past Perfect.",
+        "verb": "leave",
+        "forms": [
+          "leaves",
+          "is leaving",
+          "has left",
+          "will leave",
+          "has been leaving",
+          "will have left"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      },
+      {
+        "cue": "I usually drive to work, but today I",
+        "after": "the bus.",
+        "mark": [
+          "usually",
+          "today"
+        ],
+        "answer": "am taking",
+        "options": [
+          "am taking",
+          "take",
+          "was taking",
+          "have taken"
+        ],
+        "note": "A one-off change from a routine → Present Continuous, not Present Simple.",
+        "verb": "take",
+        "forms": [
+          "takes",
+          "is taking",
+          "has taken",
+          "will take",
+          "has been taking",
+          "will have taken"
+        ],
+        "cat": {
+          "id": "prescon",
+          "label": "Present Contrast"
+        }
+      },
+      {
+        "cue": "She",
+        "after": "to New York next Friday for a conference.",
+        "mark": [
+          "next Friday"
+        ],
+        "answer": "is flying",
+        "options": [
+          "is flying",
+          "will fly",
+          "flies",
+          "is going to fly"
+        ],
+        "note": "A fixed, booked arrangement → Present Continuous.",
+        "verb": "fly",
+        "forms": [
+          "flies",
+          "is flying",
+          "has flown",
+          "will fly",
+          "has been flying",
+          "will have flown"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      },
+      {
+        "cue": "I can't find my keys. I",
+        "after": "them somewhere.",
+        "mark": [],
+        "answer": "have lost",
+        "options": [
+          "have lost",
+          "lost",
+          "am losing",
+          "had lost"
+        ],
+        "note": "A past action with a present result → Present Perfect.",
+        "verb": "lose",
+        "forms": [
+          "loses",
+          "is losing",
+          "has lost",
+          "will lose",
+          "has been losing",
+          "will have lost"
+        ],
+        "cat": {
+          "id": "mixadv",
+          "label": "Mixed Advanced"
+        }
+      }
+    ]
+  },
+  {
+    "id": "mix-8",
+    "label": "Mix 8",
+    "color": "#f472b6",
+    "desc": "Every tense, no tab to tell you which — read the sentence.",
+    "items": [
+      {
+        "cue": "Water",
+        "after": "at 100 degrees Celsius.",
+        "mark": [],
+        "answer": "boils",
+        "options": [
+          "boils",
+          "is boiling",
+          "boiled",
+          "has boiled"
+        ],
+        "note": "A permanent scientific fact → Present Simple.",
+        "verb": "boil",
+        "forms": [
+          "boils",
+          "is boiling",
+          "has boiled",
+          "will boil",
+          "has been boiling",
+          "will have boiled"
+        ],
+        "cat": {
+          "id": "prescon",
+          "label": "Present Contrast"
+        }
+      },
+      {
+        "cue": "My feet are killing me — I",
+        "after": "practically all day.",
+        "mark": [
+          "all day"
+        ],
+        "answer": "have been standing",
+        "options": [
+          "have been standing",
+          "stood",
+          "have stood",
+          "was standing"
+        ],
+        "note": "Duration explaining a present physical result → Present Perfect Continuous.",
+        "verb": "stand",
+        "forms": [
+          "stands",
+          "is standing",
+          "has stood",
+          "will stand",
+          "has been standing",
+          "will have stood"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      },
+      {
+        "cue": "The engine smelled of smoke because it",
+        "after": "too hard.",
+        "mark": [
+          "because"
+        ],
+        "answer": "had been running",
+        "options": [
+          "had been running",
+          "ran",
+          "had run",
+          "was running"
+        ],
+        "note": "Duration explaining a past mechanical result → Past Perfect Continuous.",
+        "verb": "run",
+        "forms": [
+          "runs",
+          "is running",
+          "has run",
+          "will run",
+          "has been running",
+          "will have run"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "I",
+        "after": "that film three times already, but I'd watch it again.",
+        "mark": [
+          "three times",
+          "already"
+        ],
+        "answer": "have seen",
+        "options": [
+          "have seen",
+          "saw",
+          "am seeing",
+          "had seen"
+        ],
+        "note": "Experience up to now, counted with 'times' → Present Perfect.",
+        "verb": "see",
+        "forms": [
+          "sees",
+          "is seeing",
+          "has seen",
+          "will see",
+          "has been seeing",
+          "will have seen"
+        ],
+        "cat": {
+          "id": "mixadv",
+          "label": "Mixed Advanced"
+        }
+      },
+      {
+        "cue": "She failed her test because she",
+        "after": "enough.",
+        "mark": [
+          "because"
+        ],
+        "answer": "hadn't been practicing",
+        "options": [
+          "hadn't been practicing",
+          "didn't practice",
+          "hadn't practiced",
+          "wasn't practicing"
+        ],
+        "note": "Repeated lack of activity before a past result → Past Perfect Continuous.",
+        "verb": "practice",
+        "forms": [
+          "practices",
+          "is practicing",
+          "has practiced",
+          "will practice",
+          "has been practicing",
+          "will have practiced"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "I",
+        "after": "recently that she's moving abroad.",
+        "mark": [
+          "recently"
+        ],
+        "answer": "have heard",
+        "options": [
+          "have heard",
+          "heard",
+          "am hearing",
+          "had heard"
+        ],
+        "note": "'recently' with an unspecified moment and present relevance → Present Perfect Simple.",
+        "verb": "hear",
+        "forms": [
+          "hears",
+          "is hearing",
+          "has heard",
+          "will hear",
+          "has been hearing",
+          "will have heard"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "When he woke up, he realized he",
+        "after": "his alarm.",
+        "mark": [
+          "When"
+        ],
+        "answer": "had missed",
+        "options": [
+          "had missed",
+          "missed",
+          "has missed",
+          "was missing"
+        ],
+        "note": "The earlier past action, discovered later → Past Perfect.",
+        "verb": "miss",
+        "forms": [
+          "misses",
+          "is missing",
+          "has missed",
+          "will miss",
+          "has been missing",
+          "will have missed"
+        ],
+        "cat": {
+          "id": "pastp",
+          "label": "Past Perfect"
+        }
+      },
+      {
+        "cue": "He",
+        "after": ", no matter what I say.",
+        "mark": [],
+        "answer": "won't apologize",
+        "options": [
+          "won't apologize",
+          "doesn't apologize",
+          "isn't apologizing",
+          "isn't going to apologize"
+        ],
+        "note": "A refusal — someone's unwillingness to do something → 'won't'.",
+        "verb": "apologize",
+        "forms": [
+          "apologizes",
+          "is apologizing",
+          "has apologized",
+          "will apologize",
+          "has been apologizing",
+          "will have apologized"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      },
+      {
+        "cue": "I",
+        "after": "him twice this month, but I didn't see him at all last month.",
+        "mark": [
+          "this month",
+          "last month"
+        ],
+        "answer": "have seen",
+        "options": [
+          "have seen",
+          "saw",
+          "am seeing",
+          "had seen"
+        ],
+        "note": "'this month' (unfinished, still now) → Present Perfect; contrast with 'last month' (finished) → Past Simple.",
+        "verb": "see",
+        "forms": [
+          "sees",
+          "is seeing",
+          "has seen",
+          "will see",
+          "has been seeing",
+          "will have seen"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "We",
+        "after": "Tom since last Christmas.",
+        "mark": [
+          "since"
+        ],
+        "answer": "haven't seen",
+        "options": [
+          "haven't seen",
+          "didn't see",
+          "aren't seeing",
+          "hadn't seen"
+        ],
+        "note": "'since' + a period continuing to now → Present Perfect, not Past Simple.",
+        "verb": "see",
+        "forms": [
+          "sees",
+          "is seeing",
+          "has seen",
+          "will see",
+          "has been seeing",
+          "will have seen"
+        ],
+        "cat": {
+          "id": "pps",
+          "label": "Perfect Simple"
+        }
+      },
+      {
+        "cue": "",
+        "after": "the window? It's a bit stuffy in here.",
+        "mark": [],
+        "answer": "Shall I open",
+        "options": [
+          "Shall I open",
+          "Will I open",
+          "Am I opening",
+          "Am I going to open"
+        ],
+        "note": "'Shall I...?' is used to offer or suggest, especially in British English.",
+        "verb": "open",
+        "forms": [
+          "opens",
+          "is opening",
+          "has opened",
+          "will open",
+          "has been opening",
+          "will have opened"
+        ],
+        "cat": {
+          "id": "futf",
+          "label": "Future Forms"
+        }
+      },
+      {
+        "cue": "They",
+        "after": "on this project since January.",
+        "mark": [
+          "since"
+        ],
+        "answer": "have been working",
+        "options": [
+          "have been working",
+          "worked",
+          "have worked",
+          "were working"
+        ],
+        "note": "'since' + duration still continuing → Present Perfect Continuous.",
+        "verb": "work",
+        "forms": [
+          "works",
+          "is working",
+          "has worked",
+          "will work",
+          "has been working",
+          "will have worked"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      },
+      {
+        "cue": "Look at the time! We",
+        "after": "the train if we don't hurry!",
+        "mark": [
+          "Look",
+          "if"
+        ],
+        "answer": "are going to miss",
+        "options": [
+          "are going to miss",
+          "will miss",
+          "are missing",
+          "miss"
+        ],
+        "note": "A prediction based on present evidence (the time) → 'going to'.",
+        "verb": "miss",
+        "forms": [
+          "misses",
+          "is missing",
+          "has missed",
+          "will miss",
+          "has been missing",
+          "will have missed"
+        ],
+        "cat": {
+          "id": "mixadv",
+          "label": "Mixed Advanced"
+        }
+      },
+      {
+        "cue": "Right now, I",
+        "after": "to concentrate, so please be quiet!",
+        "mark": [
+          "Right now"
+        ],
+        "answer": "am trying",
+        "options": [
+          "am trying",
+          "try",
+          "was trying",
+          "have tried"
+        ],
+        "note": "Happening at this exact moment → Present Continuous.",
+        "verb": "try",
+        "forms": [
+          "tries",
+          "is trying",
+          "has tried",
+          "will try",
+          "has been trying",
+          "will have tried"
+        ],
+        "cat": {
+          "id": "prescon",
+          "label": "Present Contrast"
+        }
+      },
+      {
+        "cue": "While I",
+        "after": "home, I saw an old friend.",
+        "mark": [
+          "While"
+        ],
+        "answer": "was walking",
+        "options": [
+          "was walking",
+          "walked",
+          "had walked",
+          "have walked"
+        ],
+        "note": "A longer background action interrupted by a shorter one → Past Continuous.",
+        "verb": "walk",
+        "forms": [
+          "walks",
+          "is walking",
+          "has walked",
+          "will walk",
+          "has been walking",
+          "will have walked"
+        ],
+        "cat": {
+          "id": "narr2",
+          "label": "Narrative Tenses"
+        }
+      },
+      {
+        "cue": "My train",
+        "after": "at 7:15 tomorrow morning.",
+        "mark": [
+          "at 7:15"
+        ],
+        "answer": "leaves",
+        "options": [
+          "leaves",
+          "is leaving",
+          "will leave",
+          "has left"
+        ],
+        "note": "A fixed timetable → Present Simple, even with a future time word.",
+        "verb": "leave",
+        "forms": [
+          "leaves",
+          "is leaving",
+          "has left",
+          "will leave",
+          "has been leaving",
+          "will have left"
+        ],
+        "cat": {
+          "id": "prescon",
+          "label": "Present Contrast"
+        }
+      },
+      {
+        "cue": "He was covered in paint because he",
+        "after": "the fence all morning.",
+        "mark": [
+          "because",
+          "all morning"
+        ],
+        "answer": "had been painting",
+        "options": [
+          "had been painting",
+          "painted",
+          "had painted",
+          "was painting"
+        ],
+        "note": "Visible past evidence (covered in paint) explained by the activity itself → Past Perfect Continuous, not Past Perfect Simple.",
+        "verb": "paint",
+        "forms": [
+          "paints",
+          "is painting",
+          "has painted",
+          "will paint",
+          "has been painting",
+          "will have painted"
+        ],
+        "cat": {
+          "id": "pastpc",
+          "label": "Past Perfect Continuous"
+        }
+      },
+      {
+        "cue": "I'm tired because I",
+        "after": "in the garden all afternoon.",
+        "mark": [
+          "all afternoon",
+          "because"
+        ],
+        "answer": "have been working",
+        "options": [
+          "have been working",
+          "worked",
+          "have worked",
+          "was working"
+        ],
+        "note": "Duration up to now explaining a present state → Present Perfect Continuous.",
+        "verb": "work",
+        "forms": [
+          "works",
+          "is working",
+          "has worked",
+          "will work",
+          "has been working",
+          "will have worked"
+        ],
+        "cat": {
+          "id": "ppc",
+          "label": "Perfect Continuous"
+        }
+      }
+    ]
+  }
 ]
-
-
-def load_groups(path):
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    if not isinstance(data, list) or not data:
-        raise SystemExit(f"{path}: expected a non-empty JSON array of groups")
-    return data
-
-
-def pool_items(groups):
-    """Flatten every group's items into one list, each tagged with its
-    source category so the original tense isn't lost — just hidden."""
-    pool = []
-    for g in groups:
-        cat = {"id": g.get("id"), "label": g.get("label")}
-        for it in g.get("items", []):
-            # Only keep items shaped for the 4-option lane/wire format.
-            if not (isinstance(it.get("options"), list) and len(it["options"]) == 4
-                    and it.get("answer") in it["options"]):
-                continue
-            item = dict(it)  # shallow copy — don't mutate the source file
-            item["cat"] = cat
-            pool.append(item)
-    return pool
-
-
-def chunk(seq, size):
-    for i in range(0, len(seq), size):
-        yield seq[i:i + size]
-
-
-def build_mixes(pool, per_mix, rng):
-    rng.shuffle(pool)
-    mixes = []
-    for i, batch in enumerate(chunk(pool, per_mix), start=1):
-        # Guard against a too-small final batch that wouldn't support the
-        # 4-option lane games well — merge a small tail into the last mix.
-        if len(batch) < 6 and mixes:
-            mixes[-1]["items"].extend(batch)
-            continue
-        mixes.append({
-            "id": f"mix-{i}",
-            "label": f"Mix {i}",
-            "color": MIX_COLORS[(i - 1) % len(MIX_COLORS)],
-            "desc": "Every tense, no tab to tell you which — read the sentence.",
-            "items": batch,
-        })
-    return mixes
-
-
-def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("input", help="existing tense-labeled data file, e.g. tense-rush-data.json")
-    ap.add_argument("output", help="path to write the blind Mix-set file, e.g. tense-mix-data.json")
-    ap.add_argument("--per-mix", type=int, default=16, help="target items per Mix set (default 16)")
-    ap.add_argument("--seed", type=int, default=None, help="random seed, for a reproducible shuffle")
-    args = ap.parse_args()
-
-    rng = random.Random(args.seed)
-    groups = load_groups(args.input)
-    pool = pool_items(groups)
-    if not pool:
-        raise SystemExit(f"{args.input}: no items with a valid 4-option `options` array were found")
-
-    mixes = build_mixes(pool, args.per_mix, rng)
-
-    with open(args.output, "w", encoding="utf-8") as f:
-        json.dump(mixes, f, ensure_ascii=False, indent=2)
-
-    src_tenses = sorted({g.get("label") for g in groups})
-    print(f"Read {len(pool)} usable items across {len(src_tenses)} tenses from {args.input}:")
-    for t in src_tenses:
-        print(f"  - {t}")
-    print(f"\nWrote {len(mixes)} blind sets to {args.output}:")
-    for m in mixes:
-        cats_in_mix = sorted({it['cat']['label'] for it in m['items']})
-        print(f"  - {m['label']}: {len(m['items'])} items, spanning {len(cats_in_mix)} tenses")
-
-
-if __name__ == "__main__":
-    main()

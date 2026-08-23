@@ -16,7 +16,7 @@
   --paper:#e5e5e7; --dim:rgba(229,229,231,.55); --faint:rgba(229,229,231,.26);
   --line:rgba(255,255,255,.08);
   --lane1:#61b5ed; --lane2:#c084fc; --lane3:#5ED39B; --lane4:#fb923c;
-  --header-h:150px; --lane-h:104px; --player-h:36px;
+  --header-h:150px; --lane-h:104px; --player-h:36px; --hud-h:40px;
   --set-color:#C9A961; --set-rgb:201,169,97;
   --phase-color:#C9A961; --phase-rgb:201,169,97;
 }
@@ -74,10 +74,10 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
 .vtab.has-due .due{opacity:1}
 
 /* ══ HUD ══ */
-.hud{position:fixed;top:var(--header-h);left:0;right:0;height:40px;z-index:25;
+.hud{position:fixed;top:var(--header-h);left:0;right:0;height:var(--hud-h);z-index:25;
   display:flex;align-items:center;justify-content:space-between;gap:.7rem;padding:0 1rem;
   font-family:'DM Mono',monospace;font-size:.66rem;color:var(--faint);
-  border-bottom:1px solid rgba(255,255,255,.05)}
+  border-bottom:1px solid rgba(255,255,255,.05);flex-wrap:wrap}
 .score-n{font-family:'Space Grotesk',sans-serif;font-weight:900;font-size:1.05rem;
   color:var(--paper);font-variant-numeric:tabular-nums}
 .combo{font-family:'Space Grotesk',sans-serif;font-weight:900;font-size:1rem;color:var(--faint);
@@ -97,7 +97,7 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
 @media(max-width:600px){ .speeds{display:none} }
 
 /* ══ ARENA ══ */
-.arena{position:fixed;top:calc(var(--header-h) + 40px);left:0;right:0;bottom:calc(var(--lane-h) + var(--player-h));
+.arena{position:fixed;top:calc(var(--header-h) + var(--hud-h));left:0;right:0;bottom:calc(var(--lane-h) + var(--player-h));
   overflow:hidden;display:flex;flex-direction:column;
   background:radial-gradient(ellipse at 50% -10%,rgba(var(--phase-rgb),.14),transparent 60%)}
 .arena::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;
@@ -264,7 +264,7 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
     <a class="mode-btn" href="tenses-rules.html?mode=quiz">📝 Quiz</a>
    <span class="mode-btn active">🌀 Duel</span>
     <a class="mode-btn" href="tenses-forge.html">🔨 Forge </a>
-   
+    <a class="mode-btn" href="tenses-defuse.html">💣 Defuse</a>
   </div>
   <div class="set-tabs" id="setTabs"></div>
 </header>
@@ -324,11 +324,19 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
 
 <script>
 /* ══════════════════════════════════════════════════════════════════════
-   TENSE DUEL — turn-based boss fight, same engine family as Tense Mill.
+   TENSE DUEL — turn-based boss fight, same engine family as Bomb Defusal.
 
-   Reads the SAME tense-rush-data.json Rush/Mill use (cue / after / mark /
-   answer / options / note). No embedded copy: a correction to the data
-   lands here automatically.
+   Reads the blind "Mix" data file by default (see build_mix_sets.py):
+   each set pools items from every tense with no tense-revealing label on
+   the tab, so answering correctly requires actually reading the sentence's
+   time markers rather than pattern-matching the tab. Explore/Practice/Quiz
+   still use the original tense-labeled file, where knowing the category
+   up front is appropriate scaffolding — only the game modes need to be
+   blind.
+
+   Every REPEAT_EVERY-th question resurfaces an item already met this run
+   (preferring one still missed) instead of drawing fresh — a small spaced-
+   retrieval boost, same mechanic as Defusal.
 
    Each tense-set is a boss with an HP bar. Answer correctly before the
    per-question timer runs out to land a hit; combo raises your damage
@@ -345,7 +353,7 @@ window.addEventListener('error', e => {
     '<br><span style="opacity:.6">' + ((e.filename||'').split('/').pop()+':'+(e.lineno||'?')) + '</span></p>';
 });
 
-const DATA_URL = new URLSearchParams(location.search).get('data') || '../../data/grammar-rules/tense-rush-data.json';
+const DATA_URL = new URLSearchParams(location.search).get('data') || '../../data/grammar-rules/tense-mix-data.json';
 
 const LANE_N = 4;
 const LANE_COLORS = ['--lane1','--lane2','--lane3','--lane4'];
@@ -374,6 +382,13 @@ let lanes = [], curItem = null;
    small set (say 5 items) still gets *some* spacing instead of none. */
 const NO_REPEAT = 4;
 let recentIdx = [];
+/* Retrieval-practice tracking, reset every run — same mechanic as Defusal.
+   seenThisRun records the array-position (within curItems) of every item
+   served so far, in order. missedThisRun records positions the learner
+   got wrong, and a position is retired the moment they answer it
+   correctly. */
+const REPEAT_EVERY = 4;
+let seenThisRun = [], missedThisRun = [], qCount = 0;
 let score = 0, combo = 0, bestCombo = 0, hits = 0, misses = 0, missLog = [];
 let bossHP = BOSS_MAX, playerHP = PLAYER_MAX, overdriveReady = false, overdriveMark = 0;
 let qStart = 0, qDur = 0, qTimerId = null;
@@ -462,6 +477,19 @@ function pickNext(items){
   recentIdx.push(idx); if (recentIdx.length > NO_REPEAT) recentIdx.shift();
   return items[idx];
 }
+/* Every REPEAT_EVERY-th question, resurface something already met this
+   run instead of drawing fresh — prefers a still-shaky item, falls back
+   to any earlier one. Served exactly as it was the first time: same cue,
+   same 4 options, no "you've seen this" tag, so it's genuine recall. */
+function pickRepeat(items){
+  const last = seenThisRun[seenThisRun.length - 1];
+  const pool = missedThisRun.length ? missedThisRun : seenThisRun;
+  const candidates = pool.filter(i => i !== last);
+  const chosen = candidates.length
+    ? candidates[(Math.random()*candidates.length)|0]
+    : pool[(Math.random()*pool.length)|0];
+  return items[chosen];
+}
 function sentenceHTML(item, slotContent){
   let s = esc(item.cue) + (item.cue ? ' ' : '') +
           '<span class="slot">' + (slotContent ? esc(slotContent) : '____') + '</span> ' +
@@ -515,6 +543,7 @@ function startRound(){
   const items = itemsOf(g);
   score = 0; combo = 0; bestCombo = 0; hits = 0; misses = 0; missLog = [];
   bossHP = BOSS_MAX; playerHP = PLAYER_MAX; overdriveReady = false; overdriveMark = 0; recentIdx = [];
+  seenThisRun = []; missedThisRun = []; qCount = 0;
   $('score').textContent = '0'; setCombo(0);
   $('bossName').textContent = g.label.toUpperCase();
   $('logFeed').innerHTML = '';
@@ -529,7 +558,13 @@ function startRound(){
 let curItems = null;
 function nextQuestion(items){
   curItems = items || curItems;
-  curItem = pickNext(curItems);
+  qCount++;
+  if (qCount % REPEAT_EVERY === 0 && seenThisRun.length >= 2){
+    curItem = pickRepeat(curItems);
+  } else {
+    curItem = pickNext(curItems);
+    seenThisRun.push(curItems.indexOf(curItem));
+  }
   $('card').className = 'card';
   $('sentence').innerHTML = sentenceHTML(curItem);
   paintLanes(curItem);
@@ -560,6 +595,7 @@ function tapLane(i){
 function resolveAnswer(chosen, timedOut){
   if (!running || !curItem) return;
   const item = curItem; curItem = null;
+  const pos = curItems.indexOf(item);
   lockLanes();
   const ok = chosen === item.answer;
   const laneEls = $('lanes').querySelectorAll('.lane');
@@ -575,6 +611,8 @@ function resolveAnswer(chosen, timedOut){
 
   if (ok){
     hits++; combo++; bestCombo = Math.max(bestCombo,combo);
+    const mi = missedThisRun.indexOf(pos);
+    if (mi >= 0) missedThisRun.splice(mi,1);
     let mult = combo>=15 ? 2.2 : combo>=10 ? 1.7 : combo>=5 ? 1.3 : 1;
     let isOverdrive = false;
     if (overdriveReady){ mult *= 1.9; isOverdrive = true; overdriveReady = false; }
@@ -591,6 +629,7 @@ function resolveAnswer(chosen, timedOut){
     }
   } else {
     misses++; combo = 0; missLog.push(item);
+    if (pos >= 0 && !missedThisRun.includes(pos)) missedThisRun.push(pos);
     $('card').classList.add('shake');
     const dmg = Math.round(BASE_BOSS_DMG * phase.dmgMult);
     playerHP = clamp(playerHP - dmg, 0, PLAYER_MAX);
@@ -716,6 +755,7 @@ function buildTabs(){
 function switchGroup(i){
   groupIdx = i;
   buildTabs();
+  syncHeader();
   const u = new URL(location.href); u.searchParams.set('set', GROUPS[i].id);
   history.replaceState(null,'',u);
   startRound();
@@ -735,6 +775,18 @@ function setMute(on){
 }
 $('muteBtn').addEventListener('click', ()=> setMute(!musicOn));
 setMute(musicOn);
+
+/* ── LAYOUT SYNC — measures the real header/hud height instead of trusting
+   the CSS guess, same fix already applied to Defusal. Needed because the
+   set-tabs row can wrap to multiple lines on a narrow phone. ── */
+function syncHeader(){
+  const h = document.querySelector('.header'), hu = document.querySelector('.hud');
+  if (h) document.documentElement.style.setProperty('--header-h', h.offsetHeight+'px');
+  if (hu) document.documentElement.style.setProperty('--hud-h', hu.offsetHeight+'px');
+}
+window.addEventListener('resize', syncHeader);
+window.addEventListener('orientationchange', ()=>setTimeout(syncHeader,120));
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncHeader);
 
 /* ── EVENTS ── */
 document.addEventListener('keydown', e => {
@@ -770,6 +822,7 @@ async function boot(){
   const want = (new URLSearchParams(location.search).get('set') || '').toLowerCase();
   groupIdx = Math.max(0, GROUPS.findIndex(g => g.id.toLowerCase() === want));
   buildTabs();
+  syncHeader();
   $('loading').style.display = 'none';
   startRound();
 }

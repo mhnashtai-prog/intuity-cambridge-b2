@@ -68,19 +68,16 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
 .hud.hidden{display:none}
 .hud .now{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hud .now b{color:var(--gold)}
-/* View switch — inside the content container, top right. Sticky so it
-   stays reachable twenty use cases down without being a fixed bar of
-   its own. One control, not one per card. */
-.viewbar{position:sticky;top:0;z-index:8;display:flex;justify-content:flex-end;
-  padding:.15rem 0 .55rem;margin-bottom:-.35rem;pointer-events:none}
-.viewtog{display:flex;padding:.16rem;gap:.16rem;border-radius:999px;pointer-events:auto;
-  background:rgba(20,20,22,.92);backdrop-filter:blur(14px);
-  border:1px solid rgba(201,169,97,.28);box-shadow:0 3px 12px rgba(0,0,0,.45)}
-.vbtn{font-family:'Space Grotesk',sans-serif;font-size:.58rem;font-weight:700;letter-spacing:.1em;
-  text-transform:uppercase;padding:.32rem .8rem;border-radius:999px;color:rgba(255,255,255,.4);
-  transition:color .2s,background .2s}
-.vbtn:hover{color:rgba(255,255,255,.8)}
-.vbtn.on{color:#12100a;background:var(--gold)}
+/* Each use case opens its own street. The list IS the section index, so
+   there's no second menu inside the modal. */
+.card-head{display:flex;align-items:flex-start;gap:.8rem;margin-bottom:1.1rem}
+.card-head .uc-title{margin-bottom:0;flex:1}
+.street{flex:none;display:flex;align-items:center;gap:.4rem;
+  font-family:'Space Grotesk',sans-serif;font-size:.58rem;font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;padding:.45rem .9rem;border-radius:999px;
+  color:#12100a;background:var(--gold);transition:filter .2s,transform .12s}
+.street:hover{filter:brightness(1.12)}
+.street:active{transform:scale(.95)}
 
 /* ══ CONTENT ══ */
 .area{position:fixed;top:calc(var(--header-h) + var(--hud-h));left:0;right:0;bottom:0;
@@ -92,6 +89,7 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
 
 .card{background:rgba(28,28,30,.6);backdrop-filter:blur(40px);
   border:1px solid rgba(201,169,97,.2);border-radius:1.1rem;padding:1.5rem;transition:border-color .25s}
+.cards .card:first-child{padding-top:1.7rem}
 .card:hover{border-color:rgba(201,169,97,.4)}
 .uc-title{font-family:'DM Mono',monospace;font-size:1rem;color:var(--gold);text-transform:uppercase;
   letter-spacing:.1em;font-weight:500;padding:.45rem .9rem;background:rgba(201,169,97,.1);
@@ -169,12 +167,6 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
 
 <div class="area active" id="exploreArea">
   <div class="inner">
-    <div class="viewbar">
-      <div class="viewtog" role="group" aria-label="Choose a view">
-        <button class="vbtn on" data-v="list" type="button">List</button>
-        <button class="vbtn" data-v="slides" type="button">Slides</button>
-      </div>
-    </div>
     <div class="cards" id="list"></div>
   </div>
 </div>
@@ -223,7 +215,7 @@ async function boot(){
 
   const m = P.get('mode');
   if(m === 'practice' || m === 'quiz') switchMode(m);
-  if(P.get('view') === 'slides') setView('slides');
+
 }
 
 const current = () => data.find(t => t.id === CATS[cat]+'-'+TENSES[tense]);
@@ -259,7 +251,7 @@ function paintList(){
     return;
   }
   $('now').innerHTML = '<b>'+tn.name+'</b> · '+tn.useCases.length+' uses';
-  wrap.innerHTML = tn.useCases.map(uc => {
+  wrap.innerHTML = tn.useCases.map((uc,i) => {
     const markers = (uc.timeMarkers||[]).length
       ? '<div class="markers"><div class="markers-t">Time markers</div><div class="markers-l">'+
         uc.timeMarkers.map(m=>'<span class="marker">'+m+'</span>').join('')+'</div></div>'
@@ -267,9 +259,16 @@ function paintList(){
     const exs = [uc.mainExample].concat(uc.moreExamples||[])
       .map(e=>'<div class="ex">'+e+'</div>').join('');
     const note = uc.note ? '<div class="note"><i>💡</i>'+uc.note+'</div>' : '';
-    return '<div class="card"><div class="uc-title">'+uc.title+'</div>'+
-           markers+'<div class="exs">'+exs+'</div>'+note+'</div>';
+    return '<div class="card">'+
+             '<div class="card-head">'+
+               '<div class="uc-title">'+uc.title+'</div>'+
+               '<button class="street" type="button" data-sec="'+i+'">Street →</button>'+
+             '</div>'+
+             markers+'<div class="exs">'+exs+'</div>'+note+'</div>';
   }).join('');
+
+  wrap.querySelectorAll('.street').forEach(b =>
+    b.addEventListener('click', () => openStreet(+b.dataset.sec)));
 }
 
 /* ── modes ── */
@@ -301,27 +300,25 @@ document.querySelectorAll('.mode-btn[data-mode]').forEach(b =>
   b.addEventListener('click', () => switchMode(b.dataset.mode)));
 
 /* ── list / slides ── */
-function setView(v){
-  view = v;
-  document.querySelectorAll('.vbtn').forEach(b => b.classList.toggle('on', b.dataset.v === v));
-  $('modal').classList.toggle('open', v === 'slides');
-  if(v === 'slides') refreshSlides();
+function openStreet(section){
+  view = 'slides';
+  $('slidesFrame').setAttribute('src',
+    PLAY+'?category='+CATS[cat]+'&tense='+TENSES[tense]+
+    '&section='+section+'&json='+encodeURIComponent(JSON_URL));
+  $('modal').classList.add('open');
 }
-document.querySelectorAll('.vbtn').forEach(b =>
-  b.addEventListener('click', () => setView(b.dataset.v)));
-
-function refreshSlides(){
-  if(view !== 'slides') return;
-  const src = PLAY+'?category='+CATS[cat]+'&tense='+TENSES[tense]+'&json='+encodeURIComponent(JSON_URL);
-  const f = $('slidesFrame');
-  if(f.getAttribute('src') !== src) f.setAttribute('src', src);
+function closeStreet(){
+  view = 'list';
+  $('modal').classList.remove('open');
+  $('slidesFrame').setAttribute('src','');
 }
+function refreshSlides(){ if(view === 'slides') closeStreet(); }
 
-$('closeX').onclick = () => setView('list');
-$('modal').addEventListener('click', e => { if(e.target === $('modal')) setView('list'); });
-document.addEventListener('keydown', e => { if(e.key === 'Escape' && view === 'slides') setView('list'); });
+$('closeX').onclick = closeStreet;
+$('modal').addEventListener('click', e => { if(e.target === $('modal')) closeStreet(); });
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && view === 'slides') closeStreet(); });
 window.addEventListener('message', e => {
-  if(e.data && e.data.intuity === 'showList') setView('list');
+  if(e.data && e.data.intuity === 'showList') closeStreet();
 });
 
 /* ── layout sync — measures the real header instead of trusting the CSS

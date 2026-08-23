@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>INTUITY — Play mode</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --stage:#D9CFC2;
+    --paper:#FEFCF9;
+    --ink:#000000;
+    --grey:#8a8078;
+    --grey-2:#5f5852;
+    --rule:#BCAF9E;
+    --accent:#000000;
+    --spring:cubic-bezier(.22,1,.36,1);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+
+  body{
+    background:var(--stage);
+    color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    display:flex;flex-direction:column;
+    overflow:hidden;overscroll-behavior:none;
+  }
+
+  .display{
+    font-family:'Anton',Impact,sans-serif;
+    font-weight:400;
+    text-transform:uppercase;
+    letter-spacing:-.005em;
+    line-height:.92;
+  }
+
+  /* ---------- header ---------- */
+  .bar{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:14px 18px calc(14px + env(safe-area-inset-top,0px));
+    flex:none;
+  }
+  .tense-name{
+    font-size:.68rem;font-weight:500;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--grey-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .count{font-size:.68rem;font-weight:500;color:var(--grey);font-variant-numeric:tabular-nums;flex:none;letter-spacing:.08em;}
+  .count b{color:var(--ink);font-weight:700;}
+  .bar-btn{
+    border:none;background:none;color:var(--grey-2);font-family:inherit;
+    font-size:.68rem;font-weight:500;letter-spacing:.16em;text-transform:uppercase;
+    padding:6px 0;cursor:pointer;flex:none;
+  }
+  .bar-btn:hover{color:var(--ink);}
+
+  /* ---------- stage ---------- */
+  .stage{position:relative;flex:1;min-height:0;overflow:hidden;touch-action:none;}
+  .road{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+  .road line{stroke:var(--rule);stroke-width:1;}
+  .road .centre{stroke:var(--rule);stroke-dasharray:4 10;}
+  .road .vp{fill:var(--ink);}
+
+  /* ---------- distant signs ---------- */
+  .sign{
+    position:absolute;cursor:pointer;display:flex;flex-direction:column;
+    background:var(--paper);padding:9px 10px;
+    transition:left .5s var(--spring),right .5s var(--spring),top .5s var(--spring),
+               width .5s var(--spring),opacity .3s ease;
+  }
+  .sign::after{
+    content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:max(100%,44px);height:max(100%,44px);
+  }
+  .sign .cue{
+    color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;
+  }
+  .sign.right{align-items:flex-end;text-align:right;}
+  .sign .line{
+    margin-top:5px;color:var(--grey-2);line-height:1.35;font-weight:400;
+  }
+  .sign .line b{font-weight:700;color:var(--ink);}
+  .sign:active{opacity:.5;}
+
+  /* ---------- overflow chip ---------- */
+  .more{
+    position:absolute;border:none;background:none;color:var(--grey);
+    font-family:'Inter',sans-serif;font-size:.7rem;font-weight:700;letter-spacing:.1em;
+    cursor:pointer;transform:translate(-50%,-50%);padding:10px;
+  }
+  .more:hover{color:var(--ink);}
+
+  /* ---------- active card ---------- */
+  .card{
+    position:absolute;left:50%;bottom:0;transform:translateX(-50%);
+    width:min(640px,100%);
+    padding:26px 22px calc(22px + env(safe-area-inset-bottom,0px));
+    background:var(--paper);
+    border-radius:14px 14px 0 0;
+    transition:transform .42s var(--spring),opacity .3s ease;
+  }
+  .card.in{transform:translateX(-50%) translateY(16px);opacity:0;}
+  .card.out{transform:translateX(-50%) translateY(-50px) scale(.9);opacity:0;}
+
+  .card .kicker{
+    font-size:.62rem;font-weight:500;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--grey);margin-bottom:10px;
+  }
+  .card .cue{
+    font-size:clamp(2.3rem,13vw,4rem);
+    margin-bottom:18px;
+    border-bottom:3px solid var(--accent);
+    padding-bottom:6px;
+    display:inline-block;max-width:100%;
+    overflow-wrap:break-word;
+  }
+  .card .sentence{
+    font-size:1.34rem;font-weight:400;line-height:1.38;letter-spacing:-.012em;
+    color:var(--grey-2);margin-bottom:14px;
+  }
+  .card .sentence b{font-weight:700;color:var(--ink);}
+  .card .also{display:flex;flex-direction:column;gap:7px;margin-bottom:16px;}
+  .card .also div{font-size:.94rem;color:var(--grey-2);line-height:1.45;font-weight:400;}
+  .card .also b{font-weight:700;color:var(--ink);}
+  .card .note{
+    font-size:.8rem;color:var(--grey);line-height:1.55;
+    padding-top:13px;border-top:1px solid var(--rule);
+  }
+  .hint{
+    display:flex;align-items:center;justify-content:center;gap:7px;margin-top:16px;
+    font-size:.6rem;letter-spacing:.18em;text-transform:uppercase;color:var(--grey);
+  }
+  .hint span{font-size:.85rem;line-height:1;}
+
+  /* ---------- done ---------- */
+  .done{text-align:center;padding:6px 0 2px;}
+  .done h2{font-size:clamp(1.9rem,10vw,3rem);margin-bottom:12px;}
+  .done p{font-size:.9rem;color:var(--grey-2);line-height:1.5;margin-bottom:18px;}
+  .done .row{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;}
+
+  /* ---------- overflow sheet ---------- */
+  .sheet{
+    position:absolute;inset:0;background:var(--stage);
+    padding:22px;display:none;flex-direction:column;gap:2px;overflow-y:auto;
+  }
+  .sheet.open{display:flex;}
+  .sheet h3{
+    font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--grey);font-weight:500;margin-bottom:12px;
+  }
+  .sheet button{
+    text-align:left;border:none;border-bottom:1px solid var(--rule);background:none;
+    font-family:'Anton',Impact,sans-serif;text-transform:uppercase;letter-spacing:-.005em;
+    font-size:1.5rem;color:var(--ink);padding:14px 0;cursor:pointer;min-height:44px;
+  }
+  .sheet button i{
+    display:block;font-family:'Inter',sans-serif;font-style:normal;text-transform:uppercase;
+    font-size:.6rem;font-weight:500;letter-spacing:.18em;color:var(--grey);margin-top:5px;
+  }
+  .sheet button:hover{color:var(--grey-2);}
+  .sheet .close{
+    font-family:'Inter',sans-serif;font-size:.68rem;font-weight:500;letter-spacing:.16em;
+    color:var(--grey-2);border-bottom:none;margin-top:10px;
+  }
+
+  .msg{
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    text-align:center;color:var(--grey-2);font-size:.92rem;line-height:1.5;padding:0 24px;
+  }
+
+  @media (prefers-reduced-motion:reduce){ *{transition-duration:.01ms !important;} }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <span class="tense-name" id="tenseName">&nbsp;</span>
+  <span class="count"><b id="cur">0</b> / <span id="tot">0</span></span>
+  <button class="bar-btn" id="listBtn" type="button">List</button>
+</div>
+
+<div class="stage" id="stage">
+  <svg class="road" id="road" preserveAspectRatio="none"></svg>
+  <div id="signLayer"></div>
+  <div id="cardLayer"></div>
+  <div class="sheet" id="sheet"></div>
+</div>
+
+<script>
+const P        = new URLSearchParams(location.search);
+const CATEGORY = P.get('category') || 'present';
+const TENSE    = P.get('tense')    || 'simple';
+const JSON_URL = P.get('json')     || '../../data/grammar-rules/tenses-rules.json';
+
+/* Monochrome by default. Set a hex here to tint the rule under the cue
+   word per aspect; everything else stays black, grey and white. */
+const ACCENT = {
+  'simple':'#000000',
+  'continuous':'#000000',
+  'perfect':'#000000',
+  'perfect-continuous':'#000000'
+};
+document.documentElement.style.setProperty('--accent', ACCENT[TENSE] || '#000000');
+
+let useCases = [];
+let placements = [];
+let activeUc = null;
+let activeIsPlaced = false;
+let done = false;
+
+const SHRINK = 0.62;
+
+async function load(){
+  try{
+    const res = await fetch(JSON_URL);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const raw  = await res.json();
+    const list = Array.isArray(raw) ? raw : (raw.rules || Object.values(raw));
+    const tense = (Array.isArray(list)?list:Object.values(list))
+                    .find(t => t.id === CATEGORY+'-'+TENSE);
+    if(!tense) throw new Error('Tense not found');
+    useCases = tense.useCases || [];
+    document.getElementById('tenseName').textContent = tense.name || tense.fullName || '';
+  }catch(e){
+    console.error(e);
+    document.getElementById('cardLayer').innerHTML =
+      '<div class="msg">Couldn\'t load the tense data.<br>Looked for '+JSON_URL+'</div>';
+    return;
+  }
+  document.getElementById('tot').textContent = useCases.length;
+  activeUc = useCases.length ? 0 : null;
+  layout(); render();
+}
+
+function esc(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+
+function mark(sentence, markers){
+  if(!markers || !markers.length) return sentence;
+  let out = sentence;
+  markers.slice().sort((a,b)=>b.length-a.length).forEach(m=>{
+    out = out.replace(new RegExp('\\b('+esc(m)+')\\b','i'), '<b>$1</b>');
+  });
+  return out;
+}
+
+function cueOf(uc){
+  if(uc.cue) return uc.cue;
+  if(uc.timeMarkers && uc.timeMarkers.length) return uc.timeMarkers[0];
+  return uc.title.split(/[(&]/)[0].trim();
+}
+
+function shortLine(uc, budget){
+  const all = [uc.mainExample].concat(uc.moreExamples||[]);
+  const fits = all.filter(s => s.length <= budget);
+  if(fits.length) return fits.sort((a,b)=>a.length-b.length)[0];
+  return all.sort((a,b)=>a.length-b.length)[0];
+}
+
+let G = {};
+function layout(){
+  const st = document.getElementById('stage');
+  const w = st.clientWidth, h = st.clientHeight;
+  const narrow = w < 700;
+  G = {
+    w, h, narrow,
+    perSide: narrow ? 2 : 4,
+    vpx: w*0.5,
+    vpy: h*0.15,
+    baseY: h*0.58,
+    baseW: narrow ? Math.min(w*0.44,175) : Math.min(w*0.30,215),
+    edge: 6
+  };
+  const svg = document.getElementById('road');
+  svg.setAttribute('viewBox','0 0 '+w+' '+h);
+  svg.innerHTML =
+    '<line x1="'+G.edge+'" y1="'+h+'" x2="'+G.vpx+'" y2="'+G.vpy+'"/>'+
+    '<line x1="'+(w-G.edge)+'" y1="'+h+'" x2="'+G.vpx+'" y2="'+G.vpy+'"/>'+
+    '<line class="centre" x1="'+G.vpx+'" y1="'+h+'" x2="'+G.vpx+'" y2="'+G.vpy+'"/>'+
+    '<circle class="vp" cx="'+G.vpx+'" cy="'+G.vpy+'" r="2.5"/>';
+}
+
+function slotAt(side, depth){
+  const t  = Math.pow(SHRINK, depth);
+  const ax = side ? G.w - G.edge : G.edge;
+  return {
+    x: G.vpx + (ax - G.vpx) * t,
+    y: G.vpy + (G.baseY - G.vpy) * t,
+    t: t,
+    w: G.baseW * t
+  };
+}
+
+function render(){
+  document.getElementById('cur').textContent = placements.length;
+  renderSigns();
+  renderCard();
+}
+
+function renderSigns(){
+  const layer = document.getElementById('signLayer');
+  layer.innerHTML = '';
+  let hidden = 0;
+
+  placements.forEach((p, i) => {
+    const depth = placements.slice(i+1).filter(q => q.side === p.side).length;
+    if(depth >= G.perSide){ hidden++; return; }
+    if(activeIsPlaced && p.uc === activeUc) return;
+
+    const s  = slotAt(p.side, depth);
+    const uc = useCases[p.uc];
+    const el = document.createElement('div');
+    el.className = 'sign' + (p.side ? ' right' : '');
+    el.style.width = s.w + 'px';
+    el.style.top   = (s.y - s.w*0.32) + 'px';
+    if(p.side) el.style.right = (G.w - s.x) + 'px';
+    else       el.style.left  = s.x + 'px';
+
+    const cueSize = Math.max(10, Math.round(26 * s.t));
+    let html = '<div class="cue display" style="font-size:'+cueSize+'px">'+cueOf(uc)+'</div>';
+
+    const bodySize = Math.round(14 * s.t);
+    if(bodySize >= 11){
+      const budget = Math.round(s.w / (bodySize*0.5)) * 2;
+      html += '<div class="line" style="font-size:'+bodySize+'px">'
+            + mark(shortLine(uc,budget), uc.timeMarkers) + '</div>';
+    }
+
+    el.innerHTML = html;
+    el.onclick = () => retrieve(p.uc);
+    layer.appendChild(el);
+  });
+
+  if(hidden > 0){
+    const b = document.createElement('button');
+    b.className = 'more';
+    b.style.left = G.vpx + 'px';
+    b.style.top  = (G.vpy - 28) + 'px';
+    b.textContent = '+' + hidden;
+    b.onclick = openSheet;
+    layer.appendChild(b);
+  }
+}
+
+function renderCard(){
+  const layer = document.getElementById('cardLayer');
+  layer.innerHTML = '';
+
+  if(done){
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.innerHTML =
+      '<div class="done">'+
+        '<h2 class="display">Street complete</h2>'+
+        '<p>Tap any sign to bring it back. Finish the sentence before you do.</p>'+
+        '<div class="row">'+
+          '<button class="bar-btn" id="againBtn" type="button">Start again</button>'+
+          '<button class="bar-btn" id="listBtn2" type="button">See all</button>'+
+        '</div>'+
+      '</div>';
+    layer.appendChild(el);
+    el.querySelector('#againBtn').onclick = reset;
+    el.querySelector('#listBtn2').onclick = goList;
+    return;
+  }
+
+  if(activeUc === null) return;
+  const uc = useCases[activeUc];
+
+  const el = document.createElement('div');
+  el.className = 'card in';
+  el.innerHTML =
+    '<div class="kicker">'+uc.title+'</div>'+
+    '<div class="cue display">'+cueOf(uc)+'</div>'+
+    '<div class="sentence">'+mark(uc.mainExample, uc.timeMarkers)+'</div>'+
+    '<div class="also">'+
+      (uc.moreExamples||[]).slice(0,2).map(e =>
+        '<div>'+mark(e, uc.timeMarkers)+'</div>').join('')+
+    '</div>'+
+    (uc.note ? '<div class="note">'+uc.note+'</div>' : '')+
+    '<div class="hint"><span>&uarr;</span>'+
+      (activeIsPlaced ? 'Swipe up to put it back' : 'Swipe up to send it down')+
+    '</div>';
+
+  layer.appendChild(el);
+  requestAnimationFrame(() => el.classList.remove('in'));
+}
+
+function advance(){
+  if(done || activeUc === null) return;
+  const card = document.querySelector('.card');
+
+  if(!activeIsPlaced) placements.push({ uc: activeUc, side: placements.length % 2 });
+  activeIsPlaced = false;
+
+  const next = useCases.findIndex((_,i) => !placements.some(p => p.uc === i));
+  activeUc = next === -1 ? null : next;
+  if(activeUc === null) done = true;
+
+  if(card){ card.classList.add('out'); setTimeout(render, 220); }
+  else render();
+}
+
+function undo(){
+  if(!placements.length) return;
+  activeUc = placements.pop().uc;
+  activeIsPlaced = false;
+  done = false;
+  render();
+}
+
+function retrieve(i){
+  activeUc = i; activeIsPlaced = true; done = false;
+  closeSheet(); render();
+}
+
+function reset(){
+  placements = []; activeUc = 0; activeIsPlaced = false; done = false;
+  render();
+}
+
+function openSheet(){
+  const sheet = document.getElementById('sheet');
+  let html = '<h3>Further down the street</h3>';
+  placements.forEach((p,i) => {
+    if(placements.slice(i+1).filter(q => q.side === p.side).length < G.perSide) return;
+    const uc = useCases[p.uc];
+    html += '<button type="button" data-uc="'+p.uc+'">'+cueOf(uc)+'<i>'+uc.title+'</i></button>';
+  });
+  html += '<button type="button" class="close" data-close="1">Close</button>';
+  sheet.innerHTML = html;
+  sheet.classList.add('open');
+  sheet.querySelectorAll('button').forEach(b => {
+    b.onclick = () => b.dataset.close ? closeSheet() : retrieve(+b.dataset.uc);
+  });
+}
+function closeSheet(){ document.getElementById('sheet').classList.remove('open'); }
+
+function goList(){
+  if(window.parent !== window) parent.postMessage({ intuity:'showList' }, '*');
+  else location.href = 'tenses-rules.html';
+}
+document.getElementById('listBtn').onclick = goList;
+
+const stage = document.getElementById('stage');
+let sx = 0, sy = 0, tracking = false;
+
+stage.addEventListener('pointerdown', e => {
+  if(e.target.closest('.sign, .more, .sheet, .bar-btn')) return;
+  sx = e.clientX; sy = e.clientY; tracking = true;
+});
+stage.addEventListener('pointerup', e => {
+  if(!tracking) return;
+  tracking = false;
+  const dy = e.clientY - sy, dx = e.clientX - sx;
+  if(Math.abs(dy) < 45 || Math.abs(dx) > Math.abs(dy)) return;
+  dy < 0 ? advance() : undo();
+});
+stage.addEventListener('pointercancel', () => { tracking = false; });
+
+document.addEventListener('keydown', e => {
+  if(e.key === 'ArrowUp' || e.key === ' '){ e.preventDefault(); advance(); }
+  if(e.key === 'ArrowDown'){ e.preventDefault(); undo(); }
+  if(e.key === 'Escape') closeSheet();
+});
+
+let rt;
+window.addEventListener('resize', () => {
+  clearTimeout(rt);
+  rt = setTimeout(() => { layout(); render(); }, 120);
+});
+
+load();
+</script>
+</body>
+</html>

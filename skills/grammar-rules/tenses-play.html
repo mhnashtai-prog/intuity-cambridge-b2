@@ -294,12 +294,19 @@ function openSection(i){
 function buildMap(){
   $('count').innerHTML = '<b>'+visited.size+'</b> / '+cards.length;
 
-  // Each card sits a fixed offset off whatever the curve is doing at
-  // that height — so cards stay "attached" to the line's wander instead
-  // of the line drifting away from a fixed column. Widened back out so
-  // the connecting curve is actually visible between pills instead of
-  // running underneath them.
-  const OFFSET = 14;
+  // Each card sits an offset off whatever the curve is doing at that
+  // height — so cards stay "attached" to the line's wander instead of
+  // the line drifting away from a fixed column. The offset is expressed
+  // in viewBox units (0-100), but the cards themselves are a FIXED pixel
+  // size (font-size/padding are in px/rem, not %). On a wide desktop
+  // frame (~760px), 14 units ≈ 106px — plenty of clearance. On a narrow
+  // phone (~370px), the same 14 units is only ≈50px — less than half a
+  // card's own width — so the card visually crosses the line. Scaling
+  // the offset by the container's real pixel width keeps the pixel
+  // clearance roughly constant across screen sizes.
+  const mapWidthPx = $('map').clientWidth || 760;
+  const PIXEL_CLEARANCE = 106; // the clearance that looked right on desktop
+  const OFFSET = Math.max(14, Math.min(32, PIXEL_CLEARANCE / mapWidthPx * 100));
   const pillXs = NODE_LAYOUT.map(n => {
     const cx = curlXAt(n.y);
     return n.capSide === 'right' ? cx - OFFSET : cx + OFFSET;
@@ -402,6 +409,12 @@ $('back').onclick = leave;
 
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape'){ if($('modalWrap').classList.contains('open')) closeModal(); else if(secIdx!==null) leave(); }
+});
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if(secIdx !== null) buildMap(); }, 150);
 });
 
 load();

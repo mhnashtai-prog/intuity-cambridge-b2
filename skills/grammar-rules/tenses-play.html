@@ -328,7 +328,7 @@ function buildMap(){
     const n = NODE_LAYOUT[i], px = pillXs[i], dot = dots[i];
     const x1 = px + dirs[i]*11;
     svg += '<line class="stem" data-i="'+i+'" x1="'+x1+'" y1="'+n.y+'" x2="'+dot.x+'" y2="'+n.y+'"/>'+
-           '<circle class="dot" cx="'+dot.x+'" cy="'+n.y+'" r="0.46"/>';
+           '<circle class="dot" data-i="'+i+'" cx="'+dot.x+'" cy="'+n.y+'" r="0.46"/>';
   });
   $('mapPath').innerHTML = svg;
 
@@ -377,16 +377,51 @@ function buildMap(){
     // at their final size, snap each stem to the pill's actual outer
     // edge so the connector dot always sits just outside it, never
     // overlapping the pill's rounded end.
+    //
+    // The wave itself is then pulled in to match: its anchor dot moves
+    // from the original guessed STEM_LEN out to sit right against that
+    // same real edge, so the road visually meets the banner's own
+    // circumference instead of stopping short of it. Only the wave's
+    // position changes here — the banners stay exactly where NODE_LAYOUT
+    // /pillXs put them, and so do the captions.
+    const GAP_PX = 2; // placeholder breathing room; will be tuned to ~5mm next
     const mapRect = $('map').getBoundingClientRect();
-    $('nodes').querySelectorAll('.pill').forEach(pillEl => {
-      const i = +pillEl.dataset.i;
+    const tightDots = dots.map((dot,i) => {
+      const pillEl = $('nodes').querySelector('.pill[data-i="'+i+'"]');
       const dir = dirs[i];
       const pRect = pillEl.getBoundingClientRect();
       const edgePx = dir > 0 ? (pRect.right - mapRect.left) : (pRect.left - mapRect.left);
       const edgePct = edgePx / mapRect.width * 100;
-      const stemLine = $('mapPath').querySelector('.stem[data-i="'+i+'"]');
-      if(stemLine) stemLine.setAttribute('x1', edgePct);
+      const gapPct  = GAP_PX / mapRect.width * 100;
+      return { x: edgePct + dir*gapPct, y: dot.y };
     });
+
+    $('nodes').querySelectorAll('.pill').forEach(pillEl => {
+      const i = +pillEl.dataset.i;
+      const stemLine = $('mapPath').querySelector('.stem[data-i="'+i+'"]');
+      const dotEl    = $('mapPath').querySelector('.dot[data-i="'+i+'"]');
+      const tx = tightDots[i].x;
+      if(stemLine){
+        const pRect = pillEl.getBoundingClientRect();
+        const dir = dirs[i];
+        const edgePx = dir > 0 ? (pRect.right - mapRect.left) : (pRect.left - mapRect.left);
+        stemLine.setAttribute('x1', edgePx / mapRect.width * 100);
+        stemLine.setAttribute('x2', tx);
+      }
+      if(dotEl) dotEl.setAttribute('cx', tx);
+    });
+
+    // Redraw the road through the tightened anchors so the curve itself
+    // (not just the dots) actually reaches in to the banners.
+    let td = 'M '+tightDots[0].x+' '+(tightDots[0].y-6)+' L '+tightDots[0].x+' '+tightDots[0].y;
+    for(let i=1;i<tightDots.length;i++){
+      const a = tightDots[i-1], b = tightDots[i], my = (a.y+b.y)/2;
+      td += ' C '+a.x+' '+my+', '+b.x+' '+my+', '+b.x+' '+b.y;
+    }
+    const tlast = tightDots[tightDots.length-1];
+    td += ' L '+tlast.x+' '+(tlast.y+6);
+    const roadEl = $('mapPath').querySelector('.road');
+    if(roadEl) roadEl.setAttribute('d', td);
   });
 }
 

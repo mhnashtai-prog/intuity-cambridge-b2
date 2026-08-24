@@ -419,36 +419,32 @@ function buildMap(){
       if(dotEl) dotEl.setAttribute('cx', capDots[i].x);
     });
 
-    // The road threads through all six tight anchors. Rather than
-    // bolting on an artificial hook shape at each end, we let the
-    // curve's own natural trajectory continue a short distance past the
-    // first and last anchor — using the same tangent the S-curve is
-    // already following there — and cap that with a small dot. This
-    // keeps the line reading as one continuous, natural curve instead
-    // of an added decoration.
-    const EXT = 0.4; // how far past the first/last anchor to extend, as a fraction of that segment's length
+    // The road threads through all six tight anchors. Each segment's
+    // bezier control points share their anchor's x-coordinate, which
+    // means the curve actually enters/leaves every anchor moving
+    // vertically — not along the diagonal toward the next anchor. So
+    // the tail extension has to continue in that same vertical
+    // direction, or it kinks into a visible spike instead of reading as
+    // one smooth line.
+    const TAIL_LEN = 6; // how far past the first/last anchor the tail extends, in viewBox units
 
-    // Tangent-continuation point for the top: extrapolate backwards
-    // along the same curvature the first segment (anchor0 -> anchor1)
-    // starts with.
-    const a0 = tightDots[0], a1 = tightDots[1];
-    const topExt = { x: a0.x - (a1.x - a0.x) * EXT, y: a0.y - (a1.y - a0.y) * EXT };
+    const a0 = tightDots[0];
+    const topExt = { x: a0.x, y: a0.y - TAIL_LEN };
 
-    const aLast = tightDots[tightDots.length-1], aPrev = tightDots[tightDots.length-2];
-    const bottomExt = { x: aLast.x - (aPrev.x - aLast.x) * EXT, y: aLast.y - (aPrev.y - aLast.y) * EXT };
+    const aLast = tightDots[tightDots.length-1];
+    const bottomExt = { x: aLast.x, y: aLast.y + TAIL_LEN };
 
-    let td = 'M '+topExt.x+' '+topExt.y+' Q '+a0.x+' '+a0.y+', '+a0.x+' '+a0.y;
+    let td = 'M '+topExt.x+' '+topExt.y+' L '+a0.x+' '+a0.y;
     for(let i=1;i<tightDots.length;i++){
       const a = tightDots[i-1], b = tightDots[i], my = (a.y+b.y)/2;
       td += ' C '+a.x+' '+my+', '+b.x+' '+my+', '+b.x+' '+b.y;
     }
-    td += ' Q '+aLast.x+' '+aLast.y+', '+bottomExt.x+' '+bottomExt.y;
+    td += ' L '+bottomExt.x+' '+bottomExt.y;
 
     const roadEl = $('mapPath').querySelector('.road');
     if(roadEl) roadEl.setAttribute('d', td);
 
-    // Terminal end-caps: a small dot at the natural extension past the
-    // first and last anchor.
+    // Terminal end-caps: a small dot at the tip of each straight tail.
     const mapSvg = $('mapPath');
     let endCaps = mapSvg.querySelector('.endCaps');
     if(!endCaps){

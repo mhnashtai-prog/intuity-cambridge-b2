@@ -63,6 +63,11 @@
   .mapPath .road{fill:none;stroke:var(--mute);stroke-width:.16;stroke-linecap:round;}
   .mapPath .stem{stroke:var(--rule);stroke-width:.4;}
   .mapPath .dot{fill:var(--paper);stroke:var(--line);stroke-width:.3;}
+  /* Tail: hairline where it leaves the wave, heavy at the tip, capped by a
+     solid dot. Drawn as short sampled segments because SVG strokes can't
+     taper on their own. */
+  .mapPath .taper{fill:none;stroke:var(--line);stroke-linecap:round;}
+  .mapPath .endDot{fill:var(--line);stroke:none;}
 
   .nodes{position:absolute;inset:0;}
   .node{position:absolute;transform:translateY(-50%);width:100%;}
@@ -421,36 +426,70 @@ function buildMap(){
     });
 
     // ---- one continuous wave, drawn in a single pass ----
-    // Lead-in / lead-out anchors continue the alternation past the first
-    // and last pill, so the curve enters and leaves mid-swing instead of
-    // stopping dead on a node. They're reflections of the neighbouring
-    // anchor through the endpoint, and they go into the SAME array as the
-    // six dots — so the smoothing loop below can't see a seam and the
-    // curvature carries through the joins for free.
-    const LEAD = 0.62;                                // tail length, as a fraction of one row's swing
-    const clampX = x => Math.max(4, Math.min(96, x)); // keep tails inside the frame
+    // The tails don't extrapolate the wave outward — they HOOK. Each one
+    // leaves its end anchor bulging slightly away from the spine, then
+    // curls back across it and stops above (or below) the pill, close in.
+    // That's why the control points are written out explicitly instead of
+    // being reflected from the neighbouring anchor: a reflection always
+    // sends the line further out, which is the opposite of the curl.
+    // Sized in px, then converted, so the hook keeps its shape at any width.
+    const HOOK_BACK_PX = 55; // how far the tip curls back past the anchor
+    const HOOK_RISE_PX = 46; // how far above/below the anchor the tip sits
+    const HOOK_BULGE_PX = 14; // the small outward kick before it turns
 
-    const first  = tightDots[0],                    second = tightDots[1];
-    const last   = tightDots[tightDots.length - 1], penult = tightDots[tightDots.length - 2];
+    const hx = toPctX(HOOK_BACK_PX),
+          hy = toPctY(HOOK_RISE_PX),
+          bx = toPctX(HOOK_BULGE_PX);
 
-    const head = { x: clampX(first.x + (first.x - second.x) * LEAD),
-                   y: first.y - (second.y - first.y) * LEAD };
-    const tail = { x: clampX(last.x  + (last.x  - penult.x) * LEAD),
-                   y: last.y  + (last.y  - penult.y) * LEAD };
+    const first = tightDots[0], last = tightDots[tightDots.length-1];
+    const d0 = dirs[0], dN = dirs[dirs.length-1];
 
-    const anchors = [head, ...tightDots, tail];
+    // Head (top): rise, kick outward, curl back over the pill.
+    const head   = { x: first.x - d0*hx,      y: first.y - hy };
+    const headC1 = { x: first.x + d0*bx,      y: first.y - hy*0.42 };
+    const headC2 = { x: first.x - d0*hx*0.55, y: first.y - hy*0.92 };
+    // Tail (bottom): the same move, mirrored.
+    const tail   = { x: last.x - dN*hx,       y: last.y + hy };
+    const tailC1 = { x: last.x + dN*bx,       y: last.y + hy*0.42 };
+    const tailC2 = { x: last.x - dN*hx*0.55,  y: last.y + hy*0.92 };
 
-    let td = 'M ' + anchors[0].x + ' ' + anchors[0].y;
-    for(let i = 1; i < anchors.length; i++){
-      const a = anchors[i-1], b = anchors[i], my = (a.y + b.y) / 2;
+    // Single path: hook in, all six anchors, hook out. No seams.
+    let td = 'M '+head.x+' '+head.y+
+             ' C '+headC2.x+' '+headC2.y+', '+headC1.x+' '+headC1.y+', '+first.x+' '+first.y;
+    for(let i = 1; i < tightDots.length; i++){
+      const a = tightDots[i-1], b = tightDots[i], my = (a.y + b.y) / 2;
       td += ' C ' + a.x + ' ' + my + ', ' + b.x + ' ' + my + ', ' + b.x + ' ' + b.y;
     }
+    td += ' C '+tailC1.x+' '+tailC1.y+', '+tailC2.x+' '+tailC2.y+', '+tail.x+' '+tail.y;
 
     const roadEl = $('mapPath').querySelector('.road');
     if(roadEl) roadEl.setAttribute('d', td);
 
-    // Terminal end-caps: a small dot at the very top and very bottom of
-    // the completed wave — i.e. on the tails, not on nodes 1 and 6.
+    // ---- tapered tips ----
+    // An SVG stroke is one width end to end, so the taper is faked: walk
+    // the hook's own bezier, emit short segments, ramp width and opacity
+    // from hairline (matching the road, so the join is invisible) up to
+    // the heavy tip. Sits exactly on the path above, so nothing shifts.
+    const cubic = (p0,c1,c2,p1,t) => {
+      const mt = 1-t, a = mt*mt*mt, b = 3*mt*mt*t, c = 3*mt*t*t, e = t*t*t;
+      return { x: a*p0.x + b*c1.x + c*c2.x + e*p1.x,
+               y: a*p0.y + b*c1.y + c*c2.y + e*p1.y };
+    };
+    const STEPS = 16, W_THIN = 0.16, W_THICK = 0.62;
+    function taper(anchor, c1, c2, tip){
+      let out = '';
+      for(let s = 0; s < STEPS; s++){
+        const t0 = s/STEPS, t1 = (s+1)/STEPS;
+        const a = cubic(anchor, c1, c2, tip, t0);
+        const b = cubic(anchor, c1, c2, tip, t1);
+        const k = (s+1)/STEPS;                       // 0 at the wave, 1 at the tip
+        const w = W_THIN + (W_THICK - W_THIN)*k*k;   // squared: stays thin longer, then swells
+        out += '<line class="taper" x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'" '+
+               'stroke-width="'+w.toFixed(3)+'" opacity="'+(0.35 + 0.65*k).toFixed(3)+'"/>';
+      }
+      return out;
+    }
+
     const mapSvg = $('mapPath');
     let endCaps = mapSvg.querySelector('.endCaps');
     if(!endCaps){
@@ -458,9 +497,12 @@ function buildMap(){
       endCaps.setAttribute('class','endCaps');
       mapSvg.appendChild(endCaps);
     }
+    // Drawn anchor→tip so the taper runs the right way round.
     endCaps.innerHTML =
-      '<circle class="dot" cx="'+head.x+'" cy="'+head.y+'" r="0.46"/>'+
-      '<circle class="dot" cx="'+tail.x+'" cy="'+tail.y+'" r="0.46"/>';
+      taper(first, headC1, headC2, head) +
+      taper(last,  tailC1, tailC2, tail) +
+      '<circle class="endDot" cx="'+head.x+'" cy="'+head.y+'" r="0.72"/>'+
+      '<circle class="endDot" cx="'+tail.x+'" cy="'+tail.y+'" r="0.72"/>';
   });
 }
 

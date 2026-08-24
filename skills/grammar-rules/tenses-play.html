@@ -63,17 +63,26 @@
   .road .vp{fill:#8a7f6d;}
 
   .sign{position:absolute;cursor:pointer;display:flex;flex-direction:column;
-    background:var(--paper);padding:10px 12px;border-radius:3px;
-    box-shadow:0 3px 14px rgba(58,47,34,.30);
+    background:var(--paper);padding:11px 13px;border-radius:2px;
+    box-shadow:0 6px 20px rgba(40,32,22,.34);
+    border-left:3px solid #16161a;
+    transform-origin:right center;
     transition:left .5s var(--spring),right .5s var(--spring),top .5s var(--spring),
                width .5s var(--spring),opacity .3s ease;}
   .sign::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
     width:max(100%,44px);height:max(100%,44px);}
   .sign .cue{color:var(--hot);line-height:1.05;overflow-wrap:break-word;max-width:100%;}
-  .sign.right{align-items:flex-end;text-align:right;}
+  .sign.right{align-items:flex-end;text-align:right;
+    border-left:none;border-right:3px solid #16161a;
+    transform-origin:left center;}
   .sign .line{margin-top:5px;color:var(--soft);line-height:1.32;font-weight:400;}
   .sign .line b{font-weight:700;color:var(--ink);}
-  .sign:active{opacity:.5;}
+  .sign:active{opacity:.55;}
+
+  /* black post the board is bolted to, standing behind it */
+  .post{position:absolute;pointer-events:none;background:#16161a;border-radius:1px;}
+  .post::after{content:'';position:absolute;left:50%;bottom:-3px;transform:translateX(-50%);
+    width:180%;height:5px;border-radius:2px;background:#16161a;opacity:.85;}
 
   .more{position:absolute;border:none;background:none;color:var(--mute);
     font-family:'Inter',sans-serif;font-size:.7rem;font-weight:700;letter-spacing:.1em;
@@ -151,8 +160,8 @@ const START    = P.get('section') !== null ? parseInt(P.get('section'),10) : nul
    running from its side of the road to the vanishing point. Width tapers
    with depth; type size does not, so the far boards stay readable and
    simply wrap to more lines. */
-const ROW_STEP  = 0.22;   // depth step along the road
-const WIDTH_TAPER = 0.82; // width multiplier per row back
+const ROW_STEP  = 0.35;   // depth step along the road
+const WIDTH_TAPER = 0.74; // width multiplier per row back
 
 let tense = null, useCases = [], secIdx = null;
 let cards = [], placements = [], activeCard = null, activeIsPlaced = false, done = false;
@@ -261,10 +270,15 @@ function layout(){
   const narrow = w < 620;
   G = { w, h, narrow,
         perSide: narrow ? 2 : 3,
-        vpx: w*0.5, vpy: h*0.15,
-        baseY: h*0.72,
+        vpx: w*0.5, vpy: h*0.12,
+        baseY: h*0.86,
         baseW: narrow ? Math.min(w*0.45,190) : Math.min(w*0.31,230),
         edge: 8 };
+  /* The angle of the road line, damped. Boards are sheared to match it so
+     their top and bottom edges run toward the vanishing point instead of
+     staying level and facing the viewer. */
+  const raw = Math.atan2(G.baseY - G.vpy, G.vpx - G.edge) * 180 / Math.PI;
+  G.shear = Math.min(24, raw * 0.45);
   const svg = $('road');
   const kerb = G.narrow ? 44 : 78;
   svg.setAttribute('viewBox','0 0 '+w+' '+h);
@@ -307,11 +321,15 @@ function layout(){
 function slotAt(side, depth){
   const t  = Math.max(0.15, 1 - depth*ROW_STEP);
   const ax = side ? G.w - G.edge : G.edge;
+  const x  = G.vpx + (ax - G.vpx)*t;
+  // Never let a board reach across the road: cap its width at the gap
+  // between its own edge and the centre line.
+  const room = Math.abs(G.vpx - x) - 16;
   return {
-    x: G.vpx + (ax - G.vpx)*t,          // on the perspective line
-    y: G.vpy + (G.baseY - G.vpy)*t,     // same ratio, same line
+    x: x,
+    y: G.vpy + (G.baseY - G.vpy)*t,
     t: t,
-    w: G.baseW * Math.pow(WIDTH_TAPER, depth)
+    w: Math.max(96, Math.min(G.baseW * Math.pow(WIDTH_TAPER, depth), room))
   };
 }
 
@@ -337,6 +355,10 @@ function renderSigns(){
     el.style.width = s.w+'px';
     el.style.top = (s.y - 30)+'px';
     if(p.side) el.style.right = (G.w - s.x)+'px'; else el.style.left = s.x+'px';
+    // Sheared along the road line, plus a little turn for thickness.
+    const sh = p.side ? G.shear : -G.shear;
+    const ry = p.side ? -13 : 13;
+    el.style.transform = 'perspective(1200px) rotateY('+ry+'deg) skewY('+sh+'deg)';
 
     // Fixed type sizes — every hanging sign stays fully readable.
     const cueSize  = G.narrow ? 15 : 17;
@@ -347,6 +369,20 @@ function renderSigns(){
 
     el.innerHTML = html;
     el.onclick = () => retrieve(p.c);
+
+    // Post first, so the board sits in front of it.
+    const post = document.createElement('div');
+    post.className = 'post';
+    const pw = Math.max(4, Math.round(7*s.t));
+    const ph = Math.round((G.baseY - s.y) * 0.30 + 52*s.t);
+    post.style.transform = 'skewY('+(p.side ? G.shear*0.5 : -G.shear*0.5)+'deg)';
+    post.style.width  = pw+'px';
+    post.style.height = ph+'px';
+    post.style.top    = (s.y - 30 + 26)+'px';
+    if(p.side) post.style.right = (G.w - s.x + 14)+'px';
+    else       post.style.left  = (s.x + 14)+'px';
+    layer.appendChild(post);
+
     layer.appendChild(el);
   });
 

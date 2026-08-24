@@ -425,81 +425,72 @@ function buildMap(){
       if(dotEl) dotEl.setAttribute('cx', capDots[i].x);
     });
 
-    // ---- one continuous wave, drawn in a single pass ----
-    // The tails HOOK: they leave the anchor, then curl back across the
-    // spine and stop above (or below) the pill, close in.
+    // ---- the wave: ONE curve, one equation ----
+    // Not assembled from segments. The six anchors alternate sides at an
+    // equal vertical spacing, which is precisely a cosine sampled at its
+    // peaks — so a single cosine of wavelength (2 x row gap) passes through
+    // every anchor exactly, by construction. Nothing is fitted, nothing is
+    // joined, and because a cosine's slope is zero at every peak the curve
+    // meets each pill with a vertical tangent for free.
     //
-    // The critical bit is the FIRST control point. Every segment of the
-    // wave uses (a.x, midY) / (b.x, midY), so the curve's tangent at the
-    // end anchors is exactly VERTICAL. If the hook departs at any other
-    // angle the line arrives vertical and leaves tilted — positions match
-    // but directions don't, and the eye reads that instantly as two
-    // pieces stuck together. So headC1/tailC1 sit directly above/below
-    // the anchor: same tangent, continuous curvature, one gesture.
-    // The outward bulge in the sketch then appears on its own, because
-    // the curve leaves vertically while the tip pulls the other way.
-    // Sized in px, then converted, so the hook holds its shape at any width.
-    const HOOK_BACK_PX = 55; // how far the tip curls back past the anchor
-    const HOOK_RISE_PX = 46; // how far above/below the anchor the tip sits
+    // The tails are not added on. Sampling simply continues past the first
+    // and last anchor, so the curl back across the spine is the same
+    // cosine still running. There is no seam to hide because there is no
+    // seam.
+    const ys   = tightDots.map(d => d.y);
+    const y0   = ys[0], yN = ys[ys.length-1];
+    const gap  = (yN - y0) / (ys.length - 1);   // uniform by NODE_LAYOUT
+    const LAM  = 2 * gap;                        // one full period spans two rows
+    const cxW  = tightDots.reduce((s,d) => s + d.x, 0) / tightDots.length;
+    const amp  = tightDots.reduce((s,d) => s + Math.abs(d.x - cxW), 0) / tightDots.length;
+    const side = Math.sign(tightDots[0].x - cxW); // which way row 1 leans
 
-    const hx = toPctX(HOOK_BACK_PX),
-          hy = toPctY(HOOK_RISE_PX);
+    // The whole wave, as a function of height. This is the entire shape.
+    const waveX = y => cxW + side * amp * Math.cos(2*Math.PI * (y - y0) / LAM);
 
-    const first = tightDots[0], last = tightDots[tightDots.length-1];
-    const d0 = dirs[0], dN = dirs[dirs.length-1];
+    // How far past the end anchors the curve keeps running, as a fraction
+    // of a row gap. Beyond ~0.5 it crosses the centre and heads for the
+    // opposite peak — that crossing IS the hook in the sketch.
+    const EXT   = 0.62;
+    const yTop  = y0 - EXT*gap;
+    const yBot  = yN + EXT*gap;
 
-    // Head (top): straight up out of the wave, then curl back over the pill.
-    const head   = { x: first.x - d0*hx,      y: first.y - hy };
-    const headC1 = { x: first.x,              y: first.y - hy*0.45 }; // vertical departure
-    const headC2 = { x: first.x - d0*hx*0.72, y: first.y - hy*0.98 };
-    // Tail (bottom): the same move, mirrored.
-    const tail   = { x: last.x - dN*hx,       y: last.y + hy };
-    const tailC1 = { x: last.x,               y: last.y + hy*0.45 }; // vertical departure
-    const tailC2 = { x: last.x - dN*hx*0.72,  y: last.y + hy*0.98 };
-
-    // Single path: hook in, all six anchors, hook out. No seams.
-    let td = 'M '+head.x+' '+head.y+
-             ' C '+headC2.x+' '+headC2.y+', '+headC1.x+' '+headC1.y+', '+first.x+' '+first.y;
-    for(let i = 1; i < tightDots.length; i++){
-      const a = tightDots[i-1], b = tightDots[i], my = (a.y + b.y) / 2;
-      td += ' C ' + a.x + ' ' + my + ', ' + b.x + ' ' + my + ', ' + b.x + ' ' + b.y;
+    const N = 240;
+    const pts = [];
+    for(let i = 0; i <= N; i++){
+      const y = yTop + (yBot - yTop) * (i/N);
+      pts.push({ x: waveX(y), y: y });
     }
-    td += ' C '+tailC1.x+' '+tailC1.y+', '+tailC2.x+' '+tailC2.y+', '+tail.x+' '+tail.y;
 
     const roadEl = $('mapPath').querySelector('.road');
-    if(roadEl) roadEl.setAttribute('d', td);
+    if(roadEl){
+      roadEl.setAttribute('d',
+        'M ' + pts[0].x.toFixed(3) + ' ' + pts[0].y.toFixed(3) +
+        pts.slice(1).map(p => ' L ' + p.x.toFixed(3) + ' ' + p.y.toFixed(3)).join(''));
+    }
 
     // ---- tapered tips ----
-    // An SVG stroke is one width end to end, so the taper is faked: walk
-    // the hook's own bezier, emit short segments, ramp the width up to the
-    // heavy tip.
-    //
-    // The first segment must be INDISTINGUISHABLE from the road — same
-    // width, same colour — or the tail announces where it starts. So the
-    // stroke is interpolated from --mute to --line rather than being drawn
-    // dark at low opacity, which would darken the road it sits on and
-    // give the join away.
-    const cubic = (p0,c1,c2,p1,t) => {
-      const mt = 1-t, a = mt*mt*mt, b = 3*mt*mt*t, c = 3*mt*t*t, e = t*t*t;
-      return { x: a*p0.x + b*c1.x + c*c2.x + e*p1.x,
-               y: a*p0.y + b*c1.y + c*c2.y + e*p1.y };
-    };
-    const MUTE = [139,123,120], TIP = [92,78,82];   // --mute -> --soft (grey, not full ink)
+    // Drawn from the SAME sample array as the wave above, so the taper
+    // cannot drift off the curve — it is the curve, restroked. Only the
+    // stretch beyond the end anchors gets weight; width and colour ramp
+    // from the road's own values so there is no point where a tail starts.
+    const MUTE = [139,123,120], TIP = [92,78,82];    // --mute -> --soft
     const lerpCol = k => 'rgb('+MUTE.map((c,j)=>Math.round(c+(TIP[j]-c)*k)).join(',')+')';
+    const W_THIN = 0.16, W_THICK = 0.46;             // W_THIN == the road's stroke-width
 
-    const STEPS = 24, W_THIN = 0.16, W_THICK = 0.46; // W_THIN == the road's own stroke-width
-    function taper(anchor, c1, c2, tip){
-      let out = '';
-      for(let s = 0; s < STEPS; s++){
-        const a = cubic(anchor, c1, c2, tip, s/STEPS);
-        const b = cubic(anchor, c1, c2, tip, (s+1)/STEPS);
-        const k = (s+1)/STEPS;                       // 0 at the wave, 1 at the tip
-        const e = k*k*k;                             // cubed: hairline for most of it, swells late
-        out += '<line class="taper" x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'" '+
-               'stroke-width="'+(W_THIN + (W_THICK-W_THIN)*e).toFixed(3)+'" '+
-               'stroke="'+lerpCol(e)+'"/>';
-      }
-      return out;
+    let tips = '';
+    for(let i = 0; i < N; i++){
+      const a = pts[i], b = pts[i+1];
+      // 0 at the end anchor, 1 at the very tip; 0 anywhere between anchors.
+      let k = 0;
+      if(b.y < y0)      k = (y0 - b.y) / (EXT*gap);
+      else if(b.y > yN) k = (b.y - yN) / (EXT*gap);
+      if(k <= 0) continue;
+      const e = k*k*k;                               // cubed: hairline, then swells late
+      tips += '<line class="taper" x1="'+a.x.toFixed(3)+'" y1="'+a.y.toFixed(3)+
+              '" x2="'+b.x.toFixed(3)+'" y2="'+b.y.toFixed(3)+
+              '" stroke-width="'+(W_THIN + (W_THICK-W_THIN)*e).toFixed(3)+
+              '" stroke="'+lerpCol(e)+'"/>';
     }
 
     const mapSvg = $('mapPath');
@@ -509,12 +500,9 @@ function buildMap(){
       endCaps.setAttribute('class','endCaps');
       mapSvg.appendChild(endCaps);
     }
-    // Drawn anchor→tip so the taper runs the right way round.
-    endCaps.innerHTML =
-      taper(first, headC1, headC2, head) +
-      taper(last,  tailC1, tailC2, tail) +
-      '<circle class="endDot" cx="'+head.x+'" cy="'+head.y+'" r="0.58"/>'+
-      '<circle class="endDot" cx="'+tail.x+'" cy="'+tail.y+'" r="0.58"/>';
+    endCaps.innerHTML = tips +
+      '<circle class="endDot" cx="'+pts[0].x.toFixed(3)+'" cy="'+pts[0].y.toFixed(3)+'" r="0.58"/>'+
+      '<circle class="endDot" cx="'+pts[N].x.toFixed(3)+'" cy="'+pts[N].y.toFixed(3)+'" r="0.58"/>';
   });
 }
 

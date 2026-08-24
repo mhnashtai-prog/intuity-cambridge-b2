@@ -106,25 +106,42 @@
   .cap.right{text-align:left;}
   .cap.left{text-align:right;}
 
-  /* ---------- modal ---------- */
-  .modalWrap{position:absolute;inset:0;display:none;align-items:flex-end;justify-content:center;z-index:5;}
+  /* ---------- modal: focus poster ----------
+     position:FIXED, not absolute. The old rule was absolute inside .map,
+     which is itself an offset box below the bar — so "bottom of the map"
+     read as "near the footer". Fixed + centred means centred on the
+     screen, whatever the container is doing.
+     Ground is --ink rather than pure black: next to the cream stage a true
+     #000 reads as a different product. The accent (--accent) is set inline
+     per node, so the poster arrives in the colour of the pill you tapped. */
+  .modalWrap{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:50;}
   .modalWrap.open{display:flex;}
-  .backdrop{position:absolute;inset:0;background:rgba(30,26,20,.42);opacity:0;transition:opacity .25s ease;}
+  .backdrop{position:absolute;inset:0;background:rgba(20,16,14,.72);opacity:0;transition:opacity .28s ease;}
   .modalWrap.open .backdrop{opacity:1;}
-  .modalCard{position:relative;width:min(480px,100%);margin:0 12px calc(12px + env(safe-area-inset-bottom,0px));
-    padding:18px 20px 16px;background:var(--paper);border-radius:16px;
-    box-shadow:0 -8px 30px rgba(30,24,16,.3);
-    transform:translateY(24px);opacity:0;transition:transform .32s var(--spring),opacity .28s ease;}
-  .modalWrap.open .modalCard{transform:translateY(0);opacity:1;}
-  .modalCard .x{position:absolute;top:12px;right:14px;border:none;background:none;
-    font-size:1.1rem;color:var(--mute);cursor:pointer;line-height:1;padding:6px;}
-  .modalCard .kick{font-size:.54rem;letter-spacing:.18em;text-transform:uppercase;color:var(--mute);margin-bottom:7px;}
-  .modalCard .cue{font-size:clamp(1.4rem,6vw,2rem);color:var(--line);margin-bottom:11px;
-    border-bottom:2px solid var(--line);padding-bottom:3px;display:inline-block;max-width:88%;overflow-wrap:break-word;}
-  .modalCard .sentence{font-size:1.08rem;font-weight:400;line-height:1.4;letter-spacing:-.01em;color:var(--soft);}
-  .modalCard .sentence b{font-weight:700;color:var(--ink);}
-  .modalCard .note{font-size:.74rem;color:var(--mute);line-height:1.5;margin-top:11px;
-    padding-top:9px;border-top:1px solid var(--rule);}
+
+  .modalCard{position:relative;width:min(560px,92vw);max-height:88vh;overflow-y:auto;
+    padding:clamp(26px,6vw,44px) clamp(22px,5.5vw,40px);
+    background:var(--ink);color:var(--paper);border-radius:18px;
+    box-shadow:0 24px 60px rgba(20,16,14,.5);
+    transform:scale(.94);opacity:0;
+    transition:transform .34s var(--spring),opacity .26s ease;}
+  .modalWrap.open .modalCard{transform:scale(1);opacity:1;}
+  .modalCard .x{position:absolute;top:14px;right:16px;border:none;background:none;
+    font-size:1.15rem;color:rgba(254,252,249,.45);cursor:pointer;line-height:1;padding:8px;}
+  .modalCard .x:hover{color:var(--paper);}
+
+  .modalCard .kick{font-size:.56rem;letter-spacing:.22em;text-transform:uppercase;
+    color:rgba(254,252,249,.42);margin-bottom:clamp(14px,4vw,22px);}
+  /* The cue IS the poster. Big, in the node's own colour, nothing competing. */
+  .modalCard .cue{font-size:clamp(2.3rem,12vw,4.2rem);line-height:.92;
+    color:var(--accent,var(--paper));margin-bottom:clamp(16px,4.5vw,26px);
+    display:block;overflow-wrap:break-word;}
+  .modalCard .sentence{font-size:clamp(1.02rem,4.2vw,1.28rem);font-weight:400;
+    line-height:1.45;letter-spacing:-.01em;color:rgba(254,252,249,.8);}
+  .modalCard .sentence b{font-weight:700;color:var(--accent,var(--paper));}
+  .modalCard .note{font-size:.74rem;color:rgba(254,252,249,.4);line-height:1.5;
+    margin-top:clamp(16px,4vw,24px);padding-top:12px;
+    border-top:1px solid rgba(254,252,249,.14);}
 
   .msg{margin:auto;text-align:center;color:var(--soft);font-size:.92rem;line-height:1.55;padding:24px;}
   @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms !important;}}
@@ -189,6 +206,24 @@ const PALETTE = [
   { bg:'#C2956E', fg:'#2B2129' },
   { bg:'rgba(0,0,0,.7)', fg:'#FEFCF9' },
 ];
+
+/* The poster ground is --ink, so a very dark palette tone (node 5 is
+   rgba(0,0,0,.7)) would be invisible as an accent. Measure the tone and
+   swap in the palette's lightest neutral when it can't carry on dark. */
+function accentFor(bg){
+  let r,g,b;
+  const hex = bg.match(/^#([0-9a-f]{6})$/i);
+  if(hex){
+    const n = parseInt(hex[1],16);
+    r = n>>16 & 255; g = n>>8 & 255; b = n & 255;
+  }else{
+    const nums = bg.match(/[\d.]+/g);
+    if(!nums || nums.length < 3) return bg;
+    [r,g,b] = nums.slice(0,3).map(Number);
+  }
+  const lum = 0.2126*r + 0.7152*g + 0.0722*b;
+  return lum < 90 ? '#E5D1B8' : bg;   // too dark on --ink -> lightest neutral
+}
 
 let tense = null, useCases = [], secIdx = null;
 let cards = [], visited = new Set(), openIdx = null;
@@ -511,12 +546,14 @@ function buildMap(){
 function openNode(i){
   openIdx = i;
   const c = cards[i];
+  const tone = PALETTE[i % PALETTE.length];   // the poster wears the pill's colour
   if(!visited.has(i)){
     visited.add(i);
     $('nodes').querySelector('.pill[data-i="'+i+'"]').classList.add('seen');
     $('count').innerHTML = '<b>'+visited.size+'</b> / '+cards.length;
     if(visited.size === cards.length) cleared.add(secIdx);
   }
+  $('modalCard').style.setProperty('--accent', accentFor(tone.bg));
   $('modalCard').innerHTML =
     '<button class="x" id="modalClose" type="button">&#10005;</button>'+
     '<div class="kick">'+(tense.name||'')+'</div>'+

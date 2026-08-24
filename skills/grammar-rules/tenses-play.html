@@ -313,15 +313,16 @@ function buildMap(){
   // through them, not solved for afterward, so it can't drift off them.
   const dots = NODE_LAYOUT.map((n,i) => ({ x: pillXs[i] + dirs[i]*STEM_LEN, y: n.y }));
 
-  // Smooth "S" path threading through the six fixed dots, with a short
-  // decorative flick before the first and after the last.
-  let d = 'M '+dots[0].x+' '+(dots[0].y-6)+' L '+dots[0].x+' '+dots[0].y;
+  // Smooth "S" path threading through the six fixed dots, capped at each
+  // end with a half-circle loop (radius 3, so the same 6-unit span as
+  // before) instead of a straight flick.
+  let d = 'M '+dots[0].x+' '+(dots[0].y-6)+' A 3 3 0 0 1 '+dots[0].x+' '+dots[0].y;
   for(let i=1;i<dots.length;i++){
     const a = dots[i-1], b = dots[i], my = (a.y+b.y)/2;
     d += ' C '+a.x+' '+my+', '+b.x+' '+my+', '+b.x+' '+b.y;
   }
   const last = dots[dots.length-1];
-  d += ' L '+last.x+' '+(last.y+6);
+  d += ' A 3 3 0 0 1 '+last.x+' '+(last.y+6);
 
   let svg = '<path class="road" d="'+d+'"/>';
   cards.forEach((_,i) => {
@@ -384,7 +385,7 @@ function buildMap(){
     // circumference instead of stopping short of it. Only the wave's
     // position changes here — the banners stay exactly where NODE_LAYOUT
     // /pillXs put them, and so do the captions.
-    const GAP_PX = 2; // placeholder breathing room; will be tuned to ~5mm next
+    const GAP_PX = 10 * 96 / 25.4; // 10mm of breathing room (CSS px @ 96dpi)
     const mapRect = $('map').getBoundingClientRect();
     const tightDots = dots.map((dot,i) => {
       const pillEl = $('nodes').querySelector('.pill[data-i="'+i+'"]');
@@ -401,25 +402,28 @@ function buildMap(){
       const stemLine = $('mapPath').querySelector('.stem[data-i="'+i+'"]');
       const dotEl    = $('mapPath').querySelector('.dot[data-i="'+i+'"]');
       const tx = tightDots[i].x;
+      const pRect = pillEl.getBoundingClientRect();
+      const dir = dirs[i];
+      const edgePx = dir > 0 ? (pRect.right - mapRect.left) : (pRect.left - mapRect.left);
+      const edgePct = edgePx / mapRect.width * 100;
       if(stemLine){
-        const pRect = pillEl.getBoundingClientRect();
-        const dir = dirs[i];
-        const edgePx = dir > 0 ? (pRect.right - mapRect.left) : (pRect.left - mapRect.left);
-        stemLine.setAttribute('x1', edgePx / mapRect.width * 100);
+        stemLine.setAttribute('x1', edgePct);
         stemLine.setAttribute('x2', tx);
       }
-      if(dotEl) dotEl.setAttribute('cx', tx);
+      // The little dot marks the pill end of the stem now, not the wave end.
+      if(dotEl) dotEl.setAttribute('cx', edgePct);
     });
 
     // Redraw the road through the tightened anchors so the curve itself
-    // (not just the dots) actually reaches in to the banners.
-    let td = 'M '+tightDots[0].x+' '+(tightDots[0].y-6)+' L '+tightDots[0].x+' '+tightDots[0].y;
+    // (not just the dots) actually reaches in to the banners. Capped at
+    // each end with a half-circle loop, matching the initial paint.
+    let td = 'M '+tightDots[0].x+' '+(tightDots[0].y-6)+' A 3 3 0 0 1 '+tightDots[0].x+' '+tightDots[0].y;
     for(let i=1;i<tightDots.length;i++){
       const a = tightDots[i-1], b = tightDots[i], my = (a.y+b.y)/2;
       td += ' C '+a.x+' '+my+', '+b.x+' '+my+', '+b.x+' '+b.y;
     }
     const tlast = tightDots[tightDots.length-1];
-    td += ' L '+tlast.x+' '+(tlast.y+6);
+    td += ' A 3 3 0 0 1 '+tlast.x+' '+(tlast.y+6);
     const roadEl = $('mapPath').querySelector('.road');
     if(roadEl) roadEl.setAttribute('d', td);
   });

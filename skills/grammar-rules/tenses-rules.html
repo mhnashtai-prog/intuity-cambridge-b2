@@ -70,14 +70,21 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
 .hud .now b{color:var(--gold)}
 /* Each use case opens its own map. The list IS the section index, so
    there's no second menu inside the modal. */
-.card-head{display:flex;align-items:flex-start;gap:.8rem;margin-bottom:1.1rem}
+.card-head{display:flex;align-items:center;gap:.8rem;margin-bottom:1.1rem}
 .card-head .uc-title{margin-bottom:0;flex:1}
-.map-btn{flex:none;display:flex;align-items:center;gap:.4rem;
-  font-family:'Space Grotesk',sans-serif;font-size:.58rem;font-weight:700;letter-spacing:.1em;
-  text-transform:uppercase;padding:.45rem .9rem;border-radius:999px;
-  color:#12100a;background:var(--gold);transition:filter .2s,transform .12s}
-.map-btn:hover{filter:brightness(1.12)}
-.map-btn:active{transform:scale(.95)}
+.explore-btn{flex:none;display:inline-flex;align-items:center;gap:.4rem;
+  font-family:'Space Grotesk',sans-serif;font-size:.64rem;font-weight:800;letter-spacing:.05em;
+  text-transform:uppercase;padding:.5rem .7rem .5rem 1rem;border-radius:999px;
+  color:#12100a;background:linear-gradient(135deg,#ecd08e,var(--gold));
+  box-shadow:0 3px 10px rgba(201,169,97,.35),inset 0 1px 0 rgba(255,255,255,.4);
+  transition:transform .25s cubic-bezier(.34,1.56,.64,1),box-shadow .25s}
+.explore-btn:hover{transform:translateY(-2px) scale(1.05);
+  box-shadow:0 6px 16px rgba(201,169,97,.5),inset 0 1px 0 rgba(255,255,255,.45)}
+.explore-btn:active{transform:scale(.93)}
+.explore-btn .icon-badge{display:inline-flex;align-items:center;justify-content:center;
+  width:1.3rem;height:1.3rem;border-radius:50%;background:rgba(18,16,10,.14);
+  font-size:.78rem;transition:transform .35s cubic-bezier(.34,1.56,.64,1)}
+.explore-btn:hover .icon-badge{transform:rotate(18deg) scale(1.12)}
 
 /* ══ CONTENT ══ */
 .area{position:fixed;top:calc(var(--header-h) + var(--hud-h));left:0;right:0;bottom:0;
@@ -92,17 +99,19 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
 .cards .card:first-child{padding-top:1.7rem}
 .card:hover{border-color:rgba(201,169,97,.4)}
 .uc-title{font-family:'DM Mono',monospace;font-size:1rem;color:var(--gold);text-transform:uppercase;
-  letter-spacing:.1em;font-weight:500;padding:.45rem .9rem;background:rgba(201,169,97,.1);
-  border-radius:.5rem;display:inline-block;margin-bottom:1.1rem}
+  letter-spacing:.1em;font-weight:700;margin-bottom:1.1rem}
 .markers{margin-bottom:1.1rem}
 .markers.hidden{display:none}
 .markers-t{font-family:'DM Mono',monospace;font-size:.56rem;color:var(--faint);text-transform:uppercase;
   letter-spacing:.12em;margin-bottom:.55rem}
 .markers-l{display:flex;flex-wrap:wrap;gap:.4rem .9rem}
 .marker{color:var(--blue);font-size:.82rem;font-weight:500}
+.markers-group{margin-bottom:.85rem}
+.markers-group:last-child{margin-bottom:0}
 .exs{display:flex;flex-direction:column;gap:.6rem;margin-bottom:1rem}
 .ex{font-size:1.02rem;line-height:1.55;color:#e5e5e7;padding:.6rem .85rem;background:rgba(48,48,51,.3);
   border-radius:.45rem}
+.ex .marker-inline{color:var(--blue);font-weight:700}
 .note{padding:.85rem 1.05rem;background:rgba(251,146,60,.08);border-left:3px solid var(--amber);
   border-radius:.45rem;font-size:.84rem;color:#d1d1d6;line-height:1.6}
 .note i{color:var(--amber);font-style:normal;margin-right:.4rem}
@@ -194,6 +203,45 @@ let data = [], cat = 0, tense = 0, view = 'list', mainMode = 'explore';
 
 const $ = id => document.getElementById(id);
 
+/* ── time-marker helpers ──
+   timeMarkers can be either:
+     - a flat array of strings (legacy / simple tenses), or
+     - { list1: {label, items}, list2: {label, items} } for tenses that
+       benefit from two groups (e.g. frequency adverbs vs frequency phrases).
+   normMarkerGroups() always returns an array of {label, items} groups so
+   the renderer only has one code path. flatMarkers() flattens everything
+   into a single word list for the inline highlighter. */
+function normMarkerGroups(tm){
+  if(!tm) return [];
+  if(Array.isArray(tm)) return tm.length ? [{ label:'Time markers', items: tm }] : [];
+  const groups = [];
+  if(tm.list1 && tm.list1.items && tm.list1.items.length) groups.push(tm.list1);
+  if(tm.list2 && tm.list2.items && tm.list2.items.length) groups.push(tm.list2);
+  return groups;
+}
+function flatMarkers(tm){
+  if(!tm) return [];
+  if(Array.isArray(tm)) return tm;
+  return [
+    ...((tm.list1 && tm.list1.items) || []),
+    ...((tm.list2 && tm.list2.items) || [])
+  ];
+}
+function escRe(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+/* Wraps any marker word/phrase found inside `text` in a blue <span>, so
+   the same signal words shown in the marker chips are visible in situ
+   inside the example sentences. Longest markers are matched first so a
+   phrase like "hardly ever" isn't partly swallowed by "ever" (which
+   doesn't exist here, but keeps this correct in general). */
+function highlightMarkers(text, markers){
+  const safe = escHtml(text);
+  if(!markers || !markers.length) return safe;
+  const sorted = [...markers].sort((a,b)=>b.length-a.length).map(escRe);
+  const re = new RegExp('\\b(' + sorted.join('|') + ')\\b','gi');
+  return safe.replace(re, '<span class="marker-inline">$1</span>');
+}
+
 async function boot(){
   try{
     const res = await fetch(JSON_URL, { cache:'no-store' });
@@ -250,22 +298,34 @@ function paintList(){
   }
   $('now').innerHTML = '<b>'+tn.name+'</b> · '+tn.useCases.length+' uses';
   wrap.innerHTML = tn.useCases.map((uc,i) => {
-    const markers = (uc.timeMarkers||[]).length
-      ? '<div class="markers"><div class="markers-t">Time markers</div><div class="markers-l">'+
-        uc.timeMarkers.map(m=>'<span class="marker">'+m+'</span>').join('')+'</div></div>'
+    const groups = normMarkerGroups(uc.timeMarkers);
+    const flat = flatMarkers(uc.timeMarkers);
+    const markers = groups.length
+      ? '<div class="markers">'+
+          groups.map(g =>
+            '<div class="markers-group">'+
+              '<div class="markers-t">'+g.label+'</div>'+
+              '<div class="markers-l">'+
+                g.items.map(m=>'<span class="marker">'+escHtml(m)+'</span>').join('')+
+              '</div>'+
+            '</div>'
+          ).join('')+
+        '</div>'
       : '';
     const exs = [uc.mainExample].concat(uc.moreExamples||[])
-      .map(e=>'<div class="ex">'+e+'</div>').join('');
-    const note = uc.note ? '<div class="note"><i>💡</i>'+uc.note+'</div>' : '';
+      .map(e=>'<div class="ex">'+highlightMarkers(e, flat)+'</div>').join('');
+    const note = uc.note ? '<div class="note"><i>💡</i>'+escHtml(uc.note)+'</div>' : '';
     return '<div class="card">'+
              '<div class="card-head">'+
                '<div class="uc-title">'+uc.title+'</div>'+
-               '<button class="map-btn" type="button" data-sec="'+i+'">Map →</button>'+
+               '<button class="explore-btn" type="button" data-sec="'+i+'">'+
+                 'Explore<span class="icon-badge">🧭</span>'+
+               '</button>'+
              '</div>'+
              markers+'<div class="exs">'+exs+'</div>'+note+'</div>';
   }).join('');
 
-  wrap.querySelectorAll('.map-btn').forEach(b =>
+  wrap.querySelectorAll('.explore-btn').forEach(b =>
     b.addEventListener('click', () => openMap(+b.dataset.sec)));
 }
 

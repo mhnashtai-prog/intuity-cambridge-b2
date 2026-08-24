@@ -372,16 +372,17 @@ function buildMap(){
     rects.forEach(r => { r.style.width = maxW + 'px'; });
 
     // The wave (the curved "road" spine) is pulled in to sit right
-    // against each pill's real rendered edge, ~10mm out — matches the
-    // banner positions, which are untouched. The little connector dot
+    // against each pill's real rendered edge — half the previous gap —
+    // and terminates in a small dot at the very top and bottom instead
+    // of looping around the first/last pill. The little connector dot
     // sits ~8mm off each definition's real edge, at the far end of the
     // straight stem — and that stem now starts at the wave's own anchor
     // point, not at the pill, so the pill-to-wave gap reads as a single
-    // clean ~10mm span instead of two overlapping lines. Only positions
+    // clean span instead of two overlapping lines. Only positions
     // move here; the banners and the caption text itself stay exactly
     // where NODE_LAYOUT/pillXs/CAP_GAP put them.
-    const PILL_GAP_PX = 10 * 96 / 25.4; // 10mm, wave-to-banner
-    const CAP_GAP_PX  = 8  * 96 / 25.4; // 8mm, dot-to-definition
+    const PILL_GAP_PX = 5 * 96 / 25.4; // 5mm, wave-to-banner (halved from 10mm)
+    const CAP_GAP_PX  = 8 * 96 / 25.4; // 8mm, dot-to-definition
     const mapRect = $('map').getBoundingClientRect();
     const capEls = $('nodes').querySelectorAll('.cap');
     const toPctX = px => px / mapRect.width * 100;
@@ -418,48 +419,33 @@ function buildMap(){
       if(dotEl) dotEl.setAttribute('cx', capDots[i].x);
     });
 
-    // Instead of a small decorative loop floating in empty space, the
-    // wave is prolonged at each end so it actually wraps around the
-    // outside of the first and last banner — sweeping from the far side
-    // of the pill, over its top (or under its bottom), and in to the
-    // same ~10mm anchor the rest of the spine uses.
-    function wrapAroundPill(rowIdx, side){
-      const pillEl = $('nodes').querySelector('.pill[data-i="'+rowIdx+'"]');
-      const pRect  = pillEl.getBoundingClientRect();
-      const dir    = dirs[rowIdx];
-      const anchor = tightDots[rowIdx];
-      const gapPct = toPctX(PILL_GAP_PX);
-      const left   = toPctX(pRect.left  - mapRect.left);
-      const right  = toPctX(pRect.right - mapRect.left);
-      const midX   = (left + right) / 2;
-      // Mirror point: the far side of the pill, same ~10mm clearance,
-      // beyond whichever edge is opposite the anchor.
-      const mirrorX = dir > 0 ? left - gapPct : right + gapPct;
-      const clearY  = side === 'top'
-        ? toPctY(pRect.top - mapRect.top)    - toPctX(PILL_GAP_PX)
-        : toPctY(pRect.bottom - mapRect.top) + toPctX(PILL_GAP_PX);
-      return { mirrorX, midX, clearY, anchor };
-    }
-
-    const topWrap    = wrapAroundPill(0, 'top');
-    const bottomWrap  = wrapAroundPill(tightDots.length-1, 'bottom');
-
-    // Arch from the far side of the top banner, up and over its outer
-    // edge, down into the spine's first anchor.
-    let td = 'M '+topWrap.mirrorX+' '+topWrap.anchor.y+
-             ' C '+topWrap.mirrorX+' '+topWrap.clearY+', '+topWrap.midX+' '+topWrap.clearY+', '+topWrap.midX+' '+topWrap.clearY+
-             ' C '+topWrap.anchor.x+' '+topWrap.clearY+', '+topWrap.anchor.x+' '+topWrap.anchor.y+', '+topWrap.anchor.x+' '+topWrap.anchor.y;
+    // The road is a plain smooth curve threading through all six tight
+    // anchors — no wraparound loop above the first pill or below the
+    // last one. Each end simply terminates where the spine reaches that
+    // row's anchor, capped with a small dot so the line reads as
+    // deliberately "finished" rather than cut off.
+    let td = 'M '+tightDots[0].x+' '+tightDots[0].y;
     for(let i=1;i<tightDots.length;i++){
       const a = tightDots[i-1], b = tightDots[i], my = (a.y+b.y)/2;
       td += ' C '+a.x+' '+my+', '+b.x+' '+my+', '+b.x+' '+b.y;
     }
-    // Arch from the spine's last anchor, down and under the bottom
-    // banner's outer edge, out to its far side.
-    td += ' C '+bottomWrap.anchor.x+' '+bottomWrap.clearY+', '+bottomWrap.midX+' '+bottomWrap.clearY+', '+bottomWrap.midX+' '+bottomWrap.clearY+
-          ' C '+bottomWrap.mirrorX+' '+bottomWrap.clearY+', '+bottomWrap.mirrorX+' '+bottomWrap.anchor.y+', '+bottomWrap.mirrorX+' '+bottomWrap.anchor.y;
 
     const roadEl = $('mapPath').querySelector('.road');
     if(roadEl) roadEl.setAttribute('d', td);
+
+    // Terminal end-caps: a small dot at the very top and very bottom of
+    // the road, replacing the old wraparound loops.
+    const mapSvg = $('mapPath');
+    let endCaps = mapSvg.querySelector('.endCaps');
+    if(!endCaps){
+      endCaps = document.createElementNS('http://www.w3.org/2000/svg','g');
+      endCaps.setAttribute('class','endCaps');
+      mapSvg.appendChild(endCaps);
+    }
+    const first = tightDots[0], last = tightDots[tightDots.length-1];
+    endCaps.innerHTML =
+      '<circle class="dot" cx="'+first.x+'" cy="'+first.y+'" r="0.46"/>'+
+      '<circle class="dot" cx="'+last.x+'" cy="'+last.y+'" r="0.46"/>';
   });
 }
 

@@ -419,43 +419,36 @@ function buildMap(){
       if(dotEl) dotEl.setAttribute('cx', capDots[i].x);
     });
 
-    // The road threads through all six tight anchors, but no longer
-    // stops flush at the first/last pill edge (too abrupt) and no
-    // longer performs the old full wraparound loop (too much). Instead
-    // each end gets a small hook: the line swings a little further out
-    // past the banner and lifts slightly up (top) / down (bottom)
-    // before curling back in, so it reads as "turning around the
-    // banner" rather than being cut off or looping all the way over it.
-    const CURL_OUT_PX  = 20; // how far past the anchor the hook swings outward
-    const CURL_LIFT_PX = 14; // how far up/down the hook lifts
-    const curlOutPct  = toPctX(CURL_OUT_PX);
-    const curlLiftPct = toPctY(CURL_LIFT_PX);
+    // The road threads through all six tight anchors. Rather than
+    // bolting on an artificial hook shape at each end, we let the
+    // curve's own natural trajectory continue a short distance past the
+    // first and last anchor — using the same tangent the S-curve is
+    // already following there — and cap that with a small dot. This
+    // keeps the line reading as one continuous, natural curve instead
+    // of an added decoration.
+    const EXT = 0.4; // how far past the first/last anchor to extend, as a fraction of that segment's length
 
-    function hookPoints(rowIdx, liftSign){
-      const anchor = tightDots[rowIdx];
-      const dir = dirs[rowIdx];
-      const tip = { x: anchor.x + dir*curlOutPct*0.55, y: anchor.y + liftSign*curlLiftPct };
-      const c1  = { x: anchor.x + dir*curlOutPct,       y: anchor.y + liftSign*curlLiftPct*0.35 };
-      const c2  = { x: anchor.x + dir*curlOutPct*0.25,  y: anchor.y };
-      return { tip, c1, c2, anchor };
-    }
+    // Tangent-continuation point for the top: extrapolate backwards
+    // along the same curvature the first segment (anchor0 -> anchor1)
+    // starts with.
+    const a0 = tightDots[0], a1 = tightDots[1];
+    const topExt = { x: a0.x - (a1.x - a0.x) * EXT, y: a0.y - (a1.y - a0.y) * EXT };
 
-    const topHook    = hookPoints(0, -1);
-    const bottomHook = hookPoints(tightDots.length-1, 1);
+    const aLast = tightDots[tightDots.length-1], aPrev = tightDots[tightDots.length-2];
+    const bottomExt = { x: aLast.x - (aPrev.x - aLast.x) * EXT, y: aLast.y - (aPrev.y - aLast.y) * EXT };
 
-    let td = 'M '+topHook.tip.x+' '+topHook.tip.y+
-             ' C '+topHook.c1.x+' '+topHook.c1.y+', '+topHook.c2.x+' '+topHook.c2.y+', '+topHook.anchor.x+' '+topHook.anchor.y;
+    let td = 'M '+topExt.x+' '+topExt.y+' Q '+a0.x+' '+a0.y+', '+a0.x+' '+a0.y;
     for(let i=1;i<tightDots.length;i++){
       const a = tightDots[i-1], b = tightDots[i], my = (a.y+b.y)/2;
       td += ' C '+a.x+' '+my+', '+b.x+' '+my+', '+b.x+' '+b.y;
     }
-    td += ' C '+bottomHook.c2.x+' '+bottomHook.c2.y+', '+bottomHook.c1.x+' '+bottomHook.c1.y+', '+bottomHook.tip.x+' '+bottomHook.tip.y;
+    td += ' Q '+aLast.x+' '+aLast.y+', '+bottomExt.x+' '+bottomExt.y;
 
     const roadEl = $('mapPath').querySelector('.road');
     if(roadEl) roadEl.setAttribute('d', td);
 
-    // Terminal end-caps: a small dot at the tip of each hook, replacing
-    // both the old wraparound loop and the flush-stop dot.
+    // Terminal end-caps: a small dot at the natural extension past the
+    // first and last anchor.
     const mapSvg = $('mapPath');
     let endCaps = mapSvg.querySelector('.endCaps');
     if(!endCaps){
@@ -464,8 +457,8 @@ function buildMap(){
       mapSvg.appendChild(endCaps);
     }
     endCaps.innerHTML =
-      '<circle class="dot" cx="'+topHook.tip.x+'" cy="'+topHook.tip.y+'" r="0.46"/>'+
-      '<circle class="dot" cx="'+bottomHook.tip.x+'" cy="'+bottomHook.tip.y+'" r="0.46"/>';
+      '<circle class="dot" cx="'+topExt.x+'" cy="'+topExt.y+'" r="0.46"/>'+
+      '<circle class="dot" cx="'+bottomExt.x+'" cy="'+bottomExt.y+'" r="0.46"/>';
   });
 }
 

@@ -303,7 +303,7 @@ function buildMap(){
   // caption centre sits ~23% of canvas width off true centre).
   const PIXEL_STEM = 150; // the stem length that looked right on desktop
   const STEM_LEN = Math.max(30, Math.min(46, PIXEL_STEM / mapWidthPx * 100));
-  const CAP_GAP = 1.2; // small on purpose: dot should sit almost touching the caption text
+  const CAP_GAP = 0.4; // minimal on purpose: dot should sit almost touching the caption text
 
   // Pill centre: fixed distance either side of x=50, same on every row.
   const pillXs = NODE_LAYOUT.map(n => n.capSide === 'right' ? 50 - OFFSET : 50 + OFFSET);
@@ -382,7 +382,7 @@ function buildMap(){
     // move here; the banners and the caption text itself stay exactly
     // where NODE_LAYOUT/pillXs/CAP_GAP put them.
     const PILL_GAP_PX = 5 * 96 / 25.4; // 5mm, wave-to-banner (halved from 10mm)
-    const CAP_GAP_PX  = 8 * 96 / 25.4; // 8mm, dot-to-definition
+    const CAP_GAP_PX  = 2 * 96 / 25.4; // 2mm, dot-to-definition — minimal padding
     const mapRect = $('map').getBoundingClientRect();
     const capEls = $('nodes').querySelectorAll('.cap');
     const toPctX = px => px / mapRect.width * 100;
@@ -419,22 +419,43 @@ function buildMap(){
       if(dotEl) dotEl.setAttribute('cx', capDots[i].x);
     });
 
-    // The road is a plain smooth curve threading through all six tight
-    // anchors — no wraparound loop above the first pill or below the
-    // last one. Each end simply terminates where the spine reaches that
-    // row's anchor, capped with a small dot so the line reads as
-    // deliberately "finished" rather than cut off.
-    let td = 'M '+tightDots[0].x+' '+tightDots[0].y;
+    // The road threads through all six tight anchors, but no longer
+    // stops flush at the first/last pill edge (too abrupt) and no
+    // longer performs the old full wraparound loop (too much). Instead
+    // each end gets a small hook: the line swings a little further out
+    // past the banner and lifts slightly up (top) / down (bottom)
+    // before curling back in, so it reads as "turning around the
+    // banner" rather than being cut off or looping all the way over it.
+    const CURL_OUT_PX  = 20; // how far past the anchor the hook swings outward
+    const CURL_LIFT_PX = 14; // how far up/down the hook lifts
+    const curlOutPct  = toPctX(CURL_OUT_PX);
+    const curlLiftPct = toPctY(CURL_LIFT_PX);
+
+    function hookPoints(rowIdx, liftSign){
+      const anchor = tightDots[rowIdx];
+      const dir = dirs[rowIdx];
+      const tip = { x: anchor.x + dir*curlOutPct*0.55, y: anchor.y + liftSign*curlLiftPct };
+      const c1  = { x: anchor.x + dir*curlOutPct,       y: anchor.y + liftSign*curlLiftPct*0.35 };
+      const c2  = { x: anchor.x + dir*curlOutPct*0.25,  y: anchor.y };
+      return { tip, c1, c2, anchor };
+    }
+
+    const topHook    = hookPoints(0, -1);
+    const bottomHook = hookPoints(tightDots.length-1, 1);
+
+    let td = 'M '+topHook.tip.x+' '+topHook.tip.y+
+             ' C '+topHook.c1.x+' '+topHook.c1.y+', '+topHook.c2.x+' '+topHook.c2.y+', '+topHook.anchor.x+' '+topHook.anchor.y;
     for(let i=1;i<tightDots.length;i++){
       const a = tightDots[i-1], b = tightDots[i], my = (a.y+b.y)/2;
       td += ' C '+a.x+' '+my+', '+b.x+' '+my+', '+b.x+' '+b.y;
     }
+    td += ' C '+bottomHook.c2.x+' '+bottomHook.c2.y+', '+bottomHook.c1.x+' '+bottomHook.c1.y+', '+bottomHook.tip.x+' '+bottomHook.tip.y;
 
     const roadEl = $('mapPath').querySelector('.road');
     if(roadEl) roadEl.setAttribute('d', td);
 
-    // Terminal end-caps: a small dot at the very top and very bottom of
-    // the road, replacing the old wraparound loops.
+    // Terminal end-caps: a small dot at the tip of each hook, replacing
+    // both the old wraparound loop and the flush-stop dot.
     const mapSvg = $('mapPath');
     let endCaps = mapSvg.querySelector('.endCaps');
     if(!endCaps){
@@ -442,10 +463,9 @@ function buildMap(){
       endCaps.setAttribute('class','endCaps');
       mapSvg.appendChild(endCaps);
     }
-    const first = tightDots[0], last = tightDots[tightDots.length-1];
     endCaps.innerHTML =
-      '<circle class="dot" cx="'+first.x+'" cy="'+first.y+'" r="0.46"/>'+
-      '<circle class="dot" cx="'+last.x+'" cy="'+last.y+'" r="0.46"/>';
+      '<circle class="dot" cx="'+topHook.tip.x+'" cy="'+topHook.tip.y+'" r="0.46"/>'+
+      '<circle class="dot" cx="'+bottomHook.tip.x+'" cy="'+bottomHook.tip.y+'" r="0.46"/>';
   });
 }
 

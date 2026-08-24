@@ -164,47 +164,12 @@ const NODE_LAYOUT = [
   { y: 86.3, capSide:'left',  capFrom: 3,  capTo: 58 },
 ];
 
-/* A standalone curly line down the vertical centre — entirely decorative,
-   not tied to where any card sits. Tight amplitude around x=50 keeps it
-   reading as one flowing curl rather than a jagged zigzag. */
-const CURL = [
-  { x:50, y:4 }, { x:61, y:12 }, { x:40, y:26 }, { x:60, y:40 },
-  { x:40, y:54 }, { x:60, y:68 }, { x:41, y:82 }, { x:52, y:94 },
-];
-
-// Cubic Bezier evaluation, matching the exact "C p1, p2, end" curve drawn
-// below — NOT a straight-line shortcut. Using linear interpolation here
-// previously caused dots/stems to miss the rendered curve, since a cubic
-// Bezier eases in/out at each endpoint (near-flat tangent) rather than
-// moving at a constant rate like a straight line would.
-function cubicAt(p0,p1,p2,p3,t){
-  const mt = 1-t;
-  return mt*mt*mt*p0 + 3*mt*mt*t*p1 + 3*mt*t*t*p2 + t*t*t*p3;
-}
-
-// Where the curl actually sits, horizontally, at a given height — cards
-// offset from THIS, not a fixed column, so they stay in step with the
-// line's wander instead of drifting apart from it row by row. Walks the
-// same segments/control points used to draw the path, and inverts y→t
-// via binary search (y is monotonic along each segment) so the returned
-// x sits exactly ON the rendered Bezier curve, not near it.
-function curlXAt(y){
-  for(let i=1;i<CURL.length;i++){
-    const a = CURL[i-1], b = CURL[i];
-    if(y <= b.y || i === CURL.length-1){
-      const my = (a.y + b.y) / 2;
-      let lo = 0, hi = 1;
-      for(let iter=0; iter<24; iter++){
-        const mid = (lo+hi)/2;
-        const yAtMid = cubicAt(a.y, my, my, b.y, mid);
-        if(yAtMid < y) lo = mid; else hi = mid;
-      }
-      const t = (lo+hi)/2;
-      return cubicAt(a.x, a.x, b.x, b.x, t);
-    }
-  }
-  return CURL[CURL.length-1].x;
-}
+// The wave is no longer an independent decorative shape that dots try to
+// match. It's built the other way around: each row's dot sits at a fixed,
+// equally-padded offset from its pill (computed in buildMap), and the
+// wave is drawn straight through those six points as its anchors. That
+// makes "does the curve pass through the dot" true by construction —
+// there's nothing left to compute or drift out of sync.
 /* "Flight of Fancy" — neutral warm tones with muted jewel accents.
    Paired with a readable text colour per tone (the two lighter shades
    need dark text, not white). Cycles for the 6th node. */
@@ -330,47 +295,50 @@ function buildMap(){
   const mapWidthPx = $('map').clientWidth || 760;
   const PIXEL_CLEARANCE = 106; // the clearance that looked right on desktop
   const OFFSET = Math.max(14, Math.min(32, PIXEL_CLEARANCE / mapWidthPx * 100));
-  const pillXs = NODE_LAYOUT.map(n => {
-    const cx = curlXAt(n.y);
-    return n.capSide === 'right' ? cx - OFFSET : cx + OFFSET;
-  });
-
-  // The curly centre line — fixed shape, unrelated to card positions.
-  let d = 'M '+CURL[0].x+' '+CURL[0].y;
-  for(let i=1;i<CURL.length;i++){
-    const a = CURL[i-1], b = CURL[i], my = (a.y+b.y)/2;
-    d += ' C '+a.x+' '+my+', '+b.x+' '+my+', '+b.x+' '+b.y;
-  }
-
-  // Gap between the connector dot and where the caption text starts.
+  // Distance from pill edge to connector dot — fixed and container-width
+  // scaled, same as OFFSET above, so every row gets identical padding.
+  const PIXEL_STEM = 130; // the stem length that looked right on desktop
+  const STEM_LEN = Math.max(24, Math.min(40, PIXEL_STEM / mapWidthPx * 100));
   const CAP_GAP = 3;
 
-  // The dot must land exactly on the curve at this row's height — not at
-  // some independently-scaled offset — or the stem visually crosses the
-  // curl instead of terminating on it.
+  // Pill centre: fixed distance either side of x=50, same on every row.
+  const pillXs = NODE_LAYOUT.map(n => n.capSide === 'right' ? 50 - OFFSET : 50 + OFFSET);
+  const dirs   = NODE_LAYOUT.map(n => n.capSide === 'right' ? 1 : -1);
+  // Connector dot: fixed offset from its own pill — never from the curve.
+  // These six points are the wave's anchors; the curve is drawn to pass
+  // through them, not solved for afterward, so it can't drift off them.
+  const dots = NODE_LAYOUT.map((n,i) => ({ x: pillXs[i] + dirs[i]*STEM_LEN, y: n.y }));
+
+  // Smooth "S" path threading through the six fixed dots, with a short
+  // decorative flick before the first and after the last.
+  let d = 'M '+dots[0].x+' '+(dots[0].y-6)+' L '+dots[0].x+' '+dots[0].y;
+  for(let i=1;i<dots.length;i++){
+    const a = dots[i-1], b = dots[i], my = (a.y+b.y)/2;
+    d += ' C '+a.x+' '+my+', '+b.x+' '+my+', '+b.x+' '+b.y;
+  }
+  const last = dots[dots.length-1];
+  d += ' L '+last.x+' '+(last.y+6);
+
   let svg = '<path class="road" d="'+d+'"/>';
   cards.forEach((_,i) => {
-    const n = NODE_LAYOUT[i], px = pillXs[i];
-    const dir = n.capSide === 'right' ? 1 : -1;
-    const x1 = px + dir*11, x2 = curlXAt(n.y);
-    svg += '<line class="stem" x1="'+x1+'" y1="'+n.y+'" x2="'+x2+'" y2="'+n.y+'"/>'+
-           '<circle class="dot" cx="'+x2+'" cy="'+n.y+'" r="0.46"/>';
+    const n = NODE_LAYOUT[i], px = pillXs[i], dot = dots[i];
+    const x1 = px + dirs[i]*11;
+    svg += '<line class="stem" x1="'+x1+'" y1="'+n.y+'" x2="'+dot.x+'" y2="'+n.y+'"/>'+
+           '<circle class="dot" cx="'+dot.x+'" cy="'+n.y+'" r="0.46"/>';
   });
   $('mapPath').innerHTML = svg;
 
   $('nodes').innerHTML = cards.map((c,i) => {
-    const n = NODE_LAYOUT[i], px = pillXs[i];
+    const n = NODE_LAYOUT[i], px = pillXs[i], dot = dots[i];
     const seen = visited.has(i);
     const tone = PALETTE[i%PALETTE.length];
     // Circle sits at the OUTER end of the pill (away from the spine); the
     // rect's flat fused edge faces inward, toward the stem/road, matching
     // the sketch where the line continues out of the rectangle, not the circle.
     const circleRight = px >= 50;
-    // Caption sits opposite the pill, starting just past the connector dot
-    // — which itself sits exactly on the curve at this row's height.
-    const cx = curlXAt(n.y);
-    const capFrom = n.capSide === 'right' ? cx + CAP_GAP : 3;
-    const capTo   = n.capSide === 'right' ? 97 : cx - CAP_GAP;
+    // Caption sits opposite the pill, starting just past the connector dot.
+    const capFrom = n.capSide === 'right' ? dot.x + CAP_GAP : 3;
+    const capTo   = n.capSide === 'right' ? 97 : dot.x - CAP_GAP;
     return '<div class="node" style="top:'+n.y+'%">'+
       '<button class="pill'+(seen?' seen':'')+(circleRight?' circle-right':'')+'" data-i="'+i+'" '+
         'style="left:'+px+'%">'+

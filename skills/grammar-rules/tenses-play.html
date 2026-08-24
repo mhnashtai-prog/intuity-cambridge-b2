@@ -293,13 +293,6 @@ function buildMap(){
   // the offset by the container's real pixel width keeps the pixel
   // clearance roughly constant across screen sizes.
   const mapWidthPx = $('map').clientWidth || 760;
-  const mapHeightPx = $('map').clientHeight || 560;
-  // The viewBox is stretched independently on x and y (preserveAspectRatio
-  // ="none"), so a loop with equal rx/ry in viewBox units would render as
-  // a stretched ellipse, not a circle. Correcting rx by the container's
-  // real aspect ratio keeps the end-of-wave loops actually round.
-  const HOOK_RY = 3;
-  const HOOK_RX = HOOK_RY * mapHeightPx / mapWidthPx;
   // Pills sit CLOSE to the wave — a small offset, so the pill visually
   // hugs the spine (matches the reference: pill centre sits only ~6% of
   // the canvas width off true centre).
@@ -320,16 +313,16 @@ function buildMap(){
   // through them, not solved for afterward, so it can't drift off them.
   const dots = NODE_LAYOUT.map((n,i) => ({ x: pillXs[i] + dirs[i]*STEM_LEN, y: n.y }));
 
-  // Smooth "S" path threading through the six fixed dots, capped at each
-  // end with a half-circle loop (aspect-corrected, so it renders round)
-  // instead of a straight flick.
-  let d = 'M '+dots[0].x+' '+(dots[0].y-6)+' A '+HOOK_RX+' '+HOOK_RY+' 0 0 1 '+dots[0].x+' '+dots[0].y;
+  // Smooth "S" path threading through the six fixed dots. This first
+  // paint happens before any pill has actually rendered, so there's no
+  // real geometry yet to wrap the ends around — that's done in the RAF
+  // pass below, once pill positions are known. This is just a plain
+  // placeholder shape for the split-second before that.
+  let d = 'M '+dots[0].x+' '+dots[0].y;
   for(let i=1;i<dots.length;i++){
     const a = dots[i-1], b = dots[i], my = (a.y+b.y)/2;
     d += ' C '+a.x+' '+my+', '+b.x+' '+my+', '+b.x+' '+b.y;
   }
-  const last = dots[dots.length-1];
-  d += ' A '+HOOK_RX+' '+HOOK_RY+' 0 0 1 '+last.x+' '+(last.y+6);
 
   let svg = '<path class="road" d="'+d+'"/>';
   cards.forEach((_,i) => {
@@ -380,24 +373,27 @@ function buildMap(){
 
     // The wave (the curved "road" spine) is pulled in to sit right
     // against each pill's real rendered edge, ~10mm out — matches the
-    // banner positions, which are untouched. The little connector dot is
-    // inverted the other way: it sits ~8mm off each definition's real
-    // edge instead, at the far end of the straight stem that bridges the
-    // two. Only positions move here; the banners and the caption text
-    // itself stay exactly where NODE_LAYOUT/pillXs/CAP_GAP put them.
+    // banner positions, which are untouched. The little connector dot
+    // sits ~8mm off each definition's real edge, at the far end of the
+    // straight stem — and that stem now starts at the wave's own anchor
+    // point, not at the pill, so the pill-to-wave gap reads as a single
+    // clean ~10mm span instead of two overlapping lines. Only positions
+    // move here; the banners and the caption text itself stay exactly
+    // where NODE_LAYOUT/pillXs/CAP_GAP put them.
     const PILL_GAP_PX = 10 * 96 / 25.4; // 10mm, wave-to-banner
     const CAP_GAP_PX  = 8  * 96 / 25.4; // 8mm, dot-to-definition
     const mapRect = $('map').getBoundingClientRect();
     const capEls = $('nodes').querySelectorAll('.cap');
+    const toPctX = px => px / mapRect.width * 100;
+    const toPctY = py => py / mapRect.height * 100;
 
     const tightDots = dots.map((dot,i) => {
       const pillEl = $('nodes').querySelector('.pill[data-i="'+i+'"]');
       const dir = dirs[i];
       const pRect = pillEl.getBoundingClientRect();
       const edgePx = dir > 0 ? (pRect.right - mapRect.left) : (pRect.left - mapRect.left);
-      const edgePct = edgePx / mapRect.width * 100;
-      const gapPct  = PILL_GAP_PX / mapRect.width * 100;
-      return { x: edgePct + dir*gapPct, y: dot.y };
+      const gapPct = toPctX(PILL_GAP_PX);
+      return { x: toPctX(edgePx) + dir*gapPct, y: dot.y };
     });
 
     // Far end of each stem: sits just short of the caption's own real
@@ -406,38 +402,62 @@ function buildMap(){
       const dir = dirs[i];
       const cRect = capEls[i].getBoundingClientRect();
       const capEdgePx = dir > 0 ? (cRect.left - mapRect.left) : (cRect.right - mapRect.left);
-      const gapPct = CAP_GAP_PX / mapRect.width * 100;
-      return { x: (capEdgePx / mapRect.width * 100) - dir*gapPct, y: dot.y };
+      const gapPct = toPctX(CAP_GAP_PX);
+      return { x: toPctX(capEdgePx) - dir*gapPct, y: dot.y };
     });
 
     $('nodes').querySelectorAll('.pill').forEach(pillEl => {
       const i = +pillEl.dataset.i;
-      const dir = dirs[i];
-      const pRect = pillEl.getBoundingClientRect();
-      const edgePx = dir > 0 ? (pRect.right - mapRect.left) : (pRect.left - mapRect.left);
-      const edgePct = edgePx / mapRect.width * 100;
-
       const stemLine = $('mapPath').querySelector('.stem[data-i="'+i+'"]');
       const dotEl    = $('mapPath').querySelector('.dot[data-i="'+i+'"]');
       if(stemLine){
-        stemLine.setAttribute('x1', edgePct);
+        // Starts at the wave itself, not the banner.
+        stemLine.setAttribute('x1', tightDots[i].x);
         stemLine.setAttribute('x2', capDots[i].x);
       }
-      // Inverted: the little dot now marks the definition end of the
-      // line, not the pill end.
       if(dotEl) dotEl.setAttribute('cx', capDots[i].x);
     });
 
-    // Redraw the road through the tightened (pill-side) anchors, capped
-    // at each end with the same aspect-correct half-circle loop used in
-    // the initial paint.
-    let td = 'M '+tightDots[0].x+' '+(tightDots[0].y-6)+' A '+HOOK_RX+' '+HOOK_RY+' 0 0 1 '+tightDots[0].x+' '+tightDots[0].y;
+    // Instead of a small decorative loop floating in empty space, the
+    // wave is prolonged at each end so it actually wraps around the
+    // outside of the first and last banner — sweeping from the far side
+    // of the pill, over its top (or under its bottom), and in to the
+    // same ~10mm anchor the rest of the spine uses.
+    function wrapAroundPill(rowIdx, side){
+      const pillEl = $('nodes').querySelector('.pill[data-i="'+rowIdx+'"]');
+      const pRect  = pillEl.getBoundingClientRect();
+      const dir    = dirs[rowIdx];
+      const anchor = tightDots[rowIdx];
+      const gapPct = toPctX(PILL_GAP_PX);
+      const left   = toPctX(pRect.left  - mapRect.left);
+      const right  = toPctX(pRect.right - mapRect.left);
+      const midX   = (left + right) / 2;
+      // Mirror point: the far side of the pill, same ~10mm clearance,
+      // beyond whichever edge is opposite the anchor.
+      const mirrorX = dir > 0 ? left - gapPct : right + gapPct;
+      const clearY  = side === 'top'
+        ? toPctY(pRect.top - mapRect.top)    - toPctX(PILL_GAP_PX)
+        : toPctY(pRect.bottom - mapRect.top) + toPctX(PILL_GAP_PX);
+      return { mirrorX, midX, clearY, anchor };
+    }
+
+    const topWrap    = wrapAroundPill(0, 'top');
+    const bottomWrap  = wrapAroundPill(tightDots.length-1, 'bottom');
+
+    // Arch from the far side of the top banner, up and over its outer
+    // edge, down into the spine's first anchor.
+    let td = 'M '+topWrap.mirrorX+' '+topWrap.anchor.y+
+             ' C '+topWrap.mirrorX+' '+topWrap.clearY+', '+topWrap.midX+' '+topWrap.clearY+', '+topWrap.midX+' '+topWrap.clearY+
+             ' C '+topWrap.anchor.x+' '+topWrap.clearY+', '+topWrap.anchor.x+' '+topWrap.anchor.y+', '+topWrap.anchor.x+' '+topWrap.anchor.y;
     for(let i=1;i<tightDots.length;i++){
       const a = tightDots[i-1], b = tightDots[i], my = (a.y+b.y)/2;
       td += ' C '+a.x+' '+my+', '+b.x+' '+my+', '+b.x+' '+b.y;
     }
-    const tlast = tightDots[tightDots.length-1];
-    td += ' A '+HOOK_RX+' '+HOOK_RY+' 0 0 1 '+tlast.x+' '+(tlast.y+6);
+    // Arch from the spine's last anchor, down and under the bottom
+    // banner's outer edge, out to its far side.
+    td += ' C '+bottomWrap.anchor.x+' '+bottomWrap.clearY+', '+bottomWrap.midX+' '+bottomWrap.clearY+', '+bottomWrap.midX+' '+bottomWrap.clearY+
+          ' C '+bottomWrap.mirrorX+' '+bottomWrap.clearY+', '+bottomWrap.mirrorX+' '+bottomWrap.anchor.y+', '+bottomWrap.mirrorX+' '+bottomWrap.anchor.y;
+
     const roadEl = $('mapPath').querySelector('.road');
     if(roadEl) roadEl.setAttribute('d', td);
   });

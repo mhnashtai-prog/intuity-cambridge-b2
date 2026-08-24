@@ -75,17 +75,16 @@
     box-shadow:0 6px 20px rgba(40,32,22,.28);
     border:1px solid var(--rule);
     opacity:0;z-index:1;
+    transform-origin:left bottom;
     transition:left .5s var(--spring),right .5s var(--spring),bottom .5s var(--spring),
-               width .5s var(--spring),font-size .5s var(--spring),opacity .4s ease;}
+               transform .5s var(--spring),opacity .4s ease;}
   .pin::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
     width:max(100%,44px);height:max(100%,44px);}
-  .pin.right{text-align:right;}
+  .pin.right{text-align:right;transform-origin:right bottom;}
   .pin .cue{color:var(--hot);line-height:1.05;overflow-wrap:break-word;max-width:100%;
-    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
-    transition:font-size .5s var(--spring);}
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
   .pin .line{margin-top:5px;color:var(--soft);line-height:1.32;font-weight:400;
-    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
-    transition:font-size .5s var(--spring);}
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
   .pin .line b{font-weight:700;color:var(--ink);}
   .pin:active{opacity:.55;}
 
@@ -167,8 +166,7 @@ const START    = P.get('section') !== null ? parseInt(P.get('section'),10) : nul
    screen edge (biggest, nearest), smaller t is further back toward the
    vanishing point (smaller, higher up). This matches the sketch: plain
    axis-aligned rectangles, not skewed boards. */
-const T_STOPS      = [1, 0.62, 0.34];
-const WIDTH_TAPER  = 0.72;   // width shrink per stop back
+const T_STOPS = [1, 0.62, 0.34];
 
 let tense = null, useCases = [], secIdx = null;
 let cards = [], placements = [], activeCard = null, activeIsPlaced = false, done = false;
@@ -331,10 +329,14 @@ function layout(){
       const x = G.vpx + (bx - G.vpx) * t;
       const y = G.vpy + (h  - G.vpy) * t;
       const room = Math.abs(G.vpx - x) - 16;
-      G.slots[side].push({
-        x, y, t,
-        w: Math.max(88, Math.min(G.baseW * Math.pow(WIDTH_TAPER, depth), room))
-      });
+      // The box is always drawn at full (G.baseW) size, then scaled down
+      // as one rigid unit anchored at (x,y) — the exact point on the
+      // perspective line — so width, height AND padding shrink together.
+      // Tapering width and font separately left full-size padding on far
+      // boxes, which broke the illusion and let them cross the vp line.
+      const desired = 0.5 + 0.5*t;
+      const scale = Math.max(0.4, Math.min(desired, room / G.baseW, 1));
+      G.slots[side].push({ x, y, t, scale });
     });
   });
 }
@@ -376,23 +378,38 @@ function renderSigns(){
     }
 
     el.className = 'pin' + (p.side ? ' right' : '');
-    el.style.width  = s.w+'px';
-    el.style.bottom = (G.h - s.y)+'px';
-    el.style.left   = p.side ? '' : s.x+'px';
-    el.style.right  = p.side ? (G.w - s.x)+'px' : '';
-
-    // Type tapers with distance, same fixed-point stop each time.
-    const scale = 0.6 + 0.4*s.t;
-    const cueSize  = Math.round((G.narrow ? 15 : 17)   * scale);
-    const bodySize = Math.round((G.narrow ? 12.5 : 13.5) * scale);
+    el.style.width = G.baseW+'px'; // fixed base size — scale handles depth
     el.innerHTML =
-      '<div class="cue display" style="font-size:'+cueSize+'px">'+c.cue+'</div>'+
-      '<div class="line" style="font-size:'+bodySize+'px">'+mark(c.text, c.markers)+'</div>';
+      '<div class="cue display" style="font-size:'+(G.narrow?15:17)+'px">'+c.cue+'</div>'+
+      '<div class="line" style="font-size:'+(G.narrow?12.5:13.5)+'px">'+mark(c.text, c.markers)+'</div>';
 
     if(isNew){
-      requestAnimationFrame(() => requestAnimationFrame(() => { el.style.opacity = '1'; }));
+      // Seed the pin far back at the vanishing point — tiny, centred,
+      // invisible — then in the next frame animate it forward to its
+      // real slot. Position and scale move together, so it visibly
+      // approaches along the line instead of fading in already in place.
+      el.style.transition = 'none';
+      el.style.left      = p.side ? '' : G.vpx+'px';
+      el.style.right     = p.side ? (G.w - G.vpx)+'px' : '';
+      el.style.bottom    = (G.h - G.vpy)+'px';
+      el.style.transform = 'scale(.12)';
+      el.style.opacity   = '0';
+      void el.offsetWidth; // force the seed position to apply before restoring transitions
+      el.style.transition = '';
+
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        el.style.left      = p.side ? '' : s.x+'px';
+        el.style.right     = p.side ? (G.w - s.x)+'px' : '';
+        el.style.bottom    = (G.h - s.y)+'px';
+        el.style.transform = 'scale('+s.scale+')';
+        el.style.opacity   = '1';
+      }));
     } else {
-      el.style.opacity = '1';
+      el.style.left      = p.side ? '' : s.x+'px';
+      el.style.right     = p.side ? (G.w - s.x)+'px' : '';
+      el.style.bottom    = (G.h - s.y)+'px';
+      el.style.transform = 'scale('+s.scale+')';
+      el.style.opacity   = '1';
     }
   });
 
@@ -466,7 +483,17 @@ let cardTimer = null;
 function advance(){
   if(done || activeCard === null) return;
   const el = document.querySelector('.card');
-  if(!activeIsPlaced) placements.push({ c: activeCard, side: placements.length % 2 });
+  if(activeIsPlaced){
+    // Retrieved card, sent back down: treat it as a fresh placement —
+    // pull it out of wherever it was and re-add it at the end, so it
+    // returns to the FRONT of its street (depth 0) and pushes whatever
+    // was in front of it back, instead of snapping back to its old slot.
+    const idx = placements.findIndex(p => p.c === activeCard);
+    const side = idx > -1 ? placements.splice(idx,1)[0].side : placements.length % 2;
+    placements.push({ c: activeCard, side });
+  } else {
+    placements.push({ c: activeCard, side: placements.length % 2 });
+  }
   activeIsPlaced = false;
 
   const nx = cards.findIndex((_,i) => !placements.some(p => p.c === i));

@@ -172,15 +172,35 @@ const CURL = [
   { x:40, y:54 }, { x:60, y:68 }, { x:41, y:82 }, { x:52, y:94 },
 ];
 
+// Cubic Bezier evaluation, matching the exact "C p1, p2, end" curve drawn
+// below — NOT a straight-line shortcut. Using linear interpolation here
+// previously caused dots/stems to miss the rendered curve, since a cubic
+// Bezier eases in/out at each endpoint (near-flat tangent) rather than
+// moving at a constant rate like a straight line would.
+function cubicAt(p0,p1,p2,p3,t){
+  const mt = 1-t;
+  return mt*mt*mt*p0 + 3*mt*mt*t*p1 + 3*mt*t*t*p2 + t*t*t*p3;
+}
+
 // Where the curl actually sits, horizontally, at a given height — cards
 // offset from THIS, not a fixed column, so they stay in step with the
-// line's wander instead of drifting apart from it row by row.
+// line's wander instead of drifting apart from it row by row. Walks the
+// same segments/control points used to draw the path, and inverts y→t
+// via binary search (y is monotonic along each segment) so the returned
+// x sits exactly ON the rendered Bezier curve, not near it.
 function curlXAt(y){
   for(let i=1;i<CURL.length;i++){
     const a = CURL[i-1], b = CURL[i];
-    if(y <= b.y){
-      const t = (y - a.y) / (b.y - a.y || 1);
-      return a.x + (b.x - a.x) * t;
+    if(y <= b.y || i === CURL.length-1){
+      const my = (a.y + b.y) / 2;
+      let lo = 0, hi = 1;
+      for(let iter=0; iter<24; iter++){
+        const mid = (lo+hi)/2;
+        const yAtMid = cubicAt(a.y, my, my, b.y, mid);
+        if(yAtMid < y) lo = mid; else hi = mid;
+      }
+      const t = (lo+hi)/2;
+      return cubicAt(a.x, a.x, b.x, b.x, t);
     }
   }
   return CURL[CURL.length-1].x;

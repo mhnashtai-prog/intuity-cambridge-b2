@@ -57,7 +57,7 @@
   .play.on{display:flex;}
   .map{position:relative;flex:1;min-height:0;margin:0 12px calc(10px + env(safe-area-inset-bottom,0px));}
   .mapPath{position:absolute;inset:0;width:100%;height:100%;overflow:visible;}
-  .mapPath .road{fill:none;stroke:rgba(0,0,0,.8);stroke-width:.55;stroke-linecap:round;}
+  .mapPath .road{fill:none;stroke:rgba(0,0,0,.6);stroke-width:.32;stroke-linecap:round;}
   .mapPath .stem{stroke:var(--rule);stroke-width:.4;}
   .mapPath .dot{fill:var(--paper);stroke:var(--line);stroke-width:.4;}
 
@@ -150,12 +150,12 @@ const START    = P.get('section') !== null ? parseInt(P.get('section'),10) : nul
    Everything below is plain percentages — no JS layout math, no resize
    handling needed, the browser just scales the whole thing with CSS. */
 const NODE_LAYOUT = [
-  { y: 10, pillX: 27, capSide:'right', capFrom: 42, capTo: 97 },
-  { y: 27, pillX: 73, capSide:'left',  capFrom: 3,  capTo: 58 },
-  { y: 44, pillX: 27, capSide:'right', capFrom: 42, capTo: 97 },
-  { y: 61, pillX: 73, capSide:'left',  capFrom: 3,  capTo: 58 },
-  { y: 78, pillX: 27, capSide:'right', capFrom: 42, capTo: 97 },
-  { y: 95, pillX: 73, capSide:'left',  capFrom: 3,  capTo: 58 },
+  { y: 10, capSide:'right', capFrom: 42, capTo: 97 },
+  { y: 27, capSide:'left',  capFrom: 3,  capTo: 58 },
+  { y: 44, capSide:'right', capFrom: 42, capTo: 97 },
+  { y: 61, capSide:'left',  capFrom: 3,  capTo: 58 },
+  { y: 78, capSide:'right', capFrom: 42, capTo: 97 },
+  { y: 95, capSide:'left',  capFrom: 3,  capTo: 58 },
 ];
 
 /* A standalone curly line down the vertical centre — entirely decorative,
@@ -165,6 +165,20 @@ const CURL = [
   { x:50, y:-4 }, { x:61, y:12 }, { x:40, y:26 }, { x:60, y:40 },
   { x:40, y:54 }, { x:60, y:68 }, { x:41, y:82 }, { x:52, y:104 },
 ];
+
+// Where the curl actually sits, horizontally, at a given height — cards
+// offset from THIS, not a fixed column, so they stay in step with the
+// line's wander instead of drifting apart from it row by row.
+function curlXAt(y){
+  for(let i=1;i<CURL.length;i++){
+    const a = CURL[i-1], b = CURL[i];
+    if(y <= b.y){
+      const t = (y - a.y) / (b.y - a.y || 1);
+      return a.x + (b.x - a.x) * t;
+    }
+  }
+  return CURL[CURL.length-1].x;
+}
 /* "Flight of Fancy" — neutral warm tones with muted jewel accents.
    Paired with a readable text colour per tone (the two lighter shades
    need dark text, not white). Cycles for the 6th node. */
@@ -277,6 +291,15 @@ function openSection(i){
 function buildMap(){
   $('count').innerHTML = '<b>'+visited.size+'</b> / '+cards.length;
 
+  // Each card sits a fixed 20 points off whatever the curve is doing at
+  // that height — so cards stay "attached" to the line's wander instead
+  // of the line drifting away from a fixed column.
+  const OFFSET = 20;
+  const pillXs = NODE_LAYOUT.map(n => {
+    const cx = curlXAt(n.y);
+    return n.capSide === 'right' ? cx - OFFSET : cx + OFFSET;
+  });
+
   // The curly centre line — fixed shape, unrelated to card positions.
   let d = 'M '+CURL[0].x+' '+CURL[0].y;
   for(let i=1;i<CURL.length;i++){
@@ -286,26 +309,29 @@ function buildMap(){
 
   let svg = '<path class="road" d="'+d+'"/>';
   cards.forEach((_,i) => {
-    const n = NODE_LAYOUT[i];
+    const n = NODE_LAYOUT[i], px = pillXs[i];
     const dir = n.capSide === 'right' ? 1 : -1;
-    const x1 = n.pillX + dir*9, x2 = n.pillX + dir*15;
+    const x1 = px + dir*9, x2 = px + dir*15;
     svg += '<line class="stem" x1="'+x1+'" y1="'+n.y+'" x2="'+x2+'" y2="'+n.y+'"/>'+
            '<circle class="dot" cx="'+x2+'" cy="'+n.y+'" r="1.1"/>';
   });
   $('mapPath').innerHTML = svg;
 
   $('nodes').innerHTML = cards.map((c,i) => {
-    const n = NODE_LAYOUT[i];
+    const n = NODE_LAYOUT[i], px = pillXs[i];
     const seen = visited.has(i);
     const tone = PALETTE[i%PALETTE.length];
-    const circleRight = n.pillX < 50; // circle always faces the spine (inward)
+    const circleRight = px < 50; // circle always faces the spine (inward)
+    // Caption sits opposite the pill, starting just past the connector dot.
+    const capFrom = n.capSide === 'right' ? px + 15 : 3;
+    const capTo   = n.capSide === 'right' ? 97 : px - 15;
     return '<div class="node" style="top:'+n.y+'%">'+
       '<button class="pill'+(seen?' seen':'')+(circleRight?' circle-right':'')+'" data-i="'+i+'" '+
-        'style="left:'+n.pillX+'%">'+
+        'style="left:'+px+'%">'+
         '<span class="circle" style="background:'+tone.bg+';color:'+tone.fg+'"><span class="num">'+(i+1)+'</span><span class="chk">&#10003;</span></span>'+
         '<span class="rect" style="background:'+tone.bg+';color:'+tone.fg+'">'+c.cue+'</span>'+
       '</button>'+
-      '<div class="cap '+n.capSide+'" style="left:'+n.capFrom+'%;right:'+(100-n.capTo)+'%">'+
+      '<div class="cap '+n.capSide+'" style="left:'+capFrom+'%;right:'+(100-capTo)+'%">'+
         '<div class="ct">'+c.cue+'</div>'+
         '<div class="cs">'+mark(c.text, c.markers)+'</div>'+
       '</div>'+

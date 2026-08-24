@@ -293,13 +293,17 @@ function buildMap(){
   // the offset by the container's real pixel width keeps the pixel
   // clearance roughly constant across screen sizes.
   const mapWidthPx = $('map').clientWidth || 760;
-  const PIXEL_CLEARANCE = 106; // the clearance that looked right on desktop
-  const OFFSET = Math.max(14, Math.min(32, PIXEL_CLEARANCE / mapWidthPx * 100));
-  // Distance from pill edge to connector dot — fixed and container-width
-  // scaled, same as OFFSET above, so every row gets identical padding.
-  const PIXEL_STEM = 130; // the stem length that looked right on desktop
-  const STEM_LEN = Math.max(24, Math.min(40, PIXEL_STEM / mapWidthPx * 100));
-  const CAP_GAP = 3;
+  // Pills sit CLOSE to the wave — a small offset, so the pill visually
+  // hugs the spine (matches the reference: pill centre sits only ~6% of
+  // the canvas width off true centre).
+  const PIXEL_CLEARANCE = 46;
+  const OFFSET = Math.max(8, Math.min(18, PIXEL_CLEARANCE / mapWidthPx * 100));
+  // Captions sit FAR from the wave — roughly 4x the pill's offset, so
+  // definitions read as clearly separate from the spine (reference:
+  // caption centre sits ~23% of canvas width off true centre).
+  const PIXEL_STEM = 150; // the stem length that looked right on desktop
+  const STEM_LEN = Math.max(30, Math.min(46, PIXEL_STEM / mapWidthPx * 100));
+  const CAP_GAP = 1.2; // small on purpose: dot should sit almost touching the caption text
 
   // Pill centre: fixed distance either side of x=50, same on every row.
   const pillXs = NODE_LAYOUT.map(n => n.capSide === 'right' ? 50 - OFFSET : 50 + OFFSET);
@@ -323,7 +327,7 @@ function buildMap(){
   cards.forEach((_,i) => {
     const n = NODE_LAYOUT[i], px = pillXs[i], dot = dots[i];
     const x1 = px + dirs[i]*11;
-    svg += '<line class="stem" x1="'+x1+'" y1="'+n.y+'" x2="'+dot.x+'" y2="'+n.y+'"/>'+
+    svg += '<line class="stem" data-i="'+i+'" x1="'+x1+'" y1="'+n.y+'" x2="'+dot.x+'" y2="'+n.y+'"/>'+
            '<circle class="dot" cx="'+dot.x+'" cy="'+n.y+'" r="0.46"/>';
   });
   $('mapPath').innerHTML = svg;
@@ -365,6 +369,24 @@ function buildMap(){
     let maxW = 0;
     rects.forEach(r => { r.style.width = ''; maxW = Math.max(maxW, r.offsetWidth); });
     rects.forEach(r => { r.style.width = maxW + 'px'; });
+
+    // The stem's start point was a guessed constant ('11' viewBox units
+    // standing in for "half the pill's width") that doesn't track the
+    // pill's real rendered size — which depends on this text-driven rect
+    // width, only known after the measurement above. Now that pills are
+    // at their final size, snap each stem to the pill's actual outer
+    // edge so the connector dot always sits just outside it, never
+    // overlapping the pill's rounded end.
+    const mapRect = $('map').getBoundingClientRect();
+    $('nodes').querySelectorAll('.pill').forEach(pillEl => {
+      const i = +pillEl.dataset.i;
+      const dir = dirs[i];
+      const pRect = pillEl.getBoundingClientRect();
+      const edgePx = dir > 0 ? (pRect.right - mapRect.left) : (pRect.left - mapRect.left);
+      const edgePct = edgePx / mapRect.width * 100;
+      const stemLine = $('mapPath').querySelector('.stem[data-i="'+i+'"]');
+      if(stemLine) stemLine.setAttribute('x1', edgePct);
+    });
   });
 }
 

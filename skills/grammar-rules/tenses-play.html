@@ -56,31 +56,43 @@
   .play{flex:1;min-height:0;display:none;flex-direction:column;}
   .play.on{display:flex;}
   .stage{position:relative;flex:1;min-height:0;overflow:hidden;touch-action:none;}
+  .stage::before,.stage::after{content:'';position:absolute;left:0;right:0;pointer-events:none;z-index:2;}
+  .stage::before{top:0;height:8%;background:linear-gradient(to bottom,var(--stage),transparent);}
+  .stage::after{bottom:0;height:16%;background:linear-gradient(to top,var(--stage),transparent);}
   .cardzone{flex:none;touch-action:none;padding:0 14px calc(16px + env(safe-area-inset-bottom,0px));}
   .road{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
   .road line{stroke:var(--rule);stroke-width:1;}
   .road .centre{stroke:#BFB3A0;stroke-dasharray:5 12;stroke-width:1.5;}
   .road .vp{fill:#8a7f6d;}
+  #signLayer{transition:opacity .4s ease,filter .4s ease;}
+  .stage.dim #signLayer{opacity:.4;filter:saturate(.7);}
 
   .sign{position:absolute;cursor:pointer;display:flex;flex-direction:column;
     background:var(--paper);padding:11px 13px;border-radius:2px;
     box-shadow:0 6px 20px rgba(40,32,22,.34);
     border-left:3px solid #16161a;
     transform-origin:right center;
+    opacity:0;z-index:1;
     transition:left .5s var(--spring),right .5s var(--spring),top .5s var(--spring),
-               width .5s var(--spring),opacity .3s ease;}
+               width .5s var(--spring),transform .5s var(--spring),
+               font-size .5s var(--spring),opacity .4s ease;}
   .sign::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
     width:max(100%,44px);height:max(100%,44px);}
-  .sign .cue{color:var(--hot);line-height:1.05;overflow-wrap:break-word;max-width:100%;}
+  .sign .cue{color:var(--hot);line-height:1.05;overflow-wrap:break-word;max-width:100%;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
   .sign.right{align-items:flex-end;text-align:right;
     border-left:none;border-right:3px solid #16161a;
     transform-origin:left center;}
-  .sign .line{margin-top:5px;color:var(--soft);line-height:1.32;font-weight:400;}
+  .sign .line{margin-top:5px;color:var(--soft);line-height:1.32;font-weight:400;
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
   .sign .line b{font-weight:700;color:var(--ink);}
   .sign:active{opacity:.55;}
 
   /* black post the board is bolted to, standing behind it */
-  .post{position:absolute;pointer-events:none;background:#16161a;border-radius:1px;}
+  .post{position:absolute;pointer-events:none;background:#16161a;border-radius:1px;opacity:0;
+    transition:left .5s var(--spring),right .5s var(--spring),top .5s var(--spring),
+               width .5s var(--spring),height .5s var(--spring),transform .5s var(--spring),
+               opacity .4s ease;}
   .post::after{content:'';position:absolute;left:50%;bottom:-3px;transform:translateX(-50%);
     width:180%;height:5px;border-radius:2px;background:#16161a;opacity:.85;}
 
@@ -270,9 +282,9 @@ function layout(){
   const narrow = w < 620;
   G = { w, h, narrow,
         perSide: narrow ? 2 : 3,
-        vpx: w*0.5, vpy: h*0.12,
-        baseY: h*0.86,
-        baseW: narrow ? Math.min(w*0.45,190) : Math.min(w*0.31,230),
+        vpx: w*0.5, vpy: h*0.17,
+        baseY: h*0.72,
+        baseW: narrow ? Math.min(w*0.42,180) : Math.min(w*0.29,220),
         edge: 8 };
   /* The angle of the road line, damped. Boards are sheared to match it so
      their top and bottom edges run toward the vanishing point instead of
@@ -336,12 +348,15 @@ function slotAt(side, depth){
 /* ---------------- render ---------------- */
 function render(){
   $('count').innerHTML = '<b>'+placements.length+'</b> / '+cards.length;
+  $('stage').classList.toggle('dim', done);
   renderSigns(); renderCard();
 }
 
+const signEls = new Map(); // cardIdx -> { el, post }
+
 function renderSigns(){
   const layer = $('signLayer');
-  layer.innerHTML = '';
+  const seen = new Set();
   let hidden = 0;
 
   placements.forEach((p,i) => {
@@ -349,50 +364,86 @@ function renderSigns(){
     if(depth >= G.perSide){ hidden++; return; }
     if(activeIsPlaced && p.c === activeCard) return;
 
+    seen.add(p.c);
     const s = slotAt(p.side, depth), c = cards[p.c];
-    const el = document.createElement('div');
+
+    const isNew = !signEls.has(p.c);
+    let rec = signEls.get(p.c);
+    if(!rec){
+      const el = document.createElement('div');
+      el.onclick = () => retrieve(p.c);
+      const post = document.createElement('div');
+      post.className = 'post';
+      // post first, so the board sits in front of it
+      layer.appendChild(post);
+      layer.appendChild(el);
+      rec = { el, post };
+      signEls.set(p.c, rec);
+    }
+    const el = rec.el, post = rec.post;
+
     el.className = 'sign' + (p.side ? ' right' : '');
     el.style.width = s.w+'px';
     el.style.top = (s.y - 30)+'px';
-    if(p.side) el.style.right = (G.w - s.x)+'px'; else el.style.left = s.x+'px';
+    el.style.left  = p.side ? '' : s.x+'px';
+    el.style.right = p.side ? (G.w - s.x)+'px' : '';
     // Sheared along the road line, plus a little turn for thickness.
     const sh = p.side ? G.shear : -G.shear;
     const ry = p.side ? -13 : 13;
     el.style.transform = 'perspective(1200px) rotateY('+ry+'deg) skewY('+sh+'deg)';
 
-    // Fixed type sizes — every hanging sign stays fully readable.
-    const cueSize  = G.narrow ? 15 : 17;
-    const bodySize = G.narrow ? 12.5 : 13.5;
-    const html =
+    // Type tapers with distance so far boards shrink convincingly instead
+    // of wrapping onto extra lines and pushing past the board's edge.
+    const scale = 0.62 + 0.38*s.t;
+    const cueSize  = Math.round((G.narrow ? 15 : 17)   * scale);
+    const bodySize = Math.round((G.narrow ? 12.5 : 13.5) * scale);
+    el.innerHTML =
       '<div class="cue display" style="font-size:'+cueSize+'px">'+c.cue+'</div>'+
       '<div class="line" style="font-size:'+bodySize+'px">'+mark(c.text, c.markers)+'</div>';
 
-    el.innerHTML = html;
-    el.onclick = () => retrieve(p.c);
-
-    // Post first, so the board sits in front of it.
-    const post = document.createElement('div');
-    post.className = 'post';
     const pw = Math.max(4, Math.round(7*s.t));
     const ph = Math.round((G.baseY - s.y) * 0.30 + 52*s.t);
     post.style.transform = 'skewY('+(p.side ? G.shear*0.5 : -G.shear*0.5)+'deg)';
     post.style.width  = pw+'px';
     post.style.height = ph+'px';
     post.style.top    = (s.y - 30 + 26)+'px';
-    if(p.side) post.style.right = (G.w - s.x + 14)+'px';
-    else       post.style.left  = (s.x + 14)+'px';
-    layer.appendChild(post);
+    post.style.left   = p.side ? '' : (s.x + 14)+'px';
+    post.style.right  = p.side ? (G.w - s.x + 14)+'px' : '';
 
-    layer.appendChild(el);
+    if(isNew){
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        el.style.opacity = '1'; post.style.opacity = '1';
+      }));
+    } else {
+      el.style.opacity = '1'; post.style.opacity = '1';
+    }
   });
 
+  // Anything no longer on view (placed deeper than perSide, swapped out
+  // for the active card, or removed entirely) fades and is cleaned up —
+  // rather than vanishing instantly the way a full innerHTML wipe would.
+  signEls.forEach((rec, idx) => {
+    if(seen.has(idx)) return;
+    rec.el.style.opacity = '0';
+    rec.post.style.opacity = '0';
+    const { el, post } = rec;
+    setTimeout(() => { el.remove(); post.remove(); }, 320);
+    signEls.delete(idx);
+  });
+
+  let btn = layer.querySelector('.more');
   if(hidden){
-    const b = document.createElement('button');
-    b.className = 'more';
-    b.style.left = G.vpx+'px'; b.style.top = (G.vpy-28)+'px';
-    b.textContent = '+'+hidden;
-    b.onclick = openSheet;
-    layer.appendChild(b);
+    if(!btn){
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'more';
+      btn.onclick = openSheet;
+      layer.appendChild(btn);
+    }
+    btn.style.left = G.vpx+'px'; btn.style.top = (G.vpy-28)+'px';
+    btn.textContent = '+'+hidden;
+  } else if(btn){
+    btn.remove();
   }
 }
 
@@ -436,6 +487,8 @@ function renderCard(){
 }
 
 /* ---------------- state ---------------- */
+let cardTimer = null;
+
 function advance(){
   if(done || activeCard === null) return;
   const el = document.querySelector('.card');
@@ -446,7 +499,16 @@ function advance(){
   activeCard = nx === -1 ? null : nx;
   if(activeCard === null){ done = true; cleared.add(secIdx); }
 
-  if(el){ el.classList.add('out'); setTimeout(render, 220); } else render();
+  // The street reacts immediately — every tap places its sign on the
+  // spot, regardless of how fast you tap. Only the tray card underneath
+  // keeps its own short fade timer, purely cosmetic.
+  $('count').innerHTML = '<b>'+placements.length+'</b> / '+cards.length;
+  $('stage').classList.toggle('dim', done);
+  renderSigns();
+
+  clearTimeout(cardTimer);
+  if(el){ el.classList.add('out'); cardTimer = setTimeout(renderCard, 220); }
+  else renderCard();
 }
 function undo(){
   if(!placements.length) return;

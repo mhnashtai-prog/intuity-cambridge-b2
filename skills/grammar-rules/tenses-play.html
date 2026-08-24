@@ -154,14 +154,17 @@ const START    = P.get('section') !== null ? parseInt(P.get('section'),10) : nul
 
 /* Six fixed points, hand-placed to fit one phone screen without scrolling.
    Everything below is plain percentages — no JS layout math, no resize
-   handling needed, the browser just scales the whole thing with CSS. */
+   handling needed, the browser just scales the whole thing with CSS.
+   Rows start at 16 and end at 84 (rather than 13.8 / 86.3) to leave the
+   wave's lead-in and lead-out tails somewhere to live without crowding
+   the frame edge. */
 const NODE_LAYOUT = [
-  { y: 13.8, capSide:'right', capFrom: 42, capTo: 97 },
-  { y: 28.3, capSide:'left',  capFrom: 3,  capTo: 58 },
-  { y: 42.8, capSide:'right', capFrom: 42, capTo: 97 },
-  { y: 57.3, capSide:'left',  capFrom: 3,  capTo: 58 },
-  { y: 71.8, capSide:'right', capFrom: 42, capTo: 97 },
-  { y: 86.3, capSide:'left',  capFrom: 3,  capTo: 58 },
+  { y: 16.0, capSide:'right', capFrom: 42, capTo: 97 },
+  { y: 29.6, capSide:'left',  capFrom: 3,  capTo: 58 },
+  { y: 43.2, capSide:'right', capFrom: 42, capTo: 97 },
+  { y: 56.8, capSide:'left',  capFrom: 3,  capTo: 58 },
+  { y: 70.4, capSide:'right', capFrom: 42, capTo: 97 },
+  { y: 84.0, capSide:'left',  capFrom: 3,  capTo: 58 },
 ];
 
 // The wave is no longer an independent decorative shape that dots try to
@@ -372,16 +375,14 @@ function buildMap(){
     rects.forEach(r => { r.style.width = maxW + 'px'; });
 
     // The wave (the curved "road" spine) is pulled in to sit right
-    // against each pill's real rendered edge — half the previous gap —
-    // and terminates in a small dot at the very top and bottom instead
-    // of looping around the first/last pill. The little connector dot
-    // sits ~8mm off each definition's real edge, at the far end of the
-    // straight stem — and that stem now starts at the wave's own anchor
+    // against each pill's real rendered edge, and the little connector
+    // dot sits just off each definition's real edge, at the far end of
+    // the straight stem — and that stem starts at the wave's own anchor
     // point, not at the pill, so the pill-to-wave gap reads as a single
-    // clean span instead of two overlapping lines. Only positions
-    // move here; the banners and the caption text itself stay exactly
-    // where NODE_LAYOUT/pillXs/CAP_GAP put them.
-    const PILL_GAP_PX = 5 * 96 / 25.4; // 5mm, wave-to-banner (halved from 10mm)
+    // clean span instead of two overlapping lines. Only positions move
+    // here; the banners and the caption text itself stay exactly where
+    // NODE_LAYOUT/pillXs/CAP_GAP put them.
+    const PILL_GAP_PX = 5 * 96 / 25.4; // 5mm, wave-to-banner
     const CAP_GAP_PX  = 2 * 96 / 25.4; // 2mm, dot-to-definition — minimal padding
     const mapRect = $('map').getBoundingClientRect();
     const capEls = $('nodes').querySelectorAll('.cap');
@@ -398,7 +399,7 @@ function buildMap(){
     });
 
     // Far end of each stem: sits just short of the caption's own real
-    // edge (on the wave side of it), 8mm off.
+    // edge (on the wave side of it), 2mm off.
     const capDots = dots.map((dot,i) => {
       const dir = dirs[i];
       const cRect = capEls[i].getBoundingClientRect();
@@ -419,22 +420,37 @@ function buildMap(){
       if(dotEl) dotEl.setAttribute('cx', capDots[i].x);
     });
 
-    // The road threads through all six tight anchors and simply ends
-    // there — no tail curls at the top/bottom, just a clean stop capped
-    // with a small dot.
-    const a0    = tightDots[0];
-    const aLast = tightDots[tightDots.length-1];
+    // ---- one continuous wave, drawn in a single pass ----
+    // Lead-in / lead-out anchors continue the alternation past the first
+    // and last pill, so the curve enters and leaves mid-swing instead of
+    // stopping dead on a node. They're reflections of the neighbouring
+    // anchor through the endpoint, and they go into the SAME array as the
+    // six dots — so the smoothing loop below can't see a seam and the
+    // curvature carries through the joins for free.
+    const LEAD = 0.62;                                // tail length, as a fraction of one row's swing
+    const clampX = x => Math.max(4, Math.min(96, x)); // keep tails inside the frame
 
-    let td = 'M '+a0.x+' '+a0.y;
-    for(let i=1;i<tightDots.length;i++){
-      const a = tightDots[i-1], b = tightDots[i], my = (a.y+b.y)/2;
-      td += ' C '+a.x+' '+my+', '+b.x+' '+my+', '+b.x+' '+b.y;
+    const first  = tightDots[0],                    second = tightDots[1];
+    const last   = tightDots[tightDots.length - 1], penult = tightDots[tightDots.length - 2];
+
+    const head = { x: clampX(first.x + (first.x - second.x) * LEAD),
+                   y: first.y - (second.y - first.y) * LEAD };
+    const tail = { x: clampX(last.x  + (last.x  - penult.x) * LEAD),
+                   y: last.y  + (last.y  - penult.y) * LEAD };
+
+    const anchors = [head, ...tightDots, tail];
+
+    let td = 'M ' + anchors[0].x + ' ' + anchors[0].y;
+    for(let i = 1; i < anchors.length; i++){
+      const a = anchors[i-1], b = anchors[i], my = (a.y + b.y) / 2;
+      td += ' C ' + a.x + ' ' + my + ', ' + b.x + ' ' + my + ', ' + b.x + ' ' + b.y;
     }
 
     const roadEl = $('mapPath').querySelector('.road');
     if(roadEl) roadEl.setAttribute('d', td);
 
-    // Terminal end-caps: a small dot at the very top and very bottom.
+    // Terminal end-caps: a small dot at the very top and very bottom of
+    // the completed wave — i.e. on the tails, not on nodes 1 and 6.
     const mapSvg = $('mapPath');
     let endCaps = mapSvg.querySelector('.endCaps');
     if(!endCaps){
@@ -443,8 +459,8 @@ function buildMap(){
       mapSvg.appendChild(endCaps);
     }
     endCaps.innerHTML =
-      '<circle class="dot" cx="'+a0.x+'" cy="'+a0.y+'" r="0.46"/>'+
-      '<circle class="dot" cx="'+aLast.x+'" cy="'+aLast.y+'" r="0.46"/>';
+      '<circle class="dot" cx="'+head.x+'" cy="'+head.y+'" r="0.46"/>'+
+      '<circle class="dot" cx="'+tail.x+'" cy="'+tail.y+'" r="0.46"/>';
   });
 }
 

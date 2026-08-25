@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>INTUITY — Conditionals Map</title>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
   :root{
     --stage:#F1E8DA;
@@ -152,6 +152,13 @@
   /* Weight alone marks the target — no colour needed when the ground is
      this quiet and the type is this black. */
   .modalCard .sentence b{font-weight:700;color:#14110E;}
+  /* The grammar itself: set in mono so it reads as a formula rather than
+     prose, sitting directly under the cue where the eye already is. */
+  .modalCard .struct{font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:clamp(.72rem,3vw,.82rem);letter-spacing:-.01em;color:#14110E;
+    background:rgba(20,17,14,.09);border-radius:3px;
+    padding:.42em .7em;display:inline-block;margin-bottom:clamp(13px,3.5vw,18px);}
+
   /* the same sentence in its other ordering */
   .modalCard .alt{font-size:clamp(.92rem,3.6vw,1.04rem);line-height:1.45;
     color:rgba(20,17,14,.6);margin-top:12px;padding-left:12px;
@@ -346,14 +353,15 @@ function toPair(ex){
 
 // A set longer than the map has nodes becomes several sections rather than
 // losing the overflow.
-function chunk(pairs, title, note){
+function chunk(pairs, title, note, structure){
   const out=[];
   for(let i=0;i<pairs.length;i+=MAX_PER_SECTION){
     const part = pairs.length > MAX_PER_SECTION
       ? ' ' + (i/MAX_PER_SECTION+1) + '/' + Math.ceil(pairs.length/MAX_PER_SECTION) : '';
     const slice = pairs.slice(i,i+MAX_PER_SECTION);
     out.push({ title:title+part, pairs:slice,
-               timeMarkers:[...new Set(slice.flatMap(p=>p.marks))], note:note||'' });
+               timeMarkers:[...new Set(slice.flatMap(p=>p.marks))],
+               note:note||'', structure:structure||'' });
   }
   return out;
 }
@@ -363,14 +371,18 @@ function normalise(rule){
     return { name: rule.name||rule.fullName||rule.title||'',
              useCases: rule.useCases.flatMap(uc => chunk(
                [uc.mainExample].concat(uc.moreExamples||[]).filter(Boolean).map(toPair),
-               uc.title, uc.note)) };
+               uc.title, uc.note, uc.structure || '')) };
   }
   if(Array.isArray(rule.sets) && rule.sets.length){
-    const note = [rule.structure, rule.explanation].filter(Boolean).join(' \u2014 ');
+    /* structure and explanation are kept APART. The structure line is the
+       grammar itself ("if + present simple, present simple") and belongs
+       under the cue; the explanation is commentary and belongs at the foot.
+       Concatenating them buried the rule inside a grey paragraph. */
     return { name: rule.title || rule.mainTitle || '',
              useCases: rule.sets.flatMap(set => chunk(
                (set.examples||[]).map(toPair).filter(p=>p.text),
-               set.setTitle || set.title || 'Examples', note)) };
+               set.setTitle || set.title || 'Examples',
+               rule.explanation || '', rule.structure || '')) };
   }
   return { name: rule.title||'', useCases: [] };
 }
@@ -471,6 +483,7 @@ function openSection(i){
     cue:  cueFromMarks(p.marks) || cueFor(p.text, uc),
     markers: (p.marks && p.marks.length) ? p.marks : (uc.timeMarkers||[]),
     from: p.from || '',
+    structure: uc.structure || '',
     note: uc.note || ''
   }));
   visited = new Set(); openIdx = null;
@@ -736,6 +749,7 @@ function openNode(i){
     '<button class="x" id="modalClose" type="button">&#10005;</button>'+
     '<div class="kick">'+(tense.name||'')+'</div>'+
     '<div class="cue display">'+c.cue+'</div>'+
+    (c.structure ? '<div class="struct">'+c.structure+'</div>' : '')+
     '<div class="sentence">'+mark(c.text, c.markers)+'</div>'+
     (c.from ? '<div class="alt">'+mark(c.from, c.markers)+'</div>' : '')+
     (c.note ? '<div class="note">'+c.note+'</div>' : '');

@@ -221,13 +221,13 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
   </div>
 </div>
 
-<div class="area" id="practiceArea"><div class="frame"><iframe id="practiceFrame" src="" title="Practice"></iframe></div></div>
-<div class="area" id="quizArea"><div class="frame"><iframe id="quizFrame" src="" title="Quiz"></iframe></div></div>
+<div class="area" id="practiceArea"><div class="frame"><iframe id="practiceFrame" title="Practice"></iframe></div></div>
+<div class="area" id="quizArea"><div class="frame"><iframe id="quizFrame" title="Quiz"></iframe></div></div>
 
 <div class="modal" id="modal">
   <div class="shell">
     <button class="closex" id="closeX" type="button" aria-label="Close">×</button>
-    <iframe id="slidesFrame" src="" title="Tense slides"></iframe>
+    <iframe id="slidesFrame" title="Tense slides"></iframe>
   </div>
 </div>
 
@@ -321,6 +321,15 @@ async function boot(){
   paintList();
   syncHeader();
 
+  /* Defuse and Forge are real pages and link BACK here as ?mode=quiz etc.
+     Without this the parameter was ignored and every return landed on
+     Explore. Also makes each mode addressable by URL. */
+  const wanted = new URLSearchParams(location.search).get('mode');
+  if(wanted && wanted !== 'explore' &&
+     document.querySelector('.mode-btn[data-mode="'+wanted+'"]')){
+    switchMode(wanted);
+  }
+
   const m = P.get('mode');
   if(m === 'practice' || m === 'quiz') switchMode(m);
 
@@ -407,12 +416,16 @@ function switchMode(mode){
   if(explore){ $('exploreArea').classList.add('active'); }
   else if(mode === 'practice'){
     $('practiceArea').classList.add('active');
+    /* getAttribute, not .src: an iframe whose src attribute is present but
+       empty reports .src as the CURRENT PAGE's absolute URL — truthy — so
+       this guard never fired and the frame quietly loaded the parent page
+       into itself. Blank panel, no console error. */
     const f = $('practiceFrame');
-    if(!f.src) f.src = 'tenses-practice.html';
+    if(!f.getAttribute('src')) f.setAttribute('src','tenses-practice.html');
   }else if(mode === 'quiz'){
     $('quizArea').classList.add('active');
     const f = $('quizFrame');
-    if(!f.src) f.src = 'tenses-gapfill.html';
+    if(!f.getAttribute('src')) f.setAttribute('src','tenses-gapfill.html');
   }
   syncHeader();
 }
@@ -453,6 +466,19 @@ function syncHeader(){
 }
 window.addEventListener('resize', syncHeader);
 window.addEventListener('orientationchange', () => setTimeout(syncHeader,120));
+
+/* Returning from Defuse or Forge restores this page from the back/forward
+   cache: boot() does not run again, nothing resizes, so the ResizeObserver
+   has no reason to fire — and --header-h can be left at whatever it was.
+   The HUD then sits clipped under the header. pageshow is the only event
+   that fires on a bfcache restore, so re-measure there. */
+window.addEventListener('pageshow', e => {
+  syncHeader();
+  if(e.persisted) requestAnimationFrame(syncHeader);   // after layout settles
+});
+document.addEventListener('visibilitychange', () => {
+  if(!document.hidden) syncHeader();
+});
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(syncHeader);
 
 /* syncHeader() measures at the instant it is called — but the header can

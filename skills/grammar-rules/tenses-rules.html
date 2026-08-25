@@ -49,7 +49,10 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
   letter-spacing:.08em;text-transform:uppercase;color:var(--faint);transition:color .2s;white-space:nowrap}
 .back-link:hover{color:var(--accent-ink)}
 .header-title{display:flex;flex-direction:column;align-items:center;line-height:1.1}
-.app-title{font-family:'Space Grotesk',sans-serif;font-size:1rem;font-weight:900;letter-spacing:.22em;color:var(--ink)}
+/* A hair more presence: the wordmark sat at the same size as the mode words
+   beneath it, so on a phone it read as one label among several rather than
+   as the name of the app. */
+.app-title{font-family:'Space Grotesk',sans-serif;font-size:1.09rem;font-weight:900;letter-spacing:.2em;color:var(--ink)}
 .app-subtitle{font-size:.58rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
   color:var(--dim);margin-top:.1rem}
 .header-spacer{justify-self:end;font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;
@@ -132,12 +135,13 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
    outranked them, so grey read as lifeless when it was really just small.
    Scale carries the hierarchy, which frees the accent to mean one thing:
    focus. It also matches the poster this section opens. */
-/* Sage-grey, up 20%. Set at 600 rather than 500: at .94rem this is still
-   below the large-text threshold, and #71827A is 3.8:1 — the extra weight
-   is what makes it hold on the page rather than going hazy. */
-.uc-title{font-family:'DM Mono',monospace;font-weight:600;
-  font-size:.94rem;line-height:1.3;color:#71827A;
-  text-transform:uppercase;letter-spacing:.14em;margin-bottom:.95rem}
+/* Space Grotesk, not mono. A monospace label reads as technical — dashboard,
+   terminal — and that was half of what felt dated here. Space Grotesk is a
+   geometric grotesque: even strokes, open counters, and it holds its shape
+   at light weights and wide tracking, which mono does not. */
+.uc-title{font-family:'Space Grotesk',sans-serif;font-weight:500;
+  font-size:.96rem;line-height:1.3;color:#71827A;
+  text-transform:uppercase;letter-spacing:.2em;margin-bottom:1rem}
 .markers{margin-bottom:1.1rem}
 .markers.hidden{display:none}
 .markers-t{font-family:'DM Mono',monospace;font-size:.56rem;color:var(--dim);text-transform:uppercase;
@@ -273,12 +277,31 @@ function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace
    inside the example sentences. Longest markers are matched first so a
    phrase like "hardly ever" isn't partly swallowed by "ever" (which
    doesn't exist here, but keeps this correct in general). */
+/* Most sentences carry a time expression that is NOT in the section's
+   timeMarkers list — "every morning", "on Saturdays", "at 7pm" are all
+   absent from Habitual Actions, which lists only "every day", "always",
+   "usually"… So only one sentence in six was ever marked. The panel behind
+   each sentence used to disguise that; without it the gap is obvious.
+   This is the same fallback the map uses to pick its cue, so the two
+   surfaces now agree on what the signal word is. */
+const TIME_RE = /\b((?:every|each|this|next|last)\s+\w+|on\s+\w+days?|in\s+the\s+\w+|at\s+\d[\d:.]*\s*(?:am|pm)?|at\s+(?:night|noon|midnight|dawn|dusk|weekends?)|since\s+\w+|for\s+\w+(?:\s+\w+)?|all\s+\w+|as soon as|hardly ever|yet|just|already|never|ever|always|usually|often|sometimes|rarely|nowadays|recently|lately|currently|tomorrow|tonight|yesterday|today|now)\b/gi;
+
 function highlightMarkers(text, markers){
   const safe = escHtml(text);
-  if(!markers || !markers.length) return safe;
-  const sorted = [...markers].sort((a,b)=>b.length-a.length).map(escRe);
-  const re = new RegExp('\\b(' + sorted.join('|') + ')\\b','gi');
-  return safe.replace(re, '<span class="marker-inline">$1</span>');
+  let out = safe, hit = false;
+
+  if(markers && markers.length){
+    const sorted = [...markers].sort((a,b)=>b.length-a.length).map(escRe);
+    const re = new RegExp('\\b(' + sorted.join('|') + ')\\b','gi');
+    out = safe.replace(re, (m) => { hit = true; return '<span class="marker-inline">'+m+'</span>'; });
+  }
+  // only fall back when the listed markers found nothing, so a section that
+  // does mark its own words keeps full control
+  if(!hit){
+    TIME_RE.lastIndex = 0;
+    out = safe.replace(TIME_RE, '<span class="marker-inline">$1</span>');
+  }
+  return out;
 }
 
 async function boot(){
@@ -431,6 +454,22 @@ function syncHeader(){
 window.addEventListener('resize', syncHeader);
 window.addEventListener('orientationchange', () => setTimeout(syncHeader,120));
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(syncHeader);
+
+/* syncHeader() measures at the instant it is called — but the header can
+   change height AFTER that: a late webfont swap, or the tab row rewrapping
+   once layout settles. Reloading straight into EXPLORE is where that gap is
+   tightest, and the HUD ends up pinned under the header.
+   A ResizeObserver removes the timing question: it fires whenever the
+   header's box actually changes, whatever caused it. */
+if(window.ResizeObserver){
+  const ro = new ResizeObserver(() => syncHeader());
+  const h = document.querySelector('.header'), hu = document.querySelector('.hud');
+  if(h)  ro.observe(h);
+  if(hu) ro.observe(hu);
+}else{
+  // older browsers: re-measure across the frames where layout settles
+  [0,60,200,500].forEach(ms => setTimeout(syncHeader, ms));
+}
 
 boot();
 </script>

@@ -325,12 +325,16 @@
 
     function inputHtml(cls, id, value, min, handler) {
       const style = 'width: ' + boxWidth(value, min) + 'px;';
+      /* has-value drives the blue underline: the slot is marked as holding an
+         answer, without touching the colour of the word itself. */
+      if (value) cls += ' has-value';
       if (isChecked) {
         return '<input type="text" class="' + cls + '" value="' + escapeHtml(value) +
                '" readonly style="' + style + '" />';
       }
       return '<input type="text" class="' + cls + '" id="' + id + '" value="' +
-             escapeHtml(value) + '" oninput="' + handler + '" placeholder="..." style="' +
+             escapeHtml(value) + '" oninput="this.classList.toggle(&quot;has-value&quot;, !!this.value); ' +
+             handler + '" placeholder="..." style="' +
              style + '" />';
     }
 

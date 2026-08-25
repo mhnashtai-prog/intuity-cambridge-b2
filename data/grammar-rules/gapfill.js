@@ -174,15 +174,48 @@
 
     /* ─────────── loading ─────────── */
 
+    /* Three shapes exist across the topics:
+         merged      -> data.gapfill.tests      (conditionals)
+         standalone  -> data.tests              (tenses-gapfill.json)
+         bare array  -> data                    (older files)
+       And a topic whose merged file has no gapfill key at all still has its
+       tests in <topic>-gapfill.json, so try that before giving up. Reading
+       the merged file and finding nothing is what produced "No tests found". */
+    function testsIn(data){
+      if (!data) return [];
+      if (Array.isArray(data)) return data;
+      if (data.gapfill && Array.isArray(data.gapfill.tests)) return data.gapfill.tests;
+      if (Array.isArray(data.tests)) return data.tests;
+      return [];
+    }
+
+    function siblingGapfillURL(){
+      // ../../data/grammar-rules/tenses-data.json -> ...-gapfill.json
+      return DATA_URL.replace(/[^/]+\.json$/, m =>
+        m.replace(/-(data|rules|complete)\.json$/, '-gapfill.json'));
+    }
+
     async function loadData() {
       try {
-        const response = await fetch(DATA_URL);
-        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const tried = [];
+        let data = null, tests = [];
 
-        const data = await response.json();
-        indexRules(data);
-        allTests = (data.gapfill && data.gapfill.tests) || [];
-        if (!allTests.length) throw new Error('No tests found in gapfill.tests');
+        for (const url of [DATA_URL, siblingGapfillURL()]) {
+          if (tried.includes(url)) continue;
+          tried.push(url);
+          try {
+            const res = await fetch(url, { cache: 'no-store' });
+            if (!res.ok) continue;
+            const parsed = await res.json();
+            const found = testsIn(parsed);
+            if (found.length) { data = parsed; tests = found; break; }
+            if (!data) data = parsed;          // keep for indexRules even if empty
+          } catch (e) { /* try the next source */ }
+        }
+
+        indexRules(data || {});
+        allTests = tests;
+        if (!allTests.length) throw new Error('No tests found — checked ' + tried.join(' and '));
 
         renderTestSelector();
         loadTest(0);

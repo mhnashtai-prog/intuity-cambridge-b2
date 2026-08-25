@@ -371,17 +371,36 @@ function saveScores() {
   }
 }
 
+/* Two shapes exist. Conditionals was merged into one file per topic with a
+   `practice` key; tenses was not — its practice sets are still in their own
+   file, and tenses-data.json holds only `rules`. Reading .practice from it
+   returned undefined, so the page rendered nothing at all: not a 404, an
+   empty result. Try the merged file first, then the standalone one. */
+const PRACTICE_SOURCES = [
+  '../../data/grammar-rules/tenses-data.json',
+  '../../data/grammar-rules/tenses-practice.json'
+];
+
+async function fetchPractice(){
+  let lastErr = null;
+  for(const url of PRACTICE_SOURCES){
+    try{
+      const res = await fetch(url, { cache:'no-store' });
+      if(!res.ok){ lastErr = new Error('HTTP '+res.status); continue; }
+      const raw = await res.json();
+      // merged file -> raw.practice ; standalone file -> the array itself
+      const sets = Array.isArray(raw) ? raw : raw.practice;
+      if(Array.isArray(sets) && sets.length) return sets;
+      lastErr = new Error('no practice sets in ' + url.split('/').pop());
+    }catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error('no practice data found');
+}
+
 async function loadData() {
   try {
-    const response = await fetch('../../data/grammar-rules/tenses-data.json');
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    
-    /* One file per topic now: the practice sections live under `practice`. */
-    const data = (await response.json()).practice;
-    
+    const data = await fetchPractice();
+
     allTests = data.map(section => ({
       title: section.title,
       transformations: section.transformations

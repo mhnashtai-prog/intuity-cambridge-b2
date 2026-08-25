@@ -280,9 +280,7 @@
     }
 
     /* WATCH MODE */
-    .watch-mode {
-      display: block;
-    }
+    /* .watch-mode retired with the WATCH panel. */
 
     .modal-card {
       background: #000;
@@ -680,34 +678,11 @@
     <!-- EXPLORE MODE CONTENT -->
     <div class="content-area active" id="exploreArea">
       <!-- WATCH MODE -->
-      <div class="watch-mode" id="watchMode" hidden>
-        <div class="modal-card">
-          
-          <!-- SOUND ICON -->
-          <div class="sound-icon active" id="soundIcon" title="Toggle sound" hidden hidden>
-            <span id="soundEmoji">🔊</span>
-          </div>
+      <!-- WATCH panel removed. It was previously hidden via the `hidden`
+           attribute, but .watch-mode{display:block} in the stylesheet
+           overrode it — `hidden` is only a UA default and loses to any
+           real CSS display rule. Deleting the markup is unambiguous. -->
 
-          <div class="card-content" id="cardContent">
-            <div class="expression" id="expression"></div>
-            <div class="examples-list" id="examplesList"></div>
-          </div>
-
-          <!-- CONTROLS -->
-          <div class="controls">
-            <button class="control-btn" id="repeatBtn">↻</button>
-            <button class="control-btn play" id="playBtn">▶</button>
-            <button class="control-btn" id="pauseBtn" disabled>⏸</button>
-          </div>
-
-          <!-- PROGRESS -->
-          <div class="progress">
-            <span class="current" id="current">1</span> / <span id="total">0</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- LIST MODE -->
       <div class="list-mode show" id="listMode">
         <div class="list-container" id="listContainer"></div>
       </div>
@@ -797,10 +772,13 @@
         
       } catch (error) {
         console.error('Error loading data:', error);
-        document.getElementById('cardContent').innerHTML = `
-          <div style="color: #fb923c; text-align: center;">
+        // The WATCH card is gone, so errors surface in the list instead.
+        const errTarget = document.getElementById('listContainer');
+        if (errTarget) errTarget.innerHTML = `
+          <div style="color: #fb923c; text-align: center; padding: 2rem;">
             <div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div>
             <div>Failed to load conditionals</div>
+            <div style="font-size:.8rem;opacity:.7;margin-top:.6rem">${error.message}</div>
           </div>
         `;
       }
@@ -987,42 +965,12 @@
     /* WATCH mode is retired. The markup stays (hidden) so nothing that
        still references it can throw, but rendering is a no-op — otherwise
        the hidden slideshow keeps advancing and swallowing arrow keys. */
-    function renderWatchSlide(){ if(viewMode !== 'watch') return; return renderWatchSlideImpl(); }
-    function renderWatchSlideImpl() {
-      if (currentTabData.length === 0) return;
-      
-      const data = currentTabData[currentIndex];
-      const content = document.getElementById('cardContent');
-      
-      speechFinished = false;
-      
-      content.classList.remove('show');
-      
-      setTimeout(() => {
-        document.getElementById('expression').textContent = data.title;
-        
-        // Render all examples for this set
-        const examplesContainer = document.getElementById('examplesList');
-        examplesContainer.innerHTML = '';
-        data.examples.forEach(example => {
-          const div = document.createElement('div');
-          div.className = 'example-item-watch';
-          div.innerHTML = example;
-          examplesContainer.appendChild(div);
-        });
-        
-        document.getElementById('current').textContent = currentIndex + 1;
-        document.getElementById('total').textContent = currentTabData.length;
-        
-        content.classList.add('show');
-        
-        if (soundEnabled) {
-          speak(data);
-        } else {
-          speechFinished = true;
-        }
-      }, 500);
-    }
+    function renderWatchSlide(){ /* WATCH panel removed; nothing to render. */ }
+    /* renderWatchSlideImpl() deleted along with the WATCH panel it drew
+       into. It referenced #expression, #current and #total, none of which
+       exist any more — leaving it in place would have been a trap for
+       whoever next called it. */
+
 
     // SPEAK (narrates title + all examples with pauses)
     /* Speech synthesis was removed: it behaved unpredictably across school
@@ -1049,8 +997,9 @@
 
     function play() {
       isPlaying = true;
-      document.getElementById('playBtn').textContent = '■';
-      document.getElementById('pauseBtn').disabled = false;
+      const pb = document.getElementById('playBtn'), qb = document.getElementById('pauseBtn');
+      if (pb) pb.textContent = '■';
+      if (qb) qb.disabled = false;
       
       playInterval = setInterval(() => {
         if (soundEnabled && !speechFinished) {
@@ -1085,8 +1034,9 @@
 
     function pause() {
       isPlaying = false;
-      document.getElementById('playBtn').textContent = '▶';
-      document.getElementById('pauseBtn').disabled = true;
+      const pb2 = document.getElementById('playBtn'), qb2 = document.getElementById('pauseBtn');
+      if (pb2) pb2.textContent = '▶';
+      if (qb2) qb2.disabled = true;
       
       if (playInterval) {
         clearInterval(playInterval);
@@ -1097,9 +1047,13 @@
     }
 
     // EVENT LISTENERS
-    document.getElementById('repeatBtn').addEventListener('click', repeatSlide);
-    document.getElementById('playBtn').addEventListener('click', togglePlay);
-    document.getElementById('pauseBtn').addEventListener('click', pause);
+    /* The WATCH transport (repeat/play/pause) was removed with the panel.
+       These are bound only if the buttons exist — unguarded, they threw at
+       top level and stopped the whole script before the list ever built. */
+    ['repeatBtn','playBtn','pauseBtn'].forEach((id, i) => {
+      const btn = document.getElementById(id);
+      if (btn) btn.addEventListener('click', [repeatSlide, togglePlay, pause][i]);
+    });
 
     document.addEventListener('keydown', (e) => {
       if (viewMode === 'watch' && currentMainMode === 'explore') {

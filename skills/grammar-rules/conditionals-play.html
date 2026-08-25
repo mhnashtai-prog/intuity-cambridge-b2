@@ -202,14 +202,22 @@ const START    = P.get('section') !== null ? parseInt(P.get('section'),10) : nul
    Rows start at 16 and end at 84 (rather than 13.8 / 86.3) to leave the
    wave's lead-in and lead-out tails somewhere to live without crowding
    the frame edge. */
-const NODE_LAYOUT = [
-  { y: 16.0, capSide:'right', capFrom: 42, capTo: 97 },
-  { y: 29.6, capSide:'left',  capFrom: 3,  capTo: 58 },
-  { y: 43.2, capSide:'right', capFrom: 42, capTo: 97 },
-  { y: 56.8, capSide:'left',  capFrom: 3,  capTo: 58 },
-  { y: 70.4, capSide:'right', capFrom: 42, capTo: 97 },
-  { y: 84.0, capSide:'left',  capFrom: 3,  capTo: 58 },
-];
+/* Rows are GENERATED from the section's real card count, not a fixed list
+   of six. With a hardcoded six, a five-card section made tightDots look up
+   a pill that was never rendered, getBoundingClientRect() threw, and the
+   whole requestAnimationFrame block died — taking the cosine, the taper
+   and the end dots with it. What survived was the rough placeholder path
+   drawn before it, still reaching for a phantom sixth node. */
+const ROW_TOP = 16, ROW_BOT = 84;
+
+function layoutFor(n){
+  if(n === 1) return [{ y:(ROW_TOP+ROW_BOT)/2, capSide:'right' }];
+  const span = ROW_BOT - ROW_TOP;
+  return Array.from({length:n}, (_,i) => ({
+    y: ROW_TOP + span * i / (n-1),
+    capSide: i % 2 === 0 ? 'right' : 'left'
+  }));
+}
 
 // The wave is no longer an independent decorative shape that dots try to
 // match. It's built the other way around: each row's dot sits at a fixed,
@@ -479,6 +487,9 @@ function openSection(i){
 function buildMap(){
   $('count').innerHTML = '<b>'+visited.size+'</b> / '+cards.length;
 
+  // one row per rendered pill — never more
+  const LAYOUT = layoutFor(cards.length);
+
   // Each card sits an offset off whatever the curve is doing at that
   // height — so cards stay "attached" to the line's wander instead of
   // the line drifting away from a fixed column. The offset is expressed
@@ -503,12 +514,12 @@ function buildMap(){
   const CAP_GAP = 0.4; // minimal on purpose: dot should sit almost touching the caption text
 
   // Pill centre: fixed distance either side of x=50, same on every row.
-  const pillXs = NODE_LAYOUT.map(n => n.capSide === 'right' ? 50 - OFFSET : 50 + OFFSET);
-  const dirs   = NODE_LAYOUT.map(n => n.capSide === 'right' ? 1 : -1);
+  const pillXs = LAYOUT.map(n => n.capSide === 'right' ? 50 - OFFSET : 50 + OFFSET);
+  const dirs   = LAYOUT.map(n => n.capSide === 'right' ? 1 : -1);
   // Connector dot: fixed offset from its own pill — never from the curve.
   // These six points are the wave's anchors; the curve is drawn to pass
   // through them, not solved for afterward, so it can't drift off them.
-  const dots = NODE_LAYOUT.map((n,i) => ({ x: pillXs[i] + dirs[i]*STEM_LEN, y: n.y }));
+  const dots = LAYOUT.map((n,i) => ({ x: pillXs[i] + dirs[i]*STEM_LEN, y: n.y }));
 
   // Smooth "S" path threading through the six fixed dots. This first
   // paint happens before any pill has actually rendered, so there's no
@@ -523,7 +534,7 @@ function buildMap(){
 
   let svg = '<path class="road" d="'+d+'"/>';
   cards.forEach((_,i) => {
-    const n = NODE_LAYOUT[i], px = pillXs[i], dot = dots[i];
+    const n = LAYOUT[i], px = pillXs[i], dot = dots[i];
     const x1 = px + dirs[i]*11;
     svg += '<line class="stem" data-i="'+i+'" x1="'+x1+'" y1="'+n.y+'" x2="'+dot.x+'" y2="'+n.y+'"/>'+
            '<circle class="dot" data-i="'+i+'" cx="'+dot.x+'" cy="'+n.y+'" r="0.46"/>';
@@ -531,7 +542,7 @@ function buildMap(){
   $('mapPath').innerHTML = svg;
 
   $('nodes').innerHTML = cards.map((c,i) => {
-    const n = NODE_LAYOUT[i], px = pillXs[i], dot = dots[i];
+    const n = LAYOUT[i], px = pillXs[i], dot = dots[i];
     const seen = visited.has(i);
     const tone = PALETTE[i%PALETTE.length];
     // Circle sits at the OUTER end of the pill (away from the spine); the
@@ -575,7 +586,7 @@ function buildMap(){
     // point, not at the pill, so the pill-to-wave gap reads as a single
     // clean span instead of two overlapping lines. Only positions move
     // here; the banners and the caption text itself stay exactly where
-    // NODE_LAYOUT/pillXs/CAP_GAP put them.
+    // LAYOUT/pillXs/CAP_GAP put them.
     const PILL_GAP_PX = 5 * 96 / 25.4; // 5mm, wave-to-banner
     const CAP_GAP_PX  = 2 * 96 / 25.4; // 2mm, dot-to-definition — minimal padding
     const mapRect = $('map').getBoundingClientRect();
@@ -626,12 +637,25 @@ function buildMap(){
     // and last anchor, so the curl back across the spine is the same
     // cosine still running. There is no seam to hide because there is no
     // seam.
+    if(tightDots.length < 2){
+      const only = $('mapPath').querySelector('.road');
+      if(only) only.setAttribute('d','');
+      const g = $('mapPath').querySelector('.endCaps');
+      if(g) g.innerHTML = '';
+      return;
+    }
+
     const ys   = tightDots.map(d => d.y);
     const y0   = ys[0], yN = ys[ys.length-1];
-    const gap  = (yN - y0) / (ys.length - 1);   // uniform by NODE_LAYOUT
+    const gap  = (yN - y0) / (ys.length - 1);   // uniform by layoutFor()
     const LAM  = 2 * gap;                        // one full period spans two rows
-    const cxW  = tightDots.reduce((s,d) => s + d.x, 0) / tightDots.length;
-    const amp  = tightDots.reduce((s,d) => s + Math.abs(d.x - cxW), 0) / tightDots.length;
+    // Range, not mean: with an odd number of alternating anchors one side
+    // has an extra member, which drags a mean centre off true and stops the
+    // cosine passing through the anchors exactly. Anchors only ever take two
+    // x values, so midpoint-of-range is exact at any count.
+    const xsW  = tightDots.map(d => d.x);
+    const cxW  = (Math.min(...xsW) + Math.max(...xsW)) / 2;
+    const amp  = (Math.max(...xsW) - Math.min(...xsW)) / 2;
     const side = Math.sign(tightDots[0].x - cxW); // which way row 1 leans
 
     // The whole wave, as a function of height. This is the entire shape.

@@ -233,6 +233,12 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
 
 <script>
 const PLAY = 'explore-map.html';   // ONE renderer for every topic
+
+/* Bump when a framed page changes. Iframes are cached independently of the
+   top document, so a hard refresh of THIS page can still serve a stale
+   child — which is how a previous build kept loading after an upload.
+   The query string makes each build a distinct URL. */
+const BUILD = '2026-08-25c';
 const DEF  = '../../data/grammar-rules/tenses-rules.json';
 const P    = new URLSearchParams(location.search);
 const JSON_URL = P.get('json') || DEF;
@@ -421,16 +427,32 @@ function switchMode(mode){
        this guard never fired and the frame quietly loaded the parent page
        into itself. Blank panel, no console error. */
     const f = $('practiceFrame');
-    if(!f.getAttribute('src')) f.setAttribute('src','tenses-practice.html');
+    if(!f.getAttribute('src')) f.setAttribute('src','tenses-practice.html?v='+BUILD);
   }else if(mode === 'quiz'){
     $('quizArea').classList.add('active');
     const f = $('quizFrame');
-    if(!f.getAttribute('src')) f.setAttribute('src','tenses-gapfill.html');
+    if(!f.getAttribute('src')) f.setAttribute('src','tenses-gapfill.html?v='+BUILD);
   }
   syncHeader();
 }
 document.querySelectorAll('.mode-btn[data-mode]').forEach(b =>
   b.addEventListener('click', () => switchMode(b.dataset.mode)));
+
+/* Guard against the recursion that an empty src used to cause: if a frame
+   ever ends up pointing at this page, it renders a second header inside the
+   first. Cheap to check, and it fails loudly instead of looking like a
+   styling bug. */
+['practiceFrame','quizFrame'].forEach(id => {
+  const f = $(id);
+  if(!f) return;
+  f.addEventListener('load', () => {
+    const src = f.getAttribute('src') || '';
+    if(src.indexOf('tenses-rules') === 0 || src === '' || src === location.pathname){
+      console.error('[intuity] '+id+' pointed at the host page — recursion averted');
+      f.removeAttribute('src');
+    }
+  });
+});
 
 /* ── list / slides ── */
 function openMap(section){

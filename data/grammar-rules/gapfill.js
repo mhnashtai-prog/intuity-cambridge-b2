@@ -33,7 +33,12 @@
     function normalizeAnswer(answer) {
       return String(answer || '')
         .toLowerCase()
-        .replace(/[\u2018\u2019\u201B\u02BC]/g, "'")
+        /* Anything a keyboard might produce where an apostrophe belongs.
+           Phones give curly quotes; a Portuguese or Spanish layout gives the
+           acute accent from the dead key beside Enter, so "can´t" has to
+           match "can't" or every negative marks wrong for a learner using
+           the keyboard in front of them. */
+        .replace(/[\u2018\u2019\u201A\u201B\u02BC\u02B9\u02BB\u00B4\u0060\u00AB\u00BB\u2032]/g, "'")
         .trim()
         .replace(/\s+/g, ' ');
     }
@@ -100,16 +105,32 @@
       return { text: text.replace(re, '<span class="main-verb">$&</span>'), hit: true };
     }
 
-    /* The cue verb can sit either side of the gap, so walk the segments in
-       reading order and stop at the first match. */
-    function highlightSegments(segments, verb) {
-      let found = false;
-      return segments.map(function (segment) {
-        if (found) return segment;
-        const result = highlightOnce(segment, verb);
-        found = result.hit;
-        return result.text;
-      });
+    /* A cue can sit either side of the gap, so walk the segments in reading
+       order and stop at the first match.
+
+       An item may also carry several cues rather than one: a tense is often
+       forced by a pair of time markers ("for" … "now"), and highlighting only
+       the first would point at half the evidence. Each cue is matched once,
+       independently. */
+    function cuesOf(item) {
+      const raw = item.highlightVerb !== undefined ? item.highlightVerb : item.keywords;
+      if (Array.isArray(raw)) return raw.filter(Boolean);
+      return raw ? [raw] : [];
+    }
+
+    function highlightSegments(segments, cues) {
+      const list = Array.isArray(cues) ? cues : (cues ? [cues] : []);
+      let out = segments.slice();
+      for (const cue of list) {
+        let found = false;
+        out = out.map(function (segment) {
+          if (found) return segment;
+          const result = highlightOnce(segment, cue);
+          found = result.hit;
+          return result.text;
+        });
+      }
+      return out;
     }
 
     /* One parser for both shapes. Two-blank items may or may not carry a
@@ -125,6 +146,12 @@
       }
       m = item.text.match(/(.*?)_____ \(([^)]+)\)(.*)/);
       if (m) return { blanks: 1, pre: m[1], hint: m[2], post: m[3] };
+      /* Not every gap names a verb. Linking words, relative pronouns and
+         articles are asked for with a bare gap — "She _____ speaks Spanish"
+         — and those items used to vanish from the page because the parser
+         insisted on a bracketed hint. */
+      m = item.text.match(/(.*?)_____(.*)/);
+      if (m) return { blanks: 1, pre: m[1], hint: '', post: m[2] };
       return null;
     }
 
@@ -138,6 +165,22 @@
 
     function indexRules(data) {
       RULE_INDEX = {};
+
+      /* A topic may file its rules as sections in an array, each with a
+         `structure` and the `explanation` of when to use it. Index those
+         first so an item whose `rule` is a structure can show the reason
+         behind it. */
+      if (Array.isArray(data.rules)) {
+        for (const section of data.rules) {
+          if (section && section.structure) {
+            RULE_INDEX[section.structure.trim().toLowerCase()] = {
+              pattern: section.structure,
+              example: section.explanation
+            };
+          }
+        }
+      }
+
       const cats = (data.rules && data.rules.categories) || [];
       for (const cat of cats) {
         for (const group of ['verbs', 'phrases', 'prepositions', 'go_activities']) {
@@ -175,12 +218,12 @@
     /* ─────────── loading ─────────── */
 
     /* Three shapes exist across the topics:
-         merged      -> data.gapfill.tests      (conditionals)
-         standalone  -> data.tests              (tenses-gapfill.json)
-         bare array  -> data                    (older files)
-       And a topic whose merged file has no gapfill key at all still has its
-       tests in <topic>-gapfill.json, so try that before giving up. Reading
-       the merged file and finding nothing is what produced "No tests found". */
+         merged     -> data.gapfill.tests   (conditionals, past-modals)
+         standalone -> data.tests           (tenses-gapfill.json)
+         bare array -> data                 (older files)
+       A topic whose merged file has no gapfill key still keeps its tests in
+       <topic>-gapfill.json, so try that before giving up. Reading the merged
+       file and finding nothing is what produced "No tests found". */
     function testsIn(data){
       if (!data) return [];
       if (Array.isArray(data)) return data;
@@ -209,7 +252,7 @@
             const parsed = await res.json();
             const found = testsIn(parsed);
             if (found.length) { data = parsed; tests = found; break; }
-            if (!data) data = parsed;          // keep for indexRules even if empty
+            if (!data) data = parsed;
           } catch (e) { /* try the next source */ }
         }
 
@@ -226,7 +269,7 @@
           '<div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div>' +
           '<div>The quiz did not load</div>' +
           '<div style="font-size: 0.75rem; margin-top: 0.5rem;">' +
-          escapeHtml(error.message) + ' — checked ' + escapeHtml(DATA_URL) +
+          escapeHtml(error.message) +
           '</div></div>';
       }
     }
@@ -312,7 +355,7 @@
           const parts = value.split('/');
           const first = (parts[0] || '').trim();
           const second = (parts[1] || '').trim();
-          const seg = highlightSegments([parsed.pre, parsed.mid, parsed.post], item.highlightVerb);
+          const seg = highlightSegments([parsed.pre, parsed.mid, parsed.post], cuesOf(item));
 
           html += seg[0];
           html += inputHtml(cls, 'input-' + idx + '-1', first, 60, 'handleTwoBlankInput(' + idx + ')');
@@ -324,14 +367,16 @@
           if (parsed.hint) html += ' <span class="verb-hint">[' + escapeHtml(parsed.hint) + ']</span>';
           html += seg[2];
         } else {
-          const seg = highlightSegments([parsed.pre, parsed.post], item.highlightVerb);
+          const seg = highlightSegments([parsed.pre, parsed.post], cuesOf(item));
 
           html += seg[0];
           html += inputHtml(cls, 'input-' + idx + '-1', value, 80, 'handleInput(' + idx + ')');
           if (isChecked && !correct) {
             html += '<span class="correct-answer">' + escapeHtml(item.answer) + '</span>';
           }
-          html += ' <span class="verb-hint">[' + escapeHtml(parsed.hint) + ']</span>';
+          if (parsed.hint) {
+            html += ' <span class="verb-hint">[' + escapeHtml(parsed.hint) + ']</span>';
+          }
           html += seg[1];
         }
 

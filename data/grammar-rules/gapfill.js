@@ -309,10 +309,17 @@
       test.sentences.forEach(function (item, idx) {
         const dot = document.createElement('div');
         dot.className = 'progress-dot';
+        /* Circle n and dot n share a tone, so the dot row reads as a legend
+           for the page rather than as a separate counter. */
+        dot.style.setProperty('--tone', TONES[idx % TONES.length]);
         if (isAnswered(item, userAnswers[idx])) dot.classList.add('answered');
         dots.appendChild(dot);
       });
     }
+
+    /* Five tones cycling: every one carries 80% black numerals, which is the
+       binding constraint — a darker tone cannot hold dark figures. */
+    const TONES = ['#DD7450', '#DD8E58', '#DAB457', '#C97253', '#708A81'];
 
     /* ─────────── rendering ─────────── */
 
@@ -337,7 +344,8 @@
         const numClass = isAnswered(item, value) ? 'question-number answered' : 'question-number';
 
         html += '<div class="sentence-row">';
-        html += '<div class="' + numClass + '">' + (idx + 1) + '</div>';
+        html += '<div class="' + numClass + '" style="--tone:' +
+                TONES[idx % TONES.length] + '">' + (idx + 1) + '</div>';
         html += '<div class="sentence-text">';
 
         if (!parsed) {

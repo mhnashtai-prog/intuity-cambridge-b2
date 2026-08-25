@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>INTUITY — Conditionals Map</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --stage:#F1E8DA;
+    --paper:#FEFCF9;
+    --ink:#2B2129;
+    --soft:#5C4E52;
+    --mute:#8B7B78;
+    --rule:#D9C0A4;
+    --line:#2B2129;
+    --spring:cubic-bezier(.22,1,.36,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{background:var(--stage);color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    display:flex;flex-direction:column;overflow:hidden;overscroll-behavior:none;}
+  .display{font-family:'Anton',Impact,sans-serif;font-weight:400;text-transform:uppercase;
+    line-height:.94;letter-spacing:-.005em;}
+
+  /* ---------- bar ---------- */
+  .bar{display:flex;align-items:center;gap:10px;flex:none;
+    padding:12px 16px calc(12px + env(safe-area-inset-top,0px));}
+  .bar .back{border:none;background:none;color:var(--soft);font-family:inherit;
+    font-size:.68rem;font-weight:500;letter-spacing:.14em;text-transform:uppercase;
+    cursor:pointer;padding:6px 0;flex:none;}
+  .bar .back:hover{color:var(--ink);}
+  .bar .title{flex:1;min-width:0;font-size:.62rem;font-weight:700;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .bar .count{font-size:.68rem;font-weight:500;color:var(--mute);font-variant-numeric:tabular-nums;flex:none;letter-spacing:.06em;}
+  .bar .count b{color:var(--ink);font-weight:700;}
+
+  /* ---------- sections list ---------- */
+  .sections{flex:1;min-height:0;overflow-y:auto;padding:4px 16px calc(20px + env(safe-area-inset-bottom,0px));}
+  .lede{font-size:.62rem;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);margin-bottom:12px;}
+  .sec{width:100%;text-align:left;border:none;background:var(--paper);border-radius:12px;
+    padding:15px 16px;margin-bottom:9px;cursor:pointer;display:flex;align-items:center;gap:12px;
+    transition:transform .15s var(--spring);}
+  .sec:active{transform:scale(.985);}
+  .sec .txt{flex:1;min-width:0;}
+  .sec .nm{font-family:'Anton',Impact,sans-serif;text-transform:uppercase;font-size:1.12rem;
+    line-height:1.05;margin-bottom:4px;}
+  .sec .mt{font-size:.74rem;color:var(--mute);}
+  .sec .mt em{font-style:normal;color:var(--line);font-weight:700;}
+  .sec .tick{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--rule);
+    display:flex;align-items:center;justify-content:center;font-size:.7rem;color:#fff;}
+  .sec.done .tick{background:var(--line);border-color:var(--line);}
+
+  /* ---------- map ---------- */
+  .play{flex:1;min-height:0;display:none;flex-direction:column;}
+  .play.on{display:flex;}
+  .map{position:relative;flex:1;min-height:0;margin:0 12px calc(10px + env(safe-area-inset-bottom,0px));}
+  @media(max-width:480px){
+    .map{margin:0 6px calc(8px + env(safe-area-inset-bottom,0px));}
+  }
+  .mapPath{position:absolute;inset:0;width:100%;height:100%;overflow:visible;}
+  .mapPath .road{fill:none;stroke:var(--mute);stroke-width:.16;stroke-linecap:round;}
+  .mapPath .stem{stroke:var(--rule);stroke-width:.4;}
+  .mapPath .dot{fill:var(--paper);stroke:rgb(139,123,120);stroke-width:.3;}
+  /* Tail: geometry only here. stroke/fill come from the attributes the JS
+     writes, which lerp from the road's own tone — presentation attributes
+     lose to any CSS rule, so setting colour here would silently override
+     TIP and freeze the tails dark. */
+  .mapPath .taper{fill:none;stroke-linecap:round;}
+  .mapPath .endDot{stroke:none;}
+
+  .nodes{position:absolute;inset:0;}
+  .node{position:absolute;transform:translateY(-50%);width:100%;}
+
+  .pill{position:absolute;top:0;transform:translate(-50%,-50%);
+    display:flex;align-items:center;border:none;background:none;padding:0;cursor:pointer;
+    transition:transform .15s var(--spring);}
+  .pill:active{transform:translate(-50%,-50%) scale(.96);}
+
+  .pill .circle{width:44px;height:44px;border-radius:50%;flex:none;position:relative;z-index:2;order:1;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Anton',Impact,sans-serif;font-size:1.15rem;
+    box-shadow:0 5px 14px rgba(30,24,16,.24);}
+  .pill .circle .chk{display:none;}
+  .pill.seen .circle .num{display:none;}
+  .pill.seen .circle .chk{display:inline;}
+
+  .pill .rect{height:36px;display:flex;align-items:center;justify-content:center;position:relative;z-index:1;order:2;
+    border-radius:0 999px 999px 0;padding:0 18px 0 26px;margin-left:-16px;
+    font-family:'Anton',Impact,sans-serif;text-transform:uppercase;
+    font-size:.8rem;letter-spacing:.01em;white-space:nowrap;
+    box-shadow:0 5px 14px rgba(30,24,16,.2);}
+  /* .circle-right: circle sits on the right instead — same fusion, mirrored.
+     The rect's flat edge always sits against the circle; the open/rounded
+     tip always faces away from it (and is the end the stem connects from). */
+  .pill.circle-right .circle{order:2;margin-left:-12px;}
+  .pill.circle-right .rect{order:1;margin-left:0;padding:0 30px 0 18px;margin-right:0;
+    border-radius:999px 0 0 999px;}
+
+  .cap{position:absolute;top:0;transform:translateY(-50%);max-width:44%;}
+  .cap .ct{font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;font-weight:700;
+    color:var(--line);margin-bottom:3px;}
+  .cap .cs{font-size:.76rem;line-height:1.32;color:var(--soft);}
+  .cap .cs b{font-weight:700;color:var(--ink);}
+  .cap.right{text-align:left;}
+  .cap.left{text-align:right;}
+
+  /* ---------- modal: focus poster ----------
+     position:FIXED, not absolute. The old rule was absolute inside .map,
+     a box that already sits below the bar and was pinned to flex-end — so
+     "bottom of the map" read as "near the footer".
+
+     Ground is a mid warm greige and the type is solid black, after the
+     printed-poster reference. Colour does NOT carry the language here:
+     on a light ground the palette tones lose contrast as text, so the
+     node's tone appears as a solid block instead and black does the
+     reading. Colour as shape, not as ink. */
+  .modalWrap{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:50;}
+  .modalWrap.open{display:flex;}
+  .backdrop{position:absolute;inset:0;background:rgba(20,16,14,.7);opacity:0;transition:opacity .28s ease;}
+  .modalWrap.open .backdrop{opacity:1;}
+
+  .modalCard{position:relative;width:min(560px,92vw);max-height:88vh;overflow-y:auto;
+    padding:clamp(28px,6.5vw,46px) clamp(24px,6vw,42px);
+    background:var(--poster,#C9C1AD);color:#14110E;border-radius:4px;
+    box-shadow:0 26px 64px rgba(20,16,14,.5);
+    transform:scale(.94);opacity:0;
+    transition:transform .34s var(--spring),opacity .26s ease;}
+  .modalWrap.open .modalCard{transform:scale(1);opacity:1;}
+  .modalCard .x{position:absolute;top:14px;right:16px;border:none;background:none;
+    font-size:1.15rem;color:rgba(20,17,14,.4);cursor:pointer;line-height:1;padding:8px;}
+  .modalCard .x:hover{color:#14110E;}
+
+  /* kick line: solid colour block, then the label. The block is the only
+     place the node's tone appears — one deliberate mark. */
+  .modalCard .kick{display:flex;align-items:center;gap:9px;
+    font-size:.56rem;letter-spacing:.22em;text-transform:uppercase;
+    color:rgba(20,17,14,.55);margin-bottom:clamp(16px,4.5vw,24px);}
+  .modalCard .kick i{display:block;width:26px;height:10px;flex:none;
+    background:var(--accent,#14110E);}
+
+  /* The cue IS the poster: solid black, as large as it will go. */
+  .modalCard .cue{font-size:clamp(2.4rem,12.5vw,4.4rem);line-height:.9;
+    color:#14110E;margin:0 0 clamp(15px,4vw,22px);
+    display:block;overflow-wrap:break-word;}
+  .modalCard .cue::after{content:'';display:block;width:44px;height:3px;
+    background:#14110E;margin-top:clamp(14px,3.5vw,20px);}
+
+  .modalCard .sentence{font-size:clamp(1.02rem,4.2vw,1.26rem);font-weight:400;
+    line-height:1.45;letter-spacing:-.01em;color:rgba(20,17,14,.78);}
+  /* Weight alone marks the target — no colour needed when the ground is
+     this quiet and the type is this black. */
+  .modalCard .sentence b{font-weight:700;color:#14110E;}
+  /* the same sentence in its other ordering */
+  .modalCard .alt{font-size:clamp(.92rem,3.6vw,1.04rem);line-height:1.45;
+    color:rgba(20,17,14,.6);margin-top:12px;padding-left:12px;
+    border-left:2px solid rgba(20,17,14,.22);}
+  .modalCard .alt b{font-weight:700;color:rgba(20,17,14,.82);}
+  .modalCard .note{font-size:.74rem;color:rgba(20,17,14,.5);line-height:1.5;
+    margin-top:clamp(16px,4vw,24px);padding-top:12px;
+    border-top:1px solid rgba(20,17,14,.2);}
+
+  .msg{margin:auto;text-align:center;color:var(--soft);font-size:.92rem;line-height:1.55;padding:24px;}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms !important;}}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <button class="back" id="back" type="button">&larr; Sections</button>
+  <span class="title" id="title">&nbsp;</span>
+  <span class="count" id="count"></span>
+</div>
+
+<div class="sections" id="sections"></div>
+
+<div class="play" id="play">
+  <div class="map" id="map">
+    <svg class="mapPath" id="mapPath" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+    <div class="nodes" id="nodes"></div>
+    <div class="modalWrap" id="modalWrap">
+      <div class="backdrop" id="backdrop"></div>
+      <div class="modalCard" id="modalCard"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const P        = new URLSearchParams(location.search);
+const CATEGORY = P.get('category') || 'present';
+const TENSE    = P.get('tense')    || 'simple';
+const JSON_URL = P.get('json')     || '../../data/grammar-rules/conditionals-data.json';
+// Which rule to show: ?rule=zero|first|second|third|mixed, or ?index=0..
+const RULE_ID  = P.get('rule');
+const RULE_IX  = P.get('index') !== null ? parseInt(P.get('index'),10) : null;
+const START    = P.get('section') !== null ? parseInt(P.get('section'),10) : null;
+
+/* Six fixed points, hand-placed to fit one phone screen without scrolling.
+   Everything below is plain percentages — no JS layout math, no resize
+   handling needed, the browser just scales the whole thing with CSS.
+   Rows start at 16 and end at 84 (rather than 13.8 / 86.3) to leave the
+   wave's lead-in and lead-out tails somewhere to live without crowding
+   the frame edge. */
+const NODE_LAYOUT = [
+  { y: 16.0, capSide:'right', capFrom: 42, capTo: 97 },
+  { y: 29.6, capSide:'left',  capFrom: 3,  capTo: 58 },
+  { y: 43.2, capSide:'right', capFrom: 42, capTo: 97 },
+  { y: 56.8, capSide:'left',  capFrom: 3,  capTo: 58 },
+  { y: 70.4, capSide:'right', capFrom: 42, capTo: 97 },
+  { y: 84.0, capSide:'left',  capFrom: 3,  capTo: 58 },
+];
+
+// The wave is no longer an independent decorative shape that dots try to
+// match. It's built the other way around: each row's dot sits at a fixed,
+// equally-padded offset from its pill (computed in buildMap), and the
+// wave is drawn straight through those six points as its anchors. That
+// makes "does the curve pass through the dot" true by construction —
+// there's nothing left to compute or drift out of sync.
+/* "Flight of Fancy" — neutral warm tones with muted jewel accents.
+   Paired with a readable text colour per tone (the two lighter shades
+   need dark text, not white). Cycles for the 6th node. */
+const PALETTE = [
+  { bg:'#DD8E58', fg:'#FEFCF9' },
+  { bg:'#708A81', fg:'#FEFCF9' },
+  { bg:'#E5D1B8', fg:'#2B2129' },
+  { bg:'#C2956E', fg:'#2B2129' },
+  { bg:'rgba(0,0,0,.7)', fg:'#FEFCF9' },
+];
+
+/* ---------------- poster grounds ----------------
+   Each grammar area gets its own ground. They are all tuned to the SAME
+   luminance (~193) and differ only in hue, so the black type keeps an
+   identical contrast on every page and the accent rule below stays valid
+   everywhere — the pages read as one system in different temperatures,
+   not as ten different lightnesses.
+   Override per page with ?ground=#RRGGBB. */
+const GROUNDS = {
+  'tenses':              '#C9C1AD',  // soft greige
+  'inversion':           '#BDC4A7',  // soft olive
+  'gerunds-infinitives': '#B3C7AF',  // soft moss
+  'passive-voice':       '#ADC8B7',  // soft sage
+  'comparatives':        '#ACC7C5',  // soft teal
+  'reported-speech':     '#B2C4D2',  // soft blue
+  'linking-words':       '#C0C0D5',  // soft periwinkle
+  'phrasal-verbs':       '#C8BED1',  // soft violet
+  'collocations':        '#D0BCCE',  // soft mauve
+  'conditionals':        '#D7BAC4',  // soft rose
+  'past-modals':         '#D4BDB7',  // soft terracotta
+  'miscellaneous':       '#C2C2C2'   // soft grey
+};
+const DEFAULT_GROUND = '#C9C1AD';
+
+// Topic comes from ?ground=, then ?topic=, then the data file's own name —
+// so an existing page picks up its ground with no change to its markup.
+function resolveGround(){
+  const explicit = P.get('ground');
+  if(explicit) return explicit;
+  const named = P.get('topic');
+  if(named && GROUNDS[named]) return GROUNDS[named];
+  const file = (JSON_URL.split('/').pop() || '').replace(/\.json$/,'');
+  for(const key of Object.keys(GROUNDS)){
+    if(file.indexOf(key) === 0) return GROUNDS[key];
+  }
+  return DEFAULT_GROUND;
+}
+const POSTER_BG = resolveGround();
+
+function rgbOf(col){
+  const hex = col.match(/^#([0-9a-f]{6})$/i);
+  if(hex){
+    const n = parseInt(hex[1],16);
+    return [n>>16 & 255, n>>8 & 255, n & 255];
+  }
+  const nums = col.match(/[\d.]+/g);
+  return (nums && nums.length >= 3) ? nums.slice(0,3).map(Number) : null;
+}
+const lumOf = c => 0.2126*c[0] + 0.7152*c[1] + 0.0722*c[2];
+
+/* The ground is light, so a PALE palette tone (node 3 is #E5D1B8) would
+   barely register as a block on it. Deepen the tone until it separates —
+   measured against THIS page's ground, not a hardcoded one, so every
+   ground gets a correctly-weighted accent. */
+const POSTER_BG_LUM = lumOf(rgbOf(POSTER_BG) || [200,193,178]);
+const MIN_SEPARATION = 55;
+
+function accentFor(bg){
+  const c0 = rgbOf(bg);
+  if(!c0) return bg;
+  let c = c0, guard = 0;
+  while(Math.abs(POSTER_BG_LUM - lumOf(c)) < MIN_SEPARATION && guard++ < 12){
+    c = c.map(v => Math.round(v*0.86));   // deepen until it reads as a block
+  }
+  return 'rgb('+c.join(',')+')';
+}
+
+let tense = null, useCases = [], secIdx = null;
+let cards = [], visited = new Set(), openIdx = null;
+const cleared = new Set();
+
+const $ = id => document.getElementById(id);
+
+/* ---------------- shape adapter ----------------
+   Conditionals stores rules as sets[] of {before, after} pairs, not as the
+   useCases[] the map was written for. Normalising here means the renderer
+   below is untouched and stays identical to tenses-play.html — the ONLY
+   difference between the two files is this block.
+
+   before/after here are two orderings of the SAME sentence, not a
+   transformation to a target: "If you heat water, it boils" /
+   "Water boils if you heat it". So `before` (if-clause first) is the
+   canonical card and `after` is shown as the variant. That is the opposite
+   of inversion or reported speech, where `after` is the thing being taught
+   — hence PRIMARY, so the same adapter can serve either. */
+const PRIMARY = P.get('primary') || 'before';   // 'before' | 'after'
+const GUARD   = /<<([^>]+)>>/g;
+const MAX_PER_SECTION = 6;                       // the map holds six nodes
+
+function clean(t){
+  return String(t == null ? '' : t)
+    .replace(/\*\*/g,'').replace(GUARD,'$1').replace(/\s+/g,' ').trim();
+}
+function guardsIn(t){
+  const out=[]; let m; GUARD.lastIndex=0;
+  const str=String(t==null?'':t);
+  while((m=GUARD.exec(str))!==null) out.push(m[1].replace(/\*\*/g,'').trim());
+  return out;
+}
+
+function toPair(ex){
+  if(ex && typeof ex === 'object'){
+    const main = ex[PRIMARY] != null ? ex[PRIMARY] : (ex.after != null ? ex.after : ex.before);
+    const alt  = ex[PRIMARY === 'before' ? 'after' : 'before'];
+    return { text: clean(main), from: clean(alt), marks: guardsIn(main) };
+  }
+  return { text: clean(ex), from: '', marks: guardsIn(ex) };
+}
+
+// A set longer than the map has nodes becomes several sections rather than
+// losing the overflow.
+function chunk(pairs, title, note){
+  const out=[];
+  for(let i=0;i<pairs.length;i+=MAX_PER_SECTION){
+    const part = pairs.length > MAX_PER_SECTION
+      ? ' ' + (i/MAX_PER_SECTION+1) + '/' + Math.ceil(pairs.length/MAX_PER_SECTION) : '';
+    const slice = pairs.slice(i,i+MAX_PER_SECTION);
+    out.push({ title:title+part, pairs:slice,
+               timeMarkers:[...new Set(slice.flatMap(p=>p.marks))], note:note||'' });
+  }
+  return out;
+}
+
+function normalise(rule){
+  if(Array.isArray(rule.useCases) && rule.useCases.length){
+    return { name: rule.name||rule.fullName||rule.title||'',
+             useCases: rule.useCases.flatMap(uc => chunk(
+               [uc.mainExample].concat(uc.moreExamples||[]).filter(Boolean).map(toPair),
+               uc.title, uc.note)) };
+  }
+  if(Array.isArray(rule.sets) && rule.sets.length){
+    const note = [rule.structure, rule.explanation].filter(Boolean).join(' \u2014 ');
+    return { name: rule.title || rule.mainTitle || '',
+             useCases: rule.sets.flatMap(set => chunk(
+               (set.examples||[]).map(toPair).filter(p=>p.text),
+               set.setTitle || set.title || 'Examples', note)) };
+  }
+  return { name: rule.title||'', useCases: [] };
+}
+
+/* ---------------- data ---------------- */
+async function load(){
+  try{
+    const res = await fetch(JSON_URL, { cache:'no-store' });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const raw  = await res.json();
+    const list = Array.isArray(raw) ? raw : (raw.rules || Object.values(raw));
+    const rules = Array.isArray(list) ? list : Object.values(list);
+    let picked = null;
+    if(RULE_ID !== null)      picked = rules.find(r => r.id === RULE_ID);
+    else if(RULE_IX !== null) picked = rules[RULE_IX];
+    if(!picked) picked = rules[0];
+    if(!picked) throw new Error('no rules in file');
+    tense    = normalise(picked);
+    useCases = tense.useCases;
+    if(!useCases.length) throw new Error('rule has no examples');
+  }catch(e){
+    console.error(e);
+    $('sections').innerHTML = '<div class="msg">Couldn\'t load the tense data.<br>'+
+      'Looked for '+JSON_URL+'</div>';
+    return;
+  }
+  if(START !== null && useCases[START]) openSection(START);
+  else showSections();
+}
+
+/* ---------------- text ---------------- */
+function esc(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+
+function mark(sentence, markers){
+  if(!markers || !markers.length) return sentence;
+  let out = sentence;
+  markers.slice().sort((a,b)=>b.length-a.length).forEach(m=>{
+    out = out.replace(new RegExp('\\b('+esc(m)+')\\b','i'), '<b>$1</b>');
+  });
+  return out;
+}
+
+const TIME_RE = /\b((?:every|each|this|next|last)\s+\w+|on\s+\w+days?|in\s+the\s+\w+|at\s+\d[\d:.]*\s*(?:am|pm)?|at\s+(?:night|noon|midnight|dawn|dusk|weekends?)|since\s+[\w\s]{1,12}?|for\s+\w+\s*\w*|all\s+\w+|when|while|before|after|until|as\s+soon\s+as|yet|just|already|never|ever|always|usually|often|sometimes|rarely|nowadays|recently|lately|currently|tomorrow|tonight|yesterday|today|now)\b/i;
+
+/* For conditionals the guards mark the VERB PAIR, and the pair is the
+   pattern: "HEAT -> BOILS" teaches more than either verb alone. */
+function cueFromMarks(marks){
+  if(!marks || !marks.length) return '';
+  if(marks.length >= 2) return marks[0] + ' \u2192 ' + marks[1];
+  return marks[0];
+}
+
+function cueFor(sentence, uc){
+  const ms = (uc.timeMarkers||[]).slice().sort((a,b)=>b.length-a.length);
+  for(const m of ms){
+    const hit = sentence.match(new RegExp('\\b('+esc(m)+'[\\w\\s]{0,10}?)(?=[,.!?]|$)','i'));
+    if(hit) return hit[1].trim().replace(/\s+/g,' ');
+    if(new RegExp('\\b'+esc(m)+'\\b','i').test(sentence)) return m;
+  }
+  const g = sentence.match(TIME_RE);
+  if(g) return g[1];
+  return sentence.split(/\s+/).slice(0,2).join(' ').replace(/[,.!?]$/,'');
+}
+
+/* ---------------- sections list ---------------- */
+function showSections(){
+  secIdx = null;
+  $('play').classList.remove('on');
+  $('sections').style.display = '';
+  $('back').style.visibility = 'hidden';
+  $('title').textContent = tense.name || '';
+  $('count').innerHTML = '<b>'+cleared.size+'</b> / '+useCases.length;
+
+  $('sections').innerHTML =
+    '<div class="lede">Choose a set &middot; tap a node to read it</div>' +
+    useCases.map((uc,i) => {
+      const n = uc.pairs.length;
+      const cue = cueFromMarks(uc.pairs[0].marks) || cueFor(uc.pairs[0].text, uc);
+      return '<button class="sec'+(cleared.has(i)?' done':'')+'" data-i="'+i+'" type="button">'+
+               '<span class="txt">'+
+                 '<span class="nm">'+uc.title+'</span>'+
+                 '<span class="mt">'+n+' cards &middot; <em>'+cue+'</em></span>'+
+               '</span>'+
+               '<span class="tick">'+(cleared.has(i)?'&#10003;':'')+'</span>'+
+             '</button>';
+    }).join('');
+
+  $('sections').querySelectorAll('.sec').forEach(b => {
+    b.onclick = () => openSection(+b.dataset.i);
+  });
+}
+
+function openSection(i){
+  secIdx = i;
+  const uc = useCases[i];
+  cards = uc.pairs.slice(0, MAX_PER_SECTION).map(p => ({
+    text: p.text,
+    cue:  cueFromMarks(p.marks) || cueFor(p.text, uc),
+    markers: (p.marks && p.marks.length) ? p.marks : (uc.timeMarkers||[]),
+    from: p.from || '',
+    note: uc.note || ''
+  }));
+  visited = new Set(); openIdx = null;
+
+  $('sections').style.display = 'none';
+  $('play').classList.add('on');
+  $('back').style.visibility = 'visible';
+  $('back').textContent = START !== null ? '\u2190 List' : '\u2190 Sections';
+  $('title').textContent = uc.title;
+  buildMap();
+}
+
+/* ---------------- map ---------------- */
+function buildMap(){
+  $('count').innerHTML = '<b>'+visited.size+'</b> / '+cards.length;
+
+  // Each card sits an offset off whatever the curve is doing at that
+  // height — so cards stay "attached" to the line's wander instead of
+  // the line drifting away from a fixed column. The offset is expressed
+  // in viewBox units (0-100), but the cards themselves are a FIXED pixel
+  // size (font-size/padding are in px/rem, not %). On a wide desktop
+  // frame (~760px), 14 units ≈ 106px — plenty of clearance. On a narrow
+  // phone (~370px), the same 14 units is only ≈50px — less than half a
+  // card's own width — so the card visually crosses the line. Scaling
+  // the offset by the container's real pixel width keeps the pixel
+  // clearance roughly constant across screen sizes.
+  const mapWidthPx = $('map').clientWidth || 760;
+  // Pills sit CLOSE to the wave — a small offset, so the pill visually
+  // hugs the spine (matches the reference: pill centre sits only ~6% of
+  // the canvas width off true centre).
+  const PIXEL_CLEARANCE = 46;
+  const OFFSET = Math.max(8, Math.min(18, PIXEL_CLEARANCE / mapWidthPx * 100));
+  // Captions sit FAR from the wave — roughly 4x the pill's offset, so
+  // definitions read as clearly separate from the spine (reference:
+  // caption centre sits ~23% of canvas width off true centre).
+  const PIXEL_STEM = 150; // the stem length that looked right on desktop
+  const STEM_LEN = Math.max(30, Math.min(46, PIXEL_STEM / mapWidthPx * 100));
+  const CAP_GAP = 0.4; // minimal on purpose: dot should sit almost touching the caption text
+
+  // Pill centre: fixed distance either side of x=50, same on every row.
+  const pillXs = NODE_LAYOUT.map(n => n.capSide === 'right' ? 50 - OFFSET : 50 + OFFSET);
+  const dirs   = NODE_LAYOUT.map(n => n.capSide === 'right' ? 1 : -1);
+  // Connector dot: fixed offset from its own pill — never from the curve.
+  // These six points are the wave's anchors; the curve is drawn to pass
+  // through them, not solved for afterward, so it can't drift off them.
+  const dots = NODE_LAYOUT.map((n,i) => ({ x: pillXs[i] + dirs[i]*STEM_LEN, y: n.y }));
+
+  // Smooth "S" path threading through the six fixed dots. This first
+  // paint happens before any pill has actually rendered, so there's no
+  // real geometry yet to wrap the ends around — that's done in the RAF
+  // pass below, once pill positions are known. This is just a plain
+  // placeholder shape for the split-second before that.
+  let d = 'M '+dots[0].x+' '+dots[0].y;
+  for(let i=1;i<dots.length;i++){
+    const a = dots[i-1], b = dots[i], my = (a.y+b.y)/2;
+    d += ' C '+a.x+' '+my+', '+b.x+' '+my+', '+b.x+' '+b.y;
+  }
+
+  let svg = '<path class="road" d="'+d+'"/>';
+  cards.forEach((_,i) => {
+    const n = NODE_LAYOUT[i], px = pillXs[i], dot = dots[i];
+    const x1 = px + dirs[i]*11;
+    svg += '<line class="stem" data-i="'+i+'" x1="'+x1+'" y1="'+n.y+'" x2="'+dot.x+'" y2="'+n.y+'"/>'+
+           '<circle class="dot" data-i="'+i+'" cx="'+dot.x+'" cy="'+n.y+'" r="0.46"/>';
+  });
+  $('mapPath').innerHTML = svg;
+
+  $('nodes').innerHTML = cards.map((c,i) => {
+    const n = NODE_LAYOUT[i], px = pillXs[i], dot = dots[i];
+    const seen = visited.has(i);
+    const tone = PALETTE[i%PALETTE.length];
+    // Circle sits at the OUTER end of the pill (away from the spine); the
+    // rect's flat fused edge faces inward, toward the stem/road, matching
+    // the sketch where the line continues out of the rectangle, not the circle.
+    const circleRight = px >= 50;
+    // Caption sits opposite the pill, starting just past the connector dot.
+    const capFrom = n.capSide === 'right' ? dot.x + CAP_GAP : 3;
+    const capTo   = n.capSide === 'right' ? 97 : dot.x - CAP_GAP;
+    return '<div class="node" style="top:'+n.y+'%">'+
+      '<button class="pill'+(seen?' seen':'')+(circleRight?' circle-right':'')+'" data-i="'+i+'" '+
+        'style="left:'+px+'%">'+
+        '<span class="circle" style="background:'+tone.bg+';color:'+tone.fg+'"><span class="num">'+(i+1)+'</span><span class="chk">&#10003;</span></span>'+
+        '<span class="rect" style="background:'+tone.bg+';color:'+tone.fg+'">'+c.cue+'</span>'+
+      '</button>'+
+      '<div class="cap '+n.capSide+'" style="left:'+capFrom+'%;right:'+(100-capTo)+'%">'+
+        '<div class="ct">'+c.cue+'</div>'+
+        '<div class="cs">'+mark(c.text, c.markers)+'</div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+
+  $('nodes').querySelectorAll('.pill').forEach(b => {
+    b.onclick = () => openNode(+b.dataset.i);
+  });
+
+  // Cue cards were auto-sizing to their own text, so shorter labels ("AT
+  // 7PM") looked noticeably smaller than longer ones ("IN THE EVENING").
+  // Measure every rect's natural width first, then lock them all to the
+  // widest one so every card in the section reads as the same size.
+  requestAnimationFrame(() => {
+    const rects = $('nodes').querySelectorAll('.pill .rect');
+    let maxW = 0;
+    rects.forEach(r => { r.style.width = ''; maxW = Math.max(maxW, r.offsetWidth); });
+    rects.forEach(r => { r.style.width = maxW + 'px'; });
+
+    // The wave (the curved "road" spine) is pulled in to sit right
+    // against each pill's real rendered edge, and the little connector
+    // dot sits just off each definition's real edge, at the far end of
+    // the straight stem — and that stem starts at the wave's own anchor
+    // point, not at the pill, so the pill-to-wave gap reads as a single
+    // clean span instead of two overlapping lines. Only positions move
+    // here; the banners and the caption text itself stay exactly where
+    // NODE_LAYOUT/pillXs/CAP_GAP put them.
+    const PILL_GAP_PX = 5 * 96 / 25.4; // 5mm, wave-to-banner
+    const CAP_GAP_PX  = 2 * 96 / 25.4; // 2mm, dot-to-definition — minimal padding
+    const mapRect = $('map').getBoundingClientRect();
+    const capEls = $('nodes').querySelectorAll('.cap');
+    const toPctX = px => px / mapRect.width * 100;
+    const toPctY = py => py / mapRect.height * 100;
+
+    const tightDots = dots.map((dot,i) => {
+      const pillEl = $('nodes').querySelector('.pill[data-i="'+i+'"]');
+      const dir = dirs[i];
+      const pRect = pillEl.getBoundingClientRect();
+      const edgePx = dir > 0 ? (pRect.right - mapRect.left) : (pRect.left - mapRect.left);
+      const gapPct = toPctX(PILL_GAP_PX);
+      return { x: toPctX(edgePx) + dir*gapPct, y: dot.y };
+    });
+
+    // Far end of each stem: sits just short of the caption's own real
+    // edge (on the wave side of it), 2mm off.
+    const capDots = dots.map((dot,i) => {
+      const dir = dirs[i];
+      const cRect = capEls[i].getBoundingClientRect();
+      const capEdgePx = dir > 0 ? (cRect.left - mapRect.left) : (cRect.right - mapRect.left);
+      const gapPct = toPctX(CAP_GAP_PX);
+      return { x: toPctX(capEdgePx) - dir*gapPct, y: dot.y };
+    });
+
+    $('nodes').querySelectorAll('.pill').forEach(pillEl => {
+      const i = +pillEl.dataset.i;
+      const stemLine = $('mapPath').querySelector('.stem[data-i="'+i+'"]');
+      const dotEl    = $('mapPath').querySelector('.dot[data-i="'+i+'"]');
+      if(stemLine){
+        // Starts at the wave itself, not the banner.
+        stemLine.setAttribute('x1', tightDots[i].x);
+        stemLine.setAttribute('x2', capDots[i].x);
+      }
+      if(dotEl) dotEl.setAttribute('cx', capDots[i].x);
+    });
+
+    // ---- the wave: ONE curve, one equation ----
+    // Not assembled from segments. The six anchors alternate sides at an
+    // equal vertical spacing, which is precisely a cosine sampled at its
+    // peaks — so a single cosine of wavelength (2 x row gap) passes through
+    // every anchor exactly, by construction. Nothing is fitted, nothing is
+    // joined, and because a cosine's slope is zero at every peak the curve
+    // meets each pill with a vertical tangent for free.
+    //
+    // The tails are not added on. Sampling simply continues past the first
+    // and last anchor, so the curl back across the spine is the same
+    // cosine still running. There is no seam to hide because there is no
+    // seam.
+    const ys   = tightDots.map(d => d.y);
+    const y0   = ys[0], yN = ys[ys.length-1];
+    const gap  = (yN - y0) / (ys.length - 1);   // uniform by NODE_LAYOUT
+    const LAM  = 2 * gap;                        // one full period spans two rows
+    const cxW  = tightDots.reduce((s,d) => s + d.x, 0) / tightDots.length;
+    const amp  = tightDots.reduce((s,d) => s + Math.abs(d.x - cxW), 0) / tightDots.length;
+    const side = Math.sign(tightDots[0].x - cxW); // which way row 1 leans
+
+    // The whole wave, as a function of height. This is the entire shape.
+    const waveX = y => cxW + side * amp * Math.cos(2*Math.PI * (y - y0) / LAM);
+
+    // How far past the end anchors the curve keeps running, as a fraction
+    // of a row gap. Beyond ~0.5 it crosses the centre and heads for the
+    // opposite peak — that crossing IS the hook in the sketch.
+    const EXT   = 0.62;
+    const yTop  = y0 - EXT*gap;
+    const yBot  = yN + EXT*gap;
+
+    const N = 240;
+    const pts = [];
+    for(let i = 0; i <= N; i++){
+      const y = yTop + (yBot - yTop) * (i/N);
+      pts.push({ x: waveX(y), y: y });
+    }
+
+    const roadEl = $('mapPath').querySelector('.road');
+    if(roadEl){
+      roadEl.setAttribute('d',
+        'M ' + pts[0].x.toFixed(3) + ' ' + pts[0].y.toFixed(3) +
+        pts.slice(1).map(p => ' L ' + p.x.toFixed(3) + ' ' + p.y.toFixed(3)).join(''));
+    }
+
+    // ---- tapered tips ----
+    // Drawn from the SAME sample array as the wave above, so the taper
+    // cannot drift off the curve — it is the curve, restroked. Only the
+    // stretch beyond the end anchors gets weight; width and colour ramp
+    // from the road's own values so there is no point where a tail starts.
+    const MUTE = [139, 123, 120], TIP = [139, 123, 120];  // --mute -> lighter than the road itself
+    const lerpCol = k => 'rgb('+MUTE.map((c,j)=>Math.round(c+(TIP[j]-c)*k)).join(',')+')';
+    const W_THIN = 0.16, W_THICK = 0.16;             // W_THIN == the road's stroke-width
+
+    let tips = '';
+    for(let i = 0; i < N; i++){
+      const a = pts[i], b = pts[i+1];
+      // 0 at the end anchor, 1 at the very tip; 0 anywhere between anchors.
+      let k = 0;
+      if(b.y < y0)      k = (y0 - b.y) / (EXT*gap);
+      else if(b.y > yN) k = (b.y - yN) / (EXT*gap);
+      if(k <= 0) continue;
+      const e = k*k*k;                               // cubed: hairline, then swells late
+      tips += '<line class="taper" x1="'+a.x.toFixed(3)+'" y1="'+a.y.toFixed(3)+
+              '" x2="'+b.x.toFixed(3)+'" y2="'+b.y.toFixed(3)+
+              '" stroke-width="'+(W_THIN + (W_THICK-W_THIN)*e).toFixed(3)+
+              '" stroke="'+lerpCol(e)+'"/>';
+    }
+    const mapSvg = $('mapPath');
+    let endCaps = mapSvg.querySelector('.endCaps');
+    if(!endCaps){
+      endCaps = document.createElementNS('http://www.w3.org/2000/svg','g');
+      endCaps.setAttribute('class','endCaps');
+      mapSvg.appendChild(endCaps);
+    }
+    // Terminal dots take their fill from the taper's own end colour, so
+    // tuning TIP moves the stroke and the dot together.
+    endCaps.innerHTML = tips +
+      '<circle class="endDot" fill="'+lerpCol(1)+'" cx="'+pts[0].x.toFixed(3)+'" cy="'+pts[0].y.toFixed(3)+'" r="0.46"/>'+
+      '<circle class="endDot" fill="'+lerpCol(1)+'" cx="'+pts[N].x.toFixed(3)+'" cy="'+pts[N].y.toFixed(3)+'" r="0.46"/>';
+  });
+}
+
+function openNode(i){
+  openIdx = i;
+  const c = cards[i];
+  const tone = PALETTE[i % PALETTE.length];   // the poster wears the pill's colour
+  if(!visited.has(i)){
+    visited.add(i);
+    $('nodes').querySelector('.pill[data-i="'+i+'"]').classList.add('seen');
+    $('count').innerHTML = '<b>'+visited.size+'</b> / '+cards.length;
+    if(visited.size === cards.length) cleared.add(secIdx);
+  }
+  $('modalCard').style.setProperty('--poster', POSTER_BG);
+  $('modalCard').style.setProperty('--accent', accentFor(tone.bg));
+  $('modalCard').innerHTML =
+    '<button class="x" id="modalClose" type="button">&#10005;</button>'+
+    '<div class="kick">'+(tense.name||'')+'</div>'+
+    '<div class="cue display">'+c.cue+'</div>'+
+    '<div class="sentence">'+mark(c.text, c.markers)+'</div>'+
+    (c.from ? '<div class="alt">'+mark(c.from, c.markers)+'</div>' : '')+
+    (c.note ? '<div class="note">'+c.note+'</div>' : '');
+  $('modalWrap').classList.add('open');
+  $('modalClose').onclick = closeModal;
+}
+function closeModal(){
+  $('modalWrap').classList.remove('open');
+  openIdx = null;
+}
+$('backdrop').onclick = closeModal;
+
+/* ---------------- chrome ---------------- */
+function leave(){
+  if(START !== null){
+    if(window.parent !== window) parent.postMessage({ intuity:'showList' }, '*');
+    else showSections();
+  } else showSections();
+}
+$('back').onclick = leave;
+
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape'){ if($('modalWrap').classList.contains('open')) closeModal(); else if(secIdx!==null) leave(); }
+});
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if(secIdx !== null) buildMap(); }, 150);
+});
+
+load();
+</script>
+</body>
+</html>

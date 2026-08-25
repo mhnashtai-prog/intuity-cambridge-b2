@@ -760,14 +760,37 @@
     let currentTab = 0;
 
     // LOAD DATA
+    /* The site launcher builds data URLs as <topic>-rules.json, which is
+       right for tenses but wrong here: this topic's file is
+       conditionals-data.json. Rather than depend on every caller getting
+       the name right, try the requested file and fall back to the known
+       good one. RESOLVED_JSON records which actually worked, so the map
+       gets handed a URL that loads. */
+    let RESOLVED_JSON = JSON_URL;
+
+    async function fetchFirstAvailable(urls){
+      let lastErr = null;
+      for(const url of urls){
+        try{
+          const res = await fetch(url, { cache: 'no-store' });
+          if(res.ok){ RESOLVED_JSON = url; return await res.json(); }
+          lastErr = new Error(`HTTP ${res.status}`);
+        }catch(e){ lastErr = e; }
+      }
+      throw lastErr || new Error('no data source responded');
+    }
+
     async function loadData() {
       try {
-        const response = await fetch(JSON_URL, { cache: 'no-store' });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        
+        // requested first, then the canonical name, then the legacy one
+        const candidates = [...new Set([JSON_URL, DEF_JSON,
+                            '../../data/grammar-rules/conditionals.json'])];
+        const payload = await fetchFirstAvailable(candidates);
+
         /* One file per topic now: the rules sections live under `rules`. */
-        rulesData = (await response.json()).rules;
-        
+        rulesData = payload.rules;
+        if(!rulesData || !rulesData.length) throw new Error('no rules in data file');
+
         init();
         
       } catch (error) {
@@ -953,7 +976,7 @@
         PLAY + '?rule=' + encodeURIComponent(id) +
         '&section=' + section +
         '&primary=' + PRIMARY +
-        '&json=' + encodeURIComponent(JSON_URL));
+        '&json=' + encodeURIComponent(RESOLVED_JSON));
       document.getElementById('mapModal').classList.add('open');
     }
     function closeMap(){

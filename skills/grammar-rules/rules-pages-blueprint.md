@@ -4,6 +4,7 @@ Reference for porting Explore + Map to the remaining topics.
 Built from `tenses-*` (the blueprint) and `conditionals-*` (the first port).
 
 **Status:** tenses ✅ · conditionals ✅ · 10 remaining
+**Renderer:** consolidated — `explore-map.html` serves every topic.
 
 ---
 
@@ -12,14 +13,28 @@ Built from `tenses-*` (the blueprint) and `conditionals-*` (the first port).
 | File | Role | Shared? |
 |---|---|---|
 | `<topic>-rules.html` | Explore host — tabs, section list, map overlay | per topic |
-| `<topic>-play.html` | The map (wave + poster) | per topic, near-identical |
+| `explore-map.html` | The map (wave + poster) | **shared — one file, all topics** |
 | `<topic>-practice.html` | Practice | existing |
 | `<topic>-gapfill.html` | Quiz | existing |
 | `<topic>-data.json` | All content for the topic | per topic |
 
-`-play.html` differs between topics **only in the adapter block**. Everything
-below it — wave, poster, layout — must stay byte-identical. If you find
-yourself editing the renderer for one topic, that change belongs in all of them.
+There is **one renderer**. Per-topic differences live in the `TOPICS` registry
+at the top of `explore-map.html`:
+
+```js
+const TOPICS = {
+  'past-modals': { json:'past-modals-data.json', primary:'after', cue:'target' },
+  …
+};
+```
+
+`primary` — which half of a {before, after} pair is the card (see §4).
+`cue` — how the headline is built: `pair` (A → B), `target` (longest marker),
+`first`, or `time` (tenses' time-expression path).
+
+Adding a topic to the map is **one line here**, not a new file. This matters
+because files are uploaded by hand: with eleven renderers, one change to the
+wave means eleven downloads and eleven uploads.
 
 ---
 
@@ -28,8 +43,9 @@ yourself editing the renderer for one topic, that change belongs in all of them.
 The host opens the map in an overlay iframe:
 
 ```
-<topic>-play.html
-  ?rule=<rule id>        which rule (zero, first, …); or &index=<n>
+explore-map.html
+  ?topic=<topic>         picks the registry entry (falls back to the filename)
+  &rule=<rule id>        which rule (zero, first, …); or &index=<n>
   &section=<n>           which section within that rule
   &primary=before|after  sentence ordering (see §4)
   &json=<resolved url>   the data file that ACTUALLY loaded
@@ -176,8 +192,8 @@ Two rules that are easy to break:
 was never rendered, `getBoundingClientRect()` throws, and the entire RAF block
 dies — taking the cosine, taper and end dots with it. The placeholder bezier
 survives, so it *looks* like an old design rather than an error.
-→ `⚠️ tenses-play.html still has this.` Fine only while every tenses section
-has exactly 6 examples.
+→ Fixed in `explore-map.html` via `layoutFor(n)`. The superseded
+`tenses-play.html` still carries the bug, which is one more reason to delete it.
 
 **`hidden` loses to CSS.** Hiding the WATCH panel with the `hidden` attribute
 did nothing, because `.watch-mode{display:block}` overrides it. Delete markup
@@ -229,9 +245,10 @@ done **once as a shared header** across all twelve, not eleven separate times.
 1. **Reconcile the JSON first.** Several topics have both `-data.json` and
    `-rules.json` and they are **not** duplicates — they diverged. Diff before
    merging; content lost here is not recoverable later.
-2. Copy `conditionals-play.html` → `<topic>-play.html`; change the adapter's
-   default JSON path and `PRIMARY`.
+2. Add one line to `TOPICS` in `explore-map.html` — json, primary, cue.
+   (All ten are already registered and verified against real data.)
 3. Copy the host wiring into `<topic>-rules.html` (§2), apply §9 checklist.
+   This is now the ONLY per-topic file work.
 4. Verify: section count, cue quality, 5- and 6-card sections both render the
    wave with terminal dots.
 
@@ -242,8 +259,8 @@ done **once as a shared header** across all twelve, not eleven separate times.
 - **Data naming.** Standardise on `<topic>-rules.json`, or give the launcher a
   per-topic path map. Either beats the fallback in 11 files.
 - **Shared header** across all topics (§9).
-- **Shared renderer.** Eleven `-play.html` files means eleven places to fix the
-  next wave change. A single `explore-map.html` taking `?topic=` was built and
-  works; per-topic filenames can redirect to it if the naming matters.
+- ~~Shared renderer~~ — **done.** `explore-map.html` serves all topics; both
+  hosts point at it. `tenses-play.html` and `conditionals-play.html` are now
+  superseded and can be deleted once you've confirmed the live pages work.
 - **`<i></i>` in the poster kick line.** CSS for the accent block exists; the
   element was never added. Decide: coloured block, or pure black-on-neutral.

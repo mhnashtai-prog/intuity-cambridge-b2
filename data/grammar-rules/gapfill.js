@@ -287,6 +287,7 @@
       if (!EMBEDDED) return;
       parent.postMessage({
         intuity: 'tests',
+        mode: 'quiz',          /* the host keeps one list per mode */
         titles: allTests.map(function (t) { return t.title; }),
         active: currentTest
       }, '*');

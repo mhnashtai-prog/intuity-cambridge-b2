@@ -48,11 +48,9 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
 }
 .header::after{content:'';position:absolute;left:50%;bottom:0;transform:translateX(-50%);
   width:min(720px,calc(100% - 2rem));height:1px;background:var(--rule)}
-/* In PRACTICE and QUIZ the tense tabs are hidden, so this rule and the one
-   under the mode row become adjacent — a doubled line. The framed page draws
-   its own separator anyway, so the header's is dropped in those modes. */
-.header.no-tabs::after{display:none}
-.header.no-tabs .mode-selector{border-bottom:none;padding-bottom:0}
+/* The header now carries a tab row in every mode — tense tabs for Explore,
+   the framed page's tests for Practice and Quiz — so its bottom rule always
+   has a row above it and never doubles with the mode-row rule. */
 .header-top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center}
 .back-link{justify-self:start;font-family:'Space Grotesk',sans-serif;font-size:.6rem;font-weight:700;
   letter-spacing:.08em;text-transform:uppercase;color:var(--faint);transition:color .2s;white-space:nowrap}
@@ -224,6 +222,10 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
 
   <div class="set-tabs" id="catTabs"></div>
   <div class="set-tabs" id="tenseTabs"></div>
+  <!-- Practice and Quiz report their test list up from the iframe and it is
+       drawn HERE, so every navigation control lives in the one fixed header,
+       exactly as the tense tabs do for Explore. -->
+  <div class="set-tabs hidden" id="frameTabs"></div>
 </header>
 
 <!-- HUD removed: the tense name and use-count duplicated the active tabs
@@ -253,7 +255,7 @@ const PLAY = 'explore-map.html';   // ONE renderer for every topic
    top document, so a hard refresh of THIS page can still serve a stale
    child — which is how a previous build kept loading after an upload.
    The query string makes each build a distinct URL. */
-const BUILD = '2026-08-26c';
+const BUILD = '2026-08-26d';
 const DEF  = '../../data/grammar-rules/tenses-rules.json';
 const P    = new URLSearchParams(location.search);
 const JSON_URL = P.get('json') || DEF;
@@ -436,6 +438,7 @@ function switchMode(mode){
      adjacent and read as one doubled line — and the framed page draws its
      own separator regardless. */
   document.querySelector('.header').classList.toggle('no-tabs', !explore);
+  paintFrameTabs();
 
   if(explore){ $('exploreArea').classList.add('active'); }
   else if(mode === 'practice'){
@@ -455,6 +458,37 @@ function switchMode(mode){
 }
 document.querySelectorAll('.mode-btn[data-mode]').forEach(b =>
   b.addEventListener('click', () => switchMode(b.dataset.mode)));
+
+/* ── framed-page tabs ──
+   The frame owns its data, so it tells us what its tests are; we own the
+   chrome, so we draw them. Clicking one posts the index back down. */
+let frameTabState = { titles: [], active: 0 };
+
+function paintFrameTabs(){
+  const wrap = $('frameTabs');
+  const on = mainMode !== 'explore' && frameTabState.titles.length > 0;
+  wrap.classList.toggle('hidden', !on);
+  if(!on){ wrap.innerHTML = ''; return; }
+  wrap.innerHTML = frameTabState.titles.map((t,i) =>
+    '<button class="vtab'+(i === frameTabState.active ? ' active' : '')+
+    '" data-i="'+i+'" type="button">'+t+'</button>').join('');
+  wrap.querySelectorAll('.vtab').forEach(b => {
+    b.onclick = () => {
+      frameTabState.active = +b.dataset.i;
+      paintFrameTabs();
+      const f = mainMode === 'practice' ? $('practiceFrame') : $('quizFrame');
+      if(f && f.contentWindow)
+        f.contentWindow.postMessage({ intuity:'setTest', index:+b.dataset.i }, '*');
+    };
+  });
+  syncHeader();
+}
+
+window.addEventListener('message', e => {
+  if(!e.data || e.data.intuity !== 'tests') return;
+  frameTabState = { titles: e.data.titles || [], active: e.data.active || 0 };
+  paintFrameTabs();
+});
 
 /* Guard against the recursion that an empty src used to cause: if a frame
    ever ends up pointing at this page, it renders a second header inside the

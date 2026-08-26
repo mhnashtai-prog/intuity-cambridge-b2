@@ -82,7 +82,12 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
 .mode-btn.active{color:var(--ink);font-weight:700;border-bottom-color:var(--accent)}
 @media(max-width:760px){.mode-btn{padding:.42rem .62rem;font-size:.6rem;gap:.3rem}}
 
-.set-tabs{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:.28rem;padding:0 .5rem}
+/* Held to the reading column so long test titles WRAP onto a second row
+   instead of stretching edge to edge. Explore's tense tabs sit in the same
+   width, which is what makes the two headers read alike. */
+.set-tabs{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
+  gap:.28rem .4rem;padding:0 .5rem;max-width:720px;margin:0 auto;
+  row-gap:.22rem}
 .set-tabs.hidden{display:none}
 .vtab{font-family:'Space Grotesk',sans-serif;font-size:.58rem;font-weight:600;letter-spacing:.08em;
   text-transform:uppercase;padding:.18rem .6rem;border:none;border-bottom:2px solid transparent;
@@ -255,7 +260,7 @@ const PLAY = 'explore-map.html';   // ONE renderer for every topic
    top document, so a hard refresh of THIS page can still serve a stale
    child — which is how a previous build kept loading after an upload.
    The query string makes each build a distinct URL. */
-const BUILD = '2026-08-26d';
+const BUILD = '2026-08-26e';
 const DEF  = '../../data/grammar-rules/tenses-rules.json';
 const P    = new URLSearchParams(location.search);
 const JSON_URL = P.get('json') || DEF;
@@ -438,6 +443,8 @@ function switchMode(mode){
      adjacent and read as one doubled line — and the framed page draws its
      own separator regardless. */
   document.querySelector('.header').classList.toggle('no-tabs', !explore);
+  // show the list belonging to THIS mode, not whatever posted most recently
+  frameTabState = frameLists[mode] || { titles: [], active: 0 };
   paintFrameTabs();
 
   if(explore){ $('exploreArea').classList.add('active'); }
@@ -484,10 +491,17 @@ function paintFrameTabs(){
   syncHeader();
 }
 
+/* Both frames stay loaded and both announce their lists, so the host kept
+   whichever arrived last — Practice ended up wearing Quiz's tabs. Each frame
+   now says which mode it is, and only the visible one is honoured. */
+const frameLists = { practice:null, quiz:null };
+
 window.addEventListener('message', e => {
   if(!e.data || e.data.intuity !== 'tests') return;
-  frameTabState = { titles: e.data.titles || [], active: e.data.active || 0 };
-  paintFrameTabs();
+  const from = e.data.mode;
+  if(from !== 'practice' && from !== 'quiz') return;
+  frameLists[from] = { titles: e.data.titles || [], active: e.data.active || 0 };
+  if(from === mainMode) { frameTabState = frameLists[from]; paintFrameTabs(); }
 });
 
 /* Guard against the recursion that an empty src used to cause: if a frame

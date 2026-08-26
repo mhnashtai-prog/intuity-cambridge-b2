@@ -467,6 +467,22 @@ body.playing .focus-exit{display:flex}
   background:var(--screen);z-index:99;font-family:'DM Mono',monospace;font-size:0.897rem;color:var(--faint)}
 .err{color:var(--wrong);font-size:0.958rem;line-height:1.6;max-width:26rem;text-align:center;padding:2rem}
 
+/* ══ IDLE / PICK-A-MIX STATE ══
+   The very first thing a visitor should see is the whole page — header,
+   tabs, HUD — with an invitation to choose a set, not a translucent gate
+   already pre-loaded with "MIX 1" and a swinging pendulum. The gate is now
+   reserved for the moment right after a Mix has actually been picked. */
+.idle-panel{display:flex;flex-direction:column;align-items:center;gap:.6rem;text-align:center;
+  padding:1.5rem}
+.idle-kicker{font-family:'DM Mono',monospace;font-size:.68rem;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--faint)}
+.idle-msg{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:clamp(1.05rem,4vw,1.4rem);
+  color:var(--ink);max-width:22rem;line-height:1.35}
+.idle-sub{font-size:.9rem;color:var(--dim);max-width:22rem;line-height:1.5}
+.idle-arrow{font-size:1.4rem;color:var(--accent-ink);animation:idleBob 1.6s ease-in-out infinite}
+@keyframes idleBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@media(prefers-reduced-motion:reduce){.idle-arrow{animation:none}}
+
 @media(max-width:600px){
   :root{--header-h:168px;--wire-h:150px;--player-h:30px}
   .device{padding:.5rem .6rem .8rem}
@@ -607,13 +623,23 @@ body.playing .focus-exit{display:flex}
 </div>
 
 <div class="arena" id="arena">
-  <div class="threat-panel">
+  <!-- Shown before any Mix has been picked. No threat bar, no dial, no
+       wires — those only mean anything once a set is chosen, and showing
+       them empty/at rest just looked like a broken game. -->
+  <div class="idle-panel" id="idlePanel">
+    <div class="idle-kicker">Bomb Defusal</div>
+    <div class="idle-msg">Choose a MIX above to practise your tenses</div>
+    <div class="idle-sub">Each mix is a different set of sentences — pick one from the tabs at the top to start a round.</div>
+    <div class="idle-arrow">↑</div>
+  </div>
+
+  <div class="threat-panel" id="threatPanel" style="display:none">
     <div class="threat-name" id="threatName">BUILDING THREAT</div>
     <div class="threat-bar-track"><div class="threat-bar-fill" id="threatFill" style="width:100%"></div></div>
     <div class="threat-meta"><span id="threatHpText">1000 / 1000</span></div>
   </div>
 
-  <div class="device" id="device">
+  <div class="device" id="device" style="display:none">
     <div class="status-row"><span class="status-dot pulse" id="statusDot"></span><span id="statusText">ARMED</span></div>
     <div class="bombring" id="bombring"><span class="num" id="ringNum">--</span></div>
     <div class="sentence" id="sentence">Loading…</div>
@@ -621,13 +647,13 @@ body.playing .focus-exit{display:flex}
   </div>
 </div>
 
-<div class="player-wrap">
+<div class="player-wrap" id="playerWrap" style="display:none">
   <span class="player-label">You</span>
   <div class="player-bar-track"><div class="player-bar-fill" id="playerFill" style="width:100%"></div></div>
   <span class="player-hp-text" id="playerHpText">1000 / 1000</span>
 </div>
 
-<div class="wires-wrap">
+<div class="wires-wrap" id="wiresWrap" style="display:none">
   <div class="wires-label">select a wire to cut</div>
   <div class="wires" id="wires"></div>
 </div>
@@ -677,6 +703,12 @@ body.playing .focus-exit{display:flex}
    threat is left, so difficulty responds to how well the player is doing,
    not to a fixed bomb count. A Practice toggle still removes the clock
    entirely for learners who need the untimed rep before facing the timer.
+
+   ENTRY POINT (rewritten): the page used to boot straight into Mix 1 and
+   pop the gate over a barely-visible header. Now boot() only builds the
+   tabs and shows the idle "choose a MIX" panel — nothing starts, nothing
+   swings, until the learner taps a tab. The gate (with its pendulum) is
+   reserved for the moment right after that choice.
    ══════════════════════════════════════════════════════════════════════ */
 
 window.addEventListener('error', e => {
@@ -707,7 +739,7 @@ const esc = t => String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt
 const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[b[i],b[j]]=[b[j],b[i]];} return b; };
 const clamp = (n,lo,hi) => Math.max(lo,Math.min(hi,n));
 
-let GROUPS = [], groupIdx = 0;
+let GROUPS = [], groupIdx = -1;
 let running = false, started = false, rafId = null;
 let wires = [], curItem = null, resolved = false;
 const NO_REPEAT = 4;
@@ -923,6 +955,25 @@ function firstTouch(){
   $('tapStart').classList.add('gone');
 }
 
+/* ── IDLE STATE ── shown until a Mix has been chosen. Nothing about the
+   round (threat bar, dial, wires, composure bar) means anything before
+   that, so it all stays hidden rather than sitting empty. */
+function showIdle(){
+  $('idlePanel').style.display = 'flex';
+  $('threatPanel').style.display = 'none';
+  $('device').style.display = 'none';
+  $('playerWrap').style.display = 'none';
+  $('wiresWrap').style.display = 'none';
+  $('gate').classList.remove('show');
+}
+function hideIdle(){
+  $('idlePanel').style.display = 'none';
+  $('threatPanel').style.display = 'flex';
+  $('device').style.display = 'flex';
+  $('playerWrap').style.display = 'flex';
+  $('wiresWrap').style.display = 'flex';
+}
+
 /* ── RUN / ROUND ── */
 function startRun(){
   const g = GROUPS[groupIdx];
@@ -935,6 +986,7 @@ function startRun(){
   curItems = items;
   $('score').textContent = '0'; setStreak(0);
   $('threatName').textContent = g.label.toUpperCase();
+  hideIdle();
   updateBars();
   applyThreat();
   $('over').classList.remove('show');
@@ -1280,7 +1332,10 @@ function switchGroup(i){
 function setMode(m){
   mode = m; localStorage.setItem('intuity-defuse-mode', m);
   document.querySelectorAll('.mbtn').forEach(b=>b.classList.toggle('on', b.dataset.m===m));
-  if (GROUPS.length) startRun();
+  /* Only restart a round if one has actually been chosen — before that,
+     changing 90s/120s/Practice should not silently pick Mix 1 for the
+     learner. */
+  if (GROUPS.length && groupIdx >= 0) startRun();
 }
 $('modes').querySelectorAll('.mbtn').forEach(b=>b.addEventListener('click', ()=>setMode(b.dataset.m)));
 document.querySelectorAll('.mbtn').forEach(b=>b.classList.toggle('on', b.dataset.m===mode));
@@ -1355,12 +1410,22 @@ async function boot(){
     $('loading').innerHTML = '<p class="err">No set in the data file has items with a 4-option `options` array including the `answer`.</p>';
     return;
   }
+  /* Only pre-select (and auto-start) a Mix when the URL explicitly names
+     one via ?set=... — e.g. a link shared from "Next"/"Previous" or a
+     bookmark. Arriving with no ?set= param is a first visit: show the
+     full page and the idle prompt, and wait for a tap on a tab. */
   const want = (new URLSearchParams(location.search).get('set') || '').toLowerCase();
-  groupIdx = Math.max(0, GROUPS.findIndex(g => g.id.toLowerCase() === want));
-  buildTabs();
+  const foundIdx = want ? GROUPS.findIndex(g => g.id.toLowerCase() === want) : -1;
+  buildTabs();          // build with groupIdx still -1 if nothing was requested
   syncHeader();
   $('loading').style.display = 'none';
-  startRun();
+  if (foundIdx >= 0){
+    groupIdx = foundIdx;
+    buildTabs();
+    startRun();
+  } else {
+    showIdle();
+  }
 }
 boot();
 </script>

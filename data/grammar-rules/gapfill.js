@@ -274,8 +274,32 @@
       }
     }
 
+
+    /* ── selector lives in the HOST header ──
+       Explore keeps every navigation control in one fixed header. These pages
+       had their selector inside the scrolling frame instead, which gave them a
+       second band and a different scroll behaviour. Now the frame reports its
+       tests upward and the host renders them beside the mode buttons; clicks
+       come back down. The frame owns the content, the header owns navigation. */
+    const EMBEDDED = window.parent !== window;
+
+    function publishTests() {
+      if (!EMBEDDED) return;
+      parent.postMessage({
+        intuity: 'tests',
+        titles: allTests.map(function (t) { return t.title; }),
+        active: currentTest
+      }, '*');
+    }
+
+    window.addEventListener('message', function (e) {
+      if (e.data && e.data.intuity === 'setTest') loadTest(e.data.index);
+    });
+
     function renderTestSelector() {
+      publishTests();
       const selector = document.getElementById('testSelector');
+      if (EMBEDDED) { selector.style.display = 'none'; return; }   // host draws it
       selector.innerHTML = '';
 
       allTests.forEach(function (test, index) {

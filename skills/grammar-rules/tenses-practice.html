@@ -32,19 +32,20 @@
     }
     
     .container { 
-      max-width: 64rem; 
+      max-width: 45rem;   /* the quiz column: 720px */ 
       margin: 0 auto;
       padding: 0 1rem;
     }
     
     /* COMPACT TEST SELECTOR */
+    /* Column-width hairline under the tabs, as on Explore and the quiz. */
     .test-selector {
       display: flex;
       gap: 0.5rem;
       justify-content: center;
       flex-wrap: wrap;
-      margin-bottom: 0rem;
-      padding-bottom: 1.5rem;
+      margin-bottom: 1rem;
+      padding-bottom: .8rem;
       border-bottom: 1px solid var(--rule);
     }
     
@@ -74,15 +75,13 @@
       font-weight: 600;
     }
     
+    /* No panel. The quiz has none, and a rounded card around the whole page
+       was the loudest difference between the three modes. */
     .content-container {
-      background: var(--card);
-      backdrop-filter: blur(40px) saturate(150%);
-      -webkit-backdrop-filter: blur(40px) saturate(150%);
-      border-radius: 1rem;
-      border: 1.5px solid var(--rule);
-      padding: 2rem 1rem 1rem 1rem;
-      min-height: 400px;
-      box-shadow: 0 12px 40px rgba(43,33,41,.10);
+      background: none;
+      border: none;
+      border-radius: 0;
+      padding: 0 0 2.5rem;
     }
     
     /* COMPACT QUESTION CARDS */
@@ -96,14 +95,63 @@
       margin-bottom: 1.5rem;
     }
     
-    /* MINIMAL HEADER */
+    /* Orange circle marking position, as in the quiz. It never changes state
+       — the strip's dots carry progress, so each mark does one job. */
+    .q-row { display: flex; align-items: flex-start; gap: 0.62rem; }
+    .q-body { flex: 1; min-width: 0; }
+
     .q-number {
-      font-size: 0.6875rem;
-      color: var(--faint);
-      font-weight: 600;
+      flex-shrink: 0;
+      width: 1.15rem;
+      height: 1.15rem;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #DD8E58;
+      color: #333333;
+      font-size: 0.62rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+      margin-top: .15rem;
+    }
+
+    /* Instruction left, dots right — the quiz's strip, same proportions. */
+    .practice-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: .95rem;
+      padding-bottom: .45rem;
+      border-bottom: 1px solid var(--rule);
+    }
+    .practice-instruction {
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 0.5rem;
+      color: var(--faint);
+    }
+    .practice-tally {
+      font-variant-numeric: tabular-nums;
+      font-size: .7rem;
+      color: #B3AAA2;
+      margin-left: .55rem;
+    }
+    .practice-dots { display: flex; gap: 0.42rem; align-items: center; }
+    .practice-dot {
+      width: 0.62rem;
+      height: 0.62rem;
+      border-radius: 50%;
+      background: none;
+      box-shadow: inset 0 0 0 1.5px #C9BFB2;
+      transition: background .3s ease, box-shadow .3s ease;
+    }
+    .practice-dot.answered {
+      background: #DD8E58;
+      box-shadow: inset 0 0 0 1.5px #DD8E58;
     }
 
     /* The key word is the grammar being taught — brick, as everywhere else. */
@@ -471,8 +519,16 @@ function loadTest(index) {
   
   const test = allTests[index];
   const container = document.getElementById('contentContainer');
-  
-  let html = '';
+
+  /* Instruction left, dots right — the quiz's strip. The dots are the only
+     thing that changes as you work; the circles beside each question mark
+     position and stay put. */
+  let html = '<div class="practice-strip">' +
+             '<span class="practice-instruction">Complete the second sentence' +
+             '<span class="practice-tally" id="practiceTally">0/' +
+             allTests[index].transformations.length + '</span></span>' +
+             '<span class="practice-dots" id="practiceDots"></span>' +
+             '</div>';
   
   test.transformations.forEach((transformation, idx) => {
     const inputId = `input-${idx}`;
@@ -482,7 +538,9 @@ function loadTest(index) {
     
     html += `
       <div class="question-card">
-        <div class="q-number">Question ${idx + 1}</div>
+       <div class="q-row">
+        <div class="q-number">${idx + 1}</div>
+        <div class="q-body">
         <div class="sentence1">${transformation.sentence1}</div>
         <div class="sentence2-wrapper">
           <div class="keyword">${transformation.keyWord.toUpperCase()}</div>
@@ -494,7 +552,7 @@ function loadTest(index) {
               data-answer="${transformation.answer}"
               data-alternatives='${JSON.stringify(transformation.alternativeAnswers)}'
               placeholder="..."
-              oninput="this.classList.toggle('has-value', !!this.value); autoExpandInput('${inputId}')"
+              oninput="this.classList.toggle('has-value', !!this.value); autoExpandInput('${inputId}'); renderPracticeDots()"
               size="10"
             />${parts[1] ? `<span class="sentence2-part">${parts[1]}</span>` : ''}
           </div>
@@ -503,12 +561,32 @@ function loadTest(index) {
           <div class="feedback-label"></div>
           <div class="feedback-answer"></div>
         </div>
+        </div><!-- /.q-body -->
+       </div><!-- /.q-row -->
       </div>
     `;
   });
   
   container.innerHTML = html;
+  renderPracticeDots();
   document.getElementById('actionBar').style.display = 'flex';
+}
+
+/* One dot per question, filled once that question has an answer. */
+function renderPracticeDots() {
+  const wrap = document.getElementById('practiceDots');
+  if (!wrap) return;
+  const test = allTests[currentTest];
+  if (!test) return;
+  let done = 0;
+  wrap.innerHTML = test.transformations.map(function (_, idx) {
+    const el = document.getElementById('input-' + idx);
+    const filled = el && el.value.trim() !== '';
+    if (filled) done++;
+    return '<span class="practice-dot' + (filled ? ' answered' : '') + '"></span>';
+  }).join('');
+  const tally = document.getElementById('practiceTally');
+  if (tally) tally.textContent = done + '/' + test.transformations.length;
 }
 
 function autoExpandInput(inputId) {

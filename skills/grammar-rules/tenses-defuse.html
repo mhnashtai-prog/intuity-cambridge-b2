@@ -191,25 +191,31 @@ body.playing{height:100dvh;overflow:hidden}
    Header, hud and tabs are gone, so the dial and the options take the room
    rather than leaving it empty. These apply ONLY in focus mode: the normal
    view still has chrome to fit around. */
-body.playing{--wire-h:186px}                       /* was 140 */
-body.playing .bombring{width:270px;height:270px}   /* was 210 */
-body.playing .bombring::before{inset:13px}
-body.playing .bombring::after{inset:35px}
-body.playing .bombring .num{font-size:4.2rem}
+body.playing{--wire-h:158px}                       /* was 186 — reclaimed from the cards */
+body.playing .bombring{width:292px;height:292px}   /* was 210 */
+body.playing .bombring::before{inset:14px}
+body.playing .bombring::after{inset:38px}
+body.playing .bombring .num{font-size:4.6rem}
 body.playing .sentence{font-size:clamp(1.15rem,4.2vw,1.6rem)}
 body.playing .wire .label{font-size:clamp(.95rem,4.2vw,1.15rem)}
 body.playing .wire .k{font-size:1rem}
-body.playing .wire{padding:.7rem .45rem}
+/* The labels wrap to two lines at most, so the cards no longer need the
+   height of three. The dial takes what they give back. */
+body.playing .wire{padding:.55rem .45rem;justify-content:center}
+/* "select a wire to cut" states the obvious once the round is running: four
+   tappable cards under a question are self-explanatory. Its height goes to
+   the cards. */
+body.playing .wires-label{display:none}
 body.playing .wire .stripe-row{height:10px}
 body.playing .arena{gap:1.8rem}
 
 /* a phone has less to give, so it grows less */
 @media (max-width:520px){
-  body.playing{--wire-h:168px}
-  body.playing .bombring{width:216px;height:216px}
-  body.playing .bombring::before{inset:10px}
-  body.playing .bombring::after{inset:28px}
-  body.playing .bombring .num{font-size:3.4rem}
+  body.playing{--wire-h:150px}
+  body.playing .bombring{width:232px;height:232px}
+  body.playing .bombring::before{inset:11px}
+  body.playing .bombring::after{inset:30px}
+  body.playing .bombring .num{font-size:3.7rem}
 }
 
 /* the way out — the one control that must survive the stripping, or a student
@@ -254,9 +260,13 @@ body.playing .focus-exit{display:flex}
 .sentence .slot{display:inline-block;min-width:2.8em;margin:0 .2em;
   border-bottom:1px solid var(--edge);color:var(--faint);font-weight:500}
 
-.tapstart{font-family:'DM Mono',monospace;font-size:0.836rem;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--accent);background:rgba(250,247,242,.94);border:1px solid rgba(var(--accent-rgb),.35);
-  border-radius:999px;padding:.4rem 1rem;pointer-events:none;transition:opacity .4s;white-space:nowrap}
+/* Read once, then never again — and on a phone the key hint does not even
+   apply. It was the brightest orange text on the screen, competing with the
+   dial for the one thing that must be looked at. Grey, and it leaves after
+   the first answer. */
+.tapstart{font-family:'DM Mono',monospace;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--faint);background:none;border:none;
+  padding:.2rem .4rem;pointer-events:none;transition:opacity .4s;white-space:nowrap}
 .tapstart.gone{opacity:0;position:absolute}
 
 .log-feed{display:none;position:fixed;top:calc(var(--header-h) + 48px);right:.8rem;width:190px;display:flex;flex-direction:column;gap:.28rem;z-index:6;pointer-events:none}
@@ -535,7 +545,7 @@ body.playing .focus-exit{display:flex}
     <div class="status-row"><span class="status-dot pulse" id="statusDot"></span><span id="statusText">ARMED</span></div>
     <div class="bombring" id="bombring"><span class="num" id="ringNum">--</span></div>
     <div class="sentence" id="sentence">Loading…</div>
-    <div class="tapstart" id="tapStart">Cut the correct wire · keys 1–4</div>
+    <div class="tapstart" id="tapStart">Cut the correct wire</div>
   </div>
 </div>
 
@@ -638,6 +648,30 @@ let recentIdx = [];
    and starts feeling repetitive. */
 const REPEAT_EVERY = 4;
 let seenThisRun = [], missedThisRun = [], qCount = 0;
+
+/* ── WHAT COMES BACK, AND WHEN ────────────────────────────────────────────
+   Re-testing something answered confidently has poor returns: it spends a
+   question slot a shaky item could have used, and it is what makes drill feel
+   like busywork. But one correct answer is not proof either — at four options
+   that is 25% guess odds. So the interval EXPANDS with each success:
+
+     missed        -> eligible again after 2 questions
+     right once    -> after 8   (a long gap, not never)
+     right twice   -> retired for the rest of the round
+
+   correctCount[pos] holds how many times that item has been answered right;
+   dueAt[pos] is the question number it may return at. */
+let correctCount = {}, dueAt = {};
+const GAP_AFTER_MISS = 2, GAP_AFTER_ONE = 8, RETIRE_AT = 2;
+
+/* A shuffled queue, refilled when empty: a fresh draw is genuinely fresh
+   until every item in the set has been served. A 16-item set used to run dry
+   about two-thirds of the way through a 90-second round, after which every
+   "new" question was a hidden repeat. */
+let freshQueue = [];
+function refillQueue(items){
+  freshQueue = shuffle(items.map((_,i) => i));
+}
 let score = 0, streak = 0, bestStreak = 0, hits = 0, misses = 0, missLog = [];
 let threatHP = THREAT_MAX, playerHP = PLAYER_MAX, overdriveReady = false, overdriveMark = 0;
 let qStart = 0, qDur = 0, lastTickSecond = -1;
@@ -729,18 +763,24 @@ function itemsOf(g){
   })).filter(it => it.options && it.options.includes(it.answer));
 }
 function pickNext(items){
-  const mem = loadMem();
-  for (let back = Math.min(NO_REPEAT, recentIdx.length); back >= 0; back--){
-    const barred = new Set(recentIdx.slice(recentIdx.length - back));
-    const bag = [];
-    items.forEach((it,i) => { if (barred.has(i)) return; const w = weightOf(it,mem); for (let k=0;k<w;k++) bag.push(i); });
-    if (bag.length){
-      const idx = bag[(Math.random()*bag.length)|0];
-      recentIdx.push(idx); if (recentIdx.length > NO_REPEAT) recentIdx.shift();
-      return items[idx];
-    }
+  if (!freshQueue.length) refillQueue(items);
+  /* skip anything retired, and anything not yet due back */
+  let idx = null;
+  for (let n = 0; n < freshQueue.length; n++){
+    const cand = freshQueue[n];
+    const done = (correctCount[cand] || 0) >= RETIRE_AT;
+    const early = dueAt[cand] !== undefined && qCount < dueAt[cand];
+    if (!done && !early){ idx = cand; freshQueue.splice(n,1); break; }
   }
-  const idx = (Math.random()*items.length)|0;
+  if (idx === null){
+    /* everything is retired or waiting — start the cycle again rather than
+       serve nothing, but keep retired items out until the round ends */
+    refillQueue(items);
+    const open = freshQueue.filter(i => (correctCount[i] || 0) < RETIRE_AT);
+    idx = open.length ? open[(Math.random()*open.length)|0]
+                      : freshQueue[(Math.random()*freshQueue.length)|0];
+    const at = freshQueue.indexOf(idx); if (at >= 0) freshQueue.splice(at,1);
+  }
   recentIdx.push(idx); if (recentIdx.length > NO_REPEAT) recentIdx.shift();
   return items[idx];
 }
@@ -752,12 +792,14 @@ function pickNext(items){
    so answering it is genuine unaided recall, not UI memory. */
 function pickRepeat(items){
   const last = seenThisRun[seenThisRun.length - 1];
-  const pool = missedThisRun.length ? missedThisRun : seenThisRun;
-  const candidates = pool.filter(i => i !== last);
-  const chosen = candidates.length
-    ? candidates[(Math.random()*candidates.length)|0]
-    : pool[(Math.random()*pool.length)|0];
-  return items[chosen];
+  /* ONLY things still shaky. The old code fell back to any earlier item when
+     nothing was missed, so a student on a clean run had a correct answer
+     served back every 4th question for no reason. If nothing is shaky there
+     is nothing to practise — draw fresh instead. */
+  const pool = missedThisRun.filter(i =>
+    i !== last && qCount >= (dueAt[i] || 0) && (correctCount[i] || 0) < RETIRE_AT);
+  if (!pool.length) return null;
+  return items[pool[(Math.random()*pool.length)|0]];
 }
 function sentenceHTML(item, slotContent){
   let s = esc(item.cue) + (item.cue ? ' ' : '') +
@@ -817,6 +859,7 @@ function startRun(){
   roundEnd = 0; roundMs = 0; answerLog.length = 0;
   threatHP = THREAT_MAX; playerHP = PLAYER_MAX; overdriveReady = false; overdriveMark = 0; recentIdx = [];
   seenThisRun = []; missedThisRun = []; qCount = 0;
+  correctCount = {}; dueAt = {}; freshQueue = [];
   curItems = items;
   $('score').textContent = '0'; setStreak(0);
   $('threatName').textContent = g.label.toUpperCase();
@@ -832,9 +875,11 @@ function startRun(){
 let curItems = null;
 function nextBomb(){
   qCount++;
+  curItem = null;
   if (qCount % REPEAT_EVERY === 0 && seenThisRun.length >= 2){
-    curItem = pickRepeat(curItems);
-  } else {
+    curItem = pickRepeat(curItems);          /* null when nothing is shaky */
+  }
+  if (!curItem){
     curItem = pickNext(curItems);
     seenThisRun.push(curItems.indexOf(curItem));
   }
@@ -913,6 +958,8 @@ function resolveWire(chosen, timedOut){
     hits++; streak++; bestStreak = Math.max(bestStreak,streak);
     const mi = missedThisRun.indexOf(pos);
     if (mi >= 0) missedThisRun.splice(mi,1);
+    correctCount[pos] = (correctCount[pos] || 0) + 1;
+    dueAt[pos] = qCount + (correctCount[pos] >= RETIRE_AT ? 9999 : GAP_AFTER_ONE);
     let mult = streak>=15 ? 2.2 : streak>=10 ? 1.7 : streak>=5 ? 1.3 : 1;
     let isOverdrive = false;
     if (overdriveReady){ mult *= 1.9; isOverdrive = true; overdriveReady = false; }
@@ -936,15 +983,18 @@ function resolveWire(chosen, timedOut){
     }
     setStreak(streak); $('score').textContent = score; updateBars(); applyThreat();
 
+    $('tapStart').classList.add('gone');
     answerLog.push({ ok:true, cue:item.cue, answer:item.answer, after:item.after, note:item.note });
     if (threatHP <= 0){ setTimeout(()=>finish('win'), 650); return; }
     setTimeout(()=>{ if (running) nextBomb(); }, 620);
 
   } else {
+    $('tapStart').classList.add('gone');
     misses++; streak = 0; missLog.push(item);
     answerLog.push({ ok:false, cue:item.cue, answer:item.answer, after:item.after,
                      note:item.note, chose: chosen ? chosen.label : (timedOut?'—':'') });
     if (pos >= 0 && !missedThisRun.includes(pos)) missedThisRun.push(pos);
+    if (pos >= 0){ correctCount[pos] = 0; dueAt[pos] = qCount + GAP_AFTER_MISS; }
     const dmg = Math.round(BASE_PLAYER_DMG * threat.dmgMult);
     playerHP = clamp(playerHP - dmg, 0, PLAYER_MAX);
     $('device').classList.add('wrongflash');

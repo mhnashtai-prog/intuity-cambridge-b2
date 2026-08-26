@@ -172,6 +172,29 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
   50%    {box-shadow:-5px -5px 12px rgba(255,255,255,.9),7px 7px 18px rgba(43,33,41,.16),0 0 0 9px rgba(var(--wrong-rgb),.14)}}
 .bombring.practice .num{font-size:1.6rem;color:#A79B88}
 
+/* ══ THE GATE ══ */
+.gate{position:fixed;inset:0;z-index:65;display:none;align-items:center;justify-content:center;
+  padding:1.2rem;background:rgba(250,247,242,.92)}
+.gate.show{display:flex}
+.gate-card{width:min(360px,100%);text-align:center;
+  background:none;border:none;padding:0}
+.gate-kicker{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:.5rem}
+.gate-set{font-family:'Space Grotesk',sans-serif;font-weight:900;
+  font-size:clamp(1.6rem,7vw,2.2rem);letter-spacing:.02em;color:var(--ink);line-height:1}
+.gate-mode{font-family:'DM Mono',monospace;font-size:.78rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--faint);margin:.5rem 0 1.5rem}
+.gate-go{display:inline-flex;align-items:center;justify-content:center;
+  min-width:190px;padding:.95rem 2rem;border:none;border-radius:999px;cursor:pointer;
+  font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:1rem;
+  letter-spacing:.06em;text-transform:uppercase;
+  color:#FFFFFF;background:#F26430;
+  box-shadow:0 4px 14px rgba(242,100,48,.34);
+  transition:transform .12s,box-shadow .15s,background .15s}
+.gate-go:hover{background:#DB5524;box-shadow:0 6px 18px rgba(242,100,48,.42)}
+.gate-go:active{transform:translateY(2px);box-shadow:0 2px 8px rgba(242,100,48,.34)}
+.gate-hint{font-size:.78rem;color:var(--faint);margin-top:1rem;line-height:1.4}
+
 /* ══ FOCUS MODE ══
    During a round the screen holds three things: the game, the options, the
    performance bar. Everything else — header, tabs, set list, score, phase tag
@@ -534,6 +557,19 @@ body.playing .focus-exit{display:flex}
 
 <button class="focus-exit" id="focusExit" aria-label="Leave the round">&#10005;</button>
 
+<!-- The gate. No tooltip: tooltips are a hover idiom and almost every student
+     is on a phone. A card that names the set, the length and the action needs
+     no explaining. -->
+<div class="gate" id="gate">
+  <div class="gate-card">
+    <div class="gate-kicker">Bomb Defusal</div>
+    <div class="gate-set" id="gateSet">SET</div>
+    <div class="gate-mode" id="gateMode">90 seconds</div>
+    <button class="gate-go" id="gateGo">Start</button>
+    <div class="gate-hint">Cut the wire that completes the sentence</div>
+  </div>
+</div>
+
 <div class="arena" id="arena">
   <div class="threat-panel">
     <div class="threat-name" id="threatName">BUILDING THREAT</div>
@@ -866,8 +902,25 @@ function startRun(){
   updateBars();
   applyThreat();
   $('over').classList.remove('show');
+  /* ARM, do not start. The page loads with its chrome intact so a student can
+     see which set they are in and change it; the game takes the screen only
+     when they choose to begin. Nothing is more disorientating than a timer
+     that starts before you have looked at the screen. */
+  showGate(g);
+}
+
+/* the gate: set name, round length, one button */
+function showGate(g){
+  const secs = mode === 'practice' ? 'No clock' : mode + ' seconds';
+  $('gateSet').textContent  = (g.label || 'Set').toUpperCase();
+  $('gateMode').textContent = secs;
+  $('gate').classList.add('show');
+}
+
+function beginRound(){
+  $('gate').classList.remove('show');
   running = true;
-  document.body.classList.add('playing');   /* the game takes the screen */
+  document.body.classList.add('playing');   /* now the game takes the screen */
   nextBomb();
   if (rafId) cancelAnimationFrame(rafId);
   rafId = requestAnimationFrame(loop);
@@ -1072,6 +1125,28 @@ function banner(txt,col){
 }
 
 /* ── SUMMARY ── */
+const SECONDS_PER_Q = 4.2;   /* a comfortable pace for this game */
+/* ── ACCURACY IS NOT ENOUGH ──────────────────────────────────────────────
+   Answering one question correctly in ninety seconds scored 100%. Accuracy
+   alone rewards doing nothing, which is the opposite of what a timed round is
+   for. The grade now combines two things:
+
+     accuracy = right / attempted
+     coverage = attempted / what the round had time for
+
+   A perfect but tiny round is capped by its coverage, so the only way to a
+   high grade is to answer a lot AND get them right. Practice mode has no
+   clock, so coverage does not apply there. */
+function expectedCount(){
+  if (mode === 'practice') return 0;
+  const secs = parseInt(mode, 10);
+  return isFinite(secs) ? Math.max(4, Math.round(secs / SECONDS_PER_Q)) : 0;
+}
+function coverageOf(total){
+  const exp = expectedCount();
+  return exp ? Math.min(1, total / exp) : 1;
+}
+
 function scale(acc){
   const A = [[0,140],[.60,160],[.72,173],[.80,180],[1,190]];
   for (let i=1;i<A.length;i++){
@@ -1093,14 +1168,18 @@ function finish(outcome){
   else { banner('Mission Failed','#A23B2C'); sfxDefeat(); }
 
   const total = hits+misses, acc = total ? hits/total : 0;
-  const sc = scale(acc), [letter,word] = grade(sc);
+  const cov = coverageOf(total);
+  const sc = scale(acc * cov), [letter,word] = grade(sc);
   $('ovOutcome').className = 'outcome ' + (outcome==='win'?'win':'loss');
   $('ovOutcome').textContent = outcome==='win' ? 'Building secured' : 'Bomb detonated';
   $('ovScore').className = 'score g-'+letter.toLowerCase();
   $('ovScore').innerHTML = sc + '<span class="gr">'+letter+'</span>';
   $('ovSet').textContent = word + ' · ' + GROUPS[groupIdx].label + (mode==='practice' ? ' · practice' : '');
   $('ovNote').innerHTML = '<b>'+hits+'</b> defused, <b>'+misses+'</b> wrong · best streak <b>'+
-    bestStreak+'</b> · your composure <b>'+Math.max(0,playerHP)+'</b> · score <b>'+score+'</b>';
+    bestStreak+'</b> · your composure <b>'+Math.max(0,playerHP)+'</b> · score <b>'+score+'</b>' + (expectedCount() && total < expectedCount()
+      ? ' · answered <b>' + total + '</b> of about <b>' + expectedCount() +
+        '</b> — a fuller round scores higher'
+      : '');
 
   const seen = new Map();
   missLog.forEach(m=>{ const k = m.group+':'+m.idx; if(!seen.has(k)) seen.set(k, m); });
@@ -1190,7 +1269,9 @@ function leaveFocus(){
   if (!document.body.classList.contains('playing')) return;
   running = false; cancelAnimationFrame(rafId);
   document.body.classList.remove('playing');
+  showGate(GROUPS[groupIdx]);
 }
+$('gateGo').addEventListener('click', () => { firstTouch(); beginRound(); });
 $('focusExit').addEventListener('click', leaveFocus);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') leaveFocus(); });
 

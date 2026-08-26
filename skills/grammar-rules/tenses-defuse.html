@@ -172,6 +172,55 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
   50%    {box-shadow:-5px -5px 12px rgba(255,255,255,.9),7px 7px 18px rgba(43,33,41,.16),0 0 0 9px rgba(var(--wrong-rgb),.14)}}
 .bombring.practice .num{font-size:1.6rem;color:#A79B88}
 
+/* ══ FOCUS MODE ══
+   During a round the screen holds three things: the game, the options, the
+   performance bar. Everything else — header, tabs, set list, score, phase tag
+   — is chosen BEFORE play and cannot be acted on during it, so it goes.
+   The markup is not duplicated: the same elements are re-framed by a class on
+   <body>, which means one DOM and one place to fix anything.
+   100dvh, not 100vh: on a phone 100vh includes the collapsing address bar, so
+   a full-height overlay ends up taller than the screen. */
+body.playing .header,
+body.playing .hud,
+body.playing .set-tabs{display:none !important}
+
+body.playing .arena{top:0;bottom:calc(var(--wire-h) + var(--player-h));height:auto}
+body.playing{height:100dvh;overflow:hidden}
+
+/* ── the reclaimed 224px ──
+   Header, hud and tabs are gone, so the dial and the options take the room
+   rather than leaving it empty. These apply ONLY in focus mode: the normal
+   view still has chrome to fit around. */
+body.playing{--wire-h:186px}                       /* was 140 */
+body.playing .bombring{width:270px;height:270px}   /* was 210 */
+body.playing .bombring::before{inset:13px}
+body.playing .bombring::after{inset:35px}
+body.playing .bombring .num{font-size:4.2rem}
+body.playing .sentence{font-size:clamp(1.15rem,4.2vw,1.6rem)}
+body.playing .wire .label{font-size:clamp(.95rem,4.2vw,1.15rem)}
+body.playing .wire .k{font-size:1rem}
+body.playing .wire{padding:.7rem .45rem}
+body.playing .wire .stripe-row{height:10px}
+body.playing .arena{gap:1.8rem}
+
+/* a phone has less to give, so it grows less */
+@media (max-width:520px){
+  body.playing{--wire-h:168px}
+  body.playing .bombring{width:216px;height:216px}
+  body.playing .bombring::before{inset:10px}
+  body.playing .bombring::after{inset:28px}
+  body.playing .bombring .num{font-size:3.4rem}
+}
+
+/* the way out — the one control that must survive the stripping, or a student
+   who opens the wrong set is trapped */
+.focus-exit{position:fixed;top:calc(env(safe-area-inset-top,0px) + .5rem);right:.6rem;z-index:70;
+  width:34px;height:34px;border-radius:50%;display:none;align-items:center;justify-content:center;
+  background:#C4BBA9;border:1px solid #4F473C;color:#201E1C;
+  font-size:1rem;line-height:1;cursor:pointer}
+body.playing .focus-exit{display:flex}
+.focus-exit:hover{background:#B4AA96}
+
 /* ══ THE REVIEW ══
    A plain grey list: right answers unmarked but for a tick, wrong ones
    carrying the cross and what was chosen. Same classroom logic as the quiz. */
@@ -473,6 +522,8 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
 <div class="boom" id="boom"></div>
 <div class="banner" id="banner"></div>
 
+<button class="focus-exit" id="focusExit" aria-label="Leave the round">&#10005;</button>
+
 <div class="arena" id="arena">
   <div class="threat-panel">
     <div class="threat-name" id="threatName">BUILDING THREAT</div>
@@ -769,11 +820,11 @@ function startRun(){
   curItems = items;
   $('score').textContent = '0'; setStreak(0);
   $('threatName').textContent = g.label.toUpperCase();
-  $('logFeed').innerHTML = '';
   updateBars();
   applyThreat();
   $('over').classList.remove('show');
   running = true;
+  document.body.classList.add('playing');   /* the game takes the screen */
   nextBomb();
   if (rafId) cancelAnimationFrame(rafId);
   rafId = requestAnimationFrame(loop);
@@ -983,6 +1034,9 @@ const grade = s => s>=180?['A','Excellent']:s>=173?['B','Very good']:s>=160?['C'
 
 function finish(outcome){
   running = false; cancelAnimationFrame(rafId);
+  /* the chrome returns with the results, so the score is read where it can
+     actually be acted on */
+  document.body.classList.remove('playing');
   try{ if (window.INTUITY) INTUITY.session('tenses','defuse',{hits,misses,best:bestStreak,score,outcome}); }catch(e){}
 
   if (outcome === 'win'){ banner('Floor Cleared','#4A6B5C'); sfxVictory(); }
@@ -1082,6 +1136,14 @@ $('reviewBtn').addEventListener('click', () => {
   box.hidden = open;
   $('reviewBtn').textContent = open ? 'Check your answers' : 'Hide answers';
 });
+function leaveFocus(){
+  if (!document.body.classList.contains('playing')) return;
+  running = false; cancelAnimationFrame(rafId);
+  document.body.classList.remove('playing');
+}
+$('focusExit').addEventListener('click', leaveFocus);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') leaveFocus(); });
+
 $('hubBtn').addEventListener('click', () => { (window.top||window).location.href = '/?openModal=grammar'; });
 
 /* ── LAYOUT SYNC — measures the real header/hud height instead of trusting

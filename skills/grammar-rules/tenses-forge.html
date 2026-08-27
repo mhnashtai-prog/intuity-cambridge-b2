@@ -1325,19 +1325,29 @@ $('muteBtn').addEventListener('click', ()=> setMute(!musicOn));
 setMute(musicOn);
 
 /* ── EVENTS ── */
-function leaveFocus(){
-  if (!document.body.classList.contains('playing')) return;
-  running = false; cancelAnimationFrame(rafId); cancelAutoCheck();
+/* Leaving a round means leaving it — back to the entry screen where a mix is
+   chosen, not to the gate of the mix just abandoned. groupIdx is cleared, or
+   the tab just left stays "active" and tapping it again is swallowed by
+   switchGroup's own no-op guard; ?set= is stripped, or a reload re-arms that
+   mix and the learner lands mid-game at the entry screen. */
+function exitToEntry(){
+  running = false;
+  if (rafId) cancelAnimationFrame(rafId);
+  cancelAutoCheck();
   document.body.classList.remove('playing');
-  showGate(GROUPS[groupIdx]);
+  $('over').classList.remove('show');
+  groupIdx = -1;
+  const u = new URL(location.href); u.searchParams.delete('set');
+  history.replaceState(null,'',u);
+  buildTabs();
+  syncHeader();
+  showIdle();
 }
-document.addEventListener('keydown', e => {
-  if (e.key !== 'Escape') return;
-  if ($('over').classList.contains('show')){ $('over').classList.remove('show'); return; }
-  leaveFocus();
-});
-$('closeX').addEventListener('click', () => $('over').classList.remove('show'));
-$('over').addEventListener('click', e => { if (e.target === $('over')) $('over').classList.remove('show'); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') exitToEntry(); });
+/* Closing the summary is also an exit: dismissing it used to leave the dead
+   board from the finished round on screen. */
+$('closeX').addEventListener('click', exitToEntry);
+$('over').addEventListener('click', e => { if (e.target === $('over')) exitToEntry(); });
 $('againBtn').addEventListener('click', () => { $('over').classList.remove('show'); startRound(); });
 $('nextBtn').addEventListener('click', () => { const n=(groupIdx+1)%GROUPS.length; switchGroup(n); });
 $('prevBtn').addEventListener('click', () => { const p=(groupIdx-1+GROUPS.length)%GROUPS.length; switchGroup(p); });
@@ -1354,7 +1364,7 @@ $('idleStart').addEventListener('click', () => {
   firstTouch();
   switchGroup(0);
 });
-$('focusExit').addEventListener('click', leaveFocus);
+$('focusExit').addEventListener('click', exitToEntry);
 $('hubBtn').addEventListener('click', () => { (window.top||window).location.href = '/?openModal=grammar'; });
 
 function syncHeader(){

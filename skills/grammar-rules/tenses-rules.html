@@ -141,10 +141,11 @@ html,body{width:100%;height:100%;overflow:hidden}
 
   <div class="set-tabs" id="catTabs"></div>
   <div class="set-tabs" id="tenseTabs"></div>
-  <!-- No #frameTabs. Practice and Quiz are sheets now, so their test tabs
-       belong inside the sheet with the sentences they switch — not in a
-       header the sheet covers. gapfill.js draws its own selector unless a
-       host announces it will take them, and this host no longer does. -->
+  <!-- Practice and Quiz report their set list upward and it is drawn HERE,
+       beside Explore's own tabs. Navigation belongs in one place for every
+       mode: a student changes set the same way they change tense, and the
+       gate below only has to point at it. -->
+  <div class="set-tabs hidden" id="frameTabs"></div>
 </header>
 
 <div class="area active" id="exploreArea">
@@ -164,10 +165,8 @@ html,body{width:100%;height:100%;overflow:hidden}
     </button>
     <div class="sheet-gate" id="practiceGate">
       <div class="gate-mark pend-hang"><div class="pend-dial"><span>?</span></div></div>
-      <div class="gate-head">Practice</div>
-      <div class="gate-sub">Pick a set to begin. You can switch at any time once you have started.</div>
-      <div class="gate-list" id="practiceList"></div>
-      <div class="gate-wait" id="practiceWait">Loading sets…</div>
+      <div class="gate-head">Pick a set above to start practising</div>
+      <div class="gate-sub">Each set is a different group of sentences — choose one from the tabs above.</div>
     </div>
     <div class="frame"><iframe id="practiceFrame" title="Practice"></iframe></div>
   </div>
@@ -182,10 +181,8 @@ html,body{width:100%;height:100%;overflow:hidden}
     </button>
     <div class="sheet-gate" id="quizGate">
       <div class="gate-mark pend-hang"><div class="pend-dial"><span>?</span></div></div>
-      <div class="gate-head">Quiz</div>
-      <div class="gate-sub">Pick a set to begin. You can switch at any time once you have started.</div>
-      <div class="gate-list" id="quizList"></div>
-      <div class="gate-wait" id="quizWait">Loading sets…</div>
+      <div class="gate-head">Pick a set above to start the quiz</div>
+      <div class="gate-sub">Each set is a different group of sentences — choose one from the tabs above.</div>
     </div>
     <div class="frame"><iframe id="quizFrame" title="Quiz"></iframe></div>
   </div>
@@ -376,12 +373,15 @@ function applyMode(mode){
   /* Explore is always the page underneath, so it stays active while a sheet
      is open — closing the sheet reveals it already scrolled where it was. */
   $('exploreArea').classList.add('active');
+  $('catTabs').classList.toggle('hidden', !explore);
+  $('tenseTabs').classList.toggle('hidden', !explore);
   /* A sheet covers the header, so nothing there needs hiding any more. */
   if(explore)                 $('exploreArea').classList.add('active');
   else if(mode === 'practice'){ mountFrames(); $('practiceArea').classList.add('active'); openGate('practice'); }
   else if(mode === 'quiz'){     mountFrames(); $('quizArea').classList.add('active'); openGate('quiz'); }
   /* the page behind a sheet must not scroll under the finger */
   document.body.style.overflow = explore ? '' : 'hidden';
+  paintFrameTabs();
   syncHeader();
 }
 
@@ -457,56 +457,83 @@ if(window.ResizeObserver){
   [0,60,200,500].forEach(ms => setTimeout(syncHeader, ms));
 }
 
-/* ── THE ENTRY GATE ──────────────────────────────────────────────────────
-   Defuse and Forge never drop a student into a round — they show the object,
-   name the set, and wait. Practice and Quiz opened straight into whichever
-   test happened to be first, which was the one place in the product that
-   chose FOR the student.
+/* ── SET NAVIGATION LIVES IN THE HEADER ──────────────────────────────────
+   The gate used to list every set as a tile inside the sheet. That put the
+   same choice in two places and, worse, made the sheet the thing you chose
+   from — so a student who wanted a different set had to reopen the sheet
+   rather than just tap the header.
 
-   The framed page already announces its test list upward (gapfill.js and the
-   practice page both post `intuity:tests`). That message used to feed a tab
-   row in the header; it now fills the gate instead — the relay was never
-   wrong, it was in the wrong place. */
-const gateFor = { practice:{gate:'practiceGate', list:'practiceList', wait:'practiceWait', frame:'practiceFrame'},
-                  quiz:    {gate:'quizGate',     list:'quizList',     wait:'quizWait',     frame:'quizFrame'} };
+   Navigation belongs in one place for every mode: Explore's tense tabs and
+   Practice/Quiz's set tabs are drawn in the same row, in the same header, in
+   the same chips. The gate only points at it. */
+const gateFor = { practice:{gate:'practiceGate', frame:'practiceFrame'},
+                  quiz:    {gate:'quizGate',     frame:'quizFrame'} };
 const testLists = { practice:null, quiz:null };
+let frameActive = { practice:0, quiz:0 };
 
 window.addEventListener('message', e => {
   if(!e.data || e.data.intuity !== 'tests') return;
   const from = e.data.mode;
   if(from !== 'practice' && from !== 'quiz') return;
   testLists[from] = e.data.titles || [];
-  paintGate(from);
+  frameActive[from] = e.data.active || 0;
+  if(from === mainMode) paintFrameTabs();
 });
 
-function paintGate(mode){
-  const ids = gateFor[mode], titles = testLists[mode];
-  const list = $(ids.list), wait = $(ids.wait);
-  if(!list) return;
-  if(!titles || !titles.length){ list.innerHTML = ''; if(wait) wait.style.display = ''; return; }
-  if(wait) wait.style.display = 'none';
-  list.innerHTML = titles.map((t,i) =>
-    '<button class="gate-pick" type="button" data-i="' + i + '">' + esc(t) + '</button>').join('');
-  list.querySelectorAll('.gate-pick').forEach(b =>
-    b.addEventListener('click', () => beginSet(mode, +b.dataset.i)));
+function paintFrameTabs(){
+  const wrap = $('frameTabs');
+  if(!wrap) return;
+  const titles = testLists[mainMode];
+  const on = mainMode !== 'explore' && titles && titles.length;
+  wrap.classList.toggle('hidden', !on);
+  if(!on){ wrap.innerHTML = ''; syncHeader(); return; }
+  wrap.innerHTML = titles.map((t,i) =>
+    '<button class="vtab' + (i === frameActive[mainMode] ? ' active' : '') +
+    '" type="button" data-i="' + i + '">' + esc(t) + '</button>').join('');
+  wrap.querySelectorAll('.vtab').forEach(b =>
+    b.addEventListener('click', () => chooseSet(mainMode, +b.dataset.i)));
+  syncHeader();
 }
 
-function beginSet(mode, index){
+function chooseSet(mode, index){
+  frameActive[mode] = index;
   const f = $(gateFor[mode].frame);
-  /* The frame owns its content, so it is told which set to load rather than
-     being reloaded — the page is already parsed and the switch is instant. */
+  /* The frame owns its content, so it is TOLD which set to load rather than
+     reloaded — it is already parsed, so the switch is instant. */
   if(f && f.contentWindow) f.contentWindow.postMessage({ intuity:'setTest', index:index }, '*');
-  $(gateFor[mode].gate).classList.remove('open');
+  const g = $(gateFor[mode].gate);
+  if(g) g.classList.remove('open');   /* the gate's job is done once a set is picked */
+  paintFrameTabs();
 }
 
-/* The gate returns every time the sheet is opened: choosing a set is the
-   first thing that happens, not something remembered from last time. */
+/* The gate returns every time the sheet opens: nothing is chosen for the
+   student, and nothing is remembered from last time either. */
 function openGate(mode){
-  const ids = gateFor[mode];
-  if(!ids || !$(ids.gate)) return;
-  paintGate(mode);
-  $(ids.gate).classList.add('open');
+  const g = $(gateFor[mode] && gateFor[mode].gate);
+  if(g) g.classList.add('open');
+  paintFrameTabs();
+  /* A framed page that never announces its sets — the older topic pages do
+     not — would leave the gate pointing at an empty header row. After a
+     moment, step out of the way and show the exercises. */
+  setTimeout(() => {
+    if(mainMode === mode && (!testLists[mode] || !testLists[mode].length) && g)
+      g.classList.remove('open');
+  }, 1400);
 }
+
+/* Tell the framed pages that this host draws the tabs, so they hide their own
+   and the row is not shown twice. A page that never hears this keeps its own,
+   which is exactly what a standalone visit needs. */
+function announceHost(){
+  ['practiceFrame','quizFrame'].forEach(id => {
+    const f = $(id);
+    if(f && f.contentWindow) { try{ f.contentWindow.postMessage({intuity:'hostTabs'},'*'); }catch(e){} }
+  });
+}
+['practiceFrame','quizFrame'].forEach(id => {
+  const f = document.getElementById(id);
+  if(f) f.addEventListener('load', announceHost);
+});
 
 boot();
 </script>

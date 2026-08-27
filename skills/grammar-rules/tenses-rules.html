@@ -4,224 +4,108 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>INTUITY — Tenses</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Anton&display=swap" rel="stylesheet">
+
+<!-- Preconnect before the stylesheet request, so the font handshake overlaps
+     the CSS download instead of queuing behind it. A late font swap resizes
+     the header, which is the jump the ResizeObserver at the bottom exists to
+     catch — better not to cause it. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- THE SHELL. Tokens, header, mode row, tabs, tile family, close control,
+     sheets and view transitions all live here and are shared verbatim with
+     Defuse and Forge. This replaces the "edit it there and copy, never here"
+     convention that let the three headers drift apart. -->
+<link rel="stylesheet" href="intuity-shell.css?v=1">
+
 <style>
-*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+/* ═══ WHAT ONLY THIS PAGE OWNS ═══
+   Everything above is shared. What follows is Explore's reading surface and
+   the slides sheet — nothing else has them, so nothing else should carry
+   their CSS. */
 
-:root{
-  /* Light scheme. One accent hue at three depths: display, body, quiet.
-     The old --blue was Tailwind's default and belonged to no palette here. */
-  --screen:#FAF7F2;      /* page */
-  --card:#FFFFFF;        /* raised surface, exercises only */
-  --sentence:#3A3A38;    /* body text            10.7:1 */
-  --dim:#5C5852;         /* secondary text        7.2:1 */
-  --faint:#7A7570;       /* labels only           4.3:1 */
-  --rule:#D2CEC2;        /* hairlines — felt, not read */
-  --edge:#8F8574;        /* component borders     3.4:1 */
-  --topic:#DD8E58;       /* topic words AS A FILL — 2.4:1 as text */
-  --topic-ink:#9D653E;   /* the same hue, darkened to carry text 4.5:1 */
-  --filled:#97B1D2;      /* a completed answer, AS A FILL */
-  --accent:#C97253;      /* display / large type  3.3:1 */
-  --accent-ink:#A55D44;  /* the same hue for body 4.6:1 */
-  --gold:#8A6A3F;        /* section titles on light */
-  --sage:#4A6B5C;        /* correct               5.5:1 */
-  --ink:#2B2129;         /* wordmark, active states */
-  --header-h:150px;
-}
-html,body{width:100%;height:100%;overflow:hidden;background:var(--screen);overscroll-behavior:none}
-/* The glow gradients are gone: on a light ground they read as smudges, and
-   they were the most dated thing on the page. */
-body{font-family:'DM Sans',sans-serif;color:var(--sentence)}
-button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;text-decoration:none}
+html,body{width:100%;height:100%;overflow:hidden}
 
-/* ══ HEADER ══
-   Light, like everything else. The dark band was the last piece of the old
-   app, and on a projector it renders as a grey slab rather than black.
-   A hairline is enough to separate chrome from content. */
-.header{
-  position:fixed;top:0;left:0;right:0;z-index:30;
-  display:flex;flex-direction:column;gap:.3rem;padding:.4rem 1.25rem .5rem;
-  background:var(--screen);
-  /* Rule 2 of 3: the bottom of the fixed chrome, held to the 720px column so
-     it lines up with the sentences rather than cutting the window across. */
-  border-bottom:none;
-}
-.header::after{content:'';position:absolute;left:50%;bottom:0;transform:translateX(-50%);
-  width:min(720px,calc(100% - 2rem));height:1px;background:var(--rule)}
-/* The header now carries a tab row in every mode — tense tabs for Explore,
-   the framed page's tests for Practice and Quiz — so its bottom rule always
-   has a row above it and never doubles with the mode-row rule. */
-.header-top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center}
-.back-link{justify-self:start;font-family:'Space Grotesk',sans-serif;font-size:.6rem;font-weight:700;
-  letter-spacing:.08em;text-transform:uppercase;color:var(--faint);transition:color .2s;white-space:nowrap}
-.back-link:hover{color:var(--accent-ink)}
-.header-title{display:flex;flex-direction:column;align-items:center;line-height:1.1}
-/* A hair more presence: the wordmark sat at the same size as the mode words
-   beneath it, so on a phone it read as one label among several rather than
-   as the name of the app. */
-.app-title{font-family:'Space Grotesk',sans-serif;font-size:1.09rem;font-weight:900;letter-spacing:.2em;color:var(--ink)}
-.app-subtitle{font-size:.58rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
-  color:var(--dim);margin-top:.1rem}
-.header-spacer{justify-self:end;font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;
-  text-transform:uppercase;color:var(--faint);border:1px solid var(--rule);border-radius:999px;padding:.3rem .65rem}
-.header-spacer b{color:var(--sentence)}
-
-/* Modes are words, not a segmented pill. The active one is marked by weight
-   and a rule beneath it — never by colour alone, so it still reads for a
-   colour-blind student. */
-/* Rule 1 of 3: under the mode row, at the row's own width — it separates the
-   five modes from the tense tabs beneath them. */
-.mode-selector{display:flex;flex-wrap:wrap;justify-content:center;align-self:center;gap:.2rem;
-  padding-bottom:.35rem;border-bottom:1px solid var(--rule)}
-.mode-btn{display:flex;align-items:center;gap:.4rem;font-family:'Space Grotesk',sans-serif;
-  font-size:.68rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
-  padding:.3rem .8rem;color:var(--faint);
-  border-bottom:2px solid transparent;
-  transition:color .2s,border-color .2s}
-.mode-btn:hover{color:var(--sentence)}
-.mode-btn.active{color:var(--ink);font-weight:700;border-bottom-color:var(--accent)}
-@media(max-width:760px){.mode-btn{padding:.42rem .62rem;font-size:.6rem;gap:.3rem}}
-
-/* Held to the reading column so long test titles WRAP onto a second row
-   instead of stretching edge to edge. Explore's tense tabs sit in the same
-   width, which is what makes the two headers read alike. */
-/* row-gap matches the header's own .3rem gap between Explore's two tab
-   ELEMENTS, so a single row that wraps onto two lines is spaced identically
-   to two separate rows. Without this the framed pages looked crammed while
-   Explore looked relaxed — same tabs, different spacing mechanism. */
-.set-tabs{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
-  column-gap:.4rem;row-gap:.3rem;padding:0 .5rem;max-width:720px;margin:0 auto}
-
-/* frameTabs is ONE element wrapping to two lines, where Explore uses two
-   separate elements. Matching the numbers is not enough: rows inside a single
-   wrapping box read tighter than two boxes with a gap between them, because
-   there is no element boundary for the eye to rest on. So this row gets more
-   than parity — and a narrower column, so the break lands mid-list rather
-   than leaving one stray tab on the second line. */
-#frameTabs{row-gap:.55rem;max-width:660px}
-.set-tabs.hidden{display:none}
-.vtab{font-family:'Space Grotesk',sans-serif;font-size:.58rem;font-weight:600;letter-spacing:.08em;
-  text-transform:uppercase;padding:.24rem .6rem;border:none;border-bottom:2px solid transparent;
-  color:var(--faint);white-space:nowrap;transition:color .2s,border-color .2s}
-.vtab:hover{color:var(--sentence)}
-.vtab.active{color:var(--ink);font-weight:700;border-bottom-color:var(--vc,var(--accent))}
-.vtab.lead{font-size:.6rem;letter-spacing:.14em}
-
-/* A completed answer. #97B1D2 is 2.1:1 as text on this screen — unreadable —
-   but 7.1:1 underneath #2B2129, so it works as a fill and not as ink. Same
-   logic as the map's pills. */
-.filled{background:var(--filled);color:#2B2129;font-weight:600;
-  padding:.08em .42em;border-radius:.25rem;}
-
-/* ══ HUD ══ */
-/* Matched to the quiz's instruction row: a shallow strip with one hairline,
-   the label in the same register as the tabs above it, and the same 720px
-   column so the three modes share one left edge. */
-
-/* Each use case opens its own map. The list IS the section index, so
-   there's no second menu inside the modal. */
-/* A rule under the section head separates the title from its examples, so
-   the block reads as heading-then-content rather than one run of text. */
-.card-head{display:flex;align-items:center;gap:.8rem;
-  padding-bottom:.75rem;margin-bottom:.95rem;border-bottom:1px solid var(--rule)}
-.card-head .uc-title{margin-bottom:0;flex:1}
-.explore-btn{flex:none;display:inline-flex;align-items:center;gap:.4rem;
-  font-family:'Space Grotesk',sans-serif;font-size:.64rem;font-weight:800;letter-spacing:.05em;
-  text-transform:uppercase;padding:.5rem .7rem .5rem 1rem;border-radius:999px;
-  /* Solid accent, no gradient and no glow. The gold pill only worked on
-     black — on this screen it sits at 2.1:1, below what a button boundary
-     needs. #A55D44 is 4.6:1 against the page and 4.9:1 under white. */
-  color:#FFFFFF;background:var(--accent-ink);
-  transition:transform .2s cubic-bezier(.34,1.56,.64,1),background .2s}
-.explore-btn:hover{transform:translateY(-1px);background:#8F4E38}
-.explore-btn:active{transform:scale(.93)}
-.explore-btn .icon-badge{display:inline-flex;align-items:center;justify-content:center;
-  width:1.3rem;height:1.3rem;border-radius:50%;background:rgba(255,255,255,.18);
-  font-size:.78rem;transition:transform .35s cubic-bezier(.34,1.56,.64,1)}
-.explore-btn:hover .icon-badge{transform:rotate(18deg) scale(1.12)}
-
-/* ══ CONTENT ══ */
-.area{position:fixed;top:var(--header-h);left:0;right:0;bottom:0;
-  display:none;overflow-y:auto;-webkit-overflow-scrolling:touch}
-.area.active{display:block}
+/* ── EXPLORE ─────────────────────────────────────────────────────────── */
 .inner{max-width:720px;margin:0 auto;padding:.9rem 1rem 2.5rem;
   display:flex;flex-direction:column;gap:1.1rem}
 .cards{display:flex;flex-direction:column;gap:1.1rem}
-
-/* The card was a translucent panel with a gold outline. On a light ground a
-   panel adds nothing — the sentences read better straight on the page — so
-   the fill and the border go, and a hairline separates one section from the
-   next. Padding stays: the rhythm was right. */
-/* No bottom rule: the head rule below each title already separates one
-   section from the next, and two lines per section — one under the title,
-   one under the examples — read as a table rather than as a page. */
-.card{background:none;border:none;border-bottom:none;
-  border-radius:0;padding:.3rem 0 1.3rem;transition:none}
+/* No panel. On a light ground a card around the sentences added nothing —
+   the page IS the surface. Space and one hairline do the separating. */
+.card{background:none;border:none;border-radius:0;padding:.3rem 0 1.3rem}
 .cards .card:first-child{padding-top:.6rem}
 
-/* Anton, and big. In mono at 1rem this was a LABEL sitting directly above a
-   row of coloured markers at nearly the same size — nothing told the eye it
-   outranked them, so grey read as lifeless when it was really just small.
-   Scale carries the hierarchy, which frees the accent to mean one thing:
-   focus. It also matches the poster this section opens. */
-/* Space Grotesk, not mono. A monospace label reads as technical — dashboard,
-   terminal — and that was half of what felt dated here. Space Grotesk is a
-   geometric grotesque: even strokes, open counters, and it holds its shape
-   at light weights and wide tracking, which mono does not. */
-.uc-title{font-family:'Space Grotesk',sans-serif;font-weight:500;
-  font-size:.96rem;line-height:1.3;color:#71827A;
-  text-transform:uppercase;letter-spacing:.2em;margin-bottom:1rem}
+.card-head{display:flex;align-items:center;gap:.8rem;
+  padding-bottom:.75rem;margin-bottom:.95rem;border-bottom:1px solid var(--rule)}
+.card-head .uc-title{margin-bottom:0;flex:1}
+
+/* Space Grotesk, not mono. A monospace label reads as terminal, and that was
+   half of what felt dated here. Scale carries the hierarchy, which frees the
+   accent to mean one thing: focus. */
+.uc-title{font-family:var(--f-display);font-weight:500;font-size:.96rem;
+  line-height:1.3;color:#71827A;text-transform:uppercase;
+  letter-spacing:.2em;margin-bottom:1rem}
+
+/* The Explore button loses its glow and its emoji badge. A solid accent pill
+   is the one filled control on this surface; a rotating compass inside it was
+   decoration competing with the only call to action on the card. */
+.explore-btn{flex:none;display:inline-flex;align-items:center;
+  font-family:var(--f-display);font-size:.64rem;font-weight:800;
+  letter-spacing:.06em;text-transform:uppercase;
+  padding:.5rem 1rem;border-radius:var(--r-chip);
+  color:#FFFFFF;background:var(--accent-ink);border:none;
+  transition:transform .12s cubic-bezier(.2,.8,.2,1),background .2s}
+.explore-btn:hover{background:#8F4E38}
+.explore-btn:active{transform:scale(.94)}
+
 .markers{margin-bottom:1.1rem}
 .markers.hidden{display:none}
-.markers-t{font-family:'DM Mono',monospace;font-size:.56rem;color:var(--dim);text-transform:uppercase;
-  letter-spacing:.12em;margin-bottom:.55rem}
+.markers-t{font-family:var(--f-mono);font-size:.56rem;color:var(--dim);
+  text-transform:uppercase;letter-spacing:.12em;margin-bottom:.55rem}
 .markers-l{display:flex;flex-wrap:wrap;gap:.4rem .9rem}
-.marker{color:var(--topic-ink);font-size:.86rem;font-weight:600}
+.marker{color:var(--target);font-size:.86rem;font-weight:600}
 .markers-group{margin-bottom:.85rem}
 .markers-group:last-child{margin-bottom:0}
+
 .exs{display:flex;flex-direction:column;gap:.6rem;margin-bottom:1rem}
-.ex{font-size:1.02rem;line-height:1.55;color:var(--sentence);padding:.5rem 0 .5rem .9rem;background:none;
-  border-left:1px solid var(--rule);
-  }
-.ex .marker-inline{color:var(--topic-ink);font-weight:700}
-.note{padding:.8rem 0 .8rem 1rem;background:none;border-left:1px solid var(--rule);
+.ex{font-size:1.02rem;line-height:1.55;color:var(--sentence);
+  padding:.5rem 0 .5rem .9rem;border-left:1px solid var(--rule)}
+.ex .marker-inline{color:var(--target);font-weight:700}
+.note{padding:.8rem 0 .8rem 1rem;border-left:1px solid var(--rule);
   font-size:.84rem;color:var(--dim);line-height:1.6}
 .note i{color:var(--accent-ink);font-style:normal;margin-right:.4rem}
 
-.frame{position:absolute;inset:0}
-.frame iframe{width:100%;height:100%;border:none;display:block}
-
-.msg{padding:3rem 1.5rem;text-align:center;color:var(--faint);line-height:1.7;font-size:.9rem}
+.msg{padding:3rem 1.5rem;text-align:center;color:var(--faint);
+  line-height:1.7;font-size:.9rem}
 .msg small{display:block;color:var(--faint);margin-top:.5rem;font-size:.72rem}
 
-/* ══ SLIDES MODAL ══ */
-.modal{position:fixed;inset:0;z-index:60;background:rgba(8,8,9,.86);backdrop-filter:blur(6px);
-  display:none;align-items:center;justify-content:center;padding:1.25rem}
-.modal.open{display:flex}
-.shell{position:relative;width:min(760px,100%);height:100%;border-radius:1.1rem;overflow:hidden;
-  background:#D9CFC2;box-shadow:0 24px 70px rgba(0,0,0,.6)}
-.shell iframe{width:100%;height:100%;border:none;display:block}
-.closex{position:absolute;top:.6rem;right:.6rem;z-index:5;width:34px;height:34px;border-radius:50%;
-  background:rgba(0,0,0,.1);color:#000;font-size:1.1rem;line-height:1;
-  display:flex;align-items:center;justify-content:center}
-.closex:hover{background:rgba(0,0,0,.2)}
-@media(max-width:768px){.modal{padding:0}.shell{border-radius:0}}
+/* ── THE SLIDES SHEET ────────────────────────────────────────────────────
+   Was rgba(8,8,9,.86) with a blur — the only near-black surface in the
+   product, and a hard cut against a cream page. The veil is the page's own
+   colour now, so the sheet reads as the page stepping back rather than as a
+   different app launching. */
+.slides-card{position:relative;width:min(760px,100%);height:100%;
+  border-radius:var(--r-sheet);overflow:hidden;background:var(--card);
+  box-shadow:0 24px 70px rgba(43,33,41,.18)}
+.slides-card iframe{width:100%;height:100%;border:none;display:block}
+@media(max-width:768px){
+  .sheet.slides{padding:0}
+  .slides-card{border-radius:0}
+}
 
 @media(max-width:600px){
   :root{--header-h:172px}
   .inner{padding:.9rem .75rem 2rem}
-  .card{padding:1.15rem}
   .ex{font-size:.95rem}
 }
-@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
 /* ── bigger type on wide screens ──
-   A phone is read at about 30cm, a projected whiteboard at six metres. The
-   phone sizes are right where they are, so these apply only above 900px:
-   roughly 15% larger, with NO change to weight — the strokes stay the same
-   thickness, there is simply more of the letter. Bolding instead would thicken
-   the strokes and, on a projector's soft focus, actually reduce legibility. */
-@media (min-width: 900px) {
+   A phone is read at about 30cm, a projected whiteboard at six metres. Only
+   above 900px, roughly 15% larger, with NO change to weight — bolding would
+   thicken the strokes and on a projector's soft focus actually reduce
+   legibility. */
+@media (min-width:900px){
   .ex{font-size:1.16rem;line-height:1.6}
   .marker{font-size:.95rem}
   .markers-t{font-size:.62rem}
@@ -244,12 +128,15 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
     <span class="header-spacer">Level <b>B2–C1</b></span>
   </div>
 
+  <!-- No emoji. Five saturated multicolour glyphs sat across the top of every
+       page in a palette of warm grey and one orange — the loudest thing on
+       screen, each saying nothing the word beside it did not. -->
   <div class="mode-selector">
-    <button class="mode-btn active" data-mode="explore">🗺️ Explore</button>
-    <button class="mode-btn" data-mode="practice">✍️ Practice</button>
-    <button class="mode-btn" data-mode="quiz">📝 Quiz</button>
-    <a class="mode-btn" href="/skills/grammar-rules/tenses-defuse">💣 Defuse</a>
-    <a class="mode-btn" href="/skills/grammar-rules/tenses-forge">🔨 Forge</a>
+    <button class="mode-btn active" data-mode="explore">Explore</button>
+    <button class="mode-btn" data-mode="practice">Practice</button>
+    <button class="mode-btn" data-mode="quiz">Quiz</button>
+    <a class="mode-btn" href="/skills/grammar-rules/tenses-defuse">Defuse</a>
+    <a class="mode-btn" href="/skills/grammar-rules/tenses-forge">Forge</a>
   </div>
 
   <div class="set-tabs" id="catTabs"></div>
@@ -260,36 +147,32 @@ button,a{font:inherit;color:inherit;background:none;border:none;cursor:pointer;t
   <div class="set-tabs hidden" id="frameTabs"></div>
 </header>
 
-<!-- HUD removed: the tense name and use-count duplicated the active tabs
-     directly above it, and its fixed height had to be measured and fed back
-     into the content offset on every layout change. -->
-
 <div class="area active" id="exploreArea">
-  <div class="inner">
-    <div class="cards" id="list"></div>
-  </div>
+  <div class="inner"><div class="cards" id="list"></div></div>
 </div>
 
 <div class="area" id="practiceArea"><div class="frame"><iframe id="practiceFrame" title="Practice"></iframe></div></div>
 <div class="area" id="quizArea"><div class="frame"><iframe id="quizFrame" title="Quiz"></iframe></div></div>
 
-<div class="modal" id="modal">
-  <div class="shell">
-    <button class="closex" id="closeX" type="button" aria-label="Close">×</button>
+<div class="sheet slides" id="slides">
+  <div class="slides-card">
+    <button class="close-btn" id="closeX" type="button" aria-label="Close"
+            style="position:absolute;top:.6rem;right:.6rem;z-index:5">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+           stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
     <iframe id="slidesFrame" title="Tense slides"></iframe>
   </div>
 </div>
 
 <script>
-const PLAY = 'explore-map.html';   // ONE renderer for every topic
-
+const PLAY  = 'explore-map.html';   // ONE renderer for every topic
 /* Bump when a framed page changes. Iframes are cached independently of the
-   top document, so a hard refresh of THIS page can still serve a stale
-   child — which is how a previous build kept loading after an upload.
+   top document, so a hard refresh of THIS page can still serve a stale child.
    The query string makes each build a distinct URL. */
-const BUILD = '2026-08-26k';
-const DEF  = '../../data/grammar-rules/tenses-rules.json';
-const P    = new URLSearchParams(location.search);
+const BUILD = '2026-08-27a';
+const DEF   = '../../data/grammar-rules/tenses-rules.json';
+const P     = new URLSearchParams(location.search);
 const JSON_URL = P.get('json') || DEF;
 
 const CATS   = ['present','past','future'];
@@ -298,17 +181,12 @@ const TENSES = ['simple','continuous','perfect','perfect-continuous'];
 const TENSEL = ['Simple','Continuous','Perfect','Perfect continuous'];
 
 let data = [], cat = 0, tense = 0, view = 'list', mainMode = 'explore';
-
 const $ = id => document.getElementById(id);
 
 /* ── time-marker helpers ──
-   timeMarkers can be either:
-     - a flat array of strings (legacy / simple tenses), or
-     - { list1: {label, items}, list2: {label, items} } for tenses that
-       benefit from two groups (e.g. frequency adverbs vs frequency phrases).
-   normMarkerGroups() always returns an array of {label, items} groups so
-   the renderer only has one code path. flatMarkers() flattens everything
-   into a single word list for the inline highlighter. */
+   timeMarkers is either a flat array of strings, or {list1,list2} groups.
+   normMarkerGroups always returns groups so the renderer has one code path;
+   flatMarkers flattens for the inline highlighter. */
 function normMarkerGroups(tm){
   if(!tm) return [];
   if(Array.isArray(tm)) return tm.length ? [{ label:'Time markers', items: tm }] : [];
@@ -320,43 +198,42 @@ function normMarkerGroups(tm){
 function flatMarkers(tm){
   if(!tm) return [];
   if(Array.isArray(tm)) return tm;
-  return [
-    ...((tm.list1 && tm.list1.items) || []),
-    ...((tm.list2 && tm.list2.items) || [])
-  ];
+  return [...((tm.list1&&tm.list1.items)||[]), ...((tm.list2&&tm.list2.items)||[])];
 }
 function escRe(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
 function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-/* Wraps any marker word/phrase found inside `text` in a blue <span>, so
-   the same signal words shown in the marker chips are visible in situ
-   inside the example sentences. Longest markers are matched first so a
-   phrase like "hardly ever" isn't partly swallowed by "ever" (which
-   doesn't exist here, but keeps this correct in general). */
-/* Most sentences carry a time expression that is NOT in the section's
-   timeMarkers list — "every morning", "on Saturdays", "at 7pm" are all
-   absent from Habitual Actions, which lists only "every day", "always",
-   "usually"… So only one sentence in six was ever marked. The panel behind
-   each sentence used to disguise that; without it the gap is obvious.
-   This is the same fallback the map uses to pick its cue, so the two
-   surfaces now agree on what the signal word is. */
+
+/* Most sentences carry a time expression that is NOT in the section's own
+   timeMarkers list, so only one sentence in six was ever marked. This is the
+   same fallback the map uses to pick its cue, so the two surfaces agree on
+   what the signal word is. */
 const TIME_RE = /\b((?:every|each|this|next|last)\s+\w+|on\s+\w+days?|in\s+the\s+\w+|at\s+\d[\d:.]*\s*(?:am|pm)?|at\s+(?:night|noon|midnight|dawn|dusk|weekends?)|since\s+\w+|for\s+\w+(?:\s+\w+)?|all\s+\w+|as soon as|hardly ever|yet|just|already|never|ever|always|usually|often|sometimes|rarely|nowadays|recently|lately|currently|tomorrow|tonight|yesterday|today|now)\b/gi;
 
 function highlightMarkers(text, markers){
   const safe = escHtml(text);
   let out = safe, hit = false;
-
   if(markers && markers.length){
     const sorted = [...markers].sort((a,b)=>b.length-a.length).map(escRe);
     const re = new RegExp('\\b(' + sorted.join('|') + ')\\b','gi');
-    out = safe.replace(re, (m) => { hit = true; return '<span class="marker-inline">'+m+'</span>'; });
+    out = safe.replace(re, m => { hit = true; return '<span class="marker-inline">'+m+'</span>'; });
   }
-  // only fall back when the listed markers found nothing, so a section that
-  // does mark its own words keeps full control
-  if(!hit){
-    TIME_RE.lastIndex = 0;
-    out = safe.replace(TIME_RE, '<span class="marker-inline">$1</span>');
-  }
+  /* only fall back when the listed markers found nothing, so a section that
+     does mark its own words keeps full control */
+  if(!hit){ TIME_RE.lastIndex = 0; out = safe.replace(TIME_RE,'<span class="marker-inline">$1</span>'); }
   return out;
+}
+
+/* ── PRELOADING THE FRAMES ───────────────────────────────────────────────
+   Practice and Quiz used to get their src on FIRST SWITCH, so the first tap
+   on either showed an empty white frame while it fetched — the one place
+   where switching mode inside this document was slower than navigating away
+   from it. Both are mounted during boot, off-screen and non-interactive, so
+   by the time anyone taps they are already painted and the switch is a
+   cross-fade with nothing to load. */
+function mountFrames(){
+  const f1 = $('practiceFrame'), f2 = $('quizFrame');
+  if(f1 && !f1.getAttribute('src')) f1.setAttribute('src','tenses-practice.html?v='+BUILD);
+  if(f2 && !f2.getAttribute('src')) f2.setAttribute('src','tenses-gapfill.html?v='+BUILD);
 }
 
 async function boot(){
@@ -376,18 +253,22 @@ async function boot(){
   paintList();
   syncHeader();
 
-  /* Defuse and Forge are real pages and link BACK here as ?mode=quiz etc.
-     Without this the parameter was ignored and every return landed on
-     Explore. Also makes each mode addressable by URL. */
-  const wanted = new URLSearchParams(location.search).get('mode');
-  if(wanted && wanted !== 'explore' &&
-     document.querySelector('.mode-btn[data-mode="'+wanted+'"]')){
+  /* Explore is on screen and readable; the frames load in the gap after it,
+     so they cost the first paint nothing and are ready before they're wanted. */
+  requestIdleCallbackSafe(mountFrames);
+
+  /* Defuse and Forge link BACK here as ?mode=quiz. Without this the parameter
+     was ignored and every return landed on Explore. Also makes each mode
+     addressable by URL. */
+  const wanted = P.get('mode');
+  if(wanted && wanted !== 'explore' && document.querySelector('.mode-btn[data-mode="'+wanted+'"]')){
+    mountFrames();          // wanted immediately — don't wait for idle
     switchMode(wanted);
   }
-
-  const m = P.get('mode');
-  if(m === 'practice' || m === 'quiz') switchMode(m);
-
+}
+function requestIdleCallbackSafe(fn){
+  if(window.requestIdleCallback) requestIdleCallback(fn,{timeout:1500});
+  else setTimeout(fn,400);
 }
 
 const current = () => data.find(t => t.id === CATS[cat]+'-'+TENSES[tense]);
@@ -415,49 +296,39 @@ function buildTabs(){
 
 /* ── list ── */
 function paintList(){
-  const tn = current();
-  const wrap = $('list');
+  const tn = current(), wrap = $('list');
   if(!tn || !tn.useCases){
     wrap.innerHTML = '<div class="msg">No use cases for this tense yet.</div>';
     return;
   }
-  /* The HUD that displayed "<tense> · N uses" is gone — the active tabs above
-     already say which tense this is, so it was repeating them. */
   wrap.innerHTML = tn.useCases.map((uc,i) => {
     const groups = normMarkerGroups(uc.timeMarkers);
-    const flat = flatMarkers(uc.timeMarkers);
+    const flat   = flatMarkers(uc.timeMarkers);
     const markers = groups.length
-      ? '<div class="markers">'+
-          groups.map(g =>
-            '<div class="markers-group">'+
-              '<div class="markers-t">'+g.label+'</div>'+
-              '<div class="markers-l">'+
-                g.items.map(m=>'<span class="marker">'+escHtml(m)+'</span>').join('')+
-              '</div>'+
-            '</div>'
-          ).join('')+
-        '</div>'
+      ? '<div class="markers">'+ groups.map(g =>
+          '<div class="markers-group"><div class="markers-t">'+g.label+'</div>'+
+          '<div class="markers-l">'+
+            g.items.map(m=>'<span class="marker">'+escHtml(m)+'</span>').join('')+
+          '</div></div>').join('') +'</div>'
       : '';
     const exs = [uc.mainExample].concat(uc.moreExamples||[])
       .map(e=>'<div class="ex">'+highlightMarkers(e, flat)+'</div>').join('');
     const note = uc.note ? '<div class="note"><i>💡</i>'+escHtml(uc.note)+'</div>' : '';
-    return '<div class="card">'+
-             '<div class="card-head">'+
-               '<div class="uc-title">'+uc.title+'</div>'+
-               '<button class="explore-btn" type="button" data-sec="'+i+'">'+
-                 'Explore<span class="icon-badge">🧭</span>'+
-               '</button>'+
-             '</div>'+
-             markers+'<div class="exs">'+exs+'</div>'+note+'</div>';
+    return '<div class="card"><div class="card-head">'+
+             '<div class="uc-title">'+uc.title+'</div>'+
+             '<button class="explore-btn" type="button" data-sec="'+i+'">Explore</button>'+
+           '</div>'+ markers +'<div class="exs">'+exs+'</div>'+ note +'</div>';
   }).join('');
-
   wrap.querySelectorAll('.explore-btn').forEach(b =>
     b.addEventListener('click', () => openMap(+b.dataset.sec)));
 }
 
-/* ── modes ── */
-function switchMode(mode){
-  if(mode === mainMode) return;
+/* ── modes ──
+   Same-document switching, wrapped in a view transition so it uses the exact
+   mechanism the cross-document navigation to Defuse/Forge uses. That is what
+   makes all five modes feel like one surface: the three in here and the two
+   out there now change over identically. */
+function applyMode(mode){
   mainMode = mode;
   document.querySelectorAll('.mode-btn[data-mode]').forEach(b =>
     b.classList.toggle('active', b.dataset.mode === mode));
@@ -466,29 +337,26 @@ function switchMode(mode){
   const explore = mode === 'explore';
   $('catTabs').classList.toggle('hidden', !explore);
   $('tenseTabs').classList.toggle('hidden', !explore);
-  /* With the tabs hidden, the mode-row rule and the header's own rule sit
-     adjacent and read as one doubled line — and the framed page draws its
-     own separator regardless. */
-  document.querySelector('.header').classList.toggle('no-tabs', !explore);
+
   // show the list belonging to THIS mode, not whatever posted most recently
   frameTabState = frameLists[mode] || { titles: [], active: 0 };
   paintFrameTabs();
 
-  if(explore){ $('exploreArea').classList.add('active'); }
-  else if(mode === 'practice'){
-    $('practiceArea').classList.add('active');
-    /* getAttribute, not .src: an iframe whose src attribute is present but
-       empty reports .src as the CURRENT PAGE's absolute URL — truthy — so
-       this guard never fired and the frame quietly loaded the parent page
-       into itself. Blank panel, no console error. */
-    const f = $('practiceFrame');
-    if(!f.getAttribute('src')) f.setAttribute('src','tenses-practice.html?v='+BUILD);
-  }else if(mode === 'quiz'){
-    $('quizArea').classList.add('active');
-    const f = $('quizFrame');
-    if(!f.getAttribute('src')) f.setAttribute('src','tenses-gapfill.html?v='+BUILD);
-  }
+  if(explore)                 $('exploreArea').classList.add('active');
+  else if(mode === 'practice'){ mountFrames(); $('practiceArea').classList.add('active'); }
+  else if(mode === 'quiz'){     mountFrames(); $('quizArea').classList.add('active'); }
   syncHeader();
+}
+function switchMode(mode){
+  if(mode === mainMode) return;
+  const u = new URL(location.href);
+  if(mode === 'explore') u.searchParams.delete('mode'); else u.searchParams.set('mode', mode);
+  history.replaceState(null,'',u);
+  if(document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches){
+    document.startViewTransition(() => applyMode(mode));
+  }else{
+    applyMode(mode);
+  }
 }
 document.querySelectorAll('.mode-btn[data-mode]').forEach(b =>
   b.addEventListener('click', () => switchMode(b.dataset.mode)));
@@ -497,7 +365,6 @@ document.querySelectorAll('.mode-btn[data-mode]').forEach(b =>
    The frame owns its data, so it tells us what its tests are; we own the
    chrome, so we draw them. Clicking one posts the index back down. */
 let frameTabState = { titles: [], active: 0 };
-
 function paintFrameTabs(){
   const wrap = $('frameTabs');
   const on = mainMode !== 'explore' && frameTabState.titles.length > 0;
@@ -520,29 +387,27 @@ function paintFrameTabs(){
 
 /* Both frames stay loaded and both announce their lists, so the host kept
    whichever arrived last — Practice ended up wearing Quiz's tabs. Each frame
-   now says which mode it is, and only the visible one is honoured. */
+   says which mode it is, and only the visible one is honoured. With both
+   frames now mounted at BOOT rather than on first switch, both announce
+   during startup, which makes this guard load-bearing rather than defensive. */
 const frameLists = { practice:null, quiz:null };
-
 window.addEventListener('message', e => {
   if(!e.data || e.data.intuity !== 'tests') return;
   const from = e.data.mode;
   if(from !== 'practice' && from !== 'quiz') return;
   frameLists[from] = { titles: e.data.titles || [], active: e.data.active || 0 };
-  if(from === mainMode) { frameTabState = frameLists[from]; paintFrameTabs(); }
+  if(from === mainMode){ frameTabState = frameLists[from]; paintFrameTabs(); }
 });
 
-/* Guard against the recursion that an empty src used to cause: if a frame
-   ever ends up pointing at this page, it renders a second header inside the
-   first. Cheap to check, and it fails loudly instead of looking like a
-   styling bug. */
+/* Guard against recursion: if a frame ever ends up pointing at this page it
+   renders a second header inside the first. Cheap to check, and it fails
+   loudly instead of looking like a styling bug. */
 ['practiceFrame','quizFrame'].forEach(id => {
-  const f = $(id);
-  if(!f) return;
+  const f = $(id); if(!f) return;
   f.addEventListener('load', () => {
     const src = f.getAttribute('src');
     /* A frame with no src fires `load` for about:blank the moment the page
-       parses. Checking for an empty value here made that look like the
-       recursion we were guarding against — only inspect a real src. */
+       parses — only inspect a real src. */
     if(!src) return;
     if(src.indexOf('tenses-rules') === 0){
       console.error('[intuity] '+id+' pointed at the host page — recursion averted');
@@ -551,65 +416,52 @@ window.addEventListener('message', e => {
   });
 });
 
-/* ── list / slides ── */
+/* ── slides ── */
 function openMap(section){
   view = 'slides';
   $('slidesFrame').setAttribute('src',
     PLAY+'?topic=tenses&category='+CATS[cat]+'&tense='+TENSES[tense]+
     '&section='+section+'&json='+encodeURIComponent(JSON_URL));
-  $('modal').classList.add('open');
+  $('slides').classList.add('open');
 }
 function closeMap(){
   view = 'list';
-  $('modal').classList.remove('open');
+  $('slides').classList.remove('open');
   $('slidesFrame').setAttribute('src','');
 }
 function refreshSlides(){ if(view === 'slides') closeMap(); }
-
 $('closeX').onclick = closeMap;
-$('modal').addEventListener('click', e => { if(e.target === $('modal')) closeMap(); });
+$('slides').addEventListener('click', e => { if(e.target === $('slides')) closeMap(); });
 document.addEventListener('keydown', e => { if(e.key === 'Escape' && view === 'slides') closeMap(); });
-window.addEventListener('message', e => {
-  if(e.data && e.data.intuity === 'showList') closeMap();
-});
+window.addEventListener('message', e => { if(e.data && e.data.intuity === 'showList') closeMap(); });
 
-/* ── layout sync — measures the real header instead of trusting the CSS
-   guess. Two tab rows plus a six-item mode selector wrap to different
-   heights on every width, so a stale --header-h would let the header
-   sit on top of the content. Ported from tenses-defuse.html. ── */
+/* ── layout sync ──
+   Measures the real header instead of trusting the CSS guess: two tab rows
+   plus a five-item mode row wrap to different heights at every width, so a
+   stale --header-h lets the header sit on top of the content. */
 function syncHeader(){
   const h = document.querySelector('.header');
   if(h) document.documentElement.style.setProperty('--header-h', h.offsetHeight+'px');
 }
 window.addEventListener('resize', syncHeader);
 window.addEventListener('orientationchange', () => setTimeout(syncHeader,120));
-
 /* Returning from Defuse or Forge restores this page from the back/forward
-   cache: boot() does not run again, nothing resizes, so the ResizeObserver
-   has no reason to fire — and --header-h can be left at whatever it was.
-   The HUD then sits clipped under the header. pageshow is the only event
-   that fires on a bfcache restore, so re-measure there. */
+   cache: boot() does not run again and nothing resizes, so --header-h can be
+   left at whatever it was. pageshow is the only event that fires on a bfcache
+   restore. */
 window.addEventListener('pageshow', e => {
   syncHeader();
-  if(e.persisted) requestAnimationFrame(syncHeader);   // after layout settles
+  if(e.persisted) requestAnimationFrame(syncHeader);
 });
-document.addEventListener('visibilitychange', () => {
-  if(!document.hidden) syncHeader();
-});
+document.addEventListener('visibilitychange', () => { if(!document.hidden) syncHeader(); });
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(syncHeader);
-
-/* syncHeader() measures at the instant it is called — but the header can
-   change height AFTER that: a late webfont swap, or the tab row rewrapping
-   once layout settles. Reloading straight into EXPLORE is where that gap is
-   tightest, and the HUD ends up pinned under the header.
-   A ResizeObserver removes the timing question: it fires whenever the
-   header's box actually changes, whatever caused it. */
+/* syncHeader measures at the instant it is called, but the header can change
+   height AFTER that — a late webfont swap, or the tab row rewrapping once
+   layout settles. A ResizeObserver removes the timing question entirely. */
 if(window.ResizeObserver){
-  const ro = new ResizeObserver(() => syncHeader());
   const h = document.querySelector('.header');
-  if(h) ro.observe(h);
+  if(h) new ResizeObserver(() => syncHeader()).observe(h);
 }else{
-  // older browsers: re-measure across the frames where layout settles
   [0,60,200,500].forEach(ms => setTimeout(syncHeader, ms));
 }
 

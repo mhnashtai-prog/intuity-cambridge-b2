@@ -141,18 +141,45 @@ html,body{width:100%;height:100%;overflow:hidden}
 
   <div class="set-tabs" id="catTabs"></div>
   <div class="set-tabs" id="tenseTabs"></div>
-  <!-- Practice and Quiz report their test list up from the iframe and it is
-       drawn HERE, so every navigation control lives in the one fixed header,
-       exactly as the tense tabs do for Explore. -->
-  <div class="set-tabs hidden" id="frameTabs"></div>
+  <!-- No #frameTabs. Practice and Quiz are sheets now, so their test tabs
+       belong inside the sheet with the sentences they switch — not in a
+       header the sheet covers. gapfill.js draws its own selector unless a
+       host announces it will take them, and this host no longer does. -->
 </header>
 
 <div class="area active" id="exploreArea">
   <div class="inner"><div class="cards" id="list"></div></div>
 </div>
 
-<div class="area" id="practiceArea"><div class="frame"><iframe id="practiceFrame" title="Practice"></iframe></div></div>
-<div class="area" id="quizArea"><div class="frame"><iframe id="quizFrame" title="Quiz"></iframe></div></div>
+<!-- Practice and Quiz are SHEETS, not panels. They cover the header, carry
+     their own title and close, and let the framed page draw its own test tabs
+     inside the sheet — which is why #frameTabs and the whole postMessage tab
+     relay below are gone. -->
+<div class="area sheet-mode" id="practiceArea">
+  <div class="sheet-full">
+    <div class="sheet-bar">
+      <span class="sheet-title">Practice</span>
+      <button class="close-btn" data-close type="button" aria-label="Close Practice">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+             stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="frame"><iframe id="practiceFrame" title="Practice"></iframe></div>
+  </div>
+</div>
+
+<div class="area sheet-mode" id="quizArea">
+  <div class="sheet-full">
+    <div class="sheet-bar">
+      <span class="sheet-title">Quiz</span>
+      <button class="close-btn" data-close type="button" aria-label="Close Quiz">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+             stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="frame"><iframe id="quizFrame" title="Quiz"></iframe></div>
+  </div>
+</div>
 
 <div class="sheet slides" id="slides">
   <div class="slides-card">
@@ -335,18 +362,24 @@ function applyMode(mode){
   document.querySelectorAll('.area').forEach(a => a.classList.remove('active'));
 
   const explore = mode === 'explore';
-  $('catTabs').classList.toggle('hidden', !explore);
-  $('tenseTabs').classList.toggle('hidden', !explore);
-
-  // show the list belonging to THIS mode, not whatever posted most recently
-  frameTabState = frameLists[mode] || { titles: [], active: 0 };
-  paintFrameTabs();
-
+  /* Explore is always the page underneath, so it stays active while a sheet
+     is open — closing the sheet reveals it already scrolled where it was. */
+  $('exploreArea').classList.add('active');
+  /* A sheet covers the header, so nothing there needs hiding any more. */
   if(explore)                 $('exploreArea').classList.add('active');
   else if(mode === 'practice'){ mountFrames(); $('practiceArea').classList.add('active'); }
   else if(mode === 'quiz'){     mountFrames(); $('quizArea').classList.add('active'); }
+  /* the page behind a sheet must not scroll under the finger */
+  document.body.style.overflow = explore ? '' : 'hidden';
   syncHeader();
 }
+
+/* Every sheet closes back to Explore — the page it was opened from. */
+document.querySelectorAll('[data-close]').forEach(b =>
+  b.addEventListener('click', () => switchMode('explore')));
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape' && mainMode !== 'explore' && view !== 'slides') switchMode('explore');
+});
 function switchMode(mode){
   if(mode === mainMode) return;
   const u = new URL(location.href);
@@ -361,60 +394,8 @@ function switchMode(mode){
 document.querySelectorAll('.mode-btn[data-mode]').forEach(b =>
   b.addEventListener('click', () => switchMode(b.dataset.mode)));
 
-/* ── framed-page tabs ──
-   The frame owns its data, so it tells us what its tests are; we own the
-   chrome, so we draw them. Clicking one posts the index back down. */
-let frameTabState = { titles: [], active: 0 };
-function paintFrameTabs(){
-  const wrap = $('frameTabs');
-  const on = mainMode !== 'explore' && frameTabState.titles.length > 0;
-  wrap.classList.toggle('hidden', !on);
-  if(!on){ wrap.innerHTML = ''; return; }
-  wrap.innerHTML = frameTabState.titles.map((t,i) =>
-    '<button class="vtab'+(i === frameTabState.active ? ' active' : '')+
-    '" data-i="'+i+'" type="button">'+t+'</button>').join('');
-  wrap.querySelectorAll('.vtab').forEach(b => {
-    b.onclick = () => {
-      frameTabState.active = +b.dataset.i;
-      paintFrameTabs();
-      const f = mainMode === 'practice' ? $('practiceFrame') : $('quizFrame');
-      if(f && f.contentWindow)
-        f.contentWindow.postMessage({ intuity:'setTest', index:+b.dataset.i }, '*');
-    };
-  });
-  syncHeader();
-}
-
-/* Both frames stay loaded and both announce their lists, so the host kept
-   whichever arrived last — Practice ended up wearing Quiz's tabs. Each frame
-   says which mode it is, and only the visible one is honoured. With both
-   frames now mounted at BOOT rather than on first switch, both announce
-   during startup, which makes this guard load-bearing rather than defensive. */
-const frameLists = { practice:null, quiz:null };
-window.addEventListener('message', e => {
-  if(!e.data || e.data.intuity !== 'tests') return;
-  const from = e.data.mode;
-  if(from !== 'practice' && from !== 'quiz') return;
-  frameLists[from] = { titles: e.data.titles || [], active: e.data.active || 0 };
-  if(from === mainMode){ frameTabState = frameLists[from]; paintFrameTabs(); }
-});
-
-/* Guard against recursion: if a frame ever ends up pointing at this page it
-   renders a second header inside the first. Cheap to check, and it fails
-   loudly instead of looking like a styling bug. */
-['practiceFrame','quizFrame'].forEach(id => {
-  const f = $(id); if(!f) return;
-  f.addEventListener('load', () => {
-    const src = f.getAttribute('src');
-    /* A frame with no src fires `load` for about:blank the moment the page
-       parses — only inspect a real src. */
-    if(!src) return;
-    if(src.indexOf('tenses-rules') === 0){
-      console.error('[intuity] '+id+' pointed at the host page — recursion averted');
-      f.removeAttribute('src');
-    }
-  });
-});
+/* The tab relay that used to live here is gone with the sheets. The frame
+   owns its own tabs; the host owns the page behind them. */
 
 /* ── slides ── */
 function openMap(section){

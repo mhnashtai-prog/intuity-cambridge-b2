@@ -289,13 +289,23 @@ body.playing .arena{gap:1.8rem}
   body.playing .fbnote{font-size:clamp(.95rem,1.7vmin,1.2rem)}
 }
 
-/* the way out — the one control that must survive the stripping */
-.focus-exit{position:fixed;top:calc(env(safe-area-inset-top,0px) + .5rem);right:.6rem;z-index:70;
-  width:34px;height:34px;border-radius:50%;display:none;align-items:center;justify-content:center;
-  background:var(--tile-bg);border:none;color:var(--tile-ink);
-  font-size:1rem;line-height:1;cursor:pointer}
-body.playing .focus-exit{display:flex}
-.focus-exit:hover{background:var(--tile-bg-press)}
+/* ══ CLOSE ══
+   ONE control, shown wherever there is something to leave: the gate and the
+   round. A filled grey disc with a stroked mark — iOS's own close idiom.
+   The old button was tile-grey on a cream page and effectively invisible,
+   and it did not exist at the gate at all, so a learner who opened the wrong
+   mix had no way back. */
+.close-btn{width:34px;height:34px;border-radius:50%;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  background:#DBD3C6;color:#3A342E;border:none;cursor:pointer;
+  transition:background .15s,transform .1s}
+.close-btn:hover{background:#CCC2B1}
+.close-btn:active{transform:scale(.92)}
+.close-fixed{position:fixed;top:calc(env(safe-area-inset-top,0px) + .55rem);right:.7rem;
+  z-index:70;display:none}
+/* visible while a round is running, and while the gate is armed */
+body.playing .close-fixed,
+body.gated .close-fixed{display:flex}
 
 /* ══ THE QUESTION ══
    Grey and plain — a game sentence is READ, not decoded. Weight does what
@@ -405,10 +415,7 @@ body.playing .focus-exit{display:flex}
   box-shadow:0 20px 55px rgba(43,33,41,.16);
   animation:cardIn .28s cubic-bezier(.2,1,.4,1) both}
 @keyframes cardIn{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
-.over .closex{position:absolute;top:.55rem;right:.7rem;width:26px;height:26px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;font-size:1rem;line-height:1;
-  color:var(--faint);border:1px solid rgba(43,33,41,.12);transition:all .15s}
-.over .closex:hover{color:var(--paper);border-color:rgba(43,33,41,.4);background:rgba(43,33,41,.08)}
+.over .closex{position:absolute;top:.7rem;right:.7rem}
 .over .outcome{font-family:'Space Grotesk',sans-serif;font-weight:900;font-size:.75rem;
   letter-spacing:.16em;text-transform:uppercase;padding:.25rem .8rem;border-radius:999px;border:1px solid currentColor}
 .over .outcome.win{color:var(--ok)}
@@ -441,7 +448,11 @@ body.playing .focus-exit{display:flex}
   background:none;border:1px solid var(--edge);border-radius:999px;
   padding:.42rem 1rem;margin:.6rem 0 .4rem;cursor:pointer;transition:background .15s}
 .reviewpill:hover{background:#F4EFE6}
-.review{max-height:34vh;overflow-y:auto;text-align:left;width:100%;margin-bottom:.6rem;padding-right:.2rem}
+.review{text-align:left;width:100%;margin-bottom:.6rem;padding-right:.2rem}
+.rv-head{font-family:'DM Mono',monospace;font-size:.66rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--faint);margin:.5rem 0 .2rem}
+.rv-head:first-child{margin-top:0}
+.reviewpill .cnt{margin-left:.4rem;color:var(--wrong);font-variant-numeric:tabular-nums}
 .rv{display:flex;gap:.5rem;align-items:flex-start;padding:.42rem 0;
   border-bottom:1px solid var(--rule);font-size:.86rem;line-height:1.45;color:var(--sentence)}
 .rv:last-child{border-bottom:none}
@@ -508,7 +519,10 @@ body.playing .focus-exit{display:flex}
 <div class="boom" id="boom"></div>
 <div class="banner" id="banner"></div>
 
-<button class="focus-exit" id="focusExit" aria-label="Leave the round">&#10005;</button>
+<button class="close-btn close-fixed" id="exitBtn" aria-label="Leave and choose another mix">
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+       stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+</button>
 
 <div class="gate" id="gate">
   <div class="gate-card">
@@ -561,7 +575,10 @@ body.playing .focus-exit{display:flex}
 
 <div class="over" id="over">
   <div class="over-card">
-    <button class="closex" id="closeX" aria-label="Close">×</button>
+    <button class="close-btn closex" id="closeX" aria-label="Close">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+           stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
     <div class="outcome" id="ovOutcome"></div>
     <div class="score" id="ovScore"></div>
     <div class="setname" id="ovSet"></div>
@@ -813,6 +830,7 @@ function showIdle(){
   $('playerWrap').style.display = 'none';
   $('wiresWrap').style.display = 'none';
   $('gate').classList.remove('show');
+  document.body.classList.remove('gated');
 }
 function hideIdle(){
   $('idlePanel').style.display = 'none';
@@ -849,10 +867,12 @@ function showGate(g){
   const pend = document.querySelector('.pend');
   if (pend){ pend.style.animation = 'none'; void pend.offsetWidth; pend.style.animation = ''; }
   $('gate').classList.add('show');
+  document.body.classList.add('gated');   /* the exit must be reachable here too */
 }
 
 function beginRound(){
   $('gate').classList.remove('show');
+  document.body.classList.remove('gated');
   running = true;
   document.body.classList.add('playing');
   /* the clock is armed HERE, synchronously, at the moment Start is pressed.
@@ -942,6 +962,9 @@ function resolveWire(chosen){
   $('tapStart').classList.add('gone');
 
   if (ok){
+    /* logged BEFORE any effect runs: a throw in the sfx/animation chain must
+       never be able to cost the learner their review entry */
+    answerLog.push({ ok:true, cue:item.cue, answer:item.answer, after:item.after, tense:item.tense });
     hits++; streak++; bestStreak = Math.max(bestStreak,streak);
     const mi = missedThisRun.indexOf(pos); if (mi >= 0) missedThisRun.splice(mi,1);
     correctCount[pos] = (correctCount[pos] || 0) + 1;
@@ -964,15 +987,14 @@ function resolveWire(chosen){
       banner('Steady hands armed','#F26430'); sfxSteady();
     }
     setStreak(streak); $('score').textContent = score; updateBars(); applyThreat();
-    answerLog.push({ ok:true, cue:item.cue, answer:item.answer, after:item.after, tense:item.tense });
     if (setCleared()){ setTimeout(()=>finish('win'), 700); return; }
     if (threatHP <= 0){ setTimeout(()=>finish('win'), 650); return; }
     setTimeout(()=>{ if (running) nextBomb(); }, 900);
 
   } else {
-    misses++; streak = 0; missLog.push(item);
     answerLog.push({ ok:false, cue:item.cue, answer:item.answer, after:item.after,
                      tense:item.tense, chose: chosen || '—' });
+    misses++; streak = 0; missLog.push(item);
     if (pos >= 0 && !missedThisRun.includes(pos)) missedThisRun.push(pos);
     if (pos >= 0){ correctCount[pos] = 0; dueAt[pos] = qCount + GAP_AFTER_MISS; }
     const dmg = Math.round(BASE_PLAYER_DMG * threat.dmgMult);
@@ -1112,23 +1134,28 @@ function finish(outcome){
     : '';
 
   $('ovReview').hidden = true;
-  $('reviewBtn').textContent = 'Check your answers';
+  setReviewLabel(false);
   buildTabs();
   $('over').classList.add('show');
 }
 
 function renderReview(){
   const box = $('ovReview');
-  if (!answerLog.length){ box.innerHTML = '<div class="rv-empty">No answers yet.</div>'; return; }
-  box.innerHTML = answerLog.map(a =>
+  if (!answerLog.length){ box.innerHTML = '<div class="rv-empty">Nothing answered this round.</div>'; return; }
+  const bad = answerLog.filter(a => !a.ok), good = answerLog.filter(a => a.ok);
+  const row = a =>
     '<div class="rv' + (a.ok ? '' : ' bad') + '">' +
-      '<span class="rv-mark">' + (a.ok ? '✓' : '✕') + '</span>' +
+      '<span class="rv-mark">' + (a.ok ? '\u2713' : '\u2715') + '</span>' +
       '<span class="rv-body">' +
         '<span class="rv-sent">' + esc(a.cue) + ' <b>' + esc(a.answer) + '</b> ' + esc(a.after) + '</span>' +
         (a.tense ? '<span class="rv-tense">' + esc(a.tense) + '</span>' : '') +
         (!a.ok && a.chose ? '<span class="rv-chose">you chose ' + esc(a.chose) + '</span>' : '') +
       '</span>' +
-    '</div>').join('');
+    '</div>';
+  /* wrong first: these are the reason the list exists */
+  box.innerHTML =
+    (bad.length  ? '<div class="rv-head">Got wrong (' + bad.length + ')</div>' + bad.map(row).join('') : '') +
+    (good.length ? '<div class="rv-head">Got right (' + good.length + ')</div>' + good.map(row).join('') : '');
 }
 
 /* ── TABS ── */
@@ -1189,6 +1216,7 @@ function exitToEntry(){
   running = false;
   if (rafId) cancelAnimationFrame(rafId);
   document.body.classList.remove('playing');
+  document.body.classList.remove('gated');
   $('over').classList.remove('show');
   groupIdx = -1;
   const u = new URL(location.href); u.searchParams.delete('set');
@@ -1209,14 +1237,23 @@ $('over').addEventListener('click', e => { if (e.target === $('over')) exitToEnt
 $('againBtn').addEventListener('click', () => { $('over').classList.remove('show'); startRun(); });
 $('nextBtn').addEventListener('click', () => { const n=(groupIdx+1)%GROUPS.length; switchGroup(n); });
 $('prevBtn').addEventListener('click', () => { const p=(groupIdx-1+GROUPS.length)%GROUPS.length; switchGroup(p); });
+function setReviewLabel(open){
+  const n = answerLog.filter(a => !a.ok).length;
+  $('reviewBtn').innerHTML = (open ? 'Hide answers' : 'Check your answers') +
+    (!open && n ? '<span class="cnt">' + n + ' wrong</span>' : '');
+}
 $('reviewBtn').addEventListener('click', () => {
   const box = $('ovReview'), open = !box.hidden;
   if (!open) renderReview();
   box.hidden = open;
-  $('reviewBtn').textContent = open ? 'Check your answers' : 'Hide answers';
-  /* the card is already at max-height, so the list opens BELOW the fold and
-     the button looks dead. Bring it into view. */
-  if (!open) requestAnimationFrame(()=> box.scrollIntoView({behavior:'smooth',block:'nearest'}));
+  setReviewLabel(!open);
+  /* The card is the scroll container. scrollIntoView on the list moved the
+     list's own scroller instead, so the card never budged and pressing the
+     button looked like it did nothing. */
+  if (!open) requestAnimationFrame(() => {
+    const card = box.closest('.over-card');
+    if (card) card.scrollTo({ top: box.offsetTop - 56, behavior:'smooth' });
+  });
 });
 $('gateGo').addEventListener('click', () => { firstTouch(); beginRound(); });
 $('idleStart').addEventListener('click', () => {
@@ -1224,7 +1261,7 @@ $('idleStart').addEventListener('click', () => {
   firstTouch();
   switchGroup(0);
 });
-$('focusExit').addEventListener('click', exitToEntry);
+$('exitBtn').addEventListener('click', exitToEntry);
 $('hubBtn').addEventListener('click', () => { (window.top||window).location.href = '/?openModal=grammar'; });
 
 /* ── LAYOUT SYNC — measures the real header height instead of trusting the

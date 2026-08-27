@@ -94,7 +94,16 @@
     }
 
     function boxWidth(value, min) {
-      return Math.max((String(value).length || 3) * 8 + 20, min);
+      const len = String(value).length || 3;
+      /* Two things made long answers disappear inside their own box.
+         8px per character assumed a narrow face — Space Grotesk at weight 600
+         averages nearer 9.6px at 16px — and the +20 was a guess made when the
+         slot was an underline with almost no padding. The capsule adds a full
+         2em of horizontal padding, about 32px, which was never counted.
+         "wouldn't have forgotten" is 23 characters: the old formula asked for
+         204px, of which 32px went to padding, leaving 172px for 220px of text.
+         The end of the word simply scrolled out of sight. */
+      return Math.max(Math.round(len * 9.6) + 40, min);
     }
 
     function highlightOnce(text, verb) {
@@ -275,13 +284,24 @@
     }
 
 
-    /* ── selector lives in the HOST header ──
-       Explore keeps every navigation control in one fixed header. These pages
-       had their selector inside the scrolling frame instead, which gave them a
-       second band and a different scroll behaviour. Now the frame reports its
-       tests upward and the host renders them beside the mode buttons; clicks
-       come back down. The frame owns the content, the header owns navigation. */
+    /* ── WHO DRAWS THE TEST TABS ──────────────────────────────────────────
+       tenses-rules.html keeps every navigation control in one fixed header,
+       so the frame reports its tests upward and the host renders them.
+
+       But this used to hide the local selector for ANY embedding page:
+
+           if (EMBEDDED) { selector.style.display = 'none'; return; }
+
+       The other ten topics are still framed by their ORIGINAL rules pages,
+       which never listen for `intuity:tests` and draw nothing. The frame gave
+       its tabs away to a host that was not catching them, and the student was
+       left with a quiz they could not switch tests in.
+
+       So the host must now ANNOUNCE itself. Default is to draw our own tabs;
+       we only surrender them once a host says it will take them. An old host
+       stays silent, and the tabs simply stay where they are. */
     const EMBEDDED = window.parent !== window;
+    let hostDrawsTabs = false;
 
     function publishTests() {
       if (!EMBEDDED) return;
@@ -294,13 +314,22 @@
     }
 
     window.addEventListener('message', function (e) {
-      if (e.data && e.data.intuity === 'setTest') loadTest(e.data.index);
+      if (!e.data) return;
+      if (e.data.intuity === 'setTest') loadTest(e.data.index);
+      /* A host that draws the tabs says so. Until it does, we keep ours. */
+      if (e.data.intuity === 'hostTabs') {
+        if (hostDrawsTabs) return;
+        hostDrawsTabs = true;
+        renderTestSelector();
+      }
     });
 
     function renderTestSelector() {
       publishTests();
       const selector = document.getElementById('testSelector');
-      if (EMBEDDED) { selector.style.display = 'none'; return; }   // host draws it
+      if (!selector) return;
+      if (EMBEDDED && hostDrawsTabs) { selector.style.display = 'none'; return; }
+      selector.style.display = '';
       selector.innerHTML = '';
 
       allTests.forEach(function (test, index) {
@@ -348,8 +377,8 @@
 
     function inputHtml(cls, id, value, min, handler) {
       const style = 'width: ' + boxWidth(value, min) + 'px;';
-      /* has-value drives the blue underline: the slot is marked as holding an
-         answer, without touching the colour of the word itself. */
+      /* has-value lifts the slot from hollow to tile grey: it is marked as
+         holding an answer, without touching the colour of the word itself. */
       if (value) cls += ' has-value';
       if (isChecked) {
         return '<input type="text" class="' + cls + '" value="' + escapeHtml(value) +
@@ -467,8 +496,8 @@
       const first = document.getElementById('input-' + idx + '-1');
       const second = document.getElementById('input-' + idx + '-2');
 
-      first.style.width = boxWidth(first.value, 60) + 'px';
-      second.style.width = boxWidth(second.value, 60) + 'px';
+      first.style.width = boxWidth(first.value, 76) + 'px';
+      second.style.width = boxWidth(second.value, 76) + 'px';
 
       userAnswers[idx] = first.value.trim() + ' / ' + second.value.trim();
       updateProgressInfo();
@@ -511,6 +540,17 @@
 
     function showModal() {
       document.getElementById('scoreModal').classList.add('active');
+      /* The modal is position:fixed inside an IFRAME, so it is fixed to the
+         frame's box — which can sit partly below the fold on the host page.
+         Ask the host to bring the frame into view; hosts that do not listen
+         are unaffected, and the overlay is top-aligned and scrollable so the
+         close control is reachable either way. */
+      if (EMBEDDED) {
+        try { parent.postMessage({ intuity: 'modalOpen', mode: 'quiz' }, '*'); } catch (e) {}
+      }
+      /* If the frame itself is scrolled down, bring the top into view so the
+         modal's corner close is on screen. */
+      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); }
     }
 
     function closeModal() {
@@ -524,6 +564,11 @@
 
     document.getElementById('scoreModal').addEventListener('click', function (e) {
       if (e.target === this) closeModal();
+    });
+    /* Escape is the exit of last resort, and the only one available on a
+       projector where nobody is near the corner of the screen. */
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeModal();
     });
 
     window.addEventListener('load', loadData);

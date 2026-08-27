@@ -271,6 +271,11 @@
 
         renderTestSelector();
         loadTest(0);
+        /* Framed, the HOST shows the gate over this frame — a second one here
+           would give the student two. Opened directly, there is no host, so
+           the quiz would drop straight into test 1: the one place left in the
+           product that chooses for the student. */
+        if (!EMBEDDED) showEntryGate();
       } catch (error) {
         console.error('Error loading data:', error);
         document.getElementById('contentContainer').innerHTML =
@@ -338,6 +343,39 @@
         btn.textContent = test.title;
         btn.onclick = () => loadTest(index);
         selector.appendChild(btn);
+      });
+    }
+
+
+    /* ─────────── the entry gate (standalone only) ───────────
+       Built here rather than in eleven quiz shells, so every topic gets it
+       from one place — the same reason the engine itself lives here. The CSS
+       is the shell's .sheet-gate, already loaded. */
+    function showEntryGate() {
+      if (document.getElementById('quizEntryGate')) return;
+      const gate = document.createElement('div');
+      gate.id = 'quizEntryGate';
+      gate.className = 'sheet-gate open gate-standalone';
+      gate.innerHTML =
+        '<div class="gate-mark pend-hang"><div class="pend-dial"><span>?</span></div></div>' +
+        '<div class="gate-head">Quiz</div>' +
+        '<div class="gate-sub">Pick a set to begin. You can switch at any time ' +
+        'once you have started.</div>' +
+        '<div class="gate-list">' +
+          allTests.map(function (t, i) {
+            return '<button class="gate-pick" type="button" data-i="' + i + '">' +
+                   escapeHtml(t.title) + '</button>';
+          }).join('') +
+        '</div>';
+      document.body.appendChild(gate);
+      gate.querySelectorAll('.gate-pick').forEach(function (b) {
+        b.addEventListener('click', function () {
+          loadTest(+b.dataset.i);
+          gate.classList.remove('open');
+          /* removed, not hidden: reopening is a page load, and a dead overlay
+             left in the DOM is one more thing to trip over later */
+          setTimeout(function () { gate.remove(); }, 200);
+        });
       });
     }
 

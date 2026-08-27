@@ -316,7 +316,7 @@ body.playing .focus-exit{display:flex}
   background:#2B2129;
   box-shadow:inset 0 3px 9px rgba(0,0,0,.35),inset 0 -2px 0 rgba(255,255,255,.05)}
 .newdial .core{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:.05rem}
-.newdial .n{font-family:'Space Grotesk',sans-serif;font-weight:900;font-size:2.1rem;color:#E5D1B8;
+.newdial .n{font-family:'Space Grotesk',sans-serif;font-weight:900;font-size:1.7rem;color:#E5D1B8;
   font-variant-numeric:tabular-nums;transition:transform .18s;text-shadow:0 1px 3px rgba(0,0,0,.4)}
 .newdial .n.bump{transform:scale(1.22)}
 .newdial .lbl{font-family:'DM Mono',monospace;font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:rgba(229,209,184,.65)}
@@ -327,10 +327,10 @@ body.playing .focus-exit{display:flex}
   0%,100%{box-shadow:0 10px 22px rgba(43,33,41,.16),0 2px 5px rgba(43,33,41,.08),inset 0 1px 0 rgba(255,255,255,.25)}
   40%{box-shadow:0 0 0 4px rgba(162,59,44,.35),0 10px 22px rgba(43,33,41,.16)}}
 body.playing .newdial{width:190px;height:190px}
-body.playing .newdial .n{font-size:2.6rem}
+body.playing .newdial .n{font-size:2.2rem}
 @media (max-width:520px){
   body.playing .newdial{width:160px;height:160px}
-  body.playing .newdial .n{font-size:2.2rem}
+  body.playing .newdial .n{font-size:1.9rem}
 }
 @media (prefers-reduced-motion:reduce){.newdial,.newdial.wrongpulse{animation:none!important;transition:none!important}}
 
@@ -422,11 +422,11 @@ body.playing .newdial .n{font-size:2.6rem}
   background:rgba(250,247,242,.96);border-top:1px solid rgba(43,33,41,.12)}
 .player-label{font-family:'Space Grotesk',sans-serif;font-size:0.781rem;font-weight:700;letter-spacing:.1em;
   color:var(--dim);text-transform:uppercase;white-space:nowrap}
-.player-bar-track{flex:1;height:9px;border-radius:999px;background:rgba(43,33,41,.12);
-  overflow:hidden;border:1px solid rgba(43,33,41,.1)}
-.player-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#708A81,#DD8E58);
-  box-shadow:0 0 10px rgba(93,211,155,.5);transition:width .3s,background .3s;width:100%}
-.player-bar-fill.low{background:linear-gradient(90deg,var(--wrong),#A23B2C);box-shadow:0 0 10px rgba(232,106,92,.6)}
+.player-bar-track{flex:1;height:9px;border-radius:999px;background:rgba(43,33,41,.1);
+  overflow:hidden;border:1px solid rgba(194,149,110,.28)}
+.player-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#708A81,#C2956E);
+  box-shadow:0 0 10px rgba(112,138,129,.45);transition:width .3s,background .3s;width:100%}
+.player-bar-fill.low{background:linear-gradient(90deg,#A23B2C,#7A2618);box-shadow:0 0 10px rgba(162,59,44,.55)}
 .player-hp-text{font-family:'DM Mono',monospace;font-size:0.765rem;color:var(--faint);min-width:2.8rem;text-align:right}
 
 /* ══ BANK — tile tray replaces the lane grid ══ */
@@ -661,7 +661,7 @@ body.playing .newdial .n{font-size:2.6rem}
        one correct answer at a time, not a scale being balanced -->
   <div class="forge" id="forge" style="display:none">
     <div class="newdial-wrap">
-      <div class="newdial" id="dial"><div class="core"><span class="n" id="dialN">0</span><span class="lbl">cast</span></div></div>
+      <div class="newdial" id="dial"><div class="core"><span class="n" id="dialN">0%</span><span class="lbl">forged</span></div></div>
     </div>
   </div>
   <div class="center-stack" id="centerStack" style="display:none">
@@ -742,10 +742,13 @@ const DATA_URL = new URLSearchParams(location.search).get('data') || '../../data
 
 const BOSS_MAX = 1000, PLAYER_MAX = 1000;
 const BASE_DMG = 78, BASE_BOSS_DMG = 95;
+/* A wrong answer heals the boss back a step — smaller than a typical hit,
+   so a run with more hits than misses still nets forward, but a real
+   losing streak visibly retreats the ring instead of just standing still. */
+const BOSS_RECOIL = 65;
 const TIMER_BASE_MS = 4200, PER_SLOT_MS = 1650, PER_TILE_MS = 230;
 const TIMER_MIN = 5200, TIMER_MAX = 20000;
 const CLICK_THRESHOLD = 7; /* px of pointer travel below which a drag counts as a tap */
-const FORGE_TARGET = 10; /* correct answers needed to complete the blade */
 
 const $ = id => document.getElementById(id);
 const esc = t => String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -1287,6 +1290,7 @@ function submitAnswer(timedOut){
     if (pos >= 0){ correctCount[pos] = 0; dueAt[pos] = qCount + GAP_AFTER_MISS; }
     const dmg = Math.round(BASE_BOSS_DMG * phase.dmgMult);
     playerHP = clamp(playerHP - dmg, 0, PLAYER_MAX);
+    bossHP = clamp(bossHP + BOSS_RECOIL, 0, BOSS_MAX);
     sfxMiss();
     vibrate([60,40,80]);
     coolForge();
@@ -1305,43 +1309,38 @@ function submitAnswer(timedOut){
   setTimeout(()=>{ if (running) nextQuestion(); }, ok ? 750 : 1050);
 }
 
-/* ── THE FORGE — a badge that sweeps clockwise, not a line of type ───────
-   forgeLevel counts net progress toward FORGE_TARGET, same rounding and
-   clamping behaviour as before (a miss knocks a step off rather than
-   resetting to zero). The dial's sweep IS forgeLevel/FORGE_TARGET — a
-   continuous conic-gradient arc, not discrete ticks. */
+/* ── THE FORGE DIAL — renders bossHP directly, exactly like Defuse's
+   threat bar renders threatHP. No parallel counter, no fixed segment cap:
+   what you see IS the win condition, so it can never drift out of sync
+   with it the way the old 10-slug tray did. Sage sweeps forward clockwise
+   as bossHP drops (correct answers); a miss heals bossHP back a step
+   (BOSS_RECOIL) and the sweep visibly retreats to match. */
 const RING_SAGE = '#708A81', RING_CARAMEL = '#C2956E';
-let forgeLevel = 0, forgeLit = 0;
 function resetForge(){
-  forgeLevel = 0; forgeLit = 0;
   paintForge();
   const d = $('dial'); if (d){ d.classList.remove('wrongpulse'); }
 }
-function ringGradient(level){
-  const pct = clamp(level / FORGE_TARGET, 0, 1) * 100;
+function ringGradient(hp){
+  const pct = clamp((BOSS_MAX - hp) / BOSS_MAX, 0, 1) * 100;
   return 'conic-gradient(' + RING_SAGE + ' ' + pct + '%, ' + RING_CARAMEL + ' 0)';
 }
 function paintForge(){
-  const lit = clamp(Math.round(forgeLevel), 0, FORGE_TARGET);
-  forgeLit = lit;
+  const pct = Math.round(clamp((BOSS_MAX - bossHP) / BOSS_MAX, 0, 1) * 100);
   const d = $('dial');
   if (d){
-    d.style.background = ringGradient(forgeLevel);
-    d.classList.toggle('win', forgeLevel >= FORGE_TARGET);
+    d.style.background = ringGradient(bossHP);
+    d.classList.toggle('win', bossHP <= 0);
   }
-  $('dialN') && ($('dialN').textContent = String(lit));
+  $('dialN') && ($('dialN').textContent = String(pct) + '%');
 }
 function strikeForge(isOverdrive, glyph){
-  forgeLevel = clamp(forgeLevel + (isOverdrive ? 1.6 : 1), 0, FORGE_TARGET + 2);
   paintForge();
   const n = $('dialN');
   if (n){ n.classList.remove('bump'); void n.offsetWidth; n.classList.add('bump'); setTimeout(()=>n.classList.remove('bump'),180); }
   const row = $('slotRow');
   if (row){ row.classList.remove('strike'); void row.offsetWidth; row.classList.add('strike'); }
-  if (forgeLevel >= FORGE_TARGET) banner('Forme Locked','#FFC178');
 }
 function coolForge(){
-  forgeLevel = clamp(forgeLevel - 1.3, 0, FORGE_TARGET);
   paintForge();
   const d = $('dial');
   if (d){ d.classList.remove('wrongpulse'); void d.offsetWidth; d.classList.add('wrongpulse'); setTimeout(()=>d.classList.remove('wrongpulse'),340); }

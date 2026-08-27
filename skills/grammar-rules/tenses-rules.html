@@ -164,6 +164,13 @@ html,body{width:100%;height:100%;overflow:hidden}
              stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
+    <div class="sheet-gate" id="practiceGate">
+      <div class="gate-mark pend-hang"><div class="pend-dial"><span>?</span></div></div>
+      <div class="gate-head">Practice</div>
+      <div class="gate-sub">Pick a set to begin. You can switch at any time once you have started.</div>
+      <div class="gate-list" id="practiceList"></div>
+      <div class="gate-wait" id="practiceWait">Loading sets…</div>
+    </div>
     <div class="frame"><iframe id="practiceFrame" title="Practice"></iframe></div>
   </div>
 </div>
@@ -176,6 +183,13 @@ html,body{width:100%;height:100%;overflow:hidden}
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
              stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
+    </div>
+    <div class="sheet-gate" id="quizGate">
+      <div class="gate-mark pend-hang"><div class="pend-dial"><span>?</span></div></div>
+      <div class="gate-head">Quiz</div>
+      <div class="gate-sub">Pick a set to begin. You can switch at any time once you have started.</div>
+      <div class="gate-list" id="quizList"></div>
+      <div class="gate-wait" id="quizWait">Loading sets…</div>
     </div>
     <div class="frame"><iframe id="quizFrame" title="Quiz"></iframe></div>
   </div>
@@ -228,6 +242,7 @@ function flatMarkers(tm){
   return [...((tm.list1&&tm.list1.items)||[]), ...((tm.list2&&tm.list2.items)||[])];
 }
 function escRe(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+function esc(s){ return escHtml(s); }
 function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 /* Most sentences carry a time expression that is NOT in the section's own
@@ -367,8 +382,8 @@ function applyMode(mode){
   $('exploreArea').classList.add('active');
   /* A sheet covers the header, so nothing there needs hiding any more. */
   if(explore)                 $('exploreArea').classList.add('active');
-  else if(mode === 'practice'){ mountFrames(); $('practiceArea').classList.add('active'); }
-  else if(mode === 'quiz'){     mountFrames(); $('quizArea').classList.add('active'); }
+  else if(mode === 'practice'){ mountFrames(); $('practiceArea').classList.add('active'); openGate('practice'); }
+  else if(mode === 'quiz'){     mountFrames(); $('quizArea').classList.add('active'); openGate('quiz'); }
   /* the page behind a sheet must not scroll under the finger */
   document.body.style.overflow = explore ? '' : 'hidden';
   syncHeader();
@@ -444,6 +459,57 @@ if(window.ResizeObserver){
   if(h) new ResizeObserver(() => syncHeader()).observe(h);
 }else{
   [0,60,200,500].forEach(ms => setTimeout(syncHeader, ms));
+}
+
+/* ── THE ENTRY GATE ──────────────────────────────────────────────────────
+   Defuse and Forge never drop a student into a round — they show the object,
+   name the set, and wait. Practice and Quiz opened straight into whichever
+   test happened to be first, which was the one place in the product that
+   chose FOR the student.
+
+   The framed page already announces its test list upward (gapfill.js and the
+   practice page both post `intuity:tests`). That message used to feed a tab
+   row in the header; it now fills the gate instead — the relay was never
+   wrong, it was in the wrong place. */
+const gateFor = { practice:{gate:'practiceGate', list:'practiceList', wait:'practiceWait', frame:'practiceFrame'},
+                  quiz:    {gate:'quizGate',     list:'quizList',     wait:'quizWait',     frame:'quizFrame'} };
+const testLists = { practice:null, quiz:null };
+
+window.addEventListener('message', e => {
+  if(!e.data || e.data.intuity !== 'tests') return;
+  const from = e.data.mode;
+  if(from !== 'practice' && from !== 'quiz') return;
+  testLists[from] = e.data.titles || [];
+  paintGate(from);
+});
+
+function paintGate(mode){
+  const ids = gateFor[mode], titles = testLists[mode];
+  const list = $(ids.list), wait = $(ids.wait);
+  if(!list) return;
+  if(!titles || !titles.length){ list.innerHTML = ''; if(wait) wait.style.display = ''; return; }
+  if(wait) wait.style.display = 'none';
+  list.innerHTML = titles.map((t,i) =>
+    '<button class="gate-pick" type="button" data-i="' + i + '">' + esc(t) + '</button>').join('');
+  list.querySelectorAll('.gate-pick').forEach(b =>
+    b.addEventListener('click', () => beginSet(mode, +b.dataset.i)));
+}
+
+function beginSet(mode, index){
+  const f = $(gateFor[mode].frame);
+  /* The frame owns its content, so it is told which set to load rather than
+     being reloaded — the page is already parsed and the switch is instant. */
+  if(f && f.contentWindow) f.contentWindow.postMessage({ intuity:'setTest', index:index }, '*');
+  $(gateFor[mode].gate).classList.remove('open');
+}
+
+/* The gate returns every time the sheet is opened: choosing a set is the
+   first thing that happens, not something remembered from last time. */
+function openGate(mode){
+  const ids = gateFor[mode];
+  if(!ids || !$(ids.gate)) return;
+  paintGate(mode);
+  $(ids.gate).classList.add('open');
 }
 
 boot();

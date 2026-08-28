@@ -27,7 +27,9 @@
   /* this game's mark: sage rim, black core — the gate pendulum */
   --mark-sweep:#708A81; --mark-rest:#4A433D; --mark-core:#201E1C;
   --mark-ink:#E5D1B8; --mark-pct:100%;
-  --hud-h:40px; --ring-h:340px; --you-h:44px;
+  --hud-h:40px; --you-h:44px;
+  /* the vertical axis is the scarce one, so the dial is sized from it */
+  --ring-d:clamp(104px,17vh,168px);
 }
 html,body{width:100%;height:100%;overflow:hidden}
 body{user-select:none;-webkit-user-select:none;touch-action:manipulation}
@@ -63,16 +65,31 @@ body{user-select:none;-webkit-user-select:none;touch-action:manipulation}
    The lit ring's rim IS the countdown — the same conic sweep as Forge's dial.
    That removes the separate progress bar: the object you are looking at is
    the object counting down. */
-.rings{position:fixed;top:calc(var(--header-h) + var(--hud-h));left:0;right:0;
-  height:var(--ring-h);z-index:20;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:.55rem;padding:0 .5rem}
+/* ── ONE COLUMN, NOT THREE FIXED OFFSETS ──
+   Every block used to be position:fixed at a computed top, which meant the
+   sentence's height was whatever was left after three constants — and on a
+   laptop, where the browser chrome takes 140px, what was left was almost
+   nothing and the sentence sat jammed under the bar.
+
+   The stage is now a flex column: the rings take what they need, the bar takes
+   its own height, and the sentence takes ALL the rest and centres inside it.
+   Nothing can be buried, because nothing overlaps. */
+.stage{position:fixed;top:calc(var(--header-h) + var(--hud-h));left:0;right:0;bottom:0;
+  display:flex;flex-direction:column}
+body.playing .stage{top:calc(env(safe-area-inset-top,0px) + .4rem)}
+
+.rings{flex:0 0 auto;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:.6rem;
+  /* pushes the block down off the top edge — on a phone it was hugging the
+     status bar with the sentence stranded far below it */
+  padding:clamp(.6rem,4vh,2.4rem) .5rem .2rem}
 /* A 2x2 grid, not a row of four. Four across forces each ring down to 58px on
    a phone before the gaps are counted; two-by-two lets them stay big enough to
    read, and the block reads as one object rather than a strip. */
 .ring-row{display:grid;grid-template-columns:repeat(2,auto);
   gap:.55rem .8rem;justify-items:center;align-items:center}
 
-.ring{width:140px;height:140px;border-radius:50%;position:relative;flex:none;
+.ring{width:var(--ring-d);height:var(--ring-d);border-radius:50%;position:relative;flex:none;
   display:flex;align-items:center;justify-content:center;
   background:linear-gradient(145deg,#FFFFFF,#E4DDD1);
   box-shadow:-4px -4px 9px rgba(255,255,255,.9),5px 5px 13px rgba(43,33,41,.16);
@@ -83,9 +100,16 @@ body{user-select:none;-webkit-user-select:none;touch-action:manipulation}
 .ring::after{content:'';position:absolute;inset:19%;border-radius:50%;
   background:radial-gradient(circle at 38% 32%,#3A3A38,#201E1C 72%);
   box-shadow:inset 0 2px 5px rgba(0,0,0,.5)}
-.ring .rlabel{position:relative;z-index:2;font-family:var(--f-display);
-  font-weight:900;font-size:1.4rem;letter-spacing:.02em;color:#E5D1B8;
-  text-shadow:0 1px 2px rgba(0,0,0,.5)}
+.ring .core{position:relative;z-index:2;display:flex;flex-direction:column;
+  align-items:center;gap:.05rem;line-height:1}
+.ring .rlabel{font-family:var(--f-display);font-weight:900;font-size:1.4rem;
+  letter-spacing:.02em;color:#E5D1B8;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+/* The sweep says roughly how much is left; the number says exactly. A sweep
+   alone gives no answer to "how long have I got" until it is nearly gone. */
+.ring .rsec{font-family:var(--f-mono);font-size:.78rem;font-variant-numeric:tabular-nums;
+  color:#B9A98D;height:0;overflow:hidden;transition:height .25s}
+.ring.lit .rsec{height:1em}
+.ring.lit.low .rsec{color:#F0A08C}
 .ring.lit{opacity:1;transform:scale(1);filter:none}
 .ring.lit.low::before{background:conic-gradient(var(--wrong) calc(var(--pct,100) * 1%), #201E1C 0)}
 
@@ -102,8 +126,7 @@ body{user-select:none;-webkit-user-select:none;touch-action:manipulation}
    the rings and the sentence that is also the fail condition. It divides the
    two halves of the screen AND says how the round is going, which is one
    element doing the work of two. */
-.you{position:fixed;top:calc(var(--header-h) + var(--hud-h) + var(--ring-h));
-  left:0;right:0;height:var(--you-h);z-index:20;
+.you{flex:0 0 auto;position:relative;height:var(--you-h);
   display:flex;align-items:center;gap:.6rem;padding:0 1rem;
   border-bottom:1px solid var(--rule)}
 .you-label{font-family:var(--f-display);font-size:.66rem;font-weight:700;
@@ -159,15 +182,14 @@ body{user-select:none;-webkit-user-select:none;touch-action:manipulation}
 .you-num{font-family:var(--f-mono);font-size:.7rem;color:var(--faint);min-width:3.4rem;text-align:right}
 
 /* ══ THE SENTENCE ══ */
-.pad{position:fixed;top:calc(var(--header-h) + var(--hud-h) + var(--ring-h) + var(--you-h));
-  left:0;right:0;bottom:0;z-index:10;overflow-y:auto;overscroll-behavior:contain;
+.pad{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
   /* centred in the space below the bar, not pinned to the top of it. Pinned,
      the sentence sat under the rings with the whole lower half of the phone
      empty beneath it. */
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:1.2rem;padding:1.2rem 1.1rem 2rem}
-.sentence{font-size:clamp(1.05rem,4vw,1.4rem);font-weight:500;line-height:2.1;
-  text-align:center;color:var(--sentence);max-width:34rem}
+  gap:1.6rem;padding:clamp(1.2rem,4vh,2.6rem) 1.2rem}
+.sentence{font-size:clamp(1.05rem,4vw,1.4rem);font-weight:500;line-height:2.5;
+  text-align:center;color:var(--sentence);max-width:32rem}
 
 /* The capsule shows its infinitive until it holds an answer — the label that
    tells you what belongs in it, and then gets out of the way. */
@@ -326,7 +348,7 @@ body.playing .pad{top:calc(env(safe-area-inset-top,0px) + .4rem + var(--ring-h) 
   :root{--ring-h:318px}
   .ring{width:128px;height:128px}
   .ring .rlabel{font-size:1.28rem}
-  .sentence{line-height:2.2}
+  .sentence{line-height:2.5}
 }
 @media(max-width:360px){
   :root{--ring-h:282px}
@@ -390,21 +412,23 @@ body.playing .pad{top:calc(env(safe-area-inset-top,0px) + .4rem + var(--ring-h) 
   <button class="go" id="idleStart">Start</button>
 </div>
 
-<div class="rings" id="rings" style="display:none">
-  <div class="ring-row" id="ringRow"></div>
-  <div class="ring-cap" id="ringCap"></div>
-</div>
+<div class="stage" id="stage" style="display:none">
+  <div class="rings" id="rings">
+    <div class="ring-row" id="ringRow"></div>
+    <div class="ring-cap" id="ringCap"></div>
+  </div>
 
-<div class="you" id="you" style="display:none">
+<div class="you" id="you">
   <span class="you-label">You</span>
   <div class="you-track"><div class="you-fill" id="youFill"></div></div>
   <span class="you-num" id="youNum">1000</span>
 </div>
 
-<div class="pad" id="pad" style="display:none">
+<div class="pad" id="pad">
   <div class="sentence" id="sentence" aria-live="polite"></div>
   <div class="fbnote" id="fbNote" aria-live="polite"></div>
   <div class="tapstart" id="tapStart">Tap a gap to choose the form</div>
+</div>
 </div>
 
 <div class="gate" id="gate">
@@ -595,12 +619,12 @@ function burst(el, n){
     const p = document.createElement('div');
     p.className = 'spark';
     const c = SPARK_COLS[(Math.random()*SPARK_COLS.length)|0];
-    const sz = 4 + Math.random()*5;
+    const sz = 4 + Math.random()*7;
     p.style.cssText = 'left:' + (r.left + r.width*(.2+Math.random()*.6)) + 'px;top:' +
       (r.top + r.height*(.2+Math.random()*.6)) + 'px;width:' + sz + 'px;height:' + sz +
       'px;background:' + c + ';box-shadow:0 0 ' + (sz*2.5) + 'px ' + c;
     document.body.appendChild(p);
-    const a = Math.random()*Math.PI*2, d = 50 + Math.random()*110, ms = 520 + Math.random()*380;
+    const a = Math.random()*Math.PI*2, d = 70 + Math.random()*150, ms = 620 + Math.random()*420;
     p.animate([{transform:'translate(-50%,-50%) scale(1.1)',opacity:1},
       {transform:'translate(-50%,-50%) translate(' + Math.cos(a)*d + 'px,' +
         (Math.sin(a)*d + 46) + 'px) scale(.2)',opacity:0}],
@@ -653,7 +677,8 @@ function paintRings(active){
   $('ringRow').innerHTML = TYPES.map(t =>
     '<div class="ring' + (t===active?' lit':'') + '" data-t="' + t + '" ' +
       'style="--rim:' + RIM[t] + '">' +
-      '<span class="rlabel">' + SHORT[t] + '</span></div>').join('');
+      '<span class="core"><span class="rlabel">' + SHORT[t] + '</span>' +
+      '<span class="rsec"></span></span></div>').join('');
   $('ringCap').innerHTML = active
     ? active.toUpperCase() + '<span class="sub">' + CAPTION[active] + '</span>' : '';
 }
@@ -748,9 +773,7 @@ function startRun(){
   roundEnd=0; roundMs=0;
   $('score').textContent='0'; setStreak(0);
   $('idle').style.display='none';
-  $('rings').style.display='flex';
-  $('you').style.display='flex';
-  $('pad').style.display='flex';
+  $('stage').style.display='flex';
   paintYou();
   $('over').classList.remove('show');
   showGate(s);
@@ -786,6 +809,10 @@ function nextItem(){
   picked = [null,null];
   resolved = false;
   paintRings(curItem.type);
+  if(mode === 'practice'){
+    const el = $('ringRow').querySelector('.ring.lit .rsec');
+    if(el) el.textContent = '∞';
+  }
   paintSentence();
   $('fbNote').textContent=''; $('fbNote').className='fbnote';
 }
@@ -801,6 +828,9 @@ function loop(now){
     if(lit){
       lit.style.setProperty('--pct', (pct*100).toFixed(1));
       lit.classList.toggle('low', left <= 10000);
+      const secs = Math.ceil(left/1000);
+      const el = lit.querySelector('.rsec');
+      if(el && el.textContent !== String(secs)) el.textContent = secs;
     }
     if(left <= 0){ finish(gapsRight > gapsWrong ? 'win':'loss'); return; }
   }
@@ -843,7 +873,8 @@ function resolve(){
     correctCount[i] = (correctCount[i]||0)+1;
     dueAt[i] = qCount + (correctCount[i]>=RETIRE_AT ? 9999 : GAP_AFTER_ONE);
     sfxGood(); vibrate(streak >= 5 ? [20,30,40] : 20);
-    burst($('sentence'), streak >= 5 ? 26 : 16);
+    burst($('sentence'), streak >= 5 ? 44 : 26);
+    burst($('you'), streak >= 5 ? 22 : 12);
     float($('sentence'), '+' + Math.round(100*mult), streak >= 5 ? 'up big' : 'up');
     /* A streak is the only thing worth a banner. Celebrating every single
        correct answer makes the celebration mean nothing. */
@@ -861,7 +892,7 @@ function resolve(){
        student cannot see it from two colours alone */
     /* Half right is real progress and the commonest B2 error — worth points
        and worth a small burst, so the student sees they got somewhere. */
-    if(right === 1){ score += 30; float($('sentence'), '+30', 'up'); burst($('sentence'), 6); }
+    if(right === 1){ score += 30; float($('sentence'), '+30', 'up'); burst($('sentence'), 10); }
   }
   try{ showNote(it, right); }catch(e){ /* feedback is not worth a lost round */ }
   setStreak(streak); $('score').textContent = score;
@@ -1030,9 +1061,7 @@ function exitToEntry(){
   history.replaceState(null,'',u);
   buildTabs();
   $('idle').style.display='flex';
-  $('rings').style.display='none';
-  $('you').style.display='none';
-  $('pad').style.display='none';
+  $('stage').style.display='none';
 }
 $('exitBtn').addEventListener('click', exitToEntry);
 $('closeX').addEventListener('click', exitToEntry);

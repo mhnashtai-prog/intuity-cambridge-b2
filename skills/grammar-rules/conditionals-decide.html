@@ -5,8 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#FAF7F2">
 <title>INTUITY — Conditionals Decide</title>
-<!-- BUILD 2026-08-28-timebar — the time bar lives between the rings and the sentence -->
-<meta name="intuity-build" content="2026-08-28-timebar">
+<!-- BUILD 2026-08-28-timebar-fix1 — same layout as timebar build, plus:
+     default --ring-h at :root, guarded localStorage, shared multiplier fn,
+     type-namespaced mastery keys, aria-atomic live regions. See CHANGELOG
+     comment near the bottom of the script for the itemised list. -->
+<meta name="intuity-build" content="2026-08-28-timebar-fix1">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,6 +35,12 @@
   --hud-h:40px; --you-h:44px;
   /* the vertical axis is the scarce one, so the dial is sized from it */
   --ring-d:clamp(104px,17vh,168px);
+  /* FIX: this used to be set only inside the three breakpoints below, so any
+     viewport between 601px and 899px (tablets, foldables, a resized desktop
+     window, a phone in landscape) hit a calc() with an undefined variable
+     and silently dropped the .pad top offset in focus mode. This default
+     covers that gap; the breakpoints below still override it as before. */
+  --ring-h:352px;
 }
 html,body{width:100%;height:100%;overflow:hidden}
 body{user-select:none;-webkit-user-select:none;touch-action:manipulation}
@@ -435,7 +444,7 @@ body.playing .pad{top:calc(env(safe-area-inset-top,0px) + .4rem + var(--ring-h) 
   <!-- Which build is actually being served has cost us three rounds of
        debugging today: the file was right and the page was stale, and there
        was no way to tell those apart from a screenshot. Now there is. -->
-  <div class="build-tag" id="buildTag">2026-08-28-timebar</div>
+  <div class="build-tag" id="buildTag">2026-08-28-timebar-fix1</div>
 </div>
 
 <div class="stage" id="stage" style="display:none">
@@ -452,8 +461,8 @@ body.playing .pad{top:calc(env(safe-area-inset-top,0px) + .4rem + var(--ring-h) 
 
 <div class="pad" id="pad">
   <div class="tapstart" id="tapStart"><span class="hand">👉</span>Tap a gap to choose the form</div>
-  <div class="sentence" id="sentence" aria-live="polite"></div>
-  <div class="fbnote" id="fbNote" aria-live="polite"></div>
+  <div class="sentence" id="sentence" aria-live="polite" aria-atomic="true"></div>
+  <div class="fbnote" id="fbNote" aria-live="polite" aria-atomic="true"></div>
 </div>
 </div>
 
@@ -515,6 +524,27 @@ body.playing .pad{top:calc(env(safe-area-inset-top,0px) + .4rem + var(--ring-h) 
 
    Scoring is per GAP, not per item, so "you had the if-clause and missed the
    result" is reportable instead of being flattened into one wrong.
+   ══════════════════════════════════════════════════════════════════════
+
+   CHANGELOG (fix1, on top of the timebar build)
+   1. --ring-h now has a :root default (352px) so the 601–899px viewport
+      band — tablets, foldables, a resized desktop window, phone landscape —
+      no longer hits an undefined var() inside the focus-mode calc().
+   2. Every localStorage read/write is now wrapped in try/catch via safeGet/
+      safeSet, not just saveMem() and vibrate(). Private-browsing or
+      storage-blocked contexts degrade to "doesn't persist" instead of
+      throwing out of a click handler.
+   3. Streak multiplier is now computed by one function, multiplierFor(),
+      used by both the scoring in resolve() and the label in setStreak().
+      They could not previously drift apart by definition, only by two
+      people editing two copies — now there is one copy.
+   4. Mastery keys are namespaced by conditional type (`type:id`) instead of
+      bare item id, so the merged "All four" pool can't silently collide
+      with — or bleed stats into — a same-numbered item from a different
+      type-specific set.
+   5. aria-atomic="true" added to the two live regions so assistive tech
+      announces each repaint as one coherent replacement rather than
+      piecemeal diffs during rapid updates.
    ══════════════════════════════════════════════════════════════════════ */
 
 const DATA_URL = new URLSearchParams(location.search).get('data')
@@ -536,14 +566,24 @@ const esc = t => String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt
 const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[b[i],b[j]]=[b[j],b[i]];} return b; };
 const clamp = (n,lo,hi) => Math.max(lo,Math.min(hi,n));
 
+/* FIX #2: a single guarded pair for every localStorage touch in the file.
+   Private browsing, disabled storage, or a strict extension can make get/set
+   throw; nothing here should ever take down a click handler because of it. */
+function safeGet(key, fallback){
+  try{ const v = localStorage.getItem(key); return v === null ? fallback : v; }
+  catch(e){ return fallback; }
+}
+function safeSet(key, value){
+  try{ localStorage.setItem(key, value); return true; }
+  catch(e){ return false; }
+}
+
 let SETS = [], setIdx = -1, pool = [], curItem = null;
 let running = false, started = false, rafId = null, resolved = false;
-/* Once a student has tapped any gap, ever, they know the gesture — the hint
-   was writing this flag to localStorage but never reading it back, so it
-   reappeared on every fresh page load regardless of history. Read it once,
-   here, so the hint truly shows only until the FIRST tap a student ever
-   makes on this device, not every time the page reloads. */
-let hintActive = localStorage.getItem('intuity-decide-tapped') !== '1';
+/* Once a student has tapped any gap, ever, they know the gesture — read the
+   flag once, here, so the hint truly shows only until the FIRST tap a
+   student ever makes on this device, not every time the page reloads. */
+let hintActive = safeGet('intuity-decide-tapped', null) !== '1';
 let picked = [null,null], openGap = -1;
 let score = 0, streak = 0, bestStreak = 0;
 /* Time is the only stake. A fully correct item buys 3 seconds, a half-right
@@ -565,21 +605,40 @@ const REPEAT_EVERY = 4, GAP_AFTER_MISS = 2, GAP_AFTER_ONE = 8, RETIRE_AT = 2;
 let seen = [], missed = [], qCount = 0, correctCount = {}, dueAt = {}, fresh = [];
 
 const MODES = ['90','120','practice'];
-let mode = localStorage.getItem('intuity-decide-mode');
-if (MODES.indexOf(mode) === -1) { mode = '90'; localStorage.setItem('intuity-decide-mode', mode); }
+let mode = safeGet('intuity-decide-mode', null);
+if (MODES.indexOf(mode) === -1) { mode = '90'; safeSet('intuity-decide-mode', mode); }
 let roundEnd = 0, roundMs = 0;
 
+/* FIX #4: mastery keys are namespaced by type. Two different sets can both
+   legitimately contain an item with source id "3" — bare-id keys would let
+   one's history silently overwrite or blend with the other's, especially
+   once the merged "All four" pool is in play. mkey() is the single place
+   that decides the key shape, so this can't drift out of sync between
+   loadMem/noteResult and anything future that reads the map. */
+const mkey = it => it.type + ':' + it.id;
+
 const MEM_KEY = 'intuity-conditionals-mem';
-function loadMem(){ try{ return JSON.parse(localStorage.getItem(MEM_KEY)||'{}'); }catch(e){ return {}; } }
-function saveMem(m){ try{ localStorage.setItem(MEM_KEY,JSON.stringify(m)); }catch(e){} }
+function loadMem(){
+  try{ return JSON.parse(safeGet(MEM_KEY,'{}')||'{}'); }catch(e){ return {}; }
+}
+function saveMem(m){ safeSet(MEM_KEY, JSON.stringify(m)); }
 function noteResult(it, ok){
-  const m = loadMem(), e = m[it.id] || {miss:0,seen:0};
+  const m = loadMem(), k = mkey(it), e = m[k] || {miss:0,seen:0};
   e.seen++; if (ok) e.miss = Math.max(0,e.miss-1); else e.miss++;
-  m[it.id] = e; saveMem(m);
+  m[k] = e; saveMem(m);
+}
+
+/* FIX #3: one function owns the streak → multiplier mapping. resolve() uses
+   it to compute the score; setStreak() uses it to paint the label. Before,
+   these were two independently-written copies of the same three thresholds —
+   correct today, but nothing stopped them silently diverging on the next
+   edit. Now there is exactly one place to change. */
+function multiplierFor(n){
+  return n>=15 ? 2.2 : n>=10 ? 1.7 : n>=5 ? 1.3 : 1;
 }
 
 /* ── AUDIO ── */
-let ac=null, master=null, sound = localStorage.getItem('intuity-decide-sound') !== 'off';
+let ac=null, master=null, sound = safeGet('intuity-decide-sound', 'on') !== 'off';
 function audio(){
   if(!ac){ ac = new (window.AudioContext||window.webkitAudioContext)();
     master = ac.createGain(); master.gain.value=.5; master.connect(ac.destination); }
@@ -606,7 +665,7 @@ function refill(){
   const mem = loadMem();
   const idx = shuffle(pool.map((_,i)=>i));
   /* anything missed before, in any past session, comes up early */
-  idx.sort((a,b)=>((mem[pool[b].id]?.miss)||0)-((mem[pool[a].id]?.miss)||0));
+  idx.sort((a,b)=>((mem[mkey(pool[b])]?.miss)||0)-((mem[mkey(pool[a])]?.miss)||0));
   fresh = idx;
 }
 function pickNext(){
@@ -778,7 +837,7 @@ return '<button class="cap-slot' + (v?' filled':'') + (showHint ? ' hint' : '') 
 
 function openPicker(n){
   if(resolved) return;
-   if(hintActive){ hintActive=false; localStorage.setItem('intuity-decide-tapped','1'); }
+   if(hintActive){ hintActive=false; safeSet('intuity-decide-tapped','1'); }
   firstTouch();
   openGap = n;
   const g = curItem.gaps[n];
@@ -956,7 +1015,7 @@ function resolve(){
 
   if(both){
     streak++; bestStreak = Math.max(bestStreak,streak);
-    const mult = streak>=15?2.2:streak>=10?1.7:streak>=5?1.3:1;
+    const mult = multiplierFor(streak);
     score += Math.round(100*mult);
     const mi = missed.indexOf(i); if(mi>=0) missed.splice(mi,1);
     correctCount[i] = (correctCount[i]||0)+1;
@@ -1024,7 +1083,7 @@ function showNote(it, right){
 
 function setStreak(n){
   const el = $('streak');
-  const mult = n>=15?2.2:n>=10?1.7:n>=5?1.3:1;
+  const mult = multiplierFor(n);
   el.textContent = '×' + mult.toFixed(1).replace(/\.0$/,'') + (n?'  '+n:'');
   el.classList.toggle('live', n>=5);
   el.classList.add('pop'); setTimeout(()=>el.classList.remove('pop'),150);
@@ -1123,8 +1182,8 @@ function buildTabs(){
   const mem = loadMem(), wrap = $('setTabs');
   wrap.innerHTML = '';
   SETS.forEach((s,i) => {
-    const due = s.items.some(it => (mem[it.id]?.miss||0) > 0);
-    const played = s.items.some(it => mem[it.id]);
+    const due = s.items.some(it => (mem[mkey(it)]?.miss||0) > 0);
+    const played = s.items.some(it => mem[mkey(it)]);
     const b = document.createElement('button');
     b.className = 'vtab' + (i===setIdx?' active':'') + (due?' has-due':'') +
                   (played && !due ? ' cleared':'');
@@ -1182,13 +1241,13 @@ $('reviewBtn').addEventListener('click', () => {
 });
 $('hubBtn').addEventListener('click', () => { (window.top||window).location.href='/?openModal=grammar'; });
 $('modes').querySelectorAll('.mbtn').forEach(b => b.addEventListener('click', () => {
-  mode = b.dataset.m; localStorage.setItem('intuity-decide-mode', mode);
+  mode = b.dataset.m; safeSet('intuity-decide-mode', mode);
   document.querySelectorAll('.mbtn').forEach(x => x.classList.toggle('on', x.dataset.m===mode));
   if(SETS.length && setIdx >= 0) startRun();
 }));
 document.querySelectorAll('.mbtn').forEach(b => b.classList.toggle('on', b.dataset.m===mode));
 $('muteBtn').addEventListener('click', () => {
-  sound = !sound; localStorage.setItem('intuity-decide-sound', sound?'on':'off');
+  sound = !sound; safeSet('intuity-decide-sound', sound?'on':'off');
   $('muteBtn').textContent = sound ? '🔊' : '🔈';
 });
 $('muteBtn').textContent = sound ? '🔊' : '🔈';

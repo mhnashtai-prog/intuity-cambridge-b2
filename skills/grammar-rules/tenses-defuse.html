@@ -8,9 +8,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<!-- BUILD 2026-08-28-defuse-fix1 — see CHANGELOG comment in the script for
+<!-- BUILD 2026-08-28-defuse-fix2 — see CHANGELOG comment in the script for
      the itemised list of what changed from the previous build. -->
-<meta name="intuity-build" content="2026-08-28-defuse-fix1">
+<meta name="intuity-build" content="2026-08-28-defuse-fix2">
 
 <!-- THE SHELL. Tokens, base, header, mode row, tabs, tile family, close
      control, sheets and view transitions — shared verbatim with
@@ -540,6 +540,33 @@ body.playing .arena{gap:1.8rem}
    page can be left at any point.
    ══════════════════════════════════════════════════════════════════════
 
+   CHANGELOG (fix2 — on top of fix1)
+   6. finish() now takes a `reason` ('timeout' | 'depleted' | 'cleared')
+      alongside `outcome`. Previously the grade formula always multiplied
+      accuracy by coverageOf(total) — comparing questions answered against
+      the FULL round length — regardless of why the round ended. That
+      formula is correct for a timeout (someone who let the clock run out
+      after one lucky answer should not score as if they'd played a full
+      round), but it also fired on a depletion win or a cleared-set win,
+      where the round ending EARLY *is* the best-case outcome: a high streak
+      multiplier does more threat damage per hit, so a strong player reaches
+      threatHP<=0 or clears the set in fewer questions than expectedCount()
+      assumes. That was scoring perfect, undefeated rounds (e.g. 11/11, 0
+      wrong) as a D. Coverage is now only applied when reason==='timeout';
+      a depleted/cleared win is scored on accuracy alone.
+   7. The "answered N of about M — a fuller round scores higher" note in the
+      summary had the same blind spot as #6, telling a player who won by
+      depleting the bomb early that a fuller round would have scored higher
+      — which is backwards, since there was no fuller round to have played.
+      It's now gated behind the same reason==='timeout' check.
+   8. A timeout with hits === misses used to fall through the strict `>` to
+      a loss with no comment either way. Changed to `hits >= misses &&
+      hits > 0`, so a genuine tie (or a clock that expires with nothing
+      answered) resolves in the learner's favour rather than by an
+      unstated default, matching how ties are handled everywhere else in
+      the summary (grade floors round in the learner's favour too).
+   ══════════════════════════════════════════════════════════════════════
+
    CHANGELOG (fix1)
    1. multiplierFor(streak) is now the ONE place that maps streak → bonus.
       Previously resolveWire() computed the real bonus with one formula
@@ -929,7 +956,11 @@ function loop(now){
       lastTickSecond = secLeft;
       if (critical) sfxTick(1);
     }
-    if (left <= 0){ finish(hits > misses ? 'win' : 'loss'); return; }
+    /* FIX #8: a timeout tie (or a timeout with nothing answered) used to
+       fall through `hits > misses` straight to a loss with no stated
+       reasoning either way. A tie is not a loss, so it now resolves as a
+       win as long as at least one hit was scored. */
+    if (left <= 0){ finish((hits >= misses && hits > 0) ? 'win' : 'loss', 'timeout'); return; }
   }
   rafId = requestAnimationFrame(loop);
 }
@@ -996,8 +1027,11 @@ function resolveWire(chosen){
       banner('Steady hands armed','#F26430'); sfxSteady();
     }
     setStreak(streak); $('score').textContent = score; updateBars(); applyThreat();
-    if (setCleared()){ setTimeout(()=>{ if (stillCurrent()) finish('win'); }, 700); return; }
-    if (threatHP <= 0){ setTimeout(()=>{ if (stillCurrent()) finish('win'); }, 650); return; }
+    /* FIX #6: these two win paths are the round ending EARLY through good
+       play, not through the clock. finish() is told so via the `reason`
+       argument, which decides whether the coverage penalty applies. */
+    if (setCleared()){ setTimeout(()=>{ if (stillCurrent()) finish('win','cleared'); }, 700); return; }
+    if (threatHP <= 0){ setTimeout(()=>{ if (stillCurrent()) finish('win','depleted'); }, 650); return; }
     setTimeout(()=>{ if (stillCurrent()) nextBomb(); }, 900);
 
   } else {
@@ -1018,7 +1052,7 @@ function resolveWire(chosen){
     spawnDamage(dmg, 'neg', false);
     showNote(item, false);
     setStreak(0); updateBars(); applyThreat();
-    if (playerHP <= 0){ setTimeout(()=>{ if (stillCurrent()) finish('loss'); }, 800); return; }
+    if (playerHP <= 0){ setTimeout(()=>{ if (stillCurrent()) finish('loss','depleted'); }, 800); return; }
     setTimeout(()=>{ if (stillCurrent()) nextBomb(); }, 1700);
   }
 }
@@ -1079,7 +1113,13 @@ function banner(txt,col){
    scored 100%. The grade combines accuracy with COVERAGE — how much of what
    the round had time for was actually attempted — so the only way to a high
    grade is to answer a lot AND get them right. Practice has no clock, so it
-   is not graded on a curve it cannot meet. */
+   is not graded on a curve it cannot meet.
+
+   FIX #6/#7: coverage is a penalty for STOPPING EARLY, not for WINNING
+   EARLY. It only makes sense to apply when the round ended because the
+   clock ran out (reason === 'timeout'); a round that ended because the
+   threat bar hit zero or the set was fully cleared ended on its own merits
+   and is graded on accuracy alone. */
 const SECONDS_PER_Q = 4.6;
 function expectedCount(){
   if (mode === 'practice') return 0;
@@ -1100,7 +1140,7 @@ function scale(acc){
 }
 const grade = s => s>=180?['A','Excellent']:s>=173?['B','Very good']:s>=160?['C','Pass']:['D','Try again'];
 
-function finish(outcome){
+function finish(outcome, reason){
   /* FIX #2: guard against a stale/orphaned call — e.g. the player exited to
      idle (groupIdx === -1) while this timeout was in flight. running is also
      cleared by exitToEntry(), so this is a second, cheap line of defence. */
@@ -1114,7 +1154,11 @@ function finish(outcome){
 
   const total = hits+misses, acc = total ? hits/total : 0;
   const practice = mode === 'practice';
-  const sc = scale(acc * coverageOf(total));
+  /* FIX #6: only a timeout applies the coverage penalty. A depleted/cleared
+     win (or a loss from playerHP hitting 0) is scored on accuracy alone —
+     the round ending was the outcome, not a shortfall against it. */
+  const gradedOnCoverage = reason === 'timeout';
+  const sc = scale(gradedOnCoverage ? acc * coverageOf(total) : acc);
   const [letter,word] = grade(sc);
 
   $('ovOutcome').className = 'outcome ' + (outcome==='win'?'win':'loss');
@@ -1133,7 +1177,11 @@ function finish(outcome){
 
   $('ovNote').innerHTML = '<b>'+hits+'</b> defused, <b>'+misses+'</b> wrong · best streak <b>'+
     bestStreak+'</b> · composure <b>'+Math.max(0,playerHP)+'</b>' +
-    (!practice && expectedCount() && total < expectedCount()
+    /* FIX #7: same reason guard as the coverage penalty itself — a round
+       that ended by depleting the threat bar or clearing the set had no
+       "fuller round" available to answer more of, so the hint no longer
+       shows in that case. */
+    (gradedOnCoverage && !practice && expectedCount() && total < expectedCount()
       ? ' · answered <b>' + total + '</b> of about <b>' + expectedCount() + '</b> — a fuller round scores higher'
       : '');
 

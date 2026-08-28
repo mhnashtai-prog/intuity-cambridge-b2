@@ -27,7 +27,7 @@
   /* this game's mark: sage rim, black core — the gate pendulum */
   --mark-sweep:#708A81; --mark-rest:#4A433D; --mark-core:#201E1C;
   --mark-ink:#E5D1B8; --mark-pct:100%;
-  --hud-h:40px; --ring-h:132px;
+  --hud-h:40px; --ring-h:214px; --you-h:34px;
 }
 html,body{width:100%;height:100%;overflow:hidden}
 body{user-select:none;-webkit-user-select:none;touch-action:manipulation}
@@ -66,7 +66,11 @@ body{user-select:none;-webkit-user-select:none;touch-action:manipulation}
 .rings{position:fixed;top:calc(var(--header-h) + var(--hud-h));left:0;right:0;
   height:var(--ring-h);z-index:20;display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:.55rem;padding:0 .5rem}
-.ring-row{display:flex;gap:.6rem;justify-content:center;align-items:center}
+/* A 2x2 grid, not a row of four. Four across forces each ring down to 58px on
+   a phone before the gaps are counted; two-by-two lets them stay big enough to
+   read, and the block reads as one object rather than a strip. */
+.ring-row{display:grid;grid-template-columns:repeat(2,auto);
+  gap:.55rem .8rem;justify-items:center;align-items:center}
 
 .ring{width:76px;height:76px;border-radius:50%;position:relative;flex:none;
   display:flex;align-items:center;justify-content:center;
@@ -93,8 +97,26 @@ body{user-select:none;-webkit-user-select:none;touch-action:manipulation}
 .ring-cap .sub{font-family:var(--f-body);font-weight:400;font-size:.78rem;
   letter-spacing:0;text-transform:none;color:var(--faint);margin-left:.45rem}
 
+/* ══ THE PERFORMANCE BAR ══
+   Forge's composure meter, in the place the sketch puts it: a rule between
+   the rings and the sentence that is also the fail condition. It divides the
+   two halves of the screen AND says how the round is going, which is one
+   element doing the work of two. */
+.you{position:fixed;top:calc(var(--header-h) + var(--hud-h) + var(--ring-h));
+  left:0;right:0;height:var(--you-h);z-index:20;
+  display:flex;align-items:center;gap:.6rem;padding:0 1rem;
+  border-bottom:1px solid var(--rule)}
+.you-label{font-family:var(--f-display);font-size:.66rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.you-track{flex:1;height:8px;border-radius:999px;background:var(--slot-bg);overflow:hidden}
+.you-fill{height:100%;width:100%;border-radius:999px;
+  background:linear-gradient(90deg,#4A6B5C,#708A81 60%,#BCB1A0);
+  transition:width .3s,background .3s}
+.you-fill.low{background:linear-gradient(90deg,#AC5A3E,var(--wrong))}
+.you-num{font-family:var(--f-mono);font-size:.7rem;color:var(--faint);min-width:3.4rem;text-align:right}
+
 /* ══ THE SENTENCE ══ */
-.pad{position:fixed;top:calc(var(--header-h) + var(--hud-h) + var(--ring-h));
+.pad{position:fixed;top:calc(var(--header-h) + var(--hud-h) + var(--ring-h) + var(--you-h));
   left:0;right:0;bottom:0;z-index:10;overflow-y:auto;overscroll-behavior:contain;
   display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
   gap:1.1rem;padding:1.6rem 1.1rem 2rem}
@@ -126,26 +148,35 @@ body{user-select:none;-webkit-user-select:none;touch-action:manipulation}
 .tapstart.gone{opacity:0}
 
 /* ══ THE PICKER ══
-   A bottom sheet, not a centred modal: the sentence must stay visible — it is
-   the thing being decided about — and on a phone the bottom is where the
-   thumb already is. */
-.picker{position:fixed;inset:0;z-index:75;display:none;
-  align-items:flex-end;justify-content:center;background:var(--scrim)}
-.picker.open{display:flex}
-.picker-card{width:min(520px,100%);background:var(--screen);
-  border-radius:var(--r-sheet) var(--r-sheet) 0 0;
-  padding:1rem 1rem calc(env(safe-area-inset-bottom,0px) + 1.2rem);
-  box-shadow:0 -8px 34px rgba(43,33,41,.16);
-  transform:translateY(14px);transition:transform .22s cubic-bezier(.2,.9,.3,1)}
-.picker.open .picker-card{transform:translateY(0)}
-.picker-head{font-family:var(--f-mono);font-size:.68rem;letter-spacing:.14em;
-  text-transform:uppercase;color:var(--faint);text-align:center;margin-bottom:.8rem}
-.picker-list{display:flex;flex-direction:column;gap:.5rem}
-.pick{width:100%;padding:.85rem 1rem;border:none;border-radius:var(--r-chip);
-  background:var(--tile-bg);color:var(--tile-ink);
-  font-family:var(--f-display);font-weight:600;font-size:1rem;
+   A tooltip beside the gap that was tapped, not a sheet at the bottom. The
+   sentence is the thing being decided about, so it must stay in place and in
+   view — and a popover pointing AT the gap says which of the two it belongs
+   to without a label. The catcher behind it is transparent: it exists only to
+   take the tap that dismisses, so the sentence is never dimmed.
+
+   Position is set in JS from the gap's own rectangle, flipped above when
+   there is no room below and clamped to the viewport. */
+.picker{position:fixed;inset:0;z-index:75;display:none;background:transparent}
+.picker.open{display:block}
+.pop{position:fixed;z-index:76;display:flex;flex-direction:column;gap:.3rem;
+  padding:.4rem;min-width:9.5rem;max-width:min(15rem,86vw);
+  border-radius:1rem;background:var(--card);
+  box-shadow:0 10px 34px rgba(43,33,41,.2);
+  transform-origin:top center;animation:popIn .16s cubic-bezier(.2,1,.4,1)}
+@keyframes popIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
+/* the pointer — a rotated square tucked under the card's edge */
+.pop::after{content:'';position:absolute;left:var(--ax,50%);width:12px;height:12px;
+  margin-left:-6px;background:var(--card);transform:rotate(45deg)}
+.pop.below::after{top:-5px}
+.pop.above::after{bottom:-5px}
+.picker-list{display:flex;flex-direction:column;gap:.3rem}
+.pop-head{font-family:var(--f-mono);font-size:.62rem;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--faint);text-align:center;padding:.25rem 0 .1rem}
+.pick{width:100%;padding:.6rem .8rem;border:none;border-radius:var(--r-chip);
+  background:var(--tile-bg);color:var(--tile-ink);white-space:nowrap;
+  font-family:var(--f-display);font-weight:600;font-size:.92rem;
   transition:transform .1s cubic-bezier(.2,.8,.2,1),background .15s}
-.pick:active{transform:scale(.97);background:var(--tile-bg-press)}
+.pick:active{transform:scale(.96);background:var(--tile-bg-press)}
 
 /* ══ FOCUS MODE ══ same contract as Defuse and Forge */
 body.playing .header,
@@ -153,7 +184,8 @@ body.playing .hud,
 body.playing .set-tabs{display:none !important}
 body.playing{height:100dvh;overflow:hidden}
 body.playing .rings{top:calc(env(safe-area-inset-top,0px) + .4rem)}
-body.playing .pad{top:calc(env(safe-area-inset-top,0px) + .4rem + var(--ring-h))}
+body.playing .you{top:calc(env(safe-area-inset-top,0px) + .4rem + var(--ring-h))}
+body.playing .pad{top:calc(env(safe-area-inset-top,0px) + .4rem + var(--ring-h) + var(--you-h))}
 
 /* ══ IDLE + GATE ══ */
 .idle{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
@@ -245,18 +277,19 @@ body.playing .pad{top:calc(env(safe-area-inset-top,0px) + .4rem + var(--ring-h))
 .err{color:var(--wrong);font-size:.9rem;line-height:1.6;max-width:26rem;text-align:center;padding:2rem}
 
 @media(max-width:600px){
-  :root{--ring-h:122px}
-  .ring{width:66px;height:66px}
+  :root{--ring-h:196px}
+  .ring{width:70px;height:70px}
   .ring .rlabel{font-size:.74rem}
   .sentence{line-height:2.2}
 }
 @media(max-width:360px){
-  .ring{width:58px;height:58px}
-  .ring-row{gap:.4rem}
+  :root{--ring-h:180px}
+  .ring{width:62px;height:62px}
+  .ring-row{gap:.45rem .6rem}
 }
 @media(min-width:900px){
-  :root{--ring-h:160px}
-  .ring{width:96px;height:96px}
+  :root{--ring-h:250px}
+  .ring{width:104px;height:104px}
   .ring .rlabel{font-size:1rem}
   .ring-cap{font-size:.82rem}
   .sentence{font-size:1.5rem}
@@ -315,6 +348,12 @@ body.playing .pad{top:calc(env(safe-area-inset-top,0px) + .4rem + var(--ring-h))
   <div class="ring-cap" id="ringCap"></div>
 </div>
 
+<div class="you" id="you" style="display:none">
+  <span class="you-label">You</span>
+  <div class="you-track"><div class="you-fill" id="youFill"></div></div>
+  <span class="you-num" id="youNum">1000</span>
+</div>
+
 <div class="pad" id="pad" style="display:none">
   <div class="sentence" id="sentence" aria-live="polite"></div>
   <div class="fbnote" id="fbNote" aria-live="polite"></div>
@@ -331,8 +370,8 @@ body.playing .pad{top:calc(env(safe-area-inset-top,0px) + .4rem + var(--ring-h))
 </div>
 
 <div class="picker" id="picker">
-  <div class="picker-card">
-    <div class="picker-head" id="pickerHead"></div>
+  <div class="pop" id="pop">
+    <div class="pop-head" id="pickerHead"></div>
     <div class="picker-list" id="pickerList"></div>
   </div>
 </div>
@@ -402,6 +441,11 @@ let SETS = [], setIdx = -1, pool = [], curItem = null;
 let running = false, started = false, rafId = null, resolved = false;
 let picked = [null,null], openGap = -1;
 let score = 0, streak = 0, bestStreak = 0;
+/* Forge's composure meter: a wrong verb costs, and an empty bar ends the
+   round. It is also the rule dividing the rings from the sentence, so one
+   element carries the division and the stake together. */
+const YOU_MAX = 1000, YOU_HIT = 90;
+let youHP = YOU_MAX;
 let gapsRight = 0, gapsWrong = 0;
 const byType = {}, answerLog = [];
 
@@ -483,6 +527,13 @@ function pickRepeat(){
 const setCleared = () => pool.length && pool.every((_,i)=>(correctCount[i]||0) >= RETIRE_AT);
 
 /* ── RENDER ── */
+function paintYou(){
+  const pct = clamp(youHP / YOU_MAX * 100, 0, 100);
+  $('youFill').style.width = pct + '%';
+  $('youFill').classList.toggle('low', pct < 30);
+  $('youNum').textContent = Math.max(0, youHP);
+}
+
 function paintRings(active){
   $('ringRow').innerHTML = TYPES.map(t =>
     '<div class="ring' + (t===active?' lit':'') + '" data-t="' + t + '" ' +
@@ -518,9 +569,38 @@ function openPicker(n){
     '<button class="pick" type="button">' + esc(o) + '</button>').join('');
   $('pickerList').querySelectorAll('.pick').forEach(b =>
     b.addEventListener('click', () => choose(b.textContent)));
+  const slot = $('sentence').querySelector('.cap-slot[data-g="' + n + '"]');
   $('sentence').querySelectorAll('.cap-slot').forEach(b =>
     b.classList.toggle('open', +b.dataset.g === n));
   $('picker').classList.add('open');
+  placePop(slot);
+}
+
+/* Put the tooltip beside the gap it belongs to: below when there is room,
+   flipped above when there is not, and clamped so it never runs off the side
+   of a phone. The pointer stays over the gap even after the card is clamped,
+   which is the whole reason a student can tell WHICH gap it is for. */
+function placePop(slot){
+  const pop = $('pop');
+  if(!slot || !pop) return;
+  pop.classList.remove('above','below');
+  pop.style.visibility = 'hidden';
+  pop.style.left = '0px'; pop.style.top = '0px';
+  requestAnimationFrame(() => {
+    const r = slot.getBoundingClientRect();
+    const p = pop.getBoundingClientRect();
+    const M = 8;                                   /* margin from the edges */
+    const below = r.bottom + 10 + p.height <= window.innerHeight - M;
+    const top = below ? r.bottom + 10 : r.top - 10 - p.height;
+    let left = r.left + r.width / 2 - p.width / 2;
+    left = clamp(left, M, Math.max(M, window.innerWidth - p.width - M));
+    pop.style.top = Math.max(M, top) + 'px';
+    pop.style.left = left + 'px';
+    /* the arrow follows the GAP, not the card */
+    pop.style.setProperty('--ax', clamp(r.left + r.width/2 - left, 14, p.width - 14) + 'px');
+    pop.classList.add(below ? 'below' : 'above');
+    pop.style.visibility = '';
+  });
 }
 function closePicker(){
   $('picker').classList.remove('open');
@@ -546,7 +626,7 @@ let autoT = null;
 function startRun(){
   const s = SETS[setIdx];
   pool = s.items;
-  score=0; streak=0; bestStreak=0; gapsRight=0; gapsWrong=0;
+  score=0; streak=0; bestStreak=0; gapsRight=0; gapsWrong=0; youHP=YOU_MAX;
   seen=[]; missed=[]; qCount=0; correctCount={}; dueAt={}; fresh=[];
   answerLog.length = 0;
   TYPES.forEach(t => byType[t] = {right:0,wrong:0});
@@ -554,7 +634,9 @@ function startRun(){
   $('score').textContent='0'; setStreak(0);
   $('idle').style.display='none';
   $('rings').style.display='flex';
+  $('you').style.display='flex';
   $('pad').style.display='flex';
+  paintYou();
   $('over').classList.remove('show');
   showGate(s);
 }
@@ -625,6 +707,8 @@ function resolve(){
     slots[n].textContent = g.answer;   /* the correct form, always shown */
   });
   gapsRight += right; gapsWrong += (2 - right);
+  youHP = clamp(youHP - (2 - right) * YOU_HIT, 0, YOU_MAX);
+  paintYou();
   byType[it.type].right += right; byType[it.type].wrong += (2 - right);
 
   const both = right === 2;
@@ -655,6 +739,7 @@ function resolve(){
   setStreak(streak); $('score').textContent = score;
   $('tapStart').classList.add('gone');
 
+  if(youHP <= 0){ setTimeout(()=>finish('loss'), 900); return; }
   if(setCleared()){ setTimeout(()=>finish('win'), 800); return; }
   setTimeout(()=>{ if(running) nextItem(); }, both ? 900 : 1900);
 }
@@ -733,6 +818,7 @@ function finish(outcome){
   }
   $('ovNote').innerHTML = '<b>'+gapsRight+'</b> of <b>'+total+'</b> verbs right · ' +
     '<b>'+items+'</b> sentences · best streak <b>'+bestStreak+'</b>' +
+    ' · composure <b>'+Math.max(0,youHP)+'</b>' +
     (!practice && expected() && items < expected()
       ? ' · a fuller round scores higher' : '');
 
@@ -812,6 +898,7 @@ function exitToEntry(){
   buildTabs();
   $('idle').style.display='flex';
   $('rings').style.display='none';
+  $('you').style.display='none';
   $('pad').style.display='none';
 }
 $('exitBtn').addEventListener('click', exitToEntry);
@@ -854,7 +941,8 @@ function syncHeader(){
   const h = document.querySelector('.header');
   if(h) document.documentElement.style.setProperty('--header-h', h.offsetHeight+'px');
 }
-window.addEventListener('resize', syncHeader);
+window.addEventListener('resize', () => { syncHeader(); if(openGap >= 0) closePicker(); });
+window.addEventListener('scroll', () => { if(openGap >= 0) closePicker(); }, true);
 window.addEventListener('orientationchange', ()=>setTimeout(syncHeader,120));
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(syncHeader);
 if(window.ResizeObserver){ const h=document.querySelector('.header');

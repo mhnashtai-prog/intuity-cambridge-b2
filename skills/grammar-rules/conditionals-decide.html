@@ -220,6 +220,13 @@ body.playing .stage{top:calc(env(safe-area-inset-top,0px) + .4rem)}
 .cap-slot.right{background:var(--tile-ok-bg);color:var(--tile-ok-ink)}
 .cap-slot.wrong{background:var(--tile-no-bg);color:var(--tile-no-ink)}
 .cap-slot.locked{pointer-events:none}
+/* A static hint icon is easy to skim past, especially for a younger student
+   moving fast. A slow, gentle pulse — never jarring, never distracting once
+   you already know what the pill does — pulls the eye there the first time
+   without it reading as an alarm. It stops the moment hintActive goes false,
+   because paintSentence() only ever attaches the class while a hint is due. */
+.cap-slot.hint{animation:hintPulse 1.3s ease-in-out infinite}
+@keyframes hintPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
 .fbnote{min-height:2.6em;font-size:.86rem;line-height:1.5;color:var(--dim);
   text-align:center;max-width:32rem;opacity:0;transition:opacity .2s}
 .fbnote.show{opacity:1}
@@ -380,6 +387,7 @@ body.playing .pad{top:calc(env(safe-area-inset-top,0px) + .4rem + var(--ring-h) 
 }
 @media(prefers-reduced-motion:reduce){
   .ring,.cap-slot,.picker-card{transition:none!important}
+  .cap-slot.hint{animation:none!important}
 }
 </style>
 </head>
@@ -443,7 +451,7 @@ body.playing .pad{top:calc(env(safe-area-inset-top,0px) + .4rem + var(--ring-h) 
 </div>
 
 <div class="pad" id="pad">
-  <div class="tapstart" id="tapStart"><span class="hand">👆</span>Tap a gap to choose the form</div>
+  <div class="tapstart" id="tapStart"><span class="hand">👉</span>Tap a gap to choose the form</div>
   <div class="sentence" id="sentence" aria-live="polite"></div>
   <div class="fbnote" id="fbNote" aria-live="polite"></div>
 </div>
@@ -530,7 +538,12 @@ const clamp = (n,lo,hi) => Math.max(lo,Math.min(hi,n));
 
 let SETS = [], setIdx = -1, pool = [], curItem = null;
 let running = false, started = false, rafId = null, resolved = false;
-let hintActive = true;
+/* Once a student has tapped any gap, ever, they know the gesture — the hint
+   was writing this flag to localStorage but never reading it back, so it
+   reappeared on every fresh page load regardless of history. Read it once,
+   here, so the hint truly shows only until the FIRST tap a student ever
+   makes on this device, not every time the page reloads. */
+let hintActive = localStorage.getItem('intuity-decide-tapped') !== '1';
 let picked = [null,null], openGap = -1;
 let score = 0, streak = 0, bestStreak = 0;
 /* Time is the only stake. A fully correct item buys 3 seconds, a half-right
@@ -756,7 +769,7 @@ function paintSentence(){
     const g = it.gaps[n], v = picked[n];
 const showHint = hintActive && !v;
 return '<button class="cap-slot' + (v?' filled':'') + (showHint ? ' hint' : '') + '" data-g="' + n + '" type="button">' +
-           (showHint ? '☞ ' : '') + esc(v || g.hint) + '</button>';
+           (showHint ? '👉 ' : '') + esc(v || g.hint) + '</button>';
   });
   $('sentence').innerHTML = html;
   $('sentence').querySelectorAll('.cap-slot').forEach(b =>

@@ -8,6 +8,12 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
+<!-- BUILD 2026-08-28-forge-fix1 — see CHANGELOG comment in the script for
+     the itemised list of what changed from the previous build. Brings Forge
+     up to parity with the fixes already made in Defuse (fix1/fix2), plus
+     one guard Defuse didn't need in quite this shape. -->
+<meta name="intuity-build" content="2026-08-28-forge-fix1">
+
 <!-- THE SHELL. Tokens, base, header, mode row, tabs, tile family, close
      control, sheets and view transitions — shared verbatim with
      tenses-rules.html. This file no longer carries its own copy, so the
@@ -531,6 +537,42 @@ body.playing .arena{gap:1.4rem;padding-top:calc(env(safe-area-inset-top,0px) + 1
    the automatisation drill that follows it. They share one memory key.
 
    Reads the blind Mix file, with Forge's own bank/answer shape.
+   ══════════════════════════════════════════════════════════════════════
+
+   CHANGELOG (fix1) — brings Forge to parity with Defuse's fix1/fix2
+   1. finish() now takes a `reason` ('timeout' | 'depleted' | 'cleared'),
+      exactly like Defuse. Previously the grade always multiplied accuracy
+      by coverageOf(total) regardless of why the round ended, so a strong
+      player who finished the work early (high combo -> more damage per hit
+      -> workHP<=0 in fewer questions than expectedCount() assumes) was
+      graded as if they'd stopped short of a full round. Coverage now only
+      applies on a genuine timeout; a depleted/cleared win, or a loss from
+      playerHP hitting 0, is graded on accuracy alone.
+   2. The "answered N of about M — a fuller round scores higher" note is
+      gated behind the same reason==='timeout' check as #1, for the same
+      reason: there was no fuller round available on an early win.
+   3. The three win/loss timeouts inside submitAnswer() (setCleared,
+      workHP<=0, playerHP<=0) previously had NO guard at all — not even the
+      `running` check Defuse's pre-fix version had. Cutting a winning/losing
+      answer and exiting within the 700-750ms window let an orphaned
+      finish() fire over the idle screen and throw on GROUPS[-1].label,
+      silently, since #loading is already hidden by then. Every timer in
+      this function is now guarded by a round token exactly like Defuse's
+      FIX #2, and finish() itself bails out if groupIdx < 0.
+   4. multiplierFor(combo) is now the ONE place that maps combo -> bonus.
+      Previously submitAnswer() computed the real workHP-damage multiplier
+      with one formula (capped at 2.2x) while setCombo() and the score gain
+      both used an uncapped 1+floor(n/5) — so the HUD badge and the score
+      kept climbing past combo 15 even though the actual damage dealt had
+      long since capped. All three now read from the same function.
+   5. A timeout tie (hits === misses) now resolves as a win, matching
+      Defuse's fix — previously it fell through the strict `>` to a loss
+      with no stated reasoning either way.
+   6. Every localStorage read/write now goes through safeGet/safeSet, same
+      as Defuse's FIX #5. Previously several calls — including the ones that
+      run at module-load time, before boot() — were unwrapped, so a
+      storage-blocked browser (private mode, strict extensions) threw before
+      the page could even reach its own error handler.
    ══════════════════════════════════════════════════════════════════════ */
 
 window.addEventListener('error', e => {
@@ -559,6 +601,16 @@ const esc = t => String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt
 const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[b[i],b[j]]=[b[j],b[i]];} return b; };
 const clamp = (n,lo,hi) => Math.max(lo,Math.min(hi,n));
 
+/* FIX #6: a single guarded pair for every localStorage touch in the file. */
+function safeGet(key, fallback){
+  try{ const v = localStorage.getItem(key); return v === null ? fallback : v; }
+  catch(e){ return fallback; }
+}
+function safeSet(key, value){
+  try{ localStorage.setItem(key, value); return true; }
+  catch(e){ return false; }
+}
+
 let GROUPS = [], groupIdx = -1;
 let running = false, started = false, rafId = null;
 let score = 0, combo = 0, bestCombo = 0, hits = 0, misses = 0, missLog = [];
@@ -567,11 +619,25 @@ let curItems = null, curItem = null;
 let bank = [], slots = [], usedIdx = new Set(), resolved = false;
 let autoTimer = null;
 
+/* FIX #3: every round gets a token. A timeout scheduled during round N only
+   acts if roundToken is still N when it fires — a newer round or an exit to
+   idle bumps the token and turns older timers into silent no-ops instead of
+   letting them run finish()/nextQuestion() against stale or absent state. */
+let roundToken = 0;
+
 const MODES = ['90','120','practice'];
-let mode = localStorage.getItem('intuity-forge-mode');
-if (MODES.indexOf(mode) === -1) { mode = '90'; localStorage.setItem('intuity-forge-mode', mode); }
+let mode = safeGet('intuity-forge-mode', null);
+if (MODES.indexOf(mode) === -1) { mode = '90'; safeSet('intuity-forge-mode', mode); }
 let roundEnd = 0, roundMs = 0;
 const answerLog = [];
+
+/* FIX #4: the ONE place that maps a combo length to its score/damage
+   multiplier. submitAnswer() uses this for the real workHP damage; setCombo()
+   uses it to paint the HUD badge and the score gain reads it too — all three
+   can no longer drift out of sync with each other. */
+function multiplierFor(n){
+  return n>=15 ? 2.2 : n>=10 ? 1.7 : n>=5 ? 1.3 : 1;
+}
 
 /* ── WHAT COMES BACK, AND WHEN — same expanding interval as Defuse ── */
 const REPEAT_EVERY = 4;
@@ -583,21 +649,22 @@ let freshQueue = [];
 /* ── MEMORY — one key SHARED with Defuse ── */
 const MEM_KEY = 'intuity-tenses-mem';
 const BEST_KEY = 'intuity-forge-best';
-function loadMem(){ try{ return JSON.parse(localStorage.getItem(MEM_KEY)||'{}'); }catch(e){ return {}; } }
-function saveMem(m){ try{ localStorage.setItem(MEM_KEY,JSON.stringify(m)); }catch(e){} }
+function loadMem(){ try{ return JSON.parse(safeGet(MEM_KEY,'{}')||'{}'); }catch(e){ return {}; } }
+function saveMem(m){ safeSet(MEM_KEY, JSON.stringify(m)); }
 const memKey = it => it.group + ':' + it.idx;
 function noteResult(it, ok){
   const m = loadMem(), k = memKey(it), e = m[k] || {miss:0,seen:0};
   e.seen++; if (ok) e.miss = Math.max(0,e.miss-1); else e.miss++;
   m[k] = e; saveMem(m);
 }
-function loadBest(){ try{ return JSON.parse(localStorage.getItem(BEST_KEY)||'{}'); }catch(e){ return {}; } }
+function loadBest(){ try{ return JSON.parse(safeGet(BEST_KEY,'{}')||'{}'); }catch(e){ return {}; } }
 function saveBest(id, sc){
-  try{ const b = loadBest(); if (!(b[id] >= sc)) { b[id] = sc; localStorage.setItem(BEST_KEY, JSON.stringify(b)); } }catch(e){}
+  const b = loadBest();
+  if (!(b[id] >= sc)) { b[id] = sc; safeSet(BEST_KEY, JSON.stringify(b)); }
 }
 
 /* ── AUDIO ── */
-let ac = null, master = null, musicOn = localStorage.getItem('intuity-forge-sound') !== 'off';
+let ac = null, master = null, musicOn = safeGet('intuity-forge-sound', 'on') !== 'off';
 function audio(){
   if (!ac){
     ac = new (window.AudioContext||window.webkitAudioContext)();
@@ -889,6 +956,7 @@ function hideIdle(){
 
 /* ── RUN ── */
 function startRound(){
+  roundToken++;              /* FIX #3: invalidate any timers from the last round */
   const g = GROUPS[groupIdx];
   curItems = itemsOf(g);
   score = 0; combo = 0; bestCombo = 0; hits = 0; misses = 0; missLog = [];
@@ -960,7 +1028,11 @@ function loop(now){
     const fill = $('qtimerFill');
     fill.style.width = (pct*100) + '%';
     fill.classList.toggle('warn', left <= 10000);
-    if (left <= 0){ finish(hits > misses ? 'win' : 'loss'); return; }
+    /* FIX #5: a timeout tie (or a timeout with nothing answered) used to
+       fall through `hits > misses` straight to a loss with no stated
+       reasoning either way. A tie is not a loss, so it now resolves as a
+       win as long as at least one hit was scored — matching Defuse. */
+    if (left <= 0){ finish((hits >= misses && hits > 0) ? 'win' : 'loss', 'timeout'); return; }
   } else {
     $('qtimerFill').style.width = '100%';
   }
@@ -993,18 +1065,26 @@ function submitAnswer(){
 
   const heat = heatOf(workHP);
 
+  /* FIX #3: capture the token this round is running under. Any timeout
+     scheduled below only acts if the token is still current when it fires —
+     if the player has exited to idle, or a new round has started, in the
+     meantime, these become silent no-ops instead of touching stale state. */
+  const myToken = roundToken;
+  const stillCurrent = () => running && roundToken === myToken;
+
   if (ok){
     answerLog.push({ ok:true, cue:item.cue, answer:item.answer.join(' '), after:item.after, tense:item.tense });
     hits++; combo++; bestCombo = Math.max(bestCombo,combo);
     const mi = missedThisRun.indexOf(pos); if (mi >= 0) missedThisRun.splice(mi,1);
     correctCount[pos] = (correctCount[pos] || 0) + 1;
     dueAt[pos] = qCount + (correctCount[pos] >= RETIRE_AT ? 9999 : GAP_AFTER_ONE);
-    let mult = combo>=15 ? 2.2 : combo>=10 ? 1.7 : combo>=5 ? 1.3 : 1;
+    /* FIX #4: read the same multiplier the score gain and HUD badge use. */
+    let mult = multiplierFor(combo);
     let isOverdrive = false;
     if (overdriveReady){ mult *= 1.9; isOverdrive = true; overdriveReady = false; }
     const dmg = Math.round(BASE_DMG * mult);
     workHP = clamp(workHP - dmg, 0, WORK_MAX);
-    score += 120 * (1 + Math.floor(combo/5));
+    score += Math.round(120 * mult);
     sfxHit(combo); sfxStrike();
     vibrate(isOverdrive ? [30,30,30,30,60] : 24);
     strikeForge();
@@ -1036,10 +1116,14 @@ function submitAnswer(){
   updateBars();
   applyHeat();
 
-  if (setCleared()){ setTimeout(()=>finish('win'), 750); return; }
-  if (workHP <= 0){ setTimeout(()=>finish('win'), 700); return; }
-  if (playerHP <= 0){ setTimeout(()=>finish('loss'), 700); return; }
-  setTimeout(()=>{ if (running) nextQuestion(); }, ok ? 950 : 1800);
+  /* FIX #3: these three win/loss paths are the round ending EARLY, through
+     either good or bad play — not through the clock. Each is now guarded by
+     the round token, and finish() is told the reason so it can decide
+     whether the coverage penalty applies. */
+  if (setCleared()){ setTimeout(()=>{ if (stillCurrent()) finish('win','cleared'); }, 750); return; }
+  if (workHP <= 0){ setTimeout(()=>{ if (stillCurrent()) finish('win','depleted'); }, 700); return; }
+  if (playerHP <= 0){ setTimeout(()=>{ if (stillCurrent()) finish('loss','depleted'); }, 700); return; }
+  setTimeout(()=>{ if (stillCurrent()) nextQuestion(); }, ok ? 950 : 1800);
 }
 
 function showNote(item, ok){
@@ -1098,7 +1182,11 @@ function spawnDamage(amount, side, overdrive){
 }
 function setCombo(n){
   const el = $('combo');
-  el.textContent = '×' + (1+Math.floor(n/5)) + (n ? '  '+n : '');
+  /* FIX #4: read the same multiplier submitAnswer() uses for real damage,
+     instead of the old uncapped 1+floor(n/5) formula that kept climbing
+     past the point where the actual bonus had capped out. */
+  const mult = multiplierFor(n);
+  el.textContent = '×' + mult.toFixed(1).replace(/\.0$/,'') + (n ? '  '+n : '');
   el.classList.toggle('live', n>=5);
   el.classList.add('pop'); setTimeout(()=>el.classList.remove('pop'),150);
   const heat = clamp(n / 15, 0, 1);
@@ -1141,7 +1229,14 @@ function fireworks(){
 /* ── THE SUMMARY ──
    Forge's own pace constant. 4.2s was Defuse's, for picking one of four;
    assembling three to five tiles in order takes twice that, so the ported
-   value demanded ~21 answers in 90s and graded a careful learner a D. */
+   value demanded ~21 answers in 90s and graded a careful learner a D.
+
+   FIX #1/#2: coverage is a penalty for STOPPING EARLY, not for WINNING
+   EARLY (or LOSING early via playerHP). It only makes sense to apply when
+   the round ended because the clock ran out (reason === 'timeout'); a round
+   that ended because the work was finished, the set was cleared, or the
+   player ran out of composure ended on its own merits and is graded on
+   accuracy alone. */
 const SECONDS_PER_Q = 9.5;
 function expectedCount(){
   if (mode === 'practice') return 0;
@@ -1162,7 +1257,11 @@ function scale(acc){
 }
 const grade = s => s>=180?['A','Excellent']:s>=173?['B','Very good']:s>=160?['C','Pass']:['D','Try again'];
 
-function finish(outcome){
+function finish(outcome, reason){
+  /* FIX #3: guard against a stale/orphaned call — e.g. the player exited to
+     idle (groupIdx === -1) while a timeout was in flight. running is also
+     cleared by exitToEntry(), so this is a second, cheap line of defence. */
+  if (!running || groupIdx < 0 || !GROUPS[groupIdx]) return;
   running = false; cancelAnimationFrame(rafId); cancelAutoCheck();
   document.body.classList.remove('playing');
   try{ if (window.INTUITY) INTUITY.session('tenses','forge',{hits,misses,best:bestCombo,score,outcome}); }catch(e){}
@@ -1172,7 +1271,11 @@ function finish(outcome){
 
   const total = hits+misses, acc = total ? hits/total : 0;
   const practice = mode === 'practice';
-  const sc = scale(acc * coverageOf(total));
+  /* FIX #1: only a timeout applies the coverage penalty. A depleted/cleared
+     win, or a loss from playerHP hitting 0, is scored on accuracy alone —
+     the round ending was the outcome, not a shortfall against it. */
+  const gradedOnCoverage = reason === 'timeout';
+  const sc = scale(gradedOnCoverage ? acc * coverageOf(total) : acc);
   const [letter,word] = grade(sc);
 
   $('ovOutcome').className = 'outcome ' + (outcome==='win'?'win':'loss');
@@ -1191,7 +1294,10 @@ function finish(outcome){
 
   $('ovNote').innerHTML = '<b>'+hits+'</b> forged, <b>'+misses+'</b> wrong · best combo <b>'+
     bestCombo+'</b> · composure <b>'+Math.max(0,playerHP)+'</b>' +
-    (!practice && expectedCount() && total < expectedCount()
+    /* FIX #2: same reason guard as the coverage penalty itself — a round
+       that ended by finishing the work, clearing the set, or running out of
+       composure had no "fuller round" available to answer more of. */
+    (gradedOnCoverage && !practice && expectedCount() && total < expectedCount()
       ? ' · answered <b>' + total + '</b> of about <b>' + expectedCount() + '</b> — a fuller round scores higher'
       : '');
 
@@ -1260,7 +1366,7 @@ function switchGroup(i){
 
 /* ── MODE / MUTE ── */
 function setMode(m){
-  mode = m; localStorage.setItem('intuity-forge-mode', m);
+  mode = m; safeSet('intuity-forge-mode', m);
   document.querySelectorAll('.mbtn').forEach(b=>b.classList.toggle('on', b.dataset.m===m));
   /* startRound, not startRun — and only once a mix has been chosen, so this
      cannot pick Mix 1 for the learner or index GROUPS[-1] */
@@ -1270,7 +1376,7 @@ $('modes').querySelectorAll('.mbtn').forEach(b => b.addEventListener('click', ()
 document.querySelectorAll('.mbtn').forEach(b => b.classList.toggle('on', b.dataset.m === mode));
 
 function setMute(on){
-  musicOn = on; localStorage.setItem('intuity-forge-sound', on?'on':'off');
+  musicOn = on; safeSet('intuity-forge-sound', on?'on':'off');
   $('muteBtn').textContent = on ? '🔊' : '🔈';
 }
 $('muteBtn').addEventListener('click', ()=> setMute(!musicOn));
@@ -1283,6 +1389,7 @@ setMute(musicOn);
    switchGroup's own no-op guard; ?set= is stripped, or a reload re-arms that
    mix and the learner lands mid-game at the entry screen. */
 function exitToEntry(){
+  roundToken++;   /* FIX #3: any in-flight timeout from the abandoned round is now stale */
   running = false;
   if (rafId) cancelAnimationFrame(rafId);
   cancelAutoCheck();

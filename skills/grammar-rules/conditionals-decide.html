@@ -125,11 +125,16 @@ body.playing .stage{top:calc(env(safe-area-inset-top,0px) + .4rem)}
 .ring-cap .sub{font-family:var(--f-body);font-weight:400;font-size:.78rem;
   letter-spacing:0;text-transform:none;color:var(--faint);margin-left:.45rem}
 
-/* ══ THE PERFORMANCE BAR ══
-   Forge's composure meter, in the place the sketch puts it: a rule between
-   the rings and the sentence that is also the fail condition. It divides the
-   two halves of the screen AND says how the round is going, which is one
-   element doing the work of two. */
+/* ══ THE TIME BAR ══
+   The round clock, between the rings and the sentence.
+
+   It was a composure meter that only ever shrank. Now a correct answer BUYS
+   TIME and the bar visibly runs forward, which is the only way a progress bar
+   can be a reward rather than a warning — and the glitter fires on that
+   forward movement, so the celebration is the bar doing something rather than
+   an effect played over the top of it.
+
+   Two meters became one: time is the stake, and a wrong answer costs it. */
 .you{flex:0 0 auto;position:relative;height:var(--you-h);
   display:flex;align-items:center;gap:.6rem;padding:0 1rem;
   border-bottom:1px solid var(--rule)}
@@ -140,9 +145,14 @@ body.playing .stage{top:calc(env(safe-area-inset-top,0px) + .4rem)}
 .you-track{flex:1;height:12px;border-radius:999px;background:var(--slot-bg);
   overflow:hidden;box-shadow:inset 0 1px 2px rgba(43,33,41,.08)}
 .you-fill{height:100%;width:100%;border-radius:999px;
-  background:linear-gradient(90deg,#4A6B5C,#708A81 60%,#BCB1A0);
-  transition:width .3s,background .3s}
+  background:linear-gradient(90deg,#4A6B5C,#708A81 55%,#8FA89C);
+  /* .12s linear while the clock ticks down, but a gain is worth SEEING, so
+     the JS swaps in a slower eased transition for the moment it jumps. */
+  transition:width .12s linear,background .3s}
+.you-fill.gain{transition:width .5s cubic-bezier(.2,.9,.3,1);
+  background:linear-gradient(90deg,#4A6B5C,#5F8A72 45%,#9BC4A6)}
 .you-fill.low{background:linear-gradient(90deg,#AC5A3E,var(--wrong))}
+.you-num.warn{color:var(--wrong)}
 
 /* A right answer runs a light along the bar; a wrong one knocks it sideways
    and flashes the loss. The bar was a static rule that only ever shrank —
@@ -423,9 +433,9 @@ body.playing .pad{top:calc(env(safe-area-inset-top,0px) + .4rem + var(--ring-h) 
   </div>
 
 <div class="you" id="you">
-  <span class="you-label">You</span>
+  <span class="you-label">Time</span>
   <div class="you-track"><div class="you-fill" id="youFill"></div></div>
-  <span class="you-num" id="youNum">1000</span>
+  <span class="you-num" id="youNum">90s</span>
 </div>
 
 <div class="pad" id="pad">
@@ -518,11 +528,13 @@ let SETS = [], setIdx = -1, pool = [], curItem = null;
 let running = false, started = false, rafId = null, resolved = false;
 let picked = [null,null], openGap = -1;
 let score = 0, streak = 0, bestStreak = 0;
-/* Forge's composure meter: a wrong verb costs, and an empty bar ends the
-   round. It is also the rule dividing the rings from the sentence, so one
-   element carries the division and the stake together. */
-const YOU_MAX = 1000, YOU_HIT = 90;
-let youHP = YOU_MAX;
+/* Time is the only stake. A fully correct item buys 3 seconds, a half-right
+   one buys 1.5, and a wrong verb costs 4 — so the bar runs forward when the
+   student is right and the round lengthens under a good run. The bar can
+   exceed its starting width, so the fill is capped for display while the
+   clock itself keeps the surplus. */
+const TIME_FULL = 3000, TIME_HALF = 1500, TIME_COST = 4000;
+let timeLeft = 0, lastPct = 1;
 let gapsRight = 0, gapsWrong = 0;
 const byType = {}, answerLog = [];
 
@@ -659,22 +671,66 @@ function banner(text){
   setTimeout(()=>b.classList.remove('show'), 900);
 }
 
-function youPulse(ok, amount){
+function youPulse(ok){
   const bar = $('you'), fill = $('youFill'), num = $('youNum');
-  if(ok){
-    fill.classList.remove('sweep'); void fill.offsetWidth; fill.classList.add('sweep');
-  }else{
-    bar.classList.remove('shake'); void bar.offsetWidth; bar.classList.add('shake');
-    float(bar, '−' + amount, 'down');
-  }
+  if(ok){ fill.classList.remove('sweep'); void fill.offsetWidth; fill.classList.add('sweep'); }
+  else  { bar.classList.remove('shake');  void bar.offsetWidth; bar.classList.add('shake'); }
   num.classList.remove('bump'); void num.offsetWidth; num.classList.add('bump');
 }
 
 function paintYou(){
-  const pct = clamp(youHP / YOU_MAX * 100, 0, 100);
-  $('youFill').style.width = pct + '%';
-  $('youFill').classList.toggle('low', pct < 30);
-  $('youNum').textContent = Math.max(0, youHP);
+  if(mode === 'practice'){
+    $('youFill').style.width = '100%';
+    $('youNum').textContent = '∞';
+    return;
+  }
+  const pct = roundMs ? clamp(timeLeft / roundMs, 0, 1) : 0;
+  $('youFill').style.width = (pct*100).toFixed(1) + '%';
+  const low = timeLeft <= 10000;
+  $('youFill').classList.toggle('low', low);
+  $('youNum').classList.toggle('warn', low);
+  $('youNum').textContent = Math.max(0, Math.ceil(timeLeft/1000)) + 's';
+  lastPct = pct;
+}
+
+/* Sparks along the bar's leading edge, where the gain actually happened. */
+function barBurst(n){
+  if(reduced() || !canAnimate) return;
+  const track = document.querySelector('.you-track');
+  if(!track) return;
+  const r = track.getBoundingClientRect();
+  const x = r.left + r.width * clamp(lastPct, .04, .98);
+  for(let i=0;i<n;i++){
+    const p = document.createElement('div');
+    p.className = 'spark';
+    const c = ['#4A6B5C','#708A81','#9BC4A6','#C2956E','#F26430'][(Math.random()*5)|0];
+    const sz = 3 + Math.random()*6;
+    p.style.cssText = 'left:' + x + 'px;top:' + (r.top + r.height/2) + 'px;width:' + sz +
+      'px;height:' + sz + 'px;background:' + c + ';box-shadow:0 0 ' + (sz*2.5) + 'px ' + c;
+    document.body.appendChild(p);
+    /* thrown forward along the bar, not scattered — the direction IS the
+       message: the clock just moved that way */
+    const a = (-.55 + Math.random()*1.1), d = 40 + Math.random()*90, ms = 500 + Math.random()*380;
+    p.animate([{transform:'translate(-50%,-50%) scale(1.1)',opacity:1},
+      {transform:'translate(-50%,-50%) translate(' + (d*Math.cos(a)) + 'px,' +
+        (d*Math.sin(a)*.7) + 'px) scale(.2)',opacity:0}],
+      {duration:ms,easing:'cubic-bezier(.12,.75,.3,1)'});
+    setTimeout(()=>p.remove(), ms+40);
+  }
+}
+
+/* A gain has to be seen moving, so the bar is eased for that half-second and
+   the sparks are thrown from where it arrives. */
+function addTime(ms){
+  if(mode === 'practice') return;
+  roundEnd += ms;
+  timeLeft = Math.max(0, roundEnd - performance.now());
+  const fill = $('youFill');
+  fill.classList.add('gain');
+  paintYou();
+  requestAnimationFrame(() => barBurst(ms >= TIME_FULL ? 20 : 12));
+  float($('you'), '+' + Math.round(ms/1000) + 's', 'up');
+  setTimeout(() => fill.classList.remove('gain'), 520);
 }
 
 function paintRings(active){
@@ -770,7 +826,7 @@ let autoT = null;
 function startRun(){
   const s = SETS[setIdx];
   pool = s.items;
-  score=0; streak=0; bestStreak=0; gapsRight=0; gapsWrong=0; youHP=YOU_MAX;
+  score=0; streak=0; bestStreak=0; gapsRight=0; gapsWrong=0;
   seen=[]; missed=[]; qCount=0; correctCount={}; dueAt={}; fresh=[];
   answerLog.length = 0;
   TYPES.forEach(t => byType[t] = {right:0,wrong:0});
@@ -798,7 +854,9 @@ function beginRound(){
     const secs = parseInt(mode,10);
     roundMs = isFinite(secs) ? secs*1000 : 90000;
     roundEnd = performance.now() + roundMs;
+    timeLeft = roundMs;
   }
+  paintYou();
   nextItem();
   if(rafId) cancelAnimationFrame(rafId);
   rafId = requestAnimationFrame(loop);
@@ -825,7 +883,11 @@ function loop(now){
   if(!running) return;
   if(mode !== 'practice'){
     const left = Math.max(0, roundEnd - now);
+    timeLeft = left;
     const pct = roundMs ? clamp(left/roundMs,0,1) : 0;
+    /* the eased class owns the width for half a second after a gain, so the
+       tick must not fight it back down */
+    if(!$('youFill').classList.contains('gain')) paintYou();
     /* The sweep lives on the LIT ring — the object being looked at is the one
        counting down, which is what Forge's dial does. */
     const lit = $('ringRow').querySelector('.ring.lit');
@@ -856,10 +918,7 @@ function resolve(){
     slots[n].textContent = g.answer;   /* the correct form, always shown */
   });
   gapsRight += right; gapsWrong += (2 - right);
-  const cost = (2 - right) * YOU_HIT;
-  youHP = clamp(youHP - cost, 0, YOU_MAX);
-  paintYou();
-  youPulse(right === 2, cost);
+  youPulse(right === 2);
   byType[it.type].right += right; byType[it.type].wrong += (2 - right);
 
   const both = right === 2;
@@ -878,7 +937,7 @@ function resolve(){
     dueAt[i] = qCount + (correctCount[i]>=RETIRE_AT ? 9999 : GAP_AFTER_ONE);
     sfxGood(); vibrate(streak >= 5 ? [20,30,40] : 20);
     burst($('sentence'), streak >= 5 ? 44 : 26);
-    burst($('you'), streak >= 5 ? 22 : 12);
+    addTime(TIME_FULL);   /* the bar runs FORWARD — and glitters doing it */
     float($('sentence'), '+' + Math.round(100*mult), streak >= 5 ? 'up big' : 'up');
     /* A streak is the only thing worth a banner. Celebrating every single
        correct answer makes the celebration mean nothing. */
@@ -892,17 +951,22 @@ function resolve(){
     sfxBad(); vibrate([50,40,60]);
     const sent = $('sentence');
     sent.classList.remove('shake'); void sent.offsetWidth; sent.classList.add('shake');
+    if(mode !== 'practice' && right === 0){
+      roundEnd -= TIME_COST;
+      timeLeft = Math.max(0, roundEnd - performance.now());
+      paintYou();
+      float($('you'), '−' + (TIME_COST/1000) + 's', 'down');
+    }
     /* half right is worth saying: it is the commonest B2 error and the
        student cannot see it from two colours alone */
     /* Half right is real progress and the commonest B2 error — worth points
        and worth a small burst, so the student sees they got somewhere. */
-    if(right === 1){ score += 30; float($('sentence'), '+30', 'up'); burst($('sentence'), 10); }
+    if(right === 1){ score += 30; float($('sentence'), '+30', 'up'); burst($('sentence'), 10); addTime(TIME_HALF); }
   }
   try{ showNote(it, right); }catch(e){ /* feedback is not worth a lost round */ }
   setStreak(streak); $('score').textContent = score;
   $('tapStart').classList.add('gone');
 
-  if(youHP <= 0){ setTimeout(()=>finish('loss'), 900); return; }
   if(setCleared()){ setTimeout(()=>finish('win'), 800); return; }
   setTimeout(()=>{ if(running) nextItem(); }, both ? 900 : 1900);
 }
@@ -986,7 +1050,7 @@ function finish(outcome){
   }
   $('ovNote').innerHTML = '<b>'+gapsRight+'</b> of <b>'+total+'</b> verbs right · ' +
     '<b>'+items+'</b> sentences · best streak <b>'+bestStreak+'</b>' +
-    ' · composure <b>'+Math.max(0,youHP)+'</b>' +
+    (practice ? '' : ' · time left <b>'+Math.max(0,Math.ceil(timeLeft/1000))+'s</b>') +
     (!practice && expected() && items < expected()
       ? ' · a fuller round scores higher' : '');
 

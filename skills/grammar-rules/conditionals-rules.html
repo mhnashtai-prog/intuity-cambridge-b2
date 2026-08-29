@@ -511,14 +511,21 @@ if(window.ResizeObserver){
 const gateFor = { practice:{gate:'practiceGate', frame:'practiceFrame'},
                   quiz:    {gate:'quizGate',     frame:'quizFrame'} };
 const testLists = { practice:null, quiz:null };
-let frameActive = { practice:0, quiz:0 };
+/* null, not 0. The gate says "pick a set above" while a tab sits highlighted
+   — so the page contradicted itself, and a student who took the highlight at
+   face value pressed the tab that was already lit and saw nothing happen.
+   Nothing is chosen until the student chooses it. */
+let frameActive = { practice:null, quiz:null };
 
 window.addEventListener('message', e => {
   if(!e.data || e.data.intuity !== 'tests') return;
   const from = e.data.mode;
   if(from !== 'practice' && from !== 'quiz') return;
   testLists[from] = e.data.titles || [];
-  frameActive[from] = e.data.active || 0;
+  /* The frame reports which test it has loaded, which is 0 before anyone has
+     picked. Adopting that would re-light the first tab behind the gate and
+     put the contradiction straight back. Only take it once a choice exists. */
+  if(frameActive[from] !== null) frameActive[from] = e.data.active || 0;
   if(from === mainMode) paintFrameTabs();
 });
 
@@ -551,6 +558,9 @@ function chooseSet(mode, index){
 /* The gate returns every time the sheet opens: nothing is chosen for the
    student, and nothing is remembered from last time either. */
 function openGate(mode){
+  /* back at the gate, nothing is selected again — including after a close,
+     so a student returning to pick a different set sees no stale highlight */
+  if(gateFor[mode]) frameActive[mode] = null;
   const g = $(gateFor[mode] && gateFor[mode].gate);
   if(g) g.classList.add('open');
   paintFrameTabs();

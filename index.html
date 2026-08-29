@@ -364,7 +364,7 @@ function buildMap(){
   const STEM_LEN = Math.max(30, Math.min(46, 150 / mapWidthPx * 100));
   const CAP_GAP  = 0.4;
 
-  const pillXs = LAYOUT.map(n => n.capSide === 'right' ? 50 - OFFSET : 50 + OFFSET);
+  let pillXs = LAYOUT.map(n => n.capSide === 'right' ? 50 - OFFSET : 50 + OFFSET);
   const dirs   = LAYOUT.map(n => n.capSide === 'right' ? 1 : -1);
   const dots   = LAYOUT.map((n,i) => ({ x: pillXs[i] + dirs[i]*STEM_LEN, y: n.y }));
 
@@ -413,6 +413,30 @@ function buildMap(){
     rects.forEach(r => { r.style.width = ''; maxW = Math.max(maxW, r.offsetWidth); });
     rects.forEach(r => { r.style.width = maxW + 'px'; });
 
+    /* ── THE BANNERS CLOSE UP ────────────────────────────────────────────
+       The offset was a fixed 46px, which knows nothing about how wide a pill
+       actually is. On a wide screen that left the two columns 55px apart with
+       the road having to cross the gap on a diagonal — straight through the
+       pill corners, which is what the wave was doing.
+
+       The offset is now measured from the pill: half its own width, less a
+       small overlap, so the two columns almost meet on the centre line. The
+       road then only has to swing far enough to clear one pill at a time,
+       which is the weave the section maps have.
+
+       Done here rather than at paint time because a pill's width is not known
+       until it has been laid out and the labels equalised. */
+    const pillsNow = $('nodes').querySelectorAll('.pill');
+    const mapW = $('map').getBoundingClientRect().width || 1;
+    const halfPillPct = (pillsNow[0].getBoundingClientRect().width / 2) / mapW * 100;
+    const OVERLAP = .6;                       /* how far past centre they reach */
+    const off2 = Math.max(3, halfPillPct - OVERLAP);
+    pillsNow.forEach((p,i) => {
+      const x = dirs[i] > 0 ? 50 - off2 : 50 + off2;
+      p.style.left = x + '%';
+      pillXs[i] = x;
+    });
+
     const PILL_GAP_PX = 5 * 96 / 25.4;
     const CAP_GAP_PX  = 2 * 96 / 25.4;
     const mapRect = $('map').getBoundingClientRect();
@@ -441,34 +465,64 @@ function buildMap(){
 
     if(tightDots.length < 2) return;
 
-    /* One cosine, same as every section map. */
-    const ys = tightDots.map(d => d.y);
-    const y0 = ys[0], yN = ys[ys.length-1];
-    const gap = (yN - y0) / (ys.length - 1);
-    const LAM = 2 * gap;
-    const xs  = tightDots.map(d => d.x);
-    const cxW = (Math.min(...xs) + Math.max(...xs)) / 2;
-    /* ── THE WAVE NEEDS A FLOOR ──────────────────────────────────────────
-       The amplitude is measured from where the pill edges land, and the pill
-       offset is a fixed 46px expressed as a percentage — so it SHRINKS as the
-       window grows. On a phone 46px is nearly 12% and the wave is generous;
-       on a 1366px desktop it is 3.4%, the facing edges land about 48% and
-       52%, and the road straightens into a vertical line.
+    /* ── HALF CIRCLES, NOT A COSINE ──────────────────────────────────────
+       The road is a stack of true semicircles: each one spans the gap between
+       two rows, so its radius is half that gap, and it bulges to alternating
+       sides. A cosine looks similar and is not the same — it flattens as it
+       approaches each row, where a circle stays under constant curvature all
+       the way. That constant curvature is what makes the ends soft rather
+       than pointed, which is the whole character of the shape.
 
-       The wave is the identity of this page, so it gets a minimum in percent
-       rather than pixels: below 7% of the map width there is not enough
-       deviation to read as a curve at any size. Measured amplitude still wins
-       when it is larger, which is what keeps the phone layout untouched. */
-    const MIN_AMP = 7;
-    const amp = Math.max(MIN_AMP, (Math.max(...xs) - Math.min(...xs)) / 2);
-    const side = Math.sign(tightDots[0].x - cxW);
-    const waveX = y => cxW + side * amp * Math.cos(2*Math.PI * (y - y0) / LAM);
+       The radius sets the clearance: the pills meet on the centre line and
+       the arc reaches half a row-gap past them, which lands at roughly the
+       7mm the original drawing had.
 
-    const EXT = 0.62, N = 240, pts = [];
-    for(let i=0;i<=N;i++){
-      const y = (y0 - EXT*gap) + ((yN + EXT*gap) - (y0 - EXT*gap)) * (i/N);
-      pts.push({ x: waveX(y), y });
+       All of this is computed in PIXELS and converted at the end. The svg
+       carries preserveAspectRatio="none", so its 0–100 box is stretched to
+       the map's real proportions — a circle described in viewBox units would
+       render as an ellipse, and the wider the window the flatter it would
+       get. */
+    const mapH = $('map').getBoundingClientRect().height || 1;
+    const toPct = { x: px => px / mapW * 100, y: px => px / mapH * 100 };
+    const fromPct = { y: pct => pct / 100 * mapH };
+
+    const yPx = ys.map(fromPct.y);
+    const cxPx = cxW / 100 * mapW;
+    const sideOf = i => (tightDots[i].x > cxW ? 1 : -1);
+
+    const pts = [];
+    const SEG = 40;                      /* points per semicircle */
+    for(let i = 0; i < yPx.length - 1; i++){
+      const y1 = yPx[i], y2 = yPx[i+1];
+      const r  = (y2 - y1) / 2;          /* the semicircle's own radius */
+      const yc = (y1 + y2) / 2;
+      const dir = sideOf(i);             /* bulge away from this row's pill */
+      for(let s = (i === 0 ? 0 : 1); s <= SEG; s++){
+        const t = -Math.PI/2 + Math.PI * (s / SEG);   /* -90° .. +90° */
+        pts.push({
+          x: toPct.x(cxPx + dir * r * Math.cos(t)),
+          y: toPct.y(yc + r * Math.sin(t))
+        });
+      }
     }
+
+    /* A little tail past the first and last row, so the road runs on rather
+       than stopping dead at a node. */
+    if(pts.length){
+      const rEnd = (yPx[1] - yPx[0]) / 2, EXT = .45;
+      const head = [], tail = [];
+      for(let s = 1; s <= 10; s++){
+        const t = -Math.PI/2 - (Math.PI * EXT) * (s / 10);
+        head.unshift({ x: toPct.x(cxPx + sideOf(0) * rEnd * Math.cos(t)),
+                       y: toPct.y((yPx[0] + yPx[1]) / 2 + rEnd * Math.sin(t)) });
+        const t2 = Math.PI/2 + (Math.PI * EXT) * (s / 10);
+        const last = yPx.length - 1, rL = (yPx[last] - yPx[last-1]) / 2;
+        tail.push({ x: toPct.x(cxPx + sideOf(last-1) * rL * Math.cos(t2)),
+                    y: toPct.y((yPx[last-1] + yPx[last]) / 2 + rL * Math.sin(t2)) });
+      }
+      pts.unshift(...head); pts.push(...tail);
+    }
+
     const road = $('mapPath').querySelector('.road');
     if(road) road.setAttribute('d',
       'M '+pts[0].x.toFixed(3)+' '+pts[0].y.toFixed(3)+
@@ -482,7 +536,7 @@ function buildMap(){
     }
     caps.innerHTML =
       '<circle class="endDot" fill="rgb(139,123,120)" cx="'+pts[0].x.toFixed(3)+'" cy="'+pts[0].y.toFixed(3)+'" r="0.46"/>'+
-      '<circle class="endDot" fill="rgb(139,123,120)" cx="'+pts[N].x.toFixed(3)+'" cy="'+pts[N].y.toFixed(3)+'" r="0.46"/>';
+      '<circle class="endDot" fill="rgb(139,123,120)" cx="'+pts[pts.length-1].x.toFixed(3)+'" cy="'+pts[pts.length-1].y.toFixed(3)+'" r="0.46"/>';
   });
 }
 

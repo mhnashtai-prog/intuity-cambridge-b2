@@ -7,7 +7,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
   :root{
-    --stage:#F1E8DA;
+    /* The ground was #F1E8DA — a warm mid-cream. Against it the pale nodes
+       (#E5D1B8) had almost nothing to sit on, so the whole set read as muted
+       and the strong tones had to shout to register. Lifting the ground to
+       the product's own paper gives every tone the same amount of room, and
+       the pills get their vibrancy from contrast instead of from saturation. */
+    --stage:#FAF7F2;
     --paper:#FEFCF9;
     --ink:#2B2129;
     --soft:#5C4E52;
@@ -86,7 +91,11 @@
   .pill .circle{width:44px;height:44px;border-radius:50%;flex:none;position:relative;z-index:2;order:1;
     display:flex;align-items:center;justify-content:center;
     font-family:'Anton',Impact,sans-serif;font-size:1.15rem;
-    box-shadow:0 5px 14px rgba(30,24,16,.24);}
+    /* No drop shadow. Six pills each casting one made six objects hovering
+       above the page — and the shadow's brown haze desaturated the tone it
+       sat under, which is the opposite of what a shadow is usually added
+       for. A flat fill on a light ground reads stronger, not weaker. */
+    box-shadow:none;}
   .pill .circle .chk{display:none;}
   .pill.seen .circle .num{display:none;}
   .pill.seen .circle .chk{display:inline;}
@@ -95,7 +104,7 @@
     border-radius:0 999px 999px 0;padding:0 18px 0 26px;margin-left:-16px;
     font-family:'Anton',Impact,sans-serif;text-transform:uppercase;
     font-size:.8rem;letter-spacing:.01em;white-space:nowrap;
-    box-shadow:0 5px 14px rgba(30,24,16,.2);}
+    box-shadow:none;}
   /* .circle-right: circle sits on the right instead — same fusion, mirrored.
      The rect's flat edge always sits against the circle; the open/rounded
      tip always faces away from it (and is the end the stem connects from). */
@@ -129,7 +138,9 @@
   .modalCard{position:relative;width:min(560px,92vw);max-height:88vh;overflow-y:auto;
     padding:clamp(28px,6.5vw,46px) clamp(24px,6vw,42px);
     background:var(--poster,#D4CEBE);color:#14110E;border-radius:4px;
-    box-shadow:0 26px 64px rgba(20,16,14,.5);
+    /* was a 64px black lift — the heaviest shadow in the product, on the one
+       surface that is already full-screen and needs no separating */
+    box-shadow:0 18px 48px rgba(43,33,41,.18);
     transform:scale(.94);opacity:0;
     transition:transform .34s var(--spring),opacity .26s ease;}
   .modalWrap.open .modalCard{transform:scale(1);opacity:1;}
@@ -402,13 +413,30 @@ function guardsIn(t){
   return out;
 }
 
+/* The tenses data marks its verbs — {{verb}} for the one that carries the
+   section's tense, {verb} for any other. Only tenses-rules.html draws them;
+   here they are stripped.
+
+   Stripped INSIDE toPair, on the strings, never upstream on the example: a
+   conditionals example is an object — {before, after} — and stringifying one
+   gives "[object Object]", which is precisely what every node showed when
+   this ran a step earlier. */
+/* timeMarkers comes in two shapes: a flat array, or grouped
+   {list1:{label,items}, list2:{label,items}} for the sets that teach WHERE a
+   marker sits. Anything assuming the array throws the moment a grouped set
+   arrives. */
+const flatMarks = tm => !tm ? []
+  : Array.isArray(tm) ? tm
+  : [...((tm.list1 && tm.list1.items) || []), ...((tm.list2 && tm.list2.items) || [])];
+const unmark = s => String(s == null ? '' : s).replace(/[{}]/g, '');
+
 function toPair(ex){
   if(ex && typeof ex === 'object'){
     const main = ex[PRIMARY] != null ? ex[PRIMARY] : (ex.after != null ? ex.after : ex.before);
     const alt  = ex[PRIMARY === 'before' ? 'after' : 'before'];
-    return { text: clean(main), from: clean(alt), marks: guardsIn(main) };
+    return { text: clean(unmark(main)), from: clean(unmark(alt)), marks: guardsIn(main) };
   }
-  return { text: clean(ex), from: '', marks: guardsIn(ex) };
+  return { text: clean(unmark(ex)), from: '', marks: guardsIn(ex) };
 }
 
 // A set longer than the map has nodes becomes several sections rather than
@@ -496,7 +524,7 @@ function cueFromMarks(marks){
 }
 
 function cueFor(sentence, uc){
-  const ms = (uc.timeMarkers||[]).slice().sort((a,b)=>b.length-a.length);
+  const ms = flatMarks(uc.timeMarkers).slice().sort((a,b)=>b.length-a.length);
   for(const m of ms){
     const hit = sentence.match(new RegExp('\\b('+esc(m)+'[\\w\\s]{0,10}?)(?=[,.!?]|$)','i'));
     if(hit) return hit[1].trim().replace(/\s+/g,' ');
@@ -541,7 +569,7 @@ function openSection(i){
   cards = uc.pairs.slice(0, MAX_PER_SECTION).map(p => ({
     text: p.text,
     cue:  cueFromMarks(p.marks) || cueFor(p.text, uc),
-    markers: (p.marks && p.marks.length) ? p.marks : (uc.timeMarkers||[]),
+    markers: (p.marks && p.marks.length) ? p.marks : flatMarks(uc.timeMarkers),
     from: p.from || '',
     structure: uc.structure || '',
     note: uc.note || ''
@@ -814,11 +842,21 @@ function openNode(i){
     (c.from ? '<div class="alt">'+mark(c.from, c.markers)+'</div>' : '')+
     (c.note ? '<div class="note">'+c.note+'</div>' : '');
   $('modalWrap').classList.add('open');
-  $('modalClose').onclick = closeModal;
+  $('modalClose').onclick = closeToPage;
 }
 function closeModal(){
   $('modalWrap').classList.remove('open');
   openIdx = null;
+}
+/* ── ONE CLOSE, NOT TWO ──
+   The card used to close back to the map, and the map then needed its own
+   close to reach the page — two dismissals for one thing the student opened
+   once. The corner X and Escape now leave entirely. Tapping the backdrop
+   still returns to the map, which is the gesture for "put this back, I am
+   still browsing", so nothing is lost. */
+function closeToPage(){
+  closeModal();
+  leave();
 }
 $('backdrop').onclick = closeModal;
 
@@ -832,7 +870,7 @@ function leave(){
 $('back').onclick = leave;
 
 document.addEventListener('keydown', e => {
-  if(e.key === 'Escape'){ if($('modalWrap').classList.contains('open')) closeModal(); else if(secIdx!==null) leave(); }
+  if(e.key === 'Escape'){ if($('modalWrap').classList.contains('open')) closeToPage(); else if(secIdx!==null) leave(); }
 });
 
 let resizeTimer = null;

@@ -3,43 +3,144 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>INTUITY - Comparatives Quiz</title>
-  <link rel="stylesheet" href="gapfill.css">
+  <meta name="theme-color" content="#FAF7F2">
+  <title>INTUITY — Comparatives Quiz</title>
+
+  <!-- Fonts and the shell are linked HERE rather than @imported from
+       gapfill.css. An @import cannot begin downloading until the file that
+       contains it has arrived, so the tokens landed one round trip late and
+       the quiz flashed unstyled — most visibly inside an iframe, which is a
+       separate document and inherits nothing from the host. Two parallel
+       links instead of a chain. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=2">
+
+  <!-- REPOINTED. This page used to link a bare "gapfill.css" and
+       "gapfill.js", which resolve to the copies in THIS folder — the older
+       dark stylesheet and its engine. It now uses the shared light pair
+       under /data/, the same ones tenses uses.
+
+       The engine needed no change: gapfill.js already reads
+       data.gapfill.tests (which conditionals-data.json has), and already
+       indexes `structure`/`explanation` from data.rules for the "why it was
+       wrong" note. Conditionals carries both, so the notes work here too. -->
+  <link rel="stylesheet" href="/data/grammar-rules/gapfill.css?v=23">
 </head>
 <body>
   <div class="container">
     <div class="content-container">
-      <div class="test-selector" id="testSelector"></div>
-
-      <div class="progress-info" id="progressInfo" style="display: none;">
-        <span id="progressText"></span>
-        <div class="progress-dots" id="progressDots"></div>
+      <!-- Selector and strip pin together as ONE sticky block. Pinning them
+           separately meant guessing the selector's height for the strip's
+           offset, and the selector wraps to two rows on this topic — so the
+           strip sat too high and slid under it while scrolling. -->
+      <div class="pinned">
+        <div class="test-selector" id="testSelector"></div>
+        <div class="progress-info" id="progressInfo" style="display:none">
+          <span id="progressText"></span>
+          <div class="progress-dots" id="progressDots"></div>
+        </div>
       </div>
 
       <div id="contentContainer">
-        <div class="loading">Loading quiz...</div>
+        <div class="loading">Loading quiz…</div>
       </div>
     </div>
   </div>
 
   <div class="modal-overlay" id="scoreModal">
     <div class="modal">
+      <!-- The same disc used in Defuse, Forge and the slides sheet. The modal
+           had no corner close at all — only a text button below the fold on a
+           short phone. -->
+      <button class="close-btn modal-close" id="modalClose" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+             stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+
       <div class="modal-header">
-        <h2 class="modal-title">Test Results</h2>
+        <h2 class="modal-title">Test results</h2>
         <div class="modal-subtitle" id="modalSubtitle"></div>
       </div>
+
       <div class="score-display">
         <div class="score-number" id="scoreNumber">0/0</div>
         <div class="score-label" id="scoreLabel"></div>
       </div>
+
+      <!-- THE MISSING AFFORDANCE.
+           Defuse and Forge both end on "Check your answers · N wrong". The
+           quiz ended on a bare number, even though every wrong item is
+           already marked in the page behind the modal — the student just had
+           no reason to think so, and no way to find them among ten. This
+           closes the modal and jumps to the first one. -->
+      <button class="reviewpill" id="reviewJump" type="button" hidden>Check your answers</button>
+
       <div class="modal-footer">
         <button class="modal-btn modal-btn-secondary" onclick="closeModal()">Close</button>
-        <button class="modal-btn modal-btn-primary" id="nextTestBtn" onclick="nextTest()">Next Test</button>
+        <button class="modal-btn modal-btn-primary" id="nextTestBtn" onclick="nextTest()">Next test</button>
       </div>
     </div>
   </div>
 
   <script>window.QUIZ_DATA = 'comparatives-data';</script>
-  <script src="gapfill.js"></script>
+  <script src="/data/grammar-rules/gapfill.js?v=25"></script>
+
+  <script>
+  /* ── REVIEW JUMP ─────────────────────────────────────────────────────────
+     Deliberately independent of gapfill.js: it reads only `.answer-input
+     .incorrect`, a class gapfill.css already defines and the marking pass
+     already applies. Nothing here calls into the quiz engine, so the engine
+     can change without breaking this and vice versa. */
+  (function(){
+    const modal = document.getElementById('scoreModal');
+    const pill  = document.getElementById('reviewJump');
+    const shut  = document.getElementById('modalClose');
+    if(!modal || !pill) return;
+
+    const wrongOnes = () => document.querySelectorAll('.answer-input.incorrect');
+
+    /* The modal is opened by gapfill.js adding .active, so watch for that
+       rather than trying to hook a function we do not own. */
+    new MutationObserver(() => {
+      if(!modal.classList.contains('active')) return;
+      const n = wrongOnes().length;
+      pill.hidden = n === 0;                       /* a clean sheet needs no review */
+      pill.innerHTML = 'Check your answers' +
+        (n ? '<span class="cnt">' + n + ' wrong</span>' : '');
+    }).observe(modal, { attributes:true, attributeFilter:['class'] });
+
+    function dismiss(){
+      /* closeModal() belongs to gapfill.js. Call it when it is there so any
+         state it resets still gets reset; fall back to the class it toggles
+         so this page still works if the script fails to load. */
+      if(typeof window.closeModal === 'function') window.closeModal();
+      else modal.classList.remove('active');
+    }
+    if(shut) shut.addEventListener('click', dismiss);
+    document.addEventListener('keydown', e => {
+      if(e.key === 'Escape' && modal.classList.contains('active')) dismiss();
+    });
+
+    pill.addEventListener('click', () => {
+      const first = wrongOnes()[0];
+      dismiss();
+      if(!first) return;
+      /* after the modal is gone, so the sticky header measures correctly */
+      requestAnimationFrame(() => {
+        first.scrollIntoView({ behavior:'smooth', block:'center' });
+        first.classList.add('flash');
+        setTimeout(() => first.classList.remove('flash'), 1200);
+      });
+    });
+  })();
+
+  /* NOTE for gapfill.js: when it posts its test list to the host it must
+     include `mode:'quiz'`. tenses-rules.html keeps one list per mode and now
+     mounts BOTH frames at boot, so an unlabelled message is filed under
+     whichever frame announced last — which is how Practice once ended up
+     wearing Quiz's tabs. */
+  </script>
 </body>
 </html>

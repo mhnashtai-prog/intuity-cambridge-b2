@@ -422,6 +422,8 @@ function paintList(){
   }
   const sub = r.subtitle ? '<div class="subtitle-line">' + esc(r.subtitle) + '</div>' : '';
   wrap.innerHTML = sub + r.sets.map((set,i)=>{
+    /* per set: which linking words have already been demonstrated */
+    const shown = new Set();
     const exs = (set.examples||[]).map(e => {
       const raw = e[PRIMARY] != null ? e[PRIMARY] : e.after;
       /* Some examples offer two ways to say the same thing, separated by
@@ -429,19 +431,27 @@ function paintList(){
          Spanish." Two ways is two rows: each gets its own line in the
          column, so the alternatives can be compared rather than read as one
          run-on sentence. */
-      /* ONE ROW PER EXAMPLE.
-         Two changes, both subtractions. Alternatives after " / " were each
-         given a row, which doubled the block and made the same idea appear
-         twice in slightly different words — five examples became ten rows of
-         near-repetition. The first phrasing is enough; the strip above
-         already names every alternative in the set.
+      /* ── EVERY WORD IN THE STRIP GETS SHOWN ONCE ──────────────────────
+         Alternatives after " / " used to each get a row, which doubled the
+         block into near-repetition. Taking only the first phrasing fixed
+         that but silently dropped "as well as" — a word the strip above
+         still promised.
 
-         And the "and" version underneath is gone. At B2 a student knows what
-         "She speaks French and Spanish" means; showing it under every row
-         spent a line explaining the thing they already have and broke the
-         column into fragments separated by grey text. What they need is the
-         linking word, in context, once. */
-      return renderExample(String(raw).split(' / ')[0]);
+         So: the first phrasing always, and a later one only when it
+         introduces a linking word this set has not demonstrated yet. Set 1
+         gains one row for "as well as" and nothing else; the repetition
+         stays gone. The strip and the sentences cannot disagree. */
+      const rows = [];
+      String(raw).split(' / ').forEach((alt, i) => {
+        const words = (alt.match(/<<([^>]+)>>/g) || [])
+          .map(w => w.replace(/<<|>>/g, '').trim().toLowerCase());
+        const isNew = words.some(w => w && !shown.has(w));
+        if(i === 0 || isNew){
+          words.forEach(w => shown.add(w));
+          rows.push(renderExample(alt));
+        }
+      });
+      return rows.join('');
     }).join('');
     /* The strip names what the set teaches, in brick, above the sentences
        that show it in use — the same relationship tenses has between its

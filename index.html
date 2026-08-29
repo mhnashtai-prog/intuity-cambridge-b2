@@ -539,17 +539,39 @@ function buildMap(){
        moving the pills after the wave is computed would change the wave that
        positioned them — a loop that never settles. The wave is fixed first,
        then the pills are hung off it, and the wave is not recomputed. */
-    const CLEAR_PX = 7 * 96 / 25.4;
+    /* 2.5mm, down from 7. The pill and the road are one object with a
+       hairline between them, rather than two things near each other.
+
+       It is a floor as much as a gap: the road is a curve and the pill edge
+       is a straight vertical, so they are only this close at the row itself
+       and the distance opens above and below. Below about 2mm the curve's
+       shoulder starts to touch the pill's corner between rows, which reads
+       as a collision even though the measured gap at the row is positive. */
+    const CLEAR_PX = 2.5 * 96 / 25.4;
     const mapWpx = mapRect.width;
+    const mapHpx = mapRect.height;
     $('nodes').querySelectorAll('.pill').forEach(pillEl => {
-      const i = +pillEl.dataset.i;
-      const halfPill = pillEl.getBoundingClientRect().width / 2;
-      const wavePx = waveX(LAYOUT[i].y) / 100 * mapWpx;      /* the road at this row */
-      /* dirs > 0 means the caption is on the right, so the pill sits left of
-         the road and it is the pill's RIGHT edge that has to clear it. */
-      const edge = dirs[i] > 0 ? wavePx - CLEAR_PX : wavePx + CLEAR_PX;
-      const centre = dirs[i] > 0 ? edge - halfPill : edge + halfPill;
-      pillEl.style.left = (centre / mapWpx * 100) + '%';
+      const i = +pillEl.dataset.i, dir = dirs[i];
+      const pRect = pillEl.getBoundingClientRect();
+      const halfPill = pRect.width / 2;
+      const halfHpct = (pRect.height / 2) / mapHpx * 100;
+
+      /* ── MEASURED ACROSS THE PILL'S HEIGHT, NOT AT ITS MIDLINE ──────────
+         The pill's edge is a straight vertical 44px tall; the road is a curve
+         that leans back toward the centre as it leaves the row. So the two
+         are closest at the pill's CORNERS, not beside its middle — at 2.5mm
+         measured on the midline the corners came within half a pixel.
+
+         Sampling the road across the pill's own height and taking the point
+         that comes nearest gives a gap that is true along the whole edge. */
+      let nearest = null;
+      for(let s = -6; s <= 6; s++){
+        const wx = waveX(LAYOUT[i].y + halfHpct * (s / 6)) / 100 * mapWpx;
+        if(nearest === null) nearest = wx;
+        else nearest = dir > 0 ? Math.min(nearest, wx) : Math.max(nearest, wx);
+      }
+      const edge = nearest - dir * CLEAR_PX;
+      pillEl.style.left = ((dir > 0 ? edge - halfPill : edge + halfPill) / mapWpx * 100) + '%';
     });
 
     /* ── THE STEMS START BEYOND THE ROAD ─────────────────────────────────
@@ -568,6 +590,35 @@ function buildMap(){
       const startPx = wavePx + dir * CLEAR_PX;
       const stem = $('mapPath').querySelector('.stem[data-i="'+i+'"]');
       if(stem) stem.setAttribute('x1', toPctX(startPx));
+    });
+
+    /* ── THE CAPTIONS COME IN, THE STEMS HALVE ───────────────────────────
+       The captions were anchored to a stem length worked out before the
+       pills moved — 150px of rule between the road and the text, on a page
+       whose whole logic is now "everything hangs off the wave".
+
+       So the stem is halved and the caption is re-anchored to where the stem
+       now ends. Shortening the rule alone would have left the text where it
+       was with a gap in front of it; the two have to move together, which is
+       why the caption's box is rewritten here rather than at paint time. */
+    $('nodes').querySelectorAll('.pill').forEach(pillEl => {
+      const i = +pillEl.dataset.i, dir = dirs[i];
+      const stem = $('mapPath').querySelector('.stem[data-i="'+i+'"]');
+      const dotE = $('mapPath').querySelector('.dot[data-i="'+i+'"]');
+      const capEl = capEls[i];
+      if(!stem || !capEl) return;
+
+      const x1 = parseFloat(stem.getAttribute('x1'));      /* just past the road */
+      const x2 = parseFloat(stem.getAttribute('x2'));      /* at the caption */
+      const half = x1 + (x2 - x1) / 2;                     /* half the run */
+
+      stem.setAttribute('x2', half);
+      if(dotE) dotE.setAttribute('cx', half);
+
+      /* the caption starts where the stem now stops, plus its own small gap */
+      const g = toPctX(CAP_GAP_PX);
+      if(dir > 0){ capEl.style.left = (half + g) + '%'; capEl.style.right = '3%'; }
+      else       { capEl.style.right = (100 - half + g) + '%'; capEl.style.left = '3%'; }
     });
 
     let caps = $('mapPath').querySelector('.endCaps');

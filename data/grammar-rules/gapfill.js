@@ -308,12 +308,42 @@
     const EMBEDDED = window.parent !== window;
     let hostDrawsTabs = false;
 
+    /* THE FRAME IS THE SCROLLER, NOT THE WINDOW.
+       gapfill.css gives body height:100% and overflow-y:auto so a flick works
+       inside the iframe. window.scrollTo therefore moves nothing: a student
+       who checked at the bottom of item ten stayed at the bottom, with the
+       modal's corner close off screen. Scroll the element that scrolls. */
+    function scrollFrameTop() {
+      const el = document.scrollingElement || document.body;
+      try { el.scrollTo({ top: 0, behavior: 'smooth' }); }
+      catch (e) { el.scrollTop = 0; }
+    }
+
+    /* ─────────── remembered scores ───────────
+       Practice has always shown a completed set's score in its tab label and
+       the quiz never did, so the two halves of the same header disagreed
+       about whether a set was done. Keyed by data file, because this engine
+       runs every topic and a score from Conditionals must not label a set in
+       Tenses. */
+    const SCORE_KEY = 'intuity_quiz_scores_' + (window.QUIZ_DATA || 'unknown');
+    let quizScores = {};
+    try { quizScores = JSON.parse(localStorage.getItem(SCORE_KEY) || '{}'); }
+    catch (e) { quizScores = {}; }
+    function saveScores() {
+      try { localStorage.setItem(SCORE_KEY, JSON.stringify(quizScores)); }
+      catch (e) {}
+    }
+    function labelFor(test, index) {
+      const s = quizScores['test' + index];
+      return s ? test.title + ' (' + s.percentage + '%)' : test.title;
+    }
+
     function publishTests() {
       if (!EMBEDDED) return;
       parent.postMessage({
         intuity: 'tests',
         mode: 'quiz',          /* the host keeps one list per mode */
-        titles: allTests.map(function (t) { return t.title; }),
+        titles: allTests.map(labelFor),
         active: currentTest
       }, '*');
     }
@@ -340,7 +370,7 @@
       allTests.forEach(function (test, index) {
         const btn = document.createElement('button');
         btn.className = 'test-btn' + (index === currentTest ? ' active' : '');
-        btn.textContent = test.title;
+        btn.textContent = labelFor(test, index);
         btn.onclick = () => loadTest(index);
         selector.appendChild(btn);
       });
@@ -564,6 +594,14 @@
       document.getElementById('nextTestBtn').style.display =
         currentTest < allTests.length - 1 ? 'block' : 'none';
 
+      quizScores['test' + currentTest] = {
+        correct: correct, total: total,
+        percentage: Math.round((correct / total) * 100),
+        timestamp: new Date().toISOString()
+      };
+      saveScores();
+      renderTestSelector();   /* redraws our tabs and republishes to the host */
+
       showModal();
     }
 
@@ -588,7 +626,7 @@
       }
       /* If the frame itself is scrolled down, bring the top into view so the
          modal's corner close is on screen. */
-      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); }
+      scrollFrameTop();
     }
 
     function closeModal() {

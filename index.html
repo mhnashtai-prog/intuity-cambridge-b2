@@ -364,7 +364,7 @@ function buildMap(){
   const STEM_LEN = Math.max(30, Math.min(46, 150 / mapWidthPx * 100));
   const CAP_GAP  = 0.4;
 
-  let pillXs = LAYOUT.map(n => n.capSide === 'right' ? 50 - OFFSET : 50 + OFFSET);
+  const pillXs = LAYOUT.map(n => n.capSide === 'right' ? 50 - OFFSET : 50 + OFFSET);
   const dirs   = LAYOUT.map(n => n.capSide === 'right' ? 1 : -1);
   const dots   = LAYOUT.map((n,i) => ({ x: pillXs[i] + dirs[i]*STEM_LEN, y: n.y }));
 
@@ -413,29 +413,6 @@ function buildMap(){
     rects.forEach(r => { r.style.width = ''; maxW = Math.max(maxW, r.offsetWidth); });
     rects.forEach(r => { r.style.width = maxW + 'px'; });
 
-    /* ── THE BANNERS CLOSE UP ────────────────────────────────────────────
-       The offset was a fixed 46px, which knows nothing about how wide a pill
-       actually is. On a wide screen that left the two columns 55px apart with
-       the road having to cross the gap on a diagonal — straight through the
-       pill corners, which is what the wave was doing.
-
-       The offset is now measured from the pill: half its own width, less a
-       small overlap, so the two columns almost meet on the centre line. The
-       road then only has to swing far enough to clear one pill at a time,
-       which is the weave the section maps have.
-
-       Done here rather than at paint time because a pill's width is not known
-       until it has been laid out and the labels equalised. */
-    const pillsNow = $('nodes').querySelectorAll('.pill');
-    const mapW = $('map').getBoundingClientRect().width || 1;
-    const halfPillPct = (pillsNow[0].getBoundingClientRect().width / 2) / mapW * 100;
-    const OVERLAP = .6;                       /* how far past centre they reach */
-    const off2 = Math.max(3, halfPillPct - OVERLAP);
-    pillsNow.forEach((p,i) => {
-      const x = dirs[i] > 0 ? 50 - off2 : 50 + off2;
-      p.style.left = x + '%';
-      pillXs[i] = x;
-    });
 
     const PILL_GAP_PX = 5 * 96 / 25.4;
     const CAP_GAP_PX  = 2 * 96 / 25.4;
@@ -465,95 +442,30 @@ function buildMap(){
 
     if(tightDots.length < 2) return;
 
-    /* The rows, and the centre line the arcs are hung from. These were lost
-       when the cosine was replaced, which left the whole block throwing on
-       the first line that used them — and a throw here is invisible: the
-       initial cubic path stays on screen, so it looked like a design that had
-       gone wide and pointed rather than code that never ran. */
-    const ys  = tightDots.map(d => d.y);
+    /* ── THE WAVE ────────────────────────────────────────────────────────
+       One cosine, as supplied and as every section map draws it. The arc
+       experiments — true semicircles, then half-ellipses at 60% and 80% —
+       are gone: they were geometrically exact and read worse. A cosine has
+       no join to flatten because there is no join; the curvature varies
+       smoothly along the whole length rather than resetting at every row.
+
+       Amplitude is measured from the pill edges, so the wave keeps its
+       relationship to the banners rather than to a constant. */
+    const ys = tightDots.map(d => d.y);
+    const y0 = ys[0], yN = ys[ys.length-1];
+    const gap = (yN - y0) / (ys.length - 1);
+    const LAM = 2 * gap;
     const xs  = tightDots.map(d => d.x);
     const cxW = (Math.min(...xs) + Math.max(...xs)) / 2;
+    const amp = (Math.max(...xs) - Math.min(...xs)) / 2;
+    const side = Math.sign(tightDots[0].x - cxW);
+    const waveX = y => cxW + side * amp * Math.cos(2*Math.PI * (y - y0) / LAM);
 
-    /* ── HALF CIRCLES, NOT A COSINE ──────────────────────────────────────
-       The road is a stack of true semicircles: each one spans the gap between
-       two rows, so its radius is half that gap, and it bulges to alternating
-       sides. A cosine looks similar and is not the same — it flattens as it
-       approaches each row, where a circle stays under constant curvature all
-       the way. That constant curvature is what makes the ends soft rather
-       than pointed, which is the whole character of the shape.
-
-       The radius sets the clearance: the pills meet on the centre line and
-       the arc reaches half a row-gap past them, which lands at roughly the
-       7mm the original drawing had.
-
-       All of this is computed in PIXELS and converted at the end. The svg
-       carries preserveAspectRatio="none", so its 0–100 box is stretched to
-       the map's real proportions — a circle described in viewBox units would
-       render as an ellipse, and the wider the window the flatter it would
-       get. */
-    const mapH = $('map').getBoundingClientRect().height || 1;
-    const toPct = { x: px => px / mapW * 100, y: px => px / mapH * 100 };
-    const fromPct = { y: pct => pct / 100 * mapH };
-
-    const yPx = ys.map(fromPct.y);
-    const cxPx = cxW / 100 * mapW;
-    /* Which way each arc bulges. It must swing AWAY from the pill on that
-       row — the pill occupies one side of the centre line, so the road takes
-       the other and passes clear of it. Bulging toward the pill sent the road
-       behind the banner, which is the wave running the wrong way. */
-    const sideOf = i => (tightDots[i].x > cxW ? -1 : 1);
-
-    /* The arcs are semicircles in profile but drawn at 60% of their radius
-       horizontally: the vertical span has to stay exactly one row-gap or the
-       arcs would not meet, so the reach is pulled in on the x axis alone.
-       Strictly that makes them half-ellipses — the curvature still never
-       flattens, which is what keeps the ends soft. */
-    /* 0.80, not 0.60. The reach is only half of what this number does: it
-       also sets how evenly the curvature is spread. At a join the radius of
-       curvature is rx²/ry and at the bulge it is ry²/rx — at 0.60 that is
-       13px against 60px, so the curve pinches where the arcs meet and runs
-       almost straight through the middle, which is the flatness at the
-       junction. At 0.80 it is 28px against 55px: still an ellipse, but the
-       two are close enough that the curvature reads as continuous all the
-       way round, which is what a hand-drawn arc does.
-
-       The cost is reach — about 9mm past the banner rather than 7. A true
-       circle (1.00) would even the curvature perfectly at 11.6mm. */
-    const INWARD = .80;
-
-    const pts = [];
-    const SEG = 40;                      /* points per semicircle */
-    for(let i = 0; i < yPx.length - 1; i++){
-      const y1 = yPx[i], y2 = yPx[i+1];
-      const r  = (y2 - y1) / 2;          /* the semicircle's own radius */
-      const yc = (y1 + y2) / 2;
-      const dir = sideOf(i);             /* bulge away from this row's pill */
-      for(let s = (i === 0 ? 0 : 1); s <= SEG; s++){
-        const t = -Math.PI/2 + Math.PI * (s / SEG);   /* -90° .. +90° */
-        pts.push({
-          x: toPct.x(cxPx + dir * r * INWARD * Math.cos(t)),
-          y: toPct.y(yc + r * Math.sin(t))
-        });
-      }
+    const EXT = 0.62, N = 240, pts = [];
+    for(let i=0;i<=N;i++){
+      const y = (y0 - EXT*gap) + ((yN + EXT*gap) - (y0 - EXT*gap)) * (i/N);
+      pts.push({ x: waveX(y), y });
     }
-
-    /* A little tail past the first and last row, so the road runs on rather
-       than stopping dead at a node. */
-    if(pts.length){
-      const rEnd = (yPx[1] - yPx[0]) / 2, EXT = .45;
-      const head = [], tail = [];
-      for(let s = 1; s <= 10; s++){
-        const t = -Math.PI/2 - (Math.PI * EXT) * (s / 10);
-        head.unshift({ x: toPct.x(cxPx + sideOf(0) * rEnd * INWARD * Math.cos(t)),
-                       y: toPct.y((yPx[0] + yPx[1]) / 2 + rEnd * Math.sin(t)) });
-        const t2 = Math.PI/2 + (Math.PI * EXT) * (s / 10);
-        const last = yPx.length - 1, rL = (yPx[last] - yPx[last-1]) / 2;
-        tail.push({ x: toPct.x(cxPx + sideOf(last-1) * rL * INWARD * Math.cos(t2)),
-                    y: toPct.y((yPx[last-1] + yPx[last]) / 2 + rL * Math.sin(t2)) });
-      }
-      pts.unshift(...head); pts.push(...tail);
-    }
-
     const road = $('mapPath').querySelector('.road');
     if(road) road.setAttribute('d',
       'M '+pts[0].x.toFixed(3)+' '+pts[0].y.toFixed(3)+
@@ -567,7 +479,7 @@ function buildMap(){
     }
     caps.innerHTML =
       '<circle class="endDot" fill="rgb(139,123,120)" cx="'+pts[0].x.toFixed(3)+'" cy="'+pts[0].y.toFixed(3)+'" r="0.46"/>'+
-      '<circle class="endDot" fill="rgb(139,123,120)" cx="'+pts[pts.length-1].x.toFixed(3)+'" cy="'+pts[pts.length-1].y.toFixed(3)+'" r="0.46"/>';
+      '<circle class="endDot" fill="rgb(139,123,120)" cx="'+pts[N].x.toFixed(3)+'" cy="'+pts[N].y.toFixed(3)+'" r="0.46"/>';
   });
 }
 

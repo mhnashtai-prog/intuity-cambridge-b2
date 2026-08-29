@@ -162,6 +162,25 @@ html,body{width:100%;height:100%;overflow:hidden}
    conditional — keeps the family but not the stage. */
 .ex .vb{font-family:var(--f-verb);font-weight:600;color:var(--tile-ink)}
 
+/* ── THE WORKING SHEET GOES FULL SCREEN ──────────────────────────────────
+   The gate is a CHOICE and belongs on the page: it sits below the header, so
+   the set tabs it points at are visible above it. Once a set is chosen the
+   student is working, and the header is no longer navigation they need — it
+   is 170px of chrome above a ten-item exercise on a 660px screen. Defuse
+   takes the whole viewport the moment a round starts, for the same reason.
+
+   So the sheet is a panel while the gate is up and the whole screen once it
+   is down. The class goes on <body> because the header must be pushed out of
+   the way too, and it is not inside .area. */
+body.working .header{transform:translateY(-100%);pointer-events:none}
+body.working .area.sheet-mode{top:0;padding:0;z-index:80}
+body.working .sheet-full{border-radius:0;box-shadow:none}
+.header{transition:transform .26s cubic-bezier(.2,.9,.3,1)}
+/* The close is the only way back, so it cannot be a 15px disc floating over
+   an exercise — it gets a surface of its own. */
+body.working .sheet-close{top:.7rem;right:.7rem;background:var(--tile-bg);
+  color:var(--tile-ink);width:2.1rem;height:2.1rem}
+
 /* ── COLUMN MODE ─────────────────────────────────────────────────────────
    The same three cells, squared off: verbs in one continuous fill divided by
    hairlines, subjects left-aligned beside it, tails taking the rest.
@@ -689,6 +708,7 @@ function applyMode(mode){
   document.querySelectorAll('.area').forEach(a => a.classList.remove('active'));
 
   const explore = mode === 'explore';
+  if(explore) setWorking(false);
   /* Explore is always the page underneath, so it stays active while a sheet
      is open — closing the sheet reveals it already scrolled where it was. */
   $('exploreArea').classList.add('active');
@@ -705,10 +725,22 @@ function applyMode(mode){
 }
 
 /* Every sheet closes back to Explore — the page it was opened from. */
+/* ── CLOSING IS TWO STEPS, NOT ONE ───────────────────────────────────────
+   Leaving an exercise dropped the student all the way back to Explore, so
+   choosing a different set meant Practice → gate → set again — three moves
+   to do the thing they had just been doing. Closing now returns to the gate
+   it came from, and only a second close leaves the mode. Same control, one
+   step at a time: exercise → set list → Explore. */
+function closeSheet(){
+  if(mainMode === 'explore') return;
+  const g = $(gateFor[mainMode] && gateFor[mainMode].gate);
+  if(g && !g.classList.contains('open')){ openGate(mainMode); return; }
+  switchMode('explore');
+}
 document.querySelectorAll('[data-close]').forEach(b =>
-  b.addEventListener('click', () => switchMode('explore')));
+  b.addEventListener('click', closeSheet));
 document.addEventListener('keydown', e => {
-  if(e.key === 'Escape' && mainMode !== 'explore' && view !== 'slides') switchMode('explore');
+  if(e.key === 'Escape' && mainMode !== 'explore' && view !== 'slides') closeSheet();
 });
 function switchMode(mode){
   if(mode === mainMode) return;
@@ -823,7 +855,16 @@ function chooseSet(mode, index){
   if(f && f.contentWindow) f.contentWindow.postMessage({ intuity:'setTest', index:index }, '*');
   const g = $(gateFor[mode].gate);
   if(g) g.classList.remove('open');   /* the gate's job is done once a set is picked */
+  setWorking(true);
   paintFrameTabs();
+}
+
+/* One switch for "the student is mid-exercise", so the header, the sheet and
+   the close control cannot disagree about which state they are in. */
+function setWorking(on){
+  document.body.classList.toggle('working', !!on);
+  /* the header moved, so anything measured from it is stale */
+  requestAnimationFrame(syncHeader);
 }
 
 /* The gate returns every time the sheet opens: nothing is chosen for the
@@ -831,13 +872,16 @@ function chooseSet(mode, index){
 function openGate(mode){
   const g = $(gateFor[mode] && gateFor[mode].gate);
   if(g) g.classList.add('open');
+  setWorking(false);
   paintFrameTabs();
   /* A framed page that never announces its sets — the older topic pages do
      not — would leave the gate pointing at an empty header row. After a
      moment, step out of the way and show the exercises. */
   setTimeout(() => {
-    if(mainMode === mode && (!testLists[mode] || !testLists[mode].length) && g)
+    if(mainMode === mode && (!testLists[mode] || !testLists[mode].length) && g){
       g.classList.remove('open');
+      setWorking(true);
+    }
   }, 1400);
 }
 

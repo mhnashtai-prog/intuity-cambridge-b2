@@ -46,6 +46,21 @@ html,body{width:100%;height:100%;overflow:hidden}
   .slides-card{border-radius:0}
 }
 
+/* ── THE STRIP ──
+   Same treatment as the tenses time-marker strip: a quiet mono label over a
+   brick row. Brick is --target, the colour reserved for the thing being
+   taught, so it carries the linking words and nothing else does. */
+.markers{margin-bottom:1.1rem}
+.markers-t{font-family:var(--f-mono);font-size:.56rem;color:var(--dim);
+  text-transform:uppercase;letter-spacing:.12em;margin-bottom:.55rem}
+.markers-l{display:flex;flex-wrap:wrap;gap:.4rem .9rem}
+.marker{color:var(--target);font-size:.86rem;font-weight:600}
+
+/* The plain "and" version, under the sentence that replaces it — small,
+   quiet, and only there so the transformation is visible. */
+.ex-plainform{grid-column:1/-1;font-family:var(--f-read);font-size:9.5pt;
+  color:var(--faint);padding:.1rem 0 .5rem .2rem}
+
 .cards{display:flex;flex-direction:column;gap:1.1rem}
 .card{background:none;border:none;border-radius:0;padding:.3rem 0 1.3rem}
 .cards .card:first-child{padding-top:.6rem}
@@ -244,7 +259,16 @@ const P     = new URLSearchParams(location.search);
 /* before/after are two orderings of the SAME sentence, not a transformation.
    'before' is the canonical if-first form. This one constant drives BOTH the
    list and the map, so the two surfaces can never disagree. */
-const PRIMARY = 'before';
+/* ── WHICH HALF IS THE LESSON ────────────────────────────────────────────
+   Every example carries both: `before` is the plain version joined with
+   "and", `after` is the same idea written with the linking word the set is
+   teaching. The page was rendering `before`, so a set titled "Also, As Well
+   As, Apart From" showed a column of five identical `and`s — the one word
+   the set exists to move students away from.
+
+   `after` is the lesson. `before` is the starting point, and it is still
+   shown, quietly, under each example so the transformation is visible. */
+const PRIMARY = 'after';
 
 /* The map holds six nodes, so a set longer than that becomes several sections
    there. Section indices must account for it or a long set opens the wrong
@@ -363,6 +387,24 @@ function renderExample(raw){
   '</div>';
 }
 
+/* ── WHAT THIS SET OFFERS ────────────────────────────────────────────────
+   The linking words actually used in a set, collected from its own examples
+   and de-duplicated. Derived rather than authored, so it can never disagree
+   with the sentences underneath it — and a set whose examples change gets a
+   corrected strip for free. */
+function linkersIn(set){
+  const seen = [];
+  (set.examples || []).forEach(e => {
+    const raw = e[PRIMARY] != null ? e[PRIMARY] : e.after;
+    String(raw).replace(/<<([^>]+)>>/g, (_, w) => {
+      const k = w.trim();
+      if(k && !seen.some(s => s.toLowerCase() === k.toLowerCase())) seen.push(k);
+      return '';
+    });
+  });
+  return seen;
+}
+
 function paintList(){
   const r = rules[rule], wrap = $('list');
   if(!r || !r.sets || !r.sets.length){
@@ -373,12 +415,30 @@ function paintList(){
   wrap.innerHTML = sub + r.sets.map((set,i)=>{
     const exs = (set.examples||[]).map(e => {
       const raw = e[PRIMARY] != null ? e[PRIMARY] : e.after;
-      return renderExample(raw);
+      /* Some examples offer two ways to say the same thing, separated by
+         " / " — "She also speaks Spanish. / She speaks French as well as
+         Spanish." Two ways is two rows: each gets its own line in the
+         column, so the alternatives can be compared rather than read as one
+         run-on sentence. */
+      const alts = String(raw).split(' / ');
+      return alts.map(alt => renderExample(alt)).join('') +
+             (e.before ? '<div class="ex-plainform">' + render(e.before) + '</div>' : '');
     }).join('');
+    /* The strip names what the set teaches, in brick, above the sentences
+       that show it in use — the same relationship tenses has between its
+       time markers and its examples. Brick for the item taught, grey for the
+       form it takes in a sentence. */
+    const linkers = linkersIn(set);
+    const strip = linkers.length
+      ? '<div class="markers"><div class="markers-t">Ways to say it</div>' +
+        '<div class="markers-l">' +
+        linkers.map(w => '<span class="marker">' + esc(w) + '</span>').join('') +
+        '</div></div>'
+      : '';
     return '<div class="card"><div class="card-head">' +
              '<div class="uc-title">' + esc(set.setTitle) + '</div>' +
              '<button class="explore-btn" type="button" data-sec="' + i + '">Explore</button>' +
-           '</div><div class="exs">' + exs + '</div></div>';
+           '</div>' + strip + '<div class="exs">' + exs + '</div></div>';
   }).join('');
   wrap.querySelectorAll('.explore-btn').forEach(b =>
     b.addEventListener('click', () => openMap(sectionIndexOf(r, +b.dataset.sec))));

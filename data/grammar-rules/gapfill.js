@@ -450,11 +450,21 @@
       if (value) cls += ' has-value';
       if (isChecked) {
         return '<input type="text" class="' + cls + '" value="' + escapeHtml(value) +
-               '" readonly style="' + style + '" />';
+               '" readonly autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" style="' + style + '" />';
       }
+      /* ─────────── no automatic capital ───────────
+         A phone keyboard capitalises the first character of a text field
+         by default, so a gap falling mid-sentence came back as "She has
+         finished" and the student saw their own answer contradict the
+         sentence around it. The gap is not the start of a sentence and
+         the keyboard cannot know that, so it is told.
+
+         autocorrect and spellcheck go with it: a learner writing "he
+         don't" on purpose, or a verb form the phone's dictionary does
+         not carry, must not be silently rewritten before it is marked. */
       return '<input type="text" class="' + cls + '" id="' + id + '" value="' +
              escapeHtml(value) + '" oninput="this.classList.toggle(&quot;has-value&quot;, !!this.value); ' +
-             handler + '" placeholder="..." style="' +
+             handler + '" placeholder="..." autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" style="' +
              style + '" />';
     }
 

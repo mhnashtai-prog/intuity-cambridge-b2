@@ -528,6 +528,48 @@ function buildMap(){
       'M '+pts[0].x.toFixed(3)+' '+pts[0].y.toFixed(3)+
       pts.slice(1).map(p => ' L '+p.x.toFixed(3)+' '+p.y.toFixed(3)).join(''));
 
+    /* ── EACH PILL 7mm FROM THE WAVE ─────────────────────────────────────
+       The pills sat at a fixed 42% and 58%, so the gap to the road was
+       whatever the arithmetic happened to leave — about 55px on a wide
+       screen, and different again on a phone. Now the road is drawn first
+       and each pill is placed against it: the edge that faces the wave stops
+       exactly 7mm short of it, on every row and at every width.
+
+       The order matters. Amplitude is measured from the pill edges, so
+       moving the pills after the wave is computed would change the wave that
+       positioned them — a loop that never settles. The wave is fixed first,
+       then the pills are hung off it, and the wave is not recomputed. */
+    const CLEAR_PX = 7 * 96 / 25.4;
+    const mapWpx = mapRect.width;
+    $('nodes').querySelectorAll('.pill').forEach(pillEl => {
+      const i = +pillEl.dataset.i;
+      const halfPill = pillEl.getBoundingClientRect().width / 2;
+      const wavePx = waveX(LAYOUT[i].y) / 100 * mapWpx;      /* the road at this row */
+      /* dirs > 0 means the caption is on the right, so the pill sits left of
+         the road and it is the pill's RIGHT edge that has to clear it. */
+      const edge = dirs[i] > 0 ? wavePx - CLEAR_PX : wavePx + CLEAR_PX;
+      const centre = dirs[i] > 0 ? edge - halfPill : edge + halfPill;
+      pillEl.style.left = (centre / mapWpx * 100) + '%';
+    });
+
+    /* ── THE STEMS START BEYOND THE ROAD ─────────────────────────────────
+       The caption and the wave sit on the SAME side of every pill, so a stem
+       drawn from the pill's edge to its caption has to cross the road — on
+       all six rows, not occasionally. Two lines meeting at a shallow angle
+       read as a join, which is a relationship the map does not mean.
+
+       So the stem begins on the far side of the road, the same 7mm clear of
+       it as the pill is on the near side. The road passes through a
+       symmetrical gap, touching nothing, and the caption still reads as
+       belonging to its pill because nothing else is on that line. */
+    $('nodes').querySelectorAll('.pill').forEach(pillEl => {
+      const i = +pillEl.dataset.i, dir = dirs[i];
+      const wavePx = waveX(LAYOUT[i].y) / 100 * mapWpx;
+      const startPx = wavePx + dir * CLEAR_PX;
+      const stem = $('mapPath').querySelector('.stem[data-i="'+i+'"]');
+      if(stem) stem.setAttribute('x1', toPctX(startPx));
+    });
+
     let caps = $('mapPath').querySelector('.endCaps');
     if(!caps){
       caps = document.createElementNS('http://www.w3.org/2000/svg','g');

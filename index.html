@@ -465,6 +465,15 @@ function buildMap(){
 
     if(tightDots.length < 2) return;
 
+    /* The rows, and the centre line the arcs are hung from. These were lost
+       when the cosine was replaced, which left the whole block throwing on
+       the first line that used them — and a throw here is invisible: the
+       initial cubic path stays on screen, so it looked like a design that had
+       gone wide and pointed rather than code that never ran. */
+    const ys  = tightDots.map(d => d.y);
+    const xs  = tightDots.map(d => d.x);
+    const cxW = (Math.min(...xs) + Math.max(...xs)) / 2;
+
     /* ── HALF CIRCLES, NOT A COSINE ──────────────────────────────────────
        The road is a stack of true semicircles: each one spans the gap between
        two rows, so its radius is half that gap, and it bulges to alternating
@@ -488,7 +497,29 @@ function buildMap(){
 
     const yPx = ys.map(fromPct.y);
     const cxPx = cxW / 100 * mapW;
-    const sideOf = i => (tightDots[i].x > cxW ? 1 : -1);
+    /* Which way each arc bulges. It must swing AWAY from the pill on that
+       row — the pill occupies one side of the centre line, so the road takes
+       the other and passes clear of it. Bulging toward the pill sent the road
+       behind the banner, which is the wave running the wrong way. */
+    const sideOf = i => (tightDots[i].x > cxW ? -1 : 1);
+
+    /* The arcs are semicircles in profile but drawn at 60% of their radius
+       horizontally: the vertical span has to stay exactly one row-gap or the
+       arcs would not meet, so the reach is pulled in on the x axis alone.
+       Strictly that makes them half-ellipses — the curvature still never
+       flattens, which is what keeps the ends soft. */
+    /* 0.80, not 0.60. The reach is only half of what this number does: it
+       also sets how evenly the curvature is spread. At a join the radius of
+       curvature is rx²/ry and at the bulge it is ry²/rx — at 0.60 that is
+       13px against 60px, so the curve pinches where the arcs meet and runs
+       almost straight through the middle, which is the flatness at the
+       junction. At 0.80 it is 28px against 55px: still an ellipse, but the
+       two are close enough that the curvature reads as continuous all the
+       way round, which is what a hand-drawn arc does.
+
+       The cost is reach — about 9mm past the banner rather than 7. A true
+       circle (1.00) would even the curvature perfectly at 11.6mm. */
+    const INWARD = .80;
 
     const pts = [];
     const SEG = 40;                      /* points per semicircle */
@@ -500,7 +531,7 @@ function buildMap(){
       for(let s = (i === 0 ? 0 : 1); s <= SEG; s++){
         const t = -Math.PI/2 + Math.PI * (s / SEG);   /* -90° .. +90° */
         pts.push({
-          x: toPct.x(cxPx + dir * r * Math.cos(t)),
+          x: toPct.x(cxPx + dir * r * INWARD * Math.cos(t)),
           y: toPct.y(yc + r * Math.sin(t))
         });
       }
@@ -513,11 +544,11 @@ function buildMap(){
       const head = [], tail = [];
       for(let s = 1; s <= 10; s++){
         const t = -Math.PI/2 - (Math.PI * EXT) * (s / 10);
-        head.unshift({ x: toPct.x(cxPx + sideOf(0) * rEnd * Math.cos(t)),
+        head.unshift({ x: toPct.x(cxPx + sideOf(0) * rEnd * INWARD * Math.cos(t)),
                        y: toPct.y((yPx[0] + yPx[1]) / 2 + rEnd * Math.sin(t)) });
         const t2 = Math.PI/2 + (Math.PI * EXT) * (s / 10);
         const last = yPx.length - 1, rL = (yPx[last] - yPx[last-1]) / 2;
-        tail.push({ x: toPct.x(cxPx + sideOf(last-1) * rL * Math.cos(t2)),
+        tail.push({ x: toPct.x(cxPx + sideOf(last-1) * rL * INWARD * Math.cos(t2)),
                     y: toPct.y((yPx[last-1] + yPx[last]) / 2 + rL * Math.sin(t2)) });
       }
       pts.unshift(...head); pts.push(...tail);

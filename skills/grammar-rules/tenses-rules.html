@@ -39,6 +39,10 @@
                                      coloured gap has nothing to cut through. */
   --sage:#708A81;                 /* = --mark-sweep, already in the shell */
   --sage-tint:rgba(112,138,129,.16);
+  /* The pill's base. Darker and a shade bluer than --sage, which is what
+     lets it carry a solid fill: at this depth a white label clears 4.9:1,
+     where the old tint could only take an ink one. */
+  --sage-deep:#60747C;
 
   /* The two faces of a sentence. The verb is the lesson and the rest is
      context, so they are set in different voices rather than different
@@ -87,12 +91,12 @@ html,body{width:100%;height:100%;overflow:hidden}
   font-family:var(--f-display);font-size:.78rem;font-weight:600;
   letter-spacing:0;
   padding:.34rem 1rem;border-radius:var(--r-chip);
-  color:var(--tile-ink);background:var(--sage-tint);border:none;
+  color:#FFFFFF;background:var(--sage-deep);border:none;
   cursor:pointer;
   transition:transform .12s cubic-bezier(.2,.8,.2,1),filter .2s}
-.explore-btn:hover{filter:saturate(1.1) brightness(.97)}
-.explore-btn:active{transform:scale(.94);filter:saturate(1.2) brightness(.93)}
-.explore-btn:focus-visible{outline:2px solid var(--sage);outline-offset:2px}
+.explore-btn:hover{filter:brightness(.92)}
+.explore-btn:active{transform:scale(.94);filter:brightness(.86)}
+.explore-btn:focus-visible{outline:2px solid var(--sage-deep);outline-offset:2px}
 
 .markers{margin-bottom:1.1rem}
 .markers.hidden{display:none}
@@ -158,6 +162,29 @@ html,body{width:100%;height:100%;overflow:hidden}
    conditional — keeps the family but not the stage. */
 .ex .vb{font-family:var(--f-verb);font-weight:600;color:var(--tile-ink)}
 
+/* ── COLUMN MODE ─────────────────────────────────────────────────────────
+   The same three cells, squared off: verbs in one continuous fill divided by
+   hairlines, subjects left-aligned beside it, tails taking the rest.
+
+   It is the same information as the lens and a different claim about it. The
+   lens makes the set an OBJECT — centred, symmetrical, something you look
+   at. The column makes it a LIST — left-aligned, scannable, something you
+   read down. For a paradigm the list is arguably the stronger reading: the
+   eye travels down a straight edge more easily than down a curve, which is
+   the comparison the block exists to support.
+
+   Used on phones always, and on any width when ?shape=column. */
+.exs.column{grid-template-columns:max-content max-content minmax(0,1fr) !important;
+  margin-top:0 !important;margin-bottom:1rem !important}
+.exs.column .lens{display:none}
+.exs.column .ex-pre,.exs.column .ex-post{transform:none !important;padding-block:.3rem}
+.exs.column .ex-pre{text-align:left;padding-right:.75em}
+.exs.column .ex-post{padding-left:.75em}
+.exs.column .ex-vb{padding:.3rem .85rem;background:var(--verb)}
+.exs.column .ex:not(:last-child) .ex-vb{box-shadow:inset 0 -1px 0 var(--verb-rule)}
+.exs.column .ex:first-child .ex-vb{border-radius:.6rem .6rem 0 0}
+.exs.column .ex:last-child  .ex-vb{border-radius:0 0 .6rem .6rem}
+
 /* ── WHEN THE COLUMN IS THE WRONG SHAPE ──────────────────────────────────
    A column only means something when the words before the verb are short
    enough for the verbs to line up NEAR each other. In Time Conjunctions the
@@ -215,21 +242,10 @@ html,body{width:100%;height:100%;overflow:hidden}
   /* ── PHONE ──
      The lens is a tablet-and-projector idea. At 390px the waist takes about
      a third of the width, leaving ~125px a side; at that measure the tails
-     wrap to two or three lines, the rows stop being equal heights, and the
-     ragged edge that DRAWS the curve becomes a block of text. The shape
-     survives but the thing it was for does not. So the same data renders as
-     a straight column: the verbs still align, the paradigm still reads down,
-     and the sentences get the full width. */
-  .lens{display:none}
-  .exs{grid-template-columns:max-content max-content minmax(0,1fr) !important;
-       margin-top:0 !important;margin-bottom:1rem !important}
-  .ex-pre,.ex-post{transform:none !important;padding-block:.3rem}
-  .ex-pre{text-align:left;padding-right:.7em}
-  .ex-post{padding-left:.7em}
-  .ex-vb{padding:.3rem .8rem;background:var(--verb)}
-  .ex:not(:last-child) .ex-vb{box-shadow:inset 0 -1px 0 var(--verb-rule)}
-  .ex:first-child .ex-vb{border-radius:.6rem .6rem 0 0}
-  .ex:last-child  .ex-vb{border-radius:0 0 .6rem .6rem}
+     wrap to two or three lines and the ragged edge that DRAWS the curve
+     becomes a block of text. The column mode below is applied instead — by
+     the script, so the two shapes share one definition. */
+  .inner{padding:.9rem .75rem 2rem}
 }
 
 /* ── bigger type on wide screens ──
@@ -479,6 +495,12 @@ const LENS_GAP = 14;         /* clear air between the widest verb and the arc */
 const LENS_END = 0.58;       /* first/last row width, as a fraction of the waist */
 const LENS_MAXPAD = 96;
 const isPhone = () => matchMedia('(max-width:600px)').matches;
+/* ?shape=column forces the straight column at any width, ?shape=lens forces
+   the curve. Default: lens on a wide screen, column on a phone. Keeping it
+   in the URL means a shape can be linked, shown to a class, and argued about
+   without a build. */
+const SHAPE = (new URLSearchParams(location.search).get('shape')||'').toLowerCase();
+const wantsColumn = () => SHAPE === 'column' || (SHAPE !== 'lens' && isPhone());
 
 /* Decide the shape BEFORE measuring anything for the lens: the flat class
    changes the box, so a waist measured first would be measured against a
@@ -496,24 +518,17 @@ function gradeBlock(exs){
 }
 
 function layoutLens(exs){
-  if(gradeBlock(exs)){
+  exs.classList.toggle('column', wantsColumn());
+  if(wantsColumn() || gradeBlock(exs)){
+    /* CSS owns the block in these modes. Inline styles left from a lens
+       layout would fight it, so they are cleared rather than overridden — a
+       stale transform is how a resize leaves text nudged for a shape that is
+       no longer on screen. */
     exs.style.removeProperty('--colw');
     exs.style.marginTop = '';
     exs.querySelectorAll('.ex-pre,.ex-post').forEach(e => e.style.transform = '');
     const svg = exs.querySelector('.lens');
     if(svg) svg.remove();
-    return;
-  }
-  /* At phone width the CSS owns the block. Inline styles left over from a
-     wider layout would fight it, so they are cleared rather than overridden —
-     a stale transform is how a resize leaves text nudged for a shape that is
-     no longer on screen. */
-  if(isPhone()){
-    exs.style.removeProperty('--colw');
-    exs.style.marginTop = '';
-    exs.querySelectorAll('.ex-pre,.ex-post').forEach(e => e.style.transform = '');
-    const old = exs.querySelector('.lens');
-    if(old) old.remove();
     return;
   }
   const vbs = [...exs.querySelectorAll('.ex-vb')];
@@ -526,6 +541,14 @@ function layoutLens(exs){
 
   const widest = Math.max(...vbs.map(v => v.scrollWidth));
   const A = widest / 2 + LENS_GAP;
+
+  /* WHERE THE SHAPE SITS.
+     Measured from the verb column itself, never from 50% of the block. The
+     two side columns are deliberately unequal (a subject is short, a tail is
+     long), so the middle column is NOT the middle of the box — assuming it
+     was is what left the fill sitting to the right of its own verbs. */
+  const cx = (vbs[0].getBoundingClientRect().left - box.left) +
+             vbs[0].getBoundingClientRect().width / 2;
 
   const mk = pad => {
     const T = H + pad * 2;
@@ -578,7 +601,7 @@ function layoutLens(exs){
   svg.setAttribute('width', A * 2);
   svg.setAttribute('height', H);
   svg.setAttribute('viewBox', '0 0 ' + (A*2) + ' ' + H);
-  svg.style.left = 'calc(50% - ' + A + 'px)';
+  svg.style.left = (cx - A) + 'px';
   svg.innerHTML = '<path class="body" d="'+d+'"/>' + lines;
 }
 

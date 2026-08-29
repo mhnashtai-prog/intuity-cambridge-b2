@@ -1004,7 +1004,8 @@ function resolveWire(chosen){
   if (ok){
     /* logged BEFORE any effect runs: a throw in the sfx/animation chain must
        never be able to cost the learner their review entry */
-    answerLog.push({ ok:true, cue:item.cue, answer:item.answer, after:item.after, tense:item.tense });
+    answerLog.push({ ok:true, id:item.group+':'+item.idx, cue:item.cue, answer:item.answer,
+                     after:item.after, tense:tenseLabel(item) });
     hits++; streak++; bestStreak = Math.max(bestStreak,streak);
     const mi = missedThisRun.indexOf(pos); if (mi >= 0) missedThisRun.splice(mi,1);
     correctCount[pos] = (correctCount[pos] || 0) + 1;
@@ -1035,8 +1036,8 @@ function resolveWire(chosen){
     setTimeout(()=>{ if (stillCurrent()) nextBomb(); }, 900);
 
   } else {
-    answerLog.push({ ok:false, cue:item.cue, answer:item.answer, after:item.after,
-                     tense:item.tense, chose: chosen || '—' });
+    answerLog.push({ ok:false, id:item.group+':'+item.idx, cue:item.cue, answer:item.answer,
+                     after:item.after, tense:tenseLabel(item), chose: chosen || '—' });
     misses++; streak = 0; overdriveMark = 0; missLog.push(item);
     if (pos >= 0 && !missedThisRun.includes(pos)) missedThisRun.push(pos);
     if (pos >= 0){ correctCount[pos] = 0; dueAt[pos] = qCount + GAP_AFTER_MISS; }
@@ -1201,10 +1202,29 @@ function finish(outcome, reason){
   $('over').classList.add('show');
 }
 
+
+/* ── WHAT THE REVIEW NEEDS FROM AN ITEM ──────────────────────────────────
+   The log asked for item.tense and no data file has ever had that field —
+   the tense is item.cat.label. So every review row has been missing its
+   tense chip since the feature was written: the CSS is there, the markup is
+   there, the value was always undefined. */
+function tenseLabel(it){
+  return (it && it.cat && it.cat.label) ? it.cat.label : (it && it.tense) || '';
+}
+
 function renderReview(){
   const box = $('ovReview');
   if (!answerLog.length){ box.innerHTML = '<div class="rv-empty">Nothing answered this round.</div>'; return; }
-  const bad = answerLog.filter(a => !a.ok), good = answerLog.filter(a => a.ok);
+  /* ── ONE ROW PER ITEM ──
+     Both games re-serve a missed item later in the same round, which is the
+     point of the spaced repetition — but it made the review list the same
+     sentence two or three times, once per attempt, so a ten-item round could
+     show fifteen rows and read as a bug. Keep the LAST attempt for each item:
+     that is what the student ended up knowing. */
+  const byItem = new Map();
+  answerLog.forEach(a => byItem.set(a.id || (a.cue + '|' + a.answer), a));
+  const log = [...byItem.values()];
+  const bad = log.filter(a => !a.ok), good = log.filter(a => a.ok);
   const row = a =>
     '<div class="rv' + (a.ok ? '' : ' bad') + '">' +
       '<span class="rv-mark">' + (a.ok ? '\u2713' : '\u2715') + '</span>' +
@@ -1301,7 +1321,11 @@ $('againBtn').addEventListener('click', () => { $('over').classList.remove('show
 $('nextBtn').addEventListener('click', () => { const n=(groupIdx+1)%GROUPS.length; switchGroup(n); });
 $('prevBtn').addEventListener('click', () => { const p=(groupIdx-1+GROUPS.length)%GROUPS.length; switchGroup(p); });
 function setReviewLabel(open){
-  const n = answerLog.filter(a => !a.ok).length;
+  /* counted the same way the list is built, or the pill says "5 wrong" over a
+     list of three. */
+  const seen = new Map();
+  answerLog.forEach(a => seen.set(a.id || (a.cue + '|' + a.answer), a));
+  const n = [...seen.values()].filter(a => !a.ok).length;
   $('reviewBtn').innerHTML = (open ? 'Hide answers' : 'Check your answers') +
     (!open && n ? '<span class="cnt">' + n + ' wrong</span>' : '');
 }

@@ -162,25 +162,6 @@ html,body{width:100%;height:100%;overflow:hidden}
    conditional — keeps the family but not the stage. */
 .ex .vb{font-family:var(--f-verb);font-weight:600;color:var(--tile-ink)}
 
-/* ── THE WORKING SHEET GOES FULL SCREEN ──────────────────────────────────
-   The gate is a CHOICE and belongs on the page: it sits below the header, so
-   the set tabs it points at are visible above it. Once a set is chosen the
-   student is working, and the header is no longer navigation they need — it
-   is 170px of chrome above a ten-item exercise on a 660px screen. Defuse
-   takes the whole viewport the moment a round starts, for the same reason.
-
-   So the sheet is a panel while the gate is up and the whole screen once it
-   is down. The class goes on <body> because the header must be pushed out of
-   the way too, and it is not inside .area. */
-body.working .header{transform:translateY(-100%);pointer-events:none}
-body.working .area.sheet-mode{top:0;padding:0;z-index:80}
-body.working .sheet-full{border-radius:0;box-shadow:none}
-.header{transition:transform .26s cubic-bezier(.2,.9,.3,1)}
-/* The close is the only way back, so it cannot be a 15px disc floating over
-   an exercise — it gets a surface of its own. */
-body.working .sheet-close{top:.7rem;right:.7rem;background:var(--tile-bg);
-  color:var(--tile-ink);width:2.1rem;height:2.1rem}
-
 /* ── COLUMN MODE ─────────────────────────────────────────────────────────
    The same three cells, squared off: verbs in one continuous fill divided by
    hairlines, subjects left-aligned beside it, tails taking the rest.
@@ -324,10 +305,12 @@ body.working .sheet-close{top:.7rem;right:.7rem;background:var(--tile-bg);
   <div class="inner"><div class="cards" id="list"></div></div>
 </div>
 
-<!-- Practice and Quiz are SHEETS, not panels. They cover the header, carry
-     their own title and close, and let the framed page draw its own test tabs
-     inside the sheet — which is why #frameTabs and the whole postMessage tab
-     relay below are gone. -->
+<!-- Practice and Quiz are sheets that sit BELOW the header, never over it.
+     The header is where the set tabs live, and a student mid-exercise still
+     has to be able to see which set they are in, switch to another, or leave
+     the mode — so covering it would hide the only navigation they have. The
+     frames report their set lists upward and #frameTabs draws them beside
+     Explore's own tabs. -->
 <div class="area sheet-mode" id="practiceArea">
   <div class="sheet-full">
     <button class="close-btn sheet-close" data-close type="button"
@@ -708,7 +691,6 @@ function applyMode(mode){
   document.querySelectorAll('.area').forEach(a => a.classList.remove('active'));
 
   const explore = mode === 'explore';
-  if(explore) setWorking(false);
   /* Explore is always the page underneath, so it stays active while a sheet
      is open — closing the sheet reveals it already scrolled where it was. */
   $('exploreArea').classList.add('active');
@@ -724,7 +706,6 @@ function applyMode(mode){
   syncHeader();
 }
 
-/* Every sheet closes back to Explore — the page it was opened from. */
 /* ── CLOSING IS TWO STEPS, NOT ONE ───────────────────────────────────────
    Leaving an exercise dropped the student all the way back to Explore, so
    choosing a different set meant Practice → gate → set again — three moves
@@ -855,16 +836,7 @@ function chooseSet(mode, index){
   if(f && f.contentWindow) f.contentWindow.postMessage({ intuity:'setTest', index:index }, '*');
   const g = $(gateFor[mode].gate);
   if(g) g.classList.remove('open');   /* the gate's job is done once a set is picked */
-  setWorking(true);
   paintFrameTabs();
-}
-
-/* One switch for "the student is mid-exercise", so the header, the sheet and
-   the close control cannot disagree about which state they are in. */
-function setWorking(on){
-  document.body.classList.toggle('working', !!on);
-  /* the header moved, so anything measured from it is stale */
-  requestAnimationFrame(syncHeader);
 }
 
 /* The gate returns every time the sheet opens: nothing is chosen for the
@@ -872,7 +844,6 @@ function setWorking(on){
 function openGate(mode){
   const g = $(gateFor[mode] && gateFor[mode].gate);
   if(g) g.classList.add('open');
-  setWorking(false);
   paintFrameTabs();
   /* A framed page that never announces its sets — the older topic pages do
      not — would leave the gate pointing at an empty header row. After a
@@ -880,7 +851,6 @@ function openGate(mode){
   setTimeout(() => {
     if(mainMode === mode && (!testLists[mode] || !testLists[mode].length) && g){
       g.classList.remove('open');
-      setWorking(true);
     }
   }, 1400);
 }

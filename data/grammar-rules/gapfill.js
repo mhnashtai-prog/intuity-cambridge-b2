@@ -238,6 +238,10 @@
       if (Array.isArray(data)) return data;
       if (data.gapfill && Array.isArray(data.gapfill.tests)) return data.gapfill.tests;
       if (Array.isArray(data.tests)) return data.tests;
+      /* A fourth shape: {title, level, sets:[…]}. collocations-gapfill.json
+         uses it, and returning [] for a file full of perfectly good tests
+         reads to the student as a quiz with nothing in it. */
+      if (Array.isArray(data.sets)) return data.sets;
       return [];
     }
 

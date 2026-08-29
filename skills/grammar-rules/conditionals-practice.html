@@ -226,10 +226,28 @@ const esc = v => String(v).replace(/[&<>"]/g, c =>
 const EMBEDDED = window.parent !== window;
 let hostDrawsTabs = false;
 
+/* THE FRAME IS THE SCROLLER, NOT THE WINDOW.
+   body is height:100% with overflow-y:auto (see the note at the top), so
+   window.scrollTo moves nothing: after Check, the score banner was inserted
+   at the top of a page the student was still looking at the bottom of, and
+   nothing appeared to happen. */
+function scrollTop(){
+  const el = document.scrollingElement || document.body;
+  try{ el.scrollTo({ top:0, behavior:'smooth' }); }catch(e){ el.scrollTop = 0; }
+}
+
 function publishTests(){
   if(!EMBEDDED) return;
   parent.postMessage({ intuity:'tests', mode:'practice',
-    titles: allTests.map(t => t.title), active: currentTest }, '*');
+    /* The standalone selector marks a finished set; the published list did
+       not, so embedded — which is every normal visit — that feedback
+       vanished. Percentage rather than a tick, so a 60% is visible as a
+       reason to go back, not just "done". */
+    titles: allTests.map((t, i) => {
+      const s = testScores['test' + i];
+      return s ? t.title + ' (' + s.percentage + '%)' : t.title;
+    }),
+    active: currentTest }, '*');
 }
 window.addEventListener('message', e => {
   if(!e.data) return;
@@ -274,7 +292,7 @@ function renderTestSelector(){
     /* A tick, not a colour: the score is the student's own history and it
        has to read for a colour-blind student too. */
     const sc = testScores['test' + i];
-    b.textContent = t.title + (sc && sc.percentage === 100 ? ' ✓' : '');
+    b.textContent = t.title + (sc ? ' (' + sc.percentage + '%)' : '');
     b.onclick = () => loadTest(i);
     sel.appendChild(b);
   });
@@ -291,7 +309,7 @@ function loadTest(index){
   updateStrip();
   $('actionBar').style.display = 'flex';
   resetActions();
-  try{ window.scrollTo({ top:0, behavior:'smooth' }); }catch(e){ window.scrollTo(0,0); }
+  scrollTop();
 }
 
 function renderTest(){
@@ -305,7 +323,7 @@ function renderTest(){
         '<div class="sentence2">' +
           (ex.before ? '<span class="sentence2-part">' + esc(ex.before) + '</span>' : '') +
           '<input type="text" class="answer-input" id="in-' + i + '" data-i="' + i + '" ' +
-                 'placeholder="…" autocomplete="off" autocapitalize="off" spellcheck="false">' +
+                 'placeholder="…" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">' +
           (ex.after ? '<span class="sentence2-part">' + esc(ex.after) + '</span>' : '') +
         '</div>' +
         '<div class="feedback" id="fb-' + i + '">' +
@@ -385,7 +403,7 @@ function checkAnswers(){
   $('clearBtn').textContent = 'Try again';
   $('checkBtn').textContent = 'Show answers';
   $('checkBtn').onclick = showAnswers;
-  try{ window.scrollTo({ top:0, behavior:'smooth' }); }catch(e){ window.scrollTo(0,0); }
+  scrollTop();
 }
 
 function showAnswers(){
@@ -416,7 +434,7 @@ function clearAnswers(){
   isChecked = false;
   resetActions();
   updateStrip();
-  try{ window.scrollTo({ top:0, behavior:'smooth' }); }catch(e){ window.scrollTo(0,0); }
+  scrollTop();
 }
 
 function resetActions(){

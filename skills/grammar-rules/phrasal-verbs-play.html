@@ -296,7 +296,18 @@ html,body{height:100%;overflow:hidden}
   <script>
 // ==================== STATE ====================
 let grammarData = null;
-let currentCategory = null;      // group id: 'take', 'mix1', …
+let currentCategory = null;      // group id: 'take', 'mix1', … — EXPLORE'S OWN. Defaults
+                                  // to the first family so the slideshow has something to
+                                  // show the instant you land on Explore.
+let gamesCategory = null;        // group id the BOARD GAMES use — stays null until the
+                                  // learner actually taps a family tab. Kept apart from
+                                  // currentCategory on purpose: Explore needing a starting
+                                  // slide is not the same thing as Pegs/Rack/Pairs being
+                                  // handed a verb nobody chose. While this is null, gameSrc()
+                                  // omits ?verb= entirely and the game falls back to its own
+                                  // full-pool mix — which is exactly what the MIX tabs already
+                                  // represent, so an unpicked band reads as "playing the mix"
+                                  // rather than as a blank or broken screen.
 let currentIndex = 0;
 let isPlaying = false;
 let playInterval = null;
@@ -331,6 +342,20 @@ function syncHeaderHeight(){
 }
 window.addEventListener('resize', syncHeaderHeight);
 
+/* ── SET TABS, SYNCED TO WHICHEVER CATEGORY IS "CURRENT" FOR THIS MODE ──
+   The band is one shared row of buttons across six modes, but which
+   category it should be highlighting is not the same variable in all of
+   them: Explore always has a current slide (currentCategory), the three
+   board games may have chosen nothing yet (gamesCategory, possibly null).
+   Reading the right one here — instead of hardcoding "index 0" at build
+   time — is what stops the tab row from claiming TAKE is selected before
+   anyone has tapped it. */
+function syncCategoryTabs(){
+  const activeId = currentMainMode === 'explore' ? currentCategory : gamesCategory;
+  document.querySelectorAll('.vtab').forEach(btn =>
+    btn.classList.toggle('active', btn.dataset.group === activeId));
+}
+
 // ==================== MAIN MODE SWITCHING ====================
 function switchMainMode(mode) {
   if (mode === currentMainMode) return;
@@ -356,7 +381,9 @@ function switchMainMode(mode) {
      they were the product deciding FOR the student.
 
      It stays up for them now and drives the frame: a tap reloads the iframe
-     with ?verb=<id>, which each game reads on boot. */
+     with ?verb=<id>, which each game reads on boot. Until that tap happens,
+     gamesCategory is still null and the frame loads with no ?verb= at all —
+     see the note by its declaration above. */
   const BANDED = ['explore', 'pegs', 'rack', 'pairs'];
 
   if (mode === 'explore') {
@@ -391,6 +418,7 @@ function switchMainMode(mode) {
     }
   }
   syncVerbStep();
+  syncCategoryTabs();
   syncHeaderHeight();
 }
 
@@ -406,8 +434,12 @@ async function init() {
 
     VERB_ORDER = GROUPS.map(g => g.id);
     buildCategorySelector();
+    /* Explore's own default — gamesCategory is deliberately left untouched
+       (still null) so the board games open unfiltered rather than inheriting
+       Explore's first slide. */
     currentCategory = VERB_ORDER[0];
     loadCategory(currentCategory);
+    syncCategoryTabs();
     syncHeaderHeight();
 
   } catch (error) {
@@ -422,21 +454,32 @@ function buildCategorySelector() {
   selector.innerHTML = '';
   selector.classList.add('show');
 
-  GROUPS.forEach((g, index) => {
+  /* No tab is marked active here. Which one (if any) should light up
+     depends on the mode you're in, and at build time that hasn't been
+     decided yet — syncCategoryTabs() sets it, right after this returns and
+     again on every mode switch. */
+  GROUPS.forEach((g) => {
     const btn = document.createElement('button');
-    btn.className = 'vtab' + (index === 0 ? ' active' : '');
+    btn.className = 'vtab';
     btn.textContent = g.label;
     btn.dataset.group = g.id;
     btn.onclick = () => selectCategory(g.id);
     selector.appendChild(btn);
   });
+  syncCategoryTabs();
 }
 
 /* One loader for the three board games. The frame is only rebuilt when the
    family actually changes — switching away and back keeps the round you were
-   in the middle of, which is what the old include() check was protecting. */
+   in the middle of, which is what the old include() check was protecting.
+
+   Reads gamesCategory, not currentCategory: see the note on its declaration.
+   While nobody has tapped a family tab this returns the bare filename, and
+   each game's own boot() already falls back to its full, unfiltered pool
+   when it finds no ?verb= param — so "nothing chosen yet" plays as the mix,
+   not as TAKE. */
 function gameSrc(file){
-  return currentCategory ? file + '?verb=' + encodeURIComponent(currentCategory) : file;
+  return gamesCategory ? file + '?verb=' + encodeURIComponent(gamesCategory) : file;
 }
 function loadGame(frameId, file){
   const iframe = document.getElementById(frameId);
@@ -474,9 +517,12 @@ function stepVerb(dir) {
 function selectCategory(groupId) {
   if (isPlaying) pause();
   currentCategory = groupId;
+  /* A tap on the band is an explicit choice, wherever it happens — so it
+     narrows the games too, not just Explore's own slide. This is the ONLY
+     place gamesCategory ever leaves null. */
+  gamesCategory = groupId;
   currentIndex = 0;
-  document.querySelectorAll('.vtab').forEach(btn =>
-    btn.classList.toggle('active', btn.dataset.group === groupId));
+  syncCategoryTabs();
   loadCategory(groupId);
 
   /* In a board game the band is the set picker, so a tap has to reach the

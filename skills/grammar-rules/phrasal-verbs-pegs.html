@@ -391,6 +391,46 @@
   .loading.gone{ display:none; }
   .err{ color:var(--bad); line-height:1.7; text-align:center; }
 
+  /* ── THE ENTRY GATE ──
+     Ported from Word Forge's idle panel (.idle-panel / .idle-pend / .gate).
+     Forge has two waiting states in one screen: nothing chosen yet ("Pick a
+     MIX above"), and something chosen but not begun (the gate, naming the
+     mix, with its own Start). Pegs' verb tabs live on the HOST page, not in
+     here, so both of those states are folded into this one panel — only the
+     wording changes, from "pick a verb above" to naming the verb once the
+     host has posted one across. Either way the pendulum keeps turning and
+     nothing is dealt until Start is pressed. That is the fix: this file used
+     to remove the loading pendulum and go straight into a deal, which is why
+     it looked like it "auto-selected a set" — there was never a moment where
+     the learner chose to begin. */
+  .idle-panel{
+    position:fixed; inset:0; z-index:15; display:none;
+    flex-direction:column; align-items:center; justify-content:center;
+    gap:.15rem; padding:2rem 1.5rem; text-align:center;
+    background:var(--ground);
+  }
+  .idle-panel.show{ display:flex; }
+  .idle-panel .idle-kicker{
+    font-family:'DM Mono',monospace; font-size:.62rem; letter-spacing:.2em;
+    text-transform:uppercase; color:var(--faint); margin-bottom:.5rem;
+  }
+  .idle-panel .idle-msg{
+    font-family:'Space Grotesk',sans-serif; font-weight:700;
+    font-size:clamp(1rem,3.8vw,1.3rem); line-height:1.35; color:var(--ink);
+    max-width:22rem;
+  }
+  .idle-panel .idle-sub{
+    margin-top:.55rem; font-size:.82rem; color:var(--dim); max-width:21rem; line-height:1.55;
+  }
+  .idle-panel .idle-go{ margin-top:1.2rem; }
+
+  /* The board and the bank stay out of the DOM's visible flow until a deal
+     has actually begun — otherwise an empty stage and an empty bank sit
+     behind the gate for no reason, and a screen reader announces a board
+     with nothing on it before announcing the gate on top of it. */
+  body:not(.started) .stage,
+  body:not(.started) .bank{ display:none; }
+
   @media (prefers-reduced-motion: reduce){
     *{ animation-duration:.01ms !important; transition-duration:.01ms !important; }
   }
@@ -431,6 +471,19 @@
 
 <div class="banner" id="banner"></div>
 
+<!-- THE GATE. Shown the instant the data is ready and kept up until Start is
+     tapped — by the learner here, or by picking a verb on the host and then
+     tapping Start. The pendulum inside is the SAME markup/animation as the
+     one in #loading; it never stops turning across that handoff, so there is
+     no visible seam between "fetching" and "waiting for you to begin". -->
+<div class="idle-panel" id="idlePanel">
+  <div class="pend" aria-hidden="true"><div class="pend-dial"><span>?</span></div></div>
+  <div class="idle-kicker">Pegs</div>
+  <div class="idle-msg" id="idleMsg">Pick a verb above to deal your first nine</div>
+  <div class="idle-sub">Each verb is its own set of phrasal verbs — nothing deals until you start.</div>
+  <button class="go idle-go" id="idleStart">Start</button>
+</div>
+
 <div class="over" id="over">
   <div class="big" id="overBig"></div>
   <div class="sub" id="overSub"></div>
@@ -465,14 +518,22 @@ const PER_DEAL = 9;
    The fix is to stop reloading the document. The data is fetched ONCE, kept
    in RAW_DATA, and a set change afterwards is the host posting a message
    into this same still-running page — which re-filters RAW_DATA and deals
-   again without ever touching location or re-running boot(). The pendulum
-   is wired to boot() alone, so it now shows exactly once, at first entry,
-   and never again for the lifetime of this tab. */
+   again without ever touching location or re-running boot(). */
 let RAW_DATA = null;
 let currentVerb = new URLSearchParams(location.search).get('verb');
 /* A message can arrive before RAW_DATA exists — the host's tap and this
    page's own fetch are racing. Queue it rather than drop it or fetch twice. */
 let pendingVerb;
+
+/* ── THE GATE STATE ──
+   selectedVerb is "what will be dealt when Start is pressed" — it can be set
+   either by the URL at load time or by a host message while the gate is up.
+   gameStarted flips exactly once, the moment Start actually runs a deal;
+   nothing before that point touches POOL/round/bank, so there is no way for
+   a deal to happen before the learner (or the host, then the learner) has
+   chosen to begin. */
+let selectedVerb = currentVerb;
+let gameStarted = false;
 
 let POOL = [], round = [], bank = [], picked = null;
 let pegged = 0, dropped = 0, deals = 1, locked = false;
@@ -505,9 +566,8 @@ function buildPool(verbId){
   if (POOL.length < PER_DEAL && verbId) { POOL = []; buildAll(RAW_DATA); }
 }
 /* Switches the live board to a verb id (or the whole mix) using data already
-   in memory — no fetch, no reload, no pendulum. Used by both the first-load
-   path and every set change after it, so there is exactly one code path for
-   "start playing this set" regardless of when it happens. */
+   in memory — no fetch, no reload, no pendulum. Used once the game is
+   running, for every set change after the first. */
 function applyVerb(verbId){
   currentVerb = verbId;
   buildPool(verbId);
@@ -519,15 +579,55 @@ function applyVerb(verbId){
 }
 const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[b[i],b[j]]=[b[j],b[i]];} return b; };
 
+/* ── THE GATE ITSELF ──
+   Names the verb once one has been chosen; falls back to the generic prompt
+   otherwise. Called whenever selectedVerb changes while the gate is still up
+   — the label is the only thing allowed to move before Start is pressed. */
+function labelFor(verbId){
+  if (!verbId || !RAW_DATA) return null;
+  const g = (RAW_DATA.groups || []).find(x => x.id === verbId);
+  return g ? g.label : null;
+}
+function paintGate(){
+  const label = labelFor(selectedVerb);
+  $('idleMsg').textContent = label
+    ? 'Ready to deal ' + label
+    : 'Pick a verb above to deal your first nine';
+}
+function showGate(){
+  paintGate();
+  $('idlePanel').classList.add('show');
+}
+function hideGate(){
+  $('idlePanel').classList.remove('show');
+}
+/* The one and only place a deal is allowed to start. Runs once, on a tap of
+   Start — never automatically, and never twice. */
+function startGame(){
+  if (gameStarted || !RAW_DATA) return;
+  gameStarted = true;
+  document.body.classList.add('started');
+  hideGate();
+  applyVerb(selectedVerb);
+}
+$('idleStart').addEventListener('click', startGame);
+
 /* THE HOST'S CHANNEL. Same-origin only — the host frames this page, so a
    stray message from anywhere else (a browser extension, another tab) is
-   simply not from window.parent and gets ignored. */
+   simply not from window.parent and gets ignored.
+
+   Before Start has been pressed, a host message only UPDATES the gate — it
+   names the chosen verb and waits, it does not deal. Once the game is
+   already running, a host message behaves as it always did: an immediate
+   live switch, no reload, no pendulum. */
 window.addEventListener('message', e => {
   if (e.source !== window.parent) return;
   const msg = e.data;
   if (!msg || msg.type !== 'intuity:set-verb') return;
   if (!RAW_DATA) { pendingVerb = msg.verb || null; return; }
-  applyVerb(msg.verb || null);
+  selectedVerb = msg.verb || null;
+  if (gameStarted) applyVerb(selectedVerb);
+  else paintGate();
 });
 
 /* Sound and the item log both live in shared files, so a change reaches
@@ -567,11 +667,19 @@ async function boot(){
        recent instruction. */
     const first = (pendingVerb !== undefined) ? pendingVerb : currentVerb;
     pendingVerb = undefined;
+    selectedVerb = first;
+    /* Validate the data early so a bad/empty verb id fails loudly here
+       rather than silently at Start — but this does NOT deal. buildPool
+       only fills POOL in memory; nothing is drawn to the screen until
+       startGame() runs. */
     buildPool(first);
     if (!POOL.length) throw new Error('no phrases in the data');
     currentVerb = first;
     $('loading').remove();
-    deal();
+    /* The pendulum hands off from #loading to the gate here, with no gap:
+       both use the identical .pend markup and animation, so the swing never
+       actually stops — only the text and button above it appear. */
+    showGate();
   }catch(e){
     $('loading').innerHTML = '<p class="err">Could not load <b>' + DATA_URL + '</b>.<br>' +
       'Open this from the site rather than as a local file — browsers block file:// requests.</p>';

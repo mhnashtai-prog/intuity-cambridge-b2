@@ -349,6 +349,12 @@
 const DATA_URL = '../../data/grammar-rules/phrasal-verbs-data.json';
 const PER_DEAL = 9;
 
+/* ── THE SET THE HOST CHOSE ──
+   The band above this frame lists the verb families; a tap there reloads
+   this page with ?verb=<group id>. Without one we take the whole pool, so
+   opening the file directly still works. */
+const WANT = new URLSearchParams(location.search).get('verb');
+
 let POOL = [], round = [], bank = [], picked = null;
 let pegged = 0, dropped = 0, deals = 1, locked = false;
 let history = [], at = -1;
@@ -356,6 +362,13 @@ let history = [], at = -1;
 const $ = id => document.getElementById(id);
 const firstSense = m => String(m).split(';')[0].trim();
 const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function buildAll(d){
+  (d.groups || []).forEach(g => (g.items || []).forEach(it => {
+    if (it.particle && it.meaning)
+      POOL.push({ verb:(it.verb || g.label || g.id).toUpperCase(),
+                  particle: it.particle.toLowerCase(), meaning: it.meaning });
+  }));
+}
 const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[b[i],b[j]]=[b[j],b[i]];} return b; };
 
 /* Sound and the item log both live in shared files, so a change reaches
@@ -371,12 +384,16 @@ async function boot(){
     const res = await fetch(DATA_URL);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const d = await res.json();
-    (d.groups || []).forEach(g => (g.items || []).forEach(it => {
+    (d.groups || []).filter(g => !WANT || g.id === WANT)
+      .forEach(g => (g.items || []).forEach(it => {
       if (it.particle && it.meaning)
         POOL.push({ verb: (it.verb || g.label || g.id).toUpperCase(),
                     particle: it.particle.toLowerCase(),
                     meaning: it.meaning });
     }));
+    /* A family can be smaller than a deal — fall back to everything
+       rather than showing an error the child cannot act on. */
+    if (POOL.length < PER_DEAL && WANT) { POOL = []; buildAll(d); }
     if (!POOL.length) throw new Error('no phrases in the data');
     $('loading').remove();
     deal();

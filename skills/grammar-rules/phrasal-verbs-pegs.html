@@ -86,13 +86,14 @@
   .stage{
     position:fixed; top:var(--header-h); left:0; right:0; bottom:var(--bank-h);
     display:flex; align-items:center; justify-content:center;
-    padding:1.4rem 1.1rem; overflow-y:auto;
+    padding:1.4rem 1.1rem; overflow-y:auto; scrollbar-gutter:stable;
   }
   /* Capped, not stretched — every pixel the screen gains goes into the space
      BETWEEN the tiles rather than into the tiles. */
   .poles{
-    display:grid; grid-template-columns:repeat(3,minmax(0,124px));
-    justify-content:center; gap:1.5rem 1.2rem; width:100%; margin:auto;
+    display:grid; grid-template-columns:repeat(3,minmax(0,114px));
+    grid-auto-rows:min-content;
+    justify-content:center; gap:1.8rem 1.4rem; width:100%; margin:auto;
   }
   @media(max-height:760px){ .poles{ grid-template-columns:repeat(3,minmax(0,98px)); gap:1.3rem 1.1rem; } }
   @media(min-width:560px){ .poles{ grid-template-columns:repeat(3,minmax(0,136px)); gap:2.2rem 1.8rem; } }
@@ -131,9 +132,18 @@
   /* THE DEFINITION IS A CAPTION. Under the square, as the verb pair is on
      Rack — so the tile stays pure material and the prose is free to be any
      length without squeezing the type inside. */
+  /* THREE LINES, ALWAYS. The caption had no reserved height, so each row
+     sized to its own text — and any change in available width tipped a
+     definition from two lines to three, grew the row, and reflowed the whole
+     board. Nine tiles appearing to retract mid-answer is that reflow, not an
+     animation: narrower columns force more wrapping, and more wrapping makes
+     the board look shrunken. A fixed box means the grid cannot move at all
+     once it is drawn. */
   .pole .meaning{
     font-family:'DM Sans',sans-serif; font-size:clamp(.6rem,2.3vw,.7rem);
     line-height:1.35; color:var(--dim); text-align:center;
+    min-height:4.05em;              /* 3 × 1.35 */
+    display:flex; align-items:flex-start; justify-content:center;
   }
 
   /* ── THE SLOT ──
@@ -292,6 +302,8 @@
   .go:active{ transform:scale(.95); }
   .away{ margin-top:1.4rem; }
 
+  .fx{ position:fixed; inset:0; z-index:35; pointer-events:none; overflow:hidden; }
+
   .loading{
     position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
     background:var(--ground); color:var(--faint); font-size:.86rem; z-index:50;
@@ -320,6 +332,15 @@
 </header>
 
 <div class="stage"><div class="poles" id="poles"></div></div>
+
+<!-- The burst lives here, not in the board. Sparks are absolutely positioned,
+     and an absolutely positioned descendant still counts toward a scrolling
+     container's overflow — so every celebration briefly grew .stage's scroll
+     area, brought up a scrollbar, took width off the grid, and rewrapped the
+     captions. That is the retraction: it fires with the animation because the
+     animation causes it. On its own fixed layer the burst cannot touch
+     layout at all. -->
+<div class="fx" id="fx" aria-hidden="true"></div>
 
 <div class="bank">
   <div class="tray">
@@ -599,10 +620,13 @@ function flash(text, col){
 }
 
 function burst(el){
-  const stage = document.querySelector('.stage');
-  const s = stage.getBoundingClientRect(), r = el.getBoundingClientRect();
-  const cx = r.left - s.left + r.width / 2;
-  const cy = r.top - s.top + r.height / 2 + stage.scrollTop;
+  /* Viewport coordinates, because the layer is fixed. The old maths was
+     relative to .stage and had to add scrollTop to compensate — which is
+     itself a sign the sparks were living inside a scroller. */
+  const stage = document.getElementById('fx');
+  const r = el.getBoundingClientRect();
+  const cx = r.left + r.width / 2;
+  const cy = r.top + r.height / 2;
   /* The old seven belonged to the dark theme — acid yellow, gold, mint and a
    sky blue that appears nowhere else. These are the board's own. */
   const COLS = ['#6B3FA0','#E8632A','#C2956E','#4A6B5C','#FFFFFF','#B44A22'];

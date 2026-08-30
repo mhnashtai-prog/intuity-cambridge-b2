@@ -348,13 +348,24 @@ function switchMainMode(mode) {
   const viewModeContainer = document.getElementById('viewModeContainer');
   const categorySelector = document.getElementById('categorySelector');
 
+  /* THE BAND NEVER LEAVES. It used to be shown for Explore and stripped for
+     everything else — so the moment a child reached Pegs, Rack or Pairs the
+     ten verb families vanished and the game dealt from the whole pool on
+     their behalf. Quiz and Practice got away with it because the framed page
+     draws its own tabs inside the frame; the three board games have none, so
+     they were the product deciding FOR the student.
+
+     It stays up for them now and drives the frame: a tap reloads the iframe
+     with ?verb=<id>, which each game reads on boot. */
+  const BANDED = ['explore', 'pegs', 'rack', 'pairs'];
+
   if (mode === 'explore') {
     viewModeContainer.classList.remove('hidden');
     categorySelector.classList.add('show');
     document.getElementById('exploreArea').classList.add('active');
   } else {
     viewModeContainer.classList.add('hidden');
-    categorySelector.classList.remove('show');
+    categorySelector.classList.toggle('show', BANDED.includes(mode));
 
     if (mode === 'practice') {
       document.getElementById('practiceArea').classList.add('active');
@@ -364,22 +375,13 @@ function switchMainMode(mode) {
       }
     } else if (mode === 'pairs') {
       document.getElementById('pairsArea').classList.add('active');
-      const iframe = document.getElementById('pairsIframe');
-      if (!iframe.src || !iframe.src.includes('phrasal-verbs-pairs.html')) {
-        iframe.src = 'phrasal-verbs-pairs.html';
-      }
+      loadGame('pairsIframe', 'phrasal-verbs-pairs.html');
     } else if (mode === 'rack') {
       document.getElementById('rackArea').classList.add('active');
-      const iframe = document.getElementById('rackIframe');
-      if (!iframe.src || !iframe.src.includes('phrasal-verbs-rack.html')) {
-        iframe.src = 'phrasal-verbs-rack.html';
-      }
+      loadGame('rackIframe', 'phrasal-verbs-rack.html');
     } else if (mode === 'pegs') {
       document.getElementById('pegsArea').classList.add('active');
-      const iframe = document.getElementById('pegsIframe');
-      if (!iframe.src || !iframe.src.includes('phrasal-verbs-pegs.html')) {
-        iframe.src = 'phrasal-verbs-pegs.html';
-      }
+      loadGame('pegsIframe', 'phrasal-verbs-pegs.html');
     } else if (mode === 'quiz') {
       document.getElementById('quizArea').classList.add('active');
       const iframe = document.getElementById('quizIframe');
@@ -430,6 +432,23 @@ function buildCategorySelector() {
   });
 }
 
+/* One loader for the three board games. The frame is only rebuilt when the
+   family actually changes — switching away and back keeps the round you were
+   in the middle of, which is what the old include() check was protecting. */
+function gameSrc(file){
+  return currentCategory ? file + '?verb=' + encodeURIComponent(currentCategory) : file;
+}
+function loadGame(frameId, file){
+  const iframe = document.getElementById(frameId);
+  const want = gameSrc(file);
+  if (!iframe.src || !iframe.src.endsWith(want)) iframe.src = want;
+}
+const GAME_FRAMES = {
+  pegs:  ['pegsIframe',  'phrasal-verbs-pegs.html'],
+  rack:  ['rackIframe',  'phrasal-verbs-rack.html'],
+  pairs: ['pairsIframe', 'phrasal-verbs-pairs.html']
+};
+
 function syncVerbStep() {
   const bar = document.getElementById('verbStep');
   if (!bar) return;
@@ -459,6 +478,11 @@ function selectCategory(groupId) {
   document.querySelectorAll('.vtab').forEach(btn =>
     btn.classList.toggle('active', btn.dataset.group === groupId));
   loadCategory(groupId);
+
+  /* In a board game the band is the set picker, so a tap has to reach the
+     frame. Explore repaints in place; the games reload with the new family. */
+  const g = GAME_FRAMES[currentMainMode];
+  if (g) loadGame(g[0], g[1]);
 }
 
 // ==================== LOAD ====================

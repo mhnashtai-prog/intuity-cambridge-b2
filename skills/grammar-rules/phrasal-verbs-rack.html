@@ -205,7 +205,12 @@
     color:#B0865C;   /* the caramel, one step deeper — 700 at #C2956E on
                         this ground read lighter than 600 did on the old */
   }
-  .card.kept .lbl b, .card.fell .lbl b{ color:var(--faint); }
+  /* An answered verb steps back, it does not switch off. --faint (#8A9093)
+     is the HUD's colour — right for a 10px monospace tally, far too washed
+     for a 1.6rem Anton headline, which is why a kept card looked greyed out
+     rather than settled. This is the same cool family two steps up: still
+     clearly quieter than the black, still a colour rather than a fade. */
+  .card.kept .lbl b, .card.fell .lbl b{ color:#5A6469; }
   .card.kept .lbl span, .card.fell .lbl span{ color:rgba(176,134,92,.55); }
   .card.answer .lbl b{ color:var(--hot); }
   .card.answer .lbl span{ color:var(--hot); }
@@ -365,6 +370,13 @@
 <script src="intuity-sound.js"></script>
 <script>
 const DATA_URL = '../../data/grammar-rules/phrasal-verbs-data.json';
+
+/* ── THE SET THE HOST CHOSE ──
+   The band above this frame lists the verb families; a tap there reloads
+   this page with ?verb=<group id>. Without one we take the whole pool, so
+   opening the file directly still works. */
+const WANT = new URLSearchParams(location.search).get('verb');
+
 /* Nine, not sixteen. On a phone a sixteen-card rack is four columns of
    72px cards whose verbs sit at about 10px — the board fits, but nothing on
    it is comfortably readable or comfortably tappable. Nine is 3x3 on every
@@ -412,12 +424,23 @@ async function boot(){
     const res = await fetch(DATA_URL);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const d = await res.json();
-    (d.groups || []).forEach(g => (g.items || []).forEach(it => {
+    (d.groups || []).filter(g => !WANT || g.id === WANT)
+      .forEach(g => (g.items || []).forEach(it => {
       if (it.particle && it.meaning)
         POOL.push({ verb:(it.verb || g.label || g.id).toUpperCase(),
                     particle: it.particle.toLowerCase(),
                     meaning: it.meaning });
     }));
+    /* A family can be smaller than a round — fall back to the whole pool
+       rather than showing an error the child cannot act on. */
+    if (POOL.length < SIZE && WANT){
+      POOL = [];
+      (d.groups || []).forEach(g => (g.items || []).forEach(it => {
+        if (it.particle && it.meaning)
+          POOL.push({ verb:(it.verb || g.label || g.id).toUpperCase(),
+                      particle: it.particle.toLowerCase(), meaning: it.meaning });
+      }));
+    }
     if (POOL.length < SIZE) throw new Error('not enough phrases');
     $('loading').remove();
     start();

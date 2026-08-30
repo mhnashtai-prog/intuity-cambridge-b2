@@ -469,22 +469,48 @@ function buildCategorySelector() {
   syncCategoryTabs();
 }
 
-/* One loader for the three board games. The frame is only rebuilt when the
-   family actually changes — switching away and back keeps the round you were
-   in the middle of, which is what the old include() check was protecting.
+/* One loader for the three board games.
 
-   Reads gamesCategory, not currentCategory: see the note on its declaration.
-   While nobody has tapped a family tab this returns the bare filename, and
-   each game's own boot() already falls back to its full, unfiltered pool
-   when it finds no ?verb= param — so "nothing chosen yet" plays as the mix,
-   not as TAKE. */
+   NAVIGATE ONCE, THEN TALK. loadGame() used to set iframe.src on every set
+   change, which is a real page navigation — a brand-new document, starting
+   from ITS OWN loading state every time. That's why the pendulum came back
+   on every tap: it isn't slow, it's genuinely reloading from zero each time,
+   fonts and all. A game's document is now navigated to exactly once, the
+   first time its mode is opened at all (tracked in GAME_LOADED); every set
+   change after that is a postMessage into the already-running document,
+   which the game refilters its already-fetched data against and re-deals —
+   no reload, no pendulum, same as the game's own note about the pendulum
+   showing "once at entry, never again".
+
+   Reads gamesCategory, not currentCategory: see the note on its
+   declaration. While nobody has tapped a family tab this returns the bare
+   filename, and each game's own boot() already falls back to its full,
+   unfiltered pool when it finds no ?verb= param — so "nothing chosen yet"
+   plays as the mix, not as TAKE. */
+const GAME_LOADED = { pegs:false, rack:false, pairs:false };
+
 function gameSrc(file){
   return gamesCategory ? file + '?verb=' + encodeURIComponent(gamesCategory) : file;
 }
 function loadGame(frameId, file){
-  const iframe = document.getElementById(frameId);
-  const want = gameSrc(file);
-  if (!iframe.src || !iframe.src.endsWith(want)) iframe.src = want;
+  const key = frameId.replace('Iframe','');
+  if (GAME_LOADED[key]) return;   /* already running — leave it alone */
+  document.getElementById(frameId).src = gameSrc(file);
+  GAME_LOADED[key] = true;
+}
+/* Called only when the band picks a NEW family (selectCategory), not on
+   every mode switch — so opening a game you've already been in doesn't
+   restart its round, and a family you pick while looking at one game is
+   handed to the other two as well, so they don't show a stale mix the next
+   time you switch to them. */
+function updateGamesVerb(){
+  Object.keys(GAME_FRAMES).forEach(key => {
+    if (!GAME_LOADED[key]) return;   /* not open yet — it'll pick up
+                                         gamesCategory on its first load */
+    const iframe = document.getElementById(GAME_FRAMES[key][0]);
+    if (iframe.contentWindow)
+      iframe.contentWindow.postMessage({ type:'intuity:set-verb', verb: gamesCategory }, '*');
+  });
 }
 const GAME_FRAMES = {
   pegs:  ['pegsIframe',  'phrasal-verbs-pegs.html'],
@@ -525,10 +551,13 @@ function selectCategory(groupId) {
   syncCategoryTabs();
   loadCategory(groupId);
 
-  /* In a board game the band is the set picker, so a tap has to reach the
-     frame. Explore repaints in place; the games reload with the new family. */
-  const g = GAME_FRAMES[currentMainMode];
-  if (g) loadGame(g[0], g[1]);
+  /* In a board game the band is the set picker, so a tap has to reach every
+     game that's already running — not just the one on screen — or the
+     others would show a stale mix the next time you switched to them.
+     Explore repaints in place and needs nothing from this. A game that
+     hasn't been opened yet needs nothing either: it reads gamesCategory
+     itself the first time it loads. */
+  if (GAME_FRAMES[currentMainMode]) updateGamesVerb();
 }
 
 // ==================== LOAD ====================

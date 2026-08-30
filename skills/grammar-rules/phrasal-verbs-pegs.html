@@ -341,16 +341,16 @@
      here is a border-left on a 2px-wide box rather than a 1px background
      fill — same silhouette, a rendering path that can't round itself away. */
   .pend{
-    position:relative; width:88px; height:88px; margin:0 auto .95rem;
-    transform-origin:50% -38px;
+    position:relative; width:104px; height:104px; margin:0 auto .95rem;
+    transform-origin:50% -40px;
     animation:pendSwing 2.7s ease-in-out infinite;
   }
   .pend::before{
-    content:''; position:absolute; left:50%; top:-38px; width:2px; height:38px;
+    content:''; position:absolute; left:50%; top:-40px; width:2px; height:40px;
     border-left:1.5px solid var(--caramel); transform:translateX(-50%);
   }
   .pend::after{
-    content:''; position:absolute; left:50%; top:-41px; width:7px; height:7px;
+    content:''; position:absolute; left:50%; top:-43px; width:7px; height:7px;
     border-radius:50%; background:var(--caramel); transform:translateX(-50%);
   }
   .pend-dial{
@@ -360,11 +360,11 @@
     display:flex; align-items:center; justify-content:center;
   }
   .pend-dial::before{
-    content:''; position:absolute; inset:6%; border-radius:50%;
+    content:''; position:absolute; inset:0; border-radius:50%;
     background:var(--caramel);
   }
   .pend-dial::after{
-    content:''; position:absolute; inset:15%; border-radius:50%; background:var(--ink);
+    content:''; position:absolute; inset:8.5%; border-radius:50%; background:var(--ink);
   }
   .pend-dial span{
     position:relative; z-index:2; font-family:'Space Grotesk',sans-serif;
@@ -375,46 +375,43 @@
     .pend{ animation:none; }
   }
 
-  .loading{
-    position:fixed; inset:0; display:flex; flex-direction:column;
-    align-items:center; justify-content:center; gap:.2rem;
-    background:var(--ground); color:var(--faint); font-size:.86rem; z-index:50;
-  }
-  .loading.gone{ display:none; }
   .err{ color:var(--bad); line-height:1.7; text-align:center; }
 
   /* ── THE ENTRY GATE ──
-     Ported from Word Forge's idle panel (.idle-panel / .idle-pend / .gate).
-     Forge has two waiting states in one screen: nothing chosen yet ("Pick a
-     MIX above"), and something chosen but not begun (the gate, naming the
-     mix, with its own Start). Pegs' verb tabs live on the HOST page, not in
-     here, so both of those states are folded into this one panel — only the
-     wording changes, from "pick a verb above" to naming the verb once the
-     host has posted one across. Either way the pendulum keeps turning and
-     nothing is dealt until Start is pressed. That is the fix: this file used
-     to remove the loading pendulum and go straight into a deal, which is why
-     it looked like it "auto-selected a set" — there was never a moment where
-     the learner chose to begin. */
-  .idle-panel{
-    position:fixed; inset:0; z-index:15; display:none;
-    flex-direction:column; align-items:center; justify-content:center;
-    gap:.15rem; padding:2rem 1.5rem; text-align:center;
-    background:var(--ground);
+     ONE element, mounted once, for the whole span from "fetching" through
+     "waiting for Start". Loading and idle used to be two different DOM
+     nodes — #loading with its own .pend, #idlePanel with a second .pend —
+     and swapping from one to the other meant the first pendulum was
+     destroyed mid-swing and the second was born at its animation's frame
+     zero. A CSS animation always starts a new element at 0%, so that
+     handoff was a visible snap back to the resting angle: the reported
+     glitch. Here the pendulum itself never unmounts; only the loading text
+     versus the message-and-Start-button beneath it toggle, so the swing is
+     continuous from the moment the page opens to the moment Start is
+     pressed. */
+  .gate{
+    position:fixed; inset:0; z-index:50; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:.15rem;
+    padding:2rem 1.5rem; text-align:center; background:var(--ground);
   }
-  .idle-panel.show{ display:flex; }
-  .idle-panel .idle-kicker{
+  .gate .gate-loading{ font-size:.86rem; color:var(--faint); }
+  .gate .idle-kicker{
     font-family:'DM Mono',monospace; font-size:.62rem; letter-spacing:.2em;
     text-transform:uppercase; color:var(--faint); margin-bottom:.5rem;
   }
-  .idle-panel .idle-msg{
+  .gate .idle-msg{
     font-family:'Space Grotesk',sans-serif; font-weight:700;
     font-size:clamp(1rem,3.8vw,1.3rem); line-height:1.35; color:var(--ink);
     max-width:22rem;
   }
-  .idle-panel .idle-sub{
+  .gate .idle-sub{
     margin-top:.55rem; font-size:.82rem; color:var(--dim); max-width:21rem; line-height:1.55;
   }
-  .idle-panel .idle-go{ margin-top:1.2rem; }
+  .gate .idle-go{ margin-top:1.2rem; }
+
+  /* Once a deal has actually begun, the whole gate — pendulum included —
+     goes away in one step; there is nothing left for it to hand off to. */
+  body.started .gate{ display:none; }
 
   /* The board and the bank stay out of the DOM's visible flow until a deal
      has actually begun — otherwise an empty stage and an empty bank sit
@@ -463,17 +460,18 @@
 
 <div class="banner" id="banner"></div>
 
-<!-- THE GATE. Shown the instant the data is ready and kept up until Start is
-     tapped — by the learner here, or by picking a verb on the host and then
-     tapping Start. The pendulum inside is the SAME markup/animation as the
-     one in #loading; it never stops turning across that handoff, so there is
-     no visible seam between "fetching" and "waiting for you to begin". -->
-<div class="idle-panel" id="idlePanel">
+<!-- THE GATE. One element, mounted once, for the whole span from "fetching"
+     to "waiting for Start" — see the comment on .gate in <style> for why
+     this used to be two elements and what that cost. -->
+<div class="gate" id="gate">
   <div class="pend" aria-hidden="true"><div class="pend-dial"><span>?</span></div></div>
-  <div class="idle-kicker">Pegs</div>
-  <div class="idle-msg" id="idleMsg">Pick a verb above to deal your first nine</div>
-  <div class="idle-sub">Each verb is its own set of phrasal verbs — nothing deals until you start.</div>
-  <button class="go idle-go" id="idleStart">Start</button>
+  <div class="gate-loading" id="gateLoading">Loading…</div>
+  <div id="gateReady" style="display:none">
+    <div class="idle-kicker">Pegs</div>
+    <div class="idle-msg" id="idleMsg">Pick a verb above to deal your first nine</div>
+    <div class="idle-sub">Each verb is its own set of phrasal verbs — nothing deals until you start.</div>
+    <button class="go idle-go" id="idleStart">Start</button>
+  </div>
 </div>
 
 <div class="over" id="over">
@@ -486,10 +484,6 @@
     <button class="go" onclick="nextDeal()">Next nine →</button>
   </div>
   <button class="quiet away" onclick="(window.top || window).location.href='phrasal-verbs-play.html'">Back to phrasal verbs</button>
-</div>
-<div class="loading" id="loading">
-  <div class="pend" aria-hidden="true"><div class="pend-dial"><span>?</span></div></div>
-  <div>Loading…</div>
 </div>
 
 <script src="intuity-log.js"></script>
@@ -586,20 +580,22 @@ function paintGate(){
     ? 'Ready to deal ' + label
     : 'Pick a verb above to deal your first nine';
 }
+/* Swaps the gate from "Loading…" to the message-and-Start content, without
+   touching the .pend element at all — it has been swinging since the page
+   opened and keeps right on swinging through this. */
 function showGate(){
+  $('gateLoading').style.display = 'none';
+  $('gateReady').style.display = 'block';
   paintGate();
-  $('idlePanel').classList.add('show');
-}
-function hideGate(){
-  $('idlePanel').classList.remove('show');
 }
 /* The one and only place a deal is allowed to start. Runs once, on a tap of
-   Start — never automatically, and never twice. */
+   Start — never automatically, and never twice. Hiding the whole .gate here
+   (via body.started) is fine: the pendulum's job is done, there's no further
+   handoff for it to glitch across. */
 function startGame(){
   if (gameStarted || !RAW_DATA) return;
   gameStarted = true;
   document.body.classList.add('started');
-  hideGate();
   applyVerb(selectedVerb);
 }
 $('idleStart').addEventListener('click', startGame);
@@ -667,13 +663,13 @@ async function boot(){
     buildPool(first);
     if (!POOL.length) throw new Error('no phrases in the data');
     currentVerb = first;
-    $('loading').remove();
-    /* The pendulum hands off from #loading to the gate here, with no gap:
-       both use the identical .pend markup and animation, so the swing never
-       actually stops — only the text and button above it appear. */
+    /* The gate never gets torn down here — just its loading text swapped
+       for the message and Start button, with the same pendulum running
+       underneath the whole time. */
     showGate();
   }catch(e){
-    $('loading').innerHTML = '<p class="err">Could not load <b>' + DATA_URL + '</b>.<br>' +
+    $('gateReady').style.display = 'none';
+    $('gateLoading').innerHTML = '<p class="err">Could not load <b>' + DATA_URL + '</b>.<br>' +
       'Open this from the site rather than as a local file — browsers block file:// requests.</p>';
   }
 }

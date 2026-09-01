@@ -8,7 +8,7 @@
 <meta name="intuity-build" content="2026-09-01-sort-light1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@500;700;900&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@500;700;900&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script>
   /* Set on the ROOT, in the head, before first paint. The old file added a
      class to <body> at the very end of its script, which meant an embedded
@@ -138,6 +138,9 @@ html.embedded .header{ height:auto; padding:.35rem 1rem .3rem; gap:0; }
 .hud .streak b{ transition:color .15s, transform .2s var(--spring); display:inline-block; }
 .hud .streak.live b{ color:var(--hot); }
 .hud .streak.pop b{ transform:scale(1.35); }
+.hud .streak .mult{
+  color:var(--tick); font-weight:700; margin-left:.15em;
+}
 
 /* ══ STAGE ══ */
 .stage{
@@ -252,7 +255,10 @@ body.two-forms #p-bare{ display:none; }
   
 /* ══ THE BAR ══
    Progress through the deck, but it is also where the round's feeling lives:
-   a right answer runs a light along it, a wrong one knocks it sideways. */
+   a right answer runs a light along it, a wrong one knocks it sideways —
+   and, now, can slide it BACKWARD. The bar tracks points, not cards sorted:
+   points rise with a streak multiplier and fall by more than they rose, so
+   a hot streak is something to protect, not just a score to watch climb. */
 .bar{
   position:fixed; left:0; right:0; bottom:0; height:var(--bar-h); z-index:15;
   display:flex; align-items:center; gap:.8rem;
@@ -287,6 +293,18 @@ body.two-forms #p-bare{ display:none; }
 }
 .fill.sting{ background:var(--bad); }
 .bar .n{ font-variant-numeric:tabular-nums; color:var(--dim); }
+
+/* ── THE FLOATING NUMBER ──
+   A gain or a loss, spelled out over the bar itself for a moment — the same
+   move Defuse uses over its health bars. The bar's width already tells the
+   story slowly; this tells it immediately, in the same breath as the tap. */
+.ptsfloat{
+  position:fixed; z-index:36; pointer-events:none;
+  font-family:'DM Mono',monospace; font-weight:700; font-size:.78rem;
+  text-shadow:0 0 8px currentColor;
+}
+.ptsfloat.pos{ color:var(--tick); }
+.ptsfloat.neg{ color:var(--cross); }
 
 /* ══ THE BURST ══
    On its own fixed layer. Sparks are absolutely positioned, and an absolutely
@@ -492,6 +510,17 @@ html.embedded .away{ display:none; }
    four places down, and returns while the correction is still warm. A round
    ends when the deck is empty, so it ends in mastery rather than when a
    clock runs out.
+
+   THE BAR IS NOW A STAKE, NOT JUST A GAUGE. It used to move only forward —
+   right answers filled it, wrong ones just flashed and requeued the card.
+   That meant there was never anything to actually lose: the worst outcome
+   was "no progress this beat," never "less than I had." Loss aversion pulls
+   harder than the promise of gain, so the bar now tracks POINTS rather than
+   cards sorted. A streak raises the multiplier on what a correct answer is
+   worth; missing while that streak is running costs MORE than the streak
+   just earned, not less — so a long streak is something to protect, and
+   losing it is felt on the bar itself, sliding backward, not just reset to
+   a number in the HUD.
 ====================================================================== */
 
 const DATA_URL = '../../data/grammar-rules/gerunds-infinitives-complete.json';
@@ -499,6 +528,19 @@ const DATA_URL = '../../data/grammar-rules/gerunds-infinitives-complete.json';
 let DECK = [], queue = [], current = null;
 let right = 0, wrong = 0, streak = 0, best = 0, total = 0;
 let missed = new Map(), lastMissed = [], locked = false, started = false;
+
+/* THE STAKE. points is what the bar actually shows; maxPoints is the target
+   for a full, clean run through the deck at a ×1 multiplier. Answering well
+   with a streak running can fill the bar faster than the deck empties —
+   which is the reward for keeping the streak alive. A miss claws back more
+   than a hit gains at the same streak length, on purpose: BASE_LOSS is set
+   higher than BASE_GAIN so the bar's backward slide is felt, not shrugged
+   off. multiplierFor is the ONE place streak length maps to a multiplier,
+   used identically for gains and losses, so a badge and a bar can never
+   silently disagree about what a streak of N is worth. */
+let points = 0, maxPoints = 0;
+const BASE_GAIN = 10, BASE_LOSS = 15;
+const multiplierFor = n => n >= 15 ? 2.2 : n >= 10 ? 1.7 : n >= 5 ? 1.3 : 1;
 
 const $  = id => document.getElementById(id);
 const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -655,6 +697,7 @@ function start(mode){
     : buildDeck(currentMix);
   total = queue.length;
   right = wrong = streak = best = 0;
+  points = 0; maxPoints = Math.max(1, total * BASE_GAIN);
   missed = new Map();
  ['ing','to','bare'].forEach(p => { const el = $('t-' + p); if (el) el.textContent = '0'; });
   $('over').classList.remove('show');
@@ -699,6 +742,26 @@ function next(){
 const clearPiles = () =>
   ['ing','to','bare'].forEach(p => $('p-' + p).classList.remove('hit','miss','tell'));
 
+/* A gain or a loss, spelled out over the bar for a moment — same move as
+   Defuse's damage numbers over its health bars, borrowed because the bar
+   here now carries the same kind of stake. */
+function spawnFloat(text, cls){
+  if (matchMedia('(prefers-reduced-motion:reduce)').matches) return;
+  const track = $('track');
+  const r = track.getBoundingClientRect();
+  const el = document.createElement('div');
+  el.className = 'ptsfloat ' + cls;
+  el.textContent = text;
+  el.style.left = (r.left + r.width * (0.2 + Math.random()*0.6)) + 'px';
+  el.style.top  = (r.top - 18) + 'px';
+  document.body.appendChild(el);
+  el.animate(
+    [{ transform:'translateY(0)', opacity:1 }, { transform:'translateY(-26px)', opacity:0 }],
+    { duration:650, easing:'cubic-bezier(.1,.8,.2,1)' }
+  );
+  setTimeout(() => el.remove(), 680);
+}
+
 function choose(pile){
   if (!started || locked || !current) return;
   if (currentMix.piles.indexOf(pile) === -1) return;
@@ -711,13 +774,26 @@ function choose(pile){
     { game:'sort', mix:currentMix.id });
 
   if (ok){
+    /* the multiplier is read from the streak BEFORE this hit lands, matching
+       what the HUD badge showed while the student was deciding — the reward
+       is for the streak they walked in with, not one they haven't earned yet */
+    const mult = multiplierFor(streak);
     right++; streak++; best = Math.max(best, streak);
+    const gain = Math.round(BASE_GAIN * mult);
+    points = Math.min(maxPoints, points + gain);
     el.classList.add('hit');
     sfx('correct');
     burst(el);
     $('fill').classList.add('gain');
+    spawnFloat('+' + gain, 'pos');
     setTimeout(next, 550);
   } else {
+    /* the multiplier is read from the streak that is ABOUT to break — a
+       longer streak means a bigger fall, which is the whole point: it costs
+       more to lose a streak of 12 than one of 2 */
+    const mult = multiplierFor(streak);
+    const loss = Math.round(BASE_LOSS * mult);
+    points = Math.max(0, points - loss);
     wrong++; streak = 0;
     missed.set(current.trigger, current);
     el.classList.add('miss');
@@ -728,6 +804,7 @@ function choose(pile){
     $('fill').classList.add('sting');
     sfx('wrong');
     showWhy(current);
+    spawnFloat('−' + loss, 'neg');
     queue.splice(Math.min(4, queue.length), 0, current);
     setTimeout(() => { $('fill').classList.remove('sting'); next(); }, 2100);
   }
@@ -746,7 +823,13 @@ function paint(){
   $('right').textContent  = right;
   $('wrong').textContent  = wrong;
   $('left').textContent   = queue.length;
-  $('streak').textContent = streak;
+
+  /* the streak badge shows the SAME multiplier the scoring math is about to
+     use for the next hit, so a student can see the stake growing in real
+     time rather than discovering it only after cashing it in */
+  const mult = multiplierFor(streak);
+  $('streak').innerHTML = streak +
+    (mult > 1 ? ' <span class="mult">×' + mult.toFixed(1).replace(/\.0$/,'') + '</span>' : '');
 
   const sw = $('streakWrap');
   sw.classList.toggle('live', streak >= 3);
@@ -755,7 +838,9 @@ function paint(){
   $('sortedLabel').textContent = right + ' / ' + total;
   $('deckLabel').textContent   = currentMix.name.toLowerCase() + ' · sorted';
   const f = $('fill');
-  f.style.width = total ? Math.round(right / total * 100) + '%' : '0%';
+  /* the bar now reads points, not right/total — it can move backward on a
+     miss, which is the entire point of tracking it separately */
+  f.style.width = maxPoints ? Math.round(points / maxPoints * 100) + '%' : '0%';
   setTimeout(() => f.classList.remove('gain'), 600);
 }
 
@@ -765,10 +850,12 @@ function finish(){
   lastMissed = [...missed.values()];
 
   if (window.INTUITY) INTUITY.session('gerunds-infinitives', 'sort',
-    { mix: currentMix.id, sorted: right, wrong: wrong, best: best, missed: lastMissed.length });
+    { mix: currentMix.id, sorted: right, wrong: wrong, best: best, missed: lastMissed.length, points: points });
 
   $('overBig').textContent = Math.round(pct * 100) + '%';
-  $('overSub').textContent = right + ' sorted · best streak ' + best;
+  const bestMult = multiplierFor(best);
+  $('overSub').textContent = right + ' sorted · best streak ' + best +
+    (bestMult > 1 ? ' (×' + bestMult.toFixed(1).replace(/\.0$/,'') + ')' : '');
   $('overList').innerHTML = lastMissed.length
     ? 'Worth another look: ' + lastMissed.map(c =>
         '<b>' + esc(c.trigger) + '</b> + ' + esc(c.forms ? c.forms[c.pile] : c.pile)).join(' · ')

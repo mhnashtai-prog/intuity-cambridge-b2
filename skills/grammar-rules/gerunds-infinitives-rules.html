@@ -28,7 +28,9 @@ html,body{width:100%;height:100%;overflow:hidden}
 .card{background:none;border:none;border-radius:0;padding:.3rem 0 1.3rem}
 .cards .card:first-child{padding-top:.6rem}
 
-.card-head{padding-bottom:.6rem;margin-bottom:.85rem;border-bottom:1px solid var(--rule)}
+.card-head{padding-bottom:.6rem;margin-bottom:.85rem;border-bottom:1px solid var(--rule);
+  display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap}
+.card-head-text{min-width:0}
 .cat-title{font-family:var(--f-display);font-weight:900;font-size:1.02rem;
   letter-spacing:-.005em;color:var(--ink)}
 .cat-subtitle{font-size:.8rem;color:var(--faint);margin-top:.2rem;line-height:1.4}
@@ -36,6 +38,20 @@ html,body{width:100%;height:100%;overflow:hidden}
 .sec-label{font-family:var(--f-mono);font-size:.58rem;letter-spacing:.16em;
   text-transform:uppercase;color:var(--faint);margin:1rem 0 .5rem}
 .cards .card > .sec-label:first-of-type{margin-top:0}
+
+/* ── VIEW TOGGLE ──
+   Tiles is the fast-scan word list this page already had. Sentences is a
+   second way to look at the same data: every trigger word shown inside a
+   real example, so a student sees the pattern in use instead of just its
+   name. Same object language as the mode row up top (a pill, one filled
+   side) so it doesn't introduce a third control style. */
+.view-toggle{display:flex;flex-shrink:0;padding:.15rem;border-radius:999px;
+  background:var(--tile-bg);gap:.15rem}
+.view-btn{border:none;background:none;cursor:pointer;padding:.32rem .75rem;
+  border-radius:999px;font-family:var(--f-mono);font-size:.62rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.view-btn.active{background:var(--card);color:var(--ink);font-weight:600}
+.view-btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 
 /* ── THE TILE, FOUR WAYS ──
    Same object the shell already uses everywhere else (.tile) — a fill and a
@@ -53,6 +69,24 @@ html,body{width:100%;height:100%;overflow:hidden}
 .gi-tile:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 .gi-hint{font-size:.72rem;color:var(--faint);margin:-.3rem 0 .3rem;font-style:italic}
+
+/* ── SENTENCE VIEW ──
+   One row per example. The trigger word (the verb/phrase the tile named)
+   gets the same boxed treatment the Tenses page uses for its conjugated
+   verbs; the gerund that the trigger governs gets a caramel "-ing" so the
+   ending itself — the actual grammar point — is what the eye lands on,
+   not the whole word. */
+.gi-sentence-list{display:flex;flex-direction:column}
+.gi-sentence-row{padding:.6rem 0;border-bottom:1px solid var(--rule);
+  font-family:var(--f-body);font-size:.92rem;line-height:1.6;color:var(--sentence)}
+.gi-sentence-list .gi-sentence-row:last-child{border-bottom:none}
+.gi-sentence-row.no{color:var(--wrong)}
+.gi-sub{display:block;font-family:var(--f-mono);font-size:.58rem;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:.25rem}
+.gi-trigger{background:var(--tile-bg);color:var(--tile-ink);font-weight:700;
+  padding:.05rem .38rem;border-radius:.35rem;white-space:nowrap}
+.gi-ing{font-weight:600}
+.gi-ing em{font-style:normal;color:#B9762A;font-weight:700}
 
 /* ── THE TOOLTIP, REPLACING THE MODAL ──
    Same idea as the recap tooltips in the games — appears near the tile that
@@ -186,7 +220,7 @@ html,body{width:100%;height:100%;overflow:hidden}
    a flat example set (example / examples[] / example1+example2 / negative
    / meaning / note) or, for meaning-change verbs, a {gerund,infinitive}
    pair. That extraction logic is unchanged from the old page — only how
-   the result gets on screen (a tile + tooltip, not a pill + modal) is new.
+   the result gets on screen (a tile + tooltip, or a sentence row) is new.
    ══════════════════════════════════════════════════════════════════════ */
 
 const DEF   = '../../data/grammar-rules/gerunds-infinitives-complete.json';
@@ -194,6 +228,7 @@ const BUILD = '2026-09-01a';
 const P     = new URLSearchParams(location.search);
 
 let cats = [], cat = 0, mainMode = 'explore';
+let viewMode = 'tiles'; // 'tiles' | 'sentences'
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 
@@ -279,32 +314,128 @@ function labelFor(item, key){
   return item[key];
 }
 
+/* ── shared example extraction ──
+   Same fields the tooltip already knows how to read (see tipHTML below),
+   pulled out here so the sentence view can walk the same data without
+   duplicating the field-checking logic. Returns a flat array of
+   { text, sub, negative } — one entry per example sentence. */
+function itemExamples(item){
+  const out = [];
+  if(item.gerund && item.infinitive){
+    if(item.gerund.example) out.push({ text:item.gerund.example, sub:'gerund' });
+    if(item.infinitive.example) out.push({ text:item.infinitive.example, sub:'infinitive' });
+    return out;
+  }
+  if(item.example) out.push({ text:item.example });
+  if(item.example1 && item.example2){
+    out.push({ text:item.example1 });
+    out.push({ text:item.example2 });
+  }
+  if(item.examples && Array.isArray(item.examples)){
+    item.examples.forEach(ex => out.push({ text:ex }));
+  }
+  if(item.negative) out.push({ text:item.negative, negative:true });
+  return out;
+}
+
+/* ── sentence-view highlighting ──
+   Bolds/boxes the trigger word or phrase wherever it appears (any
+   conjugation, e.g. "enjoy" also matches "enjoys"/"enjoyed"), then finds
+   the first remaining "-ing" word in the sentence — the gerund the
+   pattern actually governs — and gives just its "-ing" tail the caramel
+   treatment. Heuristic rather than field-driven, since the data doesn't
+   mark which word is which; good enough for the common case of one
+   trigger + one gerund per sentence. */
+function highlightExample(text, trigger){
+  let out = esc(text);
+  const stem = String(trigger || '').split(/\s+/)[0].replace(/[^a-zA-Z]/g,'');
+  if(!stem) return out;
+  const stemEsc = stem.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const triggerRe = new RegExp('\\b(' + stemEsc + '\\w*)\\b','i');
+  const tm = out.match(triggerRe);
+
+  const ingRe = /\b(\w*?)(ing)\b/gi;
+  let m, ingMatch = null;
+  while((m = ingRe.exec(out))){
+    if(!tm || m[0].toLowerCase() !== tm[0].toLowerCase()){ ingMatch = m; break; }
+  }
+  if(ingMatch){
+    const whole = ingMatch[0], root = ingMatch[1];
+    out = out.slice(0, ingMatch.index) +
+      '<span class="gi-ing">' + root + '<em>ing</em></span>' +
+      out.slice(ingMatch.index + whole.length);
+  }
+  out = out.replace(triggerRe, '<strong class="gi-trigger">$1</strong>');
+  return out;
+}
+
 function paintList(){
   const c = cats[cat], wrap = $('list');
   if(!c){ wrap.innerHTML = '<div class="msg">No category selected.</div>'; return; }
   const cls = styleClassFor(c);
 
   let html = '<div class="card">' +
-    '<div class="card-head"><div class="cat-title">' + esc(c.title) + '</div>' +
-    (c.subtitle ? '<div class="cat-subtitle">' + esc(c.subtitle) + '</div>' : '') +
-    '</div>' +
-    '<div class="gi-hint">Tap or hover a word to see how it\u2019s used</div>';
+    '<div class="card-head">' +
+      '<div class="card-head-text"><div class="cat-title">' + esc(c.title) + '</div>' +
+      (c.subtitle ? '<div class="cat-subtitle">' + esc(c.subtitle) + '</div>' : '') +
+      '</div>' +
+      '<div class="view-toggle" role="group" aria-label="Display style">' +
+        '<button type="button" class="view-btn' + (viewMode==='tiles' ? ' active' : '') + '" data-view="tiles">Tiles</button>' +
+        '<button type="button" class="view-btn' + (viewMode==='sentences' ? ' active' : '') + '" data-view="sentences">Sentences</button>' +
+      '</div>' +
+    '</div>';
 
-  SECTIONS.forEach(([key,label,textKey]) => {
-    const items = c[key];
-    if(!items || !items.length) return;
-    html += '<div class="sec-label">' + esc(label) + '</div><div class="gi-grid">';
-    items.forEach((item,i) => {
-      const text = labelFor(item, textKey);
-      html += '<button type="button" class="tile gi-tile ' + cls + '" ' +
-        'data-key="' + key + '" data-cat="' + cat + '" data-i="' + i + '">' +
-        esc(text) + '</button>';
+  if(viewMode === 'tiles'){
+    html += '<div class="gi-hint">Tap or hover a word to see how it\u2019s used</div>';
+    SECTIONS.forEach(([key,label,textKey]) => {
+      const items = c[key];
+      if(!items || !items.length) return;
+      html += '<div class="sec-label">' + esc(label) + '</div><div class="gi-grid">';
+      items.forEach((item,i) => {
+        const text = labelFor(item, textKey);
+        html += '<button type="button" class="tile gi-tile ' + cls + '" ' +
+          'data-key="' + key + '" data-cat="' + cat + '" data-i="' + i + '">' +
+          esc(text) + '</button>';
+      });
+      html += '</div>';
     });
-    html += '</div>';
-  });
+  } else {
+    let any = false;
+    SECTIONS.forEach(([key,label,textKey]) => {
+      const items = c[key];
+      if(!items || !items.length) return;
+      const exs = items.flatMap(item => {
+        const trigger = labelFor(item, textKey);
+        return itemExamples(item).map(ex => ({ trigger, ...ex }));
+      });
+      if(!exs.length) return;
+      any = true;
+      html += '<div class="sec-label">' + esc(label) + '</div><div class="gi-sentence-list">';
+      exs.forEach(ex => {
+        const marked = highlightExample(ex.text, ex.trigger);
+        html += '<div class="gi-sentence-row' + (ex.negative ? ' no' : '') + '">' +
+          (ex.sub ? '<span class="gi-sub">' + esc(ex.sub) + '</span>' : '') +
+          (ex.negative ? '\u2717 ' : '') + marked +
+        '</div>';
+      });
+      html += '</div>';
+    });
+    if(!any) html += '<div class="msg">No example sentences in this category yet.</div>';
+  }
 
   html += '</div>';
   wrap.innerHTML = html;
+
+  wrap.querySelectorAll('.view-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      if(b.dataset.view === viewMode) return;
+      viewMode = b.dataset.view;
+      hideTip();
+      paintList();
+    });
+  });
+
+  if(viewMode !== 'tiles') return;
 
   wrap.querySelectorAll('.gi-tile').forEach(el => {
     const item = c[el.dataset.key][+el.dataset.i];

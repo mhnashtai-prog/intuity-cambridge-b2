@@ -365,19 +365,7 @@ function layoutFor(n){
   }));
 }
 
-/* Guards against two builds ever being in flight at once. buildMap() does
-   its DOM writes synchronously, then finishes positioning on the next
-   frame; if a second call starts before that frame lands — a resize and
-   fonts.ready landing within a few milliseconds of each other, say — the
-   first call's rAF was applying positions computed from measurements of
-   DOM elements the second call may have already replaced. Each call now
-   stamps a version number and the deferred half checks it is still the
-   most recent call before touching anything; a superseded call simply
-   does nothing instead of writing stale positions over fresh ones. */
-let buildVersion = 0;
-
 function buildMap(){
-  const myVersion = ++buildVersion;
   const LAYOUT = layoutFor(AREAS.length);
   const mapWidthPx = $('map').clientWidth || 760;
   const OFFSET   = Math.max(8, Math.min(18, 46 / mapWidthPx * 100));
@@ -437,22 +425,6 @@ function buildMap(){
     const PILL_GAP_PX = 5 * 96 / 25.4;
     const CAP_GAP_PX  = 2 * 96 / 25.4;
     const mapRect = $('map').getBoundingClientRect();
-
-    /* ── A BAD MEASUREMENT MUST NOT BECOME A BAD LAYOUT ──────────────────
-       Everything below divides by mapRect.width — the wave's amplitude,
-       the pill-to-road clearance, the caption offsets. On a phone the map
-       can be measured at 0 or near-0 for a single frame: right as the URL
-       bar collapses or expands, right after returning to the tab from the
-       background, or before the very first layout has settled. A resize
-       event does not reliably fire for any of those, so nothing used to
-       repeat this frame — the inflated layout it produced just sat there
-       until a manual refresh forced a fresh, correctly-measured pass.
-
-       Bail out and retry shortly rather than laying out against a width
-       that cannot be trusted. */
-    if (mapRect.width < 100) { setTimeout(buildMap, 120); return; }
-    if (myVersion !== buildVersion) return;   /* a newer build has already started */
-
     const capEls  = $('nodes').querySelectorAll('.cap');
     const toPctX  = px => px / mapRect.width * 100;
 
@@ -485,12 +457,8 @@ function buildMap(){
     const xs  = tightDots.map(d => d.x);
     const cxW = (Math.min(...xs) + Math.max(...xs)) / 2;
     const MIN_AMP_PX = 30;
-    /* Clamped to 45% as a second, independent belt: even with the width
-       guard above this keeps the wave from ever swinging past a sane
-       fraction of the map, in case some future edit changes what counts
-       as "safe" above without touching this line too. */
-    const amp = Math.min(45, Math.max(MIN_AMP_PX / mapRect.width * 100,
-                         (Math.max(...xs) - Math.min(...xs)) / 2));
+    const amp = Math.max(MIN_AMP_PX / mapRect.width * 100,
+                         (Math.max(...xs) - Math.min(...xs)) / 2);
     const side = -Math.sign(tightDots[0].x - cxW);
     const waveX = y => cxW + side * amp * Math.cos(2*Math.PI * (y - y0) / LAM);
 

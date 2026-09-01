@@ -45,13 +45,12 @@ html,body{width:100%;height:100%;overflow:hidden}
    real example, so a student sees the pattern in use instead of just its
    name. Same object language as the mode row up top (a pill, one filled
    side) so it doesn't introduce a third control style. */
-.view-toggle{display:flex;flex-shrink:0;padding:.15rem;border-radius:999px;
-  background:var(--tile-bg);gap:.15rem}
-.view-btn{border:none;background:none;cursor:pointer;padding:.32rem .75rem;
-  border-radius:999px;font-family:var(--f-mono);font-size:.62rem;
-  letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
-.view-btn.active{background:var(--card);color:var(--ink);font-weight:600}
-.view-btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.view-pill{flex-shrink:0;border:none;cursor:pointer;background:var(--tile-bg);
+  color:var(--tile-ink);padding:.4rem .9rem;border-radius:999px;
+  font-family:var(--f-mono);font-size:.62rem;letter-spacing:.08em;
+  text-transform:uppercase;font-weight:600}
+.view-pill:hover{background:var(--tile-bg-hover,var(--tile-bg))}
+.view-pill:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 
 /* ── THE TILE, FOUR WAYS ──
    Same object the shell already uses everywhere else (.tile) — a fill and a
@@ -80,7 +79,6 @@ html,body{width:100%;height:100%;overflow:hidden}
 .gi-sentence-row{padding:.6rem 0;border-bottom:1px solid var(--rule);
   font-family:var(--f-body);font-size:.92rem;line-height:1.6;color:var(--sentence)}
 .gi-sentence-list .gi-sentence-row:last-child{border-bottom:none}
-.gi-sentence-row.no{color:var(--wrong)}
 .gi-sub{display:block;font-family:var(--f-mono);font-size:.58rem;
   letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:.25rem}
 .gi-trigger{background:var(--tile-bg);color:var(--tile-ink);font-weight:700;
@@ -228,7 +226,7 @@ const BUILD = '2026-09-01a';
 const P     = new URLSearchParams(location.search);
 
 let cats = [], cat = 0, mainMode = 'explore';
-let viewMode = 'tiles'; // 'tiles' | 'sentences'
+let viewMode = 'sentences'; // 'sentences' | 'tiles'
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 
@@ -318,7 +316,10 @@ function labelFor(item, key){
    Same fields the tooltip already knows how to read (see tipHTML below),
    pulled out here so the sentence view can walk the same data without
    duplicating the field-checking logic. Returns a flat array of
-   { text, sub, negative } — one entry per example sentence. */
+   { text, sub } — one entry per example sentence. The sentence view is a
+   kid's default read of the page, so it only ever shows correct usage;
+   the "✗ wrong version" contrast still lives in the tooltip for anyone who
+   switches to List and taps a word. */
 function itemExamples(item){
   const out = [];
   if(item.gerund && item.infinitive){
@@ -334,7 +335,6 @@ function itemExamples(item){
   if(item.examples && Array.isArray(item.examples)){
     item.examples.forEach(ex => out.push({ text:ex }));
   }
-  if(item.negative) out.push({ text:item.negative, negative:true });
   return out;
 }
 
@@ -379,10 +379,9 @@ function paintList(){
       '<div class="card-head-text"><div class="cat-title">' + esc(c.title) + '</div>' +
       (c.subtitle ? '<div class="cat-subtitle">' + esc(c.subtitle) + '</div>' : '') +
       '</div>' +
-      '<div class="view-toggle" role="group" aria-label="Display style">' +
-        '<button type="button" class="view-btn' + (viewMode==='tiles' ? ' active' : '') + '" data-view="tiles">Tiles</button>' +
-        '<button type="button" class="view-btn' + (viewMode==='sentences' ? ' active' : '') + '" data-view="sentences">Sentences</button>' +
-      '</div>' +
+      '<button type="button" class="view-pill" id="viewPill">' +
+        (viewMode === 'sentences' ? 'List' : 'Sentences') +
+      '</button>' +
     '</div>';
 
   if(viewMode === 'tiles'){
@@ -413,9 +412,9 @@ function paintList(){
       html += '<div class="sec-label">' + esc(label) + '</div><div class="gi-sentence-list">';
       exs.forEach(ex => {
         const marked = highlightExample(ex.text, ex.trigger);
-        html += '<div class="gi-sentence-row' + (ex.negative ? ' no' : '') + '">' +
+        html += '<div class="gi-sentence-row">' +
           (ex.sub ? '<span class="gi-sub">' + esc(ex.sub) + '</span>' : '') +
-          (ex.negative ? '\u2717 ' : '') + marked +
+          marked +
         '</div>';
       });
       html += '</div>';
@@ -426,14 +425,14 @@ function paintList(){
   html += '</div>';
   wrap.innerHTML = html;
 
-  wrap.querySelectorAll('.view-btn').forEach(b => {
-    b.addEventListener('click', () => {
-      if(b.dataset.view === viewMode) return;
-      viewMode = b.dataset.view;
+  const pill = $('viewPill');
+  if(pill){
+    pill.addEventListener('click', () => {
+      viewMode = viewMode === 'sentences' ? 'tiles' : 'sentences';
       hideTip();
       paintList();
     });
-  });
+  }
 
   if(viewMode !== 'tiles') return;
 

@@ -46,7 +46,7 @@
 
   --m0:#C2956E; --m1:#B0865C; --m2:#B44A22; --m3:#E8632A; --m4:#6B3FA0;
 
-  --header-h:104px; --bar-h:46px;
+  --header-h:104px; --bar-h:46px; --hud-h:34px;
   --spring:cubic-bezier(.2,1.4,.4,1);
 
   --poster:#ECE9E3;
@@ -115,6 +115,25 @@ html.embedded .header{ height:auto; padding:.35rem 1rem .4rem; gap:.3rem; }
 .link{ width:13px; height:2px; border-radius:2px; background:rgba(var(--shade),.16); transition:background .3s; }
 .link.done{ background:var(--caramel); }
 
+/* ══ THE HUD — score + the fuse's countdown ══ */
+.hud{
+  position:fixed; top:var(--header-h); left:0; right:0; height:var(--hud-h); z-index:18;
+  display:flex; align-items:center; justify-content:space-between; gap:.6rem;
+  padding:0 1rem; background:var(--band); border-bottom:1px solid rgba(var(--shade),.1);
+  font-family:'DM Mono',monospace; font-size:.62rem; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--faint);
+}
+.hud b{
+  font-family:'Space Grotesk',sans-serif; font-weight:900; color:var(--ink);
+  font-variant-numeric:tabular-nums; margin-left:.4rem; font-size:.86rem; letter-spacing:0;
+}
+.hud .time{
+  font-family:'Space Grotesk',sans-serif; font-weight:900; font-size:.86rem;
+  letter-spacing:0; color:var(--ink); font-variant-numeric:tabular-nums; transition:color .25s;
+}
+.hud .time.critical{ color:var(--hot); animation:hudPulse .5s infinite; }
+@keyframes hudPulse{ 0%,100%{ opacity:1 } 50%{ opacity:.4 } }
+
 /* ══ THE FIELD + PATH ══
    .stage now STRETCHES its child instead of centering a shrink-fit grid —
    the field has to fill the whole available area for cell math to work.
@@ -122,10 +141,10 @@ html.embedded .header{ height:auto; padding:.35rem 1rem .4rem; gap:.3rem; }
    dots (non-interactive) plus the twenty real circles, absolutely placed
    on top at the coordinates generatePath() chose. */
 .stage{
-  position:fixed; top:var(--header-h); left:0; right:0; bottom:var(--bar-h);
+  position:fixed; top:calc(var(--header-h) + var(--hud-h)); left:0; right:0; bottom:var(--bar-h);
   padding:.9rem; display:flex; align-items:stretch; justify-content:stretch;
 }
-html.embedded .stage{ top:66px; padding:.6rem; }
+html.embedded .stage{ top:calc(66px + var(--hud-h)); padding:.6rem; }
 .board{
   position:relative; width:100%; height:100%;
 }
@@ -135,7 +154,17 @@ html.embedded .stage{ top:66px; padding:.6rem; }
   transform:translate(-50%,-50%); pointer-events:none;
 }
 .pathSvg{ position:absolute; inset:0; pointer-events:none; }
-.pathSvg line{ stroke:var(--caramel); stroke-width:3; stroke-linecap:round; opacity:.5; }
+.pathSvg line{ stroke:var(--caramel); stroke-width:3; stroke-linecap:round; opacity:.5; transition:stroke .3s, opacity .3s; }
+.pathSvg line.burnt{ stroke:var(--faint); opacity:.28; }
+
+.fuseHead{
+  position:absolute; width:15px; height:15px; border-radius:50%;
+  background:radial-gradient(circle,#FFF3DE 0%,var(--hot) 55%,rgba(180,74,34,0) 78%);
+  box-shadow:0 0 9px 3px rgba(180,74,34,.55);
+  transform:translate(-50%,-50%); pointer-events:none; z-index:3;
+}
+.fuseHead.critical{ animation:fuseCritical .4s infinite; }
+@keyframes fuseCritical{ 0%,100%{ transform:translate(-50%,-50%) scale(1) } 50%{ transform:translate(-50%,-50%) scale(1.4) } }
 
 /* ── A CIRCLE ──
    Now absolutely positioned rather than a grid child — left/top are set by
@@ -457,6 +486,11 @@ html.embedded .away{ display:none; }
   <div class="ladder" id="ladder"></div>
 </header>
 
+<div class="hud" id="hud">
+  <span>Score<b id="hudScore">0</b></span>
+  <span class="time" id="hudTime">1:30</span>
+</div>
+
 <div class="stage"><div class="board" id="board"></div></div>
 
 <div class="bar">
@@ -489,7 +523,8 @@ html.embedded .away{ display:none; }
   <div id="gateReady" style="display:none">
     <div class="kicker">The Board</div>
     <div class="msg">Twenty circles, a path from start to finish</div>
-    <div class="sub">Tap any circle in any order — but one miss ends the deal. Clear all twenty and the cup goes off.</div>
+    <div class="sub">Tap any circle in any order — but one miss ends the deal, and a 90-second fuse is burning down the path behind you. Clear all twenty before it reaches the end and the cup goes off.</div>
+    <div class="sub" id="gateBest" style="margin-top:.4rem"></div>
     <button class="go" id="gateStart">Deal</button>
   </div>
 </div>
@@ -497,6 +532,7 @@ html.embedded .away{ display:none; }
 <div class="over" id="over">
   <div class="big" id="overBig">20</div>
   <div class="sub" id="overSub"></div>
+  <div class="sub" id="overBest" style="margin-top:.2rem"></div>
   <div class="acts">
     <button class="go" onclick="start()">New deal →</button>
   </div>
@@ -531,6 +567,17 @@ const FIELD_ROWS = 6, FIELD_COLS = 6;
 const PATH_LEN = 20;
 const SLOTS = PATH_LEN, GOAL = PATH_LEN;
 
+/* ── THE FUSE ──
+   A single clock for the WHOLE deal, not per pill — free answer order plus a
+   ticking deadline means the real skill is triage: bank the pills you're sure
+   of first, save the shaky ones for whatever time is left. The countdown is
+   drawn as a literal fuse: a lit head travels the caramel path from start to
+   finish over ROUND_MS, and the path behind it visibly burns out to grey. If
+   the head reaches the finish pin before the player reaches pill 20, the deal
+   ends exactly like a miss does — just for a different reason. */
+const ROUND_MS = 90000;
+const CRITICAL_MS = 12000;
+
 const MARKS = [
   { at:4,  label:'Spark', col:'var(--m0)' },
   { at:8,  label:'Ember', col:'var(--m1)' },
@@ -541,12 +588,50 @@ const MARKS = [
 
 let DECK = [], slots = [], open = null, mark = -1;
 let done = 0, clean = 0, tries = 0, locked = false, started = false, dealClean = true;
+let score = 0, dealEnded = false;
+let roundStartPerf = 0, lastAnswerPerf = 0, fuseRafId = null, fuseFrac = 0, lastCriticalSecond = -1;
+let segLens = [], cumLens = [0], totalLen = 0;
 
 const $  = id => document.getElementById(id);
 const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[b[i],b[j]]=[b[j],b[i]];} return b; };
+const clamp = (n,lo,hi) => Math.max(lo, Math.min(hi,n));
 const slug = p => p.replace('-','');
 const sfx = (name) => { try { if (window.SFX && SFX[name]) SFX[name](); } catch(e){} };
+
+/* ── PERSONAL BEST ──
+   Two numbers, both worth chasing for different reasons: bestScore rewards
+   any run (even a losing one racked up points), bestCleanMs only ever gets
+   set by an actual first-try clear, so it can't be padded by a messy deal
+   that merely finished. */
+const BEST_KEY = 'intuity-board-best';
+function loadBoardBest(){ try{ return JSON.parse(localStorage.getItem(BEST_KEY) || '{}'); }catch(e){ return {}; } }
+function saveBoardBest(patch){
+  try{
+    const b = loadBoardBest();
+    Object.assign(b, patch);
+    localStorage.setItem(BEST_KEY, JSON.stringify(b));
+  }catch(e){}
+}
+function updateBest(cleanMs){
+  const b = loadBoardBest();
+  let changed = false;
+  if (!b.bestScore || score > b.bestScore){ b.bestScore = score; changed = true; }
+  if (cleanMs != null && (!b.bestCleanMs || cleanMs < b.bestCleanMs)){ b.bestCleanMs = cleanMs; changed = true; }
+  if (changed) saveBoardBest(b);
+  return b;
+}
+function fmtMs(ms){
+  const s = Math.max(0, Math.round(ms/1000));
+  return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+}
+function paintBestLine(el){
+  if (!el) return;
+  const b = loadBoardBest();
+  el.textContent = b.bestScore
+    ? 'Best score ' + b.bestScore + (b.bestCleanMs ? ' · fastest clean deal ' + fmtMs(b.bestCleanMs) : '')
+    : '';
+}
 
 const TICK = '<svg class="mk tick" viewBox="0 0 24 24" fill="none" stroke="var(--tick)" ' +
   'stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -707,6 +792,8 @@ async function boot(){
     if (!DECK.length) throw new Error('no cards in the data');
     $('gateLoading').style.display = 'none';
     $('gateReady').style.display = '';
+    $('hudTime').textContent = fmtMs(ROUND_MS);
+    paintBestLine($('gateBest'));
     $('gateStart').focus();
   }catch(e){
     $('gateLoading').innerHTML = '<p class="err">Could not load <b>' + esc(DATA_URL) + '</b>.<br>' +
@@ -722,16 +809,20 @@ function start(){
   const route = pickPath();
   slots = picked.map((card,i) => ({ card, r:route[i].r, c:route[i].c, done:false, missed:false }));
   mark = -1; done = 0; clean = 0; tries = 0; locked = false; open = null; dealClean = true;
+  score = 0; dealEnded = false; lastCriticalSecond = -1;
   started = true;
   document.body.classList.add('started');
   $('over').classList.remove('show');
   $('veil').classList.remove('show');
+  $('hudScore').textContent = '0';
+  $('hudTime').classList.remove('critical');
   drawLadder(); drawField(); drawPath(); layout(); paint();
+  startFuse();
 }
 
 function drawField(){
   const b = $('board');
-  b.innerHTML = '<svg class="pathSvg" id="pathSvg"></svg>';
+  b.innerHTML = '<svg class="pathSvg" id="pathSvg"></svg><div class="fuseHead" id="fuseHead"></div>';
   for (let r = 0; r < FIELD_ROWS; r++){
     for (let c = 0; c < FIELD_COLS; c++){
       const d = document.createElement('div');
@@ -782,23 +873,28 @@ function layout(){
   });
 
   slots.forEach((s,i) => {
+    s.cx = (s.c + 0.5) * cellW; s.cy = (s.r + 0.5) * cellH;
     const el = $('c' + i);
     if (!el) return;
-    el.style.left = ((s.c + 0.5) * cellW) + 'px';
-    el.style.top  = ((s.r + 0.5) * cellH) + 'px';
+    el.style.left = s.cx + 'px';
+    el.style.top  = s.cy + 'px';
   });
 
   const svg = $('pathSvg');
   if (svg){
     svg.setAttribute('width', w); svg.setAttribute('height', h);
     let lines = '';
+    segLens = []; cumLens = [0]; totalLen = 0;
     for (let i = 1; i < slots.length; i++){
       const a = slots[i-1], b2 = slots[i];
-      lines += '<line x1="' + ((a.c+0.5)*cellW) + '" y1="' + ((a.r+0.5)*cellH) +
-               '" x2="' + ((b2.c+0.5)*cellW) + '" y2="' + ((b2.r+0.5)*cellH) + '"/>';
+      lines += '<line id="seg' + (i-1) + '" x1="' + a.cx + '" y1="' + a.cy +
+               '" x2="' + b2.cx + '" y2="' + b2.cy + '"/>';
+      const d = Math.hypot(b2.cx - a.cx, b2.cy - a.cy);
+      segLens.push(d); totalLen += d; cumLens.push(totalLen);
     }
     svg.innerHTML = lines;
   }
+  if (started) positionFuse(fuseFrac);
 }
 window.addEventListener('resize', () => {
   layout();

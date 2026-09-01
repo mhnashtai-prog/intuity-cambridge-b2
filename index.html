@@ -365,7 +365,19 @@ function layoutFor(n){
   }));
 }
 
+/* Guards against two builds ever being in flight at once. buildMap() does
+   its DOM writes synchronously, then finishes positioning on the next
+   frame; if a second call starts before that frame lands — a resize and
+   fonts.ready landing within a few milliseconds of each other, say — the
+   first call's rAF was applying positions computed from measurements of
+   DOM elements the second call may have already replaced. Each call now
+   stamps a version number and the deferred half checks it is still the
+   most recent call before touching anything; a superseded call simply
+   does nothing instead of writing stale positions over fresh ones. */
+let buildVersion = 0;
+
 function buildMap(){
+  const myVersion = ++buildVersion;
   const LAYOUT = layoutFor(AREAS.length);
   const mapWidthPx = $('map').clientWidth || 760;
   const OFFSET   = Math.max(8, Math.min(18, 46 / mapWidthPx * 100));
@@ -439,6 +451,7 @@ function buildMap(){
        Bail out and retry shortly rather than laying out against a width
        that cannot be trusted. */
     if (mapRect.width < 100) { setTimeout(buildMap, 120); return; }
+    if (myVersion !== buildVersion) return;   /* a newer build has already started */
 
     const capEls  = $('nodes').querySelectorAll('.cap');
     const toPctX  = px => px / mapRect.width * 100;
@@ -632,22 +645,7 @@ document.addEventListener('keydown', e => {
 
 buildMap();
 let t = null;
-const scheduleBuild = () => { clearTimeout(t); t = setTimeout(buildMap, 150); };
-window.addEventListener('resize', scheduleBuild);
-/* A ResizeObserver on the map itself catches container-size changes that
-   window's resize event misses on mobile — the URL bar collapsing or
-   expanding, or the viewport settling after an orientation change — which
-   is exactly the moment the near-zero-width frame above was slipping
-   through and leaving the map stuck inflated until a manual refresh. */
-if (window.ResizeObserver) {
-  new ResizeObserver(scheduleBuild).observe($('map'));
-}
-/* Coming back to the tab (app-switch, lock screen, browser backgrounding)
-   is another moment the map can have been measured badly right before it
-   went away. Rebuild once the page is genuinely visible again rather than
-   leaving whatever layout was last computed. */
-document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleBuild(); });
-window.addEventListener('pageshow', scheduleBuild);
+window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(buildMap, 150); });
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(buildMap);
 </script>
 </body>

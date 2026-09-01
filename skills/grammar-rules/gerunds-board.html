@@ -108,6 +108,7 @@ html.embedded .header{ height:auto; padding:.35rem 1rem .4rem; gap:.3rem; }
 .mark .lbl{
   font-family:'DM Mono',monospace; font-size:.44rem; letter-spacing:.09em;
   text-transform:uppercase; color:var(--faint); transition:color .3s;
+  white-space:nowrap; overflow:visible;
 }
 .mark.done .lbl{ color:var(--dim); }
 .link{ width:13px; height:2px; border-radius:2px; background:rgba(var(--shade),.16); transition:background .3s; }
@@ -182,6 +183,23 @@ html.embedded .stage{ top:66px; padding:.6rem; }
 @keyframes flip{
   50%{ transform:translate(-50%,-50%) rotateY(88deg) scale(.92) }
   100%{ transform:translate(-50%,-50%) }
+}
+
+/* ── THE PIN ──
+   A small caramel marker sitting on top of every circle, whether it has
+   been answered yet or not. This is what actually reads as "the path": the
+   connecting lines say where the route runs, the pins say these twenty (and
+   only these twenty) dots are live stops on it. Purely decorative — it
+   never intercepts the click, and it sits above the number/word but clear
+   of the tick/cross corner badges. */
+.circle .pin{
+  position:absolute; top:7%; left:50%; width:16%; height:16%;
+  min-width:8px; min-height:8px;
+  border-radius:50%; transform:translate(-50%,0);
+  background:var(--caramel);
+  box-shadow:0 1px 0 rgba(255,255,255,.6) inset,
+             0 2px 4px rgba(var(--shade),.35);
+  pointer-events:none; z-index:1;
 }
 
 .mk{
@@ -292,32 +310,6 @@ html.embedded .stage{ top:66px; padding:.6rem; }
 
 body.two-forms .forms{ }
 body.two-forms #fm-bare{ display:none; }
-
-/* ── THE MIX CHOOSER ── */
-.mixrow{ display:flex; flex-wrap:wrap; justify-content:center; gap:.45rem; margin:.2rem 0 .7rem; }
-.mixchip{
-  display:flex; flex-direction:column; align-items:center; gap:.1rem;
-  padding:.45rem .95rem .5rem; border-radius:999px; background:var(--ground);
-  filter:drop-shadow(-2px -2px 4px rgba(255,255,255,.9))
-         drop-shadow(2px 3px 6px rgba(var(--shade),.2));
-  transition:transform .12s var(--spring), filter .15s;
-}
-.mixchip:active{ transform:scale(.95); }
-.mixchip .mn{
-  font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:.74rem;
-  letter-spacing:.03em; color:var(--dim);
-}
-.mixchip .ms{
-  font-family:'DM Mono',monospace; font-size:.53rem; letter-spacing:.09em;
-  text-transform:uppercase; color:var(--faint);
-}
-.mixchip.sel{ background:var(--hot); filter:drop-shadow(2px 4px 9px rgba(180,74,34,.32)); }
-.mixchip.sel .mn{ color:#FFF7F3; }
-.mixchip.sel .ms{ color:rgba(255,247,243,.72); }
-.mixblurb{
-  font-size:.78rem; color:var(--dim); line-height:1.5;
-  max-width:23rem; margin:0 auto .2rem;
-}
 
 /* ══ THE BAR ══ */
 .bar{
@@ -503,8 +495,6 @@ html.embedded .away{ display:none; }
   <div id="gateReady" style="display:none">
     <div class="kicker">The Board</div>
     <div class="msg">Twenty circles, a path from start to finish</div>
-    <div class="mixrow"></div>
-    <div class="mixblurb"></div>
     <div class="sub">Tap any circle in any order — but one miss ends the deal. Clear all twenty and the cup goes off.</div>
     <button class="go" id="gateStart">Deal</button>
   </div>
@@ -513,7 +503,6 @@ html.embedded .away{ display:none; }
 <div class="over" id="over">
   <div class="big" id="overBig">20</div>
   <div class="sub" id="overSub"></div>
-  <div class="mixrow"></div>
   <div class="acts">
     <button class="go" onclick="start()">New deal →</button>
   </div>
@@ -538,7 +527,10 @@ html.embedded .away{ display:none; }
    continuous attempt: one wrong answer ends it immediately (see the
    `else` branch of answer(), which calls failDeal() instead of letting
    play continue). Reach all twenty without a miss and the cup goes off.
-====================================================================== */
+
+   There is exactly one difficulty: true odds, all three forms (-ing / to
+   / bare), sampled at the rate the language actually uses them. No mix
+   picker — Deal just deals. */
 
 const DATA_URL = '../../data/grammar-rules/gerunds-infinitives-complete.json';
 const FIELD_ROWS = 6, FIELD_COLS = 8;
@@ -568,20 +560,16 @@ const TICK = '<svg class="mk tick" viewBox="0 0 24 24" fill="none" stroke="var(-
 const CROSS = '<svg class="mk cross" viewBox="0 0 24 24" fill="none" stroke="var(--cross)" ' +
   'stroke-width="5.8" stroke-linecap="round" aria-hidden="true">' +
   '<path d="M5.4 5c4.2 4.2 8.6 9.2 13.4 14.2M18.6 5.4C14.2 9.4 9.6 14.6 5.2 19"/></svg>';
+const PIN = '<span class="pin" aria-hidden="true"></span>';
 
-/* ── THE MIXES (unchanged from the old Board) ── */
-const MIXES = [
-  { id:'m1', name:'Mix 1', sub:'two forms',   n:24,
-    piles:['-ing','to'],         mode:'balanced',
-    blurb:'Gerund or infinitive, evenly split. The core contrast, and nothing else on screen.' },
-  { id:'m2', name:'Mix 2', sub:'three forms', n:30,
-    piles:['-ing','to','bare'],  mode:'balanced',
-    blurb:'The bare infinitive joins. There are only four of them, so they come up far more often here than in real English — which is the only way to actually meet them.' },
-  { id:'m3', name:'Mix 3', sub:'true odds',   n:36,
-    piles:['-ing','to','bare'],  mode:'natural',
-    blurb:'Sampled at the rate the language really uses: mostly gerunds. No help from the odds.' },
-];
-let currentMix = MIXES[0];
+/* ── THE ONE MIX ──
+   Old Board offered Mix 1/2/3 with a chooser screen up front. That choice
+   is gone: every deal now runs "true odds" — all three forms, sampled at
+   the rate the language actually uses them (mostly gerunds) — so the
+   player is dealt real English, not odds tilted in their favour. */
+const MIX = {
+  id:'m3', piles:['-ing','to','bare'], mode:'natural'
+};
 
 function sample(pool, n, piles, mode, maxRun){
   const usable = pool.filter(c => piles.indexOf(c.pile) !== -1);
@@ -662,21 +650,7 @@ function interleave(cards, maxRun){
 const MAX_RUN = 2;
 
 function applyMix(){
-  document.body.classList.toggle('two-forms', currentMix.piles.length === 2);
-}
-
-function drawMixChips(){
-  document.querySelectorAll('.mixrow').forEach(row => {
-    row.innerHTML = '';
-    MIXES.forEach(m => {
-      const b = document.createElement('button');
-      b.className = 'mixchip' + (m.id === currentMix.id ? ' sel' : '');
-      b.innerHTML = '<span class="mn">' + m.name + '</span><span class="ms">' + m.sub + '</span>';
-      b.onclick = () => { currentMix = m; applyMix(); drawMixChips(); };
-      row.appendChild(b);
-    });
-  });
-  document.querySelectorAll('.mixblurb').forEach(el => el.textContent = currentMix.blurb);
+  document.body.classList.toggle('two-forms', MIX.piles.length === 2);
 }
 
 /* ── THE PATH ──
@@ -730,13 +704,13 @@ function pickPath(){
 async function boot(){
   paintMute();
   drawLadder();
+  applyMix();
   try{
     const res = await fetch(DATA_URL);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const d = await res.json();
     DECK = (d.sorting && d.sorting.cards) || d.cards || [];
     if (!DECK.length) throw new Error('no cards in the data');
-    applyMix(); drawMixChips();
     $('gateLoading').style.display = 'none';
     $('gateReady').style.display = '';
     $('gateStart').focus();
@@ -750,7 +724,7 @@ $('gateStart').onclick = () => { sfx('unlock'); start(); };
 
 function start(){
   applyMix();
-  const picked = interleave(sample(DECK, SLOTS, currentMix.piles, currentMix.mode, MAX_RUN), MAX_RUN);
+  const picked = interleave(sample(DECK, SLOTS, MIX.piles, MIX.mode, MAX_RUN), MAX_RUN);
   const route = pickPath();
   slots = picked.map((card,i) => ({ card, r:route[i].r, c:route[i].c, done:false, missed:false }));
   mark = -1; done = 0; clean = 0; tries = 0; locked = false; open = null; dealClean = true;
@@ -781,7 +755,7 @@ function drawPath(){
     el.id = 'c' + i;
     const tagPrefix = i === 0 ? 'Start, ' : (i === slots.length-1 ? 'Finish, ' : '');
     el.setAttribute('aria-label', tagPrefix + 'Hole ' + (i+1));
-    el.innerHTML = '<span class="n">' + (i+1) + '</span>' + TICK + CROSS;
+    el.innerHTML = PIN + '<span class="n">' + (i+1) + '</span>' + TICK + CROSS;
     el.onclick = () => openCircle(i);
     b.appendChild(el);
   });
@@ -900,20 +874,20 @@ function openCircle(i){
 
 function answer(pile){
   if (open === null || locked) return;
-  if (currentMix.piles.indexOf(pile) === -1) return;
+  if (MIX.piles.indexOf(pile) === -1) return;
   locked = true;
   tries++;
   const slot = slots[open], c = slot.card, el = $('c' + open);
   const ok = pile === c.pile;
 
   if (window.INTUITY) INTUITY.log('gerunds-infinitives', c.trigger, ok,
-    { game:'board', mix:currentMix.id });
+    { game:'board', mix:MIX.id });
 
   if (ok){
     slot.done = true; done++;
     if (!slot.missed) clean++;
     el.className = 'circle done flip' + (slot.missed ? ' second' : '');
-    el.innerHTML = '<span class="word">' + esc(c.forms[c.pile]) + '</span>' + TICK;
+    el.innerHTML = PIN + '<span class="word">' + esc(c.forms[c.pile]) + '</span>' + TICK;
     fitWord(el, c.forms[c.pile]);
     el.setAttribute('aria-label', 'Turned: ' + c.forms[c.pile]);
     $('veil').classList.remove('show');
@@ -954,12 +928,11 @@ function answer(pile){
    is a new deal. */
 function failDeal(){
   if (window.INTUITY) INTUITY.session('gerunds-infinitives', 'board',
-    { mix: currentMix.id, turned: done, clean: clean, tries: tries, perfect: false });
+    { mix: MIX.id, turned: done, clean: clean, tries: tries, perfect: false });
 
   $('overBig').textContent = 'Sorry';
   $('overSub').textContent = 'You reached ' + done + ' of ' + SLOTS +
     ' before a miss. Deal again to try for the cup.';
-  drawMixChips();
   sfx('wrong');
   $('over').classList.add('show');
 }
@@ -980,7 +953,6 @@ function checkMark(){
 
 function paint(){
   $('tally').textContent = clean + ' first time';
-  $('goal').title = currentMix.name;
   $('goal').textContent  = done + ' of ' + GOAL;
   const f = $('fill');
   f.style.width = Math.min(100, done / GOAL * 100) + '%';
@@ -989,7 +961,7 @@ function paint(){
 
 function finish(){
   if (window.INTUITY) INTUITY.session('gerunds-infinitives', 'board',
-    { mix: currentMix.id, turned: done, clean: clean, tries: tries, perfect: dealClean });
+    { mix: MIX.id, turned: done, clean: clean, tries: tries, perfect: dealClean });
 
   if (dealClean){
     $('overBig').textContent = '🏆';
@@ -998,10 +970,8 @@ function finish(){
   } else {
     $('overBig').textContent = done;
     const acc = done ? Math.round(clean / done * 100) : 0;
-    $('overSub').textContent = currentMix.name.toLowerCase() + ' · ' + clean +
-      ' first time · ' + acc + '% clean';
+    $('overSub').textContent = clean + ' first time · ' + acc + '% clean';
   }
-  drawMixChips();
   sfx('fanfare');
   $('over').classList.add('show');
 }

@@ -505,7 +505,7 @@ html.embedded .away{ display:none; }
     <div class="msg">Twenty circles, a path from start to finish</div>
     <div class="mixrow"></div>
     <div class="mixblurb"></div>
-    <div class="sub">Tap any circle in any order. Get every one right on the first try and the cup goes off.</div>
+    <div class="sub">Tap any circle in any order — but one miss ends the deal. Clear all twenty and the cup goes off.</div>
     <button class="go" id="gateStart">Deal</button>
   </div>
 </div>
@@ -526,17 +526,18 @@ html.embedded .away{ display:none; }
 /* ======================================================================
    THE BOARD — DEAL
 
-   Twenty circles on a path. The path's shape is drawn fresh each deal by
-   generatePath(): a self-avoiding random walk across a background field of
-   dots, starting on the left, biased toward a random target on the right,
-   backtracking whenever it paints itself into a corner. That's what gives
-   every deal a different silhouette — staircases, diagonals, zigzags —
-   without ever needing the same route twice.
+   Twenty circles on a path. The path's shape comes from PATH_LIBRARY: a
+   small set of hand-drawn 20-cell routes (comb, spiral, zigzag, hook —
+   see pickPath()), each using only straight up/down/left/right steps so
+   the connecting lines are always plain horizontal/vertical segments,
+   never crossing. Every deal picks one shape at random and places it on
+   the board with a random mirror/flip and a random offset, so the same
+   handful of templates still produce visibly different deals.
 
-   Answer order is free. What's tracked is dealClean: true until the first
-   miss, for the whole deal. Reach twenty done with dealClean still true
-   and the cup goes off; reach twenty any other way and it's just a normal
-   finish.
+   Answer order is free — tap any open circle. But the deal is a single
+   continuous attempt: one wrong answer ends it immediately (see the
+   `else` branch of answer(), which calls failDeal() instead of letting
+   play continue). Reach all twenty without a miss and the cup goes off.
 ====================================================================== */
 
 const DATA_URL = '../../data/grammar-rules/gerunds-infinitives-complete.json';
@@ -679,54 +680,51 @@ function drawMixChips(){
 }
 
 /* ── THE PATH ──
-   A self-avoiding walk across a FIELD_ROWS x FIELD_COLS grid, exactly
-   PATH_LEN cells long, starting near the left edge and pulled toward a
-   random target near the right edge. Backtracking DFS: at each step, try
-   the neighbour that best closes the distance to the target most of the
-   time (72%), and a fully random valid neighbour the rest of the time, so
-   the route wanders rather than beelining — which is what gives each deal
-   its own silhouette. If a branch dead-ends, back up and try the next
-   candidate; the grid is generous enough relative to the path length
-   (48 cells for a 20-step walk) that this resolves almost immediately. */
-function generatePath(rows, cols, len){
-  for (let attempt = 0; attempt < 40; attempt++){
-    const start  = { r: (Math.random()*rows)|0, c: (Math.random()*2)|0 };
-    const target = { r: (Math.random()*rows)|0, c: cols - 1 - ((Math.random()*2)|0) };
-    const key = p => p.r + ',' + p.c;
-    const visited = new Set([key(start)]);
-    const path = [start];
-    const DIRS = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
-    const dist = p => Math.hypot(p.r - target.r, p.c - target.c);
+   Every shape below is hand-drawn: a fixed sequence of (row,col) cells,
+   each step exactly one grid unit up/down/left/right from the last, never
+   revisiting a cell, always exactly PATH_LEN (20) long. Nothing here is
+   generated at runtime — that's the point. A random walk can fold back on
+   itself and cross its own lines (see the old generatePath()); a drawn
+   shape simply can't, because we drew it that way once and checked it.
 
-    function step(){
-      if (path.length >= len) return true;
-      const cur = path[path.length - 1];
-      let candidates = DIRS.map(([dr,dc]) => ({ r: cur.r+dr, c: cur.c+dc }))
-        .filter(p => p.r>=0 && p.r<rows && p.c>=0 && p.c<cols && !visited.has(key(p)));
-      if (!candidates.length) return false;
-      candidates.sort((a,b) => dist(a) - dist(b));
-      const pool = Math.random() < 0.72 ? candidates.slice(0, Math.min(3, candidates.length)) : candidates;
-      const order = pool.slice().sort(() => Math.random() - 0.5);
-      for (const next of order){
-        visited.add(key(next));
-        path.push(next);
-        if (step()) return true;
-        path.pop();
-        visited.delete(key(next));
-      }
-      return false;
-    }
+   pickPath() just chooses one shape per deal, optionally mirrors it
+   horizontally and/or vertically, then drops it at a random position
+   inside the FIELD_ROWS x FIELD_COLS board — so six templates still feel
+   varied deal to deal without ever risking an ugly path. */
+const PATH_LIBRARY = [
+  { name:'comb-wide',  cells:[[0,0],[0,1],[0,2],[0,3],[0,4],[0,5],[0,6],[1,6],[1,5],[1,4],[1,3],[1,2],[1,1],[1,0],[2,0],[2,1],[2,2],[2,3],[2,4],[2,5]] },
+  { name:'comb-block', cells:[[1,1],[1,2],[1,3],[1,4],[1,5],[2,5],[2,4],[2,3],[2,2],[2,1],[3,1],[3,2],[3,3],[3,4],[3,5],[4,5],[4,4],[4,3],[4,2],[4,1]] },
+  { name:'comb-tall',  cells:[[0,2],[1,2],[2,2],[3,2],[4,2],[5,2],[5,3],[4,3],[3,3],[2,3],[1,3],[0,3],[0,4],[1,4],[2,4],[3,4],[4,4],[5,4],[5,5],[4,5]] },
+  { name:'hook',       cells:[[0,0],[0,1],[0,2],[0,3],[0,4],[0,5],[0,6],[1,6],[2,6],[3,6],[3,5],[3,4],[3,3],[3,2],[4,2],[4,3],[4,4],[4,5],[4,6],[4,7]] },
+  { name:'spiral',     cells:[[0,0],[0,1],[0,2],[0,3],[0,4],[0,5],[0,6],[0,7],[1,7],[2,7],[3,7],[4,7],[5,7],[5,6],[5,5],[5,4],[5,3],[5,2],[5,1],[5,0]] },
+  { name:'zigzag',     cells:[[0,0],[1,0],[2,0],[3,0],[3,1],[2,1],[1,1],[0,1],[0,2],[1,2],[2,2],[3,2],[3,3],[2,3],[1,3],[0,3],[0,4],[1,4],[2,4],[3,4]] },
+];
 
-    if (step()) return path;
-  }
-  /* Fallback — should essentially never trigger at this grid size, but a
-     short straight-ish line beats a hard failure. */
-  const out = []; let r = (Math.random()*rows)|0;
-  for (let i = 0; i < len; i++){
-    out.push({ r, c: Math.min(cols-1, i) });
-    if (Math.random() < 0.4) r = Math.max(0, Math.min(rows-1, r + (Math.random()<0.5?-1:1)));
-  }
-  return out;
+function boundsOf(cells){
+  let minR=Infinity, maxR=-Infinity, minC=Infinity, maxC=-Infinity;
+  cells.forEach(([r,c]) => {
+    if (r<minR) minR=r; if (r>maxR) maxR=r;
+    if (c<minC) minC=c; if (c>maxC) maxC=c;
+  });
+  return { minR, maxR, minC, maxC };
+}
+
+function pickPath(){
+  const shape = PATH_LIBRARY[(Math.random()*PATH_LIBRARY.length)|0];
+  const b = boundsOf(shape.cells);
+  const hflip = Math.random() < 0.5, vflip = Math.random() < 0.5;
+
+  let cells = shape.cells.map(([r,c]) => [
+    vflip ? (b.minR + b.maxR - r) : r,
+    hflip ? (b.minC + b.maxC - c) : c
+  ]);
+  if (Math.random() < 0.5) cells = cells.slice().reverse(); // walk it start-to-finish either way
+
+  const h = b.maxR - b.minR + 1, w = b.maxC - b.minC + 1;
+  const rOff = Math.floor(Math.random() * (FIELD_ROWS - h + 1));
+  const cOff = Math.floor(Math.random() * (FIELD_COLS - w + 1));
+
+  return cells.map(([r,c]) => ({ r: r - b.minR + rOff, c: c - b.minC + cOff }));
 }
 
 async function boot(){
@@ -753,7 +751,7 @@ $('gateStart').onclick = () => { sfx('unlock'); start(); };
 function start(){
   applyMix();
   const picked = interleave(sample(DECK, SLOTS, currentMix.piles, currentMix.mode, MAX_RUN), MAX_RUN);
-  const route = generatePath(FIELD_ROWS, FIELD_COLS, PATH_LEN);
+  const route = pickPath();
   slots = picked.map((card,i) => ({ card, r:route[i].r, c:route[i].c, done:false, missed:false }));
   mark = -1; done = 0; clean = 0; tries = 0; locked = false; open = null; dealClean = true;
   started = true;
@@ -944,10 +942,26 @@ function answer(pile){
       $('veil').classList.remove('show');
       p.classList.remove('bad');
       $('fill').classList.remove('sting');
-      open = null; locked = false;
-      paint();
+      failDeal();
     }, 1800);
   }
+}
+
+/* One miss, whole deal — the player still sees the rule and the correct
+   pill light up first (that pause above is deliberate: it's the teaching
+   moment), then the board locks and this hands off straight to the Sorry
+   screen. There's no partial credit to negotiate; the only way forward
+   is a new deal. */
+function failDeal(){
+  if (window.INTUITY) INTUITY.session('gerunds-infinitives', 'board',
+    { mix: currentMix.id, turned: done, clean: clean, tries: tries, perfect: false });
+
+  $('overBig').textContent = 'Sorry';
+  $('overSub').textContent = 'You reached ' + done + ' of ' + SLOTS +
+    ' before a miss. Deal again to try for the cup.';
+  drawMixChips();
+  sfx('wrong');
+  $('over').classList.add('show');
 }
 
 function checkMark(){

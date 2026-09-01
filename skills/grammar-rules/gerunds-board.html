@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#FAF7F2">
 <title>INTUITY — The Board</title>
-<meta name="intuity-build" content="2026-09-01-board-light2-sortcard">
+<meta name="intuity-build" content="2026-09-01-board-deal1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@500;700;900&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
@@ -13,32 +13,18 @@
   if (window.self !== window.top) document.documentElement.classList.add('embedded');
 </script>
 <style>
-/* ═══ THE BOARD ═══
-   Thirty-six holes, face down. The child chooses which to turn — that choice
-   is the difference between this and Sort, where the next card is handed to
-   them. A board can be worked at from the easy corners inward, and being
-   allowed to pick is most of what makes a board feel like a game rather than
-   a test.
+/* ═══ THE BOARD — DEAL ═══
+   Sort and the old Board did the same job in two different skins: read a
+   trigger, pick the form. This merges them. Click Deal and a path of twenty
+   circles is drawn across a field of decorative dots, start to finish, a
+   different shape every time. Tap any of the twenty, in any order — the
+   path is the shape of the deal, not a required order. Answer all twenty
+   and the deal is over. Answer all twenty right on the FIRST try, and the
+   cup goes off.
 
-   THE MODAL CARD NOW WEARS SORT'S POSTER, NOT THE OLD NOTCHED PANEL.
-   The card used to be a dark-theme-descended slab: rounded corners, a notch
-   cut into the top with a radial mask, a heavy multi-layer drop-shadow filter
-   standing it up off a darker veil. Sort settled what "the thing that states
-   a rule" looks like across this product — flat paper, square corners, real
-   ink, a mono kicker with a solid colour block, a minimal shadow — and this
-   card now uses exactly that material, at exactly Sort's proportions
-   (16/10, capped at 7cm on phone / 11cm on desktop), so opening a hole here
-   and opening a card in Sort read as the same object.
-
-   THE FORMS ROW NOW MATCHES SORT'S PILLS. Each answer used to sit in a
-   stretched three-column grid, forcing every egg to the same width no matter
-   how short its word. It's now a flex row that hugs each word's own width,
-   with the same flat caramel-then-state-colour egg Sort uses.
-
-   DEPTH ON THE BOARD ITSELF IS UNCHANGED. This file's actual point — a
-   circle face down is pressed, a circle turned is raised — still lives in
-   `.circle` below and is untouched by this pass. Only the pop-up modal
-   (`.veil` / `.panel` / `.forms`) has been rebuilt to match Sort. */
+   Everything below the CIRCLE / VEIL / LADDER / GATE / OVER sections is
+   carried over unchanged from the old Board. Only the layout engine (how
+   circles get their positions) and the win condition are new. */
 
 *,*::before,*::after{ margin:0; padding:0; box-sizing:border-box; }
 
@@ -57,19 +43,11 @@
   --hot:#B44A22;
   --shade:40,50,54;
 
-  /* THE LADDER. Five marks, and the ramp is the board's own pigments warming
-     toward the top rather than a dark-theme ember palette borrowed wholesale.
-     Crown is violet because violet is what this set means by "right" — the
-     last mark is the same colour as the tick you earned to get there. */
   --m0:#C2956E; --m1:#B0865C; --m2:#B44A22; --m3:#E8632A; --m4:#6B3FA0;
 
   --header-h:104px; --bar-h:46px;
   --spring:cubic-bezier(.2,1.4,.4,1);
 
-  /* Sort's poster palette, carried over verbatim so the modal card here
-     reads as the same object as Sort's card. Kept separate from the board's
-     own --ink/--faint tokens (those are tuned for the emboss and read too
-     flat on flat paper). */
   --poster:#ECE9E3;
   --poster-ink:#14110E;
   --poster-soft:rgba(20,17,14,.6);
@@ -115,10 +93,6 @@ html.embedded .header{ height:auto; padding:.35rem 1rem .4rem; gap:.3rem; }
 .mute{ justify-self:end; font-size:.95rem; opacity:.5; transition:opacity .2s; }
 .mute:hover{ opacity:1; }
 
-/* ── THE LADDER ──
-   The five marks, per board. A dot is pressed until it is won and raised
-   afterwards — the same grammar as the circles below it, so the ladder is
-   legible as "these are things you turn over" without a legend. */
 .ladder{ display:flex; align-items:center; justify-content:center; gap:.42rem; }
 .mark{ display:flex; flex-direction:column; align-items:center; gap:.2rem; width:40px; }
 .mark .dot{
@@ -139,29 +113,44 @@ html.embedded .header{ height:auto; padding:.35rem 1rem .4rem; gap:.3rem; }
 .link{ width:13px; height:2px; border-radius:2px; background:rgba(var(--shade),.16); transition:background .3s; }
 .link.done{ background:var(--caramel); }
 
-/* ══ THE BOARD ══ */
+/* ══ THE FIELD + PATH ══
+   .stage now STRETCHES its child instead of centering a shrink-fit grid —
+   the field has to fill the whole available area for cell math to work.
+   .board is the shared positioning context: a faint field of decorative
+   dots (non-interactive) plus the twenty real circles, absolutely placed
+   on top at the coordinates generatePath() chose. */
 .stage{
   position:fixed; top:var(--header-h); left:0; right:0; bottom:var(--bar-h);
-  padding:.9rem; display:flex; align-items:center; justify-content:center;
+  padding:.9rem; display:flex; align-items:stretch; justify-content:stretch;
 }
 html.embedded .stage{ top:66px; padding:.6rem; }
-/* The columns are worked out in JS from the space actually available. Left to
-   wrap on its own the grid ran to four rows in a frame two rows tall, and the
-   circles below the fold could never be reached — a board you cannot finish
-   is worse than a smaller board. */
 .board{
   position:relative; width:100%; height:100%;
-  display:grid; gap:var(--gap,.6rem);
-  align-content:center; justify-content:center; justify-items:center;
 }
 
+.dot{
+  position:absolute; border-radius:50%; background:rgba(23,23,26,.14);
+  transform:translate(-50%,-50%); pointer-events:none;
+}
+.pathSvg{ position:absolute; inset:0; pointer-events:none; }
+.pathSvg line{ stroke:var(--caramel); stroke-width:3; stroke-linecap:round; opacity:.5; }
+
+.tag{
+  position:absolute; transform:translate(-50%,-100%);
+  font-family:'DM Mono',monospace; font-size:.56rem; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--dim); white-space:nowrap; pointer-events:none;
+  margin-top:-6px;
+}
+.tag.finish{ color:var(--hot); }
+
 /* ── A CIRCLE ──
-   Face down it is a hole: pressed into the ground, showing only its number.
-   The number is set small and faint because it is an address, not content.
-   This is untouched by the Sort-card pass — the board's own depth grammar
-   (pressed vs. raised) stays exactly as it was. */
+   Now absolutely positioned rather than a grid child — left/top are set by
+   JS to the cell centre it belongs to. Every transform below carries the
+   translate(-50%,-50%) centring term explicitly, because CSS transform is
+   not additive: a bare `transform:scale(.96)` would silently drop the
+   centring and the circle would jump to the corner of its point. */
 .circle{
-  position:relative; width:var(--size,72px); height:var(--size,72px);
+  position:absolute; width:var(--size,72px); height:var(--size,72px);
   border-radius:50%; cursor:pointer; background:var(--ground);
   display:flex; align-items:center; justify-content:center; text-align:center;
   box-shadow:inset 3px 4px 8px rgba(var(--shade),.22),
@@ -169,45 +158,32 @@ html.embedded .stage{ top:66px; padding:.6rem; }
   transition:box-shadow .2s, transform .25s var(--spring), filter .25s;
   font-family:'DM Mono',monospace; font-size:calc(var(--size,72px) * .19);
   color:var(--faint);
+  transform:translate(-50%,-50%);
 }
 .circle:hover{ box-shadow:inset 4px 5px 10px rgba(var(--shade),.27),
                           inset -3px -3px 7px rgba(255,255,255,.9); color:var(--dim); }
-.circle:active{ transform:scale(.96); }
+.circle:active{ transform:translate(-50%,-50%) scale(.96); }
 
-/* Turned: the circle comes UP out of the ground and keeps the word. Filter
-   rather than box-shadow, because a raised object on this material is drawn
-   by the shadow of its silhouette and not of its box — the same technique
-   Pegs uses for a tile that has been dealt with. */
 .circle.done{
   cursor:default; box-shadow:none;
   filter:drop-shadow(-3px -3px 5px rgba(255,255,255,.95))
          drop-shadow(3px 4px 7px rgba(var(--shade),.22));
 }
-.circle.done:hover{ transform:none; }
-.circle.done:active{ transform:none; }
-/* THE WORD IS FITTED, NOT BROKEN. `word-break:break-word` split "understand"
-   into "understa / nd" — a nonsense fragment inside a circle a child is
-   reading for meaning. Breaking is now allowed only at a space, and the size
-   is set per circle from the longest token it has to hold (see fitWord), so a
-   long answer shrinks rather than fracturing. The box is also held clear of
-   the bottom-right corner where the tick sits. */
+.circle.done:hover{ transform:translate(-50%,-50%); }
+.circle.done:active{ transform:translate(-50%,-50%); }
 .circle .word{
   font-family:'Space Grotesk',sans-serif; font-weight:700;
   font-size:var(--w,var(--word,.8rem)); color:var(--tick);
   max-width:84%; padding:0 .1rem; line-height:1.14;
   overflow-wrap:normal; word-break:normal; hyphens:none;
 }
-/* WON AT THE SECOND ATTEMPT. The word is kept, but in olive rather than
-   violet, so first-time knowledge and eventual knowledge look different on
-   the board without either being marked as failure. */
 .circle.done.second .word{ color:#6E7A46; }
 .circle.flip{ animation:flip .5s; }
-@keyframes flip{ 50%{ transform:rotateY(88deg) scale(.92) } 100%{ transform:none } }
+@keyframes flip{
+  50%{ transform:translate(-50%,-50%) rotateY(88deg) scale(.92) }
+  100%{ transform:translate(-50%,-50%) }
+}
 
-/* A circle that was missed keeps a small cross. The turn can be taken again —
-   nothing is locked — but the board stops being able to lie: a child who
-   guessed their way to thirty can see that they did, and so can anyone
-   looking over their shoulder. */
 .mk{
   position:absolute; opacity:0; transform:scale(.5); transform-origin:50% 50%;
   transition:opacity .2s, transform .3s var(--spring); pointer-events:none; z-index:2;
@@ -218,14 +194,15 @@ html.embedded .stage{ top:66px; padding:.6rem; }
 .circle.done:not(.second) .mk.tick{ opacity:1; transform:scale(1); }
 
 .circle.failed{ animation:fail .45s; }
-@keyframes fail{ 0%,100%{ transform:none } 25%{ transform:translateX(-7px) rotate(-4deg) }
-                 50%{ transform:translateX(6px) rotate(3deg) } 75%{ transform:translateX(-3px) } }
+@keyframes fail{
+  0%,100%{ transform:translate(-50%,-50%) }
+  25%{ transform:translate(-50%,-50%) translateX(-7px) rotate(-4deg) }
+  50%{ transform:translate(-50%,-50%) translateX(6px) rotate(3deg) }
+  75%{ transform:translate(-50%,-50%) translateX(-3px) }
+}
 
-/* ══ THE CARD (POP-UP MODAL) ══
-   Rebuilt to be Sort's card, verbatim: a light veil (not a dark one), a flat
-   paper poster underneath it with square corners and a fixed 16/10 shape, a
-   mono kicker with a solid colour block, Anton for the trigger, and pills
-   below that hug their own word instead of stretching to fill a column. */
+/* ══ THE CARD (POP-UP MODAL) ══ — unchanged from the confirmed-working
+   version: Sort's poster, the big Anton cue word, the pills row. */
 .veil{
   position:fixed; inset:0; z-index:30; display:none; align-items:center; justify-content:center;
   background:rgba(250,247,242,.78);
@@ -236,9 +213,6 @@ html.embedded .stage{ top:66px; padding:.6rem; }
 }
 .veil.show{ display:flex; }
 
-/* THE PANEL IS NOW SORT'S CARD. Same background, same square corners, same
-   minimal shadow, same fixed 16/10 aspect ratio at the same width caps. No
-   notch, no dark-theme drop-shadow filter — see the top-of-file note. */
 .panel{
   position:relative; text-align:left;
   width:min(560px,92vw);
@@ -257,15 +231,14 @@ html.embedded .stage{ top:66px; padding:.6rem; }
 @keyframes bad{ 0%,100%{ transform:none } 15%{ transform:translateX(-13px) }
                 32%{ transform:translateX(11px) } 50%{ transform:translateX(-7px) }
                 70%{ transform:translateX(4px) } }
-  
-/* The kicker, exactly as Sort's: a mono label with a solid caramel block. */
+
 .panel .kick{
   display:flex; align-items:center; gap:9px;
   font-family:var(--f-mono2); font-size:.56rem; letter-spacing:.22em;
   text-transform:uppercase; color:var(--poster-faint); margin-bottom:1.1rem;
 }
 .panel .kick i{ display:block; width:26px; height:10px; flex:none; background:var(--caramel); }
-  .panel .cue{
+.panel .cue{
   font-family:'Anton',Impact,sans-serif;font-weight:400;text-transform:uppercase;
   font-size:clamp(2.2rem,10vw,3.6rem);line-height:.92;letter-spacing:-.005em;
   color:var(--poster-ink);margin:0 0 clamp(14px,3.5vw,20px);
@@ -286,15 +259,11 @@ html.embedded .stage{ top:66px; padding:.6rem; }
   font-style:normal; letter-spacing:.14em; color:var(--poster-faint); padding:0 .12em;
 }
 
-/* ── THE FORMS ROW (Sort's piles, ported) ──
-   A flex row, not a stretched grid: each pill takes only the width its word
-   needs, exactly like Sort. */
 .forms{
   display:flex; justify-content:flex-start; align-items:flex-start;
   gap:.6rem; margin-top:1.15rem;
 }
 .form{ flex:0 0 auto; position:relative; display:flex; flex-direction:column; align-items:center; gap:.3rem; }
-
 .form .egg{
   border-radius:999px; background:#BFBFC2;
   padding:.35rem .8em .4rem;
@@ -313,9 +282,6 @@ html.embedded .stage{ top:66px; padding:.6rem; }
   font-family:'DM Mono',monospace; font-size:.5rem; letter-spacing:.13em;
   text-transform:uppercase; color:var(--dim); text-align:center;
 }
-
-/* The correction, in Sort's own voice: a mono chip stating the rule, not a
-   bold red warning line. Information, not an alarm. */
 .rule{
   margin-top:.9rem; min-height:1.2rem;
   font-family:var(--f-mono2); font-weight:500; font-size:.78rem; color:var(--poster-ink);
@@ -327,10 +293,7 @@ html.embedded .stage{ top:66px; padding:.6rem; }
 body.two-forms .forms{ }
 body.two-forms #fm-bare{ display:none; }
 
-/* ── THE MIX CHOOSER ──
-   Raised chips, as Pegs' bank uses for the piece in your hand: the thing you
-   are about to pick up sits proud of the ground. Left as the board's own
-   material — this lives on the gate/over screens, not on the card. */
+/* ── THE MIX CHOOSER ── */
 .mixrow{ display:flex; flex-wrap:wrap; justify-content:center; gap:.45rem; margin:.2rem 0 .7rem; }
 .mixchip{
   display:flex; flex-direction:column; align-items:center; gap:.1rem;
@@ -387,10 +350,6 @@ body.two-forms #fm-bare{ display:none; }
 .fill.sting{ background:var(--bad); }
 .bar .n{ font-variant-numeric:tabular-nums; color:var(--dim); }
 
-/* ── A MARK FALLS ──
-   A pill on the band's paper rather than a giant glowing word. On a light
-   ground a 3rem text-shadow reads as a smudge; a raised chip reads as an
-   award, and it is the same object as everything else on the screen. */
 .banner{
   position:fixed; left:50%; top:calc(var(--header-h) + 14px); z-index:40;
   transform:translateX(-50%) translateY(-8px) scale(.9); pointer-events:none;
@@ -413,8 +372,9 @@ body.two-forms #fm-bare{ display:none; }
 }
 .fw-ring{ width:56px; height:56px; border-radius:50%; border:3px solid rgba(107,63,160,.55); }
 .fw-crackle{ width:3px; height:3px; border-radius:50%; background:var(--tick); box-shadow:0 0 7px rgba(107,63,160,.7); }
+.ribbon{ position:absolute; border-radius:3px; pointer-events:none; }
 
-/* ══ THE PENDULUM ══ (see Sort for the note on why the string is a border) */
+/* ══ THE PENDULUM ══ */
 .pend{
   position:relative; width:104px; height:104px; margin:0 auto .95rem;
   transform-origin:50% -40px; animation:pendSwing 2.7s ease-in-out infinite;
@@ -441,7 +401,7 @@ body.two-forms #fm-bare{ display:none; }
 }
 @keyframes pendSwing{ 0%,100%{ transform:rotate(-11deg) } 50%{ transform:rotate(11deg) } }
 
-/* ══ THE ENTRY GATE ══ (one element, mounted once — see Sort) */
+/* ══ THE ENTRY GATE ══ */
 .gate{
   position:fixed; inset:0; z-index:50; display:flex; flex-direction:column;
   align-items:center; justify-content:center; gap:.15rem;
@@ -463,7 +423,7 @@ body.started .gate{ display:none; }
 body:not(.started) .stage,
 body:not(.started) .bar{ display:none; }
 
-/* ══ END OF BOARD ══ */
+/* ══ END OF DEAL ══ */
 .over{
   position:fixed; inset:0; z-index:45; display:none;
   flex-direction:column; align-items:center; justify-content:center;
@@ -516,14 +476,9 @@ html.embedded .away{ display:none; }
 <div class="bar">
   <span class="n" id="tally">0 first time</span>
   <div class="track" id="track"><div class="fill" id="fill"></div></div>
-  <span class="n" id="goal">0 of 30</span>
+  <span class="n" id="goal">0 of 20</span>
 </div>
 
-<!-- The burst lives here, not in the board. Sparks are absolutely positioned,
-     and an absolutely positioned descendant still counts toward a scrolling
-     container's overflow — so every celebration would briefly grow the stage's
-     scroll area, take width off the grid and relayout the circles. On its own
-     fixed layer the burst cannot touch layout at all. -->
 <div class="fx" id="fx" aria-hidden="true"></div>
 
 <div class="veil" id="veil">
@@ -544,23 +499,23 @@ html.embedded .away{ display:none; }
 
 <div class="gate" id="gate">
   <div class="pend" aria-hidden="true"><div class="pend-dial"><span>?</span></div></div>
-  <div class="gate-loading" id="gateLoading">Loading the board…</div>
+  <div class="gate-loading" id="gateLoading">Loading the deck…</div>
   <div id="gateReady" style="display:none">
     <div class="kicker">The Board</div>
-    <div class="msg">Thirty-six holes. You choose which to turn</div>
+    <div class="msg">Twenty circles, a path from start to finish</div>
     <div class="mixrow"></div>
     <div class="mixblurb"></div>
-    <div class="sub">Turn thirty to finish. Get one wrong and the hole stays open — the turn is spent, nothing else, and you can come back to it.</div>
-    <button class="go" id="gateStart">Start</button>
+    <div class="sub">Tap any circle in any order. Get every one right on the first try and the cup goes off.</div>
+    <button class="go" id="gateStart">Deal</button>
   </div>
 </div>
 
 <div class="over" id="over">
-  <div class="big" id="overBig">30</div>
+  <div class="big" id="overBig">20</div>
   <div class="sub" id="overSub"></div>
   <div class="mixrow"></div>
   <div class="acts">
-    <button class="go" onclick="start()">New board →</button>
+    <button class="go" onclick="start()">New deal →</button>
   </div>
   <button class="quiet away" onclick="(window.top||window).location.href='/?openModal=grammar'">Back to grammar</button>
 </div>
@@ -569,31 +524,36 @@ html.embedded .away{ display:none; }
 <script src="intuity-sound.js"></script>
 <script>
 /* ======================================================================
-   THE BOARD
+   THE BOARD — DEAL
 
-   Open a hole and the sentence comes up as a card. Right, and the circle
-   rises out of the ground and keeps the word: the board fills with the
-   answers you have earned, so progress is the picture in front of you and
-   not a number in a corner. Wrong, and the hole stays a hole — nothing is
-   lost but the turn, and the same circle can be tried again later.
+   Twenty circles on a path. The path's shape is drawn fresh each deal by
+   generatePath(): a self-avoiding random walk across a background field of
+   dots, starting on the left, biased toward a random target on the right,
+   backtracking whenever it paints itself into a corner. That's what gives
+   every deal a different silhouette — staircases, diagonals, zigzags —
+   without ever needing the same route twice.
+
+   Answer order is free. What's tracked is dealClean: true until the first
+   miss, for the whole deal. Reach twenty done with dealClean still true
+   and the cup goes off; reach twenty any other way and it's just a normal
+   finish.
 ====================================================================== */
 
 const DATA_URL = '../../data/grammar-rules/gerunds-infinitives-complete.json';
-const SLOTS = 36;
-const GOAL  = 30;
+const FIELD_ROWS = 6, FIELD_COLS = 8;
+const PATH_LEN = 20;
+const SLOTS = PATH_LEN, GOAL = PATH_LEN;
 
-/* The same five marks the phrasal game climbs, spaced across the goal so the
-   first arrives early enough to be believed in. */
 const MARKS = [
-  { at:5,  label:'Spark', col:'var(--m0)' },
-  { at:10, label:'Ember', col:'var(--m1)' },
-  { at:16, label:'Flame', col:'var(--m2)' },
-  { at:23, label:'Blaze', col:'var(--m3)' },
-  { at:30, label:'Crown', col:'var(--m4)' },
+  { at:4,  label:'Spark', col:'var(--m0)' },
+  { at:8,  label:'Ember', col:'var(--m1)' },
+  { at:12, label:'Flame', col:'var(--m2)' },
+  { at:16, label:'Blaze', col:'var(--m3)' },
+  { at:20, label:'Crown', col:'var(--m4)' },
 ];
 
 let DECK = [], slots = [], open = null, mark = -1;
-let done = 0, clean = 0, tries = 0, locked = false, started = false;
+let done = 0, clean = 0, tries = 0, locked = false, started = false, dealClean = true;
 
 const $  = id => document.getElementById(id);
 const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -608,43 +568,7 @@ const CROSS = '<svg class="mk cross" viewBox="0 0 24 24" fill="none" stroke="var
   'stroke-width="5.8" stroke-linecap="round" aria-hidden="true">' +
   '<path d="M5.4 5c4.2 4.2 8.6 9.2 13.4 14.2M18.6 5.4C14.2 9.4 9.6 14.6 5.2 19"/></svg>';
 
-
-/* ══════════════════════════════════════════════════════════════════════
-   THE MIXES — WHY THE DECK IS BUILT AND NOT SLICED
-
-   THE BUG THIS REPLACES. The deck in the JSON is grouped by pile: forty-nine
-   gerunds, then twenty infinitives, then the four bare ones. `DECK.slice(0,40)`
-   therefore dealt forty gerunds and nothing else, and the shuffle that followed
-   only reordered them — it shuffled WITHIN a block that was already uniform. A
-   student could tap the left pile forty times, score a hundred per cent, and
-   never once have read the trigger. The screen was testing endurance.
-
-   WHY BLOCKS ARE WRONG HERE. This is a discrimination task: the whole skill is
-   telling `avoid` from `refuse`. A run of same-answer items produces a response
-   set — after four or five the hand stops waiting for the eye, and the learner
-   is no longer deciding, they are repeating. Interleaving feels harder and
-   scores lower in the session, and that is the point: the retrieval difficulty
-   is what builds the discrimination. Blocked practice flatters the session and
-   loses the learning.
-
-   WHY A LADDER AND NOT JUST SHUFFLE. Straight interleaving from a standing
-   start is too much: a learner who does not yet have the gerund set cannot
-   contrast it with anything. So the mixes go easy to hard by widening the
-   CHOICE, not by changing the verbs. Mix 1 is the binary contrast. Mix 2 adds
-   the third form. Mix 3 stops helping.
-
-   WHY MIX 3 IS SEPARATE FROM MIX 2. Mix 2 samples evenly, which pushes the four
-   bare items to about one card in seven — roughly three times their real rate —
-   because four cards spread across a whole deck would otherwise be met once and
-   forgotten. That is a deliberate distortion for learning. Mix 3 undoes it and
-   samples as the language actually falls, so the last rung is the only one where
-   the odds are honest. A student who can only pass Mix 2 has learned the forms
-   with a thumb on the scale, and should be able to see that.
-
-   Note the eight dual-form triggers (forget, mean, regret, remember, stop, try…)
-   are held back in the data for the contrast game, where the SAME trigger takes
-   both forms with different meanings. Nothing here reaches for them: sorting
-   them into one pile would teach the opposite of what that game teaches. */
+/* ── THE MIXES (unchanged from the old Board) ── */
 const MIXES = [
   { id:'m1', name:'Mix 1', sub:'two forms',   n:24,
     piles:['-ing','to'],         mode:'balanced',
@@ -658,30 +582,9 @@ const MIXES = [
 ];
 let currentMix = MIXES[0];
 
-/* Round-robin across the piles, shuffled within each. Scarcity handles itself:
-   the four bare cards run out after four passes and the remaining places fill
-   from the piles that still have stock, rather than the sampler failing or
-   repeating a card to hit its quota. */
 function sample(pool, n, piles, mode, maxRun){
   const usable = pool.filter(c => piles.indexOf(c.pile) !== -1);
 
-  /* ── NATURAL MODE IS ALLOCATED, NOT DRAWN ──
-     `shuffle(pool).slice(0,n)` was the obvious way to sample at the real
-     frequencies and it is wrong twice over. It is noisy — one deal comes out
-     22 gerunds, the next 28 — so "true odds" varied by a third from round to
-     round and could not be compared. Worse, a heavy draw makes an evenly
-     spaced deck IMPOSSIBLE: twenty-eight gerunds among eight others cannot be
-     broken into runs of two whatever the shuffler does, so the interleaver hit
-     its fallback and the round ended in a wall of one answer. The audit caught
-     tails of eighteen.
-
-     So the quota per pile is computed from its true share of the pool by the
-     largest-remainder method, and the biggest pile is then clamped to what a
-     run cap of `maxRun` can actually space out — r*(n+1)/(r+1) — with the
-     surplus handed to the others. At this deck size the clamp and the true
-     rate happen to land on the same number, so nothing is distorted to get it;
-     the clamp is there so a change to the data or the deck length cannot
-     quietly reintroduce the wall. */
   if (mode === 'natural'){
     const by = new Map();
     usable.forEach(c => { if (!by.has(c.pile)) by.set(c.pile, []); by.get(c.pile).push(c); });
@@ -691,7 +594,6 @@ function sample(pool, n, piles, mode, maxRun){
 
     const quota = {}; let placed = 0;
     keys.forEach(k => { quota[k] = Math.min(by.get(k).length, Math.floor(share(k) * n)); placed += quota[k]; });
-    /* largest remainder, so the rounding loss goes where it is most deserved */
     keys.slice().sort((a,b) => (share(b)*n - Math.floor(share(b)*n)) - (share(a)*n - Math.floor(share(a)*n)))
         .forEach(k => { while (placed < n && quota[k] < by.get(k).length){ quota[k]++; placed++; } });
 
@@ -715,53 +617,17 @@ function sample(pool, n, piles, mode, maxRun){
       const b = by.get(k);
       if (b && b.length){ out.push(b.pop()); moved = true; if (out.length >= n) break; }
     }
-    if (!moved) break;   /* the pool is exhausted; a short deck beats a padded one */
+    if (!moved) break;
   }
   return out;
 }
 
-/* SHUFFLING IS NOT ENOUGH, AND NOR IS GREEDY REPAIR.
-   A fair shuffle of a balanced deck still deals five gerunds in a row now and
-   again, and five in a row is all it takes to start a response set. But the
-   obvious fix — always take from the pile with the most cards left, subject to
-   a run cap — trades one pattern for a worse one. It is deterministic, so a
-   balanced deck came out `gt gt gt gt` and a two-to-one deck came out
-   `ggt ggt ggt`: a rigid period the learner can lock onto within about six
-   cards, at which point they are answering the rhythm instead of the verb.
-   That is the same failure as the block, arriving with better manners.
-
-   It failed a second way. Greedy selection drains the small piles at a
-   constant rate while the big one is still deep, so on a naturally-skewed
-   sample the minority ran out early and the deck ended in a long tail — one
-   audit deal finished on eighteen consecutive gerunds.
-
-   So the pile is drawn at random, weighted by how many cards it has LEFT, and
-   only then filtered by the run cap. Weighting by the remainder is the part
-   that matters: it is self-correcting, because a pile consumed faster than its
-   share immediately becomes less likely to be picked. The ratio therefore
-   holds roughly steady from the first card to the last, no pile empties early,
-   and the order is unpredictable at every step while still never running the
-   same answer more than `maxRun` times. */
 function interleave(cards, maxRun){
   const by = new Map();
   cards.forEach(c => { if (!by.has(c.pile)) by.set(c.pile, []); by.get(c.pile).push(c); });
   by.forEach((v, k) => by.set(k, shuffle(v)));
 
-  /* THE FEASIBILITY GUARD. Weighting by the remainder holds the ratio steady
-     on AVERAGE, which is not the same as holding it. On a two-to-one deck the
-     spare separators are few — thirty-six cards at twenty-four gerunds leaves
-     exactly twelve others, and pairs of gerunds need eleven of them — so a
-     couple of unlucky draws early spend slack that cannot be earned back, the
-     minority runs dry, and the deck ends in a wall of one answer. The audit
-     found deals finishing on twenty-three consecutive gerunds.
-
-     So before a pile is taken, the state it would leave behind is checked: a
-     sequence with a run cap of r exists only while the biggest pile is no
-     larger than r * (everything else + 1). Piles that would break that are not
-     offered. Early in a deck almost everything passes and the order is free;
-     late, when the slack is gone, the majority is forced — which is correct,
-     because by then there is only one arrangement left that works. */
-  const feasible = (counts, maxKey) => {
+  const feasible = (counts) => {
     const total = Object.values(counts).reduce((a,x) => a + x, 0);
     const mx = Object.values(counts).reduce((a,x) => Math.max(a,x), 0);
     return mx <= maxRun * (total - mx + 1);
@@ -771,8 +637,6 @@ function interleave(cards, maxRun){
   while (out.length < cards.length){
     const live = [...by.keys()].filter(k => by.get(k).length);
     if (!live.length) break;
-    /* If the only pile with cards left is the one already running, there is no
-       legal move — take it rather than drop cards on the floor. */
     let legal = live.filter(k => !(k === last && run >= maxRun));
     if (!legal.length) legal = live;
 
@@ -782,8 +646,6 @@ function interleave(cards, maxRun){
       if (--after[k] === 0) delete after[k];
       return feasible(after);
     });
-    /* Nothing safe means the deck was already tight before this step; fall
-       back to the biggest pile, which is the move that relieves the pressure. */
     if (!safe.length) safe = [legal.reduce((m,k) => by.get(k).length > by.get(m).length ? k : m, legal[0])];
 
     const weight = safe.reduce((t,k) => t + by.get(k).length, 0);
@@ -797,11 +659,7 @@ function interleave(cards, maxRun){
 }
 
 const MAX_RUN = 2;
-const buildDeck = mix => interleave(sample(DECK, mix.n, mix.piles, mix.mode, MAX_RUN), MAX_RUN);
 
-/* The pile a mix does not use is REMOVED, not greyed. Leaving a third pile on
-   screen that is never the answer teaches a learner to stop looking at it —
-   a habit that costs them the moment Mix 2 makes it live again. */
 function applyMix(){
   document.body.classList.toggle('two-forms', currentMix.piles.length === 2);
 }
@@ -818,6 +676,57 @@ function drawMixChips(){
     });
   });
   document.querySelectorAll('.mixblurb').forEach(el => el.textContent = currentMix.blurb);
+}
+
+/* ── THE PATH ──
+   A self-avoiding walk across a FIELD_ROWS x FIELD_COLS grid, exactly
+   PATH_LEN cells long, starting near the left edge and pulled toward a
+   random target near the right edge. Backtracking DFS: at each step, try
+   the neighbour that best closes the distance to the target most of the
+   time (72%), and a fully random valid neighbour the rest of the time, so
+   the route wanders rather than beelining — which is what gives each deal
+   its own silhouette. If a branch dead-ends, back up and try the next
+   candidate; the grid is generous enough relative to the path length
+   (48 cells for a 20-step walk) that this resolves almost immediately. */
+function generatePath(rows, cols, len){
+  for (let attempt = 0; attempt < 40; attempt++){
+    const start  = { r: (Math.random()*rows)|0, c: (Math.random()*2)|0 };
+    const target = { r: (Math.random()*rows)|0, c: cols - 1 - ((Math.random()*2)|0) };
+    const key = p => p.r + ',' + p.c;
+    const visited = new Set([key(start)]);
+    const path = [start];
+    const DIRS = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+    const dist = p => Math.hypot(p.r - target.r, p.c - target.c);
+
+    function step(){
+      if (path.length >= len) return true;
+      const cur = path[path.length - 1];
+      let candidates = DIRS.map(([dr,dc]) => ({ r: cur.r+dr, c: cur.c+dc }))
+        .filter(p => p.r>=0 && p.r<rows && p.c>=0 && p.c<cols && !visited.has(key(p)));
+      if (!candidates.length) return false;
+      candidates.sort((a,b) => dist(a) - dist(b));
+      const pool = Math.random() < 0.72 ? candidates.slice(0, Math.min(3, candidates.length)) : candidates;
+      const order = pool.slice().sort(() => Math.random() - 0.5);
+      for (const next of order){
+        visited.add(key(next));
+        path.push(next);
+        if (step()) return true;
+        path.pop();
+        visited.delete(key(next));
+      }
+      return false;
+    }
+
+    if (step()) return path;
+  }
+  /* Fallback — should essentially never trigger at this grid size, but a
+     short straight-ish line beats a hard failure. */
+  const out = []; let r = (Math.random()*rows)|0;
+  for (let i = 0; i < len; i++){
+    out.push({ r, c: Math.min(cols-1, i) });
+    if (Math.random() < 0.4) r = Math.max(0, Math.min(rows-1, r + (Math.random()<0.5?-1:1)));
+  }
+  return out;
 }
 
 async function boot(){
@@ -842,83 +751,112 @@ async function boot(){
 $('gateStart').onclick = () => { sfx('unlock'); start(); };
 
 function start(){
-  /* The board is always thirty-six holes, so a mix changes WHAT is under them
-     rather than how many. Interleaved as well as sampled: a learner working
-     along a row would otherwise hit a run of one form and start answering by
-     habit, which is the same trap the deck game had, arriving spatially. */
   applyMix();
   const picked = interleave(sample(DECK, SLOTS, currentMix.piles, currentMix.mode, MAX_RUN), MAX_RUN);
-  slots = picked.map(card => ({ card, done:false, missed:false }));
-  mark = -1; done = 0; clean = 0; tries = 0; locked = false; open = null;
+  const route = generatePath(FIELD_ROWS, FIELD_COLS, PATH_LEN);
+  slots = picked.map((card,i) => ({ card, r:route[i].r, c:route[i].c, done:false, missed:false }));
+  mark = -1; done = 0; clean = 0; tries = 0; locked = false; open = null; dealClean = true;
   started = true;
   document.body.classList.add('started');
   $('over').classList.remove('show');
   $('veil').classList.remove('show');
-  drawLadder(); drawBoard(); paint();
+  drawLadder(); drawField(); drawPath(); layout(); paint();
 }
 
-/* Every circle must be reachable, so the layout is solved rather than left to
-   wrap: find the column count that makes the circles largest while still
-   fitting the height, then set the size from whichever dimension binds. */
+function drawField(){
+  const b = $('board');
+  b.innerHTML = '<svg class="pathSvg" id="pathSvg"></svg>';
+  for (let r = 0; r < FIELD_ROWS; r++){
+    for (let c = 0; c < FIELD_COLS; c++){
+      const d = document.createElement('div');
+      d.className = 'dot'; d.dataset.r = r; d.dataset.c = c;
+      b.appendChild(d);
+    }
+  }
+}
+
+function drawPath(){
+  const b = $('board');
+  slots.forEach((s,i) => {
+    const el = document.createElement('button');
+    el.className = 'circle';
+    el.id = 'c' + i;
+    const tagPrefix = i === 0 ? 'Start, ' : (i === slots.length-1 ? 'Finish, ' : '');
+    el.setAttribute('aria-label', tagPrefix + 'Hole ' + (i+1));
+    el.innerHTML = '<span class="n">' + (i+1) + '</span>' + TICK + CROSS;
+    el.onclick = () => openCircle(i);
+    b.appendChild(el);
+  });
+  const tagS = document.createElement('div'); tagS.className = 'tag'; tagS.id = 'tagStart'; tagS.textContent = 'start';
+  const tagF = document.createElement('div'); tagF.className = 'tag finish'; tagF.id = 'tagFinish'; tagF.textContent = 'finish';
+  b.appendChild(tagS); b.appendChild(tagF);
+}
+
+/* Cell math is plain division since the field is a fixed rows x cols grid
+   (not solved for like the old 36-hole board, which searched for the
+   largest clean divisor of a variable slot count). */
 function layout(){
   const b = $('board');
   const w = b.clientWidth, h = b.clientHeight;
-  if (!w || !h) return;
-  /* MAXIMISING SIZE ALONE DEALT A RAGGED BOARD. Five columns across thirty-six
-     holes is seven full rows and one orphan sitting alone at the bottom left —
-     which is what the solver picked on a phone, because five columns did make
-     each circle a few pixels larger than six. A board is a rectangle before it
-     is a set of circles, so divisors of the count are tried first and a ragged
-     count is only accepted if it beats the best clean one by a real margin. */
-  const clean = [], ragged = [];
-  for (let cols = 2; cols <= SLOTS; cols++){
-    const rows = Math.ceil(SLOTS / cols);
-    const gap  = 8;
-    const size = Math.min((w - gap*(cols-1)) / cols, (h - gap*(rows-1)) / rows);
-    (SLOTS % cols === 0 ? clean : ragged).push({ size, cols });
+  if (!w || !h || !slots.length) return;
+
+  const cellW = w / FIELD_COLS, cellH = h / FIELD_ROWS;
+  const cell = Math.min(cellW, cellH);
+  const dotSize = Math.max(4, Math.min(10, cell * 0.22));
+  const circleSize = Math.max(34, Math.min(96, cell * 0.86));
+  b.style.setProperty('--size', circleSize + 'px');
+  b.style.setProperty('--word', Math.max(8, Math.round(circleSize * 0.19)) + 'px');
+
+  b.querySelectorAll('.dot').forEach(el => {
+    const r = +el.dataset.r, c = +el.dataset.c;
+    el.style.left = ((c + 0.5) * cellW) + 'px';
+    el.style.top  = ((r + 0.5) * cellH) + 'px';
+    el.style.width = el.style.height = dotSize + 'px';
+  });
+
+  slots.forEach((s,i) => {
+    const el = $('c' + i);
+    if (!el) return;
+    el.style.left = ((s.c + 0.5) * cellW) + 'px';
+    el.style.top  = ((s.r + 0.5) * cellH) + 'px';
+  });
+
+  const svg = $('pathSvg');
+  if (svg){
+    svg.setAttribute('width', w); svg.setAttribute('height', h);
+    let lines = '';
+    for (let i = 1; i < slots.length; i++){
+      const a = slots[i-1], b2 = slots[i];
+      lines += '<line x1="' + ((a.c+0.5)*cellW) + '" y1="' + ((a.r+0.5)*cellH) +
+               '" x2="' + ((b2.c+0.5)*cellW) + '" y2="' + ((b2.r+0.5)*cellH) + '"/>';
+    }
+    svg.innerHTML = lines;
   }
-  const pick = a => a.reduce((m,x) => x.size > m.size ? x : m, { size:0, cols:1 });
-  const bestClean = pick(clean), bestRagged = pick(ragged);
-  const best = bestRagged.size > bestClean.size * 1.18 ? bestRagged : bestClean;
-  const size = Math.max(34, Math.min(96, Math.floor(best.size) - 2));
-  b.style.setProperty('--size', size + 'px');
-  b.style.setProperty('--gap', Math.max(5, Math.round(size * 0.14)) + 'px');
-  b.style.gridTemplateColumns = 'repeat(' + best.cols + ', ' + size + 'px)';
-  /* The word has to fit inside the circle, whatever size it ended up. */
-  b.style.setProperty('--word', Math.max(8, Math.round(size * 0.19)) + 'px');
+
+  const tagS = $('tagStart'), tagF = $('tagFinish');
+  if (tagS && slots[0]){
+    tagS.style.left = ((slots[0].c + 0.5) * cellW) + 'px';
+    tagS.style.top  = (slots[0].r * cellH) + 'px';
+  }
+  if (tagF && slots.length){
+    const last = slots[slots.length - 1];
+    tagF.style.left = ((last.c + 0.5) * cellW) + 'px';
+    tagF.style.top  = (last.r * cellH) + 'px';
+  }
 }
 window.addEventListener('resize', () => {
   layout();
-  /* --word changed, so every word already placed has to be re-fitted or the
-     board keeps sizes computed against the old circle. */
   slots.forEach((s, i) => {
     if (!s.done) return;
     const el = $('c' + i); if (el) fitWord(el, s.card.forms[s.card.pile]);
   });
 });
 
-/* The base size is a share of the circle; a token longer than about eight
-   characters cannot fit at that size, so the size is scaled by the ratio of
-   the fitting length to the real one and floored so it never goes illegible. */
 function fitWord(el, text){
   const base = parseFloat(getComputedStyle($('board')).getPropertyValue('--word')) || 14;
   const longest = String(text).split(/\s+/).reduce((m,t) => Math.max(m, t.length), 0);
   const scale = longest > 8 ? Math.max(.66, 8 / longest) : 1;
   el.style.setProperty('--w', (base * scale).toFixed(1) + 'px');
-}
-
-function drawBoard(){
-  const b = $('board'); b.innerHTML = '';
-  slots.forEach((s, i) => {
-    const el = document.createElement('button');
-    el.className = 'circle';
-    el.id = 'c' + i;
-    el.setAttribute('aria-label', 'Hole ' + (i+1));
-    el.innerHTML = '<span class="n">' + (i+1) + '</span>' + TICK + CROSS;
-    el.onclick = () => openCircle(i);
-    b.appendChild(el);
-  });
-  layout();
 }
 
 function drawLadder(){
@@ -945,7 +883,7 @@ function openCircle(i){
   const words = stem.split(/\s+/);
   const n = Math.min(trig.split(/\s+/).length, words.length);
 
-  $('cue').textContent = trig.toUpperCase();   // ← new: the big word
+  $('cue').textContent = trig.toUpperCase();
 
   $('sentence').innerHTML =
     esc(words.slice(0, words.length - n).join(' ')) + ' <b>' +
@@ -970,7 +908,6 @@ function answer(pile){
   const slot = slots[open], c = slot.card, el = $('c' + open);
   const ok = pile === c.pile;
 
-  /* One line per answer, so October can be measured rather than remembered. */
   if (window.INTUITY) INTUITY.log('gerunds-infinitives', c.trigger, ok,
     { game:'board', mix:currentMix.id });
 
@@ -990,8 +927,7 @@ function answer(pile){
     paint();
     if (done >= GOAL) setTimeout(finish, 950);
   } else {
-    /* Frightful, but brief. The rule appears, the right egg lights, the panel
-       recoils, and the hole stays a hole — the turn is spent, nothing else. */
+    dealClean = false;
     const p = $('panel');
     p.classList.remove('bad'); void p.offsetWidth; p.classList.add('bad');
     $('rule').textContent = c.rule || '';
@@ -1029,8 +965,6 @@ function checkMark(){
 }
 
 function paint(){
-  /* Both numbers, always: how many are turned, and how many were turned
-     without a stumble. The second is the one that means something. */
   $('tally').textContent = clean + ' first time';
   $('goal').title = currentMix.name;
   $('goal').textContent  = done + ' of ' + GOAL;
@@ -1041,24 +975,66 @@ function paint(){
 
 function finish(){
   if (window.INTUITY) INTUITY.session('gerunds-infinitives', 'board',
-    { mix: currentMix.id, turned: done, clean: clean, tries: tries });
-  $('overBig').textContent = done;
-  const acc = done ? Math.round(clean / done * 100) : 0;
-  $('overSub').textContent = currentMix.name.toLowerCase() + ' · ' + clean +
-    ' first time · ' + acc + '% clean';
+    { mix: currentMix.id, turned: done, clean: clean, tries: tries, perfect: dealClean });
+
+  if (dealClean){
+    $('overBig').textContent = '🏆';
+    $('overSub').textContent = 'Perfect deal — all ' + SLOTS + ' right, first try.';
+    celebrateCup();
+  } else {
+    $('overBig').textContent = done;
+    const acc = done ? Math.round(clean / done * 100) : 0;
+    $('overSub').textContent = currentMix.name.toLowerCase() + ' · ' + clean +
+      ' first time · ' + acc + '% clean';
+  }
   drawMixChips();
   sfx('fanfare');
   $('over').classList.add('show');
 }
 
-/* ── THE BURST, FIRED AT THE CIRCLE THAT WAS WON ── */
+/* ── THE CUP ──
+   Ribbon confetti, not the per-circle spark burst below — long thin
+   rotating strips raining from top-centre, distinct from the small
+   celebratory pop that fires on every single correct answer. */
+function celebrateCup(){
+  if (matchMedia('(prefers-reduced-motion:reduce)').matches) return;
+  const fx = $('fx');
+  const cx = window.innerWidth / 2, cy = window.innerHeight * 0.32;
+  const COLS = ['#6B3FA0','#E8632A','#C2956E','#A3B26A','#B44A22','#FFFFFF'];
+
+  for (let i = 0; i < 46; i++){
+    const rib = document.createElement('div');
+    rib.className = 'ribbon';
+    const col = COLS[(Math.random()*COLS.length)|0];
+    rib.style.width = '6px';
+    rib.style.height = (16 + Math.random()*14) + 'px';
+    rib.style.background = col;
+    const startX = cx + (Math.random()-0.5) * 90;
+    rib.style.left = startX + 'px';
+    rib.style.top = cy + 'px';
+    fx.appendChild(rib);
+
+    const dx = (Math.random()-0.5) * window.innerWidth * 0.85;
+    const dy = window.innerHeight * 0.62 + Math.random()*220;
+    const rot = Math.random()*720 - 360;
+    const dur = 1500 + Math.random()*1000;
+    const delay = Math.random()*260;
+
+    rib.animate([
+      { transform:'translate(-50%,-50%) rotate(0deg)', opacity:1 },
+      { transform:'translate(' + (dx*0.5) + 'px,' + (dy*0.4 - 60) + 'px) rotate(' + (rot*0.5) + 'deg)', opacity:1, offset:.45 },
+      { transform:'translate(' + dx + 'px,' + dy + 'px) rotate(' + rot + 'deg)', opacity:0 }
+    ], { duration:dur, delay, easing:'cubic-bezier(.15,.7,.3,1)' });
+    setTimeout(() => rib.remove(), dur + delay + 60);
+  }
+}
+
+/* ── THE BURST, FIRED AT THE CIRCLE THAT WAS WON (unchanged) ── */
 function burst(el){
   if (matchMedia('(prefers-reduced-motion:reduce)').matches) return;
   const fx = $('fx');
   const r  = el.getBoundingClientRect();
   const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-  /* The old seven belonged to the dark theme — acid yellow, gold, mint and a
-     sky blue that appears nowhere else. These are the board's own. */
   const COLS = ['#6B3FA0','#E8632A','#C2956E','#A3B26A','#FFFFFF','#B44A22'];
 
   const flash = document.createElement('div');
@@ -1130,7 +1106,6 @@ function paintMute(){
 }
 $('mute').onclick = () => { if (window.SFX) SFX.toggle(); paintMute(); };
 
-/* Tapping the ground closes the card without spending the turn. */
 $('veil').addEventListener('click', e => {
   if (e.target === $('veil') && !locked){ $('veil').classList.remove('show'); open = null; }
 });

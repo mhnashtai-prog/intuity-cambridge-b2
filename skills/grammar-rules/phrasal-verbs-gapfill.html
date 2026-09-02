@@ -135,12 +135,22 @@
       color: var(--ink);
     }
 
+    html { height: 100%; }
     body {
-      font-family: var(--f-body, 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif);
+      font-family: var(--f-body);
       background: var(--screen);
-      min-height: 100vh;
+      /* WAS min-height:100vh. Inside an iframe that measures the WINDOW, not
+         the frame, so the body is taller than its own viewport before a
+         single sentence is added — and position:sticky then has no scrolling
+         ancestor to stick to, which is half of why the bank scrolled away.
+         height:100% measures the frame. Same fix as gapfill.css and
+         practice.css already carry. */
+      height: 100%;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
       color: var(--ink);
-      padding: 1rem;
+      padding: 0 var(--gutter) 1rem;
     }
 
     .content-container {
@@ -194,11 +204,29 @@
     /* ── PROGRESS, NOW A PLAIN CAPTION LINE ────────────────────────────
        No longer its own row of filled dots; a single quiet mono line,
        the way Explore's own progress counter ("1 / 16") reads. */
+    /* ── THE PINNED BLOCK ─────────────────────────────────────────────
+       The tally and the particle bank pin TOGETHER, as one object, for the
+       reason already written into gapfill.css: pinning them separately
+       means guessing the first one's height to offset the second, and this
+       bank wraps to one, two or three rows depending on the family and the
+       screen. One wrapper, one top:0, nothing to keep in sync.
+
+       Opaque background is not decoration — sentences scroll UNDER this,
+       and without it they show through the gaps between the chips. */
+    .pinned {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: var(--screen);
+      padding-top: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
     .progress-info {
       text-align: center;
       font-size: 0.75rem;
       color: var(--faint);
-      margin-bottom: 1.5rem;
+      margin-bottom: 1rem;
       font-family: var(--f-mono);
       letter-spacing: 0.04em;
     }
@@ -210,13 +238,32 @@
        carry their own identity already (tile-bg pills), so the outer box
        was a highlight around a highlight. A thin rule now separates it
        from the sentences instead of a filled panel. */
+  /* ── THE BANK STAYS ON SCREEN ────────────────────────────────────────
+     It scrolled with the sentences, so by item six the sixteen particles a
+     student is choosing FROM were above the fold — they were being asked to
+     pick from a list they could not see. It is not a heading; it is the
+     working set, and it has to behave like one.
+
+     max-height, not just sticky: MIX 1 carries 25 particles, which is four
+     wrapped rows, and a bank that tall would leave almost no sentence
+     visible on a phone. Capped at a third of the frame and scrollable
+     inside itself — the cap only ever bites on the long families. */
   .reference-bank {
-  padding-bottom: 1rem;
-  margin-bottom: 1.25rem;
+  padding-bottom: .85rem;
   border-bottom: 1px solid var(--rule);
+  max-height: 34vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
+    /* Sticky INSIDE the bank, so the label survives the bank's own scroll
+       on the 25-particle families. */
     .bank-title {
+      position: sticky;
+      top: 0;
+      background: var(--screen);
+      padding-bottom: .35rem;
       font-size: 0.6875rem;
       color: var(--faint);
       font-weight: 700;
@@ -574,11 +621,18 @@
            its own set-tabs while Quiz is open, so there's still only one
            row of tabs on screen — just styled to match the rest now). -->
       
-      <div class="progress-info" id="progressInfo" style="display: none;">
-        <span id="progressText"></span>
-        <div class="progress-dots" id="progressDots"></div>
+      <!-- The bank is rendered into #bankHost rather than into the content,
+           so it can pin with the tally. It is the only part of the quiz that
+           is not a sentence, and the only part the student needs continuously
+           rather than once. -->
+      <div class="pinned">
+        <div class="progress-info" id="progressInfo" style="display: none;">
+          <span id="progressText"></span>
+          <div class="progress-dots" id="progressDots"></div>
+        </div>
+        <div id="bankHost"></div>
       </div>
-      
+
       <div id="contentContainer">
         <div class="loading">Loading quiz...</div>
       </div>
@@ -748,25 +802,10 @@ async function loadData() {
       const testData = quizData.tests[currentTest];
       const container = document.getElementById('contentContainer');
       
+      renderBank(testData);
+
       let html = '';
-      
-      // Reference Bank with Particles
-      html += '<div class="reference-bank">';
-      html += '<div class="bank-title">Particles</div>';
-      
-      const allParticles = testData.shuffledParticles || testData.particles;
-      
-      html += '<div class="particle-list">';
-      allParticles.forEach(particle => {
-        const isUsed = isParticleUsed(particle);
-        const isSelected = selectedParticle === particle;
-        const classes = `particle-chip ${isUsed ? 'used' : ''} ${isSelected ? 'selected' : ''}`;
-        const disabled = isUsed || showingResults ? 'disabled' : '';
-        html += `<button class="${classes}" onclick="handleParticleClick('${particle}')" ${disabled}>${particle}</button>`;
-      });
-      html += '</div>';
-      html += '</div>';
-      
+
       // Sentences with shuffled order
       html += '<div class="sentences">';
       const sentencesToDisplay = testData.shuffledSentences || testData.sentences.map((s, i) => ({...s, originalIdx: i}));
@@ -865,10 +904,36 @@ async function loadData() {
       container.innerHTML = html;
     }
 
+    /* Drawn into the pinned host, and redrawn on its own whenever a particle
+       is used or freed — so striking one through never rebuilds the sentence
+       list underneath it. */
+    function renderBank(testData) {
+      const host = document.getElementById('bankHost');
+      if (!host) return;
+      const allParticles = testData.shuffledParticles || testData.particles;
+      host.innerHTML =
+        '<div class="reference-bank">' +
+          '<div class="bank-title">Particles</div>' +
+          '<div class="particle-list">' +
+            allParticles.map(particle => {
+              const isUsed = isParticleUsed(particle);
+              const isSelected = selectedParticle === particle;
+              const classes = `particle-chip ${isUsed ? 'used' : ''} ${isSelected ? 'selected' : ''}`;
+              const disabled = isUsed || showingResults ? 'disabled' : '';
+              return `<button class="${classes}" onclick="handleParticleClick('${particle}')" ${disabled}>${particle}</button>`;
+            }).join('') +
+          '</div>' +
+        '</div>';
+    }
+
     function handleParticleClick(particle) {
       if (showingResults || isParticleUsed(particle)) return;
       selectedParticle = selectedParticle === particle ? null : particle;
-      renderTest();
+      /* Only the bank changes — no sentence is touched by choosing a
+         particle. Rebuilding the whole test here reset the scroll position,
+         so on item nine a student tapped a particle and was thrown back to
+         item one. Redraw the chips and leave the page where it is. */
+      renderBank(quizData.tests[currentTest]);
     }
 
     function handleBlankClick(sentenceIdx) {

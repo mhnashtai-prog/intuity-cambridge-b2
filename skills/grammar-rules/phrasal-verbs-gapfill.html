@@ -664,14 +664,31 @@
     let showingResults = false;
     let testScores = {};
 
-    async function loadData() {
-      try {
-        const response = await fetch('../../data/grammar-rules/phrasal-verbs-gapfill.json');
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        
-        const data = await response.json();
-        quizData = data;
-        
+async function loadData() {
+  try {
+    const response = await fetch('../../data/grammar-rules/phrasal-verbs-data.json');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    
+    const raw = await response.json();
+
+    /* Adapt the shared data.json (groups/items) into the shape this file
+       was built around (tests/sentences), so nothing below this point
+       needs to change. */
+    quizData = {
+      tests: (raw.groups || []).map(group => {
+        const verbs = [...new Set(group.items.map(it => it.verb || group.id))];
+        return {
+          title: group.label,
+          verb: verbs.length === 1 ? verbs[0] : undefined,
+          verbs: verbs.length > 1 ? verbs : undefined,
+          particles: group.items.map(it => it.particle),
+          sentences: group.items.map(it => ({
+            text: it.example,
+            answer: it.particle
+          }))
+        };
+      })
+    };
         const saved = localStorage.getItem('phrasal_verbs_progress');
         if (saved) {
           testScores = JSON.parse(saved);

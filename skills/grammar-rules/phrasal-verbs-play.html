@@ -29,9 +29,11 @@
 html,body{height:100%;overflow:hidden}
 
 /* ── EXPLORE'S OWN CONTROL ROW ───────────────────────────────────────────
-   The verb stepper and the WATCH/LIST switch belong to Explore, not to the
-   product, so they sit inside Explore rather than in the header. The header
-   holds only what is true in every mode. */
+   The verb stepper belongs to Explore, not to the product, so it sits
+   inside Explore rather than in the header. The header holds only what is
+   true in every mode. The WATCH/LIST switch now lives on the card itself
+   (see .card-toggle / .list-toggle-wrap below), since it needs to stay on
+   screen in both Watch and List views, not just tucked under the header. */
 .explore-controls{display:flex;align-items:center;justify-content:center;
   flex-wrap:wrap;gap:.6rem 1.1rem;padding:.7rem .75rem .2rem;flex:none}
 
@@ -49,9 +51,9 @@ html,body{height:100%;overflow:hidden}
   text-transform:uppercase;color:var(--faint);min-width:8rem;text-align:center}
 
 /* Two states, so it is two buttons rather than a switch with two labels:
-   the same shape as every other choice on the page. */
-.view-mode-container{display:flex}
-.view-mode-container.hidden{display:none}
+   the same shape as every other choice on the page. Lives on the card now
+   (top-right, in Watch) and above the list (in List) — see .card-toggle
+   and .list-toggle-wrap — rather than under the header. */
 .toggle-container{display:flex;align-items:center;gap:.25rem;padding:.15rem;
   border-radius:var(--r-chip);background:var(--slot-bg)}
 .toggle-label{font-family:var(--f-display);font-size:.6rem;font-weight:600;
@@ -59,8 +61,18 @@ html,body{height:100%;overflow:hidden}
   padding:.3rem .8rem;border-radius:var(--r-chip);cursor:pointer;
   transition:background .15s,color .15s}
 .toggle-label.active{background:var(--card);color:var(--tile-ink);font-weight:700}
-/* the switch itself is gone; the labels are the control */
-.toggle-switch{display:none}
+
+/* Sits pinned to the card's own top-right corner, above the citation chip
+   and meaning text, so it reads as part of the card rather than the page
+   chrome. .modal-card is already position:relative. */
+.card-toggle{position:absolute;top:1rem;right:1rem;z-index:5}
+.card-toggle .toggle-container{background:var(--card);
+  box-shadow:0 2px 10px rgba(43,33,41,.08)}
+
+/* List has no card to pin to, so the same control sits right-aligned above
+   the list itself — same visual language, same corner logic. */
+.list-toggle-wrap{display:flex;justify-content:flex-end;
+  width:100%;max-width:min(94vw,1100px);margin:0 auto;padding:.6rem .6rem 0}
 
 /* ── SET TABS ────────────────────────────────────────────────────────── */
 #categorySelector{display:none}
@@ -182,6 +194,7 @@ html,body{height:100%;overflow:hidden}
   .list-container{padding:.3rem .6rem 2rem}
   .list-item{padding:1.2rem 1.1rem}
   .verb-step-now{min-width:6.5rem;font-size:.62rem}
+  .card-toggle{top:.7rem;right:.7rem}
 }
 </style>
 </head>
@@ -223,17 +236,16 @@ html,body{height:100%;overflow:hidden}
       <span class="verb-step-now" id="verbNow"></span>
       <button class="verb-step-btn" id="verbNext" onclick="stepVerb(1)" aria-label="Next verb">&#8250;</button>
     </div>
-    <div class="view-mode-container" id="viewModeContainer">
-      <div class="toggle-container">
-        <span class="toggle-label active" id="watchLabel">Watch</span>
-        <div class="toggle-switch" id="viewModeToggle"><div class="toggle-slider"></div></div>
-        <span class="toggle-label" id="listLabel">List</span>
-      </div>
-    </div>
   </div>
 
   <div class="watch-mode" id="watchMode">
     <div class="modal-card">
+      <!-- WATCH/LIST now pinned to the card's own top-right corner. -->
+      <div class="toggle-container card-toggle">
+        <span class="toggle-label js-watch-label active">Watch</span>
+        <span class="toggle-label js-list-label">List</span>
+      </div>
+
       <div class="card-content" id="cardContent">
         <div class="expression" id="expression"></div>
         <div class="meaning" id="meaning"></div>
@@ -264,6 +276,14 @@ html,body{height:100%;overflow:hidden}
   </div>
 
   <div class="list-mode" id="listMode">
+    <!-- List has no card to pin the switch to, so it sits right-aligned
+         above the list itself instead — same control, same corner logic. -->
+    <div class="list-toggle-wrap">
+      <div class="toggle-container">
+        <span class="toggle-label js-watch-label">Watch</span>
+        <span class="toggle-label js-list-label active">List</span>
+      </div>
+    </div>
     <div class="list-container" id="listContainer"></div>
   </div>
 </div>
@@ -370,7 +390,6 @@ function switchMainMode(mode) {
     area.classList.remove('active');
   });
 
-  const viewModeContainer = document.getElementById('viewModeContainer');
   const categorySelector = document.getElementById('categorySelector');
 
   /* THE BAND NEVER LEAVES. It used to be shown for Explore and stripped for
@@ -387,11 +406,9 @@ function switchMainMode(mode) {
   const BANDED = ['explore', 'pegs', 'rack', 'pairs'];
 
   if (mode === 'explore') {
-    viewModeContainer.classList.remove('hidden');
     categorySelector.classList.add('show');
     document.getElementById('exploreArea').classList.add('active');
   } else {
-    viewModeContainer.classList.add('hidden');
     categorySelector.classList.toggle('show', BANDED.includes(mode));
 
     if (mode === 'practice') {
@@ -590,14 +607,19 @@ function loadCategory(groupId) {
 }
 
 // ==================== VIEW MODE TOGGLE ====================
+// The switch now has two DOM instances — one pinned to the card's top-right
+// corner in Watch, one right-aligned above the list in List — so every
+// operation here works over BOTH via querySelectorAll instead of a single
+// getElementById pair. They're kept in sync at all times, whichever one the
+// learner actually clicked.
 function toggleViewMode() {
   if (isPlaying) pause();
   viewMode = viewMode === 'watch' ? 'list' : 'watch';
 
-  const toggle = document.getElementById('viewModeToggle');
-  document.getElementById('watchLabel').classList.toggle('active', viewMode === 'watch');
-  document.getElementById('listLabel').classList.toggle('active', viewMode === 'list');
-  toggle.classList.toggle('active', viewMode === 'list');
+  document.querySelectorAll('.js-watch-label').forEach(el =>
+    el.classList.toggle('active', viewMode === 'watch'));
+  document.querySelectorAll('.js-list-label').forEach(el =>
+    el.classList.toggle('active', viewMode === 'list'));
 
   const watchMode = document.getElementById('watchMode');
   const listMode = document.getElementById('listMode');
@@ -611,13 +633,10 @@ function toggleViewMode() {
 }
 
 function setupToggle() {
-  document.getElementById('viewModeToggle').addEventListener('click', toggleViewMode);
-  document.getElementById('watchLabel').addEventListener('click', () => {
-    if (viewMode !== 'watch') toggleViewMode();
-  });
-  document.getElementById('listLabel').addEventListener('click', () => {
-    if (viewMode !== 'list') toggleViewMode();
-  });
+  document.querySelectorAll('.js-watch-label').forEach(el =>
+    el.addEventListener('click', () => { if (viewMode !== 'watch') toggleViewMode(); }));
+  document.querySelectorAll('.js-list-label').forEach(el =>
+    el.addEventListener('click', () => { if (viewMode !== 'list') toggleViewMode(); }));
 }
 
 // ==================== RENDER ====================

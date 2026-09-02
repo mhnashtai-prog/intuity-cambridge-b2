@@ -179,6 +179,20 @@ html.embedded .stage{ top:44px; padding:.7rem .7rem .8rem; }
 }
 .card .kick i{ display:block; width:26px; height:10px; flex:none; background:var(--caramel); }
 
+/* ── THE CONTEXT LINE ──
+   Only the meaning mix uses this. A dual-meaning verb can't be sorted by
+   pattern-matching the trigger word — "stop" alone is genuinely ambiguous —
+   so the card needs somewhere to put the situation that resolves it, above
+   the sentence and read first, the way a reader would meet it. Empty and
+   collapsed for every other mix. */
+.card .context{
+  font-family:'DM Sans',sans-serif; font-style:italic; font-weight:400;
+  font-size:clamp(.74rem,2.5vw,.86rem); line-height:1.5;
+  color:var(--poster-faint); margin-bottom:.85rem; padding-bottom:.85rem;
+  border-bottom:1px solid var(--poster-rule);
+}
+.card .context:empty{ display:none; }
+
 .card .sentence{
   font-family:'DM Sans',sans-serif; font-weight:400; line-height:1.4;
   font-size:clamp(.85rem,3vw,1.05rem); color:var(--poster-soft);
@@ -206,6 +220,9 @@ html.embedded .stage{ top:44px; padding:.7rem .7rem .8rem; }
   background:rgba(20,17,14,.09); border-radius:3px; padding:.42em .7em; display:inline-block;
 }
 .card .note .eg{ font-size:.82rem; color:var(--poster-soft); font-style:italic; line-height:1.5; }
+.card .note .contrast{
+  font-size:.76rem; color:var(--poster-faint); font-style:italic; line-height:1.5; margin-top:.1rem;
+}
 
 .card.shake{ animation:shake .42s; }
 @keyframes shake{
@@ -435,7 +452,8 @@ html.embedded .away{ display:none; }
 <div class="stage">
   <div class="cardwrap">
     <div class="card" id="card">
-      <div class="kick"><i></i>Gerunds &amp; Infinitives</div>
+      <div class="kick"><i></i><span id="kickLabel">Gerunds &amp; Infinitives</span></div>
+      <div class="context" id="context"></div>
       <div class="sentence" id="sentence">…</div>
       <div class="forms">
         <button class="pile" id="p-ing" onclick="choose('-ing')">
@@ -556,6 +574,95 @@ const CROSS = '<svg class="mk cross" viewBox="0 0 24 24" fill="none" stroke="var
   'stroke-width="5.8" stroke-linecap="round" aria-hidden="true">' +
   '<path d="M5.4 5c4.2 4.2 8.6 9.2 13.4 14.2M18.6 5.4C14.2 9.4 9.6 14.6 5.2 19"/></svg>';
 
+/* ══ MIX 4: MEANING ══
+   Every other mix can be solved by memorizing which pile a verb belongs to
+   — "enjoy" always goes to -ing, no matter the sentence. These seven verbs
+   break that shortcut on purpose: the SAME verb takes both forms, and the
+   form changes what the sentence means. "stopped smoking" (quit) and
+   "stopped to smoke" (paused to) are both grammatical, both common, and
+   only the surrounding context tells you which one is true. There is no
+   trigger word to pattern-match here — the deck can only be solved by
+   reading the sentence, which is the entire point.
+
+   Kept local to this file rather than pulled from the fetched deck: it is
+   a small, hand-checked set (getting these meanings wrong would teach the
+   opposite of the rule), and it needs a `context` line the shared card
+   schema didn't have a slot for until now. */
+const VERB_MEANINGS = {
+  stop:    { '-ing':'quit the activity itself',            to:'paused it in order to do something else' },
+  remember:{ '-ing':'recalls something already done',      to:'didn\u2019t forget to do it' },
+  forget:  { '-ing':'fails to recall something already done', to:'failed to do something you should have' },
+  try:     { '-ing':'experiments with a method, to see if it works', to:'makes an effort at something hard, maybe without success' },
+  regret:  { '-ing':'is sorry about something already done', to:'is sorry about what they\u2019re about to say (formal)' },
+  mean:    { '-ing':'names a result or consequence of an action', to:'names an intention, done on purpose' },
+  'go on': { '-ing':'continues the same activity without a break', to:'moves on to a different, later action' },
+};
+
+const MEANING_DECK = [
+  { verbKey:'stop', trigger:'stop:0', context:'He\u2019d smoked a pack a day for a decade.',
+    stem:'Last year he finally stopped', forms:{'-ing':'smoking'}, tail:'\u2014 cold turkey, no patches.', pile:'-ing' },
+  { verbKey:'stop', trigger:'stop:1', context:'Halfway through his run, he spotted an old friend across the street.',
+    stem:'He stopped', forms:{to:'to say hello'}, tail:'and they talked for twenty minutes.', pile:'to' },
+  { verbKey:'stop', trigger:'stop:2', context:'The doctor\u2019s warning finally got through to her.',
+    stem:'She stopped', forms:{'-ing':'drinking'}, tail:'after fifteen years.', pile:'-ing' },
+  { verbKey:'stop', trigger:'stop:3', context:'He was driving home when his phone rang.',
+    stem:'He stopped', forms:{to:'to take'}, tail:'the call \u2014 it\u2019s illegal to do both at once.', pile:'to' },
+
+  { verbKey:'remember', trigger:'remember:0', context:'She looked at the old photo and smiled.',
+    stem:'She remembered', forms:{'-ing':'seeing'}, tail:'that beach for the very first time.', pile:'-ing' },
+  { verbKey:'remember', trigger:'remember:1', context:'It was freezing outside, so before he left\u2014',
+    stem:'he remembered', forms:{to:'to grab'}, tail:'his coat this time.', pile:'to' },
+  { verbKey:'remember', trigger:'remember:2', context:'Years later, the smell of chalk still brought her back.',
+    stem:'She remembered', forms:{'-ing':'crying'}, tail:'on her first day of school.', pile:'-ing' },
+  { verbKey:'remember', trigger:'remember:3', context:'The meeting started at nine sharp.',
+    stem:'He remembered', forms:{to:'to bring'}, tail:'his badge, unlike last week.', pile:'to' },
+
+  { verbKey:'forget', trigger:'forget:0', context:'The play was twenty years ago, but the image stuck with her.',
+    stem:'She\u2019ll never forget', forms:{'-ing':'watching'}, tail:'the curtain rise that night.', pile:'-ing' },
+  { verbKey:'forget', trigger:'forget:1', context:'The plants were wilted when she got home.',
+    stem:'She\u2019d forgotten', forms:{to:'to water'}, tail:'them before her trip.', pile:'to' },
+  { verbKey:'forget', trigger:'forget:2', context:'He walked in soaked.',
+    stem:'He forgot', forms:{to:'to bring'}, tail:'his umbrella, even though it was pouring.', pile:'to' },
+  { verbKey:'forget', trigger:'forget:3', context:'Even now, that sound makes her flinch.',
+    stem:'She\u2019ll never forget', forms:{'-ing':'waking up'}, tail:'at 3am to the fire alarm.', pile:'-ing' },
+
+  { verbKey:'try', trigger:'try:0', context:'The soup tasted bland.',
+    stem:'She tried', forms:{'-ing':'adding'}, tail:'more salt, and it worked.', pile:'-ing' },
+  { verbKey:'try', trigger:'try:1', context:'The door was jammed shut.',
+    stem:'He tried', forms:{to:'to force'}, tail:'it open, but it wouldn\u2019t budge.', pile:'to' },
+  { verbKey:'try', trigger:'try:2', context:'The printer kept jamming.',
+    stem:'He tried', forms:{'-ing':'loading'}, tail:'the paper the other way round.', pile:'-ing' },
+  { verbKey:'try', trigger:'try:3', context:'The exam was brutal.',
+    stem:'She tried', forms:{to:'to answer'}, tail:'all three questions, but ran out of time.', pile:'to' },
+
+  { verbKey:'regret', trigger:'regret:0', context:'He\u2019d said something cruel in the argument.',
+    stem:'He regretted', forms:{'-ing':'saying'}, tail:'it the moment it left his mouth.', pile:'-ing' },
+  { verbKey:'regret', trigger:'regret:1', context:'The letter opened formally.',
+    stem:'We regret', forms:{to:'to inform'}, tail:'you that your application was unsuccessful.', pile:'to' },
+  { verbKey:'regret', trigger:'regret:2', context:'She\u2019d quit the job on a whim.',
+    stem:'She regretted', forms:{'-ing':'leaving'}, tail:'so suddenly, without a plan.', pile:'-ing' },
+  { verbKey:'regret', trigger:'regret:3', context:'The captain\u2019s voice came over the tannoy.',
+    stem:'We regret', forms:{to:'to announce'}, tail:'that the flight has been delayed.', pile:'to' },
+
+  { verbKey:'mean', trigger:'mean:0', context:'The only flight left at 6am.',
+    stem:'Getting there on time meant', forms:{'-ing':'getting'}, tail:'up at four.', pile:'-ing' },
+  { verbKey:'mean', trigger:'mean:1', context:'He hadn\u2019t planned to upset her.',
+    stem:'He didn\u2019t mean', forms:{to:'to hurt'}, tail:'her feelings.', pile:'to' },
+  { verbKey:'mean', trigger:'mean:2', context:'The shop was miles away, and traffic was bad.',
+    stem:'Buying the parts meant', forms:{'-ing':'losing'}, tail:'the whole afternoon.', pile:'-ing' },
+  { verbKey:'mean', trigger:'mean:3', context:'He\u2019d been planning it for weeks.',
+    stem:'He meant', forms:{to:'to buy'}, tail:'her something special for her birthday.', pile:'to' },
+
+  { verbKey:'go on', trigger:'go on:0', context:'The rain didn\u2019t stop the marathon.',
+    stem:'The runners went on', forms:{'-ing':'running'}, tail:'despite the storm.', pile:'-ing' },
+  { verbKey:'go on', trigger:'go on:1', context:'She started out as a waitress.',
+    stem:'She went on', forms:{to:'to become'}, tail:'one of the city\u2019s top chefs.', pile:'to' },
+  { verbKey:'go on', trigger:'go on:2', context:'He\u2019d been talking for twenty minutes already.',
+    stem:'He went on', forms:{'-ing':'talking'}, tail:'about his holiday, oblivious to the yawns.', pile:'-ing' },
+  { verbKey:'go on', trigger:'go on:3', context:'After finishing his degree\u2014',
+    stem:'he went on', forms:{to:'to do'}, tail:'a PhD in the same subject.', pile:'to' },
+];
+
 const MIXES = [
   { id:'m1', name:'Mix 1', sub:'two forms',   n:24,
     piles:['-ing','to'],         mode:'balanced',
@@ -566,6 +673,9 @@ const MIXES = [
   { id:'m3', name:'Mix 3', sub:'true odds',   n:36,
     piles:['-ing','to','bare'],  mode:'natural',
     blurb:'Sampled at the rate the language really uses: mostly gerunds. No help from the odds.' },
+  { id:'m4', name:'Mix 4', sub:'meaning',     n:MEANING_DECK.length,
+    piles:['-ing','to'],         mode:'meaning',
+    blurb:'Seven verbs that take BOTH forms — "stop smoking" and "stop to smoke" are both correct English, and they mean different things. There\u2019s no verb to memorize here; the sentence is the only clue. Read it properly or guess.' },
 ];
 let currentMix = MIXES[0];
 
@@ -609,9 +719,10 @@ function sample(pool, n, piles, mode, maxRun){
   return out;
 }
 
-function interleave(cards, maxRun){
+function interleave(cards, maxRun, keyFn){
+  keyFn = keyFn || (c => c.pile);
   const by = new Map();
-  cards.forEach(c => { if (!by.has(c.pile)) by.set(c.pile, []); by.get(c.pile).push(c); });
+  cards.forEach(c => { const k = keyFn(c); if (!by.has(k)) by.set(k, []); by.get(k).push(c); });
   by.forEach((v, k) => by.set(k, shuffle(v)));
 
   const feasible = (counts) => {
@@ -646,7 +757,9 @@ function interleave(cards, maxRun){
 }
 
 const MAX_RUN = 2;
-const buildDeck = mix => interleave(sample(DECK, mix.n, mix.piles, mix.mode, MAX_RUN), MAX_RUN);
+const buildDeck = mix => mix.mode === 'meaning'
+  ? interleave(shuffle(MEANING_DECK), 1, c => c.verbKey)
+  : interleave(sample(DECK, mix.n, mix.piles, mix.mode, MAX_RUN), MAX_RUN);
 
 function applyMix(){
   document.body.classList.toggle('two-forms', currentMix.piles.length === 2);
@@ -717,6 +830,9 @@ function next(){
   const card = $('card');
   card.className = 'card';
 
+  $('kickLabel').textContent = currentMix.mode === 'meaning' ? 'Meaning, not memory' : 'Gerunds & Infinitives';
+  $('context').textContent = current.context || '';
+
   const stem = current.stem || current.trigger || '';
   const trig = current.trigger || '';
   const words = stem.split(/\s+/);
@@ -786,7 +902,12 @@ function choose(pile){
     burst(el);
     $('fill').classList.add('gain');
     spawnFloat('+' + gain, 'pos');
-    setTimeout(next, 550);
+    /* the meaning mix reveals on a HIT as well as a miss — a right answer
+       reached by genuine reading deserves the same confirmation a wrong one
+       gets, and getting it right by luck is exactly when seeing the rule
+       written out matters most. It gets more time on screen accordingly. */
+    if (currentMix.mode === 'meaning'){ showWhy(current); setTimeout(next, 1700); }
+    else setTimeout(next, 550);
   } else {
     /* the multiplier is read from the streak that is ABOUT to break — a
        longer streak means a bigger fall, which is the whole point: it costs
@@ -814,8 +935,25 @@ function choose(pile){
 function showWhy(c){
   const form = c.forms ? c.forms[c.pile] : '';
   const full = ((c.stem||'') + ' ' + form + ' ' + (c.tail||'')).replace(/\s+/g,' ').trim();
-  $('note').innerHTML = '<div class="r">' + esc(c.rule || '') + '</div>' +
-                        (form ? '<div class="eg">' + esc(full) + '</div>' : '');
+  const meanings = c.verbKey && VERB_MEANINGS[c.verbKey];
+
+  if (meanings){
+    /* the point of this mix: show BOTH readings side by side, not just the
+       rule for the one that happened to be right. Seeing what the OTHER
+       form would have meant here is what actually builds the contrast —
+       a single rule in isolation is exactly what gets memorized and
+       pattern-matched, which is the shortcut this deck exists to close. */
+    const otherPile = c.pile === '-ing' ? 'to' : '-ing';
+    const label = p => p === '-ing' ? '\u2013ing' : 'to \u2026';
+    $('note').innerHTML =
+      '<div class="r">' + esc(c.verbKey) + ' + ' + label(c.pile) + ' \u2192 ' + esc(meanings[c.pile]) + '</div>' +
+      '<div class="eg">' + esc(full) + '</div>' +
+      '<div class="contrast">' + esc(c.verbKey) + ' + ' + label(otherPile) + ' would mean ' +
+        esc(meanings[otherPile]) + ' \u2014 not what this sentence says.</div>';
+  } else {
+    $('note').innerHTML = '<div class="r">' + esc(c.rule || '') + '</div>' +
+                          (form ? '<div class="eg">' + esc(full) + '</div>' : '');
+  }
 }
 const hideWhy = () => { $('note').innerHTML = ''; };
 

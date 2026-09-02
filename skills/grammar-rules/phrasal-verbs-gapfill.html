@@ -610,6 +610,41 @@
     let showingResults = false;
     let testScores = {};
 
+/* ══ THE HOST DRAWS THE SET TABS ═════════════════════════════════════════
+   This page never had a set picker at all. Its ten tests are the ten verb
+   families, and the only way to reach the second one was to finish the first
+   and press "Next Test" in the score modal — so a student who wanted PUT had
+   to sit nine quizzes or reload the page.
+
+   The families were on screen the whole time, in the host's header band, but
+   that band drove the board games and Explore's slideshow and said nothing to
+   this frame. Speaking the same protocol every other topic's quiz speaks
+   (`intuity:'tests'` up, `intuity:'setTest'` down) is what connects the row
+   that was already there to the page it was already naming. */
+const EMBEDDED = window.parent !== window;
+
+function publishTests(){
+  if(!EMBEDDED || !quizData) return;
+  parent.postMessage({ intuity:'tests', mode:'quiz',
+    /* A finished family carries its percentage, exactly as Practice's do, so
+       the band doubles as the record of what has been done. */
+    titles: quizData.tests.map((t, i) => {
+      const sc = testScores['test' + i];
+      return sc ? t.title + ' (' + sc.percentage + '%)' : t.title;
+    }),
+    active: currentTest === null ? 0 : currentTest }, '*');
+}
+
+window.addEventListener('message', e => {
+  if(!e.data) return;
+  /* The host may announce itself before the fetch has landed, so a set asked
+     for too early is remembered rather than dropped. */
+  if(e.data.intuity === 'setTest'){
+    if(quizData) loadTest(e.data.index); else pendingTest = e.data.index;
+  }
+});
+let pendingTest = null;
+
 async function loadData() {
   try {
     const response = await fetch('../../data/grammar-rules/phrasal-verbs-data.json');
@@ -637,7 +672,9 @@ async function loadData() {
           testScores = JSON.parse(saved);
         }
         
-        loadTest(0);
+        loadTest(pendingTest == null ? 0 : pendingTest);
+        pendingTest = null;
+        publishTests();
         
       } catch (error) {
         console.error('Error loading data:', error);
@@ -651,7 +688,10 @@ async function loadData() {
       }
     }
 
+    /* Called on every save, so a percentage appears in the host's band the
+       moment a family is finished — not on the next reload. */
     function saveProgress() {
+      publishTests();
       try {
         localStorage.setItem('phrasal_verbs_progress', JSON.stringify(testScores));
       } catch (e) {
@@ -684,7 +724,10 @@ async function loadData() {
       })));
       
     renderTest();
-updateProgressInfo();
+    updateProgressInfo();
+    /* "Next Test" in the score modal moves the frame on its own; without this
+       the host band would still be lighting the family the student left. */
+    publishTests();
     }
 
     function updateProgressInfo() {

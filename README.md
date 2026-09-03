@@ -161,3 +161,149 @@ clean JSON, closest to what `vocab.js` already does.
 One small thing noticed and left: `.vtab .pct` is declared inline, identically,
 in three page `<style>` blocks. Same class of problem, two lines, worth folding
 into §6 when you're next in the shell.
+
+
+# Academic Vocabulary — converted, and cut in half
+
+**1,107 lines → 95.** No new engine, no new stylesheet. It runs on `vocab.js`
+and the promoted poster, which is what picking this page first was meant to
+test. The poster held.
+
+---
+
+## First: is it worth keeping?
+
+Half of it. The page had two data files and they are not the same quality.
+
+**`academic-vocabulary.json` — the browse mode. Cut it.**
+
+59 items, 274 alternatives, 31 example sentences. **89% of the alternatives
+appear in no context at all.** The first entry is representative:
+
+> say → state, declare, mention, remark, assert, claim, maintain, express,
+> announce, comment
+
+Those ten are not interchangeable, and the flat list says they are. A student
+who learns it writes *"The minister remarked that new measures would be
+introduced"* — grammatical, and wrong in register. At B2 that is one of the
+most common lexical errors there is, and this is a page that teaches it. No
+amount of restyling fixes a list whose *shape* asserts equivalence; it would
+just put a good poster around it.
+
+**`academic-vocabulary-gapfill.json` — the exercise. This is the page.**
+
+It is the discrimination task the list can't be. Eight words, eight gaps,
+each with a hint that names the distinguishing feature:
+
+| gap | answer | hint |
+|---|---|---|
+| "During the meeting, she briefly ___ her concerns" | mention | refer to something without detail |
+| "The witness ___ under oath that he had seen the defendant" | state | say formally or officially |
+
+That is exactly the contrast the browse mode flattened. Every word is used
+once, so the set can only be completed by telling all eight apart — you can't
+finish it by knowing six and guessing.
+
+So the conversion **drops the browse mode and keeps the exercise.** The 274
+alternatives aren't deleted, they're demoted from content to raw material —
+they're the source for more sets.
+
+---
+
+## The data was already in the right shape
+
+`academic-vocabulary-gapfill.json` matched `vocab.js`'s contract almost
+exactly — `setNumber`, `words`, `sentences[{text, correct}]`. Two changes:
+`topic` → `label`, and the topic strings trimmed
+("Communication Verbs - SAY alternatives" → "SAY alternatives", since the
+header already says Academic Vocabulary). Output:
+`academic-vocabulary-sets.json`.
+
+Integrity checked: 5 sets, 8 words and 8 sentences each, every `correct`
+index in range, **every word the answer to exactly one gap**, no set with a
+dead distractor, all 40 gaps parseable, all 40 hints present.
+
+---
+
+## One engine change: hints
+
+`vocab.js` gained `.hint`, and it's the only thing here that isn't a port.
+
+It renders **only where the data carries one** — Similar Words sets have no
+hints and the markup simply doesn't appear on them.
+
+Two decisions worth stating, because both could have gone the other way:
+
+**Hidden until Check.** Shown before, the hint turns retrieval into
+recognition — the student matches a gloss to a word instead of reaching for
+it, which is a materially easier task and not the one the exercise is for.
+
+**Revealed on a miss only.** After a correct answer it explains something the
+student just demonstrated they didn't need, and a hint under every line
+flattens the card back into the wall of glosses this conversion exists to get
+rid of. On a miss it's the correction doing its actual job: not "no", but
+"here is the distinction you missed", while the student still cares.
+
+Styled as italic body text on its own line with a short rule, deliberately
+**not** in a tile — a tile means "a word goes here" everywhere else in the
+product, and a gloss is not a ninth option.
+
+---
+
+## Also fixed here
+
+The old page linked **no webfont at all**. It sat on the system stack while
+the shell's `--f-display` and `--f-body` asked for Geist. That's the bug
+affecting 26 shell pages; this is one of them, fixed in passing.
+
+It's also now reachable. Academic Vocabulary was only ever linked from the
+modal, so nobody who arrived at Similar Words could find it. It's the third
+entry in the mode row now — Similar Words / Topic Vocabulary / Academic —
+which is honest, because they're one exercise on three materials.
+
+---
+
+## Files
+
+```
+academic-vocabulary.html        → skills/similar-words/   (replaces 1,107 lines)
+academic-vocabulary-sets.json   → data/similar-words/     (new)
+vocab.js                        → data/similar-words/     (hint support)
+vocab.css                       → data/similar-words/     (.hint)
+```
+
+Bump to `?v=5` for `vocab.js` / `vocab.css` across the three pages that use
+them — Similar Words and Topic Vocabulary load the same files and must not
+get a cached copy without the hint branch.
+
+The legacy page is kept at `academic-vocabulary-legacy.html.bak` in the working
+tree. Delete it once you've seen the new one run.
+
+---
+
+## Verified
+
+Markup balanced. All nine element IDs the engine touches are present. Data
+integrity as listed above. `node --check` on `vocab.js`, tinycss2 clean on
+`vocab.css`. Not rendered in a browser — check it against `poster-spec.html`,
+and check the hint by getting one wrong on purpose.
+
+---
+
+## The honest problem
+
+**Five sets.** Similar Words has 115, Topic Vocabulary 60. Forty gaps is about
+eight minutes, and the tab row will look thin next to its two siblings.
+
+The content to fix that already exists — the 274 alternatives, with their
+categories, are exactly the raw material. Turning them into sets means
+authoring gapped sentences and hints that force real discrimination, which is
+content work and a pedagogical judgement I'd want your input on rather than
+doing silently: the whole point of the cut is that the *quality* of the
+discrimination is what makes these sets worth doing.
+
+I'd suggest 20–25 sets, from the strongest categories — Communication,
+Thinking & Opinion, Very+Adjective, Change & Improvement. Say the word and
+I'll draft a batch for you to mark up before I write the rest.
+
+Otherwise: Descriptive Words next, four datasets, the real test of the engine.

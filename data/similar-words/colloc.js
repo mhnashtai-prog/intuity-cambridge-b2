@@ -14,7 +14,10 @@ var DATA_URL = '../../data/similar-words/collocations-bank.json';
 var SCORE_KEY = 'collocations_scores';
 
 var BANK = null, PATS = [], pat = 0, mode = 'browse';
-var items = [], answers = {}, isChecked = false, scores = {};
+var items = [], scores = {};
+/* here = the question on screen; marked = whether it has been answered yet,
+   which is what stops a second tap changing an answer already judged. */
+var here = 0, marked = false, score = 0, results = [];
 
 var $ = function (id) { return document.getElementById(id); };
 var esc = function (v) {
@@ -139,6 +142,7 @@ function buildItems() {
       });
       items.push({
         node: n.node,
+        pos: n.pos,
         answer: c.w,
         surface: c.form || c.w,
         example: c.example,
@@ -155,103 +159,124 @@ function buildItems() {
   items = items.slice(0, 10);
 }
 
-function qHTML(it, i) {
-  var ex = it.example, s = it.surface;
-  var k = ex.toLowerCase().indexOf(s.toLowerCase());
+/* ── ONE CARD AT A TIME ──────────────────────────────────────────────────
+   `here` is the question on screen. The others are not rendered at all
+   rather than hidden with CSS: a hidden card's buttons stay focusable and
+   stay in the tab order, so a keyboard user would tab into a question they
+   cannot see. */
+function qHTML(it) {
+  var ex = it.example, sf = it.surface;
+  var k = ex.toLowerCase().indexOf(sf.toLowerCase());
   var stem = k < 0 ? esc(ex)
-    : esc(ex.slice(0, k)) + '<span class="gap" id="gap-' + i + '"></span>' + esc(ex.slice(k + s.length));
-  return '<div class="q" id="q-' + i + '">' +
+    : esc(ex.slice(0, k)) + '<span class="gap" id="gap"></span>' + esc(ex.slice(k + sf.length));
+  return '<div class="card" id="card"><div class="q" id="q">' +
+    '<div class="kick"><i></i>' + esc(BANK.patterns[PATS[pat]].label) + '</div>' +
+    '<h2 class="node">' + esc(it.node) + '</h2>' +
+    '<div class="pos">' + esc(it.pos) + '</div>' +
     '<div class="stem">' + stem + '</div>' +
     '<div class="picks">' + it.options.map(function (o, j) {
-      return '<button class="pick" type="button" data-q="' + i + '" data-o="' + j + '">' +
-             esc(o) + '</button>';
+      return '<button class="pick" type="button" data-o="' + j + '">' + esc(o) + '</button>';
     }).join('') + '</div>' +
-    '<div class="why-note" id="why-' + i + '"></div></div>';
+    '<div class="why-note" id="why"></div>' +
+  '</div></div>';
 }
 
 function renderPractice() {
-  $('board').className = 'card';
-  $('board').innerHTML = items.map(qHTML).join('');
+  if (here >= items.length) { finish(); return; }
+  $('board').className = 'board quiz';
+  $('board').innerHTML = qHTML(items[here]);
   $('board').querySelectorAll('.pick').forEach(function (b) {
-    b.addEventListener('click', function () { choose(+b.dataset.q, +b.dataset.o); });
+    b.addEventListener('click', function () { answer(+b.dataset.o); });
   });
   $('actionBar').style.display = 'flex';
-  updateTally();
-}
-
-function choose(qi, oi) {
-  if (isChecked) return;
-  answers[qi] = items[qi].options[oi];
-  document.querySelectorAll('.pick[data-q="' + qi + '"]').forEach(function (b) {
-    b.classList.toggle('chosen', +b.dataset.o === oi);
-  });
-  var gap = $('gap-' + qi);
-  if (gap) gap.textContent = answers[qi];
-  snd('tick');
-  updateTally();
-}
-
-function updateTally() {
-  var done = Object.keys(answers).length;
-  $('tally').textContent = done + '/' + items.length;
-  $('dots').innerHTML = items.map(function (_, i) {
-    return '<div class="dot' + (answers[i] != null ? ' answered' : '') + '"></div>';
-  }).join('');
-  var left = items.length - done;
-  var btn = $('checkBtn');
-  btn.disabled = left > 0;
-  btn.title = left > 0 ? left + ' left' : 'Mark the set';
-}
-
-function check() {
-  var done = Object.keys(answers).length;
-  if (done < items.length || isChecked) return;
-  var correct = 0;
-  items.forEach(function (it, i) {
-    var got = answers[i], ok = got === it.answer;
-    if (ok) correct++;
-    var q = $('q-' + i);
-    q.classList.add('done'); if (!ok) q.classList.add('miss');
-    var gap = $('gap-' + i);
-    /* The gap always ends up holding the RIGHT partner, so the sentence on
-       screen is one the student can read back as true English. A wrong word
-       left sitting in it would be the only thing on the page teaching the
-       collocation that isn't. */
-    if (gap) gap.textContent = ok ? it.surface : got;
-    document.querySelectorAll('.pick[data-q="' + i + '"]').forEach(function (b) {
-      b.disabled = true;
-      var w = it.options[+b.dataset.o];
-      if (w === it.answer) b.classList.add('is-answer');
-      else if (w === got) b.classList.add('is-wrong');
-    });
-    if (!ok) {
-      var note = $('why-' + i);
-      note.innerHTML = it.why[got]
-        ? '<b>' + esc(got) + '</b> — ' + esc(it.why[got])
-        : '<b>' + esc(it.answer) + '</b> is the partner here.';
-      note.classList.add('show');
-    }
-  });
-  isChecked = true;
-  var pct = Math.round(correct / items.length * 100);
-  scores[PATS[pat]] = { correct:correct, total:items.length, percentage:pct };
-  try { localStorage.setItem(SCORE_KEY, JSON.stringify(scores)); } catch (e) {}
-  buildTabs();
-  snd(correct === items.length ? 'fanfare' : (correct >= items.length / 2 ? 'correct' : 'wrong'));
-  $('board').insertAdjacentHTML('afterbegin',
-    '<div class="score-banner' + (correct === items.length ? ' clean' : '') + '">' +
-    '<div class="score-text">' + correct + '/' + items.length + '</div>' +
-    '<div class="score-label">' + pct + '% correct</div></div>');
+  $('checkBtn').textContent = 'Next';
   $('checkBtn').disabled = true;
-  $('clearBtn').textContent = 'New set';
+  updateTally();
+}
+
+/* ── MARKED THE MOMENT IT IS ANSWERED ────────────────────────────────────
+   Ten questions checked at the end is a worksheet: by the time the reason
+   for question three arrives it is an abstraction. Answered one at a time,
+   the correction lands while the choice is still warm — which is the whole
+   argument Sort makes, and the reason the avoid notes are worth writing. */
+function answer(oi) {
+  if (marked) return;
+  var it = items[here], got = it.options[oi], ok = got === it.answer;
+  marked = true;
+  results[here] = ok;
+  if (ok) score++;
+
+  var q = $('q'), card = $('card');
+  q.classList.add('done'); if (!ok) q.classList.add('miss');
+  /* The gap ends up holding the RIGHT partner on a correct answer and the
+     chosen one on a wrong answer, struck through — so the student sees what
+     they wrote and what was wanted, rather than one instead of the other. */
+  $('gap').textContent = ok ? it.surface : got;
+  $('board').querySelectorAll('.pick').forEach(function (b) {
+    b.disabled = true;
+    var w = it.options[+b.dataset.o];
+    if (w === it.answer) b.classList.add('is-answer');
+    else if (w === got) b.classList.add('is-wrong');
+  });
+
+  var note = $('why');
+  if (!ok) {
+    note.innerHTML = it.why[got]
+      ? '<b>' + esc(got) + '</b> — ' + esc(it.why[got])
+      : '<b>' + esc(it.answer) + '</b> is the partner here.';
+    note.classList.add('show');
+  } else if (it.why[it.answer]) {
+    note.classList.add('show');
+    note.innerHTML = esc(it.why[it.answer]);
+  }
+
+  card.classList.add(ok ? 'pop' : 'shake');
+  snd(ok ? 'correct' : 'wrong');
+  $('checkBtn').disabled = false;
+  $('checkBtn').textContent = (here === items.length - 1) ? 'See score' : 'Next';
+  updateTally();
+}
+
+function next() {
+  if (!marked) return;
+  here++; marked = false;
+  renderPractice();
   var el = document.scrollingElement || document.body;
   try { el.scrollTo({ top:0, behavior:'smooth' }); } catch (e) { el.scrollTop = 0; }
 }
 
+function updateTally() {
+  $('tally').textContent = Math.min(here + 1, items.length) + '/' + items.length;
+  $('dots').innerHTML = items.map(function (_, i) {
+    var c = 'dot';
+    if (results[i] === true) c += ' answered';
+    else if (results[i] === false) c += ' answered miss';
+    else if (i === here) c += ' here';
+    return '<div class="' + c + '"></div>';
+  }).join('');
+}
+
+function finish() {
+  var pct = Math.round(score / items.length * 100);
+  scores[PATS[pat]] = { correct:score, total:items.length, percentage:pct };
+  try { localStorage.setItem(SCORE_KEY, JSON.stringify(scores)); } catch (e) {}
+  buildTabs();
+  snd(score === items.length ? 'fanfare' : (score >= items.length / 2 ? 'correct' : 'wrong'));
+  $('board').className = 'board quiz';
+  $('board').innerHTML = '<div class="card">' +
+    '<div class="score-banner' + (score === items.length ? ' clean' : '') + '">' +
+    '<div class="score-text">' + score + '/' + items.length + '</div>' +
+    '<div class="score-label">' + pct + '% correct</div></div></div>';
+  $('checkBtn').textContent = 'Again';
+  $('checkBtn').disabled = false;
+  $('checkBtn').onclick = function () { show(); };
+}
+
 /* ═══ MODES ═════════════════════════════════════════════════════════════ */
 function show() {
-  answers = {}; isChecked = false;
+  here = 0; marked = false; score = 0; results = [];
   $('clearBtn').textContent = 'New set';
+  $('checkBtn').onclick = next;
   if (mode === 'browse') { renderBrowse(); $('dots').innerHTML = ''; }
   else { buildItems(); renderPractice(); }
   var el = document.scrollingElement || document.body;
@@ -273,7 +298,7 @@ document.querySelectorAll('.mode-btn[data-mode]').forEach(function (b) {
 });
 
 $('clearBtn').onclick = function () { show(); };
-$('checkBtn').onclick = check;
+$('checkBtn').onclick = next;
 
 load();
 })();

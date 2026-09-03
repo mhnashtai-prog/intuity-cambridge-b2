@@ -273,6 +273,125 @@ vocab.css                       → data/similar-words/     (.hint)
 ```
 
 Bump to `?v=5` for `vocab.js` / `vocab.css` across the three pages that use
+# Functional Language — restyled, not rebuilt
+
+I got the last one wrong. The constellation isn't a layout inefficiency, it's
+a teaching instrument: draggable cards a class arranges on a whiteboard around
+a live question. I read `height:calc(100vh - 52px)` as waste and deleted the
+feature. The space *is* the point — you can't drag cards into an order without
+somewhere to drag them.
+
+This version keeps every bit of the architecture and changes only the skin.
+
+**Everything after `</style>` is byte-identical to your original**, apart from
+one inline colour inside an error message. All the drag handling, the
+constellation placement maths, the practice gaps, the completion overlay, the
+families screen, the cue-card mode — untouched. I checked that mechanically
+rather than by eye.
+
+The rebuilt page and its two new files are discarded.
+
+---
+
+## What changed
+
+### The board is a recess, the cards are paper on it
+
+This is the one page in the product that genuinely needs a *board*: ten cards
+floating in open space with no column to sit in. On `--screen` they'd have
+nothing to lift off, and the poster's 1px shadow would be doing all the work.
+
+So the board is **`--sunk #EBE8E1`** — the colour you said you liked, in the
+role the shell declared for it and nothing had ever used: *"a recess in the
+page … that should read as behind rather than above."* Cards are `--card
+#FAF8F5`. That's **3.87 ΔE** of separation against 1.54 on a normal page, so
+they sit up properly.
+
+It's also Sort's relationship — board darker than paper — which is the right
+precedent, since Sort is the other page where things get moved around rather
+than read down.
+
+### Five hues became one, on the constellation only
+
+The five family colours were carrying real information on the families screen
+and **none** on the constellation, where all ten cards belong to the same
+function and therefore wore the same hue: ten identical purple ribbons reading
+DISADVANTAGES above a heading that already said Disadvantages.
+
+The ribbon keeps its position — top-left is right, since the number is what
+you point at across a room ("card four, move it up") — and loses the coloured
+slab it was printed on. The card now wears the caramel block the poster wears
+everywhere, the number stays a filled chip because it must be legible at four
+metres, and the family name is set as mono type.
+
+The families screen keeps a tint per family, because there the five *are* side
+by side and the colour does work. Those five were re-cut to the product's own
+hues — sage, caramel, the shell's ok/wrong inks — rather than the saturated
+teal/amber/red/purple set, which belonged to the black board.
+
+### Type
+
+Space Grotesk, DM Sans and Lora are gone; the page was the only one using
+Lora. Geist and Geist Mono throughout, and **the centred question is Anton** —
+it's the headline of the whole screen and Anton is what this product uses for
+a headline. Its `text-shadow:0 2px 20px rgba(0,0,0,.8)` existed to hold white
+type off near-black and would be a smudge on paper.
+
+### Shadows, which needed thought rather than substitution
+
+Three different jobs, three different shadows:
+
+- **A card at rest** — a real drop shadow, not the poster's 1px. A card
+  floating on a board with nothing under it has to read as picked up, and it
+  has to survive being dragged over another card.
+- **A card being dragged** — higher and softer, so it's visibly *above* the
+  others rather than merely later in z-order.
+- **The completion card** — a modal over the board, so it keeps a deep shadow
+  and gets `--scrim` behind it.
+
+The old values were tuned for near-black (`rgba(0,0,0,.55)`, `.7`) and turn to
+mud on a light board.
+
+---
+
+## Verified
+
+- Everything after `</style>` byte-identical to the original except one inline
+  error-message colour.
+- Inline JS passes `node --check`; inline CSS parses clean; HTML balanced.
+- Drag handlers intact — `mousedown`/`touchstart`/`mousemove`/`touchmove`/
+  `mouseup`/`touchend`, `dragEl`, `place()`, `const-hint` all present.
+- No `#fff`, `#0d0d0d` or white-alpha values left anywhere.
+
+Not rendered in a browser. Worth checking three things specifically: that a
+dragged card still reads as lifted against the lighter board, that the
+completion overlay's scrim is dark enough to separate it, and that the
+ribbon's caramel mark sits where you want it at the top-left.
+
+---
+
+## File
+
+```
+phrase-bank.html → skills/similar-words/
+```
+
+Nothing else. No new CSS or JS files, no data changes. The legacy original is
+still at `phrase-bank-legacy.html.bak` if you want to compare side by side.
+
+The modal entry is renamed to **Functional Language**, which I'd keep — but
+that's a one-line revert in `index.html` if you'd rather it stayed Phrase Bank.
+
+---
+
+## What I should have asked
+
+The lesson worth recording: I diagnosed the viewport height as the cost and
+never asked what the layout was *for*. A full-viewport field with absolutely
+positioned draggable children is an unusual thing to build by accident — the
+oddity was the signal, and I read it as a defect. If a page in this repo does
+something structurally strange, that's worth a question before it's worth a
+rewrite.
 them — Similar Words and Topic Vocabulary load the same files and must not
 get a cached copy without the hint branch.
 

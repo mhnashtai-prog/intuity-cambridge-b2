@@ -77,11 +77,86 @@ function saveScores() {
    checked afterwards — an index that points at the wrong word produces a
    page that renders perfectly and teaches the wrong thing, which is the
    kind of bug nothing catches by looking. */
+/* ═══ THE POOL ORDER ════════════════════════════════════════════════════
+   ALL SIXTY Topic Vocabulary sets were authored with the answers in order:
+   word 1 into gap 1, word 2 into gap 2, straight down. Similar Words has
+   none of this in 115 sets, and Academic Vocabulary none in 5, so it was
+   one dataset rather than a house habit — but in that dataset it was total.
+
+   A student who notices can score 100% on all sixty sets WITHOUT READING A
+   SINGLE SENTENCE. And they will notice: it survives one card. What is left
+   is a test of whether you spotted the pattern, which is not what the page
+   is for and, worse, is invisible in the scores — a run of perfect results
+   that means nothing.
+
+   Fixed here rather than in the data, for three reasons. It repairs all
+   sixty sets at once instead of sixty hand edits. It is immune to the next
+   set anyone authors the same way. And a fresh order EVERY TIME is better
+   than a fixed random one: a student who repeats a set cannot lean on where
+   a word sat last time, so the second attempt tests the words again rather
+   than testing the memory of a layout.
+
+   The sentences are deliberately NOT shuffled. Their order is sometimes
+   authored — a set can build — and shuffling them changes the reading for
+   no gain. It is the mapping from pool to gap that has to be unguessable,
+   and permuting one side is enough to break it.
+
+   Fisher-Yates on a copy of the words, with `correct` remapped through the
+   permutation, so nothing downstream can tell the difference: the pool is
+   still an array of words, `correct` is still an index into it. */
+function shufflePool(set) {
+  var words = set.words || [], n = words.length;
+  if (n < 2) return set;
+
+  function build(order) {
+    var where = [];                     /* old index → new index */
+    order.forEach(function (was, now) { where[was] = now; });
+    return {
+      setNumber: set.setNumber,
+      label: set.label,
+      words: order.map(function (was) { return words[was]; }),
+      sentences: (set.sentences || []).map(function (s) {
+        var moved = { text: s.text, correct: where[s.correct] };
+        if (s.hint) moved.hint = s.hint;
+        return moved;
+      })
+    };
+  }
+
+  /* THE TEST IS THE OUTCOME, NOT THE PERMUTATION.
+     The first version of this rejected the identity shuffle, which is the
+     obvious guard and the wrong one. Sequential means "gap i is answered by
+     word i" AFTER the remap, and a set that started scrambled can land there
+     by luck — measured over 36,000 runs, 2.9% of them did. Rejecting the
+     identity permutation cannot catch that, because the permutation was not
+     the identity; the RESULT was. So the loop checks the thing that actually
+     matters and rerolls until it is false. */
+  function sequential(out) {
+    return out.sentences.length > 1 &&
+           out.sentences.every(function (s, i) { return s.correct === i; });
+  }
+
+  var order = words.map(function (_, i) { return i; }), out;
+  for (var attempt = 0; attempt < 24; attempt++) {
+    for (var i = n - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = order[i]; order[i] = order[j]; order[j] = t;
+    }
+    out = build(order);
+    if (!sequential(out)) return out;
+  }
+  /* Twenty-four rerolls without an acceptable order is effectively
+     impossible, but "effectively" is not a guarantee and this function must
+     not be able to return the one arrangement it exists to prevent. A single
+     rotation cannot be sequential for n > 1, so it always terminates. */
+  return build(order.slice(1).concat(order[0]));
+}
+
 function loadData() {
   fetch(DATA_URL, { cache:'no-store' })
     .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function (d) {
-      sets = d.sets || [];
+      sets = (d.sets || []).map(shufflePool);
       if (!sets.length) throw new Error('no sets in the data file');
       var per = d.setsPerTest || PER_TEST;
       for (var i = 0; i < sets.length; i += per) tests.push(sets.slice(i, i + per));
@@ -165,6 +240,19 @@ function cardHTML(set, si) {
               'data-s="' + si + '" data-l="' + li + '"></span>' +
         esc(p[1]) +
         '<span class="answer" hidden></span>' +
+        /* THE HINT. Present only where the data carries one — Academic
+           Vocabulary does, Similar Words does not, and the markup simply
+           does not appear on a set without them. It names the semantic
+           feature that separates the right word from the seven distractors
+           ("refer to something without detail" for MENTION), which is the
+           one thing a synonym list can never tell you.
+
+           Hidden until Check, deliberately. Shown before, it turns retrieval
+           into recognition: the student matches a gloss to a word instead of
+           reaching for it. Shown after a wrong answer, it is the correction
+           doing its job — not "no", but "here is the distinction you
+           missed", at the moment the student still cares. */
+        (s.hint ? '<span class="hint" hidden>' + esc(s.hint) + '</span>' : '') +
       '</div></div>';
   }).join('');
   return '<div class="poster">' +
@@ -407,11 +495,18 @@ function checkAnswers() {
       slot.textContent = got || '';
       slot.classList.remove('filled', 'armed');
       slot.classList.add('locked', ok ? 'correct' : 'incorrect');
+      var line = slot.parentElement;
       if (!ok) {
-        var a = slot.parentElement.querySelector('.answer');
+        var a = line.querySelector('.answer');
         a.textContent = want;
         a.hidden = false;
       }
+      /* The hint is revealed on a miss only. After a correct answer it would
+         be an explanation of something the student has just demonstrated
+         they did not need, and every line carrying one flattens the page
+         back into a wall of glosses. */
+      var h = line.querySelector('.hint');
+      if (h && !ok) h.hidden = false;
     });
   });
   paint();

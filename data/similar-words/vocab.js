@@ -222,7 +222,10 @@ function render() {
   var solo = view === 'one' && !isChecked;
   var list = solo ? [all[hereCard]] : all;
   var base = solo ? hereCard : 0;
-  $('board').className = solo ? 'board one' : 'board';
+  /* n4 / n5 so the stylesheet can size the type by how much there is to
+     read. CSS cannot count sentences; the engine can, and it is one word. */
+  var n = solo ? all[hereCard].sentences.length : 0;
+  $('board').className = solo ? ('board one n' + n) : 'board';
   /* The body carries it too, so the strip and the action bar can tighten
      with the card rather than each rule having to reach up through .board. */
   document.body.classList.toggle('solo', solo);
@@ -337,7 +340,23 @@ function updateStrip() {
     }).join('');
   }
   navButtons();
-  $('checkBtn').disabled = done === 0;
+  /* ── CHECK IS LOCKED UNTIL THE TEST IS FINISHED ──────────────────────
+     It used to unlock on the FIRST answer, and Check marks the whole test —
+     so one stray tap at 3/20 scored the other seventeen as wrong and wrote
+     15% into the tab. A number the student did not earn and cannot read.
+
+     `done < total`, not `done === 0`. In ONE view that means all five cards,
+     which is right for the same reason: the score is the test's, so the test
+     has to be done. The tally beside it already says 3/20, and the button
+     says what is missing rather than just refusing. */
+  var left = total - done;
+  var btn = $('checkBtn');
+  btn.disabled = left > 0;
+  btn.title = left > 0
+    ? left + (left === 1 ? ' sentence left' : ' sentences left')
+    : 'Mark the test';
+  btn.setAttribute('aria-label', left > 0
+    ? 'Check — ' + left + ' still to answer' : 'Check your answers');
 }
 
 /* Check stays live in ONE view. A student may well finish card three and
@@ -358,6 +377,16 @@ function navButtons() {
 
 /* ═══ MARKING ═══════════════════════════════════════════════════════════ */
 function checkAnswers() {
+  /* Belt and braces. The button is disabled above, but this is the function
+     that writes a permanent score, and it should not depend on a class
+     somewhere else having been applied correctly. */
+  var filled = 0, want = 0;
+  tests[currentTest].forEach(function (set, si) {
+    want += set.sentences.length;
+    filled += Object.keys(answers[si] || {}).length;
+  });
+  if (filled < want || isChecked) return;
+
   var correct = 0, total = 0;
   /* ORDER MATTERS. Marking always shows the WHOLE test, so in ONE view the
      board has to be re-rendered back to five cards BEFORE the marks are

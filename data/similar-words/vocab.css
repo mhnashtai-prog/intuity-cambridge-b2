@@ -1,556 +1,499 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   INTUITY — VOCABULARY
-   One card per set. Loaded after intuity-shell.css, which supplies the
-   tokens; this file adds the poster card and nothing else.
+   INTUITY — VOCABULARY ENGINE
+   One engine, two pages. Each is a shell that sets
+   window.VOCAB = { data, scoreKey, title, subtitle, self } and links this.
 
-   Serves Similar Words (115 sets of 4) and Topic Vocabulary (60 sets of 5)
-   from one stylesheet, because after the 10-word sets were split they are
-   the same exercise at two sizes.
+   Similar Words (115 sets of 4) and Topic Vocabulary (60 sets of 5) are the
+   same exercise at two sizes once the ten-word sets were split, so they
+   share everything below. Same arrangement as practice.js and gapfill.js.
    ═══════════════════════════════════════════════════════════════════════ */
+(function () {
+'use strict';
 
-/* ── THE POSTER, ON A PAGE ───────────────────────────────────────────────
-   Lifted from gerunds-sort.html, where these tokens were deliberately kept
-   apart from the ground palette because --ink and --faint are tuned for an
-   embossed board and read too flat on paper. That reasoning holds here, so
-   they stay separate.
+var CFG       = window.VOCAB || {};
+var DATA_URL  = '../../data/similar-words/' + CFG.data + '.json';
+var SCORE_KEY = CFG.scoreKey;
+var PER_TEST  = 5;                    /* the data's own setsPerTest */
 
-   ONE value changes. In Sort the card sits on --ground #E4E0E0, DARKER than
-   the card, so the poster lifts off the board. A lesson page's ground is
-   --screen #F3F1ED, which is LIGHTER than #ECE9E3 — the same card would
-   read as a recess rather than a sheet. So the paper steps up to --card
-   #FAF8F5 and keeps its relationship to the ground: 2.46 L* above it, the
-   same separation every other card in the product now has.
+var sets = [], tests = [], currentTest = 0, isChecked = false, scores = {};
+/* answers[setIndex][lineIndex] = the chosen word, or undefined. Keyed on the
+   set rather than flat, because a test holds five independent cards and a
+   word used in card 2 must stay available in card 3. */
+var answers = {};
+var picked  = null;                   /* {set, word} — armed, awaiting a gap */
 
-   Everything else is carried over untouched: near-black warm ink, the
-   caramel mark, the square corner, the 1px shadow. */
-:root{
-  --poster:var(--card);
-  --poster-ink:#14110E;
-  /* ── WHY THE SENTENCES LOOKED LIFELESS ────────────────────────────────
-     --poster-soft is a transparency: near-black at 60% over the paper. On
-     Sort that is right, because its sentence is a short piece of context
-     around one huge word and it should recede. Here the sentence IS the
-     reading, and a flattened black is the wrong material for body copy.
+/* ── ALL / ONE ───────────────────────────────────────────────────────────
+   'all'  five cards down the page
+   'one'  a single card, prev/next in the action bar
+   Remembered globally rather than per topic: a child who needs one card at
+   a time needs it on both pages, and being asked twice is being asked once
+   too often. */
+/* ── SOUND BELONGS TO ONE VIEW ONLY ──────────────────────────────────────
+   ALL view is a worksheet: five cards, scanned, worked at the student's own
+   pace, and quite possibly on thirty tablets in one room. ONE view is the
+   immersive arrangement — a single card with the whole screen — and that is
+   the one that can carry sound without becoming a noise problem.
 
-     Measured, it lands on #706D6A — L* 46.2 with a chroma of 2.16, which
-     is to say almost no colour at all. Ash. The header subtitle just above
-     it is --dim #5C5852: L* 37.6, chroma 4.07. Nearly twice the warmth and
-     a real step darker, and that is exactly the difference the eye reads
-     as alive rather than grey.
-
-     So the card gets a proper BODY ink of its own, cut to the same warmth
-     on the poster's own hue line. 6.7:1 on the paper, against 15.5:1 for
-     the placed word, so the hierarchy inside a sentence still reads without
-     either end shouting.
-
-     --poster-soft is KEPT and now unused here: it is part of the palette
-     Sort defines, and a page that borrows the card should not quietly
-     redefine what the shared vocabulary means. The recessive things on this
-     card — the kicker, the folio numerals — use --poster-faint, which is
-     where they belong. */
-  --poster-body:#5C5852;
-  --poster-soft:rgba(20,17,14,.60);
-  --poster-faint:rgba(20,17,14,.50);
-  --poster-rule:rgba(20,17,14,.20);
-  --poster-fill:rgba(20,17,14,.09);   /* the grey pill and the empty slot */
-  --poster-fill-hi:rgba(20,17,14,.15);
-  --caramel:#B0865C;
-  --f-mono2:'Geist Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+   So the speaker only appears when the view is ONE, and nothing plays in
+   ALL. SFX itself is the shared module every game already uses, reading the
+   same device-wide mute, so a child who silenced Forge arrives already
+   silent. */
+function snd(name) {
+  if (view !== 'one') return;
+  /* window.SFX throughout, never a bare SFX. This file runs inside a strict
+     IIFE, and reaching for an undeclared global there is a ReferenceError
+     rather than undefined — so on any page where the sound module failed to
+     load, the FIRST tap would throw and take the whole exercise with it.
+     The one thing that must never break is the lesson. */
+  var S = window.SFX;
+  if (S && S.isOn && S.isOn() && S[name]) { try { S[name](); } catch (e) {} }
 }
 
-html{height:100%}
-body{font-family:var(--f-body);background:var(--screen);color:var(--sentence);
-  height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;
-  overscroll-behavior:contain;padding:0}
+var VIEW_KEY = 'intuity_vocab_view';
+var view = 'all', hereCard = 0;
+try { view = localStorage.getItem(VIEW_KEY) || 'all'; } catch (e) {}
 
-.wrap{max-width:var(--w-read);margin:0 auto;
-  padding:calc(var(--header-h) + 1rem) var(--gutter) 6rem}
+var $ = function (id) { return document.getElementById(id); };
+var esc = function (v) {
+  return String(v).replace(/[&<>"]/g, function (c) {
+    return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c];
+  });
+};
 
-/* ── 23 TABS DO NOT WRAP ─────────────────────────────────────────────────
-   Similar Words has 23 tests. Wrapped, they take two rows of the header —
-   about 30px — and on a phone three. That is 30px stolen from the card in
-   a layout whose whole promise is that one set fits one screen.
-
-   One row that scrolls sideways instead. The chips are three characters
-   wide, so a dozen are visible at once and the rest are a flick away; the
-   active one is scrolled into view on load, so a student on test 19 does
-   not arrive looking at test 1. Scrollbar hidden, because a visible one
-   would cost the height this is saving. */
-.header .set-tabs{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;
-  scrollbar-width:none;-webkit-overflow-scrolling:touch;
-  justify-content:flex-start;padding-bottom:2px}
-.header .set-tabs::-webkit-scrollbar{display:none}
-.header .set-tabs .vtab{flex:none}
-/* Enough of the row to still read as centred when the tests are few —
-   Topic Vocabulary has 12 and they fit. */
-@media (min-width:720px){ .header .set-tabs{justify-content:center} }
-
-/* ── THE PROGRESS STRIP ──────────────────────────────────────────────────
-   ONE row of dots, not two. The old page drew 23 above the card for tests
-   and 20 inside it for questions — same size, same grey, 50px apart,
-   meaning entirely different things. The set tabs in the header now carry
-   the test, so these dots carry only what is answered in the test in front
-   of you. Same metrics as Practice and Quiz. */
-.strip{position:sticky;top:var(--header-h);z-index:20;background:var(--screen);
-  display:flex;align-items:center;justify-content:space-between;gap:.7rem;
-  flex-wrap:wrap;
-  padding:.7rem 0 .45rem;margin-bottom:1.1rem;
-  border-bottom:1px solid var(--rule)}
-.strip-label{font-family:var(--f-display);font-size:.58rem;font-weight:600;
-  letter-spacing:var(--track-label);text-transform:uppercase;color:var(--faint)}
-.strip-tally{font-family:var(--f-mono);font-variant-numeric:tabular-nums;
-  font-size:.7rem;color:var(--faint);margin-left:.55rem}
-.dots{display:flex;gap:.42rem;align-items:center;flex-wrap:wrap}
-.dot{width:.62rem;height:.62rem;border-radius:50%;background:none;
-  box-shadow:inset 0 0 0 1.5px var(--rule);transition:background .3s,box-shadow .3s}
-.dot.answered{background:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent)}
-
-/* ── THE CARD ────────────────────────────────────────────────────────────
-   Five sets to a test, so five cards down the page. No max-height and no
-   internal scroll: measured across all 175 sets, the tallest card in the
-   product is 450px and the median is 268px, so a card never needs to
-   scroll inside itself.
-
-   That is the whole reason the words cannot get lost. The pool and the
-   sentences it serves are ONE object — they cannot scroll apart, because
-   there is nothing to scroll. No sticky, no height cap, no measuring. The
-   phrasal-verbs quiz needed all three only because its pool served sixteen
-   sentences instead of five. */
-.card{position:relative;background:var(--poster);border-radius:var(--r-sheet);
-  box-shadow:0 1px 3px rgba(0,0,0,.10);
-  padding:clamp(1.3rem,4.4vw,1.9rem) clamp(1.1rem,4vw,1.6rem);
-  margin-bottom:1.4rem}
-
-/* The kicker. `i` is a 26×10 solid block — caramel appears as a MARK, never
-   as type. It measures 2.7:1 on this paper, which is fine for a rectangle
-   and would fail for a word; keeping it a block is what keeps it legible
-   and what makes it read as expensive rather than decorated. */
-.card .kick{display:flex;align-items:center;gap:9px;
-  font-family:var(--f-mono2);font-size:.56rem;letter-spacing:.22em;
-  text-transform:uppercase;color:var(--poster-faint);margin-bottom:.9rem}
-.card .kick i{display:block;width:26px;height:10px;flex:none;background:var(--caramel)}
-
-/* ── THE HEADLINE, WHEN THERE IS ONE ─────────────────────────────────────
-   Topic Vocabulary names every set — Body movements 1, Eye movements 2 —
-   and that name is the lesson: it says what field these five words share.
-   Similar Words names none of its 115, so those cards have no headline and
-   the pills carry the card instead. A card without a title is not a card
-   missing something; it is a different exercise, and inventing 115 topics
-   would be authoring rather than renovation. */
-.card .topic{font-family:'Anton',Impact,var(--f-display),sans-serif;
-  font-weight:400;letter-spacing:.01em;color:var(--poster-ink);
-  font-size:clamp(1.4rem,5vw,1.85rem);line-height:1.05;
-  margin:0 0 .9rem;text-transform:none}
-
-/* ── THE POOL ────────────────────────────────────────────────────────────
-   Grey pills, the card's own grey — rgba(20,17,14,.09), the same fill the
-   Sort card uses for a rule chip, so the pill belongs to the paper rather
-   than importing the page's beige onto it.
-
-   Centred and wrapping. Four or five short words fit one row at almost any
-   width; five long ones ("catch a glimpse", "stare into space") take two,
-   which the row gap is sized for. */
-.pool{display:flex;flex-wrap:wrap;gap:.4rem .45rem;
-  padding-bottom:.95rem;margin-bottom:.95rem;
-  border-bottom:1px solid var(--poster-rule)}
-.word{font-family:var(--f-display);font-size:.88rem;font-weight:600;
-  color:var(--poster-ink);background:var(--poster-fill);
-  border:none;border-radius:var(--r-field);padding:.4rem .8rem;
-  cursor:pointer;
-  transition:background .15s,color .15s,opacity .15s,transform .1s cubic-bezier(.2,.8,.2,1)}
-.word:hover:not(:disabled):not(.used){background:var(--poster-fill-hi)}
-.word:active:not(:disabled){transform:scale(.96)}
-.word:focus-visible{outline:2px solid var(--caramel);outline-offset:2px}
-/* Chosen and waiting for a gap: the pill inverts. Ink on paper becomes
-   paper on ink — the strongest signal available without introducing a
-   colour the card does not own. */
-.word.picked{background:var(--poster-ink);color:var(--poster)}
-/* Spent. Struck rather than removed: taking it out of the row would reflow
-   the other four and move the thing the student was about to tap. */
-.word.used{opacity:.34;text-decoration:line-through;
-  text-decoration-thickness:1px;cursor:default}
-
-/* ── THE SENTENCES ───────────────────────────────────────────────────────
-   Numbered like Practice and Quiz — a square, 20px, whole pixels, marking
-   position only. */
-.lines{display:flex;flex-direction:column;gap:.85rem}
-.line{display:flex;align-items:flex-start;gap:.62rem}
-.num{flex-shrink:0;width:20px;height:20px;border-radius:var(--r-field);
-  display:flex;align-items:center;justify-content:center;margin-top:2px;
-  background:var(--poster-fill);color:var(--poster-ink);
-  font-family:var(--f-mono);font-size:11px;font-weight:500;
-  font-variant-numeric:tabular-nums;line-height:20px;
-  -webkit-font-smoothing:antialiased}
-.text{flex:1;min-width:0;font-size:.9rem;line-height:1.9;color:var(--poster-body)}
-
-/* The gap is a slot, not an underline: a container you put a word into.
-   Empty it is the card's grey; filled it carries ink and reads as an
-   object sitting in the sentence. */
-.slot{display:inline-block;min-width:5.5em;box-sizing:border-box;
-  padding:.2em .7em;margin:0 .18rem;vertical-align:baseline;
-  border-radius:var(--r-field);background:var(--poster-fill);
-  color:var(--poster-ink);font-family:var(--f-display);font-weight:600;
-  font-size:.9rem;text-align:center;cursor:pointer;
-  transition:background .15s,color .15s,box-shadow .15s}
-.slot:empty::before{content:'\00a0'}
-.slot:hover:not(.locked){background:var(--poster-fill-hi)}
-.slot.armed{box-shadow:0 0 0 2px var(--caramel)}
-.slot.filled{background:var(--poster-ink);color:var(--poster)}
-.slot.locked{cursor:default}
-/* Marking follows the classroom, as everywhere else in this product: a
-   right answer settles quietly and only what is WRONG is marked loudly. */
-.slot.correct{background:var(--tile-ok-bg);color:var(--tile-ok-ink)}
-.slot.incorrect{background:var(--tile-no-bg);color:var(--tile-no-ink);
-  text-decoration:line-through;text-decoration-thickness:1px}
-/* Shown beside a wrong answer, never instead of it: the student needs to
-   see what they wrote and what was wanted, side by side. */
-.answer{display:inline-block;margin-left:.4rem;padding:.2em .7em;
-  border-radius:var(--r-field);background:var(--tile-ok-bg);
-  color:var(--tile-ok-ink);font-family:var(--f-display);
-  font-weight:600;font-size:.84rem}
-
-/* ══════════════════════════════════════════════════════════════════════
-   ONE VIEW — THE CARD AT FULL VOICE
-   Everything above describes the card as it appears in ALL view: quiet,
-   compact, five of them down a column. That is correct for scanning, and
-   it is also the reason the card arrived here with its skin but not its
-   voice — five posters stacked would be five things shouting, so the
-   headline was shrunk from Anton at 3em to under 2rem and the poster
-   became a light box with a caramel dash.
-
-   ONE view is the arrangement the card was designed for: a single object,
-   centred, with the whole screen. Everything that had to be shrunk can be
-   full size again, because there is nothing beside it to compete with.
-
-   So the card scales with the attention it is getting. Same card, two
-   registers — a paragraph in a list, and a page to itself.
-   ══════════════════════════════════════════════════════════════════════ */
-/* ══════════════════════════════════════════════════════════════════════
-   ONE SET — THE CARD FILLS THE SCREEN
-   The first compaction went too far. Measured off a 393×853 phone, the
-   card used 357px of the 523 available and left 167 — a third of the
-   screen — empty below it. Small type floating in a large void does not
-   read as restraint; it reads as a page that failed to load.
-
-   Two things fix it, and both are needed.
-
-   FIRST, the card fills the height it is given. .lines takes the leftover
-   space and distributes it BETWEEN the sentences, so four short sentences
-   and five long ones both fill the screen — one with generous air around
-   each line, the other tight. That is how a well-set page works: the block
-   fills the measure, and the leading absorbs the difference.
-
-   SECOND, the type is sized by how many sentences there are. A single
-   size cannot serve both: at 1.06rem Similar Words' four fit in 439px,
-   while Topic Vocabulary's five need 562 against 523 available. CSS cannot
-   measure content, so the engine adds n4 or n5 and each gets its own
-   ceiling. Fewer sentences, bigger type — which is right anyway.
-   ══════════════════════════════════════════════════════════════════════ */
-.board.one{display:flex;justify-content:center;align-items:stretch;
-  min-height:calc(100vh - var(--header-h) - 8.5rem)}
-.board.one .card{display:flex;flex-direction:column}
-.board.one .lines{flex:1;display:flex;flex-direction:column;
-  justify-content:space-evenly}
-
-/* vh in the middle of the clamp so the type grows on a tall phone and
-   gives up gracefully on a short one, with a floor that stays readable and
-   a ceiling set by the measurement above. */
-/* Ceilings measured against the LONGEST set in each file, not the median:
-   one card in sixty overflowing is one child scrolling for no reason they
-   can see. n4 tops out at 1.10rem (tallest card 507px of 523), n5 at
-   0.95rem (tallest 519). The median card in both lands near 400 and lets
-   the leading take the difference. */
-.board.one.n4{--fs:clamp(.95rem,2.15vh,1.10rem)}
-.board.one.n5{--fs:clamp(.90rem,1.80vh,0.95rem)}
-.board.one{--fs:.95rem}
-.board.one .card{width:min(560px,100%);margin-bottom:0;
-  /* Sort can afford clamp(1.5rem,5vw,2.3rem) because its card holds one
-     sentence. This one holds nine things and has to fit a laptop window. */
-  padding:1.15rem 1.25rem;
-  /* The lift Sort gives it. A card alone on a page can carry a real shadow;
-     five of them could not, because the stack would read as five layers. */
-  box-shadow:0 2px 4px rgba(20,17,14,.05),
-             0 8px 22px rgba(20,17,14,.07)}
-.board.one .kick{margin-bottom:.7rem}
-
-/* THE HEADLINE, AT LAST AT ITS OWN SIZE.
-   Topic Vocabulary's label — Body movements 1, Communication verbs — set
-   the way Sort sets a trigger word. Not 3em, because a label is several
-   words where a trigger is one, but far past the 1.85rem the stacked view
-   could afford. */
-.board.one .topic{font-size:clamp(1.9rem,7.5vw,2.7rem);line-height:1;
-  margin-bottom:1.2rem;letter-spacing:0}
-
-/* ── THE POOL STAYS SMALL. THE SENTENCES DO NOT. ─────────────────────────
-   A previous pass set the four words as an Anton headline here. That was
-   wrong, and wrong in an instructive way: it made the loudest thing on the
-   card the part that is merely the TOOL. The words are what you pick up;
-   the sentences are what the lesson is about, and a screen given to one
-   card should be a screen given to its sentences.
-
-   So the pool grows only enough to stay a comfortable target — it is a row
-   of controls, and controls should be quiet — and every pixel the card
-   gains goes to the reading. */
-.board.one .pool{gap:.32rem .38rem;padding-bottom:.7rem;margin-bottom:.7rem}
-.board.one .word{font-size:var(--fs);padding:.4rem .8rem}
-
-/* ── THE CHROME GIVES UP ITS SHARE TOO ───────────────────────────────────
-   The card was not the only thing over budget. On a 1366×768 laptop the
-   page has about 600px, and the strip and the action bar were taking 104
-   of them for two rows that hold, between them, six words and five dots.
-
-   In ALL view that is fine — the page scrolls, and generous chrome around
-   a long scroll is right. In ONE view every pixel spent on chrome is a
-   pixel of sentence, so both rows come in. The controls stay the same size
-   to the thumb; it is the padding around them that goes. */
-body.solo .strip{padding:.45rem 0 .3rem;margin-bottom:.65rem}
-body.solo .action-bar{padding:.5rem}
-body.solo .wrap{padding-top:calc(var(--header-h) + .5rem);padding-bottom:4.5rem}
-
-/* ══════════════════════════════════════════════════════════════════════
-   THE SENTENCES, SET — AND MADE TO FIT
-   The device is Sort's: a small sentence with one large word inside it,
-   and the large word is THE WORD THE STUDENT PLACES. That is what the
-   exercise is about, and it lands mid-sentence exactly where Sort's
-   trigger sits. Empty, the gap is a quiet well; filled, the box vanishes
-   and the word simply is — Anton, ink, underlined with a caramel rule,
-   because a mark is what caramel is for.
-
-   THE SIZE OF IT IS A CONSTRAINT, NOT A PREFERENCE. "One at a time" only
-   means anything if the whole set — four words and four sentences — is on
-   one screen. Measured, the first attempt needed 532px against 290 on a
-   1366×768 window: the word at 1.9em with .85 leading is taller than its
-   own line, so every line had to reserve 3.35rem whether a word was in it
-   or not. Four reserved lines is where the 286px of overflow came from.
-
-   So the word comes down to 1.25em, which sits INSIDE the line box at 1.65
-   leading and reserves nothing. It is still Anton, still ink among grey,
-   still the only full-weight thing on the card — the device survives; only
-   the volume comes down. A card that scrolls has stopped being one card.
-   ══════════════════════════════════════════════════════════════════════ */
-.board.one .lines{gap:0}
-.board.one .line{padding:.42rem 0;align-items:baseline}
-/* A hairline between sentences, not a gap: four sentences with air between
-   them are four fragments; four divided by rules are a list, and a list is
-   something you work down. It also costs 1px where a gap costs 20. */
-.board.one .line + .line{border-top:1px solid var(--poster-rule)}
-
-/* The numeral hangs in the margin the way a folio does — a reference, not a
-   badge. No fill, no box, nothing competing with the sentence. */
-.board.one .num{background:none;color:var(--poster-faint);
-  font-family:var(--f-mono2);font-size:.6rem;letter-spacing:.1em;
-  width:1.15rem;height:auto;margin-top:0;justify-content:flex-start;
-  border-radius:0;line-height:inherit}
-
-.board.one .text{font-size:var(--fs);line-height:1.6;color:var(--poster-body)}
-
-.board.one .slot{background:var(--poster-fill);min-width:4.5em;
-  border-radius:var(--r-field);padding:.1em .6em;
-  font-family:var(--f-display);font-size:inherit}
-.board.one .slot.armed{box-shadow:0 0 0 2px var(--caramel)}
-.board.one .slot.filled{
-  background:none;padding:0 .1em;margin:0 .08rem;min-width:0;
-  font-family:'Anton',Impact,var(--f-display),sans-serif;font-weight:400;
-  font-size:1.25em;line-height:1;letter-spacing:.01em;
-  color:var(--poster-ink);white-space:normal;
-  /* inset box-shadow, not border-bottom: it sits tight to the baseline and
-     adds no height, so a line does not grow the moment a word lands in it */
-  box-shadow:inset 0 -2px 0 var(--caramel)}
-
-/* ── MARKING, IN SORT'S OWN LANGUAGE ─────────────────────────────────────
-   In ALL view a wrong answer gets a small green pill beside it. Alone on a
-   screen there is room for the .note block Sort uses: the answer as a mono
-   rule chip on the card's own grey, so the correction reads as something
-   printed on the card rather than stuck to the sentence. */
-.board.one .slot.correct,.board.one .slot.incorrect{
-  font-size:1.25em;line-height:1;padding:.02em .25em;
-  font-family:'Anton',Impact,var(--f-display),sans-serif;font-weight:400}
-.board.one .slot.incorrect{box-shadow:none}
-.board.one .slot.correct{box-shadow:none}
-/* THE BUG IN THE SCREENSHOT: this rule set display:block on .answer, and a
-   plain `display` beats the [hidden] attribute — so the empty correction
-   chip was painted under every sentence before anything had been marked.
-   Four little grey rectangles that meant nothing. [hidden] has to win. */
-.answer[hidden]{display:none !important}
-.board.one .answer{display:block;margin:.45rem 0 0;
-  font-family:var(--f-mono2);font-weight:500;font-size:.82rem;
-  background:var(--poster-fill);color:var(--poster-ink);
-  border-radius:var(--r-field);padding:.42em .7em;width:fit-content}
-
-/* ══════════════════════════════════════════════════════════════════════
-   ALL / ONE
-   The old page had this as an unlabelled switch inside the card, and I
-   removed it in the rebuild as chrome. That was wrong: it is a real
-   accommodation. Five cards scrolling is a lot for a child; one card
-   filling the screen is a different, calmer exercise, and which one suits
-   a given learner is not something the page can decide.
-
-   It is a VIEW, not a mode — the same twenty questions either way, the
-   same test, the same score — so it does not belong in the mode row with
-   Similar Words and Topic Vocabulary. It sits in the strip beside the
-   progress it changes, and it is remembered, because a child who needs one
-   card at a time needs it every time and should not have to say so again.
-   ══════════════════════════════════════════════════════════════════════ */
-.view-toggle{display:inline-flex;gap:2px;padding:2px;flex:none;
-  background:var(--tile-bg);border-radius:var(--r-chip)}
-.view-btn{font-family:var(--f-display);font-size:.56rem;font-weight:700;
-  letter-spacing:var(--track-label);text-transform:uppercase;
-  padding:.26rem .55rem;border:none;border-radius:2px;background:none;
-  color:var(--dim);cursor:pointer;transition:background .15s,color .15s}
-.view-btn.active{background:var(--card);color:var(--tile-ink)}
-.view-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-
-/* In ONE view the strip's dots become the navigator: five dots, one per
-   card, tappable. They stop reporting individual answers — the card in
-   front of you already shows those — and start reporting where you are in
-   the test, which is the thing you cannot see when four cards are hidden. */
-.dots.cards .dot{width:.72rem;height:.72rem;cursor:pointer}
-.dots.cards .dot.here{background:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent)}
-.dots.cards .dot.done{background:var(--rule);box-shadow:inset 0 0 0 1.5px var(--rule)}
-
-/* The speaker. Present only in ONE view — see the note in vocab.js. It is
-   the same shared mute every game on the device reads, so a child who
-   silenced Forge arrives here already silent. */
-.snd{flex:none;width:30px;height:30px;display:none;align-items:center;
-  justify-content:center;border:none;border-radius:var(--r-chip);
-  background:var(--tile-bg);color:var(--dim);cursor:pointer;
-  transition:background .15s,color .15s}
-.snd.show{display:inline-flex}
-.snd.on{color:var(--tile-ink)}
-.snd:hover{background:var(--tile-bg-press)}
-.snd:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.snd svg{width:15px;height:15px}
-
-/* Prev / Next live in the action bar, so the three controls a student needs
-   at the bottom of a card are in one place rather than two. */
-.nav-btn{font-family:var(--f-display);font-size:.78rem;font-weight:700;
-  letter-spacing:.06em;text-transform:uppercase;
-  padding:.68rem 1rem;border:none;border-radius:var(--r-chip);
-  background:var(--tile-bg);color:var(--dim);cursor:pointer;
-  transition:transform .1s cubic-bezier(.2,.8,.2,1),background .15s}
-.nav-btn:hover:not(:disabled){background:var(--tile-bg-press)}
-.nav-btn:active:not(:disabled){transform:scale(.96)}
-.nav-btn:disabled{opacity:.28;cursor:default}
-.nav-btn[hidden]{display:none}
-
-/* ── ACTION BAR ── Practice's, to the pixel. */
-.action-bar{position:fixed;bottom:0;left:0;right:0;z-index:30;
-  background:var(--screen);border-top:1px solid var(--rule);padding:.75rem;
-  display:flex;justify-content:center;gap:.625rem}
-.action-btn{font-family:var(--f-display);font-size:.78rem;font-weight:700;
-  letter-spacing:.06em;text-transform:uppercase;
-  padding:.68rem 1.4rem;border:none;border-radius:var(--r-chip);
-  cursor:pointer;box-shadow:none;
-  transition:transform .1s cubic-bezier(.2,.8,.2,1),background .15s}
-.action-btn:active:not(:disabled){transform:scale(.96)}
-.action-btn.secondary{background:var(--tile-bg);color:var(--dim)}
-.action-btn.secondary:hover{background:var(--tile-bg-press)}
-.action-btn.primary{background:var(--accent);color:#FFFFFF}
-.action-btn.primary:hover{background:#DB5524}
-.action-btn:disabled{opacity:.32;cursor:default}
-
-/* ══════════════════════════════════════════════════════════════════════
-   THE SCORE — A RULE AND A NUMBER, ARRIVING
-   Still not a tinted box. But finishing a test is the one moment in the
-   lesson that deserves marking, and a number that simply appears marks
-   nothing.
-
-   The celebration is in the ARRIVAL, not in ornament. The figure rises and
-   settles with a spring; the rule under it draws itself left to right, the
-   way a line is actually drawn; the count runs up rather than being
-   printed. Three small things, all of them the page's own vocabulary — no
-   confetti, no burst, nothing that belongs to a game rather than a lesson.
-
-   A clean test earns the caramel rule instead of the grey one and one
-   quiet pulse. That is the whole difference between very good and perfect,
-   and it is enough: a child who gets 18/20 should not be shown a lesser
-   version of a celebration they can see they missed.
-   ══════════════════════════════════════════════════════════════════════ */
-.score-banner{position:relative;background:none;border:none;
-  padding:.4rem .75rem 1.1rem;margin-bottom:1.1rem;text-align:center}
-/* The rule is a pseudo-element so it can draw itself. A border cannot. */
-.score-banner::after{content:'';position:absolute;left:0;right:0;bottom:0;
-  height:1px;background:var(--rule);transform:scaleX(0);transform-origin:left;
-  animation:ruleDraw .5s cubic-bezier(.2,.8,.2,1) .18s forwards}
-.score-banner.clean::after{background:var(--caramel);height:2px}
-
-.score-text{font-family:var(--f-display);font-size:1.9rem;font-weight:900;
-  letter-spacing:var(--track-display);font-variant-numeric:tabular-nums;
-  color:var(--accent);margin-bottom:.25rem;
-  animation:scoreIn .42s cubic-bezier(.2,1.5,.4,1) both}
-.score-banner.clean .score-text{animation:scoreIn .42s cubic-bezier(.2,1.5,.4,1) both,
-  scorePulse 1.1s ease-out .42s}
-.score-label{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.08em;
-  text-transform:uppercase;color:var(--faint);
-  animation:labelIn .4s ease-out .3s both}
-
-@keyframes scoreIn{from{opacity:0;transform:translateY(9px) scale(.9)}
-                   to{opacity:1;transform:none}}
-@keyframes labelIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-@keyframes ruleDraw{to{transform:scaleX(1)}}
-@keyframes scorePulse{0%{transform:none}35%{transform:scale(1.07)}100%{transform:none}}
-
-/* A child who has asked for less movement gets the number, not the show. */
-@media (prefers-reduced-motion:reduce){
-  .score-text,.score-label,.score-banner::after{animation:none}
-  .score-banner::after{transform:none}
+function loadScores() {
+  try { scores = JSON.parse(localStorage.getItem(SCORE_KEY) || '{}'); }
+  catch (e) { scores = {}; }
+}
+function saveScores() {
+  try { localStorage.setItem(SCORE_KEY, JSON.stringify(scores)); } catch (e) {}
 }
 
-/* On a screen given to one card, the figure can be the size of the moment. */
-.board.one .score-text{font-size:2.2rem}
+/* ═══ DATA ══════════════════════════════════════════════════════════════
+   { title, level, setsPerTest, totalSets, sets:[ {setNumber, label,
+     words:[…], sentences:[{text, correct}] } ] }
 
-.loading{text-align:center;padding:2.5rem;color:var(--faint);
-  font-family:var(--f-mono);font-size:.82rem}
-.error{text-align:center;padding:2.5rem;color:var(--wrong);
-  font-size:.9rem;line-height:1.6}
-
-/* ── PHONE ── 16px on anything tappable that holds text, so iOS does not
-   zoom, and so a five-year-old thumb has something to hit. */
-@media (max-width:640px){
-  .wrap{padding-left:var(--gutter-phone);padding-right:var(--gutter-phone)}
-  .card{padding:1.15rem 1rem}
-  .text{font-size:.875rem}
-  .word,.slot{font-size:16px}
-  /* The card is the screen here, so it uses the full gutter and drops its
-     own padding again — every millimetre is a millimetre of sentence. */
-  /* The card is the screen here, so it takes the gutter back. Type is left
-     to the --fs scale above rather than being overridden: a fixed 16px here
-     would undo exactly the fitting the clamp is doing. */
-  .board.one .card{padding:1.1rem 1rem}
-  /* Three controls will not share a 360px row. The instruction is the one
-     that can go: it is read once, on arrival, and the toggle and the dots
-     are used throughout. */
-  .strip-label{display:none}
-  .nav-btn{padding:.6rem .8rem;font-size:.72rem}
-  .word{padding:.42rem .75rem}
-  .action-btn{padding:.6rem 1.15rem;font-size:.72rem}
+   `correct` is an index INTO words. It was renumbered when the ten-word
+   sets were split into halves, and every one of the 300 pairings was
+   checked afterwards — an index that points at the wrong word produces a
+   page that renders perfectly and teaches the wrong thing, which is the
+   kind of bug nothing catches by looking. */
+function loadData() {
+  fetch(DATA_URL, { cache:'no-store' })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (d) {
+      sets = d.sets || [];
+      if (!sets.length) throw new Error('no sets in the data file');
+      var per = d.setsPerTest || PER_TEST;
+      for (var i = 0; i < sets.length; i += per) tests.push(sets.slice(i, i + per));
+      loadScores();
+      buildTabs();
+      setView(view);          /* paints the toggle before the first render */
+      loadTest(0);
+    })
+    .catch(function (err) {
+      $('board').innerHTML = '<div class="error">The exercises did not load.<br>' +
+        esc(err.message) + '</div>';
+    });
 }
 
-/* ── A SHORT SCREEN ──────────────────────────────────────────────────────
-   An older phone, a split screen, or a landscape tablet gives about 340px
-   of card. Topic Vocabulary's longest set needs 507 there. Nothing sensible
-   closes a 167px gap by shrinking type — 12px sentences would fit and be
-   unreadable, which is not fitting, it is hiding.
-
-   So on a short screen the card is allowed to scroll INSIDE itself while
-   the pool stays pinned to its top. The promise "one set, one screen" is
-   kept where it can be, and where it cannot, the words a student is
-   choosing from stay in view — which was the whole point of putting them
-   in the card. Same fix as the phrasal-verbs bank, scoped to a box that
-   knows its own height. */
-@media (max-height:700px){
-  body.solo .board.one .card{max-height:calc(100vh - var(--header-h) - 5.5rem);
-    overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
-  body.solo .board.one .kick,
-  body.solo .board.one .topic,
-  body.solo .board.one .pool{position:sticky;background:var(--poster);z-index:2}
-  body.solo .board.one .kick{top:0;padding-top:.1rem}
-  body.solo .board.one .topic{top:1.4rem}
-  body.solo .board.one .pool{top:2.6rem;padding-top:.15rem}
+/* ═══ SET TABS ══════════════════════════════════════════════════════════
+   Twenty-three of them for Similar Words, which is a lot of chips — but
+   they are three characters wide and they replace the row of twenty-three
+   grey dots the old page drew above the card. Dots that were only ever a
+   tab row without labels. */
+function buildTabs() {
+  var wrap = $('setTabs');
+  wrap.innerHTML = tests.map(function (_, i) {
+    var s = scores['test' + i];
+    return '<button class="vtab' + (i === currentTest ? ' active' : '') +
+      '" type="button" data-i="' + i + '">' + (i + 1) +
+      (s ? ' <span class="pct">' + s.percentage + '%</span>' : '') + '</button>';
+  }).join('');
+  wrap.querySelectorAll('.vtab').forEach(function (b) {
+    b.addEventListener('click', function () { loadTest(+b.dataset.i); });
+  });
+  /* The row scrolls sideways, so the active tab can be off screen — on test
+     19 of 23 a student would arrive looking at test 1 with no sign of where
+     they are. Bring it into view without moving the page itself. */
+  var act = wrap.querySelector('.vtab.active');
+  if (act && act.scrollIntoView) {
+    try { act.scrollIntoView({ inline:'center', block:'nearest', behavior:'smooth' }); }
+    catch (e) { wrap.scrollLeft = act.offsetLeft - wrap.clientWidth / 2; }
+  }
 }
 
-@media (min-width:900px){
-  .text{font-size:1rem}
-  .word,.slot{font-size:1rem}
-  .strip-label{font-size:.66rem}
+/* ═══ THE BOARD ═════════════════════════════════════════════════════════ */
+function loadTest(i) {
+  if (i < 0 || i >= tests.length) return;
+  currentTest = i;
+  isChecked = false;
+  answers = {};
+  picked = null;
+  hereCard = 0;
+  buildTabs();
+  render();
+  updateStrip();
+  resetActions();
+  var el = document.scrollingElement || document.body;
+  try { el.scrollTo({ top:0, behavior:'smooth' }); } catch (e) { el.scrollTop = 0; }
 }
+
+/* The gap is a run of underscores. Split on it and KEEP the surrounding
+   spaces: the slot sits inline between two spans, so " through London
+   attracted…" must keep its leading space or the word welds itself to the
+   next one. */
+function gapSplit(t) {
+  var s = String(t || ''), m = s.match(/_{2,}/);
+  return m ? [s.slice(0, m.index), s.slice(m.index + m[0].length)] : [s, ''];
+}
+
+function cardHTML(set, si) {
+  var kick = 'SET ' + set.setNumber;
+  var head = set.label
+    ? '<h2 class="topic">' + esc(set.label) + '</h2>'
+    : '';
+  var pool = set.words.map(function (w, wi) {
+    return '<button class="word" type="button" data-s="' + si + '" data-w="' + wi +
+           '">' + esc(w) + '</button>';
+  }).join('');
+  var lines = set.sentences.map(function (s, li) {
+    var p = gapSplit(s.text);
+    return '<div class="line">' +
+      '<div class="num">' + (li + 1) + '</div>' +
+      '<div class="text">' + esc(p[0]) +
+        '<span class="slot" role="button" tabindex="0" ' +
+              'data-s="' + si + '" data-l="' + li + '"></span>' +
+        esc(p[1]) +
+        '<span class="answer" hidden></span>' +
+      '</div></div>';
+  }).join('');
+  return '<div class="card">' +
+    '<div class="kick"><i></i>' + esc(kick) + '</div>' + head +
+    '<div class="pool">' + pool + '</div>' +
+    '<div class="lines">' + lines + '</div>' +
+  '</div>';
+}
+
+function setView(v) {
+  view = v;
+  try { localStorage.setItem(VIEW_KEY, v); } catch (e) {}
+  var sb = $('sndBtn');
+if (sb) sb.onclick = function () {
+  if (window.SFX && window.SFX.toggle) { window.SFX.toggle(); paintSnd(); snd('tick'); }
+};
+document.querySelectorAll('.view-btn').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.view === v);
+    b.setAttribute('aria-pressed', b.dataset.view === v ? 'true' : 'false');
+  });
+  var b = $('sndBtn');
+  if (b) { b.classList.toggle('show', v === 'one'); paintSnd(); }
+  render();
+  updateStrip();
+}
+
+function paintSnd() {
+  var b = $('sndBtn');
+  if (!b) return;
+  var on = !!(window.SFX && window.SFX.isOn && window.SFX.isOn());
+  b.classList.toggle('on', on);
+  b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  b.setAttribute('aria-label', on ? 'Sound on' : 'Sound off');
+  b.innerHTML = on
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M22 9l-6 6M16 9l6 6"/></svg>';
+}
+
+function goCard(i) {
+  var n = tests[currentTest].length;
+  hereCard = Math.max(0, Math.min(n - 1, i));
+  picked = null;
+  render();
+  updateStrip();
+  var el = document.scrollingElement || document.body;
+  try { el.scrollTo({ top:0, behavior:'smooth' }); } catch (e) { el.scrollTop = 0; }
+}
+
+function render() {
+  var all = tests[currentTest];
+  /* ONE view renders only the card in front of the student — not five with
+     four hidden. A hidden card's inputs are still focusable and still in the
+     tab order, so a keyboard user would tab straight into a card they cannot
+     see. Rendering one means there is only one. */
+  var solo = view === 'one' && !isChecked;
+  var list = solo ? [all[hereCard]] : all;
+  var base = solo ? hereCard : 0;
+  /* n4 / n5 so the stylesheet can size the type by how much there is to
+     read. CSS cannot count sentences; the engine can, and it is one word. */
+  var n = solo ? all[hereCard].sentences.length : 0;
+  $('board').className = solo ? ('board one n' + n) : 'board';
+  /* The body carries it too, so the strip and the action bar can tighten
+     with the card rather than each rule having to reach up through .board. */
+  document.body.classList.toggle('solo', solo);
+  $('board').innerHTML = list.map(function (set, k) { return cardHTML(set, base + k); }).join('');
+  $('board').querySelectorAll('.word').forEach(function (b) {
+    b.addEventListener('click', function () { pick(+b.dataset.s, +b.dataset.w); });
+  });
+  navButtons();
+  $('board').querySelectorAll('.slot').forEach(function (el) {
+    el.addEventListener('click', function () { place(+el.dataset.s, +el.dataset.l); });
+    /* A slot is a div doing a button's job, so it has to answer to the
+       keyboard like one or it is unreachable without a mouse. */
+    el.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); place(+el.dataset.s, +el.dataset.l); }
+    });
+  });
+  paint();
+}
+
+/* ═══ CHOOSING ══════════════════════════════════════════════════════════
+   Tap a word, tap a gap. Not typing: these are five given words and the
+   exercise is choosing between them, so asking a child to spell
+   "fidgeting" correctly tests something the lesson is not about. It also
+   means a wrong answer is always a wrong CHOICE and never a typo. */
+function pick(si, wi) {
+  if (isChecked) return;
+  var set = setAt(si), w = set.words[wi];
+  if (isUsed(si, w)) return;
+  picked = (picked && picked.set === si && picked.word === w) ? null : { set:si, word:w };
+  paint();
+}
+
+function place(si, li) {
+  if (isChecked) return;
+  answers[si] = answers[si] || {};
+  /* Tapping a full gap empties it and returns the word to the pool. That is
+     the only way back for a student who changed their mind, and it must not
+     need a Clear that wipes the other four. */
+  if (answers[si][li]) { delete answers[si][li]; picked = null; paint(); updateStrip(); return; }
+  if (!picked || picked.set !== si) return;     /* a word belongs to its own card */
+  answers[si][li] = picked.word;
+  picked = null;
+  paint();
+  updateStrip();
+  /* Placement, not correctness — nothing is judged until Check, and a sound
+     implying otherwise would be lying. `tick` is deliberately almost
+     nothing: a card dealt, not an answer approved. The bowl is kept for the
+     moment a card is complete. */
+  var st = setAt(si);
+  snd(Object.keys(answers[si]).length === st.sentences.length ? 'correct' : 'tick');
+}
+
+function setAt(si) { return tests[currentTest][si]; }
+function isUsed(si, w) {
+  var a = answers[si] || {};
+  for (var k in a) if (a[k] === w) return true;
+  return false;
+}
+
+function paint() {
+  $('board').querySelectorAll('.word').forEach(function (b) {
+    var si = +b.dataset.s, w = setAt(si).words[+b.dataset.w];
+    var used = isUsed(si, w);
+    b.classList.toggle('used', used);
+    b.classList.toggle('picked', !!picked && picked.set === si && picked.word === w);
+    b.disabled = isChecked || used;
+  });
+  $('board').querySelectorAll('.slot').forEach(function (el) {
+    var si = +el.dataset.s, li = +el.dataset.l;
+    var v = (answers[si] || {})[li];
+    el.textContent = v || '';
+    el.classList.toggle('filled', !!v && !isChecked);
+    /* Armed: a word is chosen and this card's empty gaps are what can
+       receive it. Only this card's — the caramel ring should not light up
+       on four other cards the word does not belong to. */
+    el.classList.toggle('armed', !isChecked && !!picked && picked.set === si && !v);
+    el.classList.toggle('locked', isChecked);
+  });
+}
+
+function updateStrip() {
+  var total = 0, done = 0;
+  tests[currentTest].forEach(function (set, si) {
+    total += set.sentences.length;
+    done += Object.keys(answers[si] || {}).length;
+  });
+  $('tally').textContent = done + '/' + total;
+
+  var dots = $('dots'), one = view === 'one' && !isChecked;
+  dots.classList.toggle('cards', one);
+  if (one) {
+    /* One dot per CARD. With four cards off screen, where you are in the
+       test is the thing you cannot otherwise see; how many gaps are filled
+       in the card in front of you is already visible in the card. */
+    dots.innerHTML = tests[currentTest].map(function (set, si) {
+      var filled = Object.keys(answers[si] || {}).length === set.sentences.length;
+      return '<div class="dot' + (si === hereCard ? ' here' : (filled ? ' done' : '')) +
+             '" role="button" tabindex="0" data-c="' + si + '" ' +
+             'aria-label="Card ' + (si + 1) + '"></div>';
+    }).join('');
+    dots.querySelectorAll('.dot').forEach(function (el) {
+      el.addEventListener('click', function () { goCard(+el.dataset.c); });
+      el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goCard(+el.dataset.c); }
+      });
+    });
+  } else {
+    dots.innerHTML = tests[currentTest].map(function (set, si) {
+      return set.sentences.map(function (_, li) {
+        return '<div class="dot' + ((answers[si] || {})[li] ? ' answered' : '') + '"></div>';
+      }).join('');
+    }).join('');
+  }
+  navButtons();
+  /* ── CHECK IS LOCKED UNTIL THE TEST IS FINISHED ──────────────────────
+     It used to unlock on the FIRST answer, and Check marks the whole test —
+     so one stray tap at 3/20 scored the other seventeen as wrong and wrote
+     15% into the tab. A number the student did not earn and cannot read.
+
+     `done < total`, not `done === 0`. In ONE view that means all five cards,
+     which is right for the same reason: the score is the test's, so the test
+     has to be done. The tally beside it already says 3/20, and the button
+     says what is missing rather than just refusing. */
+  var left = total - done;
+  var btn = $('checkBtn');
+  btn.disabled = left > 0;
+  btn.title = left > 0
+    ? left + (left === 1 ? ' sentence left' : ' sentences left')
+    : 'Mark the test';
+  btn.setAttribute('aria-label', left > 0
+    ? 'Check — ' + left + ' still to answer' : 'Check your answers');
+}
+
+/* Check stays live in ONE view. A student may well finish card three and
+   want to know, and forcing them through two more cards first is the page
+   deciding when they are ready. Checking marks the whole test and drops
+   back to ALL, so every answer is on screen with its correction. */
+function navButtons() {
+  var prev = $('prevBtn'), next = $('nextBtn');
+  if (!prev || !next) return;
+  var on = view === 'one' && !isChecked;
+  prev.hidden = next.hidden = !on;
+  if (!on) return;
+  prev.disabled = hereCard === 0;
+  next.disabled = hereCard === tests[currentTest].length - 1;
+  next.textContent = 'Card ' + (hereCard + 2 > tests[currentTest].length ? '' : hereCard + 2) + ' →';
+  if (next.disabled) next.textContent = 'Next →';
+}
+
+/* ═══ MARKING ═══════════════════════════════════════════════════════════ */
+function checkAnswers() {
+  /* Belt and braces. The button is disabled above, but this is the function
+     that writes a permanent score, and it should not depend on a class
+     somewhere else having been applied correctly. */
+  var filled = 0, want = 0;
+  tests[currentTest].forEach(function (set, si) {
+    want += set.sentences.length;
+    filled += Object.keys(answers[si] || {}).length;
+  });
+  if (filled < want || isChecked) return;
+
+  var correct = 0, total = 0;
+  /* ORDER MATTERS. Marking always shows the WHOLE test, so in ONE view the
+     board has to be re-rendered back to five cards BEFORE the marks are
+     written into it — otherwise the list holds the single visible card and
+     marking card two writes into nothing. A score of 14/20 with sixteen
+     answers behind a Next button is a number without its reasons. */
+  isChecked = true;
+  render();
+  var cards = $('board').querySelectorAll('.card');
+  tests[currentTest].forEach(function (set, si) {
+    set.sentences.forEach(function (s, li) {
+      total++;
+      var want = set.words[s.correct];
+      var got  = (answers[si] || {})[li];
+      var ok   = got === want;
+      if (ok) correct++;
+      var slot = cards[si].querySelector('.slot[data-l="' + li + '"]');
+      slot.textContent = got || '';
+      slot.classList.remove('filled', 'armed');
+      slot.classList.add('locked', ok ? 'correct' : 'incorrect');
+      if (!ok) {
+        var a = slot.parentElement.querySelector('.answer');
+        a.textContent = want;
+        a.hidden = false;
+      }
+    });
+  });
+  paint();
+  updateStrip();
+
+  var pct = Math.round(correct / total * 100);
+  /* fanfare only for a clean test — three bowls a fifth apart, the same
+     instrument as a single right answer, so a milestone sounds like more of
+     the same thing rather than a different game. Otherwise the low, brief
+     note: a wrong answer should be heard, not punished. */
+  snd(correct === total ? 'fanfare' : (correct >= total / 2 ? 'correct' : 'wrong'));
+
+  scores['test' + currentTest] = { correct:correct, total:total, percentage:pct,
+                                   at:new Date().toISOString() };
+  saveScores();
+  buildTabs();
+
+  /* `clean` is the only distinction drawn. A child on 18/20 should not be
+     shown a diminished version of a celebration they can see they missed —
+     they get the same arrival, and the caramel rule is what perfect adds. */
+  $('board').insertAdjacentHTML('afterbegin',
+    '<div class="score-banner' + (correct === total ? ' clean' : '') + '">' +
+    '<div class="score-text" id="scoreText">0/' + total + '</div>' +
+    '<div class="score-label">' + pct + '% correct</div></div>');
+  countUp($('scoreText'), correct, total);
+
+  $('clearBtn').textContent = 'Try again';
+  $('checkBtn').disabled = true;
+  var el = document.scrollingElement || document.body;
+  try { el.scrollTo({ top:0, behavior:'smooth' }); } catch (e) { el.scrollTop = 0; }
+}
+
+/* ── THE COUNT RUNS UP ───────────────────────────────────────────────────
+   Not decoration: a number that climbs is a number you watch, and watching
+   it is the half-second in which finishing registers as having happened.
+   Fast — 620ms, eased out — because it must not become something to sit
+   through on the twentieth test.
+
+   Stepped by FRAME rather than by integer, so 4/20 and 19/20 take the same
+   time. Counting one per tick would make a low score flash past and a high
+   one drag, which is exactly backwards. */
+function countUp(el, to, total) {
+  if (!el) return;
+  /* window-qualified, like window.SFX above and for the same reason: a bare
+     global inside this strict IIFE is a ReferenceError on any host that
+     lacks it, and the thing it would take down is the score the student
+     just earned. */
+  var mm = window.matchMedia;
+  var still = mm && mm('(prefers-reduced-motion: reduce)').matches;
+  if (still || to === 0) { el.textContent = to + '/' + total; return; }
+  var t0 = null, DUR = 620;
+  function step(ts) {
+    if (t0 === null) t0 = ts;
+    var k = Math.min(1, (ts - t0) / DUR);
+    el.textContent = Math.round((1 - Math.pow(1 - k, 3)) * to) + '/' + total;
+    if (k < 1) window.requestAnimationFrame(step); else el.textContent = to + '/' + total;
+  }
+  if (!window.requestAnimationFrame) { el.textContent = to + '/' + total; return; }
+  window.requestAnimationFrame(step);
+}
+
+function clearAnswers() { loadTest(currentTest); }
+
+function resetActions() {
+  $('clearBtn').textContent = 'Clear';
+  $('checkBtn').textContent = 'Check';
+  $('checkBtn').disabled = true;
+}
+/* Bound once via onclick, not addEventListener: resetActions may reassign,
+   and two listeners on one button fires Check twice — two score banners and
+   a second pass re-marking work already judged. */
+$('clearBtn').onclick = clearAnswers;
+$('checkBtn').onclick = checkAnswers;
+$('prevBtn').onclick  = function () { goCard(hereCard - 1); };
+$('nextBtn').onclick  = function () { goCard(hereCard + 1); };
+document.querySelectorAll('.view-btn').forEach(function (b) {
+  b.addEventListener('click', function () { if (view !== b.dataset.view) setView(b.dataset.view); });
+});
+
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && picked) { picked = null; paint(); }
+});
+
+loadData();
+})();

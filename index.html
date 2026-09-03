@@ -413,10 +413,40 @@ function buildMap(){
   });
 
   requestAnimationFrame(() => {
-    const rects = $('nodes').querySelectorAll('.pill .rect');
-    let maxW = 0;
-    rects.forEach(r => { r.style.width = ''; maxW = Math.max(maxW, r.offsetWidth); });
-    rects.forEach(r => { r.style.width = maxW + 'px'; });
+    /* ── WHY THE BANNERS INFLATED ON REFRESH ─────────────────────────────
+       The six banners are locked to a common width so the map reads as one
+       object: measure the widest, apply it to all. The measurement has to
+       happen in the FINAL font, and it was not.
+
+       .rect is set in Anton — a very condensed face. Until the webfont
+       arrives the browser draws the fallback, and on Linux and Android
+       there is no Impact either, so it lands on the system sans, which is
+       far wider. Measured in that moment, "USE OF ENGLISH" is perhaps 30%
+       too wide, and that number gets written into every banner as an
+       explicit width. Anton then loads, the text shrinks inside it, and the
+       banners stay inflated — with the road drawn to meet edges that are no
+       longer where the words end.
+
+       Refreshing appeared to fix it because the second load takes Anton
+       from cache and it is ready before the first measurement. That is the
+       whole bug: a race, won or lost depending on the cache.
+
+       So: do not guess. If Anton is not ready, measure nothing and leave
+       the banners at their natural width — momentarily uneven, which is far
+       better than uniformly wrong — and let the fonts.ready pass below set
+       them once the real face is in.
+
+       The three passes are also deliberate. Resetting and measuring in one
+       loop means each banner is measured while its siblings still hold the
+       previous run's explicit width, which is a second way to measure the
+       wrong thing. Reset all, then measure all, then set all. */
+    const rects = [...$('nodes').querySelectorAll('.pill .rect')];
+    const fontReady = !document.fonts || document.fonts.check("400 .88rem Anton");
+    rects.forEach(r => { r.style.width = ''; });
+    if (fontReady) {
+      const maxW = rects.reduce((m, r) => Math.max(m, r.offsetWidth), 0);
+      rects.forEach(r => { r.style.width = maxW + 'px'; });
+    }
 
 
     const PILL_GAP_PX = 5 * 96 / 25.4;
@@ -623,12 +653,45 @@ function accentFor(bg){
   buildMap();
   let t = null;
   window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(buildMap, 150); });
-  if(document.fonts && document.fonts.ready) document.fonts.ready.then(buildMap);
+  /* Ask for the face by name rather than waiting on fonts.ready. ready
+     resolves for the whole document, which on a cold load includes faces
+     the map does not use; loading Anton explicitly resolves when the one
+     font the measurement depends on is actually available. The redraw is
+     harmless when it was already loaded. */
+  if(document.fonts && document.fonts.load){
+    document.fonts.load("400 .88rem Anton").then(buildMap).catch(() => {});
+  } else if(document.fonts && document.fonts.ready){
+    document.fonts.ready.then(buildMap);
+  }
 
-  const wantPanel = new URLSearchParams(location.search).get('panel');
+  /* ── COMING BACK FROM A SKILL PAGE ───────────────────────────────────
+     This read only ?panel=, and NOT ONE PAGE IN THE REPO SENDS THAT. All
+     102 back-links across 136 skill pages say ?openModal=<key>, so every
+     "← Grammar" and "← Vocabulary" in the product has been dropping the
+     student on the landing page with the menu shut, since the beginning.
+
+     Fixed here rather than in 102 links: one file to change instead of
+     136, and it also catches every page nobody has renovated yet. ?panel=
+     keeps working, so nothing that might already use it breaks.
+
+     An unknown key is ignored on purpose — a stale bookmark should land on
+     the map, not on an error. */
+  const q = new URLSearchParams(location.search);
+  const wantPanel = q.get('panel') || q.get('openModal');
   if(wantPanel){
     const idx = AREAS.findIndex(a => a.key === wantPanel);
-    if(idx >= 0) openPanel(wantPanel, idx);
+    if(idx >= 0){
+      openPanel(wantPanel, idx);
+      /* Writing's links carry &submenu=essays and the like — a second level
+         the panel already knows how to draw but was never told to open.
+         Deferred a frame so it lands on top of the panel just painted. */
+      const wantSub = q.get('submenu');
+      if(wantSub && typeof SUB === 'object' && SUB[wantSub]){
+        requestAnimationFrame(() => {
+          openSub(wantSub, accentFor(AREAS[idx].tone.bg), AREAS[idx].name);
+        });
+      }
+    }
   }
 </script>
 </body>

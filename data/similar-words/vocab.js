@@ -112,6 +112,14 @@ function buildTabs() {
   wrap.querySelectorAll('.vtab').forEach(function (b) {
     b.addEventListener('click', function () { loadTest(+b.dataset.i); });
   });
+  /* The row scrolls sideways, so the active tab can be off screen — on test
+     19 of 23 a student would arrive looking at test 1 with no sign of where
+     they are. Bring it into view without moving the page itself. */
+  var act = wrap.querySelector('.vtab.active');
+  if (act && act.scrollIntoView) {
+    try { act.scrollIntoView({ inline:'center', block:'nearest', behavior:'smooth' }); }
+    catch (e) { wrap.scrollLeft = act.offsetLeft - wrap.clientWidth / 2; }
+  }
 }
 
 /* ═══ THE BOARD ═════════════════════════════════════════════════════════ */
@@ -215,6 +223,9 @@ function render() {
   var list = solo ? [all[hereCard]] : all;
   var base = solo ? hereCard : 0;
   $('board').className = solo ? 'board one' : 'board';
+  /* The body carries it too, so the strip and the action bar can tighten
+     with the card rather than each rule having to reach up through .board. */
+  document.body.classList.toggle('solo', solo);
   $('board').innerHTML = list.map(function (set, k) { return cardHTML(set, base + k); }).join('');
   $('board').querySelectorAll('.word').forEach(function (b) {
     b.addEventListener('click', function () { pick(+b.dataset.s, +b.dataset.w); });

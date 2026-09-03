@@ -186,7 +186,11 @@ function qHTML(it, idx) {
   var k = ex.toLowerCase().indexOf(sf.toLowerCase());
   var stem = k < 0 ? esc(ex)
     : esc(ex.slice(0, k)) + '<span class="gap" id="gap' + idx + '"></span>' + esc(ex.slice(k + sf.length));
-  return '<div class="q" id="q' + idx + '">' +
+  /* "card q": .card is the same paper-and-shadow object Browse's nodes
+     already use, so each question is a card in its own right rather than a
+     row inside one — .q stays too, since the picks/gap/done/miss rules
+     below are still scoped to it. */
+  return '<div class="card poster q" id="q' + idx + '">' +
     '<div class="kick"><i></i>' + esc(BANK.patterns[PATS[pat]].label) + '</div>' +
     '<h2 class="node">' + esc(it.node) + '</h2>' +
     '<div class="stem">' + stem + '</div>' +
@@ -198,10 +202,10 @@ function qHTML(it, idx) {
 }
 
 function renderPractice() {
+  /* No outer wrapping card any more — ten independent cards, stacked with a
+     gap, the same arrangement .bank already uses for Browse's node list. */
   $('board').className = 'board quiz';
-  $('board').innerHTML = '<div class="card">' +
-    items.map(qHTML).join('') +
-  '</div>';
+  $('board').innerHTML = items.map(qHTML).join('');
   $('board').querySelectorAll('.pick').forEach(function (b) {
     b.addEventListener('click', function () { selectOption(+b.dataset.i, +b.dataset.o); });
   });

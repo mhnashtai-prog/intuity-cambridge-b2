@@ -11,7 +11,7 @@
 'use strict';
 
 var CFG       = window.VOCAB || {};
-var DATA_URL  = '../../data/similar-words/' + CFG.data + '.json';
+var DATA_URL  = '/data/similar-words/' + CFG.data + '.json';
 var SCORE_KEY = CFG.scoreKey;
 var PER_TEST  = 5;                    /* the data's own setsPerTest */
 
@@ -150,10 +150,10 @@ function gapSplit(t) {
 function cardHTML(set, si) {
   var kick = 'SET ' + set.setNumber;
   var head = set.label
-    ? '<h2 class="topic">' + esc(set.label) + '</h2>'
+    ? '<h2 class="poster-head">' + esc(set.label) + '</h2>'
     : '';
   var pool = set.words.map(function (w, wi) {
-    return '<button class="word" type="button" data-s="' + si + '" data-w="' + wi +
+    return '<button class="poster-pill word" type="button" data-s="' + si + '" data-w="' + wi +
            '">' + esc(w) + '</button>';
   }).join('');
   var lines = set.sentences.map(function (s, li) {
@@ -167,8 +167,8 @@ function cardHTML(set, si) {
         '<span class="answer" hidden></span>' +
       '</div></div>';
   }).join('');
-  return '<div class="card">' +
-    '<div class="kick"><i></i>' + esc(kick) + '</div>' + head +
+  return '<div class="poster">' +
+    '<div class="poster-kick"><i></i>' + esc(kick) + '</div>' + head +
     '<div class="pool">' + pool + '</div>' +
     '<div class="lines">' + lines + '</div>' +
   '</div>';
@@ -395,7 +395,7 @@ function checkAnswers() {
      answers behind a Next button is a number without its reasons. */
   isChecked = true;
   render();
-  var cards = $('board').querySelectorAll('.card');
+  var cards = $('board').querySelectorAll('.poster');
   tests[currentTest].forEach(function (set, si) {
     set.sentences.forEach(function (s, li) {
       total++;

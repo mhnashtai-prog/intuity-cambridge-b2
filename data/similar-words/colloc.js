@@ -113,7 +113,6 @@ function cardHTML(n) {
   return '<div class="card">' +
     '<div class="kick"><i></i>' + esc(BANK.patterns[n.pattern].label) + '</div>' +
     '<h2 class="node">' + esc(n.node) + '</h2>' +
-    '<div class="pos">' + esc(n.pos) + '</div>' +
     '<div class="cols">' + cols + '</div>' + avoid +
   '</div>';
 }
@@ -190,7 +189,6 @@ function qHTML(it, idx) {
   return '<div class="q" id="q' + idx + '">' +
     '<div class="kick"><i></i>' + esc(BANK.patterns[PATS[pat]].label) + '</div>' +
     '<h2 class="node">' + esc(it.node) + '</h2>' +
-    '<div class="pos">' + esc(it.pos) + '</div>' +
     '<div class="stem">' + stem + '</div>' +
     '<div class="picks">' + it.options.map(function (o, j) {
       return '<button class="pick" type="button" data-i="' + idx + '" data-o="' + j + '">' + esc(o) + '</button>';

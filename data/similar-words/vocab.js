@@ -22,6 +22,37 @@ var sets = [], tests = [], currentTest = 0, isChecked = false, scores = {};
 var answers = {};
 var picked  = null;                   /* {set, word} — armed, awaiting a gap */
 
+/* ── ALL / ONE ───────────────────────────────────────────────────────────
+   'all'  five cards down the page
+   'one'  a single card, prev/next in the action bar
+   Remembered globally rather than per topic: a child who needs one card at
+   a time needs it on both pages, and being asked twice is being asked once
+   too often. */
+/* ── SOUND BELONGS TO ONE VIEW ONLY ──────────────────────────────────────
+   ALL view is a worksheet: five cards, scanned, worked at the student's own
+   pace, and quite possibly on thirty tablets in one room. ONE view is the
+   immersive arrangement — a single card with the whole screen — and that is
+   the one that can carry sound without becoming a noise problem.
+
+   So the speaker only appears when the view is ONE, and nothing plays in
+   ALL. SFX itself is the shared module every game already uses, reading the
+   same device-wide mute, so a child who silenced Forge arrives already
+   silent. */
+function snd(name) {
+  if (view !== 'one') return;
+  /* window.SFX throughout, never a bare SFX. This file runs inside a strict
+     IIFE, and reaching for an undeclared global there is a ReferenceError
+     rather than undefined — so on any page where the sound module failed to
+     load, the FIRST tap would throw and take the whole exercise with it.
+     The one thing that must never break is the lesson. */
+  var S = window.SFX;
+  if (S && S.isOn && S.isOn() && S[name]) { try { S[name](); } catch (e) {} }
+}
+
+var VIEW_KEY = 'intuity_vocab_view';
+var view = 'all', hereCard = 0;
+try { view = localStorage.getItem(VIEW_KEY) || 'all'; } catch (e) {}
+
 var $ = function (id) { return document.getElementById(id); };
 var esc = function (v) {
   return String(v).replace(/[&<>"]/g, function (c) {
@@ -56,6 +87,7 @@ function loadData() {
       for (var i = 0; i < sets.length; i += per) tests.push(sets.slice(i, i + per));
       loadScores();
       buildTabs();
+      setView(view);          /* paints the toggle before the first render */
       loadTest(0);
     })
     .catch(function (err) {
@@ -89,6 +121,7 @@ function loadTest(i) {
   isChecked = false;
   answers = {};
   picked = null;
+  hereCard = 0;
   buildTabs();
   render();
   updateStrip();
@@ -133,11 +166,60 @@ function cardHTML(set, si) {
   '</div>';
 }
 
+function setView(v) {
+  view = v;
+  try { localStorage.setItem(VIEW_KEY, v); } catch (e) {}
+  var sb = $('sndBtn');
+if (sb) sb.onclick = function () {
+  if (window.SFX && window.SFX.toggle) { window.SFX.toggle(); paintSnd(); snd('tick'); }
+};
+document.querySelectorAll('.view-btn').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.view === v);
+    b.setAttribute('aria-pressed', b.dataset.view === v ? 'true' : 'false');
+  });
+  var b = $('sndBtn');
+  if (b) { b.classList.toggle('show', v === 'one'); paintSnd(); }
+  render();
+  updateStrip();
+}
+
+function paintSnd() {
+  var b = $('sndBtn');
+  if (!b) return;
+  var on = !!(window.SFX && window.SFX.isOn && window.SFX.isOn());
+  b.classList.toggle('on', on);
+  b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  b.setAttribute('aria-label', on ? 'Sound on' : 'Sound off');
+  b.innerHTML = on
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M22 9l-6 6M16 9l6 6"/></svg>';
+}
+
+function goCard(i) {
+  var n = tests[currentTest].length;
+  hereCard = Math.max(0, Math.min(n - 1, i));
+  picked = null;
+  render();
+  updateStrip();
+  var el = document.scrollingElement || document.body;
+  try { el.scrollTo({ top:0, behavior:'smooth' }); } catch (e) { el.scrollTop = 0; }
+}
+
 function render() {
-  $('board').innerHTML = tests[currentTest].map(cardHTML).join('');
+  var all = tests[currentTest];
+  /* ONE view renders only the card in front of the student — not five with
+     four hidden. A hidden card's inputs are still focusable and still in the
+     tab order, so a keyboard user would tab straight into a card they cannot
+     see. Rendering one means there is only one. */
+  var solo = view === 'one' && !isChecked;
+  var list = solo ? [all[hereCard]] : all;
+  var base = solo ? hereCard : 0;
+  $('board').className = solo ? 'board one' : 'board';
+  $('board').innerHTML = list.map(function (set, k) { return cardHTML(set, base + k); }).join('');
   $('board').querySelectorAll('.word').forEach(function (b) {
     b.addEventListener('click', function () { pick(+b.dataset.s, +b.dataset.w); });
   });
+  navButtons();
   $('board').querySelectorAll('.slot').forEach(function (el) {
     el.addEventListener('click', function () { place(+el.dataset.s, +el.dataset.l); });
     /* A slot is a div doing a button's job, so it has to answer to the
@@ -174,6 +256,12 @@ function place(si, li) {
   picked = null;
   paint();
   updateStrip();
+  /* Placement, not correctness — nothing is judged until Check, and a sound
+     implying otherwise would be lying. `tick` is deliberately almost
+     nothing: a card dealt, not an answer approved. The bowl is kept for the
+     moment a card is complete. */
+  var st = setAt(si);
+  snd(Object.keys(answers[si]).length === st.sentences.length ? 'correct' : 'tick');
 }
 
 function setAt(si) { return tests[currentTest][si]; }
@@ -211,20 +299,62 @@ function updateStrip() {
     done += Object.keys(answers[si] || {}).length;
   });
   $('tally').textContent = done + '/' + total;
-  var html = '', i = 0;
-  tests[currentTest].forEach(function (set, si) {
-    set.sentences.forEach(function (_, li) {
-      html += '<div class="dot' + ((answers[si] || {})[li] ? ' answered' : '') + '"></div>';
-      i++;
+
+  var dots = $('dots'), one = view === 'one' && !isChecked;
+  dots.classList.toggle('cards', one);
+  if (one) {
+    /* One dot per CARD. With four cards off screen, where you are in the
+       test is the thing you cannot otherwise see; how many gaps are filled
+       in the card in front of you is already visible in the card. */
+    dots.innerHTML = tests[currentTest].map(function (set, si) {
+      var filled = Object.keys(answers[si] || {}).length === set.sentences.length;
+      return '<div class="dot' + (si === hereCard ? ' here' : (filled ? ' done' : '')) +
+             '" role="button" tabindex="0" data-c="' + si + '" ' +
+             'aria-label="Card ' + (si + 1) + '"></div>';
+    }).join('');
+    dots.querySelectorAll('.dot').forEach(function (el) {
+      el.addEventListener('click', function () { goCard(+el.dataset.c); });
+      el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goCard(+el.dataset.c); }
+      });
     });
-  });
-  $('dots').innerHTML = html;
+  } else {
+    dots.innerHTML = tests[currentTest].map(function (set, si) {
+      return set.sentences.map(function (_, li) {
+        return '<div class="dot' + ((answers[si] || {})[li] ? ' answered' : '') + '"></div>';
+      }).join('');
+    }).join('');
+  }
+  navButtons();
   $('checkBtn').disabled = done === 0;
+}
+
+/* Check stays live in ONE view. A student may well finish card three and
+   want to know, and forcing them through two more cards first is the page
+   deciding when they are ready. Checking marks the whole test and drops
+   back to ALL, so every answer is on screen with its correction. */
+function navButtons() {
+  var prev = $('prevBtn'), next = $('nextBtn');
+  if (!prev || !next) return;
+  var on = view === 'one' && !isChecked;
+  prev.hidden = next.hidden = !on;
+  if (!on) return;
+  prev.disabled = hereCard === 0;
+  next.disabled = hereCard === tests[currentTest].length - 1;
+  next.textContent = 'Card ' + (hereCard + 2 > tests[currentTest].length ? '' : hereCard + 2) + ' →';
+  if (next.disabled) next.textContent = 'Next →';
 }
 
 /* ═══ MARKING ═══════════════════════════════════════════════════════════ */
 function checkAnswers() {
   var correct = 0, total = 0;
+  /* ORDER MATTERS. Marking always shows the WHOLE test, so in ONE view the
+     board has to be re-rendered back to five cards BEFORE the marks are
+     written into it — otherwise the list holds the single visible card and
+     marking card two writes into nothing. A score of 14/20 with sixteen
+     answers behind a Next button is a number without its reasons. */
+  isChecked = true;
+  render();
   var cards = $('board').querySelectorAll('.card');
   tests[currentTest].forEach(function (set, si) {
     set.sentences.forEach(function (s, li) {
@@ -244,23 +374,63 @@ function checkAnswers() {
       }
     });
   });
-  isChecked = true;
   paint();
+  updateStrip();
 
   var pct = Math.round(correct / total * 100);
+  /* fanfare only for a clean test — three bowls a fifth apart, the same
+     instrument as a single right answer, so a milestone sounds like more of
+     the same thing rather than a different game. Otherwise the low, brief
+     note: a wrong answer should be heard, not punished. */
+  snd(correct === total ? 'fanfare' : (correct >= total / 2 ? 'correct' : 'wrong'));
+
   scores['test' + currentTest] = { correct:correct, total:total, percentage:pct,
                                    at:new Date().toISOString() };
   saveScores();
   buildTabs();
 
+  /* `clean` is the only distinction drawn. A child on 18/20 should not be
+     shown a diminished version of a celebration they can see they missed —
+     they get the same arrival, and the caramel rule is what perfect adds. */
   $('board').insertAdjacentHTML('afterbegin',
-    '<div class="score-banner"><div class="score-text">' + correct + '/' + total + '</div>' +
+    '<div class="score-banner' + (correct === total ? ' clean' : '') + '">' +
+    '<div class="score-text" id="scoreText">0/' + total + '</div>' +
     '<div class="score-label">' + pct + '% correct</div></div>');
+  countUp($('scoreText'), correct, total);
 
   $('clearBtn').textContent = 'Try again';
   $('checkBtn').disabled = true;
   var el = document.scrollingElement || document.body;
   try { el.scrollTo({ top:0, behavior:'smooth' }); } catch (e) { el.scrollTop = 0; }
+}
+
+/* ── THE COUNT RUNS UP ───────────────────────────────────────────────────
+   Not decoration: a number that climbs is a number you watch, and watching
+   it is the half-second in which finishing registers as having happened.
+   Fast — 620ms, eased out — because it must not become something to sit
+   through on the twentieth test.
+
+   Stepped by FRAME rather than by integer, so 4/20 and 19/20 take the same
+   time. Counting one per tick would make a low score flash past and a high
+   one drag, which is exactly backwards. */
+function countUp(el, to, total) {
+  if (!el) return;
+  /* window-qualified, like window.SFX above and for the same reason: a bare
+     global inside this strict IIFE is a ReferenceError on any host that
+     lacks it, and the thing it would take down is the score the student
+     just earned. */
+  var mm = window.matchMedia;
+  var still = mm && mm('(prefers-reduced-motion: reduce)').matches;
+  if (still || to === 0) { el.textContent = to + '/' + total; return; }
+  var t0 = null, DUR = 620;
+  function step(ts) {
+    if (t0 === null) t0 = ts;
+    var k = Math.min(1, (ts - t0) / DUR);
+    el.textContent = Math.round((1 - Math.pow(1 - k, 3)) * to) + '/' + total;
+    if (k < 1) window.requestAnimationFrame(step); else el.textContent = to + '/' + total;
+  }
+  if (!window.requestAnimationFrame) { el.textContent = to + '/' + total; return; }
+  window.requestAnimationFrame(step);
 }
 
 function clearAnswers() { loadTest(currentTest); }
@@ -275,6 +445,11 @@ function resetActions() {
    a second pass re-marking work already judged. */
 $('clearBtn').onclick = clearAnswers;
 $('checkBtn').onclick = checkAnswers;
+$('prevBtn').onclick  = function () { goCard(hereCard - 1); };
+$('nextBtn').onclick  = function () { goCard(hereCard + 1); };
+document.querySelectorAll('.view-btn').forEach(function (b) {
+  b.addEventListener('click', function () { if (view !== b.dataset.view) setView(b.dataset.view); });
+});
 
 document.addEventListener('keydown', function (e) {
   if (e.key === 'Escape' && picked) { picked = null; paint(); }

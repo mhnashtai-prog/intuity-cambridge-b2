@@ -69,9 +69,10 @@
   .roadPath{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;}
   .roadPath .road{fill:none;stroke:var(--rule);stroke-width:2.5;stroke-linecap:round;}
   .roadPath .roadDot{fill:var(--board);stroke:var(--sage-l);stroke-width:2;}
+   .roadPath .loopRing{fill:none;stroke:var(--sage-l);stroke-width:2;}
 
   .roadRow{position:relative;display:flex;justify-content:space-between;align-items:flex-start;
-    padding:0 .1rem;margin-bottom:2.8rem;}
+    padding:0 .1rem;margin-bottom:1.8rem;}
   .roadRow.rev{flex-direction:row-reverse;}
 
   .stop{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;
@@ -115,14 +116,14 @@
     .stop-dial{--d:38px;font-size:.68rem;}
     .stop-name{font-size:.5rem;margin-top:.3rem;}
     .stop-count{font-size:.4rem;margin-top:.1rem;}
-    .roadRow{margin-bottom:.85rem;}
+    .roadRow{margin-bottom:.595rem;}
   }
   @media(max-width:360px){
     .roadmap{max-width:300px;}
     .stop-dial{--d:34px;font-size:.62rem;}
     .stop-name{font-size:.46rem;margin-top:.24rem;}
     .stop-count{font-size:.38rem;}
-    .roadRow{margin-bottom:.65rem;}
+    .roadRow{margin-bottom:.495rem;}
   }
 
   .fpanelWrap{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;
@@ -566,6 +567,7 @@ function drawRoadPath(){
     return { x: r.left + r.width/2 - mapRect.left, y: r.top + r.height/2 - mapRect.top };
   });
 
+  let loopRings=[];
   let d='M '+pts[0].x.toFixed(1)+' '+pts[0].y.toFixed(1);
 
   for(let i=1;i<pts.length;i++){
@@ -577,22 +579,24 @@ function drawRoadPath(){
       continue;
     }
 
-        /* Row turn: a cubic Bézier bulge, not an arc. An elliptical arc breaks
-       here because the two dials sit almost exactly above one another —
-       zero horizontal offset — so a flattened ry is too short to reach and
-       SVG silently rescales it, which is what caused the broken segments.
-       A Bézier has no such constraint: it flattens cleanly regardless of
-       how the endpoints line up. */
     const onRight = a.x > mapRect.width/2;
     const sign = onRight ? 1 : -1;
-    const bulge = Math.abs(b.y - a.y) * 0.42;   // tune 0.3–0.6 for shallower/deeper
-    d += ` C ${(a.x+sign*bulge).toFixed(1)} ${a.y.toFixed(1)}, `+
-         `${(b.x+sign*bulge).toFixed(1)} ${b.y.toFixed(1)}, `+
+    const bulge = Math.abs(b.y - a.y) * 0.667;
+    const cx1 = a.x+sign*bulge, cy1 = a.y;
+    const cx2 = b.x+sign*bulge, cy2 = b.y;
+
+    d += ` C ${cx1.toFixed(1)} ${cy1.toFixed(1)}, `+
+         `${cx2.toFixed(1)} ${cy2.toFixed(1)}, `+
          `${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
+
+    const apexX = 0.125*a.x + 0.375*cx1 + 0.375*cx2 + 0.125*b.x;
+    const apexY = 0.125*a.y + 0.375*cy1 + 0.375*cy2 + 0.125*b.y;
+    loopRings.push({x:apexX, y:apexY});
   }
 
   let inner=`<path class="road" d="${d}"/>`;
   pts.forEach(p=>{ inner += `<circle class="roadDot" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4"/>`; });
+  loopRings.forEach(p=>{ inner += `<circle class="loopRing" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="6"/>`; });
   svg.innerHTML=inner;
 }
 window.addEventListener('resize',()=>{

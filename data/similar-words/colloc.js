@@ -99,48 +99,21 @@ function markUp(ex, surface) {
          esc(ex.slice(i + surface.length));
 }
 
-/* A word in `avoid` was one bucket before this: struck through, filed under
-   "Not with", same treatment whether it was genuinely ungrammatical or just
-   the second-best choice. That's not true — 'very cold' is fine English,
-   it's just not what a native writer reaches for first. The `why` text
-   already says which is which ("Correct but weak..." vs "Wrong..."), so the
-   split costs nothing new in the data — it only needed reading. */
-function isWeak(a) { return /^correct but weak/i.test(a.why || ''); }
-
 function cardHTML(n) {
-  var strongCols = n.collocates.map(function (c) {
+  var cols = n.collocates.map(function (c) {
     return '<div class="col ' + (c.strength === 'strong' ? 'strong' : '') + '">' +
       '<div class="w">' + esc(c.w) + '</div>' +
       '<div class="eg">' + markUp(c.example, c.form || c.w) + '</div></div>';
   }).join('');
-
-  var weak = n.avoid.filter(isWeak);
-  var wrong = n.avoid.filter(function (a) { return !isWeak(a); });
-
-  /* Weak entries join the SAME list as the strong and medium collocates,
-     not a separate struck-through row — they are correct English, so they
-     belong among the words a student could actually use. Size is the only
-     thing marking them down: no example sentence exists for these in the
-     data (they were only ever written as a reason to avoid, not a model to
-     copy), so the "Correct but weak. " lead-in is trimmed off and what's
-     left stands in for the example line. */
-  var weakCols = weak.map(function (a) {
-    var note = a.why.replace(/^correct but weak\.\s*/i, '');
-    return '<div class="col weak">' +
-      '<div class="w">' + esc(a.w) + '</div>' +
-      '<div class="eg">' + esc(note) + '</div></div>';
-  }).join('');
-
-  var avoid = wrong.length ? '<div class="avoid"><div class="avoid-label">Avoid</div>' +
-    wrong.map(function (a) {
+  var avoid = n.avoid.length ? '<div class="avoid"><div class="avoid-label">Not with</div>' +
+    n.avoid.map(function (a) {
       return '<div class="av"><div class="w">' + esc(a.w) + '</div>' +
              '<div class="why">' + esc(a.why) + '</div></div>';
     }).join('') + '</div>' : '';
-
   return '<div class="card poster">' +
     '<div class="kick"><i></i>' + esc(BANK.patterns[n.pattern].label) + '</div>' +
     '<h2 class="node">' + esc(n.node) + '</h2>' +
-    '<div class="cols">' + strongCols + weakCols + '</div>' + avoid +
+    '<div class="cols">' + cols + '</div>' + avoid +
   '</div>';
 }
 

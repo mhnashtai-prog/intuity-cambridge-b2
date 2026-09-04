@@ -105,15 +105,10 @@ function cardHTML(n) {
       '<div class="w">' + esc(c.w) + '</div>' +
       '<div class="eg">' + markUp(c.example, c.form || c.w) + '</div></div>';
   }).join('');
-  var avoid = n.avoid.length ? '<div class="avoid"><div class="avoid-label">Not with</div>' +
-    n.avoid.map(function (a) {
-      return '<div class="av"><div class="w">' + esc(a.w) + '</div>' +
-             '<div class="why">' + esc(a.why) + '</div></div>';
-    }).join('') + '</div>' : '';
   return '<div class="card poster">' +
     '<div class="kick"><i></i>' + esc(BANK.patterns[n.pattern].label) + '</div>' +
     '<h2 class="node">' + esc(n.node) + '</h2>' +
-    '<div class="cols">' + cols + '</div>' + avoid +
+    '<div class="cols">' + cols + '</div>' +
   '</div>';
 }
 

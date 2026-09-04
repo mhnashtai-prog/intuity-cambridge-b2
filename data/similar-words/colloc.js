@@ -110,7 +110,7 @@ function cardHTML(n) {
       return '<div class="av"><div class="w">' + esc(a.w) + '</div>' +
              '<div class="why">' + esc(a.why) + '</div></div>';
     }).join('') + '</div>' : '';
-  return '<div class="card">' +
+  return '<div class="card poster">' +
     '<div class="kick"><i></i>' + esc(BANK.patterns[n.pattern].label) + '</div>' +
     '<h2 class="node">' + esc(n.node) + '</h2>' +
     '<div class="cols">' + cols + '</div>' + avoid +
@@ -119,9 +119,10 @@ function cardHTML(n) {
 
 function renderBrowse() {
   var ns = nodesIn(PATS[pat]);
+  var note = BANK.patterns[PATS[pat]].note;
   $('board').className = 'bank';
   $('board').innerHTML =
-    '<div class="pat-note">' + esc(BANK.patterns[PATS[pat]].note) + '</div>' +
+    (note ? '<div class="pat-note">' + esc(note) + '</div>' : '') +
     ns.map(cardHTML).join('');
   $('tally').textContent = ns.length + (ns.length === 1 ? ' word' : ' words');
   $('actionBar').style.display = 'none';

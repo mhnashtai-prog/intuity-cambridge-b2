@@ -6,18 +6,36 @@
    The bank is NODE -> collocates. The old file was organised by the
    adverb's function class, which meant the question a learner actually
    asks — which adverb goes with COLD — could not be asked of it at all.
-   ═══════════════════════════════════════════════════════════════════════ */
+
+   PRACTICE IS NOW A SCROLL, NOT A DECK.
+   It used to hold one question on screen with a Next button, the only mode
+   in the product built that way while Browse, and every "all sets" view
+   elsewhere, lays its cards down the page. That made Practice read as a
+   different, older exercise rather than the same card in its quiz form.
+   All ten questions render up front, in one card.
+
+   MARKING MOVED TO CHECK, TO MATCH SIMILAR WORDS AND TOPIC VOCABULARY.
+   A tap used to mark that one question immediately — right there before the
+   next one was even visible. That made sense while only one question was
+   ever on screen, but next to nine others waiting it reads as ten separate
+   micro-tests rather than one. Every other quiz in the product marks
+   nothing until Check, and Check itself stays disabled until all ten are
+   answered — a partial mark is a number the student did not earn. Tapping a
+   pick now only SELECTS it; nothing is judged, and it can be changed, right
+   up until Check is pressed. */
 (function () {
 'use strict';
 
-var DATA_URL = '/data/similar-words/collocations-bank.json';
+var DATA_URL = '../../data/similar-words/collocations-bank.json';
 var SCORE_KEY = 'collocations_scores';
 
 var BANK = null, PATS = [], pat = 0, mode = 'browse';
 var items = [], scores = {};
-/* here = the question on screen; marked = whether it has been answered yet,
-   which is what stops a second tap changing an answer already judged. */
-var here = 0, marked = false, score = 0, results = [];
+/* picks[i] = the OPTION INDEX chosen for question i, or undefined — a
+   selection, not a verdict. Nothing is judged until Check, so this is all
+   that exists before then; `results` and `score` only get filled in once
+   checkAnswers() runs. */
+var picks = [], isChecked = false, score = 0, results = [];
 
 var $ = function (id) { return document.getElementById(id); };
 var esc = function (v) {
@@ -92,10 +110,9 @@ function cardHTML(n) {
       return '<div class="av"><div class="w">' + esc(a.w) + '</div>' +
              '<div class="why">' + esc(a.why) + '</div></div>';
     }).join('') + '</div>' : '';
-  return '<div class="poster">' +
-    '<div class="poster-kick"><i></i>' + esc(BANK.patterns[n.pattern].label) + '</div>' +
+  return '<div class="card">' +
+    '<div class="kick"><i></i>' + esc(BANK.patterns[n.pattern].label) + '</div>' +
     '<h2 class="node">' + esc(n.node) + '</h2>' +
-    '<div class="poster-sub">' + esc(n.pos) + '</div>' +
     '<div class="cols">' + cols + '</div>' + avoid +
   '</div>';
 }
@@ -159,101 +176,132 @@ function buildItems() {
   items = items.slice(0, 10);
 }
 
-/* ── ONE CARD AT A TIME ──────────────────────────────────────────────────
-   `here` is the question on screen. The others are not rendered at all
-   rather than hidden with CSS: a hidden card's buttons stay focusable and
-   stay in the tab order, so a keyboard user would tab into a question they
-   cannot see. */
-function qHTML(it) {
+/* ── EVERY QUESTION, ONE CARD, DOWN THE PAGE ─────────────────────────────
+   `.q + .q` in colloc.css already draws a rule between one question and
+   the next — that CSS was written for exactly this arrangement, so nothing
+   there needs to change. Only the id needs to carry the question's own
+   index now, since ten of these sit in the DOM at once rather than one. */
+function qHTML(it, idx) {
   var ex = it.example, sf = it.surface;
   var k = ex.toLowerCase().indexOf(sf.toLowerCase());
   var stem = k < 0 ? esc(ex)
-    : esc(ex.slice(0, k)) + '<span class="gap" id="gap"></span>' + esc(ex.slice(k + sf.length));
-  return '<div class="poster" id="card"><div class="q" id="q">' +
-    '<div class="poster-kick"><i></i>' + esc(BANK.patterns[PATS[pat]].label) + '</div>' +
+    : esc(ex.slice(0, k)) + '<span class="gap" id="gap' + idx + '"></span>' + esc(ex.slice(k + sf.length));
+  /* "card q": .card is the same paper-and-shadow object Browse's nodes
+     already use, so each question is a card in its own right rather than a
+     row inside one — .q stays too, since the picks/gap/done/miss rules
+     below are still scoped to it. */
+  return '<div class="card poster q" id="q' + idx + '">' +
+    '<div class="kick"><i></i>' + esc(BANK.patterns[PATS[pat]].label) + '</div>' +
     '<h2 class="node">' + esc(it.node) + '</h2>' +
-    '<div class="poster-sub">' + esc(it.pos) + '</div>' +
     '<div class="stem">' + stem + '</div>' +
     '<div class="picks">' + it.options.map(function (o, j) {
-      return '<button class="pick" type="button" data-o="' + j + '">' + esc(o) + '</button>';
+      return '<button class="pick" type="button" data-i="' + idx + '" data-o="' + j + '">' + esc(o) + '</button>';
     }).join('') + '</div>' +
-    '<div class="why-note" id="why"></div>' +
-  '</div></div>';
+    '<div class="why-note" id="why' + idx + '"></div>' +
+  '</div>';
 }
 
 function renderPractice() {
-  if (here >= items.length) { finish(); return; }
+  /* No outer wrapping card any more — ten independent cards, stacked with a
+     gap, the same arrangement .bank already uses for Browse's node list. */
   $('board').className = 'board quiz';
-  $('board').innerHTML = qHTML(items[here]);
+  $('board').innerHTML = items.map(qHTML).join('');
   $('board').querySelectorAll('.pick').forEach(function (b) {
-    b.addEventListener('click', function () { answer(+b.dataset.o); });
+    b.addEventListener('click', function () { selectOption(+b.dataset.i, +b.dataset.o); });
   });
   $('actionBar').style.display = 'flex';
-  $('checkBtn').textContent = 'Next';
+  $('checkBtn').style.display = '';
+  $('checkBtn').textContent = 'Check';
   $('checkBtn').disabled = true;
+  $('checkBtn').onclick = checkAnswers;
   updateTally();
 }
 
-/* ── MARKED THE MOMENT IT IS ANSWERED ────────────────────────────────────
-   Ten questions checked at the end is a worksheet: by the time the reason
-   for question three arrives it is an abstraction. Answered one at a time,
-   the correction lands while the choice is still warm — which is the whole
-   argument Sort makes, and the reason the avoid notes are worth writing. */
-function answer(oi) {
-  if (marked) return;
-  var it = items[here], got = it.options[oi], ok = got === it.answer;
-  marked = true;
-  results[here] = ok;
-  if (ok) score++;
+/* ── SELECT: A CHOICE, NOT YET A VERDICT ─────────────────────────────────
+   Tapping a pick only records it. Tapping the SAME pick again clears it —
+   the only way back for a student who changed their mind — and tapping a
+   different one in the same question just moves the mark, the way choosing
+   again on a multiple-choice sheet does. Nothing here is correct or wrong
+   yet; that only exists after Check. */
+function selectOption(idx, oi) {
+  if (isChecked) return;
+  picks[idx] = (picks[idx] === oi) ? undefined : oi;
+  paintPick(idx);
+  updateTally();
+}
 
-  var q = $('q'), card = $('card');
-  q.classList.add('done'); if (!ok) q.classList.add('miss');
-  /* The gap ends up holding the RIGHT partner on a correct answer and the
-     chosen one on a wrong answer, struck through — so the student sees what
-     they wrote and what was wanted, rather than one instead of the other. */
-  $('gap').textContent = ok ? it.surface : got;
-  $('board').querySelectorAll('.pick').forEach(function (b) {
-    b.disabled = true;
-    var w = it.options[+b.dataset.o];
-    if (w === it.answer) b.classList.add('is-answer');
-    else if (w === got) b.classList.add('is-wrong');
+function paintPick(idx) {
+  var q = $('q' + idx);
+  q.querySelectorAll('.pick').forEach(function (b) {
+    b.classList.toggle('picked', +b.dataset.o === picks[idx]);
   });
-
-  var note = $('why');
-  if (!ok) {
-    note.innerHTML = it.why[got]
-      ? '<b>' + esc(got) + '</b> — ' + esc(it.why[got])
-      : '<b>' + esc(it.answer) + '</b> is the partner here.';
-    note.classList.add('show');
-  } else if (it.why[it.answer]) {
-    note.classList.add('show');
-    note.innerHTML = esc(it.why[it.answer]);
-  }
-
-  card.classList.add(ok ? 'pop' : 'shake');
-  snd(ok ? 'correct' : 'wrong');
-  $('checkBtn').disabled = false;
-  $('checkBtn').textContent = (here === items.length - 1) ? 'See score' : 'Next';
-  updateTally();
-}
-
-function next() {
-  if (!marked) return;
-  here++; marked = false;
-  renderPractice();
-  var el = document.scrollingElement || document.body;
-  try { el.scrollTo({ top:0, behavior:'smooth' }); } catch (e) { el.scrollTop = 0; }
 }
 
 function updateTally() {
-  $('tally').textContent = Math.min(here + 1, items.length) + '/' + items.length;
+  var done = picks.filter(function (p) { return p !== undefined; }).length;
+  $('tally').textContent = done + '/' + items.length;
   $('dots').innerHTML = items.map(function (_, i) {
     var c = 'dot';
-    if (results[i] === true) c += ' answered';
-    else if (results[i] === false) c += ' answered miss';
-    else if (i === here) c += ' here';
+    if (isChecked) { if (results[i] === true) c += ' answered'; else if (results[i] === false) c += ' answered miss'; }
+    else if (picks[i] !== undefined) c += ' answered';
     return '<div class="' + c + '"></div>';
   }).join('');
+  /* Locked until every question has a pick — a test marked at 3/10 writes a
+     score the other seven never earned. The button says what is missing
+     rather than just refusing. */
+  var left = items.length - done;
+  var btn = $('checkBtn');
+  if (!isChecked) {
+    btn.disabled = left > 0;
+    btn.title = left > 0 ? left + (left === 1 ? ' question left' : ' questions left') : 'Mark the set';
+  }
+}
+
+/* ── CHECK MARKS EVERY QUESTION AT ONCE ──────────────────────────────────
+   Only reachable once every pick is made (see updateTally). Belt and
+   braces: this is the function that writes a permanent score, so it does
+   not trust the disabled state alone. */
+function checkAnswers() {
+  var done = picks.filter(function (p) { return p !== undefined; }).length;
+  if (done < items.length || isChecked) return;
+  isChecked = true;
+  score = 0;
+
+  items.forEach(function (it, idx) {
+    var got = it.options[picks[idx]], ok = got === it.answer;
+    results[idx] = ok;
+    if (ok) score++;
+
+    var q = $('q' + idx);
+    q.classList.add('done'); if (!ok) q.classList.add('miss');
+    /* The gap ends up holding the RIGHT partner on a correct answer and the
+       chosen one on a wrong answer, struck through — so the student sees
+       what they wrote and what was wanted, rather than one instead of the
+       other. */
+    $('gap' + idx).textContent = ok ? it.surface : got;
+    q.querySelectorAll('.pick').forEach(function (b) {
+      b.disabled = true;
+      b.classList.remove('picked');
+      var w = it.options[+b.dataset.o];
+      if (w === it.answer) b.classList.add('is-answer');
+      else if (w === got) b.classList.add('is-wrong');
+    });
+
+    var note = $('why' + idx);
+    if (!ok) {
+      note.innerHTML = it.why[got]
+        ? '<b>' + esc(got) + '</b> — ' + esc(it.why[got])
+        : '<b>' + esc(it.answer) + '</b> is the partner here.';
+      note.classList.add('show');
+    } else if (it.why[it.answer]) {
+      note.classList.add('show');
+      note.innerHTML = esc(it.why[it.answer]);
+    }
+    q.classList.add(ok ? 'pop' : 'shake');
+  });
+
+  updateTally();
+  finish();
 }
 
 function finish() {
@@ -262,23 +310,27 @@ function finish() {
   try { localStorage.setItem(SCORE_KEY, JSON.stringify(scores)); } catch (e) {}
   buildTabs();
   snd(score === items.length ? 'fanfare' : (score >= items.length / 2 ? 'correct' : 'wrong'));
-  $('board').className = 'board quiz';
-  $('board').innerHTML = '<div class="poster">' +
+
+  /* Prepended above the ten marked questions, not in place of them — every
+     answer and its correction is still on screen below the score. */
+  $('board').insertAdjacentHTML('afterbegin',
     '<div class="score-banner' + (score === items.length ? ' clean' : '') + '">' +
     '<div class="score-text">' + score + '/' + items.length + '</div>' +
-    '<div class="score-label">' + pct + '% correct</div></div></div>';
-  $('checkBtn').textContent = 'Again';
-  $('checkBtn').disabled = false;
-  $('checkBtn').onclick = function () { show(); };
+    '<div class="score-label">' + pct + '% correct</div></div>');
+
+  $('checkBtn').disabled = true;
+  $('clearBtn').textContent = 'Try again';
+
+  var el = document.scrollingElement || document.body;
+  try { el.scrollTo({ top:0, behavior:'smooth' }); } catch (e) { el.scrollTop = 0; }
 }
 
 /* ═══ MODES ═════════════════════════════════════════════════════════════ */
 function show() {
-  here = 0; marked = false; score = 0; results = [];
+  picks = []; isChecked = false; score = 0; results = [];
   $('clearBtn').textContent = 'New set';
-  $('checkBtn').onclick = next;
   if (mode === 'browse') { renderBrowse(); $('dots').innerHTML = ''; }
-  else { buildItems(); renderPractice(); }
+  else { buildItems(); renderPractice(); }   /* renderPractice binds checkBtn itself */
   var el = document.scrollingElement || document.body;
   try { el.scrollTo({ top:0, behavior:'smooth' }); } catch (e) { el.scrollTop = 0; }
 }
@@ -298,7 +350,6 @@ document.querySelectorAll('.mode-btn[data-mode]').forEach(function (b) {
 });
 
 $('clearBtn').onclick = function () { show(); };
-$('checkBtn').onclick = next;
 
 load();
 })();

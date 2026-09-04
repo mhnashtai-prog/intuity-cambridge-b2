@@ -64,25 +64,26 @@
   .road-lead{max-width:520px;margin:0 auto 1.6rem;text-align:center;}
   .road-lead .lead-row{margin-bottom:.6rem;}
 
-  /* ---- Roadmap: 4-across snake board ---- */
+  /* ---- Roadmap: 4-across snake board with apex pills on the loops ---- */
   .roadmap{position:relative;max-width:420px;margin:0 auto;padding:.4rem 0 2rem;}
   .roadPath{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;}
   .roadPath .road{fill:none;stroke:var(--rule);stroke-width:2.5;stroke-linecap:round;}
   .roadPath .roadDot{fill:var(--board);stroke:var(--sage-l);stroke-width:2;}
-   .roadPath .loopRing{fill:none;stroke:var(--sage-l);stroke-width:2;}
+  .roadPath .loopRing{fill:none;stroke:var(--sage-l);stroke-width:2;}
 
   .roadRow{position:relative;display:flex;justify-content:space-between;align-items:flex-start;
     padding:0 .1rem;margin-bottom:1.08rem;}
   .roadRow.rev{flex-direction:row-reverse;}
-#roadApexLayer{position:absolute;inset:0;pointer-events:none;}
-#roadApexLayer .stop-apex{pointer-events:auto;}
-.stop.stop-apex{
-  position:absolute;width:auto;max-width:96px;
-  transform:translate(-50%,-50%);
-  opacity:0;transition:opacity .25s ease, transform .18s cubic-bezier(.22,1,.36,1);
-}
-.stop.stop-apex:hover{ transform:translate(-50%,-50%) scale(1.05); }
-.stop.stop-apex:active{ transform:translate(-50%,-50%) scale(.96); }
+
+  #roadApexLayer{position:absolute;inset:0;pointer-events:none;}
+  #roadApexLayer .stop-apex{pointer-events:auto;}
+  .stop.stop-apex{
+    position:absolute;width:auto;max-width:96px;
+    transform:translate(-50%,-50%);
+    opacity:0;transition:opacity .25s ease, transform .18s cubic-bezier(.22,1,.36,1);}
+  .stop.stop-apex:hover{ transform:translate(-50%,-50%) scale(1.05); }
+  .stop.stop-apex:active{ transform:translate(-50%,-50%) scale(.96); }
+
   .stop{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;
     width:23%;border:none;background:none;cursor:pointer;padding:0;
     font-family:inherit;color:inherit;text-align:center;
@@ -436,8 +437,213 @@
 let CORPUS = {};
 let FAM_ORDER=['evaluating','reasoning','positioning','projecting','relating'];
 
-/* How many stops sit in one row of the road before it turns. */
+/* How many stops sit in one row of the road before it turns, and how many
+   moves make up one full cycle (4 in the row + 1 sitting on the loop apex). */
 const ROW_SIZE = 4;
+const CYCLE = ROW_SIZE + 1;
+
+function frameOf(stem){
+  const s=stem.trim().toLowerCase();
+  if(/^(in my|from my|to my|as far as|as i see|personally|in general|by and large|broadly|on the whole|generally|more often|as a rule|in most)/.test(s)) return 'adverbial phrase';
+  if(/\bthat\s*…?$/.test(s) || /\bthat\b/.test(s)) return 'clause frame';
+  if(/^(this|it|there|one|a |the )/.test(s)) return 'noun-phrase frame';
+  if(/,\s*…?$/.test(s)) return 'sentence opener';
+  return 'set phrase';
+}
+
+function adaptV2(data){
+  const out={};
+  for(const [k,c] of Object.entries(data.categories||{})){
+    if(c.hidden) continue;
+    out[k]={ name:c.label, purpose:c.note||'', functions:{} };
+  }
+  for(const [fid,fn] of Object.entries(data.functions||{})){
+    if(fn.hidden || !out[fn.category]) continue;
+    const cat=fn.category;
+    out[cat].functions[fid]={
+      label: fn.label,
+      tasks: fn.tasks || [],
+      when: fn.when || 'to use this move',
+      yield: (fn.phrases||[]).length,
+      convention: fn.convention || null,
+      graded: (fn.phrases||[]).some(p=>p.register),
+      prec: null,
+      capsule: (fn.phrases||[]).map(p=>({
+        stem: p.t, tail: p.connector || '', register: p.register || null,
+        frame: frameOf(p.t)
+      }))
+    };
+  }
+  return out;
+}
+
+function adaptCorpus(data){
+  if(data && data.functions && !Array.isArray(data.functions)) return adaptV2(data);
+  const out={};
+  for(const [famKey,fam] of Object.entries(data.families)){
+    out[famKey]={ name:fam.label, purpose:fam.purpose, functions:{} };
+  }
+  for(const fn of data.functions){
+    const famKey=fn.family;
+    if(!out[famKey]) continue;
+    out[famKey].functions[fn.id]={
+      label: fn.label,
+      when: fn.when || 'to use this move',
+      yield: fn.phrases.length,
+      prec: fn.expanded || null,
+      capsule: fn.phrases.map(p=>({
+        stem: p.stem,
+        tail: p.connector,
+        frame: frameOf(p.stem)
+      }))
+    };
+  }
+  return out;
+}
+
+let path={family:null, fn:null};
+
+function hueFor(fam){ return ['var(--sage)','var(--sage-d)']; }
+const hue = fam => hueFor(fam);
+
+function regBar(fn){
+  const n={informal:0,neutral:0,formal:0};
+  fn.capsule.forEach(p=>{ if(p.register && n[p.register]!==undefined) n[p.register]++; });
+  const t=n.informal+n.neutral+n.formal;
+  if(!t) return '';
+  const seg=(k,cls)=> n[k]?`<span class="rb-seg ${cls}" style="flex:${n[k]}"></span>`:'';
+  return `<span class="fbadge-bar" aria-label="${n.informal} informal, ${n.neutral} neutral, ${n.formal} formal">${
+    seg('informal','rb-i')}${seg('neutral','rb-n')}${seg('formal','rb-f')}</span>`;
+}
+
+function totalMoves(){
+  return FAM_ORDER.reduce((s,f)=> s+Object.keys(CORPUS[f].functions).length, 0);
+}
+
+/* Flatten every function across every family into a single ordered list.
+   Family order is preserved (FAM_ORDER), so within-family neighbours
+   (e.g. Advantages → Disadvantages) still land next to each other on
+   the path — we just no longer show or gate on the family wrapper. */
+function flattenFunctions(){
+  const list=[];
+  FAM_ORDER.forEach(fam=>{
+    Object.entries(CORPUS[fam].functions).forEach(([k,fn])=>{
+      list.push({ fam, k, fn });
+    });
+  });
+  return list;
+}
+
+/* Renders one stop button. Row stops sit in normal flex flow; the apex
+   stop is absolutely positioned later, once we know where the curve's
+   midpoint actually falls (see drawRoadPath). */
+function stopHTML(item, idx, isApex, turn){
+  const {fam,k,fn}=item;
+  return `<button class="stop${isApex?' stop-apex':''}" data-i="${idx}"${isApex?` data-turn="${turn}"`:''} onclick="openFn('${fam}','${k}')">
+      <span class="stop-dial"><span>${idx+1}</span></span>
+      <span class="stop-name">${fn.label||cap(k)}</span>
+      <span class="stop-count">${fn.yield} expr.</span>
+    </button>`;
+}
+
+function buildRoad(){
+  const flat=flattenFunctions();
+
+  const totalEl=document.getElementById('leadTotal');
+  if(totalEl) totalEl.textContent=flat.length;
+
+  const rowsEl=document.getElementById('roadRows');
+  const groups=[];
+  for(let i=0;i<flat.length;i+=CYCLE) groups.push(flat.slice(i,i+CYCLE));
+
+  let rowsHtml='', apexHtml='';
+  groups.forEach((group,gi)=>{
+    const reversed = gi % 2 === 1;
+    const rowItems = group.slice(0,ROW_SIZE);
+    const apexItem = group.length>ROW_SIZE ? group[ROW_SIZE] : null;
+
+    rowsHtml += `<div class="roadRow${reversed?' rev':''}">`;
+    rowItems.forEach((item,ci)=>{
+      rowsHtml += stopHTML(item, gi*CYCLE+ci, false);
+    });
+    rowsHtml += `</div>`;
+
+    if(apexItem) apexHtml += stopHTML(apexItem, gi*CYCLE+ROW_SIZE, true, gi);
+  });
+  rowsEl.innerHTML=rowsHtml;
+
+  let apexLayer=document.getElementById('roadApexLayer');
+  if(!apexLayer){
+    apexLayer=document.createElement('div');
+    apexLayer.id='roadApexLayer';
+    document.getElementById('roadmap').appendChild(apexLayer);
+  }
+  apexLayer.innerHTML=apexHtml;
+
+  requestAnimationFrame(drawRoadPath);
+}
+
+/* Draws the snake path: a straight segment between neighbouring stops
+   in the same row, and a true semicircular loop at every row turn —
+   bulging toward whichever side the path arrives on (left or right).
+   The loop's apex point is also used to position the 5th "apex" stop
+   for that turn, and a small ring marks the same spot on the path. */
+function drawRoadPath(){
+  const svg=document.getElementById('roadPath');
+  const map=document.getElementById('roadmap');
+  const mapRect=map.getBoundingClientRect();
+  const dials=[...map.querySelectorAll('.roadRow .stop-dial')];
+  if(!dials.length){ svg.innerHTML=''; return; }
+  const pts=dials.map(d=>{
+    const r=d.getBoundingClientRect();
+    return { x: r.left + r.width/2 - mapRect.left, y: r.top + r.height/2 - mapRect.top };
+  });
+
+  let loopRings=[];
+  let d='M '+pts[0].x.toFixed(1)+' '+pts[0].y.toFixed(1);
+
+  for(let i=1;i<pts.length;i++){
+    const a=pts[i-1], b=pts[i];
+    const sameRow = Math.abs(a.y-b.y) < 4;
+
+    if(sameRow){
+      d += ` L ${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
+      continue;
+    }
+
+    /* Row turn: a cubic Bézier bulge approximating a true semicircle.
+       The (2/3)·h offset (h = vertical gap) is the standard construction
+       for a single cubic Bézier tracing a semicircular arc. */
+    const onRight = a.x > mapRect.width/2;
+    const sign = onRight ? 1 : -1;
+    const bulge = Math.abs(b.y - a.y) * 0.667;
+    const cx1 = a.x+sign*bulge, cy1 = a.y;
+    const cx2 = b.x+sign*bulge, cy2 = b.y;
+
+    d += ` C ${cx1.toFixed(1)} ${cy1.toFixed(1)}, `+
+         `${cx2.toFixed(1)} ${cy2.toFixed(1)}, `+
+         `${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
+
+    // apex point at t = 0.5 on this Bézier segment
+    const apexX = 0.125*a.x + 0.375*cx1 + 0.375*cx2 + 0.125*b.x;
+    const apexY = 0.125*a.y + 0.375*cy1 + 0.375*cy2 + 0.125*b.y;
+    loopRings.push({x:apexX, y:apexY});
+  }
+
+  let inner=`<path class="road" d="${d}"/>`;
+  pts.forEach(p=>{ inner += `<circle class="roadDot" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4"/>`; });
+  loopRings.forEach(p=>{ inner += `<circle class="loopRing" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="6"/>`; });
+  svg.innerHTML=inner;
+
+  loopRings.forEach((p,t)=>{
+    const el=map.querySelector(`.stop-apex[data-turn="${t}"]`);
+    if(el){ el.style.left=p.x+'px'; el.style.top=p.y+'px'; el.style.opacity='1'; }
+  });
+}
+window.addEventListener('resize',()=>{
+  if(document.getElementById('viewFamilies').classList.contains('active')) drawRoadPath();
+});
+
 function openFamilyPanel(fam){
   const F=CORPUS[fam];
   const idx=FAM_ORDER.indexOf(fam);

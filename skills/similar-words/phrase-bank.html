@@ -348,7 +348,7 @@
 <header class="header">
   <a class="back-link" href="/?openModal=vocabulary" id="backLink" onclick="return smartBack(event)">← Back</a>
   <div class="brand"><span class="brand-t">Phrase Bank</span><span class="brand-s">Functional Language</span></div>
-  <span class="crumb" id="crumb" onclick="goBack()">↑ All families</span>
+  <span class="crumb" id="crumb" onclick="goBack()">↑ All moves</span>
 </header>
 
 <div class="stage">
@@ -497,26 +497,41 @@ function totalMoves(){
   return FAM_ORDER.reduce((s,f)=> s+Object.keys(CORPUS[f].functions).length, 0);
 }
 
+/* Flatten every function across every family into a single ordered list.
+   Family order is preserved (FAM_ORDER), so within-family neighbours
+   (e.g. Advantages → Disadvantages) still land next to each other on
+   the path — we just no longer show or gate on the family wrapper. */
+function flattenFunctions(){
+  const list=[];
+  FAM_ORDER.forEach(fam=>{
+    Object.entries(CORPUS[fam].functions).forEach(([k,fn])=>{
+      list.push({ fam, k, fn });
+    });
+  });
+  return list;
+}
+
 function buildRoad(){
+  const flat=flattenFunctions();
+
   const totalEl=document.getElementById('leadTotal');
-  if(totalEl) totalEl.textContent=totalMoves();
+  if(totalEl) totalEl.textContent=flat.length;
 
   const rowsEl=document.getElementById('roadRows');
-  const n=FAM_ORDER.length;
   const rows=[];
-  for(let i=0;i<n;i+=2) rows.push(FAM_ORDER.slice(i,i+2));
+  for(let i=0;i<flat.length;i+=2) rows.push(flat.slice(i,i+2));
 
   let html='';
   rows.forEach((row,ri)=>{
     const reversed = ri % 2 === 1;
     html += `<div class="roadRow${reversed?' rev':''}">`;
-    row.forEach((fam,ci)=>{
+    row.forEach((item,ci)=>{
       const idx = ri*2 + ci;
-      const count=Object.keys(CORPUS[fam].functions).length;
-      html += `<button class="stop" data-i="${idx}" onclick="openFamilyPanel('${fam}')">
+      const {fam,k,fn}=item;
+      html += `<button class="stop" data-i="${idx}" onclick="openFn('${fam}','${k}')">
           <span class="stop-dial"><span>${idx+1}</span></span>
-          <span class="stop-name">${CORPUS[fam].name}</span>
-          <span class="stop-count">${count} function${count===1?'':'s'}</span>
+          <span class="stop-name">${fn.label||cap(k)}</span>
+          <span class="stop-count">${fn.yield} expr.</span>
         </button>`;
     });
     html += `</div>`;

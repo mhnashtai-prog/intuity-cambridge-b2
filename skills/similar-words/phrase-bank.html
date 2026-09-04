@@ -72,9 +72,17 @@
    .roadPath .loopRing{fill:none;stroke:var(--sage-l);stroke-width:2;}
 
   .roadRow{position:relative;display:flex;justify-content:space-between;align-items:flex-start;
-    padding:0 .1rem;margin-bottom:1.8rem;}
+    padding:0 .1rem;margin-bottom:1.08rem;}
   .roadRow.rev{flex-direction:row-reverse;}
-
+#roadApexLayer{position:absolute;inset:0;pointer-events:none;}
+#roadApexLayer .stop-apex{pointer-events:auto;}
+.stop.stop-apex{
+  position:absolute;width:auto;max-width:96px;
+  transform:translate(-50%,-50%);
+  opacity:0;transition:opacity .25s ease, transform .18s cubic-bezier(.22,1,.36,1);
+}
+.stop.stop-apex:hover{ transform:translate(-50%,-50%) scale(1.05); }
+.stop.stop-apex:active{ transform:translate(-50%,-50%) scale(.96); }
   .stop{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;
     width:23%;border:none;background:none;cursor:pointer;padding:0;
     font-family:inherit;color:inherit;text-align:center;
@@ -116,14 +124,14 @@
     .stop-dial{--d:38px;font-size:.68rem;}
     .stop-name{font-size:.5rem;margin-top:.3rem;}
     .stop-count{font-size:.4rem;margin-top:.1rem;}
-    .roadRow{margin-bottom:.595rem;}
+    .roadRow{margin-bottom:.357rem;}
   }
   @media(max-width:360px){
     .roadmap{max-width:300px;}
     .stop-dial{--d:34px;font-size:.62rem;}
     .stop-name{font-size:.46rem;margin-top:.24rem;}
     .stop-count{font-size:.38rem;}
-    .roadRow{margin-bottom:.495rem;}
+    .roadRow{margin-bottom:.297rem;}
   }
 
   .fpanelWrap{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;
@@ -430,179 +438,6 @@ let FAM_ORDER=['evaluating','reasoning','positioning','projecting','relating'];
 
 /* How many stops sit in one row of the road before it turns. */
 const ROW_SIZE = 4;
-
-function frameOf(stem){
-  const s=stem.trim().toLowerCase();
-  if(/^(in my|from my|to my|as far as|as i see|personally|in general|by and large|broadly|on the whole|generally|more often|as a rule|in most)/.test(s)) return 'adverbial phrase';
-  if(/\bthat\s*…?$/.test(s) || /\bthat\b/.test(s)) return 'clause frame';
-  if(/^(this|it|there|one|a |the )/.test(s)) return 'noun-phrase frame';
-  if(/,\s*…?$/.test(s)) return 'sentence opener';
-  return 'set phrase';
-}
-
-function adaptV2(data){
-  const out={};
-  for(const [k,c] of Object.entries(data.categories||{})){
-    if(c.hidden) continue;
-    out[k]={ name:c.label, purpose:c.note||'', functions:{} };
-  }
-  for(const [fid,fn] of Object.entries(data.functions||{})){
-    if(fn.hidden || !out[fn.category]) continue;
-    const cat=fn.category;
-    out[cat].functions[fid]={
-      label: fn.label,
-      tasks: fn.tasks || [],
-      when: fn.when || 'to use this move',
-      yield: (fn.phrases||[]).length,
-      convention: fn.convention || null,
-      graded: (fn.phrases||[]).some(p=>p.register),
-      prec: null,
-      capsule: (fn.phrases||[]).map(p=>({
-        stem: p.t, tail: p.connector || '', register: p.register || null,
-        frame: frameOf(p.t)
-      }))
-    };
-  }
-  return out;
-}
-
-function adaptCorpus(data){
-  if(data && data.functions && !Array.isArray(data.functions)) return adaptV2(data);
-  const out={};
-  for(const [famKey,fam] of Object.entries(data.families)){
-    out[famKey]={ name:fam.label, purpose:fam.purpose, functions:{} };
-  }
-  for(const fn of data.functions){
-    const famKey=fn.family;
-    if(!out[famKey]) continue;
-    out[famKey].functions[fn.id]={
-      label: fn.label,
-      when: fn.when || 'to use this move',
-      yield: fn.phrases.length,
-      prec: fn.expanded || null,
-      capsule: fn.phrases.map(p=>({
-        stem: p.stem,
-        tail: p.connector,
-        frame: frameOf(p.stem)
-      }))
-    };
-  }
-  return out;
-}
-
-let path={family:null, fn:null};
-
-function hueFor(fam){ return ['var(--sage)','var(--sage-d)']; }
-const hue = fam => hueFor(fam);
-
-function regBar(fn){
-  const n={informal:0,neutral:0,formal:0};
-  fn.capsule.forEach(p=>{ if(p.register && n[p.register]!==undefined) n[p.register]++; });
-  const t=n.informal+n.neutral+n.formal;
-  if(!t) return '';
-  const seg=(k,cls)=> n[k]?`<span class="rb-seg ${cls}" style="flex:${n[k]}"></span>`:'';
-  return `<span class="fbadge-bar" aria-label="${n.informal} informal, ${n.neutral} neutral, ${n.formal} formal">${
-    seg('informal','rb-i')}${seg('neutral','rb-n')}${seg('formal','rb-f')}</span>`;
-}
-
-function totalMoves(){
-  return FAM_ORDER.reduce((s,f)=> s+Object.keys(CORPUS[f].functions).length, 0);
-}
-
-/* Flatten every function across every family into a single ordered list.
-   Family order is preserved (FAM_ORDER), so within-family neighbours
-   (e.g. Advantages → Disadvantages) still land next to each other on
-   the path — we just no longer show or gate on the family wrapper. */
-function flattenFunctions(){
-  const list=[];
-  FAM_ORDER.forEach(fam=>{
-    Object.entries(CORPUS[fam].functions).forEach(([k,fn])=>{
-      list.push({ fam, k, fn });
-    });
-  });
-  return list;
-}
-
-function buildRoad(){
-  const flat=flattenFunctions();
-
-  const totalEl=document.getElementById('leadTotal');
-  if(totalEl) totalEl.textContent=flat.length;
-
-  const rowsEl=document.getElementById('roadRows');
-  const rows=[];
-  for(let i=0;i<flat.length;i+=ROW_SIZE) rows.push(flat.slice(i,i+ROW_SIZE));
-
-  let html='';
-  rows.forEach((row,ri)=>{
-    const reversed = ri % 2 === 1;
-    html += `<div class="roadRow${reversed?' rev':''}">`;
-    row.forEach((item,ci)=>{
-      const idx = ri*ROW_SIZE + ci;
-      const {fam,k,fn}=item;
-      html += `<button class="stop" data-i="${idx}" onclick="openFn('${fam}','${k}')">
-          <span class="stop-dial"><span>${idx+1}</span></span>
-          <span class="stop-name">${fn.label||cap(k)}</span>
-          <span class="stop-count">${fn.yield} expr.</span>
-        </button>`;
-    });
-    html += `</div>`;
-  });
-  rowsEl.innerHTML=html;
-
-  requestAnimationFrame(drawRoadPath);
-}
-
-/* Draws the snake path: a straight segment between neighbouring stops
-   in the same row, and a true semicircular loop at every row turn —
-   bulging toward whichever side the path arrives on (left or right). */
-function drawRoadPath(){
-  const svg=document.getElementById('roadPath');
-  const map=document.getElementById('roadmap');
-  const mapRect=map.getBoundingClientRect();
-  const dials=[...map.querySelectorAll('.stop-dial')];
-  if(!dials.length){ svg.innerHTML=''; return; }
-  const pts=dials.map(d=>{
-    const r=d.getBoundingClientRect();
-    return { x: r.left + r.width/2 - mapRect.left, y: r.top + r.height/2 - mapRect.top };
-  });
-
-  let loopRings=[];
-  let d='M '+pts[0].x.toFixed(1)+' '+pts[0].y.toFixed(1);
-
-  for(let i=1;i<pts.length;i++){
-    const a=pts[i-1], b=pts[i];
-    const sameRow = Math.abs(a.y-b.y) < 4;
-
-    if(sameRow){
-      d += ` L ${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
-      continue;
-    }
-
-    const onRight = a.x > mapRect.width/2;
-    const sign = onRight ? 1 : -1;
-    const bulge = Math.abs(b.y - a.y) * 0.667;
-    const cx1 = a.x+sign*bulge, cy1 = a.y;
-    const cx2 = b.x+sign*bulge, cy2 = b.y;
-
-    d += ` C ${cx1.toFixed(1)} ${cy1.toFixed(1)}, `+
-         `${cx2.toFixed(1)} ${cy2.toFixed(1)}, `+
-         `${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
-
-    const apexX = 0.125*a.x + 0.375*cx1 + 0.375*cx2 + 0.125*b.x;
-    const apexY = 0.125*a.y + 0.375*cy1 + 0.375*cy2 + 0.125*b.y;
-    loopRings.push({x:apexX, y:apexY});
-  }
-
-  let inner=`<path class="road" d="${d}"/>`;
-  pts.forEach(p=>{ inner += `<circle class="roadDot" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4"/>`; });
-  loopRings.forEach(p=>{ inner += `<circle class="loopRing" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="6"/>`; });
-  svg.innerHTML=inner;
-}
-window.addEventListener('resize',()=>{
-  if(document.getElementById('viewFamilies').classList.contains('active')) drawRoadPath();
-});
-
 function openFamilyPanel(fam){
   const F=CORPUS[fam];
   const idx=FAM_ORDER.indexOf(fam);

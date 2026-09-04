@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>INTUITY — Phrase Bank</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500&family=Anton&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<!-- Tokens only. This page keeps its own layout — the constellation is a
+     teaching surface, not a document — but it stops owning its own colours
+     and type, which is what made it read as a different product. -->
+<link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=7">
+<style>
+  *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+  :root{
+    --board:#EBE8E1;
+    --gold:var(--accent-ink);
+    --sage:#527065; --sage-d:#456055; --sage-l:#7C9A8E;
+    --evaluating:var(--caramel);   --evaluating-d:var(--sage-d);
+    --reasoning:var(--caramel);    --reasoning-d:var(--sage-d);
+    --positioning:var(--caramel);  --positioning-d:var(--sage-d);
+    --projecting:var(--caramel);   --projecting-d:var(--sage-d);
+    --relating:var(--caramel);     --relating-d:var(--sage-d);
+    --ink:#14110E; --stance:#5C5852;
+  }
+  html,body{width:100%;height:100%;background:var(--board);overflow:hidden;}
+  body{font-family:var(--f-body);color:var(--paper);-webkit-tap-highlight-color:transparent;}
+
+  .header{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;
+    justify-content:space-between;padding:.7rem 1.15rem;height:52px;
+    background:var(--board);border-bottom:1px solid var(--rule);}
+  .brand{display:flex;flex-direction:column;gap:1px;}
+  .brand-t{font-family:var(--f-display);font-weight:800;font-size:.9rem;letter-spacing:-.01em;}
+  .brand-s{font-size:.5rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);}
+  .back-link{position:absolute;left:1.15rem;text-decoration:none;font-family:var(--f-display);
+    font-size:.58rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);}
+  .back-link:hover{color:var(--paper);}
+  .header .brand{margin:0 auto;align-items:center;}
+  .crumb{position:absolute;right:1.15rem;font-family:var(--f-display);font-size:.56rem;
+    font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--sage-d);cursor:pointer;
+    opacity:0;transition:opacity .2s;pointer-events:none;}
+  .crumb.show{opacity:1;pointer-events:auto;}
+  .crumb:hover{color:var(--ink);}
+
+  .stage{position:fixed;top:52px;left:0;right:0;bottom:0;overflow-y:auto;
+    scrollbar-width:thin;scrollbar-color:var(--rule) transparent;}
+  .stage::-webkit-scrollbar{width:5px;} .stage::-webkit-scrollbar-thumb{background:var(--rule);border-radius:3px;}
+  .stage.no-scroll{overflow:hidden;}
+  .wrap{max-width:1180px;margin:0 auto;padding:1.3rem 1.15rem 3rem;}
+  .wrap.full{max-width:none;padding:0;}
+
+  .lead-row{display:flex;flex-wrap:wrap;gap:.5rem;justify-content:center;margin:0 0 1.1rem;}
+  .lead-chip{display:inline-flex;align-items:center;gap:.4rem;
+    font-family:var(--f-display);font-size:.7rem;font-weight:500;
+    letter-spacing:.04em;color:var(--dim);
+    background:var(--tile-bg);border:none;
+    padding:.32rem .8rem;border-radius:2rem;white-space:nowrap;}
+  .lead-chip b{color:var(--ink);font-weight:700;}
+  .lead-bar i{display:inline-block;width:13px;height:4px;border-radius:2px;background:var(--sage);}
+  .lead-bar i:nth-child(1){opacity:.3;} .lead-bar i:nth-child(2){opacity:.6;}
+  .lead-do{color:var(--sage-d);border-color:transparent;background:var(--tile-bg);}
+  .lead{font-size:.8rem;color:var(--faint);font-weight:500;margin:.1rem .3rem 1.15rem;line-height:1.5;max-width:640px;}
+  .cap-inner{max-width:640px;margin:0 auto;}
+
+  .road-lead{max-width:520px;margin:0 auto 1.6rem;text-align:center;}
+  .road-lead .lead-row{margin-bottom:.6rem;}
+
+  /* ---- Roadmap: 4-across snake board with apex pills on the loops ---- */
+  .roadmap{position:relative;max-width:420px;margin:0 auto;padding:.4rem 0 2rem;}
+  .roadPath{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;}
+ .roadPath .road{fill:none;stroke:#D8D4CB;stroke-width:8;stroke-linecap:round;}
+.roadPath .roadDot{fill:var(--board);stroke:var(--sage-l);stroke-width:2;}
+  .roadPath .loopRing{fill:none;stroke:var(--sage-l);stroke-width:2;}
+
+.roadRow{position:relative;display:flex;justify-content:space-between;align-items:flex-start;
+    padding:0;margin-bottom:1.6rem;}
+  .roadRow.rev{flex-direction:row-reverse;}
+     
+  #roadApexLayer{position:absolute;inset:0;pointer-events:none;}
+  #roadApexLayer .stop-apex{pointer-events:auto;}
+  .stop.stop-apex{
+    position:absolute;width:auto;max-width:96px;
+    transform:translate(-50%,-50%);
+    opacity:0;transition:opacity .25s ease, transform .18s cubic-bezier(.22,1,.36,1);}
+  .stop.stop-apex:hover{ transform:translate(-50%,-50%) scale(1.05); }
+  .stop.stop-apex:active{ transform:translate(-50%,-50%) scale(.96); }
+
+  .stop{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;
+    width:23%;border:none;background:none;cursor:pointer;padding:0;
+    font-family:inherit;color:inherit;text-align:center;
+    transition:transform .18s cubic-bezier(.22,1,.36,1);}
+  .stop:active{transform:scale(.96);}
+  .stop:focus-visible{outline:2px solid var(--sage);outline-offset:6px;border-radius:999px;}
+     
+ .stop-dial{
+    --d:60px; --bezel:5.6%; --core:16%;
+    width:var(--d);height:var(--d);border-radius:50%;position:relative;flex:none;
+    display:flex;align-items:center;justify-content:center;
+    background:none;
+    box-shadow:none;
+    font-family:'Space Grotesk',var(--f-display,sans-serif);
+    font-weight:700;font-size:1.04rem;letter-spacing:.01em;
+    color:var(--card);font-variant-numeric:tabular-nums;
+    transition:box-shadow .2s,transform .18s cubic-bezier(.22,1,.36,1);}
+  .stop-dial::before{content:'';position:absolute;inset:var(--bezel);border-radius:50%;
+    background:var(--sage);}
+  .stop-dial::after{content:'';position:absolute;inset:var(--core);border-radius:50%;
+    background:rgba(0,0,0,.9);}
+  .stop-dial span{position:relative;z-index:2;}
+  @media(hover:hover){
+    .stop:hover .stop-dial{transform:translateY(-2px);
+      box-shadow:-3px -3px 6px rgba(255,255,255,.9),6px 9px 16px rgba(20,17,14,.2);}
+  }
+
+  .stop-name{margin-top:.55rem;font-family:var(--f-display);font-weight:700;
+    font-size:.62rem;letter-spacing:.01em;color:var(--ink);line-height:1.2;}
+  .stop-count{margin-top:.18rem;font-family:var(--f-mono);font-size:.48rem;font-weight:400;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--faint);}
+
+  .roadTurn{display:none;} /* the loop itself now carries the turn — no separate arrow icon needed */
+
+/* --- Mobile sizing: pills + text scaled up 15%, row spacing reduced 20% --- */
+@media(max-width:480px){
+    .wrap{padding:.7rem .7rem 1rem;}
+    .road-lead{margin-bottom:.8rem;}
+    .roadmap{max-width:230px;padding:.2rem 0 .6rem;}
+    .stop-dial{--d:58.7px;font-size:1.22rem;}
+    .stop-name{font-size:.66rem;margin-top:.3rem;}
+    .stop-count{font-size:.53rem;margin-top:.1rem;}
+    .roadRow{margin-bottom:.72rem;}
+  }
+  @media(max-width:360px){
+    .roadmap{max-width:184px;}
+    .stop-dial{--d:51.8px;font-size:1.09rem;}
+    .stop-name{font-size:.61rem;margin-top:.24rem;}
+    .stop-count{font-size:.51rem;}
+    .roadRow{margin-bottom:.62rem;}
+  }
+
+  .fpanelWrap{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;
+    padding:1.1rem;}
+  .fpanelWrap.open{display:flex;}
+  .fpanel-scrim{position:absolute;inset:0;background:rgba(20,17,14,.4);
+    backdrop-filter:blur(6px);opacity:0;transition:opacity .22s ease;}
+  .fpanelWrap.open .fpanel-scrim{opacity:1;}
+  .fpanel{position:relative;width:min(560px,100%);max-height:82vh;overflow-y:auto;
+    background:var(--card);border-radius:var(--r-sheet);
+    padding:1.7rem 1.5rem 1.5rem;
+    box-shadow:0 24px 60px -18px rgba(20,17,14,.38),0 6px 16px rgba(20,17,14,.14);
+    transform:scale(.95);opacity:0;transition:transform .28s cubic-bezier(.22,1,.36,1),opacity .2s ease;}
+  .fpanelWrap.open .fpanel{transform:scale(1);opacity:1;}
+  .fpanel-x{position:absolute;top:14px;right:14px;border:none;background:none;
+    font-size:1.1rem;color:var(--poster-faint);cursor:pointer;line-height:1;padding:8px;}
+  .fpanel-x:hover{color:var(--poster-ink);}
+  .fpanel-kick{display:flex;align-items:center;gap:9px;margin-bottom:.5rem;}
+  .fpanel-kick i{display:block;width:26px;height:10px;flex:none;background:var(--sage);}
+  .fpanel-kick b{font-family:var(--f-mono);font-size:.56rem;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--poster-faint);}
+  .fpanel h2{font-family:var(--f-display);font-weight:800;font-size:1.35rem;
+    letter-spacing:-.01em;color:var(--poster-ink);margin-bottom:.3rem;}
+  .fpanel-purpose{font-size:.82rem;font-style:italic;color:var(--poster-body);
+    line-height:1.5;margin-bottom:1.3rem;max-width:440px;}
+
+  .fitems{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:1.2rem .8rem;}
+  .fitem{display:flex;flex-direction:column;align-items:center;gap:.55rem;
+    border:none;background:none;font:inherit;color:inherit;cursor:pointer;
+    padding:0;text-align:center;transition:transform .16s cubic-bezier(.22,1,.36,1);}
+  .fitem:active{transform:scale(.94);}
+  .fitem:focus-visible{outline:2px solid var(--sage);outline-offset:4px;border-radius:14px;}
+  .fitem-dial{--d:50px;--bezel:6.5%;--core:18%;width:var(--d);height:var(--d);border-radius:50%;
+    position:relative;flex:none;display:flex;align-items:center;justify-content:center;
+    background:none;
+    box-shadow:none;
+    font-family:'Space Grotesk',var(--f-display,sans-serif);font-weight:500;font-size:.72rem;
+    color:var(--poster-fill);transition:box-shadow .18s,transform .16s cubic-bezier(.22,1,.36,1);}
+  .fitem-dial::before{content:'';position:absolute;inset:var(--bezel);border-radius:50%;background:var(--sage-l);}
+  .fitem-dial::after{content:'';position:absolute;inset:var(--core);border-radius:50%;background:rgba(0,0,0,.9);}
+  .fitem-dial span{position:relative;z-index:2;}
+  @media(hover:hover){ .fitem:hover .fitem-dial{transform:translateY(-2px);} }
+  .fitem-lbl{font-size:.68rem;font-weight:600;line-height:1.25;color:var(--poster-ink);
+    max-width:100%;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .fitem-yield{font-family:var(--f-mono);font-size:.52rem;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--poster-faint);}
+
+  .fitems-guest{margin-top:1.3rem;padding-top:1.2rem;border-top:1px solid var(--poster-rule);}
+  .fitems-guest-name{font-family:var(--f-mono);font-size:.54rem;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--poster-faint);margin-bottom:.7rem;}
+
+  .fn-list{display:flex;flex-direction:column;gap:.55rem;}
+  .fn-tile{position:relative;display:flex;align-items:center;justify-content:space-between;gap:.8rem;
+    border-radius:.85rem;padding:.9rem 1.05rem;cursor:pointer;
+    background:var(--card);border:none;
+    border-left:4px solid var(--fc);transition:transform .16s,background .2s;}
+  .fn-tile:hover{transform:translateX(3px);background:var(--tile-bg-press);}
+  .fn-tile:focus-visible{outline:2px solid var(--fc);outline-offset:2px;}
+  .fn-name{font-family:var(--f-display);font-weight:800;font-size:.82rem;letter-spacing:.04em;
+    text-transform:uppercase;color:var(--card);}
+  .fn-when{font-size:.68rem;font-style:italic;color:var(--faint);margin-top:.15rem;}
+  .fn-yield{flex-shrink:0;font-family:var(--f-display);font-size:.56rem;font-weight:700;
+    letter-spacing:.05em;color:var(--sage-d);background:var(--tile-bg);
+    border:1px solid color-mix(in srgb,var(--fc) 35%,transparent);border-radius:999px;padding:.25rem .6rem;white-space:nowrap;}
+
+  .constellation{position:relative;width:100%;height:calc(100vh - 52px);overflow:hidden;
+    touch-action:none;}
+
+  .q-centre{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;
+    width:min(46%,520px);text-align:center;pointer-events:none;}
+  .q-eyebrow{font-family:var(--f-mono);font-size:.56rem;font-weight:400;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--dim);margin-bottom:.75rem;}
+  .q-text{font-family:'Anton',Impact,var(--f-display),sans-serif;
+    font-weight:400;letter-spacing:.01em;
+    font-size:clamp(1.3rem,2.4vw,1.95rem);line-height:1.18;color:var(--ink);}
+  .q-next{pointer-events:auto;margin-top:1.1rem;font-family:var(--f-display);font-size:.58rem;
+    font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--sage-d);
+    background:var(--tile-bg);
+    border:none;border-radius:var(--r-chip);
+    padding:.5rem 1.1rem;cursor:pointer;transition:background .18s,transform .18s;}
+  .q-next:hover{background:var(--tile-bg-press);transform:translateY(-1px);}
+  .q-controls{display:flex;align-items:center;justify-content:center;gap:.55rem;margin-top:1.1rem;flex-wrap:wrap;}
+  .q-controls .q-next{margin-top:0;}
+  .q-practice{pointer-events:auto;font-family:var(--f-display);font-size:.58rem;font-weight:700;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--dim);
+    background:var(--tile-bg);border:none;border-radius:999px;
+    padding:.5rem 1rem;cursor:pointer;transition:all .18s;}
+  .q-practice:hover{color:var(--ink);border-color:var(--faint);}
+  .q-practice.on{color:var(--card);background:var(--sage-d);border-color:transparent;}
+  .q-further{pointer-events:auto;text-decoration:none;font-family:var(--f-display);font-size:.58rem;
+    font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--sage-d);
+    background:var(--tile-bg);border:none;border-radius:var(--r-chip);
+    padding:.5rem 1rem;transition:all .18s;}
+  .q-further:hover{background:var(--tile-bg-press);transform:translateY(-1px);}
+
+  .gap{display:inline-block;min-width:3.2em;text-align:center;
+    border-bottom:2px solid var(--sage);color:transparent;
+    cursor:pointer;user-select:none;transition:color .2s,border-color .2s;position:relative;}
+  .gap.revealed{color:var(--poster-ink);border-bottom-color:var(--sage);font-weight:600;}
+  .enode.practising{cursor:pointer;}
+  .enode.practising .enode-tail{opacity:.55;}
+
+  .enode{position:absolute;z-index:2;width:270px;
+    background:var(--card);border-radius:var(--r-sheet);
+    padding:2.3rem .95rem .85rem;cursor:grab;transform:translate(-50%,-50%);
+    box-shadow:0 6px 16px -6px rgba(20,17,14,.22),0 2px 5px rgba(20,17,14,.10);
+    transition:box-shadow .18s;
+    user-select:none;-webkit-user-select:none;}
+  .enode:active{cursor:grabbing;}
+  .enode.dragging{box-shadow:0 18px 38px -10px rgba(20,17,14,.32),0 4px 10px rgba(20,17,14,.14);
+    z-index:20;}
+  .enode-banner{position:absolute;top:.85rem;left:.95rem;right:.95rem;
+    display:flex;align-items:center;gap:.5rem;z-index:3;}
+  .enode-banner::before{content:'';display:block;flex:none;
+    width:26px;height:10px;background:var(--sage);order:-1;}
+  .enode-bnum{font-family:var(--f-mono);font-weight:500;font-size:.6rem;
+    color:var(--poster-ink);background:var(--poster-fill);
+    min-width:1.2rem;height:1.2rem;border-radius:var(--r-field);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    padding:0 .3em}
+  .enode-blabel{font-family:var(--f-mono);font-weight:400;font-size:.52rem;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--poster-faint);
+    white-space:nowrap;}
+  .enode-stem{font-family:var(--f-display);font-size:.86rem;font-weight:600;
+    color:var(--poster-ink);line-height:1.38;}
+  .enode-tail{font-size:.72rem;color:var(--poster-body);line-height:1.45;
+    margin-top:.25rem;}
+  .const-hint{position:absolute;bottom:1.1rem;left:50%;transform:translateX(-50%);z-index:4;
+    font-size:.6rem;font-style:italic;color:var(--faint);letter-spacing:.04em;pointer-events:none;
+    transition:opacity .5s;}
+  .const-hint.hidden{opacity:0;}
+
+  .enode.cue-card .enode-tail{display:none;}
+  .enode.cue-card .enode-stem{font-size:.9rem;letter-spacing:.01em;}
+  .enode.cue-card .cue-trigger{display:inline-block;margin-top:.55rem;
+    font-family:var(--f-mono);font-size:.62rem;font-weight:500;letter-spacing:.02em;
+    text-transform:uppercase;color:var(--poster-ink);
+    background:var(--poster-fill);border-radius:var(--r-field);padding:.25rem .6rem;}
+  .enode.cue-card .cue-slash{color:var(--poster-faint);font-weight:400;margin:0 .1rem;}
+  .enode.cue-card{cursor:pointer;}
+  .enode.cue-card{transition:box-shadow .18s,transform .18s;}
+  .enode.cue-card:hover{transform:translate(-50%,-50%) scale(1.03);}
+  .enode.done .enode-banner::before{content:'✓';position:absolute;right:-1.4rem;top:50%;transform:translateY(-50%);
+    font-size:.7rem;color:var(--ok);font-weight:900;}
+  .enode.done{opacity:.7;}
+
+  .cc-overlay{position:absolute;inset:0;z-index:40;display:none;align-items:center;justify-content:center;
+    background:rgba(10,10,12,.72);backdrop-filter:blur(3px);padding:1rem;}
+  .cc-overlay.show{display:flex;animation:ccfade .25s ease;}
+  @keyframes ccfade{from{opacity:0;}to{opacity:1;}}
+  .cc-card{position:relative;width:min(560px,94%);background:var(--card);
+    border-radius:var(--r-sheet);
+    padding:2.7rem 1.7rem 1.5rem;box-shadow:0 24px 60px -18px rgba(20,17,14,.38),0 6px 16px rgba(20,17,14,.14);
+    animation:ccpop .28s cubic-bezier(.22,1,.36,1);}
+  @keyframes ccpop{from{opacity:0;transform:translateY(14px) scale(.97);}to{opacity:1;transform:none;}}
+  .cc-banner{position:static;display:flex;align-items:center;gap:9px;
+    margin-bottom:.5rem;background:none;padding:0;box-shadow:none;}
+  .cc-banner::before{content:'';display:block;flex:none;
+    width:26px;height:10px;background:var(--sage);}
+  .cc-banner::after{content:none;}
+  .cc-blabel{font-family:var(--f-mono);font-weight:400;font-size:.56rem;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--poster-faint);
+    white-space:nowrap;}
+  .cc-task{font-family:var(--f-mono);font-size:.56rem;font-weight:400;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--poster-faint);margin-bottom:1.1rem;}
+  .cc-phrase{display:none;}
+  .cc-phrase.show{display:block;}
+  .cc-stem{font-family:'Anton',Impact,var(--f-display),sans-serif;font-weight:400;
+    letter-spacing:.01em;font-size:clamp(1.4rem,4.6vw,1.95rem);line-height:1.15;
+    color:var(--poster-ink);}
+  .cc-tail{margin-top:.9rem;font-size:1.02rem;line-height:1.55;
+    color:var(--poster-body);}
+  .cc-reg{margin-top:1.1rem;display:none;font-family:var(--f-mono);
+    font-size:.56rem;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--poster-faint);background:var(--poster-fill);
+    border-radius:var(--r-field);padding:.3em .7em;}
+  .cc-reg.show{display:inline-block;}
+
+  .cc-cue{font-family:'Anton',Impact,var(--f-display),sans-serif;font-weight:400;
+    letter-spacing:.01em;font-size:clamp(1.3rem,4.4vw,1.75rem);
+    color:var(--poster-ink);line-height:1.2;}
+  .cc-cue .slash{color:var(--poster-faint);font-weight:400;margin:0 .18rem;}
+  .cc-trigger{display:inline-block;margin-top:1.1rem;font-family:var(--f-mono);
+    font-size:.8rem;font-weight:500;letter-spacing:.02em;
+    color:var(--poster-ink);background:var(--poster-fill);
+    border-radius:var(--r-field);padding:.45em .8em;box-shadow:none;}
+  .cc-answer{width:100%;margin-top:1.3rem;background:var(--poster-fill);border:none;border-radius:var(--r-field);
+    padding:.8rem .9rem;font-family:var(--f-body);font-size:1rem;color:var(--ink);resize:vertical;
+    min-height:3rem;outline:none;transition:border-color .18s;}
+  .cc-answer:focus{border-color:var(--fc);}
+  .cc-reveal{margin-top:1.2rem;padding:1.1rem 1.2rem;border-radius:var(--r-field);display:none;
+    background:var(--poster-fill);border:none;}
+  .cc-reveal.show{display:block;animation:ccfade .25s ease;}
+  .cc-reveal-label{font-family:var(--f-mono);font-size:.56rem;font-weight:400;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--poster-faint);margin-bottom:.5rem;}
+  .cc-reveal-model{font-size:1.05rem;line-height:1.55;color:var(--poster-ink);font-weight:500;}
+  .cc-reveal-alt{font-size:.9rem;color:var(--poster-body);line-height:1.5;margin-top:.55rem;
+    font-style:italic;font-family:var(--f-body);}
+  .cc-assess{display:none;gap:.6rem;margin-top:1.1rem;}
+  .cc-assess.show{display:flex;}
+  .cc-assess-btn{flex:1;font-family:var(--f-display);font-size:.68rem;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;padding:.72rem;border-radius:var(--r-field);cursor:pointer;
+    border:none;transition:filter .15s,transform .1s;}
+  .cc-assess-btn:active{transform:scale(.98);}
+  .cc-got{background:var(--tile-ok-bg);color:var(--tile-ok-ink);}
+  .cc-miss{background:var(--tile-no-bg);color:var(--tile-no-ink);}
+  @media(hover:hover){
+    .cc-got:hover,.cc-miss:hover{filter:brightness(.96);}
+  }
+  .cc-actions{margin-top:1.2rem;}
+  .cc-act{width:100%;font-family:var(--f-display);font-size:.72rem;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;padding:.8rem;border-radius:var(--r-field);cursor:pointer;border:none;
+    transition:background .16s,transform .1s;}
+  .cc-act:active{transform:scale(.99);}
+  .cc-primary{background:var(--sage);color:var(--card);}
+  .cc-close{width:100%;margin-top:.7rem;font-family:var(--f-display);font-size:.66rem;font-weight:700;
+    letter-spacing:.06em;text-transform:uppercase;padding:.7rem;border-radius:var(--r-field);cursor:pointer;
+    background:none;border:none;color:var(--poster-faint);transition:background .15s,color .15s;}
+  @media(hover:hover){
+    .cc-primary:hover{background:var(--sage-d);}
+    .cc-close:hover{background:var(--poster-fill);color:var(--poster-ink);}
+  }
+
+  .view{display:none;} .view.active{display:block;animation:fade .28s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+  @media(prefers-reduced-motion:reduce){.view.active{animation:none;} .stop:hover,.fitem:hover{transform:none;}}
+
+  @media(min-width:700px){
+  .roadmap{ max-width:578px; }
+  .stop{ width:14.5%; }
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <a class="back-link" href="/?openModal=vocabulary" id="backLink" onclick="return smartBack(event)">← Back</a>
+  <div class="brand"><span class="brand-t">Phrase Bank</span><span class="brand-s">Functional Language</span></div>
+  <span class="crumb" id="crumb" onclick="goBack()">↑ All moves</span>
+</header>
+
+<div class="stage">
+  <div class="wrap">
+    <div class="view active" id="viewFamilies">
+      <div class="road-lead">
+        <div class="lead-row">
+          <span class="lead-chip"><b id="leadTotal">—</b> moves</span>
+          <span class="lead-chip lead-bar"><i></i><i></i><i></i> informal &rarr; formal</span>
+          <span class="lead-chip lead-do">Tap a stop &rarr;</span>
+        </div>
+      </div>
+      <div class="roadmap" id="roadmap">
+        <svg class="roadPath" id="roadPath"></svg>
+        <div id="roadRows"></div>
+      </div>
+    </div>
+
+    <div class="view" id="viewCapsule">
+      <div class="constellation" id="constellation">
+        <div class="q-centre" id="qCentre">
+          <div class="q-eyebrow" id="qEyebrow"></div>
+          <div class="q-text" id="qText"></div>
+          <div class="q-controls">
+            <button class="q-next" id="qNext" onclick="nextQuestion()">Next question →</button>
+            <button class="q-practice" id="qPractice" onclick="togglePractice()">Practice: off</button>
+            <button class="q-further" id="qFurther" onclick="toggleFurther()">Further practice →</button>
+          </div>
+        </div>
+        <div class="cc-overlay" id="ccOverlay">
+          <div class="cc-card" id="ccCard">
+            <div class="cc-banner"><span class="cc-blabel" id="ccLabel"></span></div>
+            <div class="cc-task" id="ccTask">Build the full sentence using the trigger</div>
+            <div class="cc-phrase" id="ccPhrase">
+              <div class="cc-stem" id="ccStem"></div>
+              <div class="cc-tail" id="ccTail"></div>
+              <div class="cc-reg" id="ccReg"></div>
+            </div>
+            <div class="cc-cue" id="ccCue"></div>
+            <span class="cc-trigger" id="ccTrigger"></span>
+            <textarea class="cc-answer" id="ccAnswer" placeholder="Write your sentence… (optional — or say it aloud)"></textarea>
+            <div class="cc-reveal" id="ccReveal">
+              <div class="cc-reveal-label">Model answer</div>
+              <div class="cc-reveal-model" id="ccModel"></div>
+              <div class="cc-reveal-alt" id="ccAlt"></div>
+            </div>
+            <div class="cc-assess" id="ccAssess">
+              <button class="cc-assess-btn cc-got" onclick="ccMark(true)">✓ I built it</button>
+              <button class="cc-assess-btn cc-miss" onclick="ccMark(false)">✗ Needs work</button>
+            </div>
+            <div class="cc-actions" id="ccActions">
+              <button class="cc-act cc-primary" id="ccRevealBtn" onclick="ccReveal()">Reveal model</button>
+            </div>
+            <button class="cc-close" id="ccClose" onclick="ccCloseCard()">✕ Close — next student</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="fpanelWrap" id="fpanelWrap" role="dialog" aria-modal="true">
+  <div class="fpanel-scrim" id="fpanelScrim"></div>
+  <div class="fpanel" id="fpanel"></div>
+</div>
+
+<script>
+let CORPUS = {};
+let FAM_ORDER=['evaluating','reasoning','positioning','projecting','relating'];
+
+/* How many stops sit in one row of the road before it turns, and how many
+   moves make up one full cycle (4 in the row + 1 sitting on the loop apex). */
+const isWide = window.matchMedia('(min-width: 700px)').matches;
+const ROW_SIZE = isWide ? 6 : 3;
+const CYCLE = ROW_SIZE + 1;
+
+function frameOf(stem){
+  const s=stem.trim().toLowerCase();
+  if(/^(in my|from my|to my|as far as|as i see|personally|in general|by and large|broadly|on the whole|generally|more often|as a rule|in most)/.test(s)) return 'adverbial phrase';
+  if(/\bthat\s*…?$/.test(s) || /\bthat\b/.test(s)) return 'clause frame';
+  if(/^(this|it|there|one|a |the )/.test(s)) return 'noun-phrase frame';
+  if(/,\s*…?$/.test(s)) return 'sentence opener';
+  return 'set phrase';
+}
+
+function adaptV2(data){
+  const out={};
+  for(const [k,c] of Object.entries(data.categories||{})){
+    if(c.hidden) continue;
+    out[k]={ name:c.label, purpose:c.note||'', functions:{} };
+  }
+  for(const [fid,fn] of Object.entries(data.functions||{})){
+    if(fn.hidden || !out[fn.category]) continue;
+    const cat=fn.category;
+    out[cat].functions[fid]={
+      label: fn.label,
+      tasks: fn.tasks || [],
+      when: fn.when || 'to use this move',
+      yield: (fn.phrases||[]).length,
+      convention: fn.convention || null,
+      graded: (fn.phrases||[]).some(p=>p.register),
+      prec: null,
+      capsule: (fn.phrases||[]).map(p=>({
+        stem: p.t, tail: p.connector || '', register: p.register || null,
+        frame: frameOf(p.t)
+      }))
+    };
+  }
+  return out;
+}
+
+function adaptCorpus(data){
+  if(data && data.functions && !Array.isArray(data.functions)) return adaptV2(data);
+  const out={};
+  for(const [famKey,fam] of Object.entries(data.families)){
+    out[famKey]={ name:fam.label, purpose:fam.purpose, functions:{} };
+  }
+  for(const fn of data.functions){
+    const famKey=fn.family;
+    if(!out[famKey]) continue;
+    out[famKey].functions[fn.id]={
+      label: fn.label,
+      when: fn.when || 'to use this move',
+      yield: fn.phrases.length,
+      prec: fn.expanded || null,
+      capsule: fn.phrases.map(p=>({
+        stem: p.stem,
+        tail: p.connector,
+        frame: frameOf(p.stem)
+      }))
+    };
+  }
+  return out;
+}
+
+let path={family:null, fn:null};
+
+function hueFor(fam){ return ['var(--sage)','var(--sage-d)']; }
+const hue = fam => hueFor(fam);
+
+function regBar(fn){
+  const n={informal:0,neutral:0,formal:0};
+  fn.capsule.forEach(p=>{ if(p.register && n[p.register]!==undefined) n[p.register]++; });
+  const t=n.informal+n.neutral+n.formal;
+  if(!t) return '';
+  const seg=(k,cls)=> n[k]?`<span class="rb-seg ${cls}" style="flex:${n[k]}"></span>`:'';
+  return `<span class="fbadge-bar" aria-label="${n.informal} informal, ${n.neutral} neutral, ${n.formal} formal">${
+    seg('informal','rb-i')}${seg('neutral','rb-n')}${seg('formal','rb-f')}</span>`;
+}
+
+function totalMoves(){
+  return FAM_ORDER.reduce((s,f)=> s+Object.keys(CORPUS[f].functions).length, 0);
+}
+
+/* Flatten every function across every family into a single ordered list.
+   Family order is preserved (FAM_ORDER), so within-family neighbours
+   (e.g. Advantages → Disadvantages) still land next to each other on
+   the path — we just no longer show or gate on the family wrapper. */
+function flattenFunctions(){
+  const list=[];
+  FAM_ORDER.forEach(fam=>{
+    Object.entries(CORPUS[fam].functions).forEach(([k,fn])=>{
+      list.push({ fam, k, fn });
+    });
+  });
+  return list;
+}
+
+/* Renders one stop button. Row stops sit in normal flex flow; the apex
+   stop is absolutely positioned later, once we know where the curve's
+   midpoint actually falls (see drawRoadPath). */
+function stopHTML(item, idx, isApex, turn){
+  const {fam,k,fn}=item;
+  return `<button class="stop${isApex?' stop-apex':''}" data-i="${idx}"${isApex?` data-turn="${turn}"`:''} onclick="openFn('${fam}','${k}')">
+      <span class="stop-dial"><span>${idx+1}</span></span>
+      <span class="stop-name">${fn.label||cap(k)}</span>
+      <span class="stop-count">${fn.yield} expr.</span>
+    </button>`;
+}
+
+function buildRoad(){
+  const flat=flattenFunctions();
+
+  const totalEl=document.getElementById('leadTotal');
+  if(totalEl) totalEl.textContent=flat.length;
+
+  const rowsEl=document.getElementById('roadRows');
+  const groups=[];
+  for(let i=0;i<flat.length;i+=CYCLE) groups.push(flat.slice(i,i+CYCLE));
+
+  let rowsHtml='', apexHtml='';
+  groups.forEach((group,gi)=>{
+    const reversed = gi % 2 === 1;
+    const rowItems = group.slice(0,ROW_SIZE);
+    const apexItem = group.length>ROW_SIZE ? group[ROW_SIZE] : null;
+
+    rowsHtml += `<div class="roadRow${reversed?' rev':''}">`;
+    rowItems.forEach((item,ci)=>{
+      rowsHtml += stopHTML(item, gi*CYCLE+ci, false);
+    });
+    rowsHtml += `</div>`;
+
+    if(apexItem) apexHtml += stopHTML(apexItem, gi*CYCLE+ROW_SIZE, true, gi);
+  });
+  rowsEl.innerHTML=rowsHtml;
+
+  let apexLayer=document.getElementById('roadApexLayer');
+  if(!apexLayer){
+    apexLayer=document.createElement('div');
+    apexLayer.id='roadApexLayer';
+    document.getElementById('roadmap').appendChild(apexLayer);
+  }
+  apexLayer.innerHTML=apexHtml;
+
+  requestAnimationFrame(drawRoadPath);
+}
+
+/* Draws the snake path: a straight segment between neighbouring stops
+   in the same row, and a true semicircular loop at every row turn —
+   bulging toward whichever side the path arrives on (left or right).
+   The loop's apex point is also used to position the 5th "apex" stop
+   for that turn, and a small ring marks the same spot on the path. */
+function drawRoadPath(){
+  const svg=document.getElementById('roadPath');
+  const map=document.getElementById('roadmap');
+  const mapRect=map.getBoundingClientRect();
+  const dials=[...map.querySelectorAll('.roadRow .stop-dial')];
+  if(!dials.length){ svg.innerHTML=''; return; }
+  const pts=dials.map(d=>{
+    const r=d.getBoundingClientRect();
+    return { x: r.left + r.width/2 - mapRect.left, y: r.top + r.height/2 - mapRect.top };
+  });
+
+let loopRings=[];
+const EXT = 80; // how far the line overshoots past the first/last pill, in px
+
+// extend the start backward, using the direction from pt0 → pt1
+const p0 = pts[0], p1 = pts[1];
+const startAngle = Math.atan2(p1.y-p0.y, p1.x-p0.x);
+const startX = p0.x - Math.cos(startAngle)*EXT;
+const startY = p0.y - Math.sin(startAngle)*EXT;
+
+let d='M '+startX.toFixed(1)+' '+startY.toFixed(1)+' L '+p0.x.toFixed(1)+' '+p0.y.toFixed(1);
+
+  for(let i=1;i<pts.length;i++){
+    const a=pts[i-1], b=pts[i];
+    const sameRow = Math.abs(a.y-b.y) < 4;
+
+    if(sameRow){
+      d += ` L ${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
+      continue;
+    }
+
+    /* Row turn: a cubic Bézier bulge approximating a true semicircle.
+       The (2/3)·h offset (h = vertical gap) is the standard construction
+       for a single cubic Bézier tracing a semicircular arc. */
+    const onRight = a.x > mapRect.width/2;
+    const sign = onRight ? 1 : -1;
+    const bulge = Math.abs(b.y - a.y) * 0.88;
+    const cx1 = a.x+sign*bulge, cy1 = a.y;
+    const cx2 = b.x+sign*bulge, cy2 = b.y;
+
+    d += ` C ${cx1.toFixed(1)} ${cy1.toFixed(1)}, `+
+         `${cx2.toFixed(1)} ${cy2.toFixed(1)}, `+
+         `${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
+
+    // apex point at t = 0.5 on this Bézier segment
+    const apexX = 0.125*a.x + 0.375*cx1 + 0.375*cx2 + 0.125*b.x;
+    const apexY = 0.125*a.y + 0.375*cy1 + 0.375*cy2 + 0.125*b.y;
+    loopRings.push({x:apexX, y:apexY});
+  }
+
+  // extend the end forward, using the direction from the last two points
+  const pn = pts[pts.length-1], pnPrev = pts[pts.length-2];
+  const endAngle = Math.atan2(pn.y-pnPrev.y, pn.x-pnPrev.x);
+  const endX = pn.x + Math.cos(endAngle)*EXT;
+  const endY = pn.y + Math.sin(endAngle)*EXT;
+  d += ` L ${endX.toFixed(1)} ${endY.toFixed(1)}`;
+
+  // Align the very first and very last row-stops with the same left column
+  // that the apex loops (e.g. pillar 14) establish, so the whole left edge
+  // reads as one straight line, matching the reference layout.
+  if(loopRings.length >= 2){
+    const rowStart2Idx = 2*ROW_SIZE; // first dial of the 3rd row (e.g. pillar 15)
+    if(pts[rowStart2Idx]){
+      const leftApex = loopRings[1]; // the left-bulging apex (pillar 14)
+      const delta = pts[rowStart2Idx].x - leftApex.x; // how far the apex sticks out further left
+      if(delta > 0){
+        const firstStop = dials[0] && dials[0].closest('.stop');
+        const lastStop = dials[dials.length-1] && dials[dials.length-1].closest('.stop');
+        if(firstStop) firstStop.style.left = (-delta)+'px';
+        if(lastStop) lastStop.style.left = (-delta)+'px';
+      }
+    }
+  }
+
+  let inner = `<defs>
+    <linearGradient id="roadGrad" gradientUnits="userSpaceOnUse"
+      x1="${startX}" y1="${startY}" x2="${endX}" y2="${endY}">
+      <stop offset="0%" stop-color="#2FBF71"/>
+      <stop offset="25%" stop-color="#2F8FBF"/>
+      <stop offset="50%" stop-color="#7A4FBF"/>
+      <stop offset="75%" stop-color="#D14FA6"/>
+      <stop offset="100%" stop-color="#E8A33D"/>
+    </linearGradient>
+  </defs>
+  <path class="road" stroke="url(#roadGrad)" d="${d}"/>`;
+
+  pts.forEach(p=>{ inner += `<circle class="roadDot" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4"/>`; });
+  loopRings.forEach(p=>{ inner += `<circle class="loopRing" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="6"/>`; });
+  svg.innerHTML=inner;
+
+  loopRings.forEach((p,t)=>{
+    const el=map.querySelector(`.stop-apex[data-turn="${t}"]`);
+    if(el){ el.style.left=p.x+'px'; el.style.top=p.y+'px'; el.style.opacity='1'; }
+  });
+}
+if(document.fonts && document.fonts.ready){
+  document.fonts.ready.then(()=>{
+    if(document.getElementById('viewFamilies').classList.contains('active')) drawRoadPath();
+  });
+}
+
+function openFamilyPanel(fam){
+  const F=CORPUS[fam];
+  const idx=FAM_ORDER.indexOf(fam);
+  const items=Object.entries(F.functions).map(([k,fn],i)=>`
+      <button class="fitem" onclick="closeFamilyPanel();openFn('${fam}','${k}')">
+        <span class="fitem-dial"><span>${i+1}</span></span>
+        <span class="fitem-lbl">${fn.label||cap(k)}</span>
+        <span class="fitem-yield">${fn.yield} expr.</span>
+      </button>`).join('');
+
+  document.getElementById('fpanel').innerHTML = `
+    <button class="fpanel-x" onclick="closeFamilyPanel()" aria-label="Close">✕</button>
+    <div class="fpanel-kick"><i></i><b>Stop ${idx+1} of ${FAM_ORDER.length}</b></div>
+    <h2>${F.name}</h2>
+    <div class="fpanel-purpose">${F.purpose||''}</div>
+    <div class="fitems">${items}</div>`;
+
+  document.getElementById('fpanelWrap').classList.add('open');
+}
+function closeFamilyPanel(){
+  document.getElementById('fpanelWrap').classList.remove('open');
+}
+document.getElementById('fpanelScrim').addEventListener('click', closeFamilyPanel);
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape' && document.getElementById('fpanelWrap').classList.contains('open')) closeFamilyPanel();
+});
+
+let qList=[], taskList=[], qIndex=0, curFam=null, curFn=null;
+
+function openFn(fam,k){
+  path={family:fam, fn:k};
+  curFam=fam; curFn=k;
+  const F=CORPUS[fam], fn=F.functions[k], [c]=hue(fam);
+  const con=document.getElementById('constellation');
+  con.style.setProperty('--fc',c);
+  con.style.setProperty('--fc-d',hue(fam)[1]);
+
+  const T=(CORPUS[fam]&&CORPUS[fam].functions[k]&&CORPUS[fam].functions[k].tasks)||[];
+  taskList = T.filter(t=>t.question);
+  qList = taskList.length ? taskList.map(t=>t.question)
+                          : ((QUESTIONS[k] && QUESTIONS[k].length) ? QUESTIONS[k].slice() : []);
+  qIndex = 0;
+  setQuestion(fam,k);
+
+  furtherMode=false;
+  const fbtn=document.getElementById('qFurther');
+  if(fbtn){ fbtn.textContent='Further practice →'; fbtn.classList.remove('on'); }
+
+  con.querySelectorAll('.enode').forEach(n=>n.remove());
+  con.querySelector('.const-hint')?.remove();
+
+  switchView('viewCapsule');
+  requestAnimationFrame(()=>layoutConstellation(fam,k));
+  setCrumb();
+}
+
+function setQuestion(fam,k){
+  const F=CORPUS[fam], [c]=hue(fam);
+  document.getElementById('qEyebrow').textContent=cap(k)+' · '+F.name;
+  document.getElementById('qEyebrow').style.setProperty('--fc',c);
+  const qt=document.getElementById('qText');
+  qt.textContent = qList.length ? qList[qIndex] : F.functions[k].when;
+  const nextBtn=document.getElementById('qNext');
+  nextBtn.style.display = qList.length>1 ? 'inline-block' : 'none';
+  nextBtn.style.setProperty('--fc',c);
+}
+
+function nextQuestion(){
+  if(!qList.length) return;
+  qIndex = (qIndex+1) % qList.length;
+  setQuestion(curFam,curFn);
+  const con=document.getElementById('constellation');
+  con.querySelectorAll('.enode').forEach(nd=>nd.remove());
+  con.querySelector('.const-hint')?.remove();
+  layoutConstellation(curFam,curFn);
+}
+
+let dragEl=null, dragDX=0, dragDY=0;
+function layoutConstellation(fam,k){
+  const F=CORPUS[fam], fn=F.functions[k], [c,d]=hue(fam);
+  const con=document.getElementById('constellation');
+  const W=con.clientWidth, H=con.clientHeight;
+  const cx=W/2, cy=H/2;
+
+  const tasks = fn.tasks || [];
+  const withQ = tasks.filter(t=>t.question);
+  const active = withQ.length ? withQ[qIndex % withQ.length] : null;
+  const drillItems = active && active.cues && active.cues.length
+    ? active.cues
+    : (DRILLS[k] || []);
+  const items = furtherMode ? drillItems : fn.capsule;
+  const n=items.length;
+  if(furtherMode && !n){
+    const note=document.createElement('div');
+    note.className='const-hint'; note.style.opacity='.5';
+    note.textContent='No drill written for this question yet.';
+    con.appendChild(note);
+    return;
+  }
+
+  const half = Math.ceil(n/2);
+  const rightCount = n - half;
+  const rx = Math.min(W*0.32, 470);
+  const ry = Math.min(H*0.42, 280);
+
+  function place(i){
+    const onLeft = i < half;
+    const idx = onLeft ? i : i - half;
+    const count = onLeft ? half : rightCount;
+    const angMax = 65 * Math.PI/180;
+    const yMaxFrac = Math.sin(angMax);
+    const t = count>1 ? (idx/(count-1))*2 - 1 : 0;
+    const yFrac = t*yMaxFrac;
+    const xFrac = Math.sqrt(Math.max(0, 1 - yFrac*yFrac));
+    const baseX = onLeft ? -xFrac : xFrac;
+    return { x: cx + baseX*rx, y: cy + yFrac*ry };
+  }
+
+  items.forEach((x,i)=>{
+    const node=document.createElement('div');
+    node.className='enode'+(practiceMode?' practising':'')+(furtherMode?' cue-card':'')
+    node.style.setProperty('--fc',c); node.style.setProperty('--fc-d',d);
+
+    if(furtherMode){
+      const cueHtml=x.cue.split('/').map(s=>s.trim()).join('<span class="cue-slash">/</span>');
+      node.innerHTML=`<div class="enode-banner">
+          <span class="enode-bnum">${i+1}</span>
+          <span class="enode-blabel">${cap(k)}</span>
+        </div>
+        <div class="enode-stem">${cueHtml}</div>
+        <span class="cue-trigger">[${x.trigger}]</span>`;
+      if(furtherDone.has(cueKey(k,i))) node.classList.add('done');
+    } else {
+      node.innerHTML=`<div class="enode-banner">
+          <span class="enode-bnum">${i+1}</span>
+          <span class="enode-blabel">${cap(k)}</span>
+        </div>
+        <div class="enode-stem">${practiceMode ? blankStem(x.stem) : x.stem}</div>
+        <div class="enode-tail">${x.tail}</div>`;
+    }
+    con.appendChild(node);
+
+    const p=place(i);
+    node.style.left=p.x+'px'; node.style.top=p.y+'px';
+
+    if(furtherMode){
+      node.addEventListener('click',()=>openCompletion(k,i,x,c,d));
+      return;
+    }
+
+    let downX=0, downY=0, moved=false;
+    const down=(px,py)=>{
+      downX=px; downY=py; moved=false;
+      dragEl=node; node.classList.add('dragging');
+      const cr=con.getBoundingClientRect(), r=node.getBoundingClientRect();
+      node.style.transform='none';
+      node.style.left=(r.left-cr.left)+'px';
+      node.style.top =(r.top -cr.top )+'px';
+      dragDX=px-r.left; dragDY=py-r.top;
+      hideHint();
+    };
+    node.addEventListener('mousedown',e=>{e.preventDefault();down(e.clientX,e.clientY);});
+    node.addEventListener('touchstart',e=>{down(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
+
+    node.addEventListener('click',()=>{
+      if(dragMoved || practiceMode) return;
+      openPhrase(k,i,x);
+    });
+  });
+
+  const hint=document.createElement('div');
+  hint.className='const-hint';
+  hint.textContent = furtherMode ? 'Choose a card to complete — build it, then close for the next student'
+                   : practiceMode ? 'Fill the gap in your head — then tap the card to check'
+                   : 'Drag any expression to arrange your answer';
+  con.appendChild(hint);
+}
+
+let dragMoved=false;
+function moveNode(px,py){
+  if(!dragEl) return;
+  dragMoved=true;
+  const con=document.getElementById('constellation');
+  const cr=con.getBoundingClientRect();
+  dragEl.style.left=(px-cr.left-dragDX)+'px';
+  dragEl.style.top =(py-cr.top -dragDY)+'px';
+}
+document.addEventListener('mousemove',e=>{ if(dragEl) moveNode(e.clientX,e.clientY); });
+document.addEventListener('touchmove',e=>{ if(dragEl){ moveNode(e.touches[0].clientX,e.touches[0].clientY);} },{passive:true});
+document.addEventListener('mouseup',()=>{ if(dragEl){dragEl.classList.remove('dragging');dragEl=null; setTimeout(()=>dragMoved=false,0);} });
+document.addEventListener('touchend',()=>{ if(dragEl){dragEl.classList.remove('dragging');dragEl=null; setTimeout(()=>dragMoved=false,0);} });
+let hintGone=false;
+function hideHint(){ if(hintGone)return; hintGone=true; document.querySelector('.const-hint')?.classList.add('hidden'); }
+
+let practiceMode=false;
+const STOPWORDS=new Set(['the','a','an','is','it','of','to','that','this','there','be','in','on',
+  'and','or','but','as','so','if','far','my','i','one','no','not','are','was','were','been','being',
+  'for','with','from','by','at','would','could','may','might','will','can','do','does','than','then',
+  'few','people','deny','say','said','what','which','who','when','how','why','over','past','years']);
+function blankStem(stem){
+  const tokens=stem.split(/(\s+)/);
+  const cand=[];
+  tokens.forEach((t,idx)=>{
+    const w=t.replace(/[^A-Za-z']/g,'').toLowerCase();
+    if(w.length>=4 && !STOPWORDS.has(w) && !t.includes('…')) cand.push({idx,len:w.length});
+  });
+  if(!cand.length) return stem;
+  cand.sort((a,b)=>b.len-a.len);
+  const pick=cand[0].idx;
+  const original=tokens[pick];
+  const lead=(original.match(/^[^A-Za-z']*/)||[''])[0];
+  const trail=(original.match(/[^A-Za-z']*$/)||[''])[0];
+  const word=original.slice(lead.length, original.length-trail.length);
+  tokens[pick]=`${lead}<span class="gap" data-word="${word}">${word}</span>${trail}`;
+  return tokens.join('');
+}
+function togglePractice(){
+  practiceMode=!practiceMode;
+  const btn=document.getElementById('qPractice');
+  btn.textContent='Practice: '+(practiceMode?'on':'off');
+  btn.classList.toggle('on',practiceMode);
+  if(curFn){
+    const con=document.getElementById('constellation');
+    con.querySelectorAll('.enode').forEach(nd=>nd.remove());
+    con.querySelector('.const-hint')?.remove();
+    layoutConstellation(curFam,curFn);
+  }
+}
+document.addEventListener('click',e=>{
+  const g=e.target.closest('.gap');
+  if(g && practiceMode && !dragMoved) g.classList.add('revealed');
+});
+
+let furtherMode=false;
+let DRILLS={};
+const furtherDone=new Set();
+let ccCurrent=null;
+function cueKey(k,i){ return k+':'+i; }
+
+function toggleFurther(){
+  furtherMode=!furtherMode;
+  const btn=document.getElementById('qFurther');
+  btn.textContent = furtherMode ? '← Back to frames' : 'Further practice →';
+  btn.classList.toggle('on',furtherMode);
+  if(furtherMode && practiceMode){
+    practiceMode=false;
+    const pb=document.getElementById('qPractice');
+    pb.textContent='Practice: off'; pb.classList.remove('on');
+  }
+  if(curFn){
+    const con=document.getElementById('constellation');
+    con.querySelectorAll('.enode').forEach(nd=>nd.remove());
+    con.querySelector('.const-hint')?.remove();
+    layoutConstellation(curFam,curFn);
+  }
+}
+
+function openCompletion(k,i,item,c,d){
+  ccResetCard();
+  ccCurrent={k,i,item};
+  const ov=document.getElementById('ccOverlay');
+  const card=document.getElementById('ccCard');
+  card.style.setProperty('--fc',c); card.style.setProperty('--fc-d',d);
+  document.getElementById('ccLabel').textContent=cap(k);
+  document.getElementById('ccCue').innerHTML=
+    item.cue.split('/').map(s=>s.trim()).join('<span class="slash">/</span>');
+  document.getElementById('ccTrigger').textContent='['+item.trigger+']';
+  document.getElementById('ccAnswer').value='';
+  document.getElementById('ccReveal').classList.remove('show');
+  document.getElementById('ccAssess').classList.remove('show');
+  document.getElementById('ccActions').style.display='block';
+  document.getElementById('ccRevealBtn').style.display='block';
+  ov.classList.add('show');
+}
+function openPhrase(k,i,item){
+  ccCurrent=null;
+  var $=function(id){ return document.getElementById(id); };
+  $('ccLabel').textContent=cap(k)+' · '+(i+1);
+  $('ccTask').textContent='The phrase in full';
+  $('ccStem').textContent=item.stem;
+  $('ccTail').textContent=item.tail||'';
+  var reg=$('ccReg');
+  if(item.register){ reg.textContent=item.register; reg.classList.add('show'); }
+  else reg.classList.remove('show');
+  $('ccPhrase').classList.add('show');
+  $('ccCue').style.display='none';
+  $('ccTrigger').style.display='none';
+  $('ccAnswer').style.display='none';
+  $('ccReveal').classList.remove('show');
+  $('ccAssess').classList.remove('show');
+  $('ccActions').style.display='none';
+  $('ccClose').textContent='✕ Close';
+  $('ccOverlay').classList.add('show');
+}
+function ccResetCard(){
+  var $=function(id){ return document.getElementById(id); };
+  $('ccPhrase').classList.remove('show');
+  $('ccTask').textContent='Build the full sentence using the trigger';
+  $('ccCue').style.display='';
+  $('ccTrigger').style.display='';
+  $('ccAnswer').style.display='';
+  $('ccClose').textContent='✕ Close — next student';
+}
+
+function ccReveal(){
+  if(!ccCurrent) return;
+  const it=ccCurrent.item;
+  document.getElementById('ccModel').textContent=it.models[0];
+  const alt=document.getElementById('ccAlt');
+  if(it.models.length>1){ alt.textContent='Also valid: '+it.models.slice(1).join('  ·  '); alt.style.display='block'; }
+  else alt.style.display='none';
+  document.getElementById('ccReveal').classList.add('show');
+  document.getElementById('ccActions').style.display='none';
+  document.getElementById('ccAssess').classList.add('show');
+}
+function ccMark(got){
+  if(!ccCurrent) return;
+  furtherDone.add(cueKey(ccCurrent.k, ccCurrent.i));
+  ccCloseCard();
+}
+function ccCloseCard(){
+  document.getElementById('ccOverlay').classList.remove('show');
+  ccCurrent=null;
+  if(curFn){
+    const con=document.getElementById('constellation');
+    con.querySelectorAll('.enode').forEach(nd=>nd.remove());
+    con.querySelector('.const-hint')?.remove();
+    layoutConstellation(curFam,curFn);
+  }
+}
+
+function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+function switchView(id){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const stage=document.querySelector('.stage'), wrap=document.querySelector('.wrap');
+  const radial = id==='viewCapsule';
+  stage.classList.toggle('no-scroll',radial);
+  wrap.classList.toggle('full',radial);
+  if(!radial) stage.scrollTo({top:0});
+}
+function setCrumb(){ document.getElementById('crumb').classList.add('show'); }
+function goBack(){
+  switchView('viewFamilies');
+  document.getElementById('crumb').classList.remove('show');
+  path={family:null,fn:null};
+  requestAnimationFrame(drawRoadPath);
+}
+function smartBack(e){
+  try{
+    const ref=document.referrer;
+    if(ref && new URL(ref).host===location.host){
+      e.preventDefault(); history.back(); return false;
+    }
+  }catch(_){}
+  return true;
+}
+window.addEventListener('resize',()=>{
+  if(document.getElementById('viewCapsule').classList.contains('active') && path.fn){
+    const con=document.getElementById('constellation');
+    con.querySelectorAll('.enode').forEach(n=>n.remove());
+    con.querySelector('.const-hint')?.remove();
+    layoutConstellation(path.family,path.fn);
+  }
+});
+
+function corpusUrl(){
+  const p=new URLSearchParams(location.search).get('json');
+  return p || '/data/similar-words/phrase-bank-corpus.json';
+}
+function questionsUrl(){
+  const p=new URLSearchParams(location.search).get('questions');
+  return p || '/data/similar-words/functional-questions.json';
+}
+function drillsUrl(){
+  const p=new URLSearchParams(location.search).get('drills');
+  return p || '/data/similar-words/functional-drills.json';
+}
+let QUESTIONS={};
+(function boot(){
+  const rowsEl=document.getElementById('roadRows');
+  Promise.all([
+    fetch(corpusUrl()).then(r=>{ if(!r.ok) throw new Error('corpus HTTP '+r.status); return r.json(); }),
+    fetch(questionsUrl()).then(r=> r.ok ? r.json() : {questions:{}}).catch(()=>({questions:{}})),
+    fetch(drillsUrl()).then(r=> r.ok ? r.json() : {drills:{}}).catch(()=>({drills:{}}))
+  ])
+    .then(([corpus, q, dr])=>{
+      CORPUS=adaptCorpus(corpus);
+      FAM_ORDER=Object.keys(CORPUS);
+      QUESTIONS=(q && q.questions) ? q.questions : {};
+      DRILLS=(dr && dr.drills) ? dr.drills : {};
+      buildRoad();
+    })
+    .catch(err=>{
+      rowsEl.innerHTML=`<div style="color:var(--dim);font-size:.85rem;padding:2rem 1rem;max-width:520px;margin:0 auto;text-align:center;">
+        Couldn't load the phrase corpus (<code>${corpusUrl()}</code>). ${err.message}.<br><br>
+        On the live site the JSON sits beside this page; opened straight from disk, some browsers block the fetch —
+        run it through the deployed site or a local server.</div>`;
+    });
+})();
+</script>
+</body>
+</html>

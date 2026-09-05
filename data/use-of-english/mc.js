@@ -366,9 +366,11 @@ function submit() {
   $('ovEm').textContent    = pct === 100 ? '\uD83C\uDFC6' : pct >= 75 ? '\uD83C\uDF89' : pct >= 50 ? '\uD83D\uDC4D' : '\uD83D\uDCDA';
   $('ovTitle').textContent = pct === 100 ? 'Perfect' : pct >= 75 ? 'Strong' : pct >= 50 ? 'Getting there' : 'Keep going';
   $('ovScore').textContent = got + ' / ' + qs.length + ' correct \u00b7 ' + pct + '%';
+  /* A class, not an inline colour — the bars have to agree with the words
+     and the dots, and three places hard-coding the same pair is how they
+     stop agreeing. uoe.css owns the colour. */
   $('ovBars').innerHTML = qs.map(function (q, i) {
-    return '<div class="ov-bar" style="background:' +
-      (isRight(q, i) ? 'var(--tile-ok-ink)' : 'var(--tile-no-ink)') + '"></div>';
+    return '<div class="ov-bar ' + (isRight(q, i) ? 'ok' : 'no') + '"></div>';
   }).join('');
 
   var missed = qs.filter(function (q, i) { return !isRight(q, i); });

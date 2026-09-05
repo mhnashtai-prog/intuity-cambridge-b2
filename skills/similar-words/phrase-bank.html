@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>INTUITY — Phrase Bank</title>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500&family=Anton&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500&family=Anton&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <!-- Tokens only. This page keeps its own layout — the constellation is a
      teaching surface, not a document — but it stops owning its own colours
      and type, which is what made it read as a different product. -->
@@ -118,10 +118,26 @@
     display:flex;align-items:center;border:none;background:none;padding:0;
     pointer-events:none;}
 
-  .pill .circle{width:48px;height:48px;border-radius:50%;flex:none;position:relative;z-index:2;order:1;
-    display:flex;align-items:center;justify-content:center;
-    font-family:'Anton',Impact,sans-serif;font-size:1.27rem;letter-spacing:.02em;
-    box-shadow:0 6px 15px rgba(30,24,16,.24);}
+  /* ── THE PENDULUM DIAL, NOT THE LANDING PAGE'S CIRCLE ─────────────
+     A flat disc in the area's own tone is exactly what the landing page
+     puts on this spine, so arriving here read as never having left.
+
+     .pend-dial is already in intuity-shell.css — the mark the gate screens
+     wear — so this is not a new shape, it is the product's other one. It
+     takes four variables and nothing else: a conic sweep, what the sweep
+     runs against, a core, and the ink on top. Sage sweeping on black
+     belongs to no area, which is the point: the spine still says "a map",
+     the dials say "not that one".
+
+     The hanging thread and its swing (.pend-hang) are deliberately not
+     used. A gate has one dial and it can hang; six of them swinging down
+     a spine would be six things moving on a menu. */
+  .pill .circle{--d:48px;
+    --mark-sweep:var(--sage); --mark-rest:#14110E;
+    --mark-core:#14110E; --mark-ink:var(--card,#FAF8F5); --mark-pct:72%;
+    width:var(--d);height:var(--d);flex:none;position:relative;z-index:2;order:1;}
+  .pill .circle span{font-size:calc(var(--d) * .34);letter-spacing:.01em;}
+
   .pill .rect{height:40px;display:flex;align-items:center;justify-content:center;position:relative;z-index:1;order:2;
     border-radius:0 999px 999px 0;padding:0 22px 0 31px;margin-left:-18px;
     font-family:'Anton',Impact,sans-serif;text-transform:uppercase;
@@ -149,8 +165,7 @@
   .pbfn:focus-visible{outline:2px solid var(--clay);outline-offset:3px;border-radius:3px;}
 
   @media(max-width:560px){
-    .pill .circle{width:51px;height:51px;font-size:1.29rem;
-      box-shadow:0 6px 15px rgba(30,24,16,.24);}
+    .pill .circle{--d:51px;}
     .pill .rect{height:41px;font-size:.78rem;letter-spacing:.07em;text-indent:.07em;
       padding:0 14px 0 24px;margin-left:-19px;
       box-shadow:0 6px 15px rgba(30,24,16,.2);}
@@ -716,7 +731,7 @@ function buildMap(){
     return '<div class="node" style="top:'+n.y+'%">'+
       '<div class="pill'+(circleRight?' circle-right':'')+'" data-i="'+i+'" '+
         'style="left:'+px+'%" aria-hidden="true">'+
-        '<span class="circle" style="background:'+a.tone.bg+';color:'+a.tone.fg+'">'+count+'</span>'+
+        '<span class="circle pend-dial"><span>'+count+'</span></span>'+
         '<span class="rect" style="background:'+a.tone.bg+';color:'+a.tone.fg+'">'+a.name+'</span>'+
       '</div>'+
       '<div class="cap '+n.capSide+'" style="left:'+capFrom+'%;right:'+(100-capTo)+'%">'+
@@ -787,7 +802,16 @@ function buildMap(){
     const MIN_AMP_PX = 30;
     const amp = Math.max(MIN_AMP_PX / mapRect.width * 100,
                          (Math.max(...xs) - Math.min(...xs)) / 2);
-    const side = -Math.sign(tightDots[0].x - cxW);
+    /* WHICH WAY THE SPINE BULGES.
+       The wave is a cosine about cxW, and `side` picks its phase: at the
+       first node it swings to one extreme or the other. Negative is the
+       landing page's — the spine leans AWAY from the first pill, so the
+       first stem runs across it. Positive leans it toward the first pill
+       instead, which is the flip. One sign, and every dependent pass
+       (pill re-seating, stems, captions, end caps) follows it, because
+       they all read the same waveX. */
+    const WAVE_FLIP = true;
+    const side = (WAVE_FLIP ? 1 : -1) * Math.sign(tightDots[0].x - cxW);
     const waveX = y => cxW + side * amp * Math.cos(2*Math.PI * (y - y0) / LAM);
 
     const EXT = 0.62, N = 240, pts = [];
@@ -1251,6 +1275,7 @@ function switchView(id){
   stage.classList.toggle('no-scroll',radial);
   wrap.classList.toggle('full',radial);
   if(!radial) stage.scrollTo({top:0});
+  setBackLabel();
 }
 function setCrumb(){ document.getElementById('crumb').classList.add('show'); }
 function goBack(){
@@ -1260,9 +1285,23 @@ function goBack(){
   /* the map had no width while hidden, so the offsets need measuring again */
   requestAnimationFrame(buildMap);
 }
-/* Context-aware back: if the student came from another INTUITY page, return there;
-   otherwise fall back to the Vocabulary modal (this file's registered home). */
+/* ── BACK ─────────────────────────────────────────────────────────────
+   Two levels live in this one file, so the arrow has two jobs and the
+   view it is looking at decides which.
+
+   Inside a function, back means THE WAVE — the menu the student just came
+   from, one step up, not out of the page entirely. Leaving to the landing
+   page from here would throw away the whole visit for what reads as a
+   single step, which is the same complaint the tenses page fixed when
+   closing an exercise dropped the student back to Explore.
+
+   On the wave itself there is nothing above, so it leaves: to wherever
+   the student came from if that was another INTUITY page, otherwise to
+   the Vocabulary modal, this file's registered home. */
 function smartBack(e){
+  if(document.getElementById('viewCapsule').classList.contains('active')){
+    e.preventDefault(); goBack(); return false;
+  }
   try{
     const ref=document.referrer;
     if(ref && new URL(ref).host===location.host){
@@ -1271,6 +1310,15 @@ function smartBack(e){
   }catch(_){}
   return true; /* let the href (/?openModal=vocabulary) proceed */
 }
+
+/* The arrow says where it goes, so it has to change with the view. */
+function setBackLabel(){
+  const a=document.getElementById('backLink');
+  if(!a) return;
+  a.textContent = document.getElementById('viewCapsule').classList.contains('active')
+    ? '\u2190 All moves' : '\u2190 Back';
+}
+
 window.addEventListener('resize',()=>{
   if(document.getElementById('viewCapsule').classList.contains('active') && path.fn){
     const con=document.getElementById('constellation');

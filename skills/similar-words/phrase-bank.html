@@ -190,6 +190,27 @@
   .constellation{position:relative;width:100%;height:calc(100vh - 52px);overflow:hidden;
     touch-action:none;}
 
+  /* ── TWO READINGS OF THE SAME FUNCTION ─────────────────────────────
+     On a board the cards are objects: a teacher drags them into a mind
+     map, and the ellipse exists so there is room to do that. A phone has
+     no room and no board — the cards would overlap each other and cover
+     the question, and dragging on a 380px screen buys nothing.
+
+     So below 700px the same cards stack: question at the top, cards down
+     the page, ordinary scrolling. Nothing is hidden and nothing is added;
+     the drag simply stops being the point. */
+  .constellation.stack{position:static;height:auto;overflow:visible;
+    touch-action:auto;padding:1.2rem .9rem 3rem;max-width:640px;margin:0 auto;}
+  .constellation.stack .q-centre{position:static;transform:none;width:auto;
+    text-align:left;margin-bottom:1.4rem;pointer-events:auto;}
+  .constellation.stack .q-controls{justify-content:flex-start;}
+  .constellation.stack .enode{position:static;transform:none;width:100%;
+    margin:0 0 .7rem;cursor:pointer;}
+  .constellation.stack .enode:active{cursor:pointer;}
+  .constellation.stack .enode.cue-card:hover{transform:none;}
+  .constellation.stack .const-hint{position:static;transform:none;
+    margin-top:.6rem;text-align:left;}
+
   /* the question: plain, prominent, no box, no circle */
   .q-centre{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;
     width:min(46%,520px);text-align:center;pointer-events:none;}
@@ -929,9 +950,14 @@ function nextQuestion(){
 }
 
 let dragEl=null, dragDX=0, dragDY=0;
+/* The board is a desk-width idea. Below this, the same cards are a list. */
+function isStacked(){ return window.matchMedia('(max-width:700px)').matches; }
+
 function layoutConstellation(fam,k){
   const F=CORPUS[fam], fn=F.functions[k], [c,d]=hue(fam);
   const con=document.getElementById('constellation');
+  const stacked=isStacked();
+  con.classList.toggle('stack',stacked);
   const W=con.clientWidth, H=con.clientHeight;
   const cx=W/2, cy=H/2;
 
@@ -1007,8 +1033,18 @@ function layoutConstellation(fam,k){
     }
     con.appendChild(node);
 
-    const p=place(i);
-    node.style.left=p.x+'px'; node.style.top=p.y+'px';
+    /* Stacked: the card sits in normal flow, so it is given no position
+       at all — and no drag handlers, because there is nowhere to drag to. */
+    if(!stacked){
+      const p=place(i);
+      node.style.left=p.x+'px'; node.style.top=p.y+'px';
+    }
+
+    if(stacked){
+      if(furtherMode) node.addEventListener('click',()=>openCompletion(k,i,x,c,d));
+      else if(!practiceMode) node.addEventListener('click',()=>openPhrase(k,i,x));
+      return;
+    }
 
     if(furtherMode){
       // cue cards: click opens the completion card (no dragging in drill mode)
@@ -1050,6 +1086,7 @@ function layoutConstellation(fam,k){
   hint.className='const-hint';
   hint.textContent = furtherMode ? 'Choose a card to complete — build it, then close for the next student'
                    : practiceMode ? 'Fill the gap in your head — then tap the card to check'
+                   : stacked ? 'Tap any expression to see it in full'
                    : 'Drag any expression to arrange your answer';
   con.appendChild(hint);
 }
@@ -1240,7 +1277,9 @@ function switchView(id){
   document.getElementById(id).classList.add('active');
   const stage=document.querySelector('.stage'), wrap=document.querySelector('.wrap');
   const radial = id==='viewCapsule';
-  stage.classList.toggle('no-scroll',radial);
+  /* no-scroll pins the board so a dragged card cannot scroll the page.
+     Stacked, scrolling IS the interaction. */
+  stage.classList.toggle('no-scroll', radial && !isStacked());
   wrap.classList.toggle('full',radial);
   if(!radial) stage.scrollTo({top:0});
   setBackLabel();
@@ -1292,6 +1331,7 @@ window.addEventListener('resize',()=>{
     const con=document.getElementById('constellation');
     con.querySelectorAll('.enode').forEach(n=>n.remove());
     con.querySelector('.const-hint')?.remove();
+    document.querySelector('.stage').classList.toggle('no-scroll', !isStacked());
     layoutConstellation(path.family,path.fn);
   }
 });

@@ -69,27 +69,44 @@
     flex:none;font-variant-numeric:tabular-nums;padding-top:.25rem;}
   .mc-text{font-size:1rem;line-height:2.1;color:var(--poster-ink);}
 
-  /* One at a time: the sentence is the headline of the screen. */
-  .solo .mc-line{border:none;padding:0;}
-  .solo .mc-num{display:none;}
-  .solo .mc-text{font-family:'Anton',Impact,var(--f-display),sans-serif;font-weight:400;
-    font-size:clamp(1.3rem,4.4vw,1.85rem);line-height:1.55;}
+  /* ── PER PARAGRAPH IS A CLOSE-UP ───────────────────────────────────
+     Not the same card with fewer lines on it — a magnified view of this
+     part of the test. Bigger reading type, more leading, more room round
+     it, and the card sits narrower so the eye has one column to hold.
 
-  /* ── THE GAP IS THE CONTROL ── */
-  .gapbtn{display:inline-flex;align-items:center;justify-content:center;
-    min-width:6.5rem;padding:.15rem .7rem;margin:0 .15rem;
-    font-family:var(--f-display);font-size:.95rem;font-weight:600;
-    color:var(--poster-faint);background:var(--poster-fill);
-    border:none;border-radius:var(--r-field);cursor:pointer;vertical-align:baseline;
-    box-shadow:inset 0 0 0 1px var(--poster-rule);
-    transition:background .15s,box-shadow .15s,color .15s;}
-  .gapbtn:hover{background:var(--poster-fill-hi);}
-  .gapbtn.filled{color:var(--poster-ink);background:var(--poster-fill-hi);box-shadow:none;}
-  .gapbtn.open{box-shadow:inset 0 0 0 2px var(--caramel);}
-  .gapbtn.ok{background:var(--tile-ok-bg);color:var(--tile-ok-ink);box-shadow:none;}
-  .gapbtn.no{background:var(--tile-no-bg);color:var(--tile-no-ink);box-shadow:none;
-    text-decoration:line-through;}
-  .solo .gapbtn{font-size:inherit;min-width:8rem;}
+     Still not Anton. Anton is the product's headline face, and a sentence
+     you must read carefully and choose inside is not a headline: it is
+     something to read, at a size that makes reading it easy. */
+  .para{max-width:34rem;margin:0 auto;padding:2.2rem 2rem 2rem;}
+  .para .mc-line{padding:1.5rem 0;gap:1.1rem;}
+  .para .mc-text{font-size:1.2rem;line-height:2.5;}
+  .para .mc-num{font-size:.62rem;padding-top:.55rem;}
+
+  .para .fix{font-size:.88rem;}
+
+  /* ── THE GAP IS THE CONTROL ────────────────────────────────────────
+     A blank in a sentence, not a form field. The filled box was tall
+     enough to break the line, so the sentence stopped reading as a
+     sentence and started reading as a form to complete.
+
+     So: no box, no fill, no border. A caramel rule under a run of space,
+     sitting on the text's own baseline, in the text's own face and size.
+     It reads as the printed blank it is standing in for — and once a word
+     is in it, it reads simply as the word, underlined. */
+  .gapbtn{display:inline;padding:0 .1rem;margin:0;
+    font:inherit;color:var(--poster-faint);background:none;border:none;
+    border-bottom:2px solid var(--caramel);
+    cursor:pointer;white-space:nowrap;
+    transition:color .15s,background .15s,border-color .15s;}
+  .gapbtn::before{content:'\2007\2007\2007\2007\2007\2007';letter-spacing:.02em;}
+  .gapbtn.filled::before{content:none;}
+  .gapbtn:hover{background:var(--poster-fill);}
+  .gapbtn.filled{color:var(--poster-ink);font-weight:600;}
+  .gapbtn.open{background:var(--poster-fill-hi);border-bottom-color:var(--sage,#527065);}
+  .gapbtn.ok{color:var(--tile-ok-ink);font-weight:700;border-bottom-color:var(--tile-ok-ink);}
+  .gapbtn.no{color:var(--tile-no-ink);text-decoration:line-through;
+    border-bottom-color:var(--tile-no-ink);}
+
   .fix{font-family:var(--f-display);font-size:.8rem;font-weight:600;
     color:var(--tile-ok-ink);margin-left:.4rem;white-space:nowrap;}
 
@@ -176,6 +193,9 @@
     .header-top{flex-wrap:wrap;row-gap:.2rem;}
     .header-title{order:3;flex:1 0 100%;text-align:center;}
     .mc-card{padding:1.2rem 1rem;}
+    .para{padding:1.4rem 1.1rem;}
+    .para .mc-text{font-size:1.05rem;line-height:2.4;}
+    .para .mc-line{padding:1.15rem 0;}
     .mc-text{font-size:.95rem;line-height:2.15;}
     .tip{width:12rem;}
     .setrow .label{min-width:7rem;font-size:.55rem;}
@@ -198,7 +218,7 @@
   </div>
   <div class="mode-selector">
     <button class="mode-btn active" type="button" data-mode="full">Full test</button>
-    <button class="mode-btn"        type="button" data-mode="solo">One at a time</button>
+    <button class="mode-btn"        type="button" data-mode="para">Per paragraph</button>
   </div>
   <!-- The dataset picker, as tabs. It was a dropdown floating over the
        page; a set is a choice among three, and three things fit on a row.
@@ -266,7 +286,9 @@ let BANKS=[];      /* one entry per dataset, each holding its own tests */
 let bi=0;          /* which dataset */
 let TESTS=[];      /* the current dataset's tests */
 let si=0;          /* which test within it */
-let qi=0;          /* which sentence, in one-at-a-time */
+let qi=0;          /* which paragraph, in per-paragraph mode */
+/* A paragraph is a chunk of the test. Eight sentences make two. */
+const PARA=4;
 let answers={};    /* index -> 'A'|'B'|'C'|'D' */
 let marked=false;
 let mode='full';
@@ -331,12 +353,15 @@ function render(){
   $('prevSet').disabled=si===0;
   $('nextSet').disabled=si===TESTS.length-1;
 
-  const shown = mode==='full' ? items.map((_,i)=>i) : [qi];
+  const paras=Math.ceil(items.length/PARA);
+  const shown = mode==='full'
+    ? items.map((_,i)=>i)
+    : items.map((_,i)=>i).slice(qi*PARA,(qi+1)*PARA);
   const lines = shown.map(i=>{
     const it=items[i], chosen=answers[i];
     const gap='<button class="gapbtn'+(chosen?' filled':'')+
       (marked&&chosen?(chosen===it.answer?' ok':' no'):'')+
-      '" data-q="'+i+'">'+(chosen?wordFor(it,chosen):'&nbsp;&nbsp;&nbsp;&nbsp;')+'</button>'+
+      '" data-q="'+i+'">'+(chosen?wordFor(it,chosen):'')+'</button>'+
       (marked&&chosen&&chosen!==it.answer
         ? '<span class="fix">'+wordFor(it,it.answer)+'</span>':'');
     const text=String(it.q).replace(/_{2,}/,gap);
@@ -344,10 +369,10 @@ function render(){
            '</span><span class="mc-text">'+text+'</span></div>';
   }).join('');
 
-  $('board').innerHTML='<div class="mc-card'+(mode==='solo'?' solo':'')+'">'+
+  $('board').innerHTML='<div class="mc-card'+(mode==='para'?' para':'')+'">'+
     '<div class="mc-kick">Multiple choice<span class="right">'+
       (mode==='full' ? Object.keys(answers).length+' / '+items.length+' answered'
-                     : 'Question '+(qi+1)+' of '+items.length)+
+                     : 'Paragraph '+(qi+1)+' of '+paras)+
     '</span></div>'+lines+'</div>';
 
   $('board').querySelectorAll('.gapbtn').forEach(b=>{
@@ -362,13 +387,13 @@ function paintDots(){
     let c='qdot';
     if(marked&&answers[i]!==undefined) c+= answers[i]===it.answer?' ok':' no';
     else if(answers[i]!==undefined) c+=' filled';
-    if(mode==='solo'&&i===qi) c+=' cur';
+    if(mode==='para' && Math.floor(i/PARA)===qi) c+=' cur';
     return '<button class="'+c+'" data-i="'+i+'" aria-label="Question '+(i+1)+'"></button>';
   }).join('');
   $('qdots').querySelectorAll('.qdot').forEach(d=>{
     d.onclick=()=>{
       const i=+d.dataset.i;
-      if(mode==='solo'){ qi=i; render(); }
+      if(mode==='para'){ qi=Math.floor(i/PARA); render(); }
       else{
         const g=$('board').querySelector('.gapbtn[data-q="'+i+'"]');
         if(g){ g.scrollIntoView({behavior:'smooth',block:'center'});
@@ -381,12 +406,12 @@ function paintDots(){
 function paintBar(){
   const items=TESTS[si].items;
   const all=items.every((_,i)=>answers[i]!==undefined);
-  const solo=mode==='solo';
-  $('btnPrev').style.display   = solo?'':'none';
-  $('btnRepeat').style.display = solo?'':'none';
-  $('btnNext').style.display   = solo?'':'none';
+  const para=mode==='para', paras=Math.ceil(items.length/PARA);
+  $('btnPrev').style.display   = para?'':'none';
+  $('btnRepeat').style.display = para?'':'none';
+  $('btnNext').style.display   = para?'':'none';
   $('btnPrev').disabled=qi===0;
-  $('btnNext').disabled=qi===items.length-1;
+  $('btnNext').disabled=qi===paras-1;
   $('btnSubmit').disabled=!all||marked;
   $('btnSubmit').textContent=marked?'Marked':'Submit';
 }
@@ -432,11 +457,8 @@ function choose(i,letter){
   sfx('tick');
   closeTip();
   render();
-  /* One at a time: taking an answer moves you on, so the rhythm is
-     read-choose-read rather than read-choose-reach-for-a-button. */
-  if(mode==='solo'&&qi<TESTS[si].items.length-1){
-    setTimeout(()=>{ qi++; render(); },260);
-  }
+  /* No auto-advance: a paragraph is read as a block, and jumping the card
+     out from under a student mid-paragraph would break the reading. */
 }
 
 /* ── marking ──────────────────────────────────────────────────────── */
@@ -445,7 +467,7 @@ function submit(){
   if(marked||!items.every((_,i)=>answers[i]!==undefined)) return;
   marked=true;
   let ok=0; items.forEach((it,i)=>{ if(answers[i]===it.answer) ok++; });
-  if(mode==='solo') qi=0;
+  if(mode==='para') qi=0;
   render();
 
   const pct=Math.round(ok/items.length*100);
@@ -471,8 +493,15 @@ function submit(){
 /* ── wiring ───────────────────────────────────────────────────────── */
 $('btnSubmit').onclick=submit;
 $('btnPrev').onclick=()=>{ if(qi>0){qi--;render();} };
-$('btnNext').onclick=()=>{ if(qi<TESTS[si].items.length-1){qi++;render();} };
-$('btnRepeat').onclick=()=>{ delete answers[qi]; marked=false; render(); };
+$('btnNext').onclick=()=>{
+  const paras=Math.ceil(TESTS[si].items.length/PARA);
+  if(qi<paras-1){ qi++; render(); }
+};
+/* Repeat clears this paragraph's answers, not the whole test. */
+$('btnRepeat').onclick=()=>{
+  for(let i=qi*PARA;i<(qi+1)*PARA;i++) delete answers[i];
+  marked=false; render();
+};
 $('prevSet').onclick=()=>loadSet(si-1);
 $('nextSet').onclick=()=>loadSet(si+1);
 $('ovClose').onclick=()=>$('ov').classList.remove('show');

@@ -20,7 +20,7 @@
     --spring:cubic-bezier(.22,1,.36,1);
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-  html,body{height:100%;}
+  html,body{height:100%;overflow-x:hidden;}   /* nothing may widen the page */
   body{background:var(--stage);color:var(--ink);
     font-family:'Inter',system-ui,sans-serif;
     display:flex;flex-direction:column;overflow:hidden;overscroll-behavior:none;}
@@ -363,8 +363,34 @@ function layoutFor(n){
 }
 
 function buildMap(){
+  /* ── WHY THE MAP SOMETIMES OVERFLOWED ON A PHONE ──────────────────────
+     Every position this function writes is derived from the map's measured
+     width, and one of them divides by it:
+
+         pillEl.style.left = (… / mapWpx * 100) + '%'
+
+     If the map has no width at the moment of measuring, that is a division
+     by zero: left becomes Infinity% or NaN%, the pills leave the page, and
+     the layout stays broken until something re-runs the maths. Refreshing
+     re-measured against a real width, which is why a reload always "fixed"
+     it — the tell that this was a timing bug, not a layout one.
+
+     A phone hits it coming BACK from a skill page: the page is restored
+     from bfcache so nothing re-runs on a fresh layout, but the address bar
+     animating fires a resize, and the debounced rebuild can land before the
+     restored document has been laid out.
+
+     So: if there is nothing to measure, do not guess. Wait for a frame and
+     try again. Same rule as the Anton guard below — never measure a thing
+     that is not ready. */
+  const mapEl = $('map');
+  if(!mapEl) return;
+  if(mapEl.clientWidth < 40 || mapEl.getBoundingClientRect().width < 40){
+    requestAnimationFrame(buildMap);
+    return;
+  }
   const LAYOUT = layoutFor(AREAS.length);
-  const mapWidthPx = $('map').clientWidth || 760;
+  const mapWidthPx = mapEl.clientWidth || 760;
   const OFFSET   = Math.max(8, Math.min(18, 46 / mapWidthPx * 100));
   const STEM_LEN = Math.max(30, Math.min(46, 150 / mapWidthPx * 100));
   const CAP_GAP  = 0.4;
@@ -500,8 +526,8 @@ function buildMap(){
       pts.slice(1).map(p => ' L '+p.x.toFixed(3)+' '+p.y.toFixed(3)).join(''));
 
     const CLEAR_PX = 2.5 * 96 / 25.4;
-    const mapWpx = mapRect.width;
-    const mapHpx = mapRect.height;
+    const mapWpx = mapRect.width  || 760;   /* never divide by zero */
+    const mapHpx = mapRect.height || 600;
     $('nodes').querySelectorAll('.pill').forEach(pillEl => {
       const i = +pillEl.dataset.i, dir = dirs[i];
       const pRect = pillEl.getBoundingClientRect();
@@ -653,6 +679,14 @@ function accentFor(bg){
   buildMap();
   let t = null;
   window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(buildMap, 150); });
+  /* Coming back from a skill page, the browser may restore this document
+     from bfcache: no load event, no re-run, and whatever the layout was
+     when it left. pageshow with persisted=true is the only signal for it. */
+  window.addEventListener('pageshow', e => { if(e.persisted) requestAnimationFrame(buildMap); });
+  /* A tab measured while hidden measures nothing. */
+  document.addEventListener('visibilitychange', () => {
+    if(!document.hidden) requestAnimationFrame(buildMap);
+  });
   /* Ask for the face by name rather than waiting on fonts.ready. ready
      resolves for the whole document, which on a cold load includes faces
      the map does not use; loading Anton explicitly resolves when the one

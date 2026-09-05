@@ -64,17 +64,24 @@
   .road-lead{max-width:520px;margin:0 auto 2.2rem;text-align:center;}
   .road-lead .lead-row{margin-bottom:.6rem;}
 
-  /* ---- Roadmap: 4-across snake board with apex pills on the loops ---- */
-  .roadmap{position:relative;max-width:420px;margin:0 auto;padding:1.5rem 0 3.5rem;}
+  /* ---- Roadmap: snake board with apex pills riding the loops ----
+     --road-spread is set from JS. The rows pull outwards by that amount on
+     each side so the loops (and the apex pill sitting on each loop) share a
+     column with the row ends. Nothing is nudged individually any more, so
+     space-between keeps every pill evenly spaced. */
+  .roadmap{position:relative;max-width:420px;margin:0 auto;padding:1.5rem 0 3.5rem;
+    --road-spread:0px;}
   .roadPath{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;}
- .roadPath .road{fill:none;stroke:#D8D4CB;stroke-width:8;stroke-linecap:round;}
-.roadPath .roadDot{fill:var(--board);stroke:var(--sage-l);stroke-width:2;}
+  .roadPath .road{fill:none;stroke:#D8D4CB;stroke-width:8;stroke-linecap:round;}
+  .roadPath .roadDot{fill:var(--board);stroke:var(--sage-l);stroke-width:2;}
   .roadPath .loopRing{fill:none;stroke:var(--sage-l);stroke-width:2;}
 
-.roadRow{position:relative;display:flex;justify-content:space-between;align-items:flex-start;
-    padding:0;margin-bottom:1.6rem;}
+  .roadRow{position:relative;display:flex;justify-content:space-between;align-items:flex-start;
+    padding:0;margin-bottom:1.6rem;
+    margin-left:calc(-1 * var(--road-spread));
+    margin-right:calc(-1 * var(--road-spread));}
   .roadRow.rev{flex-direction:row-reverse;}
-     
+
   #roadApexLayer{position:absolute;inset:0;pointer-events:none;}
   #roadApexLayer .stop-apex{pointer-events:auto;}
   .stop.stop-apex{
@@ -90,8 +97,8 @@
     transition:transform .18s cubic-bezier(.22,1,.36,1);}
   .stop:active{transform:scale(.96);}
   .stop:focus-visible{outline:2px solid var(--sage);outline-offset:6px;border-radius:999px;}
-     
- .stop-dial{
+
+  .stop-dial{
     --d:60px; --bezel:5.6%; --core:16%;
     width:var(--d);height:var(--d);border-radius:50%;position:relative;flex:none;
     display:flex;align-items:center;justify-content:center;
@@ -118,22 +125,26 @@
 
   .roadTurn{display:none;} /* the loop itself now carries the turn — no separate arrow icon needed */
 
-/* --- Mobile sizing: pills + text scaled up 15%, row spacing reduced 20% --- */
+/* --- Mobile: narrower board, wider stop boxes so labels stop colliding,
+       and more air between rows for two-line names --- */
 @media(max-width:480px){
     .wrap{padding:.7rem .7rem 3rem;}
     .road-lead{margin-bottom:1.2rem;}
-    .roadmap{max-width:230px;padding:1rem 0 2rem;}
-    .stop-dial{--d:58.7px;font-size:1.22rem;}
-    .stop-name{font-size:.66rem;margin-top:.3rem;}
-    .stop-count{font-size:.53rem;margin-top:.1rem;}
-    .roadRow{margin-bottom:.72rem;}
+    .roadmap{max-width:min(240px,66vw);padding:1.1rem 0 2.6rem;}
+    .stop{width:32%;}
+    .stop-dial{--d:54px;font-size:1.12rem;}
+    .stop-name{font-size:.63rem;margin-top:.42rem;}
+    .stop-count{font-size:.5rem;margin-top:.14rem;}
+    .roadRow{margin-bottom:1.35rem;}
+    .stop.stop-apex{max-width:66px;}
   }
   @media(max-width:360px){
-    .roadmap{max-width:184px;}
-    .stop-dial{--d:51.8px;font-size:1.09rem;}
-    .stop-name{font-size:.61rem;margin-top:.24rem;}
-    .stop-count{font-size:.51rem;}
-    .roadRow{margin-bottom:.62rem;}
+    .roadmap{max-width:min(206px,64vw);}
+    .stop-dial{--d:48px;font-size:1rem;}
+    .stop-name{font-size:.59rem;}
+    .stop-count{font-size:.48rem;}
+    .roadRow{margin-bottom:1.15rem;}
+    .stop.stop-apex{max-width:60px;}
   }
 
   .fpanelWrap{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;
@@ -444,7 +455,7 @@ let CORPUS = {};
 let FAM_ORDER=['evaluating','reasoning','positioning','projecting','relating'];
 
 /* How many stops sit in one row of the road before it turns, and how many
-   moves make up one full cycle (4 in the row + 1 sitting on the loop apex). */
+   moves make up one full cycle (the row + 1 sitting on the loop apex). */
 const isWide = window.matchMedia('(min-width: 700px)').matches;
 const ROW_SIZE = isWide ? 6 : 3;
 const CYCLE = ROW_SIZE + 1;
@@ -590,48 +601,66 @@ function buildRoad(){
   requestAnimationFrame(drawRoadPath);
 }
 
-/* Draws the snake path: a straight segment between neighbouring stops
-   in the same row, and a true semicircular loop at every row turn —
-   bulging toward whichever side the path arrives on (left or right).
-   The loop's apex point is also used to position the 5th "apex" stop
-   for that turn, and a small ring marks the same spot on the path. */
+/* Draws the snake path: a straight segment between neighbouring stops in
+   the same row, and a semicircular loop at every row turn, bulging toward
+   whichever side the path arrives on.
+
+   The apex of that cubic sits at  edge + 0.75 * bulge. So instead of
+   nudging individual pills sideways to meet the apex column (which left a
+   hole in the row), we widen the whole row by `spread` on each side and
+   derive bulge = spread / 0.75. Every pill then redistributes evenly and
+   the apex lands exactly on the row's outer column.
+
+   `spread` is clamped to the space actually left beside the board, so on a
+   narrow phone the loops shrink rather than pushing the apex pill off-screen. */
 function drawRoadPath(){
   const svg=document.getElementById('roadPath');
   const map=document.getElementById('roadmap');
-  const mapRect=map.getBoundingClientRect();
   const dials=[...map.querySelectorAll('.roadRow .stop-dial')];
   if(!dials.length){ svg.innerHTML=''; return; }
+
+  const rowGap = dials[ROW_SIZE]
+    ? Math.abs(dials[ROW_SIZE].getBoundingClientRect().top -
+               dials[ROW_SIZE-1].getBoundingClientRect().top)
+    : 0;
+  const apexEl  = map.querySelector('.stop-apex');
+  const apexPad = apexEl ? apexEl.offsetWidth/2 + 8 : 40;
+  const room    = Math.max(0,(map.parentElement.clientWidth - map.clientWidth)/2 - apexPad);
+  const spread  = Math.min(rowGap*0.66, room);
+  const bulge   = spread/0.75;
+
+  // Apply the spread, then re-measure once with the wider rows.
+  const applied = parseFloat(map.style.getPropertyValue('--road-spread')) || 0;
+  if(Math.abs(applied - spread) > 0.5){
+    map.style.setProperty('--road-spread', spread.toFixed(1)+'px');
+    requestAnimationFrame(drawRoadPath);
+    return;
+  }
+
+  const mapRect=map.getBoundingClientRect();
   const pts=dials.map(d=>{
     const r=d.getBoundingClientRect();
     return { x: r.left + r.width/2 - mapRect.left, y: r.top + r.height/2 - mapRect.top };
   });
 
-let loopRings=[];
-const EXT = 80; // how far the line overshoots past the first/last pill, in px
+  const loopRings=[];
+  const EXT = Math.min(80, spread + 24); // overshoot past the first/last pill
 
-// extend the start backward, using the direction from pt0 → pt1
-const p0 = pts[0], p1 = pts[1];
-const startAngle = Math.atan2(p1.y-p0.y, p1.x-p0.x);
-const startX = p0.x - Math.cos(startAngle)*EXT;
-const startY = p0.y - Math.sin(startAngle)*EXT;
+  const p0=pts[0], p1=pts[1] || pts[0];
+  const startAngle=Math.atan2(p1.y-p0.y, p1.x-p0.x);
+  const startX=p0.x-Math.cos(startAngle)*EXT;
+  const startY=p0.y-Math.sin(startAngle)*EXT;
 
-let d='M '+startX.toFixed(1)+' '+startY.toFixed(1)+' L '+p0.x.toFixed(1)+' '+p0.y.toFixed(1);
+  let d='M '+startX.toFixed(1)+' '+startY.toFixed(1)+' L '+p0.x.toFixed(1)+' '+p0.y.toFixed(1);
 
   for(let i=1;i<pts.length;i++){
     const a=pts[i-1], b=pts[i];
-    const sameRow = Math.abs(a.y-b.y) < 4;
-
-    if(sameRow){
+    if(Math.abs(a.y-b.y) < 4){
       d += ` L ${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
       continue;
     }
 
-    /* Row turn: a cubic Bézier bulge approximating a true semicircle.
-       The (2/3)·h offset (h = vertical gap) is the standard construction
-       for a single cubic Bézier tracing a semicircular arc. */
-    const onRight = a.x > mapRect.width/2;
-    const sign = onRight ? 1 : -1;
-    const bulge = Math.abs(b.y - a.y) * 0.88;
+    const sign = a.x > mapRect.width/2 ? 1 : -1;
     const cx1 = a.x+sign*bulge, cy1 = a.y;
     const cx2 = b.x+sign*bulge, cy2 = b.y;
 
@@ -639,35 +668,17 @@ let d='M '+startX.toFixed(1)+' '+startY.toFixed(1)+' L '+p0.x.toFixed(1)+' '+p0.
          `${cx2.toFixed(1)} ${cy2.toFixed(1)}, `+
          `${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
 
-    // apex point at t = 0.5 on this Bézier segment
-    const apexX = 0.125*a.x + 0.375*cx1 + 0.375*cx2 + 0.125*b.x;
-    const apexY = 0.125*a.y + 0.375*cy1 + 0.375*cy2 + 0.125*b.y;
-    loopRings.push({x:apexX, y:apexY});
+    loopRings.push({
+      x: 0.125*a.x + 0.375*cx1 + 0.375*cx2 + 0.125*b.x,
+      y: 0.125*a.y + 0.375*cy1 + 0.375*cy2 + 0.125*b.y
+    });
   }
 
-  // extend the end forward, using the direction from the last two points
-  const pn = pts[pts.length-1], pnPrev = pts[pts.length-2];
-  const endAngle = Math.atan2(pn.y-pnPrev.y, pn.x-pnPrev.x);
-  const endX = pn.x + Math.cos(endAngle)*EXT;
-  const endY = pn.y + Math.sin(endAngle)*EXT;
+  const pn=pts[pts.length-1], pnPrev=pts[pts.length-2] || pn;
+  const endAngle=Math.atan2(pn.y-pnPrev.y, pn.x-pnPrev.x);
+  const endX=pn.x+Math.cos(endAngle)*EXT;
+  const endY=pn.y+Math.sin(endAngle)*EXT;
   d += ` L ${endX.toFixed(1)} ${endY.toFixed(1)}`;
-
-  // Align the very first and very last row-stops with the same left column
-  // that the apex loops (e.g. pillar 14) establish, so the whole left edge
-  // reads as one straight line, matching the reference layout.
-  if(loopRings.length >= 2){
-    const rowStart2Idx = 2*ROW_SIZE; // first dial of the 3rd row (e.g. pillar 15)
-    if(pts[rowStart2Idx]){
-      const leftApex = loopRings[1]; // the left-bulging apex (pillar 14)
-      const delta = pts[rowStart2Idx].x - leftApex.x; // how far the apex sticks out further left
-      if(delta > 0){
-        const firstStop = dials[0] && dials[0].closest('.stop');
-        const lastStop = dials[dials.length-1] && dials[dials.length-1].closest('.stop');
-        if(firstStop) firstStop.style.left = (-delta)+'px';
-        if(lastStop) lastStop.style.left = (-delta)+'px';
-      }
-    }
-  }
 
   let inner = `<defs>
     <linearGradient id="roadGrad" gradientUnits="userSpaceOnUse"
@@ -1059,6 +1070,10 @@ window.addEventListener('resize',()=>{
     con.querySelectorAll('.enode').forEach(n=>n.remove());
     con.querySelector('.const-hint')?.remove();
     layoutConstellation(path.family,path.fn);
+  } else if(document.getElementById('viewFamilies').classList.contains('active')){
+    // `spread` depends on how much room sits beside the board, so the loops
+    // (and the apex pills riding them) must be re-measured on every resize.
+    requestAnimationFrame(drawRoadPath);
   }
 });
 

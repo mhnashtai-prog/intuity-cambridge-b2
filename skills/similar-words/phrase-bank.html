@@ -64,11 +64,11 @@
   .road-lead{max-width:520px;margin:0 auto 2.2rem;text-align:center;}
   .road-lead .lead-row{margin-bottom:.6rem;}
 
-  /* ---- Roadmap: snake board with apex pills riding the loops ----
-     Rows keep their natural width and even space-between spacing. The apex
-     pill is snapped to the row-end column (see drawRoadPath) rather than to
-     the curve's true midpoint, so every row end and every apex share one
-     vertical edge — 1 / 14 / 15 / 27 down the left, 6 / 7 / 8 down the right. */
+  /* ---- Roadmap: 4-across snake board with apex pills on the loops ----
+     --open-l / --open-r stretch a row's OPEN end (the first row's start and
+     the last row's finish, the two ends no loop arrives at) out to the loop
+     column, so pill 1 sits under pill 14. Stretching the row rather than
+     nudging its first pill is what keeps space-between spacing even. */
   .roadmap{position:relative;max-width:420px;margin:0 auto;padding:1.5rem 0 3.5rem;}
   .roadPath{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;}
   .roadPath .road{fill:none;stroke:#D8D4CB;stroke-width:8;stroke-linecap:round;}
@@ -76,7 +76,9 @@
   .roadPath .loopRing{fill:none;stroke:var(--sage-l);stroke-width:2;}
 
   .roadRow{position:relative;display:flex;justify-content:space-between;align-items:flex-start;
-    padding:0;margin-bottom:1.6rem;}
+    padding:0;margin-bottom:1.6rem;
+    margin-left:calc(-1 * var(--open-l, 0px));
+    margin-right:calc(-1 * var(--open-r, 0px));}
   .roadRow.rev{flex-direction:row-reverse;}
 
   #roadApexLayer{position:absolute;inset:0;pointer-events:none;}
@@ -598,50 +600,49 @@ function buildRoad(){
   requestAnimationFrame(drawRoadPath);
 }
 
-/* Draws the snake path: a straight segment between neighbouring stops in the
-   same row, and a semicircular loop at every row turn, bulging toward whichever
-   side the path arrives on.
+/* Draws the snake path: a straight segment between neighbouring stops
+   in the same row, and a true semicircular loop at every row turn —
+   bulging toward whichever side the path arrives on (left or right).
+   The loop's apex point is also used to position the 5th "apex" stop
+   for that turn, and a small ring marks the same spot on the path.
 
-   The loop's true midpoint always sits 0.75*bulge OUTSIDE the row's end pill,
-   so a pill placed on it can never share a column with the row — that was the
-   misalignment. Instead the bulge is sized from the dial (just wide enough for
-   the road to pass behind the pill) and the apex pill is snapped to the
-   row-end column, which puts 1 / 14 / 15 / 27 on one edge and 6 / 7 / 8 on
-   the other. */
+   The bulge is derived from the vertical row gap, so it does NOT change
+   when a row is stretched horizontally — which is what lets the open-end
+   alignment below settle in a single extra pass. */
 function drawRoadPath(){
   const svg=document.getElementById('roadPath');
   const map=document.getElementById('roadmap');
+  const mapRect=map.getBoundingClientRect();
   const dials=[...map.querySelectorAll('.roadRow .stop-dial')];
   if(!dials.length){ svg.innerHTML=''; return; }
-
-  const mapRect=map.getBoundingClientRect();
-  const dialW=dials[0].getBoundingClientRect().width || 60;
-  const bulge=dialW*0.80;              // road clears the apex pill by a few px
-  const EXT=Math.min(80, dialW*1.35);  // overshoot past the first/last pill
-
   const pts=dials.map(d=>{
     const r=d.getBoundingClientRect();
     return { x: r.left + r.width/2 - mapRect.left, y: r.top + r.height/2 - mapRect.top };
   });
 
-  const loops=[];
+  let loopRings=[];
+  const EXT = 80; // how far the line overshoots past the first/last pill, in px
 
-  const p0=pts[0], p1=pts[1] || pts[0];
-  const startAngle=Math.atan2(p1.y-p0.y, p1.x-p0.x);
-  const startX=p0.x-Math.cos(startAngle)*EXT;
-  const startY=p0.y-Math.sin(startAngle)*EXT;
+  const p0 = pts[0], p1 = pts[1] || pts[0];
+  const startAngle = Math.atan2(p1.y-p0.y, p1.x-p0.x);
+  const startX = p0.x - Math.cos(startAngle)*EXT;
+  const startY = p0.y - Math.sin(startAngle)*EXT;
 
   let d='M '+startX.toFixed(1)+' '+startY.toFixed(1)+' L '+p0.x.toFixed(1)+' '+p0.y.toFixed(1);
 
   for(let i=1;i<pts.length;i++){
     const a=pts[i-1], b=pts[i];
-    if(Math.abs(a.y-b.y) < 4){
+    const sameRow = Math.abs(a.y-b.y) < 4;
+
+    if(sameRow){
       d += ` L ${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
       continue;
     }
 
+    /* Row turn: a cubic Bézier bulge approximating a true semicircle. */
     const onRight = a.x > mapRect.width/2;
     const sign = onRight ? 1 : -1;
+    const bulge = Math.abs(b.y - a.y) * 0.88;
     const cx1 = a.x+sign*bulge, cy1 = a.y;
     const cx2 = b.x+sign*bulge, cy2 = b.y;
 
@@ -649,18 +650,62 @@ function drawRoadPath(){
          `${cx2.toFixed(1)} ${cy2.toFixed(1)}, `+
          `${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
 
-    /* Pill column = the outer edge shared by the two row ends this loop joins.
-       Pill y = the curve's own midpoint, so it still sits on the turn. */
-    loops.push({
-      x: onRight ? Math.max(a.x,b.x) : Math.min(a.x,b.x),
-      y: 0.125*a.y + 0.375*cy1 + 0.375*cy2 + 0.125*b.y
-    });
+    // apex point at t = 0.5 on this Bézier segment
+    const apexX = 0.125*a.x + 0.375*cx1 + 0.375*cx2 + 0.125*b.x;
+    const apexY = 0.125*a.y + 0.375*cy1 + 0.375*cy2 + 0.125*b.y;
+    loopRings.push({x:apexX, y:apexY});
   }
 
-  const pn=pts[pts.length-1], pnPrev=pts[pts.length-2] || pn;
-  const endAngle=Math.atan2(pn.y-pnPrev.y, pn.x-pnPrev.x);
-  const endX=pn.x+Math.cos(endAngle)*EXT;
-  const endY=pn.y+Math.sin(endAngle)*EXT;
+  /* --- Open-end alignment ---------------------------------------------
+     Every row end that a loop arrives at is already tied to that loop. The
+     two ends left over — the very first pill and the very last — sat one
+     column inside the loops. The old code slid those two pills across on
+     their own, which is what opened the hole beside pill 1. Stretching the
+     whole row to the loop column instead lets space-between re-space all of
+     its pills evenly, so pill 1 lands under pill 14 with nothing left behind
+     it. Bulge is independent of row width, so one redraw is enough. */
+  const rows=[...map.querySelectorAll('.roadRow')];
+  if(rows.length>1 && loopRings.length){
+    const mid=mapRect.width/2;
+    const leftApex =loopRings.filter(p=>p.x< mid).sort((a,b)=>a.x-b.x)[0];
+    const rightApex=loopRings.filter(p=>p.x>=mid).sort((a,b)=>b.x-a.x)[0];
+
+    const edgeOf=(row,side)=>{
+      const xs=[...row.querySelectorAll('.stop-dial')].map(dd=>{
+        const rr=dd.getBoundingClientRect();
+        return rr.left+rr.width/2-mapRect.left;
+      });
+      if(!xs.length) return null;
+      return side==='left' ? Math.min(...xs) : Math.max(...xs);
+    };
+    const stretch=(row,side,apex)=>{
+      if(!row||!apex) return false;
+      const edge=edgeOf(row,side);
+      if(edge===null) return false;
+      const prop = side==='left' ? '--open-l' : '--open-r';
+      const cur  = parseFloat(row.style.getPropertyValue(prop))||0;
+      const want = cur + (side==='left' ? edge-apex.x : apex.x-edge);
+      if(Math.abs(want-cur)>0.5){ row.style.setProperty(prop, want.toFixed(1)+'px'); return true; }
+      return false;
+    };
+
+    const first=rows[0], last=rows[rows.length-1];
+    // A reversed row runs right-to-left, so its start is on the right and
+    // its finish is on the left.
+    const firstSide = first.classList.contains('rev') ? 'right' : 'left';
+    const lastSide  = last.classList.contains('rev')  ? 'left'  : 'right';
+
+    let changed=false;
+    if(stretch(first, firstSide, firstSide==='left'?leftApex:rightApex)) changed=true;
+    if(stretch(last,  lastSide,  lastSide ==='left'?leftApex:rightApex)) changed=true;
+    if(changed){ requestAnimationFrame(drawRoadPath); return; }
+  }
+
+  // extend the end forward, using the direction from the last two points
+  const pn = pts[pts.length-1], pnPrev = pts[pts.length-2] || pn;
+  const endAngle = Math.atan2(pn.y-pnPrev.y, pn.x-pnPrev.x);
+  const endX = pn.x + Math.cos(endAngle)*EXT;
+  const endY = pn.y + Math.sin(endAngle)*EXT;
   d += ` L ${endX.toFixed(1)} ${endY.toFixed(1)}`;
 
   let inner = `<defs>
@@ -676,18 +721,16 @@ function drawRoadPath(){
   <path class="road" stroke="url(#roadGrad)" d="${d}"/>`;
 
   pts.forEach(p=>{ inner += `<circle class="roadDot" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4"/>`; });
-
-  loops.forEach((p,t)=>{
-    const el=map.querySelector(`.stop-apex[data-turn="${t}"]`);
-    if(el){
-      el.style.left=p.x+'px'; el.style.top=p.y+'px'; el.style.opacity='1';
-    } else {
-      // no pill on this turn — mark the spot so the loop still reads as a stop
+  loopRings.forEach((p,t)=>{
+    if(!map.querySelector(`.stop-apex[data-turn="${t}"]`))
       inner += `<circle class="loopRing" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="6"/>`;
-    }
   });
-
   svg.innerHTML=inner;
+
+  loopRings.forEach((p,t)=>{
+    const el=map.querySelector(`.stop-apex[data-turn="${t}"]`);
+    if(el){ el.style.left=p.x+'px'; el.style.top=p.y+'px'; el.style.opacity='1'; }
+  });
 }
 if(document.fonts && document.fonts.ready){
   document.fonts.ready.then(()=>{

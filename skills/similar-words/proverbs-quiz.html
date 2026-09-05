@@ -45,6 +45,13 @@
   /* The old .hdr/.mode-seg/.seg-btn are gone: the header markup below is
      the shell's, so this page's header is the same object as every other
      page's — same height, same back link, same mode row. */
+  /* Mute is shared across the device by intuity-sound.js, so a student who
+     turned sound off in Sort arrives here with it already off. */
+  .mute{border:none;background:none;cursor:pointer;font-size:.9rem;
+    line-height:1;padding:0 .5rem 0 0;opacity:.75;transition:opacity .15s;}
+  .mute:hover{opacity:1;}
+  .mute.off{opacity:.32;filter:grayscale(1);}
+
   .score-chip{font-family:var(--f-mono);font-size:.62rem;letter-spacing:.06em;
     color:var(--poster-faint);font-variant-numeric:tabular-nums;}
   .score-chip + .score-chip{margin-left:.55rem;}
@@ -223,7 +230,9 @@
   .ov-bar{width:10px;height:32px;border-radius:3px;}
   .ov-sub{font-size:.82rem;color:rgba(255,255,255,.6);text-align:center;
     max-width:300px;line-height:1.55;}
-  .ov-btns{display:flex;gap:.6rem;margin-top:.6rem;}
+  .ov-btns{display:flex;gap:.6rem;margin-top:.6rem;flex-wrap:wrap;justify-content:center;}
+  .ov-sub b{color:var(--card);font-weight:700;}
+  .ov-more{opacity:.6;}
   .ov-btn{font-family:var(--f-display);font-size:.72rem;font-weight:700;
     letter-spacing:.06em;text-transform:uppercase;padding:.75rem 1.5rem;
     border-radius:var(--r-field);cursor:pointer;border:none;transition:filter .15s;}
@@ -244,7 +253,10 @@
         <div class="app-title">INTUITY</div>
         <div class="app-subtitle">Idiomatic Expressions &middot; B1&ndash;B2</div>
       </div>
-      <span class="header-spacer">Level <b>B1&ndash;B2</b></span>
+      <span class="header-spacer">
+        <button class="mute" id="mute" type="button" aria-label="Sound">&#128266;</button>
+        Level <b>B1&ndash;B2</b>
+      </span>
     </div>
 
     <!-- The same three modes, in the shell's mode row. setMode still toggles
@@ -324,12 +336,20 @@
   <div class="ov-bars"  id="ovBars"></div>
   <div class="ov-sub"   id="ovSub"></div>
   <div class="ov-btns">
+    <button class="ov-btn primary" id="againMissed" onclick="againMissed()" style="display:none">↻ Just the missed ones</button>
     <button class="ov-btn primary" onclick="restart()">↺ Try Again</button>
     <button class="ov-btn ghost"   onclick="closeOverlay()">Review</button>
   </div>
 </div>
 
+<!-- The product's instrument library. Sort has used it from the start;
+     this page had every hook it exists for and made no call. -->
+<script src="/skills/grammar-rules/intuity-sound.js"></script>
 <script>
+/* One helper so a missing library can never throw — the page must work
+   with sound off, muted, or the file absent. */
+function sfx(name){ try{ if(window.SFX && SFX[name]) SFX[name](); }catch(e){} }
+
 /* ═══════════════════════════════════════════
    PALETTE
 ═══════════════════════════════════════════ */
@@ -601,6 +621,7 @@ function placeFromPool(i, poolIdx, slotIdx){
   if(slots[slotIdx]!==null) pool.push(slots[slotIdx]);  // occupied: swap out
   slots[slotIdx]=word;
   pool.splice(poolIdx,1);
+  sfx('tick');
   syncAttempt(i); renderBuildChips(i);
 }
 
@@ -667,6 +688,7 @@ function checkBuild(){
   const words=buildWords[slideIdx];
   const correct=corr.split(/\s+/);
   const allRight=words.every((w,i)=>w===correct[i]);
+  sfx(allRight?'correct':'wrong');
   const fb=document.getElementById('feedback');
   const fbText=document.getElementById('fbText');
   const fbIcon=document.getElementById('fbIcon');
@@ -725,6 +747,7 @@ function choose(chosenText,btn,slideIdx){
   const isCorrect=chosenText===corr;
   results[slideIdx]=isCorrect?'correct':'wrong';
   results[slideIdx+'_chosen']=chosenText;
+  sfx(isCorrect?'correct':'wrong');
   updateScoreDisplay();
   const allBtns=document.querySelectorAll('.opt-btn');
   allBtns.forEach(b=>b.classList.add('locked'));
@@ -804,30 +827,70 @@ function renderDots(){
 /* ═══════════════════════════════════════════
    COMPLETE
 ═══════════════════════════════════════════ */
+function missedList(){
+  return order.map(i=>i).filter(i=>results[i]==='wrong');
+}
+
+/* Sort's scorecard does the thing this one did not: it says WHAT was
+   missed and offers to run just those again. Everything needed was
+   already in state — results per slide, the proverb, its meaning. */
 function showComplete(){
   let ok=0;
   Object.entries(results).forEach(([k,v])=>{if(!k.includes('_')&&v==='correct')ok++;});
   const pct=Math.round(ok/TOTAL*100);
+  const missed=missedList();
+
   document.getElementById('ovEm').textContent=pct===100?'🏆':pct>=80?'🎉':pct>=60?'👍':'📚';
   document.getElementById('ovScore').textContent=ok+' / '+TOTAL+' correct ('+pct+'%)';
-  document.getElementById('ovSub').textContent=
-    pct===100?'Perfect! You know your proverbs!':
-    pct>=80?'Excellent — almost flawless!':
-    pct>=60?'Good effort. Keep practising.':'Review the list and try again!';
+  document.getElementById('ovSub').innerHTML = missed.length
+    ? 'Worth another look: '+missed.slice(0,6).map(i=>
+        '<b>'+correctTexts[i]+'</b>').join(' · ')+
+      (missed.length>6 ? ' <span class="ov-more">and '+(missed.length-6)+' more</span>' : '')
+    : 'Nothing missed — the whole deck, first time.';
+
   const bars=document.getElementById('ovBars');
   bars.innerHTML='';
   order.forEach((_,i)=>{
     const b=document.createElement('div');
     b.className='ov-bar';
     const res=results[order[i]];
-    b.style.background=res==='correct'?'var(--green)':res==='wrong'?'var(--red)':'rgba(255,255,255,.1)';
+    b.style.background = res==='correct' ? 'var(--sage,#527065)'
+                       : res==='wrong'   ? 'var(--tile-no-ink)'
+                       : 'rgba(255,255,255,.14)';
     bars.appendChild(b);
   });
+
+  const again=document.getElementById('againMissed');
+  if(again) again.style.display = missed.length ? '' : 'none';
+
+  sfx('fanfare');
   document.getElementById('overlay').classList.add('show');
 }
+
+/* Run the deck again with only the ones that were wrong. The order array
+   IS the deck, so a shorter deck is the whole change — nothing else in
+   the page needs to know it is a second pass. */
+function againMissed(){
+  const missed=missedList();
+  if(!missed.length) return;
+  document.getElementById('overlay').classList.remove('show');
+  order=missed; TOTAL=order.length;
+  results={}; buildChecked={};
+  order.forEach(i=>{
+    const bw=[...correctTexts[i].split(/\s+/)]; shuffle(bw);
+    buildPool[i]=bw;
+    buildSlots[i]=new Array(bw.length).fill(null);
+    buildWords[i]=new Array(bw.length).fill('');
+  });
+  cur=0;
+  updateScoreDisplay(); renderDots(); updateProgress();
+  if(appMode==='list') renderList(); else renderSlide('in');
+}
+
 function restart(){
   document.getElementById('overlay').classList.remove('show');
-  init();
+  init();                      /* rebuilds the FULL deck, after againMissed */
+  TOTAL=slides.length;
   if(appMode==='list') renderList();
   else renderSlide('in');
 }
@@ -874,6 +937,19 @@ addEventListener('resize', syncHeader);
 addEventListener('orientationchange', function(){ setTimeout(syncHeader,120); });
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(syncHeader);
 if(window.ResizeObserver){ var hh=document.querySelector('.header'); if(hh) new ResizeObserver(syncHeader).observe(hh); }
+(function(){
+  var b=document.getElementById('mute');
+  if(!b) return;
+  function paint(){
+    var on = !window.SFX || SFX.isOn();
+    b.textContent = on ? '\uD83D\uDD0A' : '\uD83D\uDD07';
+    b.classList.toggle('off', !on);
+    b.setAttribute('aria-label', on ? 'Sound on' : 'Sound off');
+  }
+  b.onclick=function(){ if(window.SFX) SFX.toggle(); paint(); };
+  paint();
+})();
+
 syncHeader();
 
 /* The nav belongs under the card, not pinned to the viewport foot. Moving

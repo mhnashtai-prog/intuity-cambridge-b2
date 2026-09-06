@@ -132,6 +132,63 @@
        "Can't find variable: stripLeaders" before it drew anything. A
        helper used by more than one function belongs where all of them can
        see it. */
+
+    /* ── PARAGRAPHS ──────────────────────────────────────────────────────
+       Two faults, and I found them one at a time.
+
+       FIRST: some texts carry no paragraph breaks at all. word-formation-
+       8gaps test 1 is 880 characters with zero newlines, so
+       `text.split('\n\n')` returned one element, the section builder made
+       one section of it, and "Paragraph" showed the whole passage.
+
+       SECOND, and the one I nearly missed: most texts DO carry breaks —
+       3 of 4 in the 8-gap file, 6 of 8 in the 10-gap file. I checked test
+       1, found no newlines, and generalised. Where the breaks exist they
+       can still be far too big for the mode: 10gaps test 7 opens with a
+       642-character paragraph holding NINE gaps, which is the whole point
+       of the mode lost in one card.
+
+       So both, in order. Honour the author's paragraphing where it exists,
+       then subdivide any paragraph that is still too long. A chunk closes
+       at whichever limit is reached first, and only ever at a SENTENCE
+       END — a word-formation gap is decided by the clause around it, so
+       cutting a sentence in half would remove the thing that decides it. */
+    const PARA_MIN_GAPS  = 3;    /* enough to be worth a card */
+    const PARA_MAX_CHARS = 340;  /* and short enough to hold in the head */
+
+    function chunkOne(t){
+      const countGaps = x => (String(x).match(/\(\d+\)/g) || []).length;
+      if (t.length <= PARA_MAX_CHARS && countGaps(t) <= PARA_MIN_GAPS + 1) return [t];
+      /* Sentence ends: . ! or ? then space then a capital or "(". A missed
+         split only makes one chunk larger — it never breaks a sentence. */
+      const sentences = t.split(/(?<=[.!?])\s+(?=[A-Z(])/).filter(x => x.trim());
+      if (sentences.length < 2) return [t];
+      const out = [];
+      let buf = [], gaps = 0;
+      for (const sent of sentences) {
+        buf.push(sent);
+        gaps += countGaps(sent);
+        if (gaps >= PARA_MIN_GAPS || buf.join(' ').length >= PARA_MAX_CHARS) {
+          out.push(buf.join(' ')); buf = []; gaps = 0;
+        }
+      }
+      /* A trailing stub is merged back rather than left as a card with one
+         gap on it. */
+      if (buf.length) {
+        if (out.length) out[out.length - 1] += ' ' + buf.join(' ');
+        else out.push(buf.join(' '));
+      }
+      return out;
+    }
+
+    function toParagraphs(text){
+      const t = String(text);
+      const authored = t.includes('\n\n')
+        ? t.split('\n\n').filter(x => x.trim())
+        : [t];
+      return authored.reduce((acc, para) => acc.concat(chunkOne(para)), []);
+    }
+
     function stripLeaders(t){ return String(t).replace(/\s*\.{4,}\s*/g, ' '); }
 
     const DATASETS = [
@@ -586,7 +643,7 @@
         }
       } else {
         // For paragraph format: use similar logic as gap-fill
-        const paragraphs = test.text.split('\n\n').filter(p => p.trim());
+        const paragraphs = toParagraphs(test.text);
         const gapNums = Object.keys(test.gaps).filter(n => n !== '0').map(n => parseInt(n)).sort((a, b) => a - b);
         
         let currentParagraphs = [];
@@ -710,7 +767,13 @@
             const answer = answerObj ? (answerObj.answer || answerObj) : '';
             replacements.push({
               original: match[0],
-              replacement: `(${num}) <span class="prompt-word">${sanitizeText(promptWord)}</span> <span class="example-word">${sanitizeText(answer)}</span> `
+              /* Guided mode had its own copy of the example injection, and
+                 unlike the classic one at the top of this file it does NOT
+                 consume the answer out of the text — gapPattern captures
+                 "(0) ICY" only, so the "icy" that follows stays put and
+                 the answer appeared twice. Prompt chip alone; the text
+                 supplies the answer, as the paper prints it. */
+              replacement: `(${num}) <span class="prompt-word">${sanitizeText(promptWord)}</span> `
             });
           } else {
             const value = userAnswers[num] || '';
@@ -749,7 +812,8 @@
           sectionHtml = sectionHtml.replace(r.original, r.replacement);
         });
         
-        content.innerHTML = sectionHtml.split('\n\n').map(para => `<p>${para}</p>`).join('');
+        content.innerHTML = toParagraphs(stripLeaders(sectionHtml))
+          .map(para => `<p>${para}</p>`).join('');
       }
       
       const navButtons = document.createElement('div');
@@ -881,6 +945,27 @@
     function updateFooter() {
       const total = getTotalGaps();
       const filled = getFilledCount();
+
+      /* ── SUBMIT MARKS THE TEST, NOT THE CARD ─────────────────────────
+         The same architecture in both views, which is what the full-text
+         view already implied: you fill every gap, then you submit. A
+         paragraph is a way of LOOKING at the test, not a smaller test —
+         its gaps are scored with the rest and count toward the same total.
+         Marking per paragraph would give three scores for one exam task
+         and let a student finish one card without ever seeing the others.
+
+         `filled` and `total` above are already counted across every gap,
+         not just the ones on screen — which is why this works unchanged in
+         the paragraph view, where most inputs are not even in the DOM. */
+      const submitBtn = document.getElementById('submitBtn');
+      if (submitBtn && !showingResults) {
+        const left = total - filled;
+        submitBtn.disabled = left > 0;
+        submitBtn.textContent = left > 0 ? `Submit — ${left} to go` : 'Submit';
+      } else if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit';
+      }
       const footer = document.getElementById('footer');
       
       if (filled === total && !showingResults) {

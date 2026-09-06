@@ -69,7 +69,7 @@
     tog.appendChild(b);
     return b;
   });
-
+  
   function paint() {
     btns.forEach(function (b, i) {
       b.classList.toggle('active', i === at);

@@ -46,31 +46,35 @@ var STAGE = (B.getAttribute('data-stage') || '').toLowerCase();
    It also makes the point the menu makes and the pages did not: Essay is
    Part 1 and compulsory, the other five are Part 2 and you choose one. */
 var GENRES = {
-  essays:   { label:'Essay',   part:'Part 1',  back:'/index.html?openModal=writing',
+  essays:   { label:'Essay',   part:'Part 1', back:'/skills/writing/writing-door.html',
               stages:{ question:'/skills/writing/essays/essay-question.html',
                        plan:    '/skills/writing/essays/essay-plan.html',
                        model:   '/skills/writing/essays/essay-model.html',
                        sample:  '/skills/writing/essays/essay-sample.html' } },
-  reviews:  { label:'Review',  part:'Part 2', back:'/index.html?openModal=writing',
+  reviews:  { label:'Review',  part:'Part 2', back:'/skills/writing/writing-door.html',
               stages:{ question:'/skills/writing/reviews/review-question-selector.html',
-                       plan:    '/skills/writing/reviews/review-structure.html',
-                       model:   '/skills/writing/reviews/review-builder.html',
+                       plan:    '/skills/writing/reviews/review-plan.html',
+                       model:   '/skills/writing/reviews/review-model.html',
                        sample:  '/skills/writing/reviews/review-sample.html' } },
-  reports:  { label:'Report',  part:'Part 2', back:'/index.html?openModal=writing',
+  reports:  { label:'Report',  part:'Part 2', back:'/skills/writing/writing-door.html',
               stages:{ question:'/skills/writing/reports/report-question-selector.html',
-                       plan:    '/skills/writing/reports/report-structure-practice.html',
-                       model:   '/skills/writing/reports/report-sentence-builder.html',
+                       plan:    '/skills/writing/reports/report-plan.html',
+                       model:   '/skills/writing/reports/report-model.html',
                        sample:  '/skills/writing/reports/report-sample.html' } },
-  emails:   { label:'Email',   part:'Part 2', back:'/index.html?openModal=writing',
+  emails:   { label:'Email',   part:'Part 2', back:'/skills/writing/writing-door.html',
               stages:{ question:'/skills/writing/emails/email-question.html',
                        plan:    '/skills/writing/emails/email-plan.html',
                        model:   '/skills/writing/emails/email-model.html',
                        sample:  '/skills/writing/emails/email-sample.html' } },
-  articles: { label:'Article', part:'Part 2', back:'/index.html?openModal=writing',
-              stages:{ question:'/skills/writing/articles/article-question.html' } },
-  story:    { label:'Story',   part:'Part 2', back:'/index.html?openModal=writing',
-              stages:{ question:'/skills/writing/narrative/narrative-question.html' } }
+  articles: { label:'Article', part:'Part 2', back:'/skills/writing/writing-door.html',
+              stages:{ question:'/skills/writing/articles/article-question.html',
+                       model:   '/skills/writing/articles/article-model.html',
+                       sample:  '/skills/writing/articles/article-sample.html' } },
+  story:    { label:'Story',   part:'Part 2', back:'/skills/writing/writing-door.html',
+              stages:{ question:'/skills/writing/narrative/narrative-question.html',
+                       sample:  '/skills/writing/narrative/narrative-sample.html' } }
 };
+
 var G = GENRES[GENRE];
 if (!G) return;
 

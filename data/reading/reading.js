@@ -215,15 +215,29 @@ function questionHTML(card, i) {
    it — but wide, because what lands in it is a whole sentence rather than
    a word. Empty it shows its number and invites; filled it shows the
    sentence you placed. */
+/* ── THE GAP, AS THE PAPER PRINTS IT ─────────────────────────────────────
+   Cambridge sets a Part 6 gap as a SHORT numbered box on its own line:
+   a rule running across the column with the question number in a small
+   shaded square at the left. It is deliberately not the width of a
+   sentence — the box marks the JOIN between two paragraphs, and a wide
+   bar saying "Choose a sentence" made it look like a field to fill in
+   rather than a seam to close.
+
+   So empty, the gap is that box: number, short rule, nothing else.
+   Filled, it opens out to show the sentence you placed, because at that
+   point you need to read the paragraph back and hear whether it works —
+   which is the only way to check a Part 6 answer. Two states, two
+   shapes, and the empty one matches the printed paper. */
 function gapHTML(i) {
   var a = answers[i], has = a !== undefined;
   var ok = marked && has && a === T().answers[i];
   var bad = marked && has && !ok;
-  var body = has ? esc(T().sentences[a]) : 'Choose a sentence';
-  return '<button class="rd-gap' + (has ? ' filled' : '') + (ok ? ' ok' : '') +
-    (bad ? ' no' : '') + '" type="button" data-i="' + i + '"' +
-    (marked ? ' disabled' : '') + '>' +
-    '<span class="let">' + (i + 1) + '</span><span>' + body + '</span></button>' +
+  var cls = 'rd-gap' + (has ? ' filled' : ' empty') + (ok ? ' ok' : '') + (bad ? ' no' : '');
+  var inner = '<span class="let">' + (i + 1) + '</span>' +
+              (has ? '<span class="sen">' + esc(T().sentences[a]) + '</span>'
+                   : '<span class="rule"></span>');
+  return '<button class="' + cls + '" type="button" data-i="' + i + '"' +
+    (marked ? ' disabled' : '') + '>' + inner + '</button>' +
     (bad ? '<div class="rd-fix"><span class="let">' + (i + 1) + '</span><span>' +
            esc(T().sentences[T().answers[i]]) + '</span></div>' : '');
 }

@@ -129,14 +129,6 @@ function paintTexts() {
   $('setTabs').querySelectorAll('.vtab').forEach(function (b) {
     b.onclick = function () { if (!b.disabled && +b.dataset.i !== bi) openText(+b.dataset.i); };
   });
-  /* The row scrolls rather than wraps, so the active tab can be off to the
-     right on load. Bring it into view — a tab row whose current item is
-     not visible is worse than no tab row. */
-  var cur = $('setTabs').querySelector('.vtab.active');
-  if (cur && cur.scrollIntoView) {
-    try { cur.scrollIntoView({ inline:'center', block:'nearest', behavior:'smooth' }); }
-    catch (e) {}
-  }
   syncHeader();
 }
 

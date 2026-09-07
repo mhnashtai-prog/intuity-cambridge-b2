@@ -233,7 +233,22 @@ function gappedHTML() {
   var paras = view === 'full' ? t.text : [t.text[paraOf(qi + 1)]];
   return paras.map(function (p) {
     return '<p>' + esc(p).replace(/\{(\d+)\}/g, function (_, n) {
-      return gapHTML(+n - 1);
+      n = +n;
+      /* {0} IS THE WORKED EXAMPLE, not a gap.
+         The schema numbers the example 0 and the gaps 1-6, exactly as the
+         paper prints them — so the placeholders run 0…6 while `answers`
+         has six entries. Without this branch {0} resolved to gapHTML(-1),
+         which is answers[-1]: no gap, no letter, and a broken card on the
+         opening paragraph of every text.
+
+         Rendered filled and inert, like the example in Part 1: it is the
+         paper's answer, not a slot you could have filled. */
+      if (n === 0) {
+        var ex = t.example;
+        if (!ex) return '';
+        return '<span class="rd-eg">' + esc(t.sentences[ex.sentence]) + '</span>';
+      }
+      return gapHTML(n - 1);
     }) + '</p>';
   }).join('');
 }
@@ -342,6 +357,10 @@ function openSheet(i) {
 function openBank(i) {
   if (marked) return;
   var t = T(), spent = usedBy(i);
+  /* The example's sentence is spent before the student starts — it is
+     already printed in the passage, and offering it would make one of the
+     eight a free elimination. */
+  if (t.example) spent[t.example.sentence] = true;
   $('rdKick').textContent = 'Gap ' + (i + 1);
   $('rdQ').textContent = 'Which sentence fits?';
   $('rdOpts').innerHTML = t.sentences.map(function (sen, k) {

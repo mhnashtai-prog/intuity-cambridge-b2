@@ -36,30 +36,39 @@ var STAGE = (B.getAttribute('data-stage') || '').toLowerCase();
 /* The four stages, and where each genre keeps them. A genre is a config
    object — the same move that turned four Use of English monoliths into
    one engine. Adding a genre is adding an entry, not editing this file. */
+/* `part` is what the subtitle says. Gap-fill's header reads OPEN CLOZE ·
+   PART 2 and it is the better line: it tells a student where they are in
+   the EXAM, which is the thing they are anxious about. Naming the stage
+   there would spend the subtitle on something already answered — the
+   active pill at the bottom of the screen says which stage you are on, in
+   thumb reach, where you are already looking.
+
+   It also makes the point the menu makes and the pages did not: Essay is
+   Part 1 and compulsory, the other five are Part 2 and you choose one. */
 var GENRES = {
-  essays:   { label:'Essay',   back:'/index.html?openModal=writing',
+  essays:   { label:'Essay',   part:'Part 1',  back:'/index.html?openModal=writing',
               stages:{ question:'/skills/writing/essays/essay-question.html',
                        plan:    '/skills/writing/essays/essay-plan.html',
                        model:   '/skills/writing/essays/essay-model.html',
                        sample:  '/skills/writing/essays/essay-sample.html' } },
-  reviews:  { label:'Review',  back:'/index.html?openModal=writing',
+  reviews:  { label:'Review',  part:'Part 2', back:'/index.html?openModal=writing',
               stages:{ question:'/skills/writing/reviews/review-question-selector.html',
                        plan:    '/skills/writing/reviews/review-structure.html',
                        model:   '/skills/writing/reviews/review-builder.html',
                        sample:  '/skills/writing/reviews/review-sample.html' } },
-  reports:  { label:'Report',  back:'/index.html?openModal=writing',
+  reports:  { label:'Report',  part:'Part 2', back:'/index.html?openModal=writing',
               stages:{ question:'/skills/writing/reports/report-question-selector.html',
                        plan:    '/skills/writing/reports/report-structure-practice.html',
                        model:   '/skills/writing/reports/report-sentence-builder.html',
                        sample:  '/skills/writing/reports/report-sample.html' } },
-  emails:   { label:'Email',   back:'/index.html?openModal=writing',
+  emails:   { label:'Email',   part:'Part 2', back:'/index.html?openModal=writing',
               stages:{ question:'/skills/writing/emails/email-question.html',
                        plan:    '/skills/writing/emails/email-plan.html',
                        model:   '/skills/writing/emails/email-model.html',
                        sample:  '/skills/writing/emails/email-sample.html' } },
-  articles: { label:'Article', back:'/index.html?openModal=writing',
+  articles: { label:'Article', part:'Part 2', back:'/index.html?openModal=writing',
               stages:{ question:'/skills/writing/articles/article-question.html' } },
-  story:    { label:'Story',   back:'/index.html?openModal=writing',
+  story:    { label:'Story',   part:'Part 2', back:'/index.html?openModal=writing',
               stages:{ question:'/skills/writing/narrative/narrative-question.html' } }
 };
 var G = GENRES[GENRE];
@@ -91,7 +100,7 @@ function header() {
   back.href = G.back; back.target = '_top';
   var title = el('div', 'header-title');
   title.appendChild(el('div', 'app-title', 'INTUITY'));
-  title.appendChild(el('div', 'app-subtitle', G.label + ' \u00b7 ' + (NAMES[STAGE] || '')));
+  title.appendChild(el('div', 'app-subtitle', G.label + ' \u00b7 ' + (G.part || '')));
   var spacer = el('span', 'header-spacer');
   var mute = el('button', 'mute'); mute.type = 'button';
   mute.setAttribute('aria-label', 'Sound');
@@ -122,7 +131,7 @@ function header() {
      inside the header where every other section keeps that choice. It is
      MOVED rather than rebuilt: the page's script owns its contents and
      must keep finding it. */
-  var filt = document.querySelector('.filter-bar, .topic-tabs, .register-bar');
+  var filt = document.querySelector('.filter-bar, .topic-tabs, .register-bar, .nav-tabs, .mode-toggle');
   if (filt) { filt.classList.add('wr-filters'); h.appendChild(filt); }
 
   return h;
@@ -155,14 +164,37 @@ function foot() {
   return f;
 }
 
-/* ── SWAP ───────────────────────────────────────────────────────────── */
-var shell = document.querySelector('.shell') || B;
-var oldTop = document.querySelector('.topbar');
+/* ── SWAP ────────────────────────────────────────────────────────────────
+   Most writing pages are .shell > .topbar / .stage / .foot. Four are not:
+   report-sentence-builder, report-structure-practice, review-structure and
+   review-builder use .container > .header with .bottom-nav or .control-bar
+   underneath.
+
+   That second shape matters for a reason beyond tidiness: those pages call
+   their own bar `.header`, which is the SHELL'S class. Injecting another
+   .header would give the page two elements claiming the same fixed
+   position. So the old one is replaced rather than added to, whichever
+   name it goes by — and the search is scoped inside .shell or .container
+   so it cannot pick up something the new header itself contains. */
+var shell = document.querySelector('.shell, .container') || B;
+
+function firstIn(root, sels) {
+  for (var i = 0; i < sels.length; i++) {
+    var n = root.querySelector(sels[i]);
+    if (n) return n;
+  }
+  return null;
+}
+
+var oldTop = firstIn(shell, ['.topbar', ':scope > .header', '.header-row']);
+if (oldTop && oldTop.classList.contains('header-row') && oldTop.parentNode) {
+  oldTop = oldTop.parentNode;              /* .header wrapping .header-row */
+}
 var newTop = header();
 if (oldTop && oldTop.parentNode) oldTop.parentNode.replaceChild(newTop, oldTop);
 else shell.insertBefore(newTop, shell.firstChild);
 
-var oldFoot = document.querySelector('.foot');
+var oldFoot = firstIn(shell, ['.foot', '.bottom-nav', '.control-bar']);
 var newFoot = foot();
 if (oldFoot && oldFoot.parentNode) oldFoot.parentNode.replaceChild(newFoot, oldFoot);
 else shell.appendChild(newFoot);

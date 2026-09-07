@@ -48,6 +48,20 @@ var CFG = window.RD || {};
    rows, the dots, the toggle, the bar, the overlay, the marking. Three
    functions ask which shape they are in, and nothing else does. */
 var GAPPED = CFG.kind === 'gap';
+var MATCH  = CFG.kind === 'match';
+
+/* ── PART 7: WHY THIS ONE HAS NO MODAL ───────────────────────────────────
+   The container follows the length of the option, and Part 7's options are
+   the shortest in the product: a single letter, four to six of them.
+   Measured across seven texts, the statements run to a median of 83
+   characters and the sections to 366.
+
+   So the letters go INLINE, in a row under the statement. A tooltip would
+   cost a tap to open and a tap to choose where the row costs one, and a
+   modal would hide the statement you are answering. Part 5 gets a modal
+   because its options are whole sentences; Part 6 gets one because its
+   sentences run to 133 characters. Part 7 needs neither, and giving it one
+   for consistency would be consistency in the wrong place. */
 var BANKS = [];   /* one per text; null where a file is missing */
 var bi = 0;       /* which text */
 var qi = 0;       /* which question, in the per-question view */
@@ -77,6 +91,7 @@ Promise.all(wanted.map(function (n) {
     .then(function (j) {
       if (!j) return null;
       if (GAPPED) return (j.text && j.sentences && j.answers) ? j : null;
+      if (MATCH)  return (j.sections && j.questions && j.questions.length) ? j : null;
       return (j.cards && j.cards.length) ? j : null;
     })
     .catch(function () { return null; });
@@ -95,7 +110,13 @@ var T = function () { return BANKS[bi]; };
 
 /* ONE OF THE THREE. A unit is what the dots count and what the paged view
    shows one of: a question card in Part 5, a gap in Part 6. */
-function count() { return GAPPED ? T().answers.length : T().cards.length; }
+function count() {
+  if (GAPPED) return T().answers.length;
+  if (MATCH)  return T().questions.length;
+  return T().cards.length;
+}
+/* The section letters, in the order the paper prints them. */
+function letters() { return Object.keys(T().sections || {}); }
 function cards() { return T().cards || []; }
 
 /* Which paragraph holds gap n. Read from the text rather than assumed, so
@@ -139,7 +160,12 @@ function openText(i) {
 }
 
 function rightFor(i) {
-  return GAPPED ? T().answers[i] : cards()[i].answer;
+  if (GAPPED) return T().answers[i];
+  /* Part 7 stores the answer as a LETTER, not an index — the sections are
+     keyed by letter and so is the key. Compared as given, rather than
+     converted, so nothing depends on the order of Object.keys. */
+  if (MATCH)  return T().questions[i].answer;
+  return cards()[i].answer;
 }
 
 function paintDots() {
@@ -157,6 +183,11 @@ function paintDots() {
   $('tdots').querySelectorAll('.tdot').forEach(function (b) {
     b.onclick = function () {
       var i = +b.dataset.i;
+      if (MATCH) {
+        var st = $('board').querySelector('.rd-st[data-i="' + i + '"]');
+        if (st) st.scrollIntoView({ behavior:'smooth', block:'center' });
+        return;
+      }
       if (view === 'one') { qi = i; render(); return; }
       var sel = GAPPED ? '.rd-gap[data-i="' + i + '"]' : '.rd-q[data-i="' + i + '"]';
       var el = $('board').querySelector(sel);
@@ -267,8 +298,62 @@ function gappedHTML() {
   }).join('');
 }
 
+/* ── PART 7 ──────────────────────────────────────────────────────────── */
+function statementHTML(q, i) {
+  var a = answers[i], has = a !== undefined;
+  var ok = marked && has && a === rightFor(i);
+  var bad = marked && has && !ok;
+  return '<div class="rd-st" data-i="' + i + '">' +
+    '<div class="rd-st-n">' + (q.number != null ? q.number : (i + 1)) + '</div>' +
+    '<div class="rd-st-q">' + esc(q.question) + '</div>' +
+    '<div class="rd-picks">' + letters().map(function (L) {
+      var cls = 'rd-pick' + (a === L ? ' chosen' : '');
+      if (marked && a === L) cls += ok ? ' ok' : ' no';
+      if (marked && !ok && L === rightFor(i)) cls += ' key';
+      return '<button class="' + cls + '" type="button" data-i="' + i +
+             '" data-l="' + L + '"' + (marked ? ' disabled' : '') + '>' + L + '</button>';
+    }).join('') + '</div>' +
+    (bad ? '<div class="rd-st-fix">The answer is ' + esc(rightFor(i)) + '</div>' : '') +
+  '</div>';
+}
+
+function sectionsHTML() {
+  var t = T();
+  return letters().map(function (L) {
+    return '<div class="rd-sec">' +
+      '<div class="rd-sec-l">' + L + '</div>' +
+      '<div class="rd-sec-t">' + esc(t.sections[L]) + '</div>' +
+    '</div>';
+  }).join('');
+}
+
 function render() {
   var t = T(), done = Object.keys(answers).length;
+
+  if (MATCH) {
+    var head = '<div class="mc-kick">Part ' + esc(CFG.part) + ' &middot; ' +
+      esc(t.title || ('Text ' + (bi + 1))) +
+      '<span class="right">' + done + ' / ' + count() + ' matched</span></div>';
+    /* SECTIONS FIRST BY DEFAULT is wrong for this part. In Part 7 the
+       sections are reference — you skim them, then work the statements and
+       go back. So the statements are the default view and the sections are
+       one tap away, rather than 1,500 characters you must scroll past
+       before reaching anything to do. */
+    $('board').innerHTML = view === 'full'
+      ? '<div class="mc-card">' + head +
+        '<div class="rd-title">' + esc(t.title || '') + '</div>' +
+        (t.subtitle ? '<div class="rd-sub">' + esc(t.subtitle) + '</div>' : '') +
+        sectionsHTML() + '</div>'
+      : '<div class="mc-card">' + head +
+        t.questions.map(statementHTML).join('') + '</div>';
+
+    $('board').querySelectorAll('.rd-pick:not([disabled])').forEach(function (b) {
+      b.addEventListener('click', function () { choose(+b.dataset.i, b.dataset.l); });
+    });
+    paintDots(); paintBar();
+    return;
+  }
+
   if (GAPPED) {
     var head = '<div class="mc-kick">Part ' + esc(CFG.part) + ' &middot; ' +
       esc(t.title || ('Text ' + (bi + 1))) +
@@ -322,7 +407,7 @@ function paintBar() {
   var n = count();
   var all = true;
   for (var z = 0; z < n; z++) if (answers[z] === undefined) all = false;
-  var one = view === 'one';
+  var one = view === 'one' && !MATCH;
   ['btnPrev','btnNext'].forEach(function (id) { $(id).style.display = one ? '' : 'none'; });
   $('btnPrev').disabled = qi === 0;
   $('btnNext').disabled = qi === n - 1;
@@ -393,9 +478,9 @@ function openBank(i) {
 function closeSheet() { $('rdSheet').classList.remove('show'); }
 
 function choose(i, k) {
-  /* A sentence belongs to one gap. If it was placed elsewhere, it leaves
-     there — otherwise a student could fill all six with the same one and
-     the closed set would stop being closed. */
+  /* Part 7 letters are NOT a closed set: a section can answer several
+     statements, and often does. So no sentence is displaced, and nothing
+     is struck through. Only Part 6 has a closed set. */
   if (GAPPED) {
     for (var g in answers) if (answers[g] === k) delete answers[g];
   }
@@ -403,6 +488,10 @@ function choose(i, k) {
   sfx('tick');
   closeSheet();
   render();
+  /* Part 7 shows every statement at once, so there is nothing to advance
+     to — moving the page under a student who is working down a list would
+     lose their place. */
+  if (MATCH) return;
   /* Per question, answering moves you on: each chunk is self-contained,
      so there is no context to take away — unlike a Use of English passage,
      where the gaps lean on each other and the card waits. */
@@ -434,7 +523,18 @@ function submit() {
   }).join('');
 
   var missed = idx.filter(function (i) { return answers[i] !== rightFor(i); });
+  if (MATCH) {
+    $('ovMiss').innerHTML = missed.length
+      ? '<div class="ov-miss-h">Worth another look</div>' + missed.map(function (i) {
+          var q = T().questions[i];
+          return '<div class="ov-miss-i">' + (q.number != null ? q.number : i + 1) +
+            ' \u00b7 <s>' + esc(answers[i]) + '</s> \u2192 <b>' + esc(rightFor(i)) + '</b>' +
+            '<span class="ov-miss-w">' + esc(q.question) + '</span></div>';
+        }).join('')
+      : '';
+  }
   var opts = function (i) { return GAPPED ? T().sentences : cards()[i].choices; };
+  if (MATCH) { finishScore(got, n, pct); return; }
   $('ovMiss').innerHTML = missed.length
     ? '<div class="ov-miss-h">Worth another look</div>' + missed.map(function (i) {
         var o = { i:i, c: GAPPED ? {} : cards()[i] };
@@ -446,6 +546,12 @@ function submit() {
           '</div>';
       }).join('')
     : '';
+  finishScore(got, n, pct);
+}
+
+/* The last three lines of submit(), shared — MATCH writes its own review
+   list and then needs exactly this. */
+function finishScore(got, n, pct) {
   saveScore(pct);
   sfx(pct === 100 ? 'fanfare' : 'bowlLow');
   $('ov').classList.add('show');

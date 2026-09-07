@@ -32,6 +32,22 @@
 'use strict';
 
 var CFG = window.RD || {};
+
+/* ── TWO SHAPES, ONE ENGINE ──────────────────────────────────────────────
+   'mc'  Part 5 — chunks, each with its own question and four choices
+   'gap' Part 6 — ONE text with six gaps and SEVEN sentences
+
+   The difference is not cosmetic. In Part 5 each question carries its own
+   private options, so answering one tells you nothing about the next. In
+   Part 6 the seven sentences are a CLOSED SET shared by six gaps: place
+   one and it is gone, the field narrows, and elimination is a real
+   strategy. That is most of what Part 6 tests, and it is why the old data
+   — four private choices per gap — had to be replaced rather than styled.
+
+   Everything above the card is identical either way: the header, the
+   rows, the dots, the toggle, the bar, the overlay, the marking. Three
+   functions ask which shape they are in, and nothing else does. */
+var GAPPED = CFG.kind === 'gap';
 var BANKS = [];   /* one per text; null where a file is missing */
 var bi = 0;       /* which text */
 var qi = 0;       /* which question, in the per-question view */
@@ -59,7 +75,9 @@ Promise.all(wanted.map(function (n) {
   return fetch(CFG.path(n), { cache:'no-store' })
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (j) {
-      return (j && j.cards && j.cards.length) ? j : null;
+      if (!j) return null;
+      if (GAPPED) return (j.text && j.sentences && j.answers) ? j : null;
+      return (j.cards && j.cards.length) ? j : null;
     })
     .catch(function () { return null; });
 })).then(function (list) {
@@ -73,8 +91,29 @@ Promise.all(wanted.map(function (n) {
     + esc(err.message) + ').</div>';
 });
 
-var T     = function () { return BANKS[bi]; };
-var cards = function () { return T().cards; };
+var T = function () { return BANKS[bi]; };
+
+/* ONE OF THE THREE. A unit is what the dots count and what the paged view
+   shows one of: a question card in Part 5, a gap in Part 6. */
+function count() { return GAPPED ? T().answers.length : T().cards.length; }
+function cards() { return T().cards || []; }
+
+/* Which paragraph holds gap n. Read from the text rather than assumed, so
+   a paragraph may hold any gaps in any arrangement. */
+function paraOf(n) {
+  var t = T().text || [];
+  for (var i = 0; i < t.length; i++) {
+    if (String(t[i]).indexOf('{' + n + '}') > -1) return i;
+  }
+  return 0;
+}
+/* Which sentences are already spent. A sentence placed at gap 3 is gone
+   for gaps 4-6 — that is the whole exercise, so the bank has to say so. */
+function usedBy(gap) {
+  var out = {};
+  for (var k in answers) if (+k !== gap) out[answers[k]] = true;
+  return out;
+}
 
 /* ── THE ROWS ───────────────────────────────────────────────────────────
    Three levels of choice, three controls, one home each: which part
@@ -99,21 +138,28 @@ function openText(i) {
   paintTexts(); render();
 }
 
+function rightFor(i) {
+  return GAPPED ? T().answers[i] : cards()[i].answer;
+}
+
 function paintDots() {
-  var n = cards().length;
-  $('tdots').innerHTML = cards().map(function (c, i) {
+  var n = count();
+  var list = [];
+  for (var k = 0; k < n; k++) list.push(k);
+  $('tdots').innerHTML = list.map(function (i) {
     var a = answers[i], cls = 'tdot';
-    if (marked && a !== undefined) cls += (a === c.answer ? ' ok' : ' no');
+    if (marked && a !== undefined) cls += (a === rightFor(i) ? ' ok' : ' no');
     else if (a !== undefined) cls += ' filled';
     if (view === 'one' && i === qi) cls += ' cur';
     return '<button class="' + cls + '" type="button" data-i="' + i +
-           '" aria-label="Question ' + (i + 1) + '"></button>';
+           '" aria-label="' + (GAPPED ? 'Gap ' : 'Question ') + (i + 1) + '"></button>';
   }).join('');
   $('tdots').querySelectorAll('.tdot').forEach(function (b) {
     b.onclick = function () {
       var i = +b.dataset.i;
       if (view === 'one') { qi = i; render(); return; }
-      var el = $('board').querySelector('.rd-q[data-i="' + i + '"]');
+      var sel = GAPPED ? '.rd-gap[data-i="' + i + '"]' : '.rd-q[data-i="' + i + '"]';
+      var el = $('board').querySelector(sel);
       if (el) el.scrollIntoView({ behavior:'smooth', block:'center' });
     };
   });
@@ -164,8 +210,52 @@ function questionHTML(card, i) {
     slotHTML(card, i) + '</div>';
 }
 
+/* ── THE GAP ───────────────────────────────────────────────────────────
+   The same pill every gap in this product wears, with the number inside
+   it — but wide, because what lands in it is a whole sentence rather than
+   a word. Empty it shows its number and invites; filled it shows the
+   sentence you placed. */
+function gapHTML(i) {
+  var a = answers[i], has = a !== undefined;
+  var ok = marked && has && a === T().answers[i];
+  var bad = marked && has && !ok;
+  var body = has ? esc(T().sentences[a]) : 'Choose a sentence';
+  return '<button class="rd-gap' + (has ? ' filled' : '') + (ok ? ' ok' : '') +
+    (bad ? ' no' : '') + '" type="button" data-i="' + i + '"' +
+    (marked ? ' disabled' : '') + '>' +
+    '<span class="let">' + (i + 1) + '</span><span>' + body + '</span></button>' +
+    (bad ? '<div class="rd-fix"><span class="let">' + (i + 1) + '</span><span>' +
+           esc(T().sentences[T().answers[i]]) + '</span></div>' : '');
+}
+
+function gappedHTML() {
+  var t = T();
+  var paras = view === 'full' ? t.text : [t.text[paraOf(qi + 1)]];
+  return paras.map(function (p) {
+    return '<p>' + esc(p).replace(/\{(\d+)\}/g, function (_, n) {
+      return gapHTML(+n - 1);
+    }) + '</p>';
+  }).join('');
+}
+
 function render() {
   var t = T(), done = Object.keys(answers).length;
+  if (GAPPED) {
+    var head = '<div class="mc-kick">Part ' + esc(CFG.part) + ' &middot; ' +
+      esc(t.title || ('Text ' + (bi + 1))) +
+      '<span class="right">' + done + ' / ' + count() + ' placed</span></div>';
+    $('board').innerHTML = '<div class="mc-card">' + head +
+      (view === 'full'
+        ? '<div class="rd-title">' + esc(t.title || '') + '</div>' +
+          (t.subtitle ? '<div class="rd-sub">' + esc(t.subtitle) + '</div>' : '')
+        : '') +
+      '<div class="rd-passage">' + gappedHTML() + '</div></div>';
+    $('board').querySelectorAll('.rd-gap:not([disabled])').forEach(function (b) {
+      b.addEventListener('click', function () { openBank(+b.dataset.i); });
+    });
+    paintDots(); paintBar();
+    return;
+  }
   var head = '<div class="mc-kick">Part ' + esc(CFG.part) + ' &middot; ' +
     esc(t.title || ('Text ' + (bi + 1))) +
     '<span class="right">' + done + ' / ' + cards().length + ' answered</span></div>';
@@ -200,8 +290,9 @@ function render() {
 }
 
 function paintBar() {
-  var n = cards().length;
-  var all = cards().every(function (_, i) { return answers[i] !== undefined; });
+  var n = count();
+  var all = true;
+  for (var z = 0; z < n; z++) if (answers[z] === undefined) all = false;
   var one = view === 'one';
   ['btnPrev','btnNext'].forEach(function (id) { $(id).style.display = one ? '' : 'none'; });
   $('btnPrev').disabled = qi === 0;
@@ -233,9 +324,48 @@ function openSheet(i) {
   });
   $('rdSheet').classList.add('show');
 }
+/* ── THE SENTENCE BANK ───────────────────────────────────────────────────
+   Part 6's options are the longest in the product: median 82 characters,
+   longest 133. So a modal, for the same measured reason as Part 5 — four
+   of those will not sit beside a gap on a phone, let alone seven.
+
+   What it borrows from Similar Words is the BEHAVIOUR, not the layout. A
+   sentence already placed at another gap is struck through and left in
+   position, never removed. Removing it would reflow the list under the
+   thumb and, worse, would hide the thing the student is meant to be
+   doing: counting what is left. Elimination is half of Part 6, and it
+   only works if the field is visibly narrowing.
+
+   The distractor is the seventh sentence and is never anyone's answer.
+   Nothing in this card says which one it is — finding that out by
+   exhausting the others is the exercise. */
+function openBank(i) {
+  if (marked) return;
+  var t = T(), spent = usedBy(i);
+  $('rdKick').textContent = 'Gap ' + (i + 1);
+  $('rdQ').textContent = 'Which sentence fits?';
+  $('rdOpts').innerHTML = t.sentences.map(function (sen, k) {
+    var used = !!spent[k];
+    return '<button class="rd-opt' + (answers[i] === k ? ' chosen' : '') +
+      (used ? ' used' : '') + '" type="button" data-k="' + k + '"' +
+      (used ? ' disabled' : '') + '>' +
+      '<span class="let">' + LETTER[k] + '</span><span>' + esc(sen) + '</span></button>';
+  }).join('');
+  $('rdOpts').querySelectorAll('.rd-opt:not([disabled])').forEach(function (b) {
+    b.onclick = function () { choose(i, +b.dataset.k); };
+  });
+  $('rdSheet').classList.add('show');
+}
+
 function closeSheet() { $('rdSheet').classList.remove('show'); }
 
 function choose(i, k) {
+  /* A sentence belongs to one gap. If it was placed elsewhere, it leaves
+     there — otherwise a student could fill all six with the same one and
+     the closed set would stop being closed. */
+  if (GAPPED) {
+    for (var g in answers) if (answers[g] === k) delete answers[g];
+  }
   answers[i] = k;
   sfx('tick');
   closeSheet();
@@ -243,7 +373,7 @@ function choose(i, k) {
   /* Per question, answering moves you on: each chunk is self-contained,
      so there is no context to take away — unlike a Use of English passage,
      where the gaps lean on each other and the card waits. */
-  if (view === 'one' && qi < cards().length - 1) {
+  if (view === 'one' && qi < count() - 1) {
     setTimeout(function () { qi++; render(); }, 280);
   }
 }
@@ -254,27 +384,29 @@ function choose(i, k) {
    percentage mean something Cambridge does not mean by it, so the weight
    comes from the config rather than being assumed. */
 function submit() {
-  var cs = cards();
-  if (marked || !cs.every(function (_, i) { return answers[i] !== undefined; })) return;
+  var n = count();
+  var idx = []; for (var z = 0; z < n; z++) idx.push(z);
+  if (marked || !idx.every(function (i) { return answers[i] !== undefined; })) return;
   marked = true;
-  var got = cs.filter(function (c, i) { return answers[i] === c.answer; }).length;
+  var got = idx.filter(function (i) { return answers[i] === rightFor(i); }).length;
   var w = CFG.marksPerQuestion || 1;
   render();
 
-  var pct = Math.round(got / cs.length * 100);
+  var pct = Math.round(got / n * 100);
   $('ovEm').textContent    = pct === 100 ? '\uD83C\uDFC6' : pct >= 75 ? '\uD83C\uDF89' : pct >= 50 ? '\uD83D\uDC4D' : '\uD83D\uDCDA';
   $('ovTitle').textContent = pct === 100 ? 'Perfect' : pct >= 75 ? 'Strong' : pct >= 50 ? 'Getting there' : 'Keep going';
-  $('ovScore').textContent = (got * w) + ' / ' + (cs.length * w) + ' marks \u00b7 ' + pct + '%';
-  $('ovBars').innerHTML = cs.map(function (c, i) {
-    return '<div class="ov-bar ' + (answers[i] === c.answer ? 'ok' : 'no') + '"></div>';
+  $('ovScore').textContent = (got * w) + ' / ' + (n * w) + ' marks \u00b7 ' + pct + '%';
+  $('ovBars').innerHTML = idx.map(function (i) {
+    return '<div class="ov-bar ' + (answers[i] === rightFor(i) ? 'ok' : 'no') + '"></div>';
   }).join('');
 
-  var missed = cs.map(function (c, i) { return { c:c, i:i }; })
-                 .filter(function (o) { return answers[o.i] !== o.c.answer; });
+  var missed = idx.filter(function (i) { return answers[i] !== rightFor(i); });
+  var opts = function (i) { return GAPPED ? T().sentences : cards()[i].choices; };
   $('ovMiss').innerHTML = missed.length
-    ? '<div class="ov-miss-h">Worth another look</div>' + missed.map(function (o) {
-        return '<div class="ov-miss-i">' + String(o.i + 1).padStart(2, '0') + ' \u00b7 <s>' +
-          esc(o.c.choices[answers[o.i]]) + '</s> \u2192 <b>' + esc(o.c.choices[o.c.answer]) + '</b>' +
+    ? '<div class="ov-miss-h">Worth another look</div>' + missed.map(function (i) {
+        var o = { i:i, c: GAPPED ? {} : cards()[i] };
+        return '<div class="ov-miss-i">' + String(i + 1).padStart(2, '0') + ' \u00b7 <s>' +
+          esc(opts(i)[answers[i]]) + '</s> \u2192 <b>' + esc(opts(i)[rightFor(i)]) + '</b>' +
           /* Neutral label, because half of these are glosses rather than
              quotations and "the text says" would be false for those. */
           (o.c.highlight ? '<span class="ov-miss-w">Evidence: ' + esc(o.c.highlight) + '</span>' : '') +
@@ -298,9 +430,9 @@ function saveScore(pct) {
 /* ── WIRING ─────────────────────────────────────────────────────────── */
 $('btnSubmit').onclick = submit;
 $('btnPrev').onclick = function () { if (qi > 0) { qi--; render(); } };
-$('btnNext').onclick = function () { if (qi < cards().length - 1) { qi++; render(); } };
+$('btnNext').onclick = function () { if (qi < count() - 1) { qi++; render(); } };
 $('prevSet').onclick = function () { if (qi > 0) { qi--; render(); } };
-$('nextSet').onclick = function () { if (qi < cards().length - 1) { qi++; render(); } };
+$('nextSet').onclick = function () { if (qi < count() - 1) { qi++; render(); } };
 $('rdClose').onclick = closeSheet;
 $('rdSheet').addEventListener('click', function (e) { if (e.target === $('rdSheet')) closeSheet(); });
 addEventListener('keydown', function (e) { if (e.key === 'Escape') closeSheet(); });

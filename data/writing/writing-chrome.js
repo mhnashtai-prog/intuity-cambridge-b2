@@ -22,7 +22,7 @@ var GENRES = {
   reports:  { label:'Report',  part:'Part 2', back:'/skills/writing/writing-door.html',
               stages:{ question:'/skills/writing/reports/report-question-selector.html',
                        plan:    '/skills/writing/reports/report-plan.html',
-                       model:   '/skills/writing/reports/report-model.html',
+                       model:   '/skills/writing/reports/reports-cards',
                        sample:  '/skills/writing/reports/report-sample.html' } },
 emails:   { label:'Email',   part:'Part 2', back:'/skills/writing/writing-door.html',
             stages:{ question:'/skills/writing/emails/email-question.html',

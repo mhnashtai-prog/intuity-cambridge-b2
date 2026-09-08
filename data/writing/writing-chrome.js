@@ -131,16 +131,29 @@ function header() {
   });
   h.appendChild(nav);
 
-  /* The page's own filter row — topics, registers, categories — moves
+  /* The page's own filter row(s) — topics, registers, categories — move
      inside the header where every other section keeps that choice. It is
      MOVED rather than rebuilt: the page's script owns its contents and
-     must keep finding it. */
-  var filt = document.querySelector('.filter-bar, .topic-tabs, .register-bar, .nav-tabs, .mode-toggle');
-  if (filt) { filt.classList.add('wr-filters'); h.appendChild(filt); }
+     must keep finding it.
+
+     A page can have MORE THAN ONE of these — Email has both a register
+     row (Formal/Informal) and a type row (All/Job Application/...). A
+     plain querySelector only ever returns the first match across the
+     whole selector list, in DOM order, which silently dropped whichever
+     row came second. querySelectorAll + a loop moves every row that
+     exists, in the order the page already puts them in, and scoping to
+     `shell` keeps it from ever picking up something the header itself
+     just added. */
+  var filts = shell.querySelectorAll(
+    '.filter-bar, .topic-tabs, .register-bar, .nav-tabs, .mode-toggle'
+  );
+  for (var fi = 0; fi < filts.length; fi++) {
+    filts[fi].classList.add('wr-filters');
+    h.appendChild(filts[fi]);
+  }
 
   return h;
 }
-
 /* ── THE STAGE ROW ──────────────────────────────────────────────────────
    Rebuilt as links rather than onclick handlers, so a long-press opens in
    a new tab and the browser shows where each one goes. A stage with no

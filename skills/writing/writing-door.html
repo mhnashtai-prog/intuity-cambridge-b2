@@ -66,9 +66,9 @@
      do. Both build stems and dots and then hide them: the wave alone
      weaves past the rings, and the arms I had left visible were what made
      this read as a diagram rather than a map. */
-  .mapPath .stem{stroke:var(--rule,#BCB1A0);stroke-width:.4;display:none;}
+  .mapPath .stem{stroke:var(--rule,#BCB1A0);stroke-width:.4;}
   .mapPath .dot{fill:var(--screen,#F3F1ED);stroke:rgb(139,123,120);
-    stroke-width:.3;display:none;}
+    stroke-width:.3;}
 
   .nodes{position:absolute;inset:0;}
   .node{position:absolute;transform:translateY(-50%);width:100%;}
@@ -133,6 +133,11 @@
     .pill .circle span{font-size:1rem;}
     .pill .lbl{width:8rem;font-size:.72rem;letter-spacing:.04em;}
     .map{margin:.3rem 6px calc(10px + env(safe-area-inset-bottom,0px));}
+    /* Phones drop the arms: at this width the caption sits directly
+       opposite its ring and the connector only adds clutter. Same rule as
+       index.html and the Phrase Bank. */
+    .mapPath .stem{display:none;}
+    .mapPath .dot{display:none;}
   }
 
   /* ── THE FOOTER ────────────────────────────────────────────────────────
@@ -284,7 +289,28 @@ function buildMap(){
      at ±10% — the Phrase Bank's own visual amplitude — and it now tracks
      the rings instead of fighting them: move them further out and the wave
      opens up with them. */
-  var amp = OFFSET / 2;
+  /* ── THE WAVE ─────────────────────────────────────────────────────────
+     THE AMPLITUDE IS A LENGTH, NOT A FRACTION OF THE RING OFFSET.
+
+     Deriving it from `tightDots` the way the Phrase Bank does collapsed
+     once the rings moved out to +/-20%: those measured edges converged on
+     the middle, amp fell to 1.6%, and the floor took over. Correct
+     diagnosis. But OFFSET/2 replaced it with 10% — a 270px swing on a
+     desktop — so the wave became wider than the gap between the rings and
+     stopped reading as a spine at all.
+
+     The Phrase Bank's wave is about 55px crest to crest whatever the
+     window is doing. So state it in pixels and convert, with a floor and a
+     ceiling in percent so it still opens up on a phone. It no longer
+     depends on OFFSET, which is the coupling that caused both bugs. */
+  var amp = Math.max(2, Math.min(5, 28 / w * 100));
+  /* And never wider than the room the labels leave. .lbl is a fixed 9rem
+     (8rem under 560px), so at 390px the ring's own label already reaches
+     46% and a 5% wave would run underneath the word ESSAYS. Clamp to the
+     gap that is actually free. */
+  var LBL  = ((w <= 560 ? 128 : 144) / 2) / w * 100;
+  var room = OFFSET - LBL - 1.5;
+  amp = Math.max(1.6, Math.min(amp, room));
   var cx  = 50;
   var ys  = L.map(function(n){ return n.y; });
   var y0  = ys[0], yN = ys[ys.length-1];
@@ -292,13 +318,7 @@ function buildMap(){
   var LAM = 2 * gap;
   /* The first ring is left of centre, so the wave leans right to meet it. */
   var sideSign = dirs[0];
-  /* Apex level with each ring, on the opposite side — the Phrase Bank's
-     own phase, unshifted. I had put a quarter-period offset here to fix
-     what looked like a misalignment; the misalignment was vertical, not
-     horizontal, and the shift only made the wave weave too tightly. See
-     the transform on .pill. */
   var waveX = function(y){ return cx + sideSign * amp * Math.cos(2*Math.PI*(y - y0)/LAM); };
-
 
   /* Sampled, and run a little past the first and last ring so the wave does
      not appear to start and stop at them. .mapPath is overflow:visible so
@@ -308,15 +328,40 @@ function buildMap(){
     var y = (y0 - EXT*gap) + ((yN + EXT*gap) - (y0 - EXT*gap)) * k / N;
     d += (k ? ' L ' : 'M ') + waveX(y).toFixed(2) + ' ' + y.toFixed(2);
   }
-  $('mapPath').innerHTML = '<path class="road" d="' + d + '"/>';
+  var svg = '<path class="road" d="' + d + '"/>';
 
-  /* The caption sits on the far side of the wave from its ring, filling
-     the space out to the margin. */
+  /* ── THE ARMS ─────────────────────────────────────────────────────────
+     A stem and a dot per ring, which this page had stopped drawing. The
+     comment above the CSS claimed index.html and the Phrase Bank build
+     them and then hide them; they do not — both hide them only under
+     560px. On a desktop they are what ties a caption to the ring it
+     describes, and without them "Film . Restaurant . Book" sits nearer the
+     ESSAYS label than the REVIEWS ring it belongs to.
+
+     The arm starts on the far side of the wave from its ring and runs
+     outward to the dot; the caption begins just past it. Lengths in px so
+     they hold their proportion at any width. */
+  var CLEAR  = 10 / w * 100;
+  var STEM   = Math.max(50, Math.min(110, w * 0.075)) / w * 100;
+  var CAPGAP = 8 / w * 100;
+
+  var stemFrom = L.map(function(n,i){ return waveX(n.y) + dirs[i]*CLEAR; });
+  var stemTo   = L.map(function(n,i){ return stemFrom[i] + dirs[i]*STEM; });
+
+  L.forEach(function(n,i){
+    svg += '<line class="stem" x1="' + stemFrom[i].toFixed(2) + '" y1="' + n.y +
+           '" x2="' + stemTo[i].toFixed(2) + '" y2="' + n.y + '"/>' +
+           '<circle class="dot" cx="' + stemTo[i].toFixed(2) + '" cy="' + n.y + '" r="0.46"/>';
+  });
+  $('mapPath').innerHTML = svg;
+
+  /* The caption starts at the dot rather than at a figure derived from the
+     amplitude, so it stays tied to the arm when either one moves. */
   var capSide = L.map(function(n){ return n.side === 'right' ? 'right' : 'left'; });
   var capBox  = L.map(function(n,i){
-    return n.side === 'right'
-      ? 'left:' + (50 + amp + 3).toFixed(1) + '%;right:3%'
-      : 'left:3%;right:' + (50 + amp + 3).toFixed(1) + '%';
+    return dirs[i] > 0
+      ? 'left:'  + (stemTo[i] + CAPGAP).toFixed(2) + '%;right:3%'
+      : 'left:3%;right:' + (100 - stemTo[i] + CAPGAP).toFixed(2) + '%';
   });
 
   $('nodes').innerHTML = AREAS.map(function(a,i){
@@ -336,7 +381,12 @@ function buildMap(){
 }
 
 buildMap();
-addEventListener('resize', buildMap);
+var _t = null;
+addEventListener('resize', function(){ clearTimeout(_t); _t = setTimeout(buildMap, 150); });
+/* A tab measured while hidden measures nothing. */
+document.addEventListener('visibilitychange', function(){
+  if(!document.hidden) requestAnimationFrame(buildMap);
+});
 addEventListener('orientationchange', function(){ setTimeout(buildMap, 150); });
 addEventListener('pageshow', buildMap);          /* bfcache restore */
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(buildMap);

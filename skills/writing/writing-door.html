@@ -314,7 +314,27 @@ function layoutFor(n, top, bot){
   });
 }
 
+/* ── RESERVE WHAT THE HEADER ACTUALLY USES ────────────────────────────
+   body carries padding-top:var(--header-h,110px) to clear a fixed header.
+   That token is a guess made once for a family of pages, and on this one
+   it over-reserves by around 80px: the run of rings started well below the
+   rule and the footer fell off the bottom, so the page had to be scrolled
+   to look right — which is the difference between your two screenshots.
+
+   Measure the header instead of trusting the token. If it is taken out of
+   flow the padding matches its real height; if it is in flow it needs none,
+   and reserving any would double-count. Self-correcting, so it survives the
+   header changing height on a narrow screen or the token being retuned. */
+function fitHeader(){
+  var hd = document.querySelector('.header');
+  if(!hd) return;
+  var pos = getComputedStyle(hd).position;
+  document.body.style.paddingTop =
+    (pos === 'fixed' || pos === 'absolute') ? hd.offsetHeight + 'px' : '0px';
+}
+
 function buildMap(){
+  fitHeader();
   var mapEl = $('map');
   if(!mapEl) return;
   /* NEVER MEASURE A THING THAT IS NOT READY.
@@ -405,9 +425,19 @@ function buildMap(){
   /* Sampled, and run a little past the first and last ring so the wave does
      not appear to start and stop at them. .mapPath is overflow:visible so
      the overshoot is not clipped. */
+  /* THE OVERSHOOT CANNOT EXCEED THE ROOM ABOVE AND BELOW.
+     EXT*gap is a fraction of the row spacing, and it knew nothing about
+     how much map was left outside the first and last ring. Once the band
+     became derived, the headroom fell to 30px while the overshoot stayed
+     at about 41px — so the top of the wave left the map, and .mapPath is
+     overflow:visible, which is why it ended up touching the line of text
+     above. Clamp each end to the space that is actually there, keeping a
+     couple of percent clear. */
   var EXT = 0.5, N = 220, d = '';
+  var extTop = Math.max(0, Math.min(EXT*gap, ROW_TOP - 2));
+  var extBot = Math.max(0, Math.min(EXT*gap, (100 - ROW_BOT) - 2));
   for(var k = 0; k <= N; k++){
-    var y = (y0 - EXT*gap) + ((yN + EXT*gap) - (y0 - EXT*gap)) * k / N;
+    var y = (y0 - extTop) + ((yN + extBot) - (y0 - extTop)) * k / N;
     d += (k ? ' L ' : 'M ') + waveX(y).toFixed(2) + ' ' + y.toFixed(2);
   }
   var svg = '<path class="road" d="' + d + '"/>';

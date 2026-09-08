@@ -62,8 +62,13 @@
     margin:.4rem 10px calc(12px + env(safe-area-inset-bottom,0px));}
   .mapPath{position:absolute;inset:0;width:100%;height:100%;overflow:visible;}
   .mapPath .road{fill:none;stroke:var(--mute,#8B7B78);stroke-width:.16;stroke-linecap:round;}
-  .mapPath .stem{stroke:var(--rule,#BCB1A0);stroke-width:.4;}
-  .mapPath .dot{fill:var(--screen,#F3F1ED);stroke:rgb(139,123,120);stroke-width:.3;}
+  /* DECLARED AND SWITCHED OFF, exactly as index.html and the Phrase Bank
+     do. Both build stems and dots and then hide them: the wave alone
+     weaves past the rings, and the arms I had left visible were what made
+     this read as a diagram rather than a map. */
+  .mapPath .stem{stroke:var(--rule,#BCB1A0);stroke-width:.4;display:none;}
+  .mapPath .dot{fill:var(--screen,#F3F1ED);stroke:rgb(139,123,120);
+    stroke-width:.3;display:none;}
 
   .nodes{position:absolute;inset:0;}
   .node{position:absolute;transform:translateY(-50%);width:100%;}
@@ -203,21 +208,50 @@ function buildMap(){
   var dirs   = L.map(function(n){ return n.side === 'right' ? 1 : -1; });
   var dots   = L.map(function(n,i){ return { x: pillXs[i] + dirs[i]*STEM_LEN, y: n.y }; });
 
-  /* THE ROAD: one cubic Bézier per pair of dots, control points level with
-     the midpoint. It therefore passes exactly through every dot, which a
-     cosine fitted afterwards never quite does. */
-  var d = 'M ' + dots[0].x + ' ' + dots[0].y;
-  for(var i = 1; i < dots.length; i++){
-    var a = dots[i-1], b = dots[i], my = (a.y + b.y) / 2;
-    d += ' C ' + a.x + ' ' + my + ', ' + b.x + ' ' + my + ', ' + b.x + ' ' + b.y;
+  /* ── THE WAVE ─────────────────────────────────────────────────────────
+     The Phrase Bank draws the Bézier road first and then REPLACES it, in a
+     second pass, with a cosine fitted through `tightDots` — and a tightDot
+     is the pill's own bounding box edge plus 5mm. The pill is a column
+     containing the label, so that box is as wide as the LABEL, not the
+     medallion.
+
+     That is the whole difference. My wave was fitted through the far dots
+     at ±38%, so it swung out past everything; theirs is fitted just
+     outside the labels at ±10%, so it runs down the middle and bulges to
+     one side or the other as it passes each ring.
+
+     Computed rather than measured. The label is a fixed width — 9.5rem, or
+     8.2rem below 560px — so there is nothing to read back from the DOM and
+     no second pass to go wrong. */
+  var labelRem = w <= 560 ? 8.2 : 9;
+  var half = (labelRem * 16 / 2 + 5 * 96 / 25.4) / w * 100;
+  var tight = L.map(function(n,i){ return pillXs[i] + dirs[i] * half; });
+
+  var ys = L.map(function(n){ return n.y; });
+  var y0 = ys[0], yN = ys[ys.length-1];
+  var gap = (yN - y0) / (ys.length - 1);
+  var LAM = 2 * gap;
+  var cx  = (Math.min.apply(null,tight) + Math.max.apply(null,tight)) / 2;
+  /* A FLOOR, for a wide screen only. The label's half-width is a fixed
+     number of pixels, so as a PERCENTAGE of the map it shrinks as the map
+     grows — at 1100px the two tight points nearly meet and the wave
+     flattens to 0.3%, a straight line. 3.5% keeps it a wave, and it can
+     never reach a ring: the wave is at its extreme where the rings are,
+     and always on the opposite side. */
+  var amp = Math.max(3.5,
+    (Math.max.apply(null,tight) - Math.min.apply(null,tight)) / 2);
+  var sideSign = Math.sign(tight[0] - cx) || 1;
+  var waveX = function(y){ return cx + sideSign * amp * Math.cos(2*Math.PI*(y - y0)/LAM); };
+
+  /* Sampled, and run a little past the first and last ring so the wave does
+     not appear to start and stop at them. .mapPath is overflow:visible so
+     the overshoot is not clipped. */
+  var EXT = 0.5, N = 220, d = '';
+  for(var k = 0; k <= N; k++){
+    var y = (y0 - EXT*gap) + ((yN + EXT*gap) - (y0 - EXT*gap)) * k / N;
+    d += (k ? ' L ' : 'M ') + waveX(y).toFixed(2) + ' ' + y.toFixed(2);
   }
-  var svg = '<path class="road" d="' + d + '"/>';
-  L.forEach(function(n,i){
-    svg += '<line class="stem" x1="' + (pillXs[i] + dirs[i]*11) + '" y1="' + n.y +
-           '" x2="' + dots[i].x + '" y2="' + n.y + '"/>' +
-           '<circle class="dot" cx="' + dots[i].x + '" cy="' + n.y + '" r="0.46"/>';
-  });
-  $('mapPath').innerHTML = svg;
+  $('mapPath').innerHTML = '<path class="road" d="' + d + '"/>';
 
   $('nodes').innerHTML = AREAS.map(function(a,i){
     return '<div class="node" style="top:' + L[i].y + '%">' +

@@ -264,6 +264,22 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
    paper, a caramel block over a mono kicker, Anton for the placed word,
    --poster-body for the sentence. Caramel is the MARK and never a letter —
    2.7:1 is right for a rectangle and would fail for a word. */
+/* ── THE DESKTOP HAS ROOM, SO IT USES IT ───────────────────────────────
+   On a phone the poster stacks under the essay and the card scrolls as one
+   column. Past 900px the card widens and the two sit side by side: the
+   student's paragraph on the left, the alternative on the right, both in
+   view at once. That is the comparison the feature exists to make, and
+   stacking it vertically on a wide screen wasted the width and forced a
+   scroll to do what a glance should do. */
+.card-cols{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
+.slot-stage{flex:none;overflow-y:auto;padding:0 1.2rem 0.5rem;}
+.slot-stage:empty{display:none;}
+@media(min-width:900px){
+  .poster{width:min(880px,94vw);}
+  .card-cols{flex-direction:row;gap:1.4rem;padding-right:.4rem;}
+  .card-scroll{flex:1 1 50%;min-width:0;}
+  .slot-stage{flex:1 1 50%;min-width:0;padding:1rem 1.6rem 1rem 0;}
+}
 .slot-body{background:var(--poster,#FAF8F5);border-radius:var(--r-sheet,0);
   box-shadow:0 1px 3px rgba(0,0,0,.10);
   margin-top:.9rem;padding:1rem 1.1rem 1.1rem;}
@@ -341,8 +357,18 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
       </div>
 
       <!-- Content -->
+      <div class="card-cols">
       <div class="card-scroll" id="infographic">
         <div class="state-msg">Loading…</div>
+      </div>
+
+      <!-- THE GALLERY HAS ITS OWN REGION.
+           It used to be appended into #infographic, which is overflow-y:auto
+           — so the poster rendered below the fold of the scroll area and the
+           counter ticked over a card nobody could see. It sits outside the
+           scroll now, which also lets it move beside the essay on a wide
+           screen instead of under it. -->
+      <div class="slot-stage" id="slotStage"></div>
       </div>
 
       <!-- Paragraph navigation (paragraphs mode only) -->
@@ -377,10 +403,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
            used to say — the role, the group, the mode — is on the card
            above, where the student is already looking. -->
       <div class="slot-nav hidden" id="slotNav">
-        <div class="slot-modes">
-          <button class="slot-mode active" id="modeWhole" onclick="setSlotMode('whole')">Gallery</button>
-          <button class="slot-mode" id="modePhrase" onclick="setSlotMode('phrase')">Slides</button>
-        </div>
+        <div class="slot-modes"><span class="slot-mode active">Gallery</span></div>
         <div class="slot-steps">
           <button class="slot-arrow" id="slotPrev" onclick="slotPrev()" aria-label="Previous">&larr;</button>
           <span class="slot-count" id="slotCount">1 / 1</span>
@@ -665,9 +688,16 @@ const ROLE_SECTIONS = {
   closing: [['full','conclusion']]
 };
 
-let slotPool={}, phraseBank=null, slotIndex=0, slotMode='whole', slotReady=false;
+let slotPool={}, phraseBank=null, slotIndex=0, slotReady=false;
+/* One mode. See the note by .slot-modes. */
+const slotMode='whole';
 
+let slotLoading=false;
 async function loadSlotPool(){
+  /* Once. The pool is built by pushing into arrays, so a second run would
+     silently double every slot — 120 conclusions where 60 exist. Nothing
+     calls it twice today; this makes sure nothing can. */
+  if(slotLoading) return; slotLoading=true;
   try{
     const r=await fetch(SLOT_SOURCE);
     if(r.ok){
@@ -718,21 +748,14 @@ function currentPool(){
                              : (slotPool[currentRole()]||[]).map(t=>({text:t}));
 }
 
-function setSlotMode(m){
-  slotMode=m; slotIndex=0;
-  document.getElementById('modeWhole').classList.toggle('active',m==='whole');
-  document.getElementById('modePhrase').classList.toggle('active',m==='phrase');
-  renderSlot();
-}
-window.setSlotMode=setSlotMode;
 
 function renderSlot(){
   const nav=document.getElementById('slotNav'); if(!nav) return;
   const pool=currentPool();
   const show = slotReady && !fullTextMode && paragraphs.length && pool.length>0;
   nav.classList.toggle('hidden', !show);
-  const box=document.getElementById('infographic');
-  const old=box&&box.querySelector('.slot-body'); if(old) old.remove();
+  const stage=document.getElementById('slotStage');
+  if(stage) stage.innerHTML='';
   if(!show) return;
 
   if(slotIndex>=pool.length) slotIndex=0;
@@ -752,7 +775,7 @@ function renderSlot(){
                    first:'body paragraph',second:'body paragraph'}[currentRole()]||'version');
   alt.innerHTML='<div class="slot-kick"><i></i>'+kick+'</div>'+
                 '<div class="para-text">'+html+'</div>';
-  box.appendChild(alt);
+  stage.appendChild(alt);
 }
 
 function slotPrev(){ if(slotIndex>0){ slotIndex--; renderSlot(); } }

@@ -216,6 +216,20 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 }
   
 /* ── ACCENT BAR ── */
+.slot-nav{display:flex;align-items:center;justify-content:center;gap:.5rem;
+  padding:.55rem .75rem;border-top:1px solid var(--rule,#BCB1A0);}
+.slot-nav.hidden{display:none;}
+.slot-arrow{width:34px;height:34px;border:none;border-radius:999px;
+  background:var(--poster-fill,rgba(20,17,14,.09));color:var(--poster-ink,#14110E);
+  font-size:.9rem;cursor:pointer;transition:background .15s,transform .12s;}
+.slot-arrow:active{transform:scale(.94);background:var(--poster-fill-hi,rgba(20,17,14,.15));}
+.slot-arrow:disabled{opacity:.35;cursor:default;}
+.slot-label{display:flex;flex-direction:column;align-items:center;gap:.1rem;min-width:9rem;}
+.slot-kicker{font-size:.56rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--sage-d,#456055);font-weight:700;}
+.slot-count{font-size:.6rem;color:var(--faint,#756B6E);font-variant-numeric:tabular-nums;}
+.slot-body{border-top:1px dashed var(--rule,#BCB1A0);margin-top:.9rem;padding-top:.9rem;}
+.slot-body .para-text{color:var(--paper,#4A433D);}
 .accent-bar{height:4px;background:var(--acc);flex-shrink:0;border-radius:0 0 1.4rem 1.4rem;opacity:0.7}
 
 /* ── STATE MSG ── */
@@ -291,6 +305,26 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
         <button class="para-arrow" id="btnPrev" onclick="goPrev()" disabled>←</button>
         <div class="para-nav-label" id="paraLabel">Introduction</div>
         <button class="para-arrow" id="btnNext" onclick="goNext()">→</button>
+      </div>
+
+      <!-- ══ THE SECOND AXIS ══════════════════════════════════════════
+           The row above moves ALONG the essay: introduction, then body,
+           then conclusion. This one holds the slot still and moves ACROSS
+           essays — sixty other introductions, then sixty other conclusions.
+
+           That is the axis no other page in the product has, and it is the
+           one that teaches the thing a model essay cannot: the function is
+           fixed, the wording is not. A student who reads five samples end
+           to end takes away five essays. A student who sees five
+           introductions in the same slot takes away the slot, which is
+           what the exam actually asks them to fill. -->
+      <div class="slot-nav hidden" id="slotNav">
+        <button class="slot-arrow" id="slotPrev" onclick="slotPrev()">←</button>
+        <div class="slot-label">
+          <span class="slot-kicker">Other <span id="slotRole">introductions</span></span>
+          <span class="slot-count" id="slotCount">1 / 1</span>
+        </div>
+        <button class="slot-arrow" id="slotNext" onclick="slotNext()">→</button>
       </div>
 
       <div class="accent-bar"></div>
@@ -448,6 +482,7 @@ function render(){
       return `<div class="para-text ${xrayOn?'xray-on':''}">${d.html}</div>`;
     }).join('');
     box.innerHTML=html;
+    renderSlot();
   }else{
     const p=paragraphs[currentPara]||'';
     const t=topicFor(currentPara);
@@ -455,6 +490,7 @@ function render(){
     const label=paraLabels[currentPara]||`Paragraph ${currentPara+1}`;
     box.innerHTML=`<div class="para-label">${label}</div><div class="para-text ${xrayOn?'xray-on':''}">${d.html}</div>`;
     updateNav();
+    renderSlot();
   }
 }
 
@@ -464,8 +500,8 @@ function updateNav(){
   document.getElementById('btnNext').disabled=currentPara>=paragraphs.length-1;
   document.getElementById('paraLabel').textContent=paraLabels[currentPara]||`Paragraph ${currentPara+1}`;
 }
-function goPrev(){if(currentPara>0){currentPara--;render();}}
-function goNext(){if(currentPara<paragraphs.length-1){currentPara++;render();}}
+function goPrev(){if(currentPara>0){currentPara--;slotIndex=0;render();}}
+function goNext(){if(currentPara<paragraphs.length-1){currentPara++;slotIndex=0;render();}}
 
 /* ══ STYLE ══ */
 function selectStyle(style){
@@ -518,6 +554,11 @@ function navTo(dest){
 /* ══ INIT ══ */
 async function init(){
   try{question=JSON.parse(sessionStorage.getItem('currentQuestion'));}catch(e){}
+
+  /* The cross-essay pool loads in the background, like the expression
+     corpus above it. The page never waits for it: if it never arrives the
+     second axis simply does not appear, and everything else still works. */
+  loadSlotPool();
 
   /* Topic label */
 /* Topic label + accent colour — sourced from the question file, per the pipeline rule */
@@ -578,6 +619,79 @@ init();
 </div>
 
 <script src="/skills/grammar-rules/intuity-sound.js"></script>
-<script src="/data/writing/writing-chrome.js?v=2"></script>
+<script src="/data/writing/writing-chrome.js?v=2">
+/* ══ SLOT POOL — the cross-essay axis ══════════════════════════════════
+   essays-models.json holds 60 samples in 7 different paragraph shapes, so
+   the labels do NOT line up: "Body Paragraph 1 - Advantage" in one sample
+   is "Body Paragraph 1 - Main Point" in another. Matching on the literal
+   label would give a student four alternatives where sixty exist.
+
+   So labels are normalised to a ROLE first — opening, supporting, counter,
+   closing — and the pool for a slot is every paragraph in the corpus that
+   plays the same role. This is the Hub's getSectionKey idea, reduced to
+   the four roles the samples actually distinguish.
+
+   ONE FILE TO EXTEND. SLOT_SOURCE and the role table are the only things
+   the other six genres need to change; everything below is generic. */
+const SLOT_SOURCE = '/skills/writing/essays/data1/essays-models.json';
+
+function slotRole(label){
+  const l=String(label||'').toLowerCase();
+  if(l.includes('introduction')||l.includes('opening')) return 'opening';
+  if(l.includes('conclusion')||l.includes('closing'))   return 'closing';
+  if(l.includes('counter')||l.includes('disadvantage')||
+     l.includes('problem')||l.includes('concern'))      return 'counter';
+  return 'supporting';
+}
+const ROLE_NAME = {opening:'introductions', closing:'conclusions',
+                   counter:'counterpoints', supporting:'body paragraphs'};
+
+let slotPool={}, slotIndex=0, slotReady=false;
+
+async function loadSlotPool(){
+  try{
+    const r=await fetch(SLOT_SOURCE); if(!r.ok) return;
+    const data=await r.json();
+    (data.samples||[]).forEach(smp=>{
+      (smp.paragraphs||[]).forEach(p=>{
+        if(!p || !p.text) return;
+        const role=slotRole(p.label);
+        (slotPool[role]=slotPool[role]||[]).push({text:p.text,label:p.label});
+      });
+    });
+    slotReady=Object.keys(slotPool).length>0;
+  }catch(e){ /* the page works without it; the axis simply does not appear */ }
+  renderSlot();
+}
+
+function currentRole(){ return slotRole(paraLabels[currentPara]); }
+function currentPool(){ return (slotPool[currentRole()]||[]); }
+
+function renderSlot(){
+  const nav=document.getElementById('slotNav'); if(!nav) return;
+  const pool=currentPool();
+  /* No axis when there is nothing to compare against, and none in full-text
+     mode: cycling one slot only means anything while one slot is on screen. */
+  const show = slotReady && !fullTextMode && paragraphs.length && pool.length>1;
+  nav.classList.toggle('hidden', !show);
+  if(!show) return;
+  if(slotIndex>=pool.length) slotIndex=0;
+  document.getElementById('slotRole').textContent=ROLE_NAME[currentRole()]||'versions';
+  document.getElementById('slotCount').textContent=(slotIndex+1)+' / '+pool.length;
+  document.getElementById('slotPrev').disabled=slotIndex===0;
+  document.getElementById('slotNext').disabled=slotIndex>=pool.length-1;
+
+  const box=document.getElementById('infographic');
+  let alt=box.querySelector('.slot-body');
+  if(!alt){ alt=document.createElement('div'); alt.className='slot-body'; box.appendChild(alt); }
+  const item=pool[slotIndex];
+  alt.innerHTML='<div class="para-text">'+item.text+'</div>';
+}
+
+function slotPrev(){ if(slotIndex>0){ slotIndex--; renderSlot(); } }
+function slotNext(){ if(slotIndex<currentPool().length-1){ slotIndex++; renderSlot(); } }
+window.slotPrev=slotPrev; window.slotNext=slotNext;
+
+</script>
 </body>
 </html>

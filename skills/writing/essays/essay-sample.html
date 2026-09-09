@@ -689,18 +689,35 @@ const PHRASE_SOURCE = {
 
 /* Paragraph label -> the role a slot plays. Used twice: to pool whole
    paragraphs from the 60 samples, and to pick the phrase bank section. */
-function slotRole(label){
+/* ── THE ROLE OF A SLOT ────────────────────────────────────────────────
+   POSITION FIRST, WORDS SECOND — and it has to be that way round.
+
+   buildParaLabels has two modes. Without writingPoints it numbers the
+   bodies "Body 1 / Body 2 / Body 3", which a word-matcher can read. WITH
+   writingPoints it labels them by CONTENT — "Technology", "Cost", "Traffic"
+   — and those say nothing at all about which slot they fill. Reading only
+   the words, every one of them fell through to 'first', so the gallery
+   offered Body 1's pool for the second and third body as well.
+
+   Where a paragraph sits is known for certain: index 0 opens, the last one
+   closes, and the bodies run in order between them. So position decides,
+   and the label is consulted only to promote a body to 'counter' when it
+   actually announces itself as one ("Disadvantages", "Counter-argument") —
+   which is a refinement position cannot make. */
+function slotRole(label, i, total){
   const l=String(label||'').toLowerCase();
+  if(typeof i === 'number' && typeof total === 'number' && total > 0){
+    if(i === 0) return 'opening';
+    if(i === total - 1) return 'closing';
+    /* a body that names itself a counterpoint is one, wherever it sits */
+    if(/counter|disadvantage|drawback|problem|against|concern/.test(l)) return 'counter';
+    const nth = i;                       /* 1 = first body, 2 = second, ... */
+    return nth === 1 ? 'first' : nth === 2 ? 'second' : 'counter';
+  }
+  /* No position given: fall back to reading the label. */
   if(l.includes('introduction')||l.includes('opening')) return 'opening';
   if(l.includes('conclusion')||l.includes('closing'))   return 'closing';
-  if(l.includes('counter')||l.includes('disadvantage')||
-     l.includes('problem')||l.includes('concern'))      return 'counter';
-  /* GENERIC LABELS NEED POSITION, NOT WORDS. buildParaLabels falls back to
-     "Body 1 / Body 2 / Body 3" whenever a question carries no writingPoints,
-     and those say nothing about what the paragraph does. By convention the
-     third body is where the counter-argument goes, so position supplies
-     what the wording does not — otherwise Body 3 offers first-reason
-     frames, which is the wrong move at the right slot. */
+  if(/counter|disadvantage|drawback|problem|against|concern/.test(l)) return 'counter';
   const m=l.match(/\bbody\s*(\d+)/) || l.match(/paragraph\s*(\d+)/);
   if(m){ const n=+m[1]; return n<=1?'first':n===2?'second':'counter'; }
   if(l.includes('second')||l.includes('supporting')) return 'second';
@@ -785,7 +802,7 @@ function phrasesFor(role){
   return out;
 }
 
-function currentRole(){ return slotRole(paraLabels[currentPara]); }
+function currentRole(){ return slotRole(paraLabels[currentPara], currentPara, paragraphs.length); }
 function currentPool(){
   return slotMode==='phrase' ? phrasesFor(currentRole())
                              : (slotPool[currentRole()]||[]).map(t=>({text:t}));

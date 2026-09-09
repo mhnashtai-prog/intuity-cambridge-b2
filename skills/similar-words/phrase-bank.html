@@ -246,11 +246,34 @@
   .constellation.wave .enode.dragging{transform:translateY(-50%);box-shadow:none;}
   .constellation.wave .enode-banner{display:none;}
   .constellation.wave .enode-tail{display:none;}
-  .constellation.wave .enode-stem{font-size:.72rem;line-height:1.32;
-    font-weight:600;color:var(--poster-ink,var(--ink));}
+  /* ── THE EXPRESSIONS ARE THE TARGET LANGUAGE ──────────────────────────
+     Everything else on this screen is scaffolding — the question, the
+     controls, the spine. The ten phrases are the thing being learnt, and
+     on the wave they are the only text, so they carry the accent.
+
+     NOT --caramel. This file's own note says why, and the number holds
+     here: #B0865C on the board is 2.68:1, and these are set at .72rem.
+     Caramel is a block colour — it works under a banner, it fails as
+     words, which is exactly what that comment warned about.
+
+     --accent-ink is the shell's answer to this (caramel darkened until it
+     could be type), at 4.22:1. Still short of 4.5 for text this small, so
+     it goes one step further: #9F5339, 4.55:1. Reads as the same caramel,
+     passes as the size it is actually set at. */
+  /* THE FRAME RECEDES, THE WORD CARRIES. The grey has a floor: the frame
+     is not decoration, it is the pattern the student has to reuse, so it
+     must stay readable at .72rem. #6C655D is 4.52:1 on the board — plainly
+     secondary next to solid ink, still legible as words. A lighter grey
+     looked better and failed at exactly the size it is set. The key word
+     takes --ink at 1.2em, which is the point of the screen: ten frames
+     scanned at a glance, ten different words inside them. */
+  .constellation.wave .enode-stem{font-size:.72rem;line-height:1.34;
+    font-weight:500;color:#6C655D;}
+  .constellation.wave .enode-stem .kw{color:var(--ink,#14110E);
+    font-size:1.2em;font-weight:700;letter-spacing:-.005em;}
   .constellation.wave .enode.side-l{text-align:right;}
   .constellation.wave .enode.side-r{text-align:left;}
-  .constellation.wave .enode:active .enode-stem{color:var(--sage-d);}
+  .constellation.wave .enode:active .enode-stem{color:var(--ink);}
 
   /* THE QUESTION AT THE BASE. Not a heading above a list — the foot of the
      wave, which every expression runs down toward. */
@@ -658,7 +681,7 @@ function adaptV2(data){
       prec: null,
       capsule: (fn.phrases||[]).map(p=>({
         stem: p.t, tail: p.connector || '', register: p.register || null,
-        frame: frameOf(p.t)
+        key: p.key || null, frame: frameOf(p.t)
       }))
     };
   }
@@ -682,6 +705,7 @@ function adaptCorpus(data){
       capsule: fn.phrases.map(p=>({
         stem: p.stem,
         tail: p.connector,
+        key: p.key || null,
         frame: frameOf(p.stem)
       }))
     };
@@ -1012,6 +1036,39 @@ let dragEl=null, dragDX=0, dragDY=0;
 /* The board is a desk-width idea. Below this, the same cards are a list. */
 function isStacked(){ return window.matchMedia('(max-width:700px)').matches; }
 
+/* ── THE KEY WORD IN A FRAME ──────────────────────────────────────────
+   Every phrase is scaffolding around one content word — advantage,
+   strengths, feature, upside — and that word is the thing being taught.
+   The corpus does not mark it, so it is found rather than stored, from the
+   grammar these stems share: the head noun is the word before the final
+   "of" ("a major ADVANTAGE of", "one of the primary STRENGTHS of"), and
+   where there is no "of" it is the word before "is" ("what makes ...
+   APPEALING is"). Ten for ten across Advantages.
+
+   A heuristic over 28 functions will miss somewhere, so the data wins when
+   it says anything: add "key" to a phrase in the corpus JSON and that
+   value is used instead. Correcting one entry never needs a code change. */
+function keyWordOf(stem, given){
+  if(given) return given;
+  const t=String(stem).replace(/…/g,' ').trim();
+  let m=[...t.matchAll(/\b([A-Za-z][\w'-]*)\s+of\b/g)];
+  if(m.length) return m[m.length-1][1];
+  m=[...t.matchAll(/\b([A-Za-z][\w'-]*)\s+is\b/g)];
+  if(m.length) return m[m.length-1][1];
+  const w=t.match(/\b[A-Za-z][\w'-]{3,}\b/g);
+  return w ? w[w.length-1] : null;
+}
+
+/* Wrap that one word, leaving the rest of the string untouched. Escaped
+   first: these are data strings and must not become markup. */
+function markKey(stem, given){
+  const esc=String(stem).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const k=keyWordOf(stem, given);
+  if(!k) return esc;
+  const rx=new RegExp('(^|[^\\w])('+k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')(?![\\w])');
+  return esc.replace(rx, (m,a,b)=>a+'<span class="kw">'+b+'</span>');
+}
+
 function layoutConstellation(fam,k){
   const F=CORPUS[fam], fn=F.functions[k], [c,d]=hue(fam);
   const con=document.getElementById('constellation');
@@ -1092,7 +1149,7 @@ function layoutConstellation(fam,k){
           <span class="enode-bnum">${i+1}</span>
           <span class="enode-blabel">${cap(k)}</span>
         </div>
-        <div class="enode-stem">${practiceMode ? blankStem(x.stem) : x.stem}</div>
+        <div class="enode-stem">${practiceMode ? blankStem(x.stem) : markKey(x.stem, x.key)}</div>
         <div class="enode-tail">${x.tail}</div>`;
     }
     con.appendChild(node);
@@ -1180,9 +1237,10 @@ function placeOnWave(con){
   const qEl=con.querySelector('.q-centre');
   const qH=qEl?qEl.offsetHeight:96;
   const TOP=18, FLOOR=Math.max(TOP+40, H-qH-26);
-  /* 10% tighter, taken off the bottom rather than shared: the run lifts
-     away from the question instead of closing in on it from both ends. */
-  const span=(FLOOR-TOP)*0.9;
+  /* Tighter than the space allows, taken off the bottom rather than shared,
+     so the run lifts away from the question instead of closing in on it
+     from both ends. 0.9 then a further 15%. */
+  const span=(FLOOR-TOP)*0.765;
   const BOT=TOP+span;
   const yAt=i=> n===1 ? (TOP+BOT)/2 : TOP+span*i/(n-1);
   const gap=n>1 ? span/(n-1) : span;

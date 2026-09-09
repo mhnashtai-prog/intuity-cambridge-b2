@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Essay Games — INTUITY</title>
+<title>INTUITY — Structure Games</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Geist:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600;700&family=Crimson+Text:ital@0;1&display=swap" rel="stylesheet">
@@ -22,10 +22,20 @@
   .cond{font-family:'Geist Mono',monospace}
   main{width:100%;max-width:520px;display:flex;flex-direction:column;align-items:center}
 
-  /* top bar */
-  #top{width:100%;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-  #top a{color:var(--dim);text-decoration:none;font-size:12px;letter-spacing:.12em}
-  #top .brand{color:var(--gold-d);font-size:12px;letter-spacing:.3em;font-weight:600}
+  /* top bar — this row IS the entry point: brand + writing-type switcher, always live, never a gate */
+  #top{width:100%;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap}
+  #top a,#top button.linklike{color:var(--dim);text-decoration:none;font-size:12px;letter-spacing:.12em;background:none;border:none;cursor:pointer;font-family:'Geist Mono',monospace}
+  #top a:hover,#top button.linklike:hover{color:var(--gold-d)}
+  #top .brand{color:var(--gold-d);font-size:12px;letter-spacing:.3em;font-weight:600;flex:none}
+
+  /* type switcher — lives in the header itself, no separate gate screen */
+  #typeStrip{display:flex;gap:.3rem;order:3;width:100%;justify-content:center}
+  .tpip{background:rgba(26,23,18,.035);border:1px solid rgba(26,23,18,.08);border-radius:999px;
+    padding:.32rem .85rem;font-family:'Geist Mono',monospace;font-size:.62rem;font-weight:700;
+    letter-spacing:.1em;text-transform:uppercase;color:rgba(26,23,18,.45);cursor:pointer;transition:.18s;white-space:nowrap}
+  .tpip:hover{background:rgba(26,23,18,.07);color:rgba(26,23,18,.8)}
+  .tpip.current{background:var(--gold);border-color:var(--gold);color:#2c2416}
+  @media(min-width:640px){ #typeStrip{order:0;width:auto;justify-content:flex-start} }
 
   /* stage strip (from BUILD's nav-pips) */
   #strip{width:100%;display:flex;gap:.35rem;flex-wrap:wrap;justify-content:center;margin-bottom:.8rem}
@@ -125,6 +135,7 @@
   /* ════════ WHITEBOARD — large screens, read from across the room ════════ */
   @media (min-width:1100px){
     main{max-width:900px}
+    .tpip{font-size:.72rem;padding:.4rem 1.05rem}
     .card{width:min(860px,88vw);border-radius:26px}
     .header{padding:2rem 2.2rem 1.9rem}
     .title{font-size:clamp(2.6rem,3.6vw,3.6rem)}
@@ -169,7 +180,7 @@
     body{padding:calc(10px + env(safe-area-inset-top)) 10px 18px}
     main{max-width:100%}
     #top{margin-bottom:8px}
-    #top a,#top .brand,#top #typeTag{font-size:11px}
+    #top a,#top .brand,#top #typeTag,#top button.linklike{font-size:11px}
     #strip{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;
       -webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px}
     #strip::-webkit-scrollbar{display:none}
@@ -195,6 +206,9 @@
     .gbtn .nm{font-size:.66rem}
     #fulltext{width:100%;padding:13px 18px;min-height:48px}
     .os-whole{font-size:15.5px}
+    .tpip{font-size:.58rem;padding:.28rem .7rem}
+    .type-card{padding:1.1rem .7rem}
+    .type-card .ti-name{font-size:1.1rem}
   }
   /* touch devices: the drag handle is misleading — show a tap affordance instead */
   body.touch .os-item::before{content:'\21C5'}
@@ -423,8 +437,8 @@
 <body>
 <main>
   <div id="top">
-    <a href="index.html" class="cond">&#8592; TASK TYPES</a>
-    <span class="brand cond" id="brandTag">GAMES</span>
+    <span class="brand cond" id="brandTag">INTUITY</span>
+    <div id="typeStrip"></div>
     <button id="newText" class="cond" onclick="window._newText()" title="Another model text">&#8635; <span id="textTag">NEW TEXT</span></button>
     <div id="modeToggle">
       <button class="mtb cond on" id="mbStages" onclick="window._mode(false)">STAGES</button>
@@ -433,7 +447,7 @@
   </div>
 
   <div id="strip"></div>
-  <div id="loading">Loading&hellip;</div>
+  <div id="loading" style="display:none">Loading&hellip;</div>
   <div id="shell">
     <div class="card" id="card">
       <div class="header" id="header">
@@ -465,8 +479,14 @@
   if(TOUCH) document.body.classList.add('touch');
   const MOVE_HINT = TOUCH ? 'Tap one sentence, then another, to swap them.'
                           : 'Drag the sentences into the order that reads best.';
-  const params=new URLSearchParams(location.search);
-  const type=params.get('type')||'essays';
+
+  /* ═══ WRITING TYPES — now just a header row, not a gate ═══ */
+  const TYPES=[
+    {id:'essays', label:'ESSAY',  desc:'Claim → support → link',  ico:'01'},
+    {id:'reports',label:'REPORT', desc:'Findings, laid out plainly',ico:'02'},
+    {id:'reviews',label:'REVIEW', desc:'Verdict, then the reasons', ico:'03'},
+    {id:'emails', label:'EMAIL',  desc:'Ask, context, sign-off',    ico:'04'}
+  ];
   const DATA={essays:'data/essays-models.json',reports:'data/reports-models.json',
     reviews:'data/reviews-models.json',emails:'data/emails-models.json'};
   const ACCENTS=['#3d9e95','#e8723a','#7b5ea7','#c94f6d','#c08b2f'];
@@ -482,7 +502,25 @@
     {id:'builder', ico:'\u270D\uFE0F', nm:'Builder'}
   ];
 
-  let stages=[], play=[], fullText=false, si=0, game='sequence', solved=new Set();
+  let type=null, stages=[], play=[], fullText=false, si=0, game='sequence', solved=new Set();
+
+  /* ── type switcher, living in the header itself — no gate, nothing to click through ── */
+  function renderTypeStrip(){
+    const s=document.getElementById('typeStrip'); s.innerHTML='';
+    TYPES.forEach(t=>{
+      const b=document.createElement('button');
+      b.className='tpip cond'+(t.id===type?' current':'');
+      b.textContent=t.label;
+      b.onclick=()=>{ if(t.id!==type) chooseType(t.id); };
+      s.appendChild(b);
+    });
+  }
+  function chooseType(id){
+    type=id;
+    renderTypeStrip();
+    initType(id);
+  }
+
   function buildStages(){
     const sample=DATASET.samples[sampleIdx];
     stages=sample.paragraphs.map(p=>({
@@ -506,20 +544,28 @@
   let order=[], curSupports=[], curClaim='';
 
   let DATASET=null, sampleIdx=0;
-  fetch(DATA[type]).then(r=>r.json()).then(d=>{
-    DATASET=d;
-    if(!(d.samples&&d.samples.length)){fail('No content.');return;}
-    sampleIdx=Math.floor(Math.random()*d.samples.length);
-    buildStages();
-    const TYPE_LABEL={essays:'ESSAY',reports:'REPORT',reviews:'REVIEW',emails:'EMAIL',articles:'ARTICLE'};
-    document.getElementById('brandTag').textContent=(TYPE_LABEL[type]||'WRITING')+' GAMES';
-    document.getElementById('textTag').textContent='TEXT '+(sampleIdx+1)+'/'+d.samples.length;
-    document.getElementById('loading').style.display='none';
-    document.getElementById('shell').classList.add('on');
-    rebuildPlay(); renderStrip(); renderGames(); load(firstPlayable());
-  }).catch(()=>fail('Could not load game data.'));
+  function initType(t){
+    document.getElementById('loading').style.display='block';
+    document.getElementById('loading').textContent='Loading\u2026';
+    document.getElementById('strip').style.display='flex';
+    fetch(DATA[t]).then(r=>r.json()).then(d=>{
+      DATASET=d;
+      if(!(d.samples&&d.samples.length)){fail('No content.');return;}
+      sampleIdx=Math.floor(Math.random()*d.samples.length);
+      buildStages();
+      const TYPE_LABEL={essays:'ESSAY',reports:'REPORT',reviews:'REVIEW',emails:'EMAIL',articles:'ARTICLE'};
+      document.getElementById('brandTag').textContent=(TYPE_LABEL[t]||'WRITING')+' GAMES';
+      document.getElementById('textTag').textContent='TEXT '+(sampleIdx+1)+'/'+d.samples.length;
+      document.getElementById('loading').style.display='none';
+      document.getElementById('shell').classList.add('on');
+      solved=new Set(); pzStage=-1; sbStage=-1; ftFocus=null; si=0; fullText=false;
+      document.getElementById('mbStages').classList.add('on');
+      document.getElementById('mbFull').classList.remove('on');
+      rebuildPlay(); renderStrip(); renderGames(); load(firstPlayable());
+    }).catch(()=>fail('Could not load game data.'));
+  }
 
-  function fail(m){document.getElementById('loading').textContent=m;}
+  function fail(m){document.getElementById('loading').style.display='block';document.getElementById('loading').textContent=m;}
   function playable(i){ if(!play[i])return false;
     const n=play[i].sents.length;
     return n>=1; }
@@ -708,7 +754,7 @@
           ftFocus={key:ftKey(p,sIdx), p:p, s:sIdx, label:stages[p].label,
                    sents:[stages[p].sents[sIdx]]};
         }
-        render();
+        load(si);
       };
     });
 
@@ -716,7 +762,7 @@
     actions.innerHTML='<span class="ft-count">'+done.size+' of '+total+' done with '+gm.nm.toLowerCase()+'</span>'+
       (done.size?'<button onclick="window._ftClear()">CLEAR MARKS</button>':'');
   }
-  window._ftClear=function(){ ftDone[game]=new Set(); render(); };
+  window._ftClear=function(){ ftDone[game]=new Set(); load(si); };
   window._ftBack=function(){
     if(ftFocus){
       // anything finished in the focused piece is marked on the map
@@ -724,7 +770,7 @@
       if(game==='sequence') stages[ftFocus.p].sents.forEach((_,k)=>d.add(ftKey(ftFocus.p,k)));
       else if(ftFocus.s!=null) d.add(ftKey(ftFocus.p,ftFocus.s));
     }
-    ftFocus=null; render();
+    ftFocus=null; load(si);
   };
 
   /* ═══ SEQUENCE — drag every sentence into order (works at any stage, incl. the 2-sentence intro) ═══ */
@@ -1214,12 +1260,10 @@
       }});
   }
 
-  function renderStub(gm){
-    document.getElementById('cardBody').innerHTML=
-      `<div class="stub"><b>${gm.nm}</b> for this stage<br>is coming soon.<br><br>Try <b>Order Supports</b> \u2014 it's live.</div>`;
-    document.getElementById('cardActions').innerHTML='';
-  }
-
+  /* ═══ boot: the header is the only gate there ever is — pick a type and go straight in ═══ */
+  const params=new URLSearchParams(location.search);
+  const urlType=params.get('type');
+  chooseType((urlType && DATA[urlType]) ? urlType : 'essays');
 
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') window._bdClose&&window._bdClose(); });
   document.addEventListener('click',e=>{ if(e.target && e.target.id==='bdModal') window._bdClose(); });

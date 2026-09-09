@@ -36,7 +36,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .topic-label{font-size:0.68rem;font-weight:700;color:rgba(0,0,0,0.38);letter-spacing:0.04em;text-align:right;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase}
 
 /* ── STAGE ── */
-.stage{flex:1;min-height:0;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.stage{flex:1;min-height:0;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;padding:.5rem 0}
 
 /* ── FOOTER NAV ── */
 .foot{flex-shrink:0;display:flex;justify-content:center;padding:0.5rem 1rem calc(env(safe-area-inset-bottom,0px) + 0.55rem);background:rgba(240,239,236,0.95);border-top:1px solid rgba(0,0,0,0.06)}
@@ -47,7 +47,13 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 
 /* ── POSTER CARD ── */
 .poster{
-  width:min(420px,90vw);height:min(560px,83vh);
+  /* SIZED AGAINST ITS CONTAINER, NOT THE VIEWPORT.
+     83vh measured the whole window, but .poster lives in .stage — the
+     window minus the header and the footer. On a short screen 83vh is
+     taller than the stage, and align-items:center splits the excess, so
+     the card ran up under the header and down under the foot. 100% is the
+     stage; min() keeps the 560px ceiling on tall screens. */
+  width:min(420px,90vw);height:min(560px,100%);max-height:100%;
   background:var(--white);border-radius:1.4rem;
   display:flex;flex-direction:column;overflow:hidden;position:relative;
   box-shadow:0 2px 0 rgba(255,255,255,0.8) inset,4px 6px 0 rgba(0,0,0,0.06),0 20px 50px rgba(0,0,0,0.18),0 4px 12px rgba(0,0,0,0.1);
@@ -216,7 +222,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 }
   
 /* ── ACCENT BAR ── */
-.slot-nav{display:flex;align-items:center;justify-content:center;gap:.5rem;
+.slot-nav{flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:.5rem;
   padding:.55rem .75rem;border-top:1px solid var(--rule,#BCB1A0);}
 .slot-nav.hidden{display:none;}
 .slot-arrow{width:34px;height:34px;border:none;border-radius:999px;
@@ -551,75 +557,6 @@ function navTo(dest){
   if(map[dest])window.location.href=map[dest];
 }
 
-/* ══ INIT ══ */
-async function init(){
-  try{question=JSON.parse(sessionStorage.getItem('currentQuestion'));}catch(e){}
-
-  /* The cross-essay pool loads in the background, like the expression
-     corpus above it. The page never waits for it: if it never arrives the
-     second axis simply does not appear, and everything else still works. */
-  loadSlotPool();
-
-  /* Topic label */
-/* Topic label + accent colour — sourced from the question file, per the pipeline rule */
-  if(question){
-    const label=question.topic||question.topicLabel||(question.mainQuestion||question.question||'').substring(0,35);
-    if(label)document.getElementById('topicLabel').textContent=label.toUpperCase();
-    applyAccent(question.essayType||'opinion');
-  }
-
-  if(!question){
-    document.getElementById('infographic').innerHTML='<div class="state-msg">No question selected.<br>Return to Questions to choose one.</div>';
-    return;
-  }
-
-  const lookupId=question.questionId||question.id;
-
-  /* Sample data */
-  try{
-    /* the expression corpus loads in the background — the page never waits for it */
-    fetch('data/essays-expressions.json')
-      .then(r=>r.ok?r.json():null)
-      .then(d=>{ if(d){ window.CORPUS=d; CORPUS=d; render(); } })
-      .catch(()=>{});
-    const res=await fetch('data/samples.json');
-    if(!res.ok)throw new Error('samples.json not found');
-    const data=await res.json();
-    const pool=Array.isArray(data)?data:(data.opinion||data.samples||data.essays||[]);
-    const match=pool.find(s=>s.id===lookupId);
-    if(!match){
-      document.getElementById('infographic').innerHTML=`<div class="state-msg">No sample essay for this question yet.</div>`;
-      return;
-    }
-    sampleData=match;
-
-    /* Show the Guided button only when this essay actually has a guided style authored */
-    document.getElementById('styleGuided').classList.toggle('hidden', !match.styles?.guided);
-
-    const html=match.styles?.default||match.html||match.text||'';
-    paragraphs=extractParagraphs(html);
-    paraLabels=buildParaLabels(paragraphs.length);
-    render();
-  }catch(err){
-    document.getElementById('infographic').innerHTML=`<div class="state-msg">⚠ Could not load samples.json</div>`;
-  }
-}
-
-init();
-</script>
-<div class="alt-overlay" id="altOverlay" onclick="closeAlt(event)">
-  <div class="alt-modal" onclick="event.stopPropagation()">
-    <div class="alt-header">
-      <div><div class="alt-title">Other ways to open this paragraph</div>
-           <div class="alt-phrase" id="altPhrase"></div></div>
-      <button class="alt-close" onclick="closeAlt()">×</button>
-    </div>
-    <div class="alt-body" id="altBody"></div>
-  </div>
-</div>
-
-<script src="/skills/grammar-rules/intuity-sound.js"></script>
-<script src="/data/writing/writing-chrome.js?v=2">
 /* ══ SLOT POOL — the cross-essay axis ══════════════════════════════════
    essays-models.json holds 60 samples in 7 different paragraph shapes, so
    the labels do NOT line up: "Body Paragraph 1 - Advantage" in one sample
@@ -691,6 +628,77 @@ function renderSlot(){
 function slotPrev(){ if(slotIndex>0){ slotIndex--; renderSlot(); } }
 function slotNext(){ if(slotIndex<currentPool().length-1){ slotIndex++; renderSlot(); } }
 window.slotPrev=slotPrev; window.slotNext=slotNext;
+
+/* ══ INIT ══ */
+async function init(){
+  try{question=JSON.parse(sessionStorage.getItem('currentQuestion'));}catch(e){}
+
+  /* The cross-essay pool loads in the background, like the expression
+     corpus above it. The page never waits for it: if it never arrives the
+     second axis simply does not appear, and everything else still works. */
+  loadSlotPool();
+
+  /* Topic label */
+/* Topic label + accent colour — sourced from the question file, per the pipeline rule */
+  if(question){
+    const label=question.topic||question.topicLabel||(question.mainQuestion||question.question||'').substring(0,35);
+    if(label)document.getElementById('topicLabel').textContent=label.toUpperCase();
+    applyAccent(question.essayType||'opinion');
+  }
+
+  if(!question){
+    document.getElementById('infographic').innerHTML='<div class="state-msg">No question selected.<br>Return to Questions to choose one.</div>';
+    return;
+  }
+
+  const lookupId=question.questionId||question.id;
+
+  /* Sample data */
+  try{
+    /* the expression corpus loads in the background — the page never waits for it */
+    fetch('data/essays-expressions.json')
+      .then(r=>r.ok?r.json():null)
+      .then(d=>{ if(d){ window.CORPUS=d; CORPUS=d; render(); } })
+      .catch(()=>{});
+    const res=await fetch('data/samples.json');
+    if(!res.ok)throw new Error('samples.json not found');
+    const data=await res.json();
+    const pool=Array.isArray(data)?data:(data.opinion||data.samples||data.essays||[]);
+    const match=pool.find(s=>s.id===lookupId);
+    if(!match){
+      document.getElementById('infographic').innerHTML=`<div class="state-msg">No sample essay for this question yet.</div>`;
+      return;
+    }
+    sampleData=match;
+
+    /* Show the Guided button only when this essay actually has a guided style authored */
+    document.getElementById('styleGuided').classList.toggle('hidden', !match.styles?.guided);
+
+    const html=match.styles?.default||match.html||match.text||'';
+    paragraphs=extractParagraphs(html);
+    paraLabels=buildParaLabels(paragraphs.length);
+    render();
+  }catch(err){
+    document.getElementById('infographic').innerHTML=`<div class="state-msg">⚠ Could not load samples.json</div>`;
+  }
+}
+
+init();
+</script>
+<div class="alt-overlay" id="altOverlay" onclick="closeAlt(event)">
+  <div class="alt-modal" onclick="event.stopPropagation()">
+    <div class="alt-header">
+      <div><div class="alt-title">Other ways to open this paragraph</div>
+           <div class="alt-phrase" id="altPhrase"></div></div>
+      <button class="alt-close" onclick="closeAlt()">×</button>
+    </div>
+    <div class="alt-body" id="altBody"></div>
+  </div>
+</div>
+
+<script src="/skills/grammar-rules/intuity-sound.js"></script>
+<script src="/data/writing/writing-chrome.js?v=2">
+
 
 </script>
 </body>

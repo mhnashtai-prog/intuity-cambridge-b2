@@ -235,6 +235,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .slot-arrow:disabled{opacity:.35;cursor:default;}
 .slot-modes{display:flex;gap:.3rem;justify-content:center;}
 .slot-steps{display:flex;align-items:center;justify-content:center;gap:.7rem;}
+.slot-steps.hidden{display:none;}
 /* THE FOOTER IS CENTRED. The arrows were pinned to the corners with
    space-between, which on a 420px card put them as far from each other and
    from the eye as the geometry allowed — a control you have to go looking
@@ -264,22 +265,15 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
    paper, a caramel block over a mono kicker, Anton for the placed word,
    --poster-body for the sentence. Caramel is the MARK and never a letter —
    2.7:1 is right for a rectangle and would fail for a word. */
-/* ── THE DESKTOP HAS ROOM, SO IT USES IT ───────────────────────────────
-   On a phone the poster stacks under the essay and the card scrolls as one
-   column. Past 900px the card widens and the two sit side by side: the
-   student's paragraph on the left, the alternative on the right, both in
-   view at once. That is the comparison the feature exists to make, and
-   stacking it vertically on a wide screen wasted the width and forced a
-   scroll to do what a glance should do. */
+/* ── ONE AT A TIME ─────────────────────────────────────────────────────
+   The side-by-side split is gone. Two half-width columns cut the essay to
+   about six words a line and put two things in front of a student who is
+   reading one — the alternative competed with the paragraph instead of
+   answering it. The gallery card sits under the essay at full width and is
+   read in its turn, at every screen size. */
 .card-cols{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
 .slot-stage{flex:none;overflow-y:auto;padding:0 1.2rem 0.5rem;}
 .slot-stage:empty{display:none;}
-@media(min-width:900px){
-  .poster{width:min(880px,94vw);}
-  .card-cols{flex-direction:row;gap:1.4rem;padding-right:.4rem;}
-  .card-scroll{flex:1 1 50%;min-width:0;}
-  .slot-stage{flex:1 1 50%;min-width:0;padding:1rem 1.6rem 1rem 0;}
-}
 .slot-body{background:var(--poster,#FAF8F5);border-radius:var(--r-sheet,0);
   box-shadow:0 1px 3px rgba(0,0,0,.10);
   margin-top:.9rem;padding:1rem 1.1rem 1.1rem;}
@@ -403,8 +397,10 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
            used to say — the role, the group, the mode — is on the card
            above, where the student is already looking. -->
       <div class="slot-nav hidden" id="slotNav">
-        <div class="slot-modes"><span class="slot-mode active">Gallery</span></div>
-        <div class="slot-steps">
+        <div class="slot-modes">
+          <button class="slot-mode" id="slotToggle" onclick="toggleGallery()">Gallery</button>
+        </div>
+        <div class="slot-steps hidden" id="slotSteps">
           <button class="slot-arrow" id="slotPrev" onclick="slotPrev()" aria-label="Previous">&larr;</button>
           <span class="slot-count" id="slotCount">1 / 1</span>
           <button class="slot-arrow" id="slotNext" onclick="slotNext()" aria-label="Next">&rarr;</button>
@@ -584,8 +580,8 @@ function updateNav(){
   document.getElementById('btnNext').disabled=currentPara>=paragraphs.length-1;
   document.getElementById('paraLabel').textContent=paraLabels[currentPara]||`Paragraph ${currentPara+1}`;
 }
-function goPrev(){if(currentPara>0){currentPara--;slotIndex=0;render();}}
-function goNext(){if(currentPara<paragraphs.length-1){currentPara++;slotIndex=0;render();}}
+function goPrev(){if(currentPara>0){currentPara--;slotIndex=0;galleryOpen=false;render();}}
+function goNext(){if(currentPara<paragraphs.length-1){currentPara++;slotIndex=0;galleryOpen=false;render();}}
 
 /* ══ STYLE ══ */
 function selectStyle(style){
@@ -689,6 +685,17 @@ const ROLE_SECTIONS = {
 };
 
 let slotPool={}, phraseBank=null, slotIndex=0, slotReady=false;
+/* ── TWO TIERS, ONE AT A TIME ──────────────────────────────────────────
+   PRIMARY (the green arrows) walks the sections of THIS sample.
+   SECONDARY (the footer) opens a gallery of other essays' versions of the
+   section you are standing on.
+
+   They are never both live. With the gallery open the green arrows would
+   move the slot out from under the cards a student is reading, so the
+   primary tier stands down and the footer offers Close. Closing puts it
+   back. One navigation is active at any moment, and the footer always says
+   which. */
+let galleryOpen=false;
 /* One mode. See the note by .slot-modes. */
 const slotMode='whole';
 
@@ -749,14 +756,33 @@ function currentPool(){
 }
 
 
+function toggleGallery(){
+  galleryOpen=!galleryOpen;
+  slotIndex=0;
+  renderSlot();
+}
+window.toggleGallery=toggleGallery;
+
 function renderSlot(){
   const nav=document.getElementById('slotNav'); if(!nav) return;
   const pool=currentPool();
-  const show = slotReady && !fullTextMode && paragraphs.length && pool.length>0;
-  nav.classList.toggle('hidden', !show);
+  const offer = slotReady && !fullTextMode && paragraphs.length && pool.length>0;
+  nav.classList.toggle('hidden', !offer);
+  if(!offer) galleryOpen=false;
+
   const stage=document.getElementById('slotStage');
   if(stage) stage.innerHTML='';
-  if(!show) return;
+
+  /* The primary tier stands down while the gallery is open. */
+  const paraNav=document.getElementById('paraNav');
+  if(paraNav) paraNav.classList.toggle('hidden', fullTextMode || galleryOpen);
+
+  const toggle=document.getElementById('slotToggle');
+  const steps=document.getElementById('slotSteps');
+  if(toggle){ toggle.textContent = galleryOpen ? 'Close' : 'Gallery';
+              toggle.classList.toggle('active', galleryOpen); }
+  if(steps) steps.classList.toggle('hidden', !galleryOpen);
+  if(!offer || !galleryOpen) return;
 
   if(slotIndex>=pool.length) slotIndex=0;
   const item=pool[slotIndex];

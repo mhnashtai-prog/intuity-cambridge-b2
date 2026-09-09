@@ -230,6 +230,12 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
   font-size:.9rem;cursor:pointer;transition:background .15s,transform .12s;}
 .slot-arrow:active{transform:scale(.94);background:var(--poster-fill-hi,rgba(20,17,14,.15));}
 .slot-arrow:disabled{opacity:.35;cursor:default;}
+.slot-modes{display:flex;gap:.2rem;margin-right:auto;}
+.slot-mode{border:none;border-radius:999px;padding:.25rem .5rem;font-size:.5rem;
+  font-weight:800;letter-spacing:.06em;cursor:pointer;
+  background:var(--poster-fill,rgba(20,17,14,.09));color:var(--poster-ink,#14110E);}
+.slot-mode.active{background:var(--poster-ink,#14110E);color:#fff;}
+.slot-blank{color:var(--sage-d,#456055);font-weight:700;}
 .slot-label{display:flex;flex-direction:column;align-items:center;gap:.1rem;min-width:9rem;}
 .slot-kicker{font-size:.56rem;letter-spacing:.14em;text-transform:uppercase;
   color:var(--sage-d,#456055);font-weight:700;}
@@ -324,10 +330,24 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
            to end takes away five essays. A student who sees five
            introductions in the same slot takes away the slot, which is
            what the exam actually asks them to fill. -->
+      <!-- ══ THE SECOND AXIS, IN TWO MODES ═══════════════════════════
+           WHOLE — sixty other paragraphs that fill this same slot.
+           PHRASES — the phrase bank for this slot: the openings, the
+           thesis frames, the conclusion frames, in three variant groups.
+
+           These are different grains of the same idea and the Hub had
+           both. WHOLE shows a student what a finished introduction looks
+           like; PHRASES shows the frame under it, with [topic] still a
+           blank to fill. A student who has seen five introductions can
+           imitate; one who has seen the fifteen frames can generate. -->
       <div class="slot-nav hidden" id="slotNav">
+        <div class="slot-modes">
+          <button class="slot-mode active" id="modeWhole" onclick="setSlotMode('whole')">WHOLE</button>
+          <button class="slot-mode" id="modePhrase" onclick="setSlotMode('phrase')">PHRASES</button>
+        </div>
         <button class="slot-arrow" id="slotPrev" onclick="slotPrev()">←</button>
         <div class="slot-label">
-          <span class="slot-kicker">Other <span id="slotRole">introductions</span></span>
+          <span class="slot-kicker" id="slotRole">introductions</span>
           <span class="slot-count" id="slotCount">1 / 1</span>
         </div>
         <button class="slot-arrow" id="slotNext" onclick="slotNext()">→</button>
@@ -570,59 +590,131 @@ function navTo(dest){
 
    ONE FILE TO EXTEND. SLOT_SOURCE and the role table are the only things
    the other six genres need to change; everything below is generic. */
-const SLOT_SOURCE = '/skills/writing/essays/data1/essays-models.json';
+const SLOT_SOURCE  = '/skills/writing/essays/data1/essays-models.json';
+const PHRASE_SOURCE = {
+  hook:   '/skills/writing/essays/data1/essay-hook.json',
+  thesis: '/skills/writing/essays/data1/essay-thesis.json',
+  full:   '/skills/writing/essays/data1/essay-full-structures.json'
+};
 
+/* Paragraph label -> the role a slot plays. Used twice: to pool whole
+   paragraphs from the 60 samples, and to pick the phrase bank section. */
 function slotRole(label){
   const l=String(label||'').toLowerCase();
   if(l.includes('introduction')||l.includes('opening')) return 'opening';
   if(l.includes('conclusion')||l.includes('closing'))   return 'closing';
   if(l.includes('counter')||l.includes('disadvantage')||
      l.includes('problem')||l.includes('concern'))      return 'counter';
-  return 'supporting';
+  /* GENERIC LABELS NEED POSITION, NOT WORDS. buildParaLabels falls back to
+     "Body 1 / Body 2 / Body 3" whenever a question carries no writingPoints,
+     and those say nothing about what the paragraph does. By convention the
+     third body is where the counter-argument goes, so position supplies
+     what the wording does not — otherwise Body 3 offers first-reason
+     frames, which is the wrong move at the right slot. */
+  const m=l.match(/\bbody\s*(\d+)/) || l.match(/paragraph\s*(\d+)/);
+  if(m){ const n=+m[1]; return n<=1?'first':n===2?'second':'counter'; }
+  if(l.includes('second')||l.includes('supporting')) return 'second';
+  return 'first';
 }
 const ROLE_NAME = {opening:'introductions', closing:'conclusions',
-                   counter:'counterpoints', supporting:'body paragraphs'};
+                   counter:'counterpoints', first:'body paragraphs',
+                   second:'body paragraphs'};
+/* Which section of the phrase banks answers each role. The introduction
+   draws on TWO files — the hook and the thesis — because that is what an
+   introduction is made of, and the Hub paired them for the same reason. */
+const ROLE_SECTIONS = {
+  opening: [['hook','introduction_context'],['thesis','thesis_statement']],
+  first:   [['full','argument_1']],
+  second:  [['full','argument_2']],
+  counter: [['full','counter_argument']],
+  closing: [['full','conclusion']]
+};
 
-let slotPool={}, slotIndex=0, slotReady=false;
+let slotPool={}, phraseBank=null, slotIndex=0, slotMode='whole', slotReady=false;
 
 async function loadSlotPool(){
   try{
-    const r=await fetch(SLOT_SOURCE); if(!r.ok) return;
-    const data=await r.json();
-    (data.samples||[]).forEach(smp=>{
-      (smp.paragraphs||[]).forEach(p=>{
-        if(!p || !p.text) return;
-        const role=slotRole(p.label);
-        (slotPool[role]=slotPool[role]||[]).push({text:p.text,label:p.label});
-      });
-    });
-    slotReady=Object.keys(slotPool).length>0;
-  }catch(e){ /* the page works without it; the axis simply does not appear */ }
+    const r=await fetch(SLOT_SOURCE);
+    if(r.ok){
+      const data=await r.json();
+      (data.samples||[]).forEach(smp=>(smp.paragraphs||[]).forEach(p=>{
+        if(p&&p.text){ const role=slotRole(p.label);
+          (slotPool[role]=slotPool[role]||[]).push(p.text); }
+      }));
+    }
+  }catch(e){}
+  try{
+    const [h,t,f]=await Promise.all(Object.values(PHRASE_SOURCE).map(u=>fetch(u)));
+    phraseBank={
+      hook:   h.ok ? await h.json() : null,
+      thesis: t.ok ? await t.json() : null,
+      full:   f.ok ? await f.json() : null
+    };
+  }catch(e){}
+  slotReady = Object.keys(slotPool).length>0 || !!phraseBank;
   renderSlot();
 }
 
+function essayKey(){
+  const raw=String((question&&(question.essayType||question.type))||'opinion').toLowerCase();
+  return raw.replace(/[\s-]+/g,'_');
+}
+
+/* The phrases for the current slot, flattened across default/alt1/alt2 and
+   tagged with which group they came from, so a student can see that the
+   three are alternatives rather than a sequence. */
+function phrasesFor(role){
+  if(!phraseBank) return [];
+  const key=essayKey(), out=[];
+  (ROLE_SECTIONS[role]||[]).forEach(([file,section])=>{
+    const st=phraseBank[file]&&phraseBank[file].structures;
+    const t = st && (st[key]||st.opinion);
+    const sec = t && t.sections && t.sections[section];
+    if(!sec||!sec.phrases) return;
+    Object.entries(sec.phrases).forEach(([grp,list])=>
+      (list||[]).forEach(p=>out.push({text:p,group:grp,label:sec.label})));
+  });
+  return out;
+}
+
 function currentRole(){ return slotRole(paraLabels[currentPara]); }
-function currentPool(){ return (slotPool[currentRole()]||[]); }
+function currentPool(){
+  return slotMode==='phrase' ? phrasesFor(currentRole())
+                             : (slotPool[currentRole()]||[]).map(t=>({text:t}));
+}
+
+function setSlotMode(m){
+  slotMode=m; slotIndex=0;
+  document.getElementById('modeWhole').classList.toggle('active',m==='whole');
+  document.getElementById('modePhrase').classList.toggle('active',m==='phrase');
+  renderSlot();
+}
+window.setSlotMode=setSlotMode;
 
 function renderSlot(){
   const nav=document.getElementById('slotNav'); if(!nav) return;
   const pool=currentPool();
-  /* No axis when there is nothing to compare against, and none in full-text
-     mode: cycling one slot only means anything while one slot is on screen. */
-  const show = slotReady && !fullTextMode && paragraphs.length && pool.length>1;
+  const show = slotReady && !fullTextMode && paragraphs.length && pool.length>0;
   nav.classList.toggle('hidden', !show);
+  const box=document.getElementById('infographic');
+  const old=box&&box.querySelector('.slot-body'); if(old) old.remove();
   if(!show) return;
+
   if(slotIndex>=pool.length) slotIndex=0;
-  document.getElementById('slotRole').textContent=ROLE_NAME[currentRole()]||'versions';
+  const item=pool[slotIndex];
+  document.getElementById('slotRole').textContent =
+    slotMode==='phrase' ? (item.group||'phrase')+' frame' : 'other '+(ROLE_NAME[currentRole()]||'versions');
   document.getElementById('slotCount').textContent=(slotIndex+1)+' / '+pool.length;
   document.getElementById('slotPrev').disabled=slotIndex===0;
   document.getElementById('slotNext').disabled=slotIndex>=pool.length-1;
 
-  const box=document.getElementById('infographic');
-  let alt=box.querySelector('.slot-body');
-  if(!alt){ alt=document.createElement('div'); alt.className='slot-body'; box.appendChild(alt); }
-  const item=pool[slotIndex];
-  alt.innerHTML='<div class="para-text">'+item.text+'</div>';
+  const alt=document.createElement('div');
+  alt.className='slot-body';
+  /* [topic] and the like stay visible as blanks — they are the part the
+     student supplies, and hiding them would turn a frame into a sentence. */
+  const html=String(item.text).replace(/\[([^\]]+)\]/g,'<span class="slot-blank">[$1]</span>');
+  alt.innerHTML='<div class="para-text">'+html+'</div>';
+  box.appendChild(alt);
 }
 
 function slotPrev(){ if(slotIndex>0){ slotIndex--; renderSlot(); } }

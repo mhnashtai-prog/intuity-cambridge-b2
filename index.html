@@ -548,26 +548,28 @@ function buildMap(){
     const MIN_AMP_PX = 30;
     const amp = Math.max(MIN_AMP_PX / mapRect.width * 100,
                          (Math.max(...xs) - Math.min(...xs)) / 2);
-    /* ── THE PHASE, AND WHY CHANGING IT DOES NOT MIRROR THE MAP ───────
-       Restored to the file's original sign after several attempts to flip
-       the composition from here. It cannot be done from this line.
+    /* ── THE PHASE ────────────────────────────────────────────────────
+       One flag, one place. `side` is the cosine's phase: it decides
+       whether the spine bulges toward each banner or away from it.
 
-       Below, every pill is RE-SEATED against the curve once it is drawn:
+       This was unstable for a long time and it was not the sign's fault.
+       It is measured from tightDots[0].x — the first banner's inner edge —
+       and until Anton loaded that edge was drawn in a much wider fallback
+       face, landing on the other side of cxW and inverting the result. The
+       map came up mirrored on a cold load and corrected itself on refresh,
+       which made every attempt to fix the sign look like it worked or
+       failed at random.
 
-           const edge = nearest - dir * CLEAR_PX;
-           pillEl.style.left = (dir > 0 ? edge - halfPill : edge + halfPill)
+       The fontReady guard above closes that: the measurement now only ever
+       happens in Anton, so it returns the same answer every time. Which
+       means this flag can finally be trusted — set it once, and it holds
+       on a cold load, a warm load, and a bfcache restore.
 
-       Whatever shape waveX produces, each pill is then pushed to hug it on
-       its own `dir` side. So changing `side` redraws the curve and the
-       pills chase it back into the same relationship — the map looks
-       shifted, not mirrored. It is circular as well: amp and cxW are
-       measured from the pill rects, and the pill rects are then positioned
-       from waveX.
-
-       What actually decides which side a node sits on is `dirs`, which
-       comes from capSide in layoutFor. Mirroring the map means flipping
-       THAT, and letting the wave and the re-seating follow it. */
-    const side = -Math.sign(tightDots[0].x - cxW);
+       If the map ever needs mirroring again, flip BEND_TOWARD and nothing
+       else. Do not reach for dirs or capSide: the pills are re-seated
+       against the curve further down, so they follow whatever this draws. */
+    const BEND_TOWARD = true;
+    const side = (BEND_TOWARD ? 1 : -1) * Math.sign(tightDots[0].x - cxW);
     const waveX = y => cxW + side * amp * Math.cos(2*Math.PI * (y - y0) / LAM);
 
     const EXT = 0.62, N = 240, pts = [];

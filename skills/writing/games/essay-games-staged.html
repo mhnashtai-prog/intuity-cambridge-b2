@@ -320,6 +320,20 @@
   .ps-gap{color:var(--poster-rule);letter-spacing:.08em}
   .ps-todo{color:var(--poster-rule);letter-spacing:.1em;font-size:.9em}
 
+  /* THE PER-SENTENCE TICK — the moment a sentence itself is confirmed
+     correct, not just the whole stage. Sits before the sentence, stays
+     once placed (so a scroll back up still shows which ones are done),
+     and gets one deliberate pop the instant it lands. */
+  .ps-tick{display:inline-block;color:var(--ok);font-weight:800;
+    font-size:1.15em;line-height:1;margin-right:.32em;vertical-align:-1px}
+  .ps-tick.burst{animation:tickBurst .55s cubic-bezier(.2,1.7,.3,1)}
+  @keyframes tickBurst{
+    0%{transform:scale(0) rotate(-18deg);opacity:0}
+    55%{transform:scale(1.55) rotate(6deg);opacity:1}
+    100%{transform:scale(1) rotate(0deg);opacity:1}
+  }
+  @media(prefers-reduced-motion:reduce){.ps-tick.burst{animation:none}}
+
   .sb-count{font-family:var(--f-display);font-weight:800;font-size:1.6rem;color:var(--caramel);
     margin-top:.5rem;line-height:1}
   .sb-blank{display:inline-block;border:none;border-bottom:2px solid var(--caramel);
@@ -1109,7 +1123,7 @@
   };
 
   /* ═══ STORYBOARD ═══ */
-  let sbStage=-1, sbSents=[], sbIdx=0, sbDone=new Set(), sbS={}, sbShowing=false, sbTimer=null;
+  let sbStage=-1, sbSents=[], sbIdx=0, sbDone=new Set(), sbS={}, sbShowing=false, sbTimer=null, sbJustDone=-1;
   const SB_MAX_TRIES=3, SB_MAX_READS=3;
   function sbWords(i){ return (sbSents[i]||'').split(/\s+/).filter(Boolean); }
   function sbKey(w){ return (w||'').toLowerCase().replace(/[^a-z0-9']/g,''); }
@@ -1144,7 +1158,8 @@
 
     const box=sbSents.map((s,i)=>{
       if(sbDone.has(i))
-        return '<span class="ps-done" data-edit="'+i+'" title="Tap to do it again">'+lightFrames(s)+'</span>';
+        return '<span class="ps-done" data-edit="'+i+'" title="Tap to do it again">'+
+          '<span class="ps-tick'+(i===sbJustDone?' burst':'')+'">\u2713</span>'+lightFrames(s)+'</span>';
       if(i===sbIdx){
         if(sbShowing) return '<span class="sb-flashing">'+lightFrames(s)+'</span>';
         return sbWords(i).map((w,k)=>{
@@ -1245,6 +1260,7 @@
     tick(); sbTimer=setInterval(tick,1000);
   };
   window._sbConfirm=function(){
+    sbJustDone=sbIdx;
     sbDone.add(sbIdx); solved.add(stageKey()+':story');
     registerHit();
     const left=sbSents.length-sbDone.size;
@@ -1252,6 +1268,7 @@
     const next=sbSents.findIndex((_,i)=>!sbDone.has(i));
     if(next>-1) sbOpen(next);
     paintStory();
+    setTimeout(()=>{ sbJustDone=-1; },600);
   };
   window._sbGo=function(i){ sbOpen(i); paintStory(); };
   window._sbAgain=function(){ sbDone.delete(sbIdx); sbS[sbIdx]=null; sbOpen(sbIdx); paintStory(); };
@@ -1276,7 +1293,7 @@
   }
 
   /* ═══ PUZZLE ═══ */
-  let pzStage=-1, pzSents=[], pzIdx=0, pzDone=new Set(), pzPlaced=[], pzPool=[];
+  let pzStage=-1, pzSents=[], pzIdx=0, pzDone=new Set(), pzPlaced=[], pzPool=[], pzJustDone=-1;
   function renderPuzzle(st){
     if(pzStage!==stageKey()){ pzStage=stageKey(); pzSents=st.sents.slice(); pzIdx=0; pzDone=new Set(); openSentence(0); }
     paintPuzzle();
@@ -1308,7 +1325,8 @@
 
     const box=pzSents.map((s,i)=>{
       if(pzDone.has(i))
-        return '<span class="ps-done" data-edit="'+i+'" title="Tap to edit">'+lightFrames(s)+'</span>';
+        return '<span class="ps-done" data-edit="'+i+'" title="Tap to edit">'+
+          '<span class="ps-tick'+(i===pzJustDone?' burst':'')+'">\u2713</span>'+lightFrames(s)+'</span>';
       if(i===pzIdx){
         const placed=pzPlaced.map((w,k)=>'<span class="ps-place" data-i="'+k+'" title="Tap to take it back">'+w+'</span>').join(' ');
         const left=words.length-pzPlaced.length;
@@ -1363,11 +1381,13 @@
   window._pzConfirm=function(){
     const words=unitsOf(pzSents[pzIdx]);
     if(pzPlaced.join(' ')===words.join(' ')){
+      pzJustDone=pzIdx;
       pzDone.add(pzIdx); solved.add(stageKey()+':puzzle');
       registerHit();
       const next=pzSents.findIndex((_,i)=>!pzDone.has(i));
       if(next>-1) openSentence(next);
       paintPuzzle();
+      setTimeout(()=>{ pzJustDone=-1; },600);
     } else {
       registerMiss('Sentence '+(pzIdx+1)+' — the pieces landed in the wrong order.');
       const l=document.getElementById('pzLine');

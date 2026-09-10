@@ -401,7 +401,7 @@
   const buzz=ms=>{try{navigator.vibrate&&navigator.vibrate(ms);}catch(e){}};
   const wait=ms=>new Promise(r=>setTimeout(r,ms));
   const P=new URLSearchParams(location.search);
-  const DEF='past-modal-game-data.json';
+  const DEF='../../data/grammar-rules/past-modal-game.json';
 
   /* the modal phrase inside an option is marked <<like this>> in the data,
      same convention as past-modals-data.json, so a set author never has to
@@ -575,9 +575,29 @@
   /* ═══ CONTENT / ROUND FLOW ═══ */
   let DATA=null, order=[], ri=0, current=null, tries=0, busy=false, epoch=0, optState=[];
 
+  /* Same reasoning as past-modal-rules.html's fetchFirstAvailable: try what
+     was asked for, then the known-good names/locations, rather than hard-
+     failing the moment one path is renamed or moved. */
+  async function fetchFirstAvailable(urls){
+    let lastErr=null;
+    for(const url of urls){
+      try{
+        const res=await fetch(url,{cache:'no-store'});
+        if(res.ok) return await res.json();
+        lastErr=new Error('HTTP '+res.status+' — '+url);
+      }catch(e){ lastErr=e; }
+    }
+    throw lastErr||new Error('no data source responded');
+  }
   function loadData(){
-    return fetch(P.get('json')||DEF,{cache:'no-store'}).then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
-      .then(d=>{ if(!d.rounds||!d.rounds.length) throw new Error('no rounds in data file'); DATA=d; });
+    return fetchFirstAvailable([...new Set([
+      P.get('json'), DEF,
+      '../../data/grammar-rules/past-modal-game-data.json',
+      'past-modal-game-data.json', 'past-modal-game.json'
+    ].filter(Boolean))]).then(d=>{
+      if(!d.rounds||!d.rounds.length) throw new Error('no rounds in data file');
+      DATA=d;
+    });
   }
 
   document.querySelectorAll('#modeChoice .mbtn,#modeChoice button').forEach(()=>{});

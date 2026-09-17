@@ -614,6 +614,10 @@ function ivFor(){ return IV && IV.interviews[D.topics[ti].id]; }
 
 function setMode(m){
   if(m==='bank'){ bank(); return; }      /* a sheet, never a destination */
+  /* What a student chose last is what they get next time. A default is a
+     recommendation, and after the first visit the best recommendation is
+     their own habit. */
+  try{ localStorage.setItem('intuity.p1.mode', m); }catch(e){}
   hush(); stopPlay();
   mode=m;
   Array.prototype.forEach.call($('pills').children,function(b){
@@ -659,18 +663,34 @@ function tools(){
 }
 
 /* ── THE EXCHANGE ────────────────────────────────────────────────────── */
+/* ── X-RAY ───────────────────────────────────────────────────────────────
+   The tags in part1-structure.json are COLLOCATIONS, not literal strings:
+   'read extensively' against "read quite extensively", 'gentle exercises'
+   against "gentle stretching exercises", 'quick escape' against "quick city
+   escape". Ten of them across the five interviews never matched literally,
+   so the original x-ray silently highlighted nothing for those and nobody
+   could tell, because a phrase that fails to light looks the same as a
+   phrase that was never tagged.
+
+   So the match is case-insensitive and tolerates up to two words inside the
+   phrase. That is what the tags meant; matching them literally was the bug. */
+function rx(p){
+  var w=p.trim().split(/\s+/).map(function(x){
+    return x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); });
+  return new RegExp('(?![^<]*>)('+w.join('(?:\\s+\\S+){0,2}\\s+')+')','i');
+}
 function xr(turn){
   var t=esc(turn.t);
   if(!xray) return t;
   /* Longest first, so 'To be honest' is not eaten by 'be'. */
-  (turn.d||[]).slice().sort(function(a,b){return b.length-a.length;}).forEach(function(p){
-    var e=esc(p).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-    t=t.replace(new RegExp('(?![^<]*>)('+e+')'),'<span class="xr-d">$1</span>');
-  });
-  (turn.v||[]).slice().sort(function(a,b){return b.length-a.length;}).forEach(function(p){
-    var e=esc(p).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-    t=t.replace(new RegExp('(?![^<]*>)('+e+')'),'<span class="xr-v">$1</span>');
-  });
+  function mark(list,cls){
+    (list||[]).slice().sort(function(a,b){ return b.length-a.length; })
+      .forEach(function(p){
+        t=t.replace(rx(p),'<span class="'+cls+'">$1</span>');
+      });
+  }
+  mark(turn.d,'xr-d');
+  mark(turn.v,'xr-v');
   return t;
 }
 
@@ -868,11 +888,24 @@ Promise.all([
     var wantT=p.get('topic');
     if(wantT){ D.topics.forEach(function(t,i){ if(t.id===wantT) ti=i; }); }
     chrome();
+    /* WHICH MODE OPENS, in order of authority:
+         1. ?mode= in the link — an explicit request, always wins
+         2. whatever this student chose last time
+         3. Listen, for a first visit
+
+       Three, not Build, because the four modes are a progression: notice a
+       full exchange, read it at your own pace, then make one yourself. A
+       student who lands straight in Build never sees the first two steps,
+       and a default is a recommendation whether or not it is meant as one.
+       A student who prefers to drill overrides it once and never sees
+       Listen again. */
     var wantM=p.get('mode');
-    /* A pill that has nothing behind it for this topic falls back rather
-       than showing an empty screen. */
-    if(wantM==='listen'||wantM==='read'){ if(!ivFor()) wantM='build'; }
-    setMode(['listen','read','build'].indexOf(wantM)>-1 ? wantM : 'build');
+    if(!wantM){ try{ wantM=localStorage.getItem('intuity.p1.mode'); }catch(e){} }
+    if(['listen','read','build'].indexOf(wantM)===-1) wantM='listen';
+    /* A mode with nothing behind it for this topic falls back rather than
+       showing an empty screen. */
+    if((wantM==='listen'||wantM==='read') && !ivFor()) wantM='build';
+    setMode(wantM);
     /* Pills for topics with no interview are disabled, not hidden. */
   })
   .catch(function(e){

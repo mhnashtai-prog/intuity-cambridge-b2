@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#F3F1ED">
+<title>INTUITY — Speaking Part 1</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=7">
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   SPEAKING PART 1 — GROWING AN ANSWER
+
+   The architecture is clause-builder's and the credit belongs there: a
+   level is written in full by a person, the engine never composes one, it
+   only chooses which to show and diffs one against the next. That is what
+   makes the material checkable by eye instead of by trust.
+
+   What changes is the unit. clause-builder's segments carry a syntactic
+   kind — independent, dependent, non-finite — because Writing is marked on
+   range of structure. Part 1 is not. Part 1 is marked on Discourse
+   Management, and the thing that costs a candidate the band is stopping
+   after eight words. So a segment here carries a MOVE, and the moves are
+   the school's own drill: REACT, ANSWER, then expand with a REASON, an
+   EXAMPLE and a CONTRAST.
+
+   That sequence is not invented here. part1-structure.json's phraseBank
+   already holds it as five steps with a phrase list each; this page is
+   that bank turned into something a student does. The bank itself is one
+   tap away at the move it belongs to, which is where a drilled phrase is
+   actually wanted — at the moment of choosing, not in a list beforehand.
+
+   THE REACTION GOES IN FRONT. Level 1 is the bare answer a student gives
+   unprompted; round 1 puts a reaction BEFORE it, and the student watches
+   it arrive there. A phrase list can say the reaction comes first. Only
+   the screen can show it.
+
+   And the readout changes with it. clause-builder counts clauses and
+   words; this counts SECONDS, because the exam is two minutes long and
+   the number a student needs to feel is how little four words buys them.
+   No score, no combo, no flow bar — AESTHETIC.md §6 asks for one back
+   control and one number, and the number is the seconds.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root{
+  /* Speaking's tone, taken from index.html's AREAS rather than invented.
+     #DD8E58 measures 2.3:1 on --screen, correct for a block and wrong for
+     a word, so type uses the same hue at #9A5A2C (4.81:1). */
+  --accent:#DD8E58;
+  --accent-ink:#9A5A2C;
+  --accent-rgb:221,142,88;
+
+  /* ONE green and ONE red. clause-builder carries --ok #3A6B50 AND --good
+     #1F7A4A, --wrong #A23B2C AND --bad #C4402F: two colours per meaning,
+     chosen by which part of the file was written first. The shell already
+     names both, so neither is redeclared here. */
+}
+
+/* Sticky, in flow: no --header-h, no ResizeObserver, nothing to go stale.
+   Same as speaking-format.html. */
+.header{position:sticky;padding-bottom:.5rem}
+.header::after{opacity:0;transition:opacity .2s ease;width:100%}
+body.scrolled .header::after{opacity:1}
+
+/* A part with no page yet is visible and not enterable, rather than a live
+   link to an empty file. */
+.mode-btn[aria-disabled="true"]{color:var(--rule);cursor:default}
+
+.wrap{max-width:var(--w-read);margin:0 auto;padding:1.5rem var(--gutter) 6rem}
+
+/* ── THE QUESTION ────────────────────────────────────────────────────────
+   The examiner speaks first and is the only voice on screen that is not
+   the student's, so it is the only thing set in mono. No card, no tint —
+   the label and the type do the separating. */
+.ask-label{font-family:var(--f-mono);font-size:.62rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:.4rem}
+.ask{font-family:var(--f-display);font-size:1.22rem;font-weight:600;
+  line-height:1.35;color:var(--ink);letter-spacing:var(--track-display);
+  margin-bottom:1.6rem}
+
+/* ── THE ANSWER ──────────────────────────────────────────────────────────
+   Prose, at reading size, growing in place. Each move is a <span> so the
+   newest can be brought in on its own without redrawing the rest — which
+   is the whole point of storing levels as segments. */
+.answer{font-size:1.02rem;line-height:1.75;color:var(--sentence);
+  min-height:5.2em;margin-bottom:1.1rem}
+.seg{transition:opacity .3s ease}
+.seg.new{animation:segIn .36s cubic-bezier(.2,.8,.2,1) both}
+@keyframes segIn{from{opacity:0}to{opacity:1}}
+/* The reaction arrives in FRONT of what the student already wrote, so the
+   rest of the answer has to visibly give way to it. That shift is the
+   teaching; a fade would let it appear as if it had always been there. */
+.answer.shift .seg:not(.new){animation:shiftIn .36s cubic-bezier(.2,.8,.2,1) both}
+@keyframes shiftIn{from{transform:translateX(-10px)}to{transform:none}}
+/* The discourse marker gets the caramel underline and nothing else. It is
+   the convention already used for a placed word in Vocabulary, and it is
+   on the thing being learned rather than on a label about it. */
+.mk{box-shadow:inset 0 -2px 0 var(--accent)}
+
+/* ── THE NUMBER ──────────────────────────────────────────────────────────
+   Seconds of speech at about 150 words a minute. The track runs to 20s
+   because that is roughly where a developed Part 1 answer lands; the mark
+   at 15s is the point past which a student has stopped being brief. */
+.metre{display:flex;align-items:center;gap:.7rem;margin-bottom:1.8rem}
+.metre-n{font-family:var(--f-mono);font-size:1.34rem;color:var(--ink);
+  font-variant-numeric:tabular-nums;min-width:3.4ch}
+.metre-l{font-family:var(--f-mono);font-size:.62rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--faint);white-space:nowrap}
+.metre-track{position:relative;flex:1;height:8px;border-radius:2px;
+  background:var(--slot-bg);overflow:hidden}
+.metre-fill{height:100%;width:0;background:var(--accent);
+  transition:width .4s cubic-bezier(.2,.9,.3,1),background .3s}
+.metre-fill.over{background:var(--wrong)}
+/* The band, not a line: 15s to 20s of a 30s track. */
+.metre-band{position:absolute;left:50%;width:16.7%;top:0;bottom:0;
+  background:var(--edge);opacity:.16}
+.metre-n.over{color:var(--wrong)}
+
+/* ── THE MOVES ───────────────────────────────────────────────────────────
+   clause-builder's structures strip, mapped onto discourse. It lights up
+   as the answer grows, so the student sees the shape of a good answer
+   accumulating rather than being told it. */
+.moves{display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:2rem}
+.move{font-family:var(--f-display);font-size:.62rem;font-weight:600;
+  letter-spacing:.07em;text-transform:uppercase;padding:.3rem .62rem;
+  border-radius:var(--r-chip);background:var(--sunk);color:var(--rule);
+  transition:background .25s,color .25s}
+.move.on{background:var(--tile-bg);color:var(--tile-ink)}
+
+/* ── THE ROUND ───────────────────────────────────────────────────────────
+   Three options, full width, no card. A fill and a radius — the shell's
+   tile family, which is why none of this needs a rim. */
+.prompt{font-size:.9rem;color:var(--dim);margin-bottom:.8rem}
+.opts{display:flex;flex-direction:column;gap:.5rem}
+.opt{text-align:left;width:100%;font-size:.94rem;line-height:1.5;
+  padding:.85rem 1rem;border:none;border-radius:var(--r-field);
+  background:var(--tile-bg);color:var(--tile-ink);cursor:pointer;
+  transition:background .14s,transform .1s cubic-bezier(.2,.8,.2,1)}
+@media(hover:hover){ .opt:hover:not(:disabled){background:var(--tile-bg-press)} }
+.opt:active:not(:disabled){transform:scale(.985)}
+.opt:disabled{cursor:default}
+.opt.is-ok{background:var(--tile-ok-bg);color:var(--tile-ok-ink)}
+.opt.is-no{background:var(--tile-no-bg);color:var(--tile-no-ink)}
+
+/* Every wrong option explains itself — clause-builder's `why`, kept,
+   because "a wrong answer can say why" is the first promise in INTENT.md
+   and almost nothing else in the suite keeps it. */
+.why{font-size:.84rem;line-height:1.55;color:var(--dim);
+  padding:.7rem 1rem 0;display:none}
+.why.show{display:block}
+
+/* ── VOICE ───────────────────────────────────────────────────────────────
+   Not in the header. It changes the content, not the destination, so it
+   sits with the content — the same judgement vocab.css made putting its
+   view toggle beside the progress it changes rather than in the mode row.
+
+   Switching keeps the student's position in the ladder and swaps whose
+   life it is. Same question, same depth, three lives. */
+.voice{display:flex;align-items:center;gap:.3rem;margin:2.2rem 0 0;
+  flex-wrap:wrap}
+.voice-l{font-family:var(--f-mono);font-size:.6rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--faint);margin-right:.35rem}
+.vb{font-family:var(--f-display);font-size:.66rem;font-weight:600;
+  letter-spacing:.05em;padding:.36rem .7rem;border:none;
+  border-radius:var(--r-chip);background:none;color:var(--faint);
+  cursor:pointer;transition:background .15s,color .15s}
+@media(hover:hover){ .vb:hover{color:var(--sentence)} }
+.vb.on{background:var(--tile-bg);color:var(--tile-ink);font-weight:700}
+
+.done{margin-top:1.6rem;display:none}
+.done.show{display:block}
+.done-n{font-size:.92rem;line-height:1.6;color:var(--sentence);
+  margin-bottom:1rem}
+.again{font-family:var(--f-display);font-size:.72rem;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--accent-ink);
+  background:none;border:none;padding:.4rem 0;cursor:pointer}
+
+/* ── THE PILLS ───────────────────────────────────────────────────────────
+   Four modes, one thin line, below the header rather than inside it — so
+   Part 1 keeps the same three header bands as Parts 2, 3 and 4, and the
+   pills scroll away once a student is working.
+
+   Two units, not four screens. Listen and Read show the EXCHANGE: examiner
+   asks, candidate answers, examiner asks again. Build makes ONE answer.
+   Neither absorbs the other — a metre that measures one answer has no
+   honest reading across three of them, and that seam is why these are
+   modes rather than one hybrid view. Phrases opens the sheet in place,
+   because a phrase bank that becomes a destination stops arriving at the
+   moment it is needed. */
+.pills{display:flex;gap:.15rem;flex-wrap:wrap;align-items:center;
+  padding-top:.9rem;border-top:1px solid var(--rule);margin-bottom:.2rem}
+.pill-b{font-family:var(--f-display);font-size:.66rem;font-weight:600;
+  letter-spacing:.05em;padding:.4rem .72rem;border:none;border-radius:var(--r-chip);
+  background:none;color:var(--faint);cursor:pointer;white-space:nowrap;
+  transition:background .15s,color .15s}
+@media(hover:hover){ .pill-b:hover{color:var(--sentence)} }
+.pill-b.on{background:var(--tile-bg);color:var(--tile-ink);font-weight:700}
+.pill-b:disabled{color:var(--rule);cursor:default;background:none}
+
+/* Mode-specific controls live here, on their own line, so that nothing
+   ever sits between the interlocutor and the candidate. */
+.tools{display:flex;align-items:center;gap:.5rem;min-height:2.1rem;
+  margin-bottom:1.1rem;flex-wrap:wrap}
+.tool{font-family:var(--f-mono);font-size:.62rem;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--faint);background:none;border:none;
+  padding:.35rem .5rem;border-radius:var(--r-chip);cursor:pointer;
+  transition:background .15s,color .15s}
+.tool.on{background:var(--tile-bg);color:var(--accent-ink)}
+@media(hover:hover){ .tool:hover{color:var(--sentence)} }
+.tool-n{font-family:var(--f-mono);font-size:.62rem;color:var(--faint);
+  margin-left:auto}
+
+/* ── THE EXCHANGE · STYLE ────────────────────────────────────────────────────────
+   The exam room. An examiner turn and a candidate turn, and nothing at all
+   between them or beside them — no control, no counter, no toggle. Every
+   instrument is above this column or below it.
+
+   The two speakers are told apart by a label and an indent. No avatars, no
+   bubbles, no alternating tints: in the room there are two people and a
+   table, and the screen should not be busier than that. */
+.xq{margin:0 0 1.15rem}
+.xa{margin:0 0 1.8rem;padding-left:1.1rem;border-left:2px solid var(--accent)}
+.xl{font-family:var(--f-mono);font-size:.6rem;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:.25rem}
+.xa .xl{color:var(--accent-ink)}
+.xq p{margin:0;font-family:var(--f-display);font-size:1.04rem;font-weight:600;
+  line-height:1.4;color:var(--ink);letter-spacing:var(--track-display)}
+.xa p{margin:0;font-size:.99rem;line-height:1.72;color:var(--sentence)}
+/* The turn being spoken. Opacity only — a highlight box would be a third
+   object in a room that contains two people. */
+.xturn{transition:opacity .3s ease}
+.playing .xturn{opacity:.32}
+.playing .xturn.live{opacity:1}
+
+/* X-ray, restored. Discourse and lexis marked differently because they are
+   two criteria, not one: the marker is underlined, the word is not. */
+.xr-d{box-shadow:inset 0 -2px 0 var(--accent)}
+.xr-v{color:var(--accent-ink)}
+
+.gap{font-size:.84rem;line-height:1.55;color:var(--dim);
+  padding:1rem 0 0;border-top:1px solid var(--rule);margin-top:.5rem}
+
+/* ── AUDIO · STYLE ───────────────────────────────────────────────────────────────
+   Restored from part1-structure.html, which read the whole dialogue aloud
+   with two distinct voices and was the single best thing on it. Dropping
+   audio from a SPEAKING page was the worst regression in this rewrite.
+
+   Same settings as the original: en-GB, rate 0.9, the examiner lower at
+   pitch 0.9 and the candidate higher at 1.1, so a student can hear which
+   side of the exchange is speaking without being told. */
+.say{background:none;border:none;padding:.25rem;margin-left:.4rem;
+  color:var(--faint);cursor:pointer;vertical-align:middle;
+  transition:color .15s,transform .1s cubic-bezier(.2,.8,.2,1)}
+.say:active{transform:scale(.9)}
+.say.on{color:var(--accent-ink)}
+@media(hover:hover){ .say:hover{color:var(--accent-ink)} }
+.say svg{display:block}
+
+/* The mode switch. Text is the quiet default; Voice speaks the examiner's
+   question on arrival and each move as it is chosen. */
+.vmode{display:inline-flex;gap:.2rem;margin-left:auto}
+.vm{font-family:var(--f-display);font-size:.62rem;font-weight:600;
+  letter-spacing:.06em;text-transform:uppercase;padding:.3rem .6rem;
+  border:none;border-radius:var(--r-chip);background:none;color:var(--faint);
+  cursor:pointer;transition:background .15s,color .15s}
+.vm.on{background:var(--tile-bg);color:var(--tile-ink);font-weight:700}
+.ask-row{display:flex;align-items:center;gap:.2rem;margin-bottom:.4rem}
+.ask-row .ask-label{margin:0}
+/* Speaking is the one state worth animating, because it is the only one
+   the student cannot see. */
+.speaking{animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@media(prefers-reduced-motion:reduce){ .speaking{animation:none} }
+
+/* ── THE PHRASE BANK · STYLE ─────────────────────────────────────────────────────
+   The drilling resource, reachable at the move being chosen rather than as
+   a separate destination. It opens scrolled to the move in play, because a
+   student reaching for a phrase already knows which kind they need.
+
+   This also gives useful-expressions.html something to be. That file is
+   currently one byte, and tile 06 in the Speaking modal opens it. */
+.bank-btn{margin-left:auto;font-family:var(--f-mono);font-size:.62rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink);
+  background:none;border:none;padding:.3rem 0;cursor:pointer}
+.prompt-row{display:flex;align-items:baseline;gap:1rem;margin-bottom:.8rem}
+.prompt-row .prompt{margin:0}
+
+.sheet-card{align-items:stretch;text-align:left;gap:0;max-width:26rem}
+.sheet-card h2{font-family:var(--f-display);font-size:1.12rem;font-weight:900;
+  letter-spacing:var(--track-display);color:var(--ink);margin-bottom:.3rem}
+.sheet-card .tip{font-size:.82rem;line-height:1.55;color:var(--dim);
+  margin-bottom:1.1rem}
+.bank-g{padding:.8rem 0;border-top:1px solid var(--rule)}
+.bank-g.here{background:none}
+.bank-h{display:flex;align-items:baseline;gap:.5rem;margin-bottom:.5rem}
+.bank-h b{font-family:var(--f-display);font-size:.72rem;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--ink)}
+.bank-g.here .bank-h b{color:var(--accent-ink)}
+.bank-h i{font-style:normal;font-family:var(--f-mono);font-size:.62rem;
+  color:var(--faint)}
+.bank-g ul{list-style:none;margin:0;padding:0;display:flex;
+  flex-wrap:wrap;gap:.3rem}
+.bank-g li{font-size:.84rem;color:var(--tile-ink);background:var(--tile-bg);
+  border-radius:var(--r-chip);padding:.32rem .6rem}
+.bank-g.here li{background:var(--sunk)}
+.sheet-card .close-btn{position:absolute;top:.7rem;right:.7rem}
+
+@media(max-width:560px){
+  .ask{font-size:1.08rem}
+  .answer{font-size:.98rem}
+}
+@media(prefers-reduced-motion:reduce){
+  .seg.new{animation:none}
+  .metre-fill{transition:none}
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-top">
+    <a class="back-link" href="/index.html?openModal=speaking" target="_top">← Speaking</a>
+    <div class="header-title">
+      <div class="app-title">INTUITY</div>
+      <div class="app-subtitle">Speaking</div>
+    </div>
+    <span class="header-spacer">Level <b>B2</b></span>
+  </div>
+  <!-- Generated by tools/check-pages.py --fix-nav. All four parts,
+       same row on every page. Do not hand-edit one copy. -->
+  <nav class="mode-selector" aria-label="Exam part">
+    <span class="mode-btn active" aria-current="page">Part 1</span>
+    <a class="mode-btn" href="part2-turn.html">Part 2</a>
+    <a class="mode-btn" href="part3-talk.html">Part 3</a>
+    <a class="mode-btn" href="part4-views.html">Part 4</a>
+  </nav>
+
+  <div class="set-tabs" id="tabs"></div>
+</header>
+
+<main class="wrap">
+
+  <nav class="pills" id="pills" aria-label="Mode">
+    <button class="pill-b" type="button" data-m="listen">Listen · full interview</button>
+    <button class="pill-b" type="button" data-m="read">Read · full interview</button>
+    <button class="pill-b on" type="button" data-m="build">Build an answer</button>
+    <button class="pill-b" type="button" data-m="bank">Phrase bank</button>
+  </nav>
+  <div class="tools" id="tools"></div>
+
+  <!-- LISTEN / READ: the exchange -->
+  <section id="interview" style="display:none"></section>
+
+  <!-- BUILD -->
+  <section id="builder">
+  <div class="ask-row">
+    <div class="ask-label">Examiner</div>
+    <button class="say" type="button" id="askSay" aria-label="Hear the question">
+      <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M3 6h2.5L9 3v10L5.5 10H3z" fill="currentColor"/>
+        <path d="M11.5 5.5a3.5 3.5 0 010 5M13.5 3.5a6 6 0 010 9"
+              stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+  <h1 class="ask" id="ask"></h1>
+
+  <div class="answer" id="answer"></div>
+
+  <div class="metre">
+    <span class="metre-n" id="secs">0s</span>
+    <div class="metre-track">
+      <div class="metre-band"></div>
+      <div class="metre-fill" id="fill"></div>
+    </div>
+    <span class="metre-l" id="metreL">of speaking</span>
+    <button class="say" type="button" id="turnSay" aria-label="Hear the answer so far">
+      <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M4 3l9 5-9 5z" fill="currentColor"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="moves" id="moves"></div>
+
+  <div id="round">
+    <div class="prompt-row">
+      <p class="prompt" id="prompt"></p>
+      <button class="bank-btn" type="button" id="bankBtn">Phrases</button>
+    </div>
+    <div class="opts" id="opts"></div>
+    <div class="why" id="why"></div>
+  </div>
+
+  <div class="done" id="done">
+    <p class="done-n" id="doneN"></p>
+    <button class="again" type="button" id="againBtn">Build it again</button>
+  </div>
+
+  <div class="voice">
+    <span class="voice-l">Whose life</span>
+    <span id="voices"></span>
+  </div>
+  </section>
+</main>
+
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="bankH">
+  <div class="sheet-card">
+    <button class="close-btn" id="sheetX" type="button" aria-label="Close">
+      <svg width="15" height="15" viewBox="0 0 15 15" aria-hidden="true">
+        <path d="M3 3 L12 12 M12 3 L3 12" stroke="currentColor"
+              stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      </svg>
+    </button>
+    <h2 id="bankH">Phrase bank</h2>
+    <p class="tip" id="bankTip"></p>
+    <div id="bankBody"></div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   THE ENGINE
+
+   It does four things: pick a level, diff it against the one before to
+   find what was added, count the seconds, and mark a round. Everything
+   else is in the JSON, and the JSON is written by a person.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+var D = null, ti = 0, vi = 0, step = 0, locked = false, nowMove = null;
+
+var $ = function(id){ return document.getElementById(id); };
+var esc = function(s){ return s.replace(/[&<>"]/g, function(c){
+  return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); };
+
+/* About 150 words a minute is normal unrehearsed speech, so 2.5 words a
+   second. Rounded, because a decimal here would suggest a precision the
+   figure does not have. */
+function seconds(segs){
+  var w = segs.map(function(s){ return s.t; }).join(' ')
+    .split(/\s+/).filter(function(x){ return /[A-Za-z0-9]/.test(x); }).length;
+  return Math.round(w / 2.5);
+}
+
+/* The marks are underlined where they appear. Escaped first, then matched,
+   so a student never sees markup and an apostrophe cannot break the span. */
+function markup(seg){
+  var t = esc(seg.t);
+  (seg.marks || []).forEach(function(m){
+    var e = esc(m).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    t = t.replace(new RegExp('(' + e + ')'), '<span class="mk">$1</span>');
+  });
+  return t;
+}
+
+/* The underlines are derived from the text, not stored per option, so a
+   phrase added to the bank tomorrow is marked without touching six files. */
+var MARKERS = ["To be honest","If there's one thing","What I love about",
+  "What I like about","The thing about","On the other hand","That said",
+  "This is mainly because","That's mainly due to","The main reason",
+  "It's just that","for instance","Honestly","actually","absolutely",
+  "easily","usually","mostly","Although","However","Of course","Well","Oh"];
+function markFor(t){
+  return MARKERS.filter(function(m){ return t.indexOf(m) !== -1; });
+}
+
+function life(){ return D.topics[ti].lives[D.voices[vi].id]; }
+
+/* A CHOICE round is one where every option is right — clause-builder's own
+   distinction, and the reason it can teach range rather than only accuracy.
+   React is a choice round: three native openers on three different
+   structures, and whichever the student picks becomes theirs for the rest
+   of the ladder.
+
+   This is withChoices() from clause-builder, keyed on the move instead of
+   the clause id, because a move appears once per answer. Without it the
+   student picks 'What I love about weekends is…' and the next level
+   silently replaces it with the one the file happened to store first. */
+var picked = {};
+function choose(segs){
+  return segs.map(function(x){
+    if (!picked[x.m]) return x;
+    var c = picked[x.m];
+    return { t:c.t, m:x.m, marks:c.marks || [] };
+  });
+}
+
+function draw(fresh, front){
+  var L = life(), segs = choose(L.levels[step]);
+
+  /* The added segment is not always the last one: a reaction is prepended.
+     So the new one is found by position — whichever index the previous
+     level did not have — rather than assumed to be at the end. */
+  var newIdx = -1;
+  if (fresh && step > 0) {
+    var prev = choose(L.levels[step - 1]).map(function(x){ return x.t; });
+    for (var i = 0; i < segs.length; i++) {
+      if (prev.indexOf(segs[i].t) === -1) { newIdx = i; break; }
+    }
+  }
+
+  $('answer').innerHTML = segs.map(function(s, i){
+    return '<span class="seg' + (i === newIdx ? ' new' : '') + '">' +
+           markup(s) + '</span>';
+  }).join(' ');
+
+  $('answer').classList.toggle('shift', !!front);
+
+  var s = seconds(segs);
+  var over = s > 20;
+  $('secs').textContent = s + 's';
+  $('secs').classList.toggle('over', over);
+  $('fill').classList.toggle('over', over);
+  $('fill').style.width = Math.min(100, s / 30 * 100) + '%';
+  $('metreL').textContent = over ? 'long for Part 1'
+                                 : (s >= 15 ? 'about right' : 'of speaking');
+
+  /* The strip is in the formula's order — react, answer, reason, example,
+     contrast — not in the order the student earned them. A student who
+     builds the reaction second still has to see that it belongs first. */
+  var used = {};
+  segs.forEach(function(x){ used[x.m] = 1; });
+  $('moves').innerHTML = Object.keys(D.moves).map(function(k){
+    return '<span class="move' + (used[k] ? ' on' : '') + '" title="' +
+           esc(D.moves[k].hint) + '">' + D.moves[k].name + '</span>';
+  }).join('');
+
+  if (step < L.rounds.length) { round(L.rounds[step]); }
+  else { finish(s); }
+}
+
+function round(r){
+  locked = false;
+  $('round').style.display = '';
+  $('done').classList.remove('show');
+  $('why').classList.remove('show');
+  $('why').textContent = '';
+  $('prompt').textContent = r.prompt;
+  nowMove = r.move;
+
+  /* Shuffled, so the correct option is never in the same place twice. */
+  var opts = r.options.slice();
+  for (var i = opts.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var t = opts[i]; opts[i] = opts[j]; opts[j] = t;
+  }
+
+  $('opts').innerHTML = '';
+  opts.forEach(function(o){
+    var b = document.createElement('button');
+    b.className = 'opt';
+    b.type = 'button';
+    b.textContent = o.t;
+    o.front = (r.where === 'front');
+    o.move  = r.move;
+    b.addEventListener('click', function(){ pick(b, o); });
+    $('opts').appendChild(b);
+  });
+}
+
+function pick(btn, o){
+  if (locked) return;
+
+  if (o.ok) {
+    locked = true;
+    if (o.note) { $('why').textContent = o.note; $('why').classList.add('show'); }
+    /* Remember the choice so every later level shows the student's own
+       reaction rather than the file's first one. */
+    if (o.move) picked[o.move] = { t:o.t, marks:markFor(o.t) };
+    btn.classList.add('is-ok');
+    Array.prototype.forEach.call($('opts').children, function(b){ b.disabled = true; });
+    /* A beat, so the student sees which option was theirs before the
+       answer grows. Without it the screen changes under the finger and
+       the choice is never confirmed. */
+    setTimeout(function(){
+      step++; draw(true, o.front);
+      /* In Voice mode the student hears the move they just added, not the
+         whole answer — the new piece is the thing being learned. */
+      if(voiceOn) speak(o.t,'candidate',null);
+    }, 420);
+  } else {
+    /* Wrong is not a dead end: the option greys, its reason appears, and
+       the round stays open. A penalty that teaches, per INTENT.md. */
+    btn.classList.add('is-no');
+    btn.disabled = true;
+    $('why').textContent = o.why;
+    $('why').classList.add('show');
+  }
+}
+
+function finish(s){
+  $('round').style.display = 'none';
+  $('done').classList.add('show');
+  $('doneN').textContent = s > 20
+    ? ('That is ' + s + ' seconds. Strong, but long for Part 1 — the four ' +
+       'moves before the contrast are already a band 5 answer here. Save ' +
+       'the fifth for Part 2 and Part 4, where the turns are long enough ' +
+       'to carry it.')
+    : ('That is ' + s + ' seconds, which is about right for Part 1. The ' +
+       'reaction you added second is the one the examiner hears first.');
+}
+
+/* ── MODES ────────────────────────────────────────────────────────────────
+   Four pills, two units. listen/read render the exchange; build is the
+   ladder; bank opens the sheet without leaving wherever you are.
+   ?mode= and ?topic= deep-link, so a pill can be bookmarked or sent. */
+var IV=null, mode='build', xray=false, playing=false, playIx=0;
+
+function ivFor(){ return IV && IV.interviews[D.topics[ti].id]; }
+
+function setMode(m){
+  if(m==='bank'){ bank(); return; }      /* a sheet, never a destination */
+  hush(); stopPlay();
+  mode=m;
+  Array.prototype.forEach.call($('pills').children,function(b){
+    b.classList.toggle('on', b.dataset.m===m);
+  });
+  var iv = m==='listen'||m==='read';
+  $('interview').style.display = iv ? '' : 'none';
+  $('builder').style.display   = iv ? 'none' : '';
+  try{ history.replaceState(null,'','?mode='+m+'&topic='+D.topics[ti].id); }catch(e){}
+  tools(); if(iv) drawIv(); else draw(false);
+}
+
+/* Mode-specific controls, all of them on the tools line and none of them in
+   the exchange. */
+function tools(){
+  var T=$('tools'); T.innerHTML='';
+  function btn(label,on,fn,dis){
+    var b=document.createElement('button');
+    b.className='tool'+(on?' on':''); b.type='button'; b.textContent=label;
+    if(dis) b.disabled=true; else b.addEventListener('click',fn);
+    T.appendChild(b); return b;
+  }
+  if(mode==='listen'){
+    if(!ivFor()) return;
+    btn(playing?'■ stop':'▶ play the interview',playing,function(){
+      playing?stopPlay():startPlay(); });
+    var n=document.createElement('span'); n.className='tool-n';
+    n.textContent=IV.interviews[D.topics[ti].id].category+' · 3 questions';
+    T.appendChild(n);
+  } else if(mode==='read'){
+    if(!ivFor()) return;
+    /* X-ray, restored from part1-structure.html. Off by default: notice the
+       answer first, then look at the machinery. */
+    btn('x-ray',xray,function(){ xray=!xray; tools(); drawIv(); });
+    var n=document.createElement('span'); n.className='tool-n';
+    n.textContent=xray?'markers underlined · lexis in colour':'reveal the language';
+    T.appendChild(n);
+  } else {
+    btn('Text',!voiceOn,function(){ setVoice(false); tools(); });
+    btn('Voice',voiceOn,function(){ setVoice(true); tools();
+      speak(D.topics[ti].question,'examiner',$('askSay')); });
+  }
+}
+
+/* ── THE EXCHANGE ────────────────────────────────────────────────────── */
+function xr(turn){
+  var t=esc(turn.t);
+  if(!xray) return t;
+  /* Longest first, so 'To be honest' is not eaten by 'be'. */
+  (turn.d||[]).slice().sort(function(a,b){return b.length-a.length;}).forEach(function(p){
+    var e=esc(p).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    t=t.replace(new RegExp('(?![^<]*>)('+e+')'),'<span class="xr-d">$1</span>');
+  });
+  (turn.v||[]).slice().sort(function(a,b){return b.length-a.length;}).forEach(function(p){
+    var e=esc(p).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    t=t.replace(new RegExp('(?![^<]*>)('+e+')'),'<span class="xr-v">$1</span>');
+  });
+  return t;
+}
+
+function drawIv(){
+  var iv=ivFor();
+  if(!iv){
+    $('interview').innerHTML='<p class="gap">There is no full interview for this '+
+      'topic yet — only the answer builder. Pick another topic above, or switch to Build.</p>';
+    return;
+  }
+  var turns=iv.styles[IV.styles[Math.min(vi,IV.styles.length-1)].id] || iv.styles.default;
+  $('interview').innerHTML=turns.map(function(t,i){
+    var q=t.who==='q';
+    return '<div class="xturn '+(q?'xq':'xa')+'" data-i="'+i+'">'+
+      '<div class="xl">'+(q?'Examiner':'Candidate')+'</div>'+
+      '<p>'+xr(t)+'</p></div>';
+  }).join('')+
+  '<p class="gap">Every candidate in these interviews is the same working adult. '+
+  'Build offers school, university and working — these five do not yet, and saying so '+
+  'is better than letting you find out.</p>';
+}
+
+/* ── PLAY THE WHOLE EXCHANGE ─────────────────────────────────────────────
+   Two voices, sequential, the turn being spoken at full opacity and the
+   rest dimmed. This is the thing the builder cannot do: pacing across a
+   sequence rather than the shape of one answer. */
+function startPlay(){
+  var iv=ivFor(); if(!iv||!SPEECH) return;
+  var turns=iv.styles[IV.styles[Math.min(vi,IV.styles.length-1)].id] || iv.styles.default;
+  playing=true; playIx=0; $('interview').classList.add('playing'); tools();
+  (function next(){
+    if(!playing||playIx>=turns.length){ stopPlay(); return; }
+    var t=turns[playIx];
+    Array.prototype.forEach.call($('interview').querySelectorAll('.xturn'),function(el){
+      el.classList.toggle('live', +el.dataset.i===playIx); });
+    var u=new SpeechSynthesisUtterance(t.t);
+    u.lang='en-GB'; u.rate=0.9; u.pitch = t.who==='q' ? 0.9 : 1.1;
+    var v=pickVoice(t.who==='q'?'examiner':'candidate'); if(v) u.voice=v;
+    u.onend=function(){ playIx++; setTimeout(next,340); };
+    u.onerror=function(){ stopPlay(); };
+    speechSynthesis.speak(u);
+  })();
+}
+function stopPlay(){
+  playing=false;
+  if(SPEECH) speechSynthesis.cancel();
+  var el=$('interview'); if(el){ el.classList.remove('playing');
+    Array.prototype.forEach.call(el.querySelectorAll('.live'),function(x){ x.classList.remove('live'); }); }
+  if($('tools')) tools();
+}
+
+/* ── AUDIO ────────────────────────────────────────────────────────────────
+   Two speakers, as the old page had them: the examiner lower, the candidate
+   higher, both en-GB at 0.9. Voices load asynchronously in most browsers,
+   so the list is re-read on every utterance rather than cached once at boot
+   — caching it is why speech silently fails on a cold first load. */
+var voiceOn=false, speakingBtn=null;
+var SPEECH = ('speechSynthesis' in window);
+
+function pickVoice(who){
+  var vs = speechSynthesis.getVoices(), want = who==='examiner' ? /male/i : /female/i;
+  return vs.filter(function(v){ return /en[-_]GB/i.test(v.lang) && want.test(v.name); })[0]
+      || vs.filter(function(v){ return /^en/i.test(v.lang) && want.test(v.name); })[0]
+      || vs.filter(function(v){ return /en[-_]GB/i.test(v.lang); })[0]
+      || vs.filter(function(v){ return /^en/i.test(v.lang); })[0] || null;
+}
+
+function hush(){
+  if(!SPEECH) return;
+  speechSynthesis.cancel();
+  if(speakingBtn){ speakingBtn.classList.remove('on','speaking'); speakingBtn=null; }
+}
+
+function speak(text, who, btn){
+  if(!SPEECH || !text) return;
+  hush();
+  var u = new SpeechSynthesisUtterance(text);
+  u.lang='en-GB'; u.rate=0.9; u.pitch = who==='examiner' ? 0.9 : 1.1;
+  var v = pickVoice(who); if(v) u.voice=v;
+  if(btn){ speakingBtn=btn; btn.classList.add('on','speaking'); }
+  u.onend=u.onerror=function(){
+    if(btn){ btn.classList.remove('on','speaking'); }
+    if(speakingBtn===btn) speakingBtn=null;
+  };
+  speechSynthesis.speak(u);
+}
+
+function sayTurn(){
+  var segs = choose(life().levels[step]).map(function(x){ return x.t; }).join(' ');
+  speak(segs,'candidate',$('turnSay'));
+}
+
+$('askSay').addEventListener('click',function(){
+  speak(D.topics[ti].question,'examiner',$('askSay'));
+});
+$('turnSay').addEventListener('click', sayTurn);
+
+/* The switch is drawn by tools(), on the tools line — never beside the
+   interlocutor. setVoice only holds the state. */
+function setVoice(on){ voiceOn=on; hush(); }
+/* No speech support: the switch would be a lie, so it goes. */
+if(!SPEECH){ $('askSay').style.display='none'; $('turnSay').style.display='none'; }
+/* Some browsers only populate the voice list after this fires. */
+if(SPEECH && speechSynthesis.onvoiceschanged!==undefined){
+  speechSynthesis.onvoiceschanged=function(){};
+}
+addEventListener('pagehide',hush);
+
+/* ── THE PHRASE BANK ──────────────────────────────────────────────────── */
+function bank(){
+  $('bankTip').textContent = D.tip;
+  $('bankBody').innerHTML = D.phraseBank.map(function(g){
+    /* The group for the move in play is marked, not filtered to. A student
+       who needs 'although' while choosing a reason should still find it. */
+    return '<div class="bank-g' + (g.move === nowMove ? ' here' : '') + '">' +
+      '<div class="bank-h"><b>' + esc(D.moves[g.move].name) + '</b>' +
+      '<i>' + esc(g.heading) + '</i></div><ul>' +
+      g.phrases.map(function(p){ return '<li>' + esc(p) + '</li>'; }).join('') +
+      '</ul></div>';
+  }).join('');
+  $('sheet').classList.add('open');
+  var here = $('bankBody').querySelector('.bank-g.here');
+  if (here) here.scrollIntoView({ block:'nearest' });
+  $('sheetX').focus();
+}
+function shutBank(){ $('sheet').classList.remove('open'); $('bankBtn').focus(); }
+
+$('bankBtn').addEventListener('click', bank);
+$('sheetX').addEventListener('click', shutBank);
+$('sheet').addEventListener('click', function(e){ if (e.target === $('sheet')) shutBank(); });
+addEventListener('keydown', function(e){
+  if (e.key === 'Escape' && $('sheet').classList.contains('open')) shutBank();
+});
+
+/* ── TABS AND VOICES ──────────────────────────────────────────────────── */
+function chrome(){
+  $('tabs').innerHTML = '';
+  D.topics.forEach(function(t, i){
+    var b = document.createElement('button');
+    b.className = 'vtab' + (i === ti ? ' active' : '');
+    b.type = 'button';
+    b.textContent = t.tab;
+    b.addEventListener('click', function(){
+      ti = i; step = 0; hush(); stopPlay(); chrome();
+      /* A topic with no interview cannot stay in Listen or Read. */
+      if((mode==='listen'||mode==='read') && !ivFor()){ setMode('build'); return; }
+      tools();
+      if(mode==='listen'||mode==='read'){ drawIv(); }
+      else { draw(false); if(voiceOn) speak(D.topics[ti].question,'examiner',$('askSay')); }
+      try{ history.replaceState(null,'','?mode='+mode+'&topic='+D.topics[ti].id); }catch(e){}
+    });
+    $('tabs').appendChild(b);
+  });
+
+  $('voices').innerHTML = '';
+  D.voices.forEach(function(v, i){
+    var b = document.createElement('button');
+    b.className = 'vb' + (i === vi ? ' on' : '');
+    b.type = 'button';
+    b.textContent = v.tab;
+    /* Position is kept. The ladder is the same length in every life, so
+       the student swaps whose answer it is without losing where they are —
+       which is the moment the three voices actually teach something. */
+    b.addEventListener('click', function(){ vi = i; hush(); chrome(); draw(false); });
+    $('voices').appendChild(b);
+  });
+
+  $('ask').textContent = D.topics[ti].question;
+  if(IV){
+    var has=!!ivFor();
+    Array.prototype.forEach.call($('pills').children,function(b){
+      if(b.dataset.m==='listen'||b.dataset.m==='read') b.disabled=!has;
+    });
+  }
+}
+
+$('againBtn').addEventListener('click', function(){ step = 0; picked = {}; hush(); draw(false); });
+
+Array.prototype.forEach.call($('pills').children,function(b){
+  b.addEventListener('click',function(){ setMode(b.dataset.m); });
+});
+
+addEventListener('scroll', function(){
+  document.body.classList.toggle('scrolled', scrollY > 4);
+}, { passive:true });
+
+/* ── BOOT ─────────────────────────────────────────────────────────────── */
+Promise.all([
+  fetch('data/part1-answers.json').then(function(r){ if(!r.ok) throw new Error('answers '+r.status); return r.json(); }),
+  fetch('data/part1-interview.json').then(function(r){ if(!r.ok) throw new Error('interview '+r.status); return r.json(); })
+])
+  .then(function(both){
+    D=both[0]; IV=both[1];
+    var p=new URLSearchParams(location.search);
+    var wantT=p.get('topic');
+    if(wantT){ D.topics.forEach(function(t,i){ if(t.id===wantT) ti=i; }); }
+    chrome();
+    var wantM=p.get('mode');
+    /* A pill that has nothing behind it for this topic falls back rather
+       than showing an empty screen. */
+    if(wantM==='listen'||wantM==='read'){ if(!ivFor()) wantM='build'; }
+    setMode(['listen','read','build'].indexOf(wantM)>-1 ? wantM : 'build');
+    /* Pills for topics with no interview are disabled, not hidden. */
+  })
+  .catch(function(e){
+    /* It says so on the page. part3-dialogue.html fetches a file that does
+       not exist and prints its error into a div nobody looks at, which is
+       how it stayed broken. */
+    $('ask').textContent = 'Could not load Part 1.';
+    $('answer').textContent = e.message + '. Expected data/part1-answers.json and '+
+      'data/part1-interview.json beside this page.';
+  });
+</script>
+</body>
+</html>

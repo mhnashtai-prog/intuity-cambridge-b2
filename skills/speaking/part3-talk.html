@@ -40,13 +40,32 @@ body.scrolled .header::after{opacity:1}
 .mode-btn[aria-disabled="true"]{color:var(--rule);cursor:default}
 .wrap{max-width:var(--w-read);margin:0 auto;padding:1.3rem var(--gutter) 6rem}
 
-/* ── THE QUESTION ────────────────────────────────────────────────────────
-   Part 3 gives a written question and prompts. It stays on screen because
-   a discussion that drifts off it is the other way candidates lose marks. */
+/* ── THE MAP ─────────────────────────────────────────────────────────────
+   Part 3 is not a photograph task. Cambridge hands the pair a written
+   question with five prompts around it, and the candidates are expected to
+   work through them. So the space Part 2 gives to two photographs is given
+   here to the thing the exam actually puts in front of you.
+
+   Drawn as one inline SVG: hairlines and type, no nodes, no boxes, no
+   fills. A prompt dims in once the discussion has reached it, so the map
+   doubles as the record of what the pair has covered — which is the other
+   half of what Part 3 marks, and impossible to show with a static picture.
+
+   The five sit on an ellipse rather than a circle because the container is
+   wider than it is tall; a circle would waste the corners and crowd the
+   question. */
 .q-label{font-family:var(--f-mono);font-size:.62rem;letter-spacing:.14em;
   text-transform:uppercase;color:var(--faint);margin-bottom:.35rem}
-.q{font-family:var(--f-display);font-size:1.1rem;font-weight:600;line-height:1.35;
-  color:var(--ink);letter-spacing:var(--track-display);margin-bottom:1.2rem}
+.map{margin:0 0 1.1rem}
+.map svg{width:100%;height:auto;display:block;overflow:visible}
+.map .spoke{stroke:var(--rule);stroke-width:1;transition:stroke .4s ease}
+.map .spoke.hit{stroke:var(--accent)}
+.map .node{font-family:var(--f-body);font-size:13px;fill:var(--faint);
+  transition:fill .4s ease}
+.map .node.hit{fill:var(--accent-ink)}
+.map .core{font-family:var(--f-display);font-weight:600;font-size:16px;
+  fill:var(--ink);letter-spacing:-.01em}
+.map .ring{fill:none;stroke:var(--rule);stroke-width:1}
 
 /* ── THE SCORE THAT IS NOT A SCORE ───────────────────────────────────────
    Two counts, because the skill has two halves and a student needs to know
@@ -139,8 +158,8 @@ body.scrolled .header::after{opacity:1}
 </header>
 
 <main class="wrap">
-  <div class="q-label">Discuss together</div>
-  <h1 class="q" id="q"></h1>
+  <div class="q-label">Talk together</div>
+  <div class="map" id="map"></div>
 
   <div class="tally">
     <span class="ty" id="tyBoth"><b>0</b><span>turns doing both</span></span>
@@ -202,9 +221,57 @@ function options(t){
   return o;
 }
 
+/* The question is wrapped by hand: SVG has no line box, so the words are
+   measured roughly and broken at the widest that still fits the centre. */
+function wrap(t,per){
+  var w=t.split(' '),L=[],cur='';
+  w.forEach(function(x){
+    if((cur+' '+x).trim().length>per){ L.push(cur.trim()); cur=x; }
+    else cur+=' '+x;
+  });
+  if(cur.trim()) L.push(cur.trim());
+  return L;
+}
+
+function drawMap(hits){
+  var t=topic(), P=t.prompts, W=680, H=300, cx=W/2, cy=H/2, rx=252, ry=112;
+  var svg=['<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+
+           esc(t.question)+', with five prompts">'];
+
+  P.forEach(function(p,i){
+    /* Five points, evenly spaced, first one at the top. */
+    var a=(-90+i*72)*Math.PI/180;
+    var x=cx+rx*Math.cos(a), y=cy+ry*Math.sin(a);
+    /* The spoke stops short of both ends so no line ever touches type. */
+    var x1=cx+rx*0.30*Math.cos(a), y1=cy+ry*0.42*Math.sin(a);
+    var x2=cx+rx*0.80*Math.cos(a), y2=cy+ry*0.76*Math.sin(a);
+    var on=hits.indexOf(i)!==-1?' hit':'';
+    svg.push('<line class="spoke'+on+'" x1="'+x1.toFixed(1)+'" y1="'+y1.toFixed(1)+
+             '" x2="'+x2.toFixed(1)+'" y2="'+y2.toFixed(1)+'"/>');
+    /* Anchored by which side of the centre it falls, so nothing runs off. */
+    var anc = Math.abs(x-cx)<40 ? 'middle' : (x>cx?'start':'end');
+    var dy  = y<cy ? -4 : 14;
+    svg.push('<text class="node'+on+'" x="'+x.toFixed(1)+'" y="'+(y+dy).toFixed(1)+
+             '" text-anchor="'+anc+'">'+esc(p)+'</text>');
+  });
+
+  var lines=wrap(t.question,26);
+  var top=cy-((lines.length-1)*11);
+  lines.forEach(function(l,i){
+    svg.push('<text class="core" x="'+cx+'" y="'+(top+i*22)+
+             '" text-anchor="middle" dominant-baseline="middle">'+esc(l)+'</text>');
+  });
+
+  svg.push('</svg>');
+  $('map').innerHTML=svg.join('');
+}
+
 function render(){
   var seq=run();
-  $('q').textContent=topic().question;
+  /* A prompt lights as the discussion reaches it: one per completed
+     exchange, in order, the way a pair works round the map. */
+  var reached=[]; for(var k=0;k<Math.min(both,topic().prompts.length);k++) reached.push(k);
+  drawMap(reached);
 
   $('talk').innerHTML=seq.slice(0,at).map(function(t){
     var mine=t.who==='me';
@@ -322,7 +389,7 @@ fetch('data/part3-talk.json')
   .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
   .then(function(d){ D=d; chrome(); render(); })
   .catch(function(e){
-    $('q').textContent='Could not load the discussions.';
+    $('map').textContent='Could not load the discussions.';
     $('prompt').textContent='data/part3-talk.json did not load ('+e.message+').';
   });
 </script>

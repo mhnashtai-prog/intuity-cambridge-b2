@@ -110,12 +110,15 @@ body.scrolled .header::after{opacity:1}
   font-variant-numeric:tabular-nums;min-width:3.4ch}
 .metre-l{font-family:var(--f-mono);font-size:.62rem;letter-spacing:.1em;
   text-transform:uppercase;color:var(--faint);white-space:nowrap}
-.metre-track{position:relative;flex:1;height:6px;border-radius:2px;
+.metre-track{position:relative;flex:1;height:8px;border-radius:2px;
   background:var(--slot-bg);overflow:hidden}
 .metre-fill{height:100%;width:0;background:var(--accent);
-  transition:width .4s cubic-bezier(.2,.9,.3,1)}
-.metre-mark{position:absolute;left:47%;top:0;bottom:0;width:1px;
-  background:var(--edge);opacity:.5}
+  transition:width .4s cubic-bezier(.2,.9,.3,1),background .3s}
+.metre-fill.over{background:var(--wrong)}
+/* The band, not a line: 15s to 20s of a 30s track. */
+.metre-band{position:absolute;left:50%;width:16.7%;top:0;bottom:0;
+  background:var(--edge);opacity:.16}
+.metre-n.over{color:var(--wrong)}
 
 /* ── THE MOVES ───────────────────────────────────────────────────────────
    clause-builder's structures strip, mapped onto discourse. It lights up
@@ -253,10 +256,10 @@ body.scrolled .header::after{opacity:1}
   <div class="metre">
     <span class="metre-n" id="secs">0s</span>
     <div class="metre-track">
-      <div class="metre-mark"></div>
+      <div class="metre-band"></div>
       <div class="metre-fill" id="fill"></div>
     </div>
-    <span class="metre-l">of speaking</span>
+    <span class="metre-l" id="metreL">of speaking</span>
   </div>
 
   <div class="moves" id="moves"></div>
@@ -330,17 +333,47 @@ function markup(seg){
   return t;
 }
 
+/* The underlines are derived from the text, not stored per option, so a
+   phrase added to the bank tomorrow is marked without touching six files. */
+var MARKERS = ["To be honest","If there's one thing","What I love about",
+  "What I like about","The thing about","On the other hand","That said",
+  "This is mainly because","That's mainly due to","The main reason",
+  "It's just that","for instance","Honestly","actually","absolutely",
+  "easily","usually","mostly","Although","However","Of course","Well","Oh"];
+function markFor(t){
+  return MARKERS.filter(function(m){ return t.indexOf(m) !== -1; });
+}
+
 function life(){ return D.topics[ti].lives[D.voices[vi].id]; }
 
+/* A CHOICE round is one where every option is right — clause-builder's own
+   distinction, and the reason it can teach range rather than only accuracy.
+   React is a choice round: three native openers on three different
+   structures, and whichever the student picks becomes theirs for the rest
+   of the ladder.
+
+   This is withChoices() from clause-builder, keyed on the move instead of
+   the clause id, because a move appears once per answer. Without it the
+   student picks 'What I love about weekends is…' and the next level
+   silently replaces it with the one the file happened to store first. */
+var picked = {};
+function choose(segs){
+  return segs.map(function(x){
+    if (!picked[x.m]) return x;
+    var c = picked[x.m];
+    return { t:c.t, m:x.m, marks:c.marks || [] };
+  });
+}
+
 function draw(fresh, front){
-  var L = life(), segs = L.levels[step];
+  var L = life(), segs = choose(L.levels[step]);
 
   /* The added segment is not always the last one: a reaction is prepended.
      So the new one is found by position — whichever index the previous
      level did not have — rather than assumed to be at the end. */
   var newIdx = -1;
   if (fresh && step > 0) {
-    var prev = L.levels[step - 1].map(function(x){ return x.t; });
+    var prev = choose(L.levels[step - 1]).map(function(x){ return x.t; });
     for (var i = 0; i < segs.length; i++) {
       if (prev.indexOf(segs[i].t) === -1) { newIdx = i; break; }
     }
@@ -354,8 +387,13 @@ function draw(fresh, front){
   $('answer').classList.toggle('shift', !!front);
 
   var s = seconds(segs);
+  var over = s > 20;
   $('secs').textContent = s + 's';
-  $('fill').style.width = Math.min(100, s / 32 * 100) + '%';
+  $('secs').classList.toggle('over', over);
+  $('fill').classList.toggle('over', over);
+  $('fill').style.width = Math.min(100, s / 30 * 100) + '%';
+  $('metreL').textContent = over ? 'long for Part 1'
+                                 : (s >= 15 ? 'about right' : 'of speaking');
 
   /* The strip is in the formula's order — react, answer, reason, example,
      contrast — not in the order the student earned them. A student who
@@ -394,6 +432,7 @@ function round(r){
     b.type = 'button';
     b.textContent = o.t;
     o.front = (r.where === 'front');
+    o.move  = r.move;
     b.addEventListener('click', function(){ pick(b, o); });
     $('opts').appendChild(b);
   });
@@ -404,6 +443,10 @@ function pick(btn, o){
 
   if (o.ok) {
     locked = true;
+    if (o.note) { $('why').textContent = o.note; $('why').classList.add('show'); }
+    /* Remember the choice so every later level shows the student's own
+       reaction rather than the file's first one. */
+    if (o.move) picked[o.move] = { t:o.t, marks:markFor(o.t) };
     btn.classList.add('is-ok');
     Array.prototype.forEach.call($('opts').children, function(b){ b.disabled = true; });
     /* A beat, so the student sees which option was theirs before the
@@ -423,10 +466,13 @@ function pick(btn, o){
 function finish(s){
   $('round').style.display = 'none';
   $('done').classList.add('show');
-  $('doneN').textContent =
-    'Eight words became ' + s + ' seconds, and the reaction you added ' +
-    'second is the one the examiner hears first. Try the same question as ' +
-    'someone else — the life changes, the five moves do not.';
+  $('doneN').textContent = s > 20
+    ? ('That is ' + s + ' seconds. Strong, but long for Part 1 — the four ' +
+       'moves before the contrast are already a band 5 answer here. Save ' +
+       'the fifth for Part 2 and Part 4, where the turns are long enough ' +
+       'to carry it.')
+    : ('That is ' + s + ' seconds, which is about right for Part 1. The ' +
+       'reaction you added second is the one the examiner hears first.');
 }
 
 /* ── THE PHRASE BANK ──────────────────────────────────────────────────── */

@@ -7,9 +7,17 @@ the page died on load with 'Unexpected token .'"""
 import re,sys,subprocess,os,json
 
 def check(path):
-    h=open(path,encoding='utf8').read(); bad=[]
-    css=h[h.index('<style>'):h.index('</style>')]
-    js =h[h.index('<script>')+8:h.rindex('</script>')]
+    h=open(path,encoding='utf8',errors='ignore').read(); bad=[]
+    try:
+        css=h[h.index('<style>'):h.index('</style>')]
+    except ValueError:
+        css=''
+    # A page can carry several <script> blocks, and a src= one has no body.
+    blocks=[m.group(1) for m in
+            re.finditer(r'<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>', h, re.S)
+            if m.group(1).strip()]
+    if not blocks: return True
+    js='\n'.join(blocks)          # for the CSS-leak and id scans only
 
     # 1. CSS leaked into JS?
     for pat in (r'^\s*\.[a-zA-Z-]+\{', r'^\s*@media\(', r'^\s*@keyframes '):
@@ -21,12 +29,37 @@ def check(path):
         n=len(re.findall(r'/\* ── '+banner+r' ──',h))
         if n>1: bad.append(f"banner '{banner.strip()}' appears {n}x — ambiguous patch anchor")
 
-    # 3. does the JS actually parse?
-    open('/tmp/x.js','w',encoding='utf8').write(js)
-    r=subprocess.run(['node','--check','/tmp/x.js'],capture_output=True,text=True)
-    if r.returncode: bad.append("JS syntax: "+r.stderr.strip().split('\n')[0])
+    # 3. does each block parse ON ITS OWN? Concatenating independent scripts
+    #    invents errors that the browser would never see.
+    for n,b in enumerate(blocks):
+        open('/tmp/x.js','w',encoding='utf8').write(b)
+        r=subprocess.run(['node','--check','/tmp/x.js'],capture_output=True,text=True)
+        if r.returncode:
+            line=[l for l in r.stderr.split('\n') if 'SyntaxError' in l]
+            where=r.stderr.split('\n')[1].strip() if len(r.stderr.split('\n'))>1 else ''
+            bad.append(f"script block {n} does not parse: "+
+                       (line[0].strip() if line else '?')+"  near: "+where[:70])
 
-    # 4. every getElementById target exists in the markup
+    # 4. the mode row: every sibling page reachable, and pointing at the
+    #    right file. Four pages each written at a different time left six of
+    #    twelve paths dead or aimed at a superseded page — and a link to the
+    #    WRONG page looks like it works, which is why this is checked rather
+    #    than eyeballed.
+    nav=re.search(r'<nav class="mode-selector".*?</nav>',h,re.S)
+    if nav:
+        here=os.path.dirname(path) or '.'
+        items=re.findall(r'<(a|span)\s+class="mode-btn([^"]*)"([^>]*)>([^<]+)</\1>',nav.group(0))
+        act=[i for i in items if 'active' in i[1]]
+        if len(act)!=1: bad.append(f"mode row has {len(act)} active items, expected 1")
+        for tag,cls,attrs,label in items:
+            if 'active' in cls: continue
+            href=re.search(r'href="([^"]+)"',attrs)
+            if tag!='a' or not href:
+                bad.append(f"mode row: '{label.strip()}' is a dead end")
+            elif not os.path.exists(os.path.join(here,href.group(1).split('?')[0])):
+                bad.append(f"mode row: '{label.strip()}' → {href.group(1)} does not exist")
+
+    # 5. every getElementById target exists in the markup
     for i in set(re.findall(r"\$\('([^']+)'\)",js)) | set(re.findall(r"getElementById\('([^']+)'\)",js)):
         if f'id="{i}"' not in h: bad.append(f"$('{i}') has no element")
 

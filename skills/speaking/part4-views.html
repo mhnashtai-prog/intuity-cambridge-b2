@@ -236,6 +236,55 @@ body.scrolled .header::after{opacity:1}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 @media(prefers-reduced-motion:reduce){ .speaking{animation:none} }
 
+/* ── THE PILLS ───────────────────────────────────────────────────────────
+   The same four as Parts 1 and 3, in the same order. Only Build differs
+   between parts, and Listen/Read read exactly what Build works on. */
+.pills{display:flex;gap:.15rem;flex-wrap:wrap;align-items:center;
+  padding-top:.9rem;border-top:1px solid var(--rule);margin-bottom:.2rem}
+.pill-b{font-family:var(--f-display);font-size:.66rem;font-weight:600;
+  letter-spacing:.05em;padding:.4rem .72rem;border:none;border-radius:var(--r-chip);
+  background:none;color:var(--faint);cursor:pointer;white-space:nowrap;
+  transition:background .15s,color .15s}
+@media(hover:hover){ .pill-b:hover{color:var(--sentence)} }
+.pill-b.on{background:var(--tile-bg);color:var(--tile-ink);font-weight:700}
+.tools{display:flex;align-items:center;gap:.5rem;min-height:2.1rem;
+  margin-bottom:1.1rem;flex-wrap:wrap}
+.tool{font-family:var(--f-mono);font-size:.62rem;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--faint);background:none;border:none;
+  padding:.35rem .5rem;border-radius:var(--r-chip);cursor:pointer;
+  transition:background .15s,color .15s}
+.tool.on{background:var(--tile-bg);color:var(--accent-ink)}
+.tool-n{font-family:var(--f-mono);font-size:.62rem;color:var(--faint);margin-left:auto}
+
+/* ── THE EXCHANGE, READ WHOLE ───────────────────────────────────────────
+   Examiner, you, examiner again, then the other candidate. Three voices and
+   nothing between them. */
+.xq{margin:0 0 1rem}
+.xa{margin:0 0 1.6rem;padding-left:1.1rem;border-left:2px solid var(--accent)}
+.xl{font-family:var(--f-mono);font-size:.6rem;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:.25rem}
+.xa .xl{color:var(--accent-ink)}
+.xq p{margin:0;font-family:var(--f-display);font-size:1.02rem;font-weight:600;
+  line-height:1.4;color:var(--ink);letter-spacing:var(--track-display)}
+.xa p{margin:0;font-size:.98rem;line-height:1.72;color:var(--sentence)}
+.xturn{transition:opacity .3s ease}
+.playing .xturn{opacity:.32}
+.playing .xturn.live{opacity:1}
+
+/* X-RAY. In Part 4 it marks the GENERALISATION — the move the whole part
+   turns on, and the one candidates replace with a sentence about themselves. */
+.xr-g{box-shadow:inset 0 -2px 0 var(--accent)}
+.xr-m{color:var(--accent-ink)}
+
+.bank-g{padding:.85rem 0;border-top:1px solid var(--rule)}
+.bank-g b{display:block;font-family:var(--f-display);font-size:.74rem;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--ink);margin-bottom:.2rem}
+.bank-g i{display:block;font-style:normal;font-size:.8rem;line-height:1.5;
+  color:var(--dim);margin-bottom:.55rem}
+.bank-g ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:.3rem}
+.bank-g li{font-size:.84rem;color:var(--tile-ink);background:var(--tile-bg);
+  border-radius:var(--r-chip);padding:.32rem .6rem}
+
 /* ── THE HANDOVER · STYLE ────────────────────────────────────────────────
    Set apart by a rule and the examiner label, not by a box. It is a change
    of speaker, and a change of speaker is what a label is for. */
@@ -316,6 +365,18 @@ body.scrolled .header::after{opacity:1}
 </header>
 
 <main class="wrap">
+
+  <nav class="pills" id="pills" aria-label="Mode">
+    <button class="pill-b" type="button" data-m="listen">Listen · full exchange</button>
+    <button class="pill-b" type="button" data-m="read">Read · full exchange</button>
+    <button class="pill-b on" type="button" data-m="build">Build an answer</button>
+    <button class="pill-b" type="button" data-m="bank">Phrase bank</button>
+  </nav>
+  <div class="tools" id="tools"></div>
+
+  <section id="interview" style="display:none"></section>
+
+  <section id="builder">
   <div class="ask-row">
     <div class="ask-label">Examiner</div>
     <button class="say" type="button" id="askSay" aria-label="Hear the question">
@@ -373,6 +434,7 @@ body.scrolled .header::after{opacity:1}
     <button class="again" type="button" id="againBtn">Build it again</button>
   </div>
 
+  </section>
 </main>
 
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="bankH">
@@ -399,6 +461,7 @@ body.scrolled .header::after{opacity:1}
    ═══════════════════════════════════════════════════════════════════════ */
 
 var D = null, ti = 0, step = 0, locked = false, nowMove = null;
+var mode='build', xray=false, playing=false, playIx=0;
 
 var $ = function(id){ return document.getElementById(id); };
 var esc = function(s){ return s.replace(/[&<>"]/g, function(c){
@@ -591,6 +654,117 @@ function finish(s){
 var voiceOn=false, speakingBtn=null;
 var SPEECH = ('speechSynthesis' in window);
 
+/* ── MODES ────────────────────────────────────────────────────────────────
+   Listen and Read show the exchange Build has you construct: the examiner's
+   question, your full answer, the handover, and the other candidate's reply.
+   One source — the same ladders, at the same topic. */
+function setMode(m){
+  if(m==='bank'){ bank(); return; }
+  hush(); stopPlay();
+  mode=m;
+  Array.prototype.forEach.call($('pills').children,function(b){
+    b.classList.toggle('on', b.dataset.m===m);
+  });
+  var iv = m==='listen'||m==='read';
+  $('interview').style.display = iv ? '' : 'none';
+  $('builder').style.display   = iv ? 'none' : '';
+  tools();
+  if(iv) drawIv(); else draw(false);
+}
+
+function tools(){
+  var T=$('tools'); if(!T) return;
+  T.innerHTML='';
+  function btn(label,on,fn){
+    var b=document.createElement('button');
+    b.className='tool'+(on?' on':''); b.type='button'; b.textContent=label;
+    b.addEventListener('click',fn); T.appendChild(b); return b;
+  }
+  var n=document.createElement('span'); n.className='tool-n';
+  if(mode==='listen'){
+    if(!SPEECH){ n.textContent='this browser has no speech'; T.appendChild(n); return; }
+    btn(playing?'■ stop':'▶ play the exchange',playing,function(){
+      playing?stopPlay():startPlay(); });
+    n.textContent='examiner · you · '+D.b;
+  } else if(mode==='read'){
+    /* Part 4's x-ray marks the GENERALISATION, because that is the move the
+       part turns on and the one candidates replace with a sentence about
+       themselves. The linkers are marked too, more quietly. */
+    btn('x-ray',xray,function(){ xray=!xray; tools(); drawIv(); });
+    n.textContent = xray ? 'the generalisation underlined · linkers in colour'
+                         : 'show the Part 4 move';
+  } else {
+    n.textContent='then '+D.b+' answers';
+  }
+  T.appendChild(n);
+}
+
+/* The exchange: question, your answer, the handover, their reply. */
+function exchange(){
+  var t=D.topics[ti], L=t.levels[t.levels.length-1];
+  var mine=L.filter(function(s){ return s.m!=='p'; });
+  var theirs=L.filter(function(s){ return s.m==='p'; });
+  return [
+    {who:'q', t:t.question, segs:[]},
+    {who:'a', who2:'You', t:mine.map(function(s){return s.t;}).join(' '), segs:mine},
+    {who:'q', t:t.handover, segs:[]},
+    {who:'a', who2:D.b, t:theirs.map(function(s){return s.t;}).join(' '), segs:theirs}
+  ];
+}
+
+function xr(turn){
+  if(!xray || !turn.segs.length) return esc(turn.t);
+  return turn.segs.map(function(s){
+    var cls = s.m==='g' ? 'xr-g' : '';
+    var t=esc(s.t);
+    (s.marks||[]).slice().sort(function(a,b){return b.length-a.length;}).forEach(function(m){
+      var e=esc(m).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      t=t.replace(new RegExp('(?![^<]*>)('+e+')'),'<span class="xr-m">$1</span>');
+    });
+    return cls ? '<span class="'+cls+'">'+t+'</span>' : t;
+  }).join(' ');
+}
+
+function drawIv(){
+  $('interview').innerHTML=exchange().map(function(t,i){
+    var q=t.who==='q';
+    return '<div class="xturn '+(q?'xq':'xa')+'" data-i="'+i+'">'+
+      '<div class="xl">'+esc(q?'Examiner':t.who2)+'</div>'+
+      '<p>'+xr(t)+'</p></div>';
+  }).join('');
+}
+
+/* ── PLAY ────────────────────────────────────────────────────────────────
+   Three roles, three pitches: the examiner low, you in the middle, the other
+   candidate higher — so the handover is audible without being announced. */
+function startPlay(){
+  if(!SPEECH) return;
+  var E=exchange(); playing=true; playIx=0;
+  $('interview').classList.add('playing'); tools();
+  (function next(){
+    if(!playing||playIx>=E.length){ stopPlay(); return; }
+    var t=E[playIx];
+    Array.prototype.forEach.call($('interview').querySelectorAll('.xturn'),function(el){
+      el.classList.toggle('live', +el.dataset.i===playIx); });
+    var u=new SpeechSynthesisUtterance(t.t);
+    u.lang='en-GB'; u.rate=0.92;
+    u.pitch = t.who==='q' ? 0.85 : (t.who2==='You' ? 1.05 : 1.25);
+    var v=pickVoice(t.who==='q'?'examiner':'candidate'); if(v) u.voice=v;
+    u.onend=function(){ playIx++; setTimeout(next,320); };
+    u.onerror=function(){ stopPlay(); };
+    speechSynthesis.speak(u);
+  })();
+}
+function stopPlay(){
+  playing=false;
+  if(SPEECH) speechSynthesis.cancel();
+  var el=$('interview');
+  if(el){ el.classList.remove('playing');
+    Array.prototype.forEach.call(el.querySelectorAll('.live'),function(x){
+      x.classList.remove('live'); }); }
+  if($('tools')) tools();
+}
+
 function pickVoice(who){
   var vs = speechSynthesis.getVoices(), want = who==='examiner' ? /male/i : /female/i;
   return vs.filter(function(v){ return /en[-_]GB/i.test(v.lang) && want.test(v.name); })[0]
@@ -650,21 +824,17 @@ addEventListener('pagehide',hush);
 
 /* ── THE PHRASE BANK ──────────────────────────────────────────────────── */
 function bank(){
-  $('bankTip').textContent = D.tip;
-  $('bankBody').innerHTML = D.phraseBank.map(function(g){
-    /* The group for the move in play is marked, not filtered to. A student
-       who needs 'although' while choosing a reason should still find it. */
-    return '<div class="bank-g' + (g.move === nowMove ? ' here' : '') + '">' +
-      '<div class="bank-h"><b>' + esc(D.moves[g.move].name) + '</b>' +
-      '<i>' + esc(g.heading) + '</i></div><ul>' +
-      g.phrases.map(function(p){ return '<li>' + esc(p) + '</li>'; }).join('') +
+  $('bankTip').textContent = D.tip || '';
+  $('bankBody').innerHTML=D.phraseBank.map(function(g){
+    return '<div class="bank-g"><b>'+esc(g.heading)+'</b>'+
+      (g.note?'<i>'+esc(g.note)+'</i>':'')+'<ul>'+
+      g.phrases.map(function(p){ return '<li>'+esc(p)+'</li>'; }).join('')+
       '</ul></div>';
   }).join('');
   $('sheet').classList.add('open');
-  var here = $('bankBody').querySelector('.bank-g.here');
-  if (here) here.scrollIntoView({ block:'nearest' });
   $('sheetX').focus();
 }
+
 function shutBank(){ $('sheet').classList.remove('open'); $('bankBtn').focus(); }
 
 $('bankBtn').addEventListener('click', bank);
@@ -694,6 +864,11 @@ function chrome(){
 
 $('againBtn').addEventListener('click', function(){ step = 0; picked = {}; hush(); draw(false); });
 
+Array.prototype.forEach.call($('pills').children,function(b){
+  b.addEventListener('click',function(){ setMode(b.dataset.m); });
+});
+addEventListener('pagehide',stopPlay);
+
 addEventListener('scroll', function(){
   document.body.classList.toggle('scrolled', scrollY > 4);
 }, { passive:true });
@@ -701,7 +876,14 @@ addEventListener('scroll', function(){
 /* ── BOOT ─────────────────────────────────────────────────────────────── */
 fetch('data/part4-views.json')
   .then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); })
-  .then(function(d){ D = d; chrome(); draw(false); })
+  .then(function(d){
+    D = d;
+    var p=new URLSearchParams(location.search);
+    var wt=p.get('topic'); if(wt) D.topics.forEach(function(t,i){ if(t.id===wt) ti=i; });
+    chrome();
+    var wm=p.get('mode');
+    setMode(['listen','read','build'].indexOf(wm)>-1 ? wm : 'listen');
+  })
   .catch(function(e){
     /* It says so on the page. part3-dialogue.html fetches a file that does
        not exist and prints its error into a div nobody looks at, which is

@@ -7,7 +7,7 @@ the page died on load with 'Unexpected token .'"""
 import re,sys,subprocess,os,json
 
 def check(path):
-    h=open(path,encoding='utf8',errors='ignore').read(); bad=[]
+    h=open(path,encoding='utf8',errors='ignore').read(); bad=[]; notes=[]
     try:
         css=h[h.index('<style>'):h.index('</style>')]
     except ValueError:
@@ -59,12 +59,32 @@ def check(path):
             elif not os.path.exists(os.path.join(here,href.group(1).split('?')[0])):
                 bad.append(f"mode row: '{label.strip()}' → {href.group(1)} does not exist")
 
-    # 5. every getElementById target exists in the markup
+    # 5. width/height on a class that the page builds as a <span>.
+    #    Caught twice in one file and silent both times: an inline box ignores
+    #    width and height, so the rule looks correct, the element exists, and
+    #    nothing is drawn. .bar and .pend-hang both shipped this way.
+    sized=set()
+    for m in re.finditer(r'(?<![\w-])\.([a-zA-Z][\w-]*)[^{}]*\{([^}]*)\}', css):
+        body=m.group(2)
+        if re.search(r'(?<![\w-])(width|height)\s*:', body) and \
+           not re.search(r'display\s*:\s*(block|flex|grid|inline-block|inline-flex|inline-grid)', body) and \
+           not re.search(r'position\s*:\s*(absolute|fixed)', body):
+            sized.add(m.group(1))
+    for cls in sorted(sized):
+        # does anything build it as a span?
+        if re.search(r'<span[^>]*class=[\'"][^\'"]*(?<![\w-])'+re.escape(cls)+r'(?![\w-])', h):
+            # A flex or grid CHILD is blockified, so width applies there and
+            # this is only worth a look, not a failure. The checker cannot see
+            # the parent, so it reports and lets a human decide.
+            notes.append(f"<span class=\"{cls}\"> is given width/height — fine as a flex/grid child, ignored otherwise")
+
+    # 6. every getElementById target exists in the markup
     for i in set(re.findall(r"\$\('([^']+)'\)",js)) | set(re.findall(r"getElementById\('([^']+)'\)",js)):
         if f'id="{i}"' not in h: bad.append(f"$('{i}') has no element")
 
-    if bad or '-v' in sys.argv: print(("  FAIL " if bad else "  ok   ")+path)
+    if bad or notes or '-v' in sys.argv: print(("  FAIL " if bad else "  ok   ")+path)
     for b in bad: print("         ! "+b)
+    for n in notes: print("         ~ "+n)
     return not bad
 
 def find():
@@ -84,7 +104,7 @@ def find():
                 if '<script>' in h and '<style>' in h: out.append(p)
     return sorted(out)
 
-paths = sys.argv[1:] or find()
+paths = [a for a in sys.argv[1:] if not a.startswith('-')] or find()
 print(f"checking {len(paths)} pages\n")
 results=[check(p) for p in paths]
 n=sum(1 for r in results if not r)

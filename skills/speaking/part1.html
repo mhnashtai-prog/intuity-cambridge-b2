@@ -100,7 +100,8 @@ body.scrolled .header::after{opacity:1}
 
 /* ── THE NUMBER ──────────────────────────────────────────────────────────
    Seconds of speech at about 150 words a minute. */
-.metre{display:flex;align-items:center;gap:.7rem;margin-bottom:1.8rem}
+.metre{display:flex;align-items:center;gap:.7rem;margin:2.2rem 0 0;
+  padding-top:1.1rem;border-top:1px solid var(--rule)}
 .metre-n{font-family:var(--f-mono);font-size:1.34rem;color:var(--ink);
   font-variant-numeric:tabular-nums;min-width:3.4ch}
 .metre-l{font-family:var(--f-mono);font-size:.62rem;letter-spacing:.1em;
@@ -315,6 +316,24 @@ body.scrolled .header::after{opacity:1}
 
   <div class="answer" id="answer"></div>
 
+
+  <div class="moves" id="moves"></div>
+
+  <div id="round">
+    <div class="prompt-row">
+      <p class="prompt" id="prompt"></p>
+      <button class="bank-btn" type="button" id="bankBtn">Phrases</button>
+    </div>
+    <div class="opts" id="opts"></div>
+    <div class="why" id="why"></div>
+  </div>
+
+  <!-- THE TIMER SITS LAST.
+       It was between the question and the choices, which put a number in the
+       one gap that should hold nothing — the examiner has spoken and the
+       candidate is about to. A counter there is read every time the eye
+       travels between them, and it is not needed until after the choice is
+       made. Below the round it is still glanceable and never in the way. -->
   <div class="metre">
     <span class="metre-n" id="secs">0s</span>
     <div class="metre-track">
@@ -327,17 +346,6 @@ body.scrolled .header::after{opacity:1}
         <path d="M4 3l9 5-9 5z" fill="currentColor"/>
       </svg>
     </button>
-  </div>
-
-  <div class="moves" id="moves"></div>
-
-  <div id="round">
-    <div class="prompt-row">
-      <p class="prompt" id="prompt"></p>
-      <button class="bank-btn" type="button" id="bankBtn">Phrases</button>
-    </div>
-    <div class="opts" id="opts"></div>
-    <div class="why" id="why"></div>
   </div>
 
   <div class="done" id="done">
@@ -512,9 +520,32 @@ function finish(s){
 }
 
 /* ── MODES ────────────────────────────────────────────────────────────── */
-var IV=null, mode='build', xray=false, playing=false, playIx=0;
+var mode='build', xray=false, playing=false, playIx=0;
 
-function ivFor(){ return IV && IV.interviews[D.topics[ti].id]; }
+/* ONE SOURCE OF TRUTH.
+   Listen, Read and Build now read the same ladders out of part1-answers.json.
+   There is no second interview file, so there is no second candidate: pick
+   'At school' and the interview is a school student, because it is literally
+   the answer Build would have you construct.
+
+   That also repairs something that was quietly wrong. The life selector
+   governed Build alone, so a student could choose 'At school' and then hear a
+   thirty-year-old talk about their current job. Nothing on screen explained
+   the switch, because nothing on screen knew about it.
+
+   THE INTERVIEW IS THE SIX TOPICS. The old file asked three questions on one
+   topic; this one asks one question on each of six, which is closer to how an
+   examiner actually moves. What is lost is the examiner coming BACK at you on
+   the same subject — worth adding later as three questions per topic, and a
+   writing job rather than a code one. */
+function ivFor(){ return D && D.topics.length ? true : null; }
+
+/* The answer Build ends on, at the life currently selected. Not a copy, not a
+   paraphrase — the same array. */
+function finalAnswer(topic){
+  var L = topic.lives[D.voices[vi].id].levels;
+  return L[L.length-1];
+}
 
 function setMode(m){
   if(m==='bank'){ bank(); return; }
@@ -544,13 +575,13 @@ function tools(){
     btn(playing?'■ stop':'▶ play the interview',playing,function(){
       playing?stopPlay():startPlay(); });
     var n=document.createElement('span'); n.className='tool-n';
-    n.textContent=IV.interviews[D.topics[ti].id].category+' · 3 questions';
+    n.textContent=D.topics.length+' questions · '+D.voices[vi].tab.toLowerCase();
     T.appendChild(n);
   } else if(mode==='read'){
     if(!ivFor()) return;
     btn('x-ray',xray,function(){ xray=!xray; tools(); drawIv(); });
     var n=document.createElement('span'); n.className='tool-n';
-    n.textContent=xray?'markers underlined · lexis in colour':'reveal the language';
+    n.textContent=xray?'discourse markers underlined':'reveal the markers';
     T.appendChild(n);
   } else {
     btn('Text',!voiceOn,function(){ setVoice(false); tools(); });
@@ -579,8 +610,10 @@ function xr(turn){
         t=t.replace(rx(p),'<span class="'+cls+'">$1</span>');
       });
   }
+  /* Discourse markers only. The ladders tag the markers a student is meant to
+     notice and reuse; they carry no separate lexis list, and inventing one
+     here would be data written by the page rather than by a person. */
   mark(turn.d,'xr-d');
-  mark(turn.v,'xr-v');
   return t;
 }
 
@@ -605,12 +638,13 @@ function drawIv(){
 }
 
 function startPlay(){
-  var iv=ivFor(); if(!iv||!SPEECH) return;
+  if(!SPEECH) return;
+  var T=turns();
   var turns=iv.dialogue;
   playing=true; playIx=0; $('interview').classList.add('playing'); tools();
   (function next(){
-    if(!playing||playIx>=turns.length){ stopPlay(); return; }
-    var t=turns[playIx];
+    if(!playing||playIx>=T.length){ stopPlay(); return; }
+    var t=T[playIx];
     Array.prototype.forEach.call($('interview').querySelectorAll('.xturn'),function(el){
       el.classList.toggle('live', +el.dataset.i===playIx); });
     var u=new SpeechSynthesisUtterance(t.t);
@@ -732,12 +766,7 @@ function chrome(){
   });
 
   $('ask').textContent = D.topics[ti].question;
-  if(IV){
-    var has=!!ivFor();
-    Array.prototype.forEach.call($('pills').children,function(b){
-      if(b.dataset.m==='listen'||b.dataset.m==='read') b.disabled=!has;
-    });
-  }
+
 }
 
 $('againBtn').addEventListener('click', function(){ step = 0; picked = {}; hush(); draw(false); });
@@ -751,12 +780,10 @@ addEventListener('scroll', function(){
 }, { passive:true });
    
 /* ── BOOT ─────────────────────────────────────────────────────────────── */
-Promise.all([
-  fetch('data/part1-answers.json').then(function(r){ if(!r.ok) throw new Error('answers '+r.status); return r.json(); }),
-  fetch('data/part1-interview.json').then(function(r){ if(!r.ok) throw new Error('interview '+r.status); return r.json(); })
-])
-  .then(function(both){
-    D=both[0]; IV=both[1];
+fetch('data/part1-answers.json')
+  .then(function(r){ if(!r.ok) throw new Error('answers '+r.status); return r.json(); })
+  .then(function(d){
+    D=d;
     var p=new URLSearchParams(location.search);
     var wantT=p.get('topic');
     if(wantT){ D.topics.forEach(function(t,i){ if(t.id===wantT) ti=i; }); }
@@ -764,13 +791,11 @@ Promise.all([
     var wantM=p.get('mode');
     if(!wantM){ try{ wantM=localStorage.getItem('intuity.p1.mode'); }catch(e){} }
     if(['listen','read','build'].indexOf(wantM)===-1) wantM='listen';
-    if((wantM==='listen'||wantM==='read') && !ivFor()) wantM='build';
     setMode(wantM);
   })
   .catch(function(e){
     $('ask').textContent = 'Could not load Part 1.';
-    $('answer').textContent = e.message + '. Expected data/part1-answers.json and '+
-      'data/part1-interview.json beside this page.';
+    $('answer').textContent = e.message + '. Expected data/part1-answers.json beside this page.';
   });
 </script>
 </body>

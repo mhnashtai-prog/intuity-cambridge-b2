@@ -189,6 +189,28 @@ body.scrolled .header::after{opacity:1}
 
 @media(max-width:560px){ .q{font-size:1rem} .opt{font-size:.9rem} }
 @media(prefers-reduced-motion:reduce){ .turn{animation:none} }
+/* ── THE PHRASE BANK · STYLE ─────────────────────────────────────────── */
+.bank-g{padding:.9rem 0;border-top:1px solid var(--rule)}
+.bank-g b{display:block;font-family:var(--f-display);font-size:.76rem;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--ink);margin-bottom:.15rem}
+.bank-g i{display:block;font-style:normal;font-size:.8rem;line-height:1.5;
+  color:var(--dim);margin-bottom:.6rem}
+.bank-g ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:.3rem}
+.bank-g li{font-size:.84rem;color:var(--tile-ink);background:var(--tile-bg);
+  border-radius:var(--r-chip);padding:.32rem .6rem}
+/* A phrase that appears nowhere in this page's own turns. Shown, because
+   range is the point, and marked, because pretending it was in the material
+   would be the lie the corpus was built to avoid. */
+.bank-g li.extra{background:none;box-shadow:inset 0 0 0 1px var(--rule);color:var(--dim)}
+/* Cannot open a sentence — 'whereas', 'although'. The leading dash is the
+   sentence it has to attach to. */
+.bank-g li.joins::before{content:'… ';color:var(--faint)}
+.bank-g li em{font-style:normal;font-family:var(--f-mono);font-size:.58rem;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-left:.45rem}
+.bank-note{font-size:.82rem;line-height:1.6;color:var(--dim);
+  margin:.7rem 0 0;white-space:pre-line}
+.bank-miss{font-size:.8rem;line-height:1.55;color:var(--dim);margin:.55rem 0 0}
+.bank-miss s{color:var(--wrong);text-decoration-color:var(--wrong);margin-right:.35rem}
 </style>
 </head>
 <body>
@@ -525,14 +547,66 @@ function pickVoice(who){
 /* ── THE BANK ────────────────────────────────────────────────────────────
    A sheet, never a destination — the same rule as Part 1. Every phrase is
    lifted verbatim from a turn in these discussions. */
+/* ── THE PHRASE BANK ─────────────────────────────────────────────────────
+   Reads data/speaking-phrases.json, the one corpus shared by all four parts
+   and the Hub, filtered here to the functions tagged for THIS part.
+
+   Not each page's own list any more. Contrast is contrast wherever it
+   happens, and a phrase that lived in four files was four copies waiting to
+   drift — which is exactly what happened twice already in this project.
+
+   Every phrase carries where it came from. `turn` means it appears in a
+   model turn on this page; `bank` means it was added for range and appears
+   nowhere yet. Both are shown, and the marker says which — hiding the
+   second kind would narrow the bank to what one writer happened to use.
+
+   `mouth` is shown only where it discriminates: a function whose phrases
+   are all the same age says nothing by displaying it. */
+var PART = 3;
+var PH = null;
+
+function bankFns(){
+  if (!PH) return [];
+  var out = [];
+  Object.keys(PH.functions).forEach(function(k){
+    var f = PH.functions[k];
+    if (f.parts.indexOf(PART) !== -1) out.push(f);
+  });
+  return out;
+}
+
 function bank(){
-  $('bankBody').innerHTML=D.phraseBank.map(function(g){
-    return '<div class="bank-g"><b>'+esc(g.heading)+'</b>'+
-      (g.note?'<i>'+esc(g.note)+'</i>':'')+'<ul>'+
-      g.phrases.map(function(p){ return '<li>'+esc(p)+'</li>'; }).join('')+
-      '</ul></div>';
-  }).join('');
+  var fns = bankFns();
+  if (!fns.length){
+    $('bankBody').innerHTML = '<p class="bank-miss">The phrase bank did not load. ' +
+      'Expected data/speaking-phrases.json beside this page.</p>';
+  } else {
+    $('bankBody').innerHTML = fns.map(function(f){
+      /* show the age marker only when the function actually mixes ages */
+      var mixed = f.phrases.some(function(p){ return p.mouth !== f.phrases[0].mouth; });
+      var here  = (typeof nowMove !== 'undefined' && nowMove && f.moves &&
+                   f.moves.indexOf(nowMove) !== -1) ? ' here' : '';
+      return '<div class="bank-g' + here + '">' +
+        '<b>' + esc(f.label) + '</b>' +
+        (f.when ? '<i>' + esc(f.when) + '</i>' : '') +
+        '<ul>' + f.phrases.map(function(p){
+          var cls = 'ph' + (p.from === 'bank' ? ' extra' : '') +
+                    (p.joins ? ' joins' : '');
+          var tag = (mixed && p.mouth !== 'both')
+            ? '<em>' + (p.mouth === 'teen' ? 'teen' : 'adult') + '</em>' : '';
+          return '<li class="' + cls + '" title="' + esc(p.note || '') + '">' +
+                 esc(p.t) + tag + '</li>';
+        }).join('') + '</ul>' +
+        (f.convention ? '<p class="bank-note">' + esc(f.convention) + '</p>' : '') +
+        (f.misfires ? f.misfires.map(function(m){
+            return '<p class="bank-miss"><s>' + esc(m.t) + '</s> ' + esc(m.why) + '</p>';
+          }).join('') : '') +
+        '</div>';
+    }).join('');
+  }
   $('sheet').classList.add('open');
+  var h = $('bankBody').querySelector('.bank-g.here');
+  if (h && h.scrollIntoView) h.scrollIntoView({ block:'nearest' });
   $('sheetX').focus();
 }
 function shutBank(){ $('sheet').classList.remove('open'); }
@@ -667,9 +741,16 @@ addEventListener('scroll',function(){
   document.body.classList.toggle('scrolled',scrollY>4);
 },{passive:true});
 
-fetch('data/part3-talk.json')
-  .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
-  .then(function(d){
+Promise.all([
+  fetch('data/part3-talk.json').then(function(r){ if(!r.ok) throw new Error('part3-talk.json '+r.status); return r.json(); }),
+  /* The shared corpus. A failure here must NOT take the page down: a
+     student can still build an answer without the phrase bank, so it
+     resolves to null and bank() says so when opened. */
+  fetch('data/speaking-phrases.json').then(function(r){ return r.ok ? r.json() : null; })
+                                     .catch(function(){ return null; })
+])
+  .then(function(both){
+    var d=both[0]; PH=both[1];
     D=d;
     var p=new URLSearchParams(location.search);
     var wt=p.get('topic');

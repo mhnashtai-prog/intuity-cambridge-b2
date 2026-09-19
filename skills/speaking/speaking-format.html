@@ -177,6 +177,37 @@ body{min-height:100dvh;display:flex;flex-direction:column}
   text-decoration:none;transition:background .15s,transform .1s cubic-bezier(.2,.8,.2,1)}
 @media(hover:hover){ .open:hover{background:var(--tile-bg-press)} }
 .open:active{transform:scale(.96)}
+/* ── THE PHRASE BANK · STYLE ─────────────────────────────────────────── */
+.bank-g{padding:.9rem 0;border-top:1px solid var(--rule)}
+.bank-g b{display:block;font-family:var(--f-display);font-size:.76rem;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--ink);margin-bottom:.15rem}
+.bank-g i{display:block;font-style:normal;font-size:.8rem;line-height:1.5;
+  color:var(--dim);margin-bottom:.6rem}
+.bank-g ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:.3rem}
+.bank-g li{font-size:.84rem;color:var(--tile-ink);background:var(--tile-bg);
+  border-radius:var(--r-chip);padding:.32rem .6rem}
+/* A phrase that appears nowhere in this page's own turns. Shown, because
+   range is the point, and marked, because pretending it was in the material
+   would be the lie the corpus was built to avoid. */
+.bank-g li.extra{background:none;box-shadow:inset 0 0 0 1px var(--rule);color:var(--dim)}
+/* Cannot open a sentence — 'whereas', 'although'. The leading dash is the
+   sentence it has to attach to. */
+.bank-g li.joins::before{content:'… ';color:var(--faint)}
+.bank-g li em{font-style:normal;font-family:var(--f-mono);font-size:.58rem;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-left:.45rem}
+.bank-note{font-size:.82rem;line-height:1.6;color:var(--dim);
+  margin:.7rem 0 0;white-space:pre-line}
+.bank-miss{font-size:.8rem;line-height:1.55;color:var(--dim);margin:.55rem 0 0}
+.bank-miss s{color:var(--wrong);text-decoration-color:var(--wrong);margin-right:.35rem}
+.fn-ph{list-style:none;margin:.6rem 0 0 1.7rem;padding:0;
+  display:flex;flex-wrap:wrap;gap:.3rem}
+.fn-ph li{font-size:.82rem;color:var(--tile-ink);background:var(--tile-bg);
+  border-radius:var(--r-chip);padding:.3rem .58rem}
+.fn-ph li.extra{background:none;box-shadow:inset 0 0 0 1px var(--rule);color:var(--dim)}
+.fn-ph li.joins::before{content:'… ';color:var(--faint)}
+.fn-ph li em{font-style:normal;font-family:var(--f-mono);font-size:.56rem;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-left:.4rem}
+.fn-tip .bank-note{margin-left:1.7rem}
 </style>
 </head>
 <body>
@@ -223,6 +254,32 @@ body{min-height:100dvh;display:flex;flex-direction:column}
 </div>
 
 <script>
+/* ── THE CORPUS ──────────────────────────────────────────────────────────
+   The Hub is the only screen that sees all four parts at once, so it is the
+   only one that shows the whole corpus — browsed by FUNCTION, which is the
+   axis the writing corpus settled on and the reason a learner looking for a
+   way to disagree politely should not have to know which part it lives in.
+
+   TIPS below stays as the fallback. It is twenty lines written for this page
+   and synced to nothing, which was true when I wrote it and is written here
+   so nobody discovers it later. Where the corpus covers a function, the
+   corpus wins; where it does not yet, the line is shown and marked. */
+var PH = null;
+fetch('data/speaking-phrases.json')
+  .then(function(r){ return r.ok ? r.json() : null; })
+  .then(function(d){ PH = d; })
+  .catch(function(){ PH = null; });
+
+/* Which corpus function answers which of the Hub's twenty. Written out
+   rather than matched on the label, because the two vocabularies were
+   arrived at separately and guessing would silently mis-file a phrase. */
+const FN_OF = {
+  1:['reacting','giving_reason','buying_time','giving_example','conceding'],
+  2:['comparing','contrasting','speculating','managing_minute','buying_time'],
+  3:['opening_idea','partly_agreeing','disagreeing','suggesting_alternative','deciding'],
+  4:['reacting','generalising','consequence','conceding','inviting']
+};
+
 const TIPS = {
   1:[["Say who you are and what you do, without turning it into a list.",
       "I'm still at school, in my last two years."],
@@ -358,11 +415,26 @@ function openCard(p, from){
   $('cardShare').textContent = p.minutes + ' of the ' + SPEAKING.total + ' minutes';
 
   const tips = TIPS[p.n] || [];
+  const keys = FN_OF[p.n] || [];
   $('cardFns').innerHTML = p.fns.map(function(f, i){
     const t = tips[i] || ['',''];
+    const fn = PH && PH.functions ? PH.functions[keys[i]] : null;
+
+    /* The corpus where it reaches, the written line where it does not. */
+    let body = '<p>' + t[0] + (t[1] ? '<em>' + t[1] + '</em>' : '') + '</p>';
+    if (fn){
+      const mixed = fn.phrases.some(function(x){ return x.mouth !== fn.phrases[0].mouth; });
+      body = '<p>' + (fn.when ? fn.when.charAt(0).toUpperCase() + fn.when.slice(1) + '.' : t[0]) + '</p>' +
+        '<ul class="fn-ph">' + fn.phrases.map(function(x){
+          const cls = 'ph' + (x.from === 'bank' ? ' extra' : '') + (x.joins ? ' joins' : '');
+          const tag = (mixed && x.mouth !== 'both')
+            ? '<em>' + (x.mouth === 'teen' ? 'teen' : 'adult') + '</em>' : '';
+          return '<li class="' + cls + '">' + x.t + tag + '</li>';
+        }).join('') + '</ul>' +
+        (fn.convention ? '<p class="bank-note">' + fn.convention + '</p>' : '');
+    }
     return '<li><button class="fn-b" type="button" aria-expanded="false">' + f + '</button>' +
-      '<div class="fn-tip"><div><p>' + t[0] +
-      (t[1] ? '<em>' + t[1] + '</em>' : '') + '</p></div></div></li>';
+      '<div class="fn-tip"><div>' + body + '</div></div></li>';
   }).join('');
 
   Array.prototype.forEach.call($('cardFns').querySelectorAll('.fn-b'), function(b){

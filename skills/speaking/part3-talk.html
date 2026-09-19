@@ -464,12 +464,9 @@ function startPlay(){
       el.classList.toggle('live', +el.dataset.i===playIx); });
     var u=new SpeechSynthesisUtterance(t.t);
     u.lang='en-GB'; u.rate=0.95; u.pitch = t.who==='me' ? 0.9 : 1.1;
-    var vs=speechSynthesis.getVoices();
-    var want = t.who==='me' ? /male/i : /female/i;
-    var v = vs.filter(function(x){ return /en[-_]GB/i.test(x.lang) && want.test(x.name); })[0]
-         || vs.filter(function(x){ return /en[-_]GB/i.test(x.lang); })[0]
-         || vs.filter(function(x){ return /^en/i.test(x.lang); })[0];
-    if(v) u.voice=v;
+    /* In Part 3 both speakers are students, so 'examiner' here just means
+       the other one — the point is that the two are audibly different. */
+    var v=pickVoice(t.who==='me' ? 'candidate' : 'examiner'); if(v) u.voice=v;
     u.onend=function(){ playIx++; setTimeout(next,300); };
     u.onerror=function(){ stopPlay(); };
     speechSynthesis.speak(u);
@@ -484,6 +481,46 @@ function stopPlay(){
       x.classList.remove('live'); }); }
   if($('tools')) tools();
 }
+
+/* ── CHOOSING A VOICE ────────────────────────────────────────────────────
+   This was broken on iOS, and in two separate ways.
+
+   FIRST: the old test for a man was /male/i — which matches "female". The
+   substring is right there, so the examiner filter would cheerfully pick a
+   woman if her name happened to contain the word.
+
+   SECOND, and the reason an iPhone always read in the same dull man's
+   voice: iOS voice names carry NO gender word. They are called Serena,
+   Martha, Daniel, Arthur. So /female/i matched nothing at all, every
+   lookup fell through to "the first en-GB voice in the list", and on iOS
+   that is Daniel. No setting on the phone could have changed it, because
+   the page was never asking for anything else.
+
+   So voices are matched BY NAME against the ones the platforms actually
+   ship — Apple, Google and Microsoft — with the gender words kept only as
+   a last resort for desktop engines that do use them. */
+var VOICE_F = /(serena|martha|kate|stephanie|sonia|hazel|susan|libby|maisie|fiona|moira|karen|tessa|samantha|victoria|zira|catherine|amelie|female)/i;
+var VOICE_M = /(daniel|oliver|arthur|george|ryan|thomas|alex|fred|gordon|\bmale\b|\bman\b)/i;
+
+function pickVoice(who){
+  var vs = speechSynthesis.getVoices() || [];
+  var wantF = who !== 'examiner';           /* the candidate is a woman */
+  var gb = vs.filter(function(v){ return /en[-_]GB/i.test(v.lang); });
+  var en = vs.filter(function(v){ return /^en/i.test(v.lang); });
+
+  function find(list, yes, no){
+    return list.filter(function(v){ return yes.test(v.name) && !no.test(v.name); })[0];
+  }
+  var yes = wantF ? VOICE_F : VOICE_M, no = wantF ? VOICE_M : VOICE_F;
+
+  return find(gb, yes, no)                  /* a British voice of the right sex */
+      || find(en, yes, no)                  /* any English one */
+      /* Nothing named: take a British voice that is at least not obviously
+         the other sex, rather than the first in the list. */
+      || gb.filter(function(v){ return !no.test(v.name); })[0]
+      || gb[0] || en[0] || null;
+}
+
 
 /* ── THE BANK ────────────────────────────────────────────────────────────
    A sheet, never a destination — the same rule as Part 1. Every phrase is

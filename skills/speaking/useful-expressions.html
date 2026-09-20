@@ -102,6 +102,13 @@ main.stage{flex:1;display:flex;flex-direction:column;align-items:center;
   font-weight:400;letter-spacing:.005em;line-height:1.08;color:var(--poster-ink);
   font-size:clamp(1.7rem,5.5vw,3rem);max-width:42rem}
 .deck-answer .accent{color:var(--accent-ink)}
+   .deck-answer.long{font-family:var(--f-display);font-weight:600;
+  letter-spacing:var(--track-display);line-height:1.5;
+  font-size:clamp(1.05rem,2.6vw,1.35rem);max-width:38rem}
+.deck-extra{font-size:.95rem;line-height:1.6;color:var(--dim);max-width:38rem;
+  border-top:1px solid var(--poster-rule);padding-top:1rem}
+.deck-extra b{color:var(--ink);font-weight:600}
+.fn-picker button:disabled{opacity:.4;cursor:default}
 
 .deck-chips{display:flex;flex-wrap:wrap;justify-content:center;gap:.45rem;
   max-width:36rem}
@@ -174,31 +181,31 @@ main.stage{flex:1;display:flex;flex-direction:column;align-items:center;
 
 <script>
 const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
 
-/* ── SOURCES ─────────────────────────────────────────────────────────────
-   Functions: the same corpus the hub cards already read, fetched exactly
-   the way speaking-format.html fetches it — one file, one vocabulary.
-   Topics: the old external repo, unmigrated on purpose. Its content
-   (full model-answer sentences for general opinion topics) does not exist
-   anywhere else in the app, so there is nothing to reconcile it with. */
+/* SOURCES. Everything comes from files the app already has.
+   Functions: the shared phrase corpus.
+   Topics: the same answer files the Part pages read. */
 const PHRASES_URL = 'data/speaking-phrases.json';
-const TOPICS_URL   = 'https://raw.githubusercontent.com/mhnashtai-prog/speaking-slides-multi-levels/main/b2-speaking-map.json';
+const PART_URL = {
+  1: 'data/part1-answers.json',
+  /* 2: 'data/…',  add when Part 2's file is wired in */
+  /* 3: 'data/…',  add when Part 3's file is wired in */
+  4: 'data/part4-views.json'
+};
+const PART_LABEL = { 1:'Interview', 2:'Long turn', 3:'Collaborate', 4:'Discuss' };
 
-let PH = null, TOPICS = null;
-let tab = 'functions';       // 'functions' | 'topics'
-let fnKey = null;            // current function key, functions tab only
-let at = 0;                  // current index within whatever list is showing
+let PH = null;
+let PARTS = {};            // PARTS[n] = that part's JSON, once loaded
+let tab = 'functions';     // 'functions' | 'topics'
+let fnKey = null;          // Functions tab: current function
+let partKey = 0;           // Topics tab: 0 = all four parts, else 1-4
+let at = 0;
 
-function fnList(){
-  if (!PH || !PH.functions) return [];
-  return Object.keys(PH.functions);
-}
+function fnList(){ return PH && PH.functions ? Object.keys(PH.functions) : []; }
 
-/* Flatten one function's phrases into the same {context, answerHtml, chips}
-   shape the render layer expects, so functions and topics can share one
-   renderer instead of two. */
 function functionSlides(key){
-  const f = PH.functions[key];
+  const f = PH && PH.functions ? PH.functions[key] : null;
   if (!f) return [];
   return f.phrases.map(function(p){
     const chips = [];
@@ -212,15 +219,63 @@ function functionSlides(key){
   });
 }
 
-function topicSlides(){
-  if (!TOPICS || !TOPICS.cards) return [];
-  return TOPICS.cards.map(function(c){
-    return {
-      context: c.question || '',
-      answerHtml: c.answerHtml || '',
-      chips: (c.support || []).map(function(s){ return { text: (s.icon ? s.icon + ' ' : '') + s.text, bank:false }; })
-    };
+/* ── TOPICS: the whole answer, expressions marked ────────────────────── */
+function marked(seg){
+  let t = esc(seg.t);
+  (seg.marks || []).slice().sort((a, b) => b.length - a.length).forEach(m => {
+    const e = esc(m).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    t = t.replace(new RegExp('(?![^<]*>)(' + e + ')'), '<span class="accent">$1</span>');
   });
+  return t;
+}
+
+function moveChips(D, segs){
+  const used = {};
+  segs.forEach(s => { used[s.m] = 1; });
+  return Object.keys(D.moves || {}).filter(k => used[k])
+    .map(k => ({ text: D.moves[k].name, bank:false }));
+}
+
+/* One builder per part, each reading its own file the way that Part's page does. */
+const BUILD = {
+  1(D){
+    const vid = D.voices[0].id;                         // the life Part 1 opens on
+    return D.topics.map(t => {
+      const L = t.lives[vid].levels;
+      const segs = L[L.length - 2];                     // four moves, same as Listen
+      return { context: esc(t.question),
+               answerHtml: segs.map(marked).join(' '),
+               chips: [{ text:t.tab, bank:false }].concat(moveChips(D, segs)) };
+    });
+  },
+  4(D){
+    return D.topics.map(t => {
+      const L = t.levels[t.levels.length - 1];
+      const mine   = L.filter(s => s.m !== 'p');
+      const theirs = L.filter(s => s.m === 'p');
+      return { context: esc(t.question),
+               answerHtml: mine.map(marked).join(' '),
+               extra: theirs.length
+                 ? '<b>' + esc(t.handover) + '</b><br>' + theirs.map(marked).join(' ') : '',
+               chips: [{ text:t.tab, bank:false }].concat(moveChips(D, mine)) };
+    });
+  }
+};
+
+function topicSlides(){
+  const keys = partKey ? [partKey] : [1, 2, 3, 4];
+  const out = [];
+  keys.forEach(k => {
+    if (!PARTS[k] || !BUILD[k]) return;
+    try {
+      BUILD[k](PARTS[k]).forEach(s => {
+        s.long = true;
+        s.chips.unshift({ text: 'Part ' + k + ' · ' + PART_LABEL[k], bank:false });
+        out.push(s);
+      });
+    } catch (e) { console.warn('Part ' + k + ' did not build', e); }
+  });
+  return out;
 }
 
 function currentSlides(){
@@ -228,7 +283,7 @@ function currentSlides(){
 }
 
 function currentLabel(){
-  if (tab === 'topics') return TOPICS ? TOPICS.label : 'Topics';
+  if (tab === 'topics') return partKey ? 'Part ' + partKey + ' · ' + PART_LABEL[partKey] : 'All four parts';
   const f = PH && fnKey ? PH.functions[fnKey] : null;
   return f ? f.label : 'Functions';
 }
@@ -241,7 +296,8 @@ function render(){
   $('deckLabel').textContent = currentLabel();
 
   if (!slides.length){
-    body.innerHTML = '<p class="deck-msg">Nothing to show yet.</p>';
+    body.innerHTML = '<p class="deck-msg">' +
+      (tab === 'topics' ? 'No answers loaded yet.' : 'Nothing to show yet.') + '</p>';
     $('deckCounter').textContent = '';
     $('deckDots').innerHTML = '';
     $('prevBtn').disabled = true;
@@ -255,7 +311,8 @@ function render(){
   $('deckCounter').textContent = (at + 1) + ' / ' + slides.length;
   body.innerHTML =
     (s.context ? '<p class="deck-context">' + s.context + '</p>' : '') +
-    '<p class="deck-answer">' + s.answerHtml + '</p>' +
+    '<p class="deck-answer' + (s.long ? ' long' : '') + '">' + s.answerHtml + '</p>' +
+    (s.extra ? '<p class="deck-extra">' + s.extra + '</p>' : '') +
     (s.chips.length ? '<div class="deck-chips">' + s.chips.map(function(c){
         return '<span class="' + (c.bank ? 'bank' : '') + '">' + c.text + '</span>';
       }).join('') + '</div>' : '');
@@ -268,29 +325,36 @@ function render(){
     b.addEventListener('click', function(){ at = i; render(); });
   });
 
-  $('prevBtn').disabled = at === 0;
-  $('nextBtn').disabled = at === slides.length - 1;
+  const loop = tab === 'topics';               // Topics is the loop: it never dead-ends
+  $('prevBtn').disabled = !loop && at === 0;
+  $('nextBtn').disabled = !loop && at === slides.length - 1;
 }
 
-function renderFnPicker(){
+/* One picker row, two meanings: a function on Functions, a part on Topics. */
+function renderPicker(){
   const picker = $('fnPicker');
-  if (tab !== 'functions' || !PH){ picker.hidden = true; return; }
+  let items;
+  if (tab === 'functions'){
+    if (!PH){ picker.hidden = true; return; }
+    items = fnList().map(k => ({ key:k, label:PH.functions[k].label, on:k === fnKey, off:false }));
+  } else {
+    items = [{ key:'0', label:'All four parts', on:partKey === 0, off:false }].concat(
+      [1, 2, 3, 4].map(n => ({ key:String(n), label:'Part ' + n, on:partKey === n, off:!PARTS[n] })));
+  }
   picker.hidden = false;
-  const keys = fnList();
-  picker.innerHTML = keys.map(function(k){
-    const f = PH.functions[k];
-    return '<button type="button" data-k="' + k + '"' +
-      (k === fnKey ? ' class="active"' : '') + '>' + f.label + '</button>';
+  picker.innerHTML = items.map(function(i){
+    return '<button type="button" data-k="' + i.key + '"' +
+      (i.on ? ' class="active"' : '') + (i.off ? ' disabled' : '') + '>' + i.label + '</button>';
   }).join('');
   Array.prototype.forEach.call(picker.children, function(b){
     b.addEventListener('click', function(){
-      fnKey = b.dataset.k; at = 0;
-      renderFnPicker(); render();
+      if (tab === 'functions') fnKey = b.dataset.k; else partKey = +b.dataset.k;
+      at = 0; renderPicker(); render();
     });
   });
 }
 
-/* ── TABS ────────────────────────────────────────────────────────────── */
+/* ── TABS AND NAVIGATION ─────────────────────────────────────────────── */
 $('drillTabs').addEventListener('click', function(e){
   const b = e.target.closest('.drill-tab');
   if (!b) return;
@@ -298,29 +362,32 @@ $('drillTabs').addEventListener('click', function(e){
   Array.prototype.forEach.call($('drillTabs').children, function(x){
     x.classList.toggle('active', x === b);
   });
-  renderFnPicker();
+  renderPicker();
   render();
 });
 
-$('prevBtn').addEventListener('click', function(){ if (at > 0){ at--; render(); } });
-$('nextBtn').addEventListener('click', function(){
+function go(d){
   const n = currentSlides().length;
-  if (at < n - 1){ at++; render(); }
-});
+  if (!n) return;
+  at = tab === 'topics' ? (at + d + n) % n                 // wraps: last goes back to first
+                        : Math.max(0, Math.min(n - 1, at + d));
+  render();
+}
+$('prevBtn').addEventListener('click', function(){ go(-1); });
+$('nextBtn').addEventListener('click', function(){ go(1); });
 addEventListener('keydown', function(e){
-  if (e.key === 'ArrowRight') $('nextBtn').click();
-  if (e.key === 'ArrowLeft')  $('prevBtn').click();
+  if (e.key === 'ArrowRight') go(1);
+  if (e.key === 'ArrowLeft')  go(-1);
 });
 
 /* ── BOOT ────────────────────────────────────────────────────────────── */
-Promise.all([
-  fetch(PHRASES_URL).then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; }),
-  fetch(TOPICS_URL).then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; })
-]).then(function(results){
-  PH = results[0];
-  TOPICS = results[1];
+const load = url => fetch(url).then(r => r.ok ? r.json() : null).catch(() => null);
+const partNums = Object.keys(PART_URL);
+Promise.all([load(PHRASES_URL)].concat(partNums.map(k => load(PART_URL[k])))).then(function(res){
+  PH = res[0];
+  partNums.forEach(function(k, i){ PARTS[k] = res[i + 1]; });
   if (PH && PH.functions) fnKey = fnList()[0] || null;
-  renderFnPicker();
+  renderPicker();
   render();
 });
 </script>

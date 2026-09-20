@@ -235,6 +235,15 @@ body.scrolled .header::after{opacity:1}
 
 .sheet-card .bank-note,
 .sheet-card .bank-miss{font-size:.9rem}
+   .sc-t{transition:opacity .3s ease}
+.playing .sc-t{opacity:.32}
+.playing .sc-t.live{opacity:1}
+.sc-who{font-family:var(--f-mono);font-size:.6rem;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:.25rem}
+.sc-t.mine .sc-who{color:var(--accent-ink)}
+.sc-r{color:var(--accent-ink)}
+@media(min-width:900px){ .sc-ans{font-size:1.55rem} }
+@media(min-width:1500px){ .sc-ans{font-size:1.8rem} }
 </style>
 </head>
 <body>
@@ -264,8 +273,8 @@ body.scrolled .header::after{opacity:1}
 <main class="wrap">
 
   <nav class="pills" id="pills" aria-label="Mode">
-    <button class="pill-b" type="button" data-m="listen">Listen · full discussion</button>
-    <button class="pill-b" type="button" data-m="read">Read · full discussion</button>
+ <button class="pill-b" type="button" data-m="listen">Listen</button>
+<button class="pill-b" type="button" data-m="read">Read</button>
     <button class="pill-b on" type="button" data-m="build">Build your turns</button>
     <button class="pill-b" type="button" data-m="bank">Phrase bank</button>
   </nav>
@@ -319,7 +328,7 @@ body.scrolled .header::after{opacity:1}
    are built at the moment they are needed, from the turn itself.
    ═══════════════════════════════════════════════════════════════════════ */
 var D=null, ti=0, si=0, at=0, both=0, halves=0, locked=false, done=false;
-var mode='build', xray=false, playing=false, playIx=0;
+var mode='build', xray=false, playing=false, playIx=0, view='full', xi=0;
 var SPEECH=('speechSynthesis' in window);
 
 var $=function(id){ return document.getElementById(id); };
@@ -452,6 +461,7 @@ function setMode(m){
   $('round').style.display = iv ? 'none' : '';
   $('res').classList.remove('show');
   var ty=document.querySelector('.tally'); if(ty) ty.style.display = iv ? 'none' : '';
+  frame();
   tools();
   if(iv) drawAll(); else reset();
 }
@@ -464,26 +474,34 @@ function tools(){
     b.className='tool'+(on?' on':''); b.type='button'; b.textContent=label;
     b.addEventListener('click',fn); T.appendChild(b); return b;
   }
+  function views(){
+    btn('Full discussion',view==='full',function(){ setView('full'); });
+    btn('In sections',view==='sections',function(){ setView('sections'); });
+    var s=document.createElement('span'); s.className='tool-sep'; T.appendChild(s);
+  }
+  var sec = view==='sections';
+  var count = sec ? topic().tab.toLowerCase()+' · '+(xi+1)+' of '+exCount(ti)
+                  : topic().them+' and you · '+run().length+' turns';
   var n=document.createElement('span'); n.className='tool-n';
   if(mode==='listen'){
+    views();
     if(!SPEECH){ n.textContent='this browser has no speech'; T.appendChild(n); return; }
-    btn(playing?'■ stop':'▶ play the discussion',playing,function(){
+    btn(playing?'■ stop':(sec?'▶ play this exchange':'▶ play the discussion'),playing,function(){
       playing?stopPlay():startPlay(); });
-    n.textContent=topic().them+' and you · '+run().length+' turns';
+    n.textContent=count;
   } else if(mode==='read'){
-    /* Part 3's x-ray marks what Part 3 is graded on. Not vocabulary: the two
-       jobs, on every line, so the pattern is visible before it is explained. */
-    btn('x-ray',xray,function(){ xray=!xray; tools(); drawAll(); });
-    n.textContent = xray ? 'responding half underlined · advancing half in colour'
-                         : 'show the two jobs';
+    views();
+    if(!sec) btn('x-ray',xray,function(){ xray=!xray; tools(); drawAll(); });
+    n.textContent = (xray && !sec) ? 'responding half underlined · advancing half in colour'
+                                   : (sec ? count : 'show the two jobs');
   } else {
     n.textContent='you are '+topic().me;
   }
   T.appendChild(n);
 }
-
 /* Every turn, start to finish — the discussion as it actually runs. */
 function drawAll(){
+     if(view==='sections'){ $('talk').innerHTML=sectionHtml(); return; }
   var seq=run();
   $('talk').innerHTML=seq.map(function(t,i){
     var mine=t.who==='me', body;
@@ -498,28 +516,111 @@ function drawAll(){
   drawMap([0,1,2,3,4]);
 }
 
+   function exCount(t){
+  return Math.ceil(D.topics[t].runs[D.styles[si].id].length/2);
+}
+
+/* The neighbouring exchange, crossing into the next or previous topic at the ends. */
+function nb(d){
+  var t=ti, x=xi+d;
+  if(x>=exCount(t)){ t++; x=0; if(t>=D.topics.length) return null; }
+  else if(x<0){ t--; if(t<0) return null; x=exCount(t)-1; }
+  return {t:t,x:x};
+}
+
+/* In sections the map gives way to the card, and comes back in the full view. */
+function frame(){
+  var sec = view==='sections' && (mode==='listen'||mode==='read');
+  $('map').style.display = sec ? 'none' : '';
+  document.querySelector('.q-label').style.display = sec ? 'none' : '';
+}
+
+function sectionHtml(){
+  var t=topic(), seq=run(), lo=xi*2, pair=seq.slice(lo,lo+2), N=exCount(ti);
+  var chips=[t.tab], two=false, last=false;
+  var body=pair.map(function(x,j){
+    var mine=x.who==='me';
+    if(x.last) last=true;
+    var text=esc(x.t);
+    if(mine && x.respond && x.advance){
+      two=true;
+      text='<span class="sc-r">'+esc(x.respond)+'</span> '+esc(x.advance);
+    }
+    return '<div class="sc-t'+(mine?' mine':'')+'" data-i="'+(lo+j)+'">'+
+      '<div class="sc-who">'+esc(mine?'You ('+t.me+')':t.them)+'</div>'+
+      '<p class="'+(mine?'sc-ans':'sc-ctx')+'">'+text+'</p></div>';
+  }).join('');
+  if(two) chips.push('Respond','Advance');
+  if(last) chips.push('The decision');
+  return '<div class="sc">' +
+    '<div class="sc-top"><span>Part 3 · Collaborate</span><span>'+(xi+1)+' / '+N+'</span></div>' +
+    '<div class="sc-body">' +
+      '<div><div class="sc-who">Talk together</div><p class="sc-ctx">'+esc(t.question)+'</p></div>' +
+      body +
+      '<div class="sc-chips">'+chips.map(function(c){
+        return '<span>'+esc(c)+'</span>'; }).join('')+'</div>' +
+    '</div>' + navHtml() + '</div>';
+}
+
+function navHtml(){
+  var N=exCount(ti), pv=nb(-1), nx=nb(1), dots='';
+  for(var j=0;j<N;j++){
+    dots+='<button type="button" data-go="'+ti+':'+j+'"'+(j===xi?' class="on"':'')+
+          ' aria-label="Exchange '+(j+1)+'"></button>';
+  }
+  return '<div class="sc-nav">' +
+    '<button class="sc-arrow" type="button"'+(pv?' data-go="'+pv.t+':'+pv.x+'"':' disabled')+
+      ' aria-label="Previous">&larr;</button>' +
+    '<div class="sc-dots">'+dots+'</div>' +
+    '<button class="sc-arrow" type="button"'+(nx?' data-go="'+nx.t+':'+nx.x+'"':' disabled')+
+      ' aria-label="Next">&rarr;</button></div>';
+}
+
+function goSection(s){
+  var a=String(s).split(':'), t=+a[0], x=+a[1];
+  if(!(t>=0 && t<D.topics.length) || !(x>=0)) return;
+  ti=t; xi=x; stopPlay(); chrome(); tools(); drawAll();
+}
+
+function setView(v){
+  if(v===view) return;
+  view=v; xi=0; stopPlay(); frame(); tools(); drawAll();
+}
+
+$('talk').addEventListener('click',function(e){
+  var b=e.target.closest('[data-go]');
+  if(b && !b.disabled) goSection(b.dataset.go);
+});
+addEventListener('keydown',function(e){
+  if(view!=='sections' || (mode!=='listen' && mode!=='read')) return;
+  if($('sheet').classList.contains('open')) return;
+  var s = e.key==='ArrowRight' ? nb(1) : e.key==='ArrowLeft' ? nb(-1) : null;
+  if(s) goSection(s.t+':'+s.x);
+});
+   
 /* ── PLAY THE DISCUSSION ─────────────────────────────────────────────────
    Two voices. Part 1 had to assemble an interview out of separate answers;
    this is a real conversation in the file, so Listen plays the thing itself. */
 function startPlay(){
   if(!SPEECH) return;
-  var seq=run(); playing=true; playIx=0;
+  var all=run(), lo=0, hi=all.length;
+  if(view==='sections'){ lo=xi*2; hi=Math.min(all.length,lo+2); }
+  playing=true; playIx=lo;
   $('talk').classList.add('playing'); tools();
   (function next(){
-    if(!playing||playIx>=seq.length){ stopPlay(); return; }
-    var t=seq[playIx];
-    Array.prototype.forEach.call($('talk').querySelectorAll('.turn'),function(el){
+    if(!playing||playIx>=hi){ stopPlay(); return; }
+    var t=all[playIx];
+    Array.prototype.forEach.call($('talk').querySelectorAll('.turn,.sc-t'),function(el){
       el.classList.toggle('live', +el.dataset.i===playIx); });
     var u=new SpeechSynthesisUtterance(t.t);
     u.lang='en-GB'; u.rate=0.95; u.pitch = t.who==='me' ? 0.9 : 1.1;
-    /* In Part 3 both speakers are students, so 'examiner' here just means
-       the other one — the point is that the two are audibly different. */
     var v=pickVoice(t.who==='me' ? 'candidate' : 'examiner'); if(v) u.voice=v;
     u.onend=function(){ playIx++; setTimeout(next,300); };
     u.onerror=function(){ stopPlay(); };
     speechSynthesis.speak(u);
   })();
 }
+   
 function stopPlay(){
   playing=false;
   if(SPEECH) speechSynthesis.cancel();
@@ -749,7 +850,7 @@ function chrome(){
   D.topics.forEach(function(t,i){
     var b=document.createElement('button');
     b.className='vtab'+(i===ti?' active':''); b.type='button'; b.textContent=t.tab;
-    b.addEventListener('click',function(){ ti=i; stopPlay(); chrome();
+    b.addEventListener('click',function(){ti=i; xi=0; stopPlay(); chrome();
       if(mode==='listen'||mode==='read') { tools(); drawAll(); } else reset(); });
     $('tabs').appendChild(b);
   });
@@ -757,8 +858,8 @@ function chrome(){
   D.styles.forEach(function(s,i){
     var b=document.createElement('button');
     b.className='vb'+(i===si?' on':''); b.type='button'; b.textContent=s.tab;
-    b.addEventListener('click',function(){ si=i; stopPlay(); chrome();
-      if(mode==='listen'||mode==='read') drawAll(); else reset(); });
+        b.addEventListener('click',function(){ si=i; xi=Math.min(xi,exCount(ti)-1); stopPlay(); chrome();
+      if(mode==='listen'||mode==='read'){ tools(); drawAll(); } else reset(); });
     $('voices').appendChild(b);
   });
 }
@@ -785,6 +886,7 @@ Promise.all([
     var wm=p.get('mode');
     /* Listen unless the link says otherwise — notice the discussion before
        being asked to take part in one. */
+         if(p.get('view')==='sections') view='sections';
     setMode(['listen','read','build'].indexOf(wm)>-1 ? wm : 'listen');
   })
   .catch(function(e){

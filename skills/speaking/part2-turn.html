@@ -266,6 +266,17 @@ body.scrolled .header::after{opacity:1}
 
 .sheet-card .bank-note,
 .sheet-card .bank-miss{font-size:.9rem}
+
+   .sc-s{transition:opacity .3s ease}
+.playing .sc-s{opacity:.32}
+.playing .sc-s.live{opacity:1}
+.sc-s.past{color:var(--faint)}
+.sc .xr-m{box-shadow:none;color:var(--accent-ink)}
+.sc .sc-s.past .xr-m{color:var(--faint)}
+.sc-cut{display:block;margin:.8rem 0;font-family:var(--f-mono);font-size:.62rem;
+  font-weight:400;letter-spacing:.08em;text-transform:uppercase;color:var(--wrong)}
+@media(min-width:900px){ .sc-ans{font-size:1.45rem} }
+@media(min-width:1500px){ .sc-ans{font-size:1.6rem} }
    
 </style>
 </head>
@@ -296,8 +307,8 @@ body.scrolled .header::after{opacity:1}
 
 <main class="wrap">
   <nav class="pills" id="pills" aria-label="Mode">
-    <button class="pill-b" type="button" data-m="listen">Listen · full turn</button>
-    <button class="pill-b" type="button" data-m="read">Read · full turn</button>
+    <button class="pill-b" type="button" data-m="listen">Listen</button>
+<button class="pill-b" type="button" data-m="read">Read</button>
     <button class="pill-b on" type="button" data-m="build">Build the minute</button>
     <button class="pill-b" type="button" data-m="bank">Phrase bank</button>
   </nav>
@@ -370,7 +381,7 @@ body.scrolled .header::after{opacity:1}
    ═══════════════════════════════════════════════════════════════════════ */
 
 var D=null, ti=0, si=0, ph=0, spent=0, chosen=[], done=false;
-var mode='build', xray=false, playing=false, playIx=0;
+var mode='build', xray=false, playing=false, playIx=0, view='full', sp=0;
 var SPEECH=('speechSynthesis' in window);
 
 var $=function(id){ return document.getElementById(id); };
@@ -391,6 +402,8 @@ function setMode(m){
   $('model').style.display = iv ? '' : 'none';
   $('build').style.display = iv ? 'none' : '';
   $('turn').style.display  = iv ? 'none' : '';
+     $('pics').style.display  = iv ? 'none' : '';
+  $('task').style.display  = iv ? 'none' : '';
   document.querySelector('.clock').style.display = iv ? 'none' : '';
   $('res').classList.remove('show');
   tools();
@@ -405,28 +418,34 @@ function tools(){
     b.className='tool'+(on?' on':''); b.type='button'; b.textContent=label;
     b.addEventListener('click',fn); T.appendChild(b); return b;
   }
+  function views(){
+    btn('Full turn',view==='full',function(){ setView('full'); });
+    btn('In sections',view==='sections',function(){ setView('sections'); });
+    var s=document.createElement('span'); s.className='tool-sep'; T.appendChild(s);
+  }
   var n=document.createElement('span'); n.className='tool-n';
   var total=modelLines().reduce(function(a,x){ return a+x.s; },0);
-  /* Three of the twenty-four model turns fit inside the minute. Saying so
-     matters: a student who only ever meets the over-long ones learns that
-     Part 2 is impossible rather than that it is tight. */
   var fits = total<=D.limit;
   var verdict = fits ? total+'s — this one just fits'
                      : total+'s against a '+D.limit+'s limit';
+  var sec = view==='sections';
+  var count = sec ? task().tab.toLowerCase()+' · '+(sp+1)+' of '+D.phases.length : verdict;
   if(mode==='listen'){
+    views();
     if(!SPEECH){ n.textContent='this browser has no speech'; T.appendChild(n); return; }
-    btn(playing?'■ stop':'▶ play the whole model',playing,function(){
+    btn(playing?'■ stop':(sec?'▶ play this phase':'▶ play the whole model'),playing,function(){
       playing?stopPlay():startPlay(); });
-    n.textContent=verdict;
+    n.textContent=count;
   } else if(mode==='read'){
-    btn('x-ray',xray,function(){ xray=!xray; tools(); drawModel(); });
-    n.textContent = xray ? 'the phrase that opens each move' : verdict;
+    views();
+    if(!sec) btn('x-ray',xray,function(){ xray=!xray; tools(); drawModel(); });
+    n.textContent = (xray && !sec) ? 'the phrase that opens each move' : count;
   } else {
     n.textContent='you have '+D.limit+' seconds';
   }
   T.appendChild(n);
 }
-
+   
 /* Every sentence of the model, in order, each carrying its own cost and the
    running total at the point it ends. */
 function modelLines(){
@@ -440,9 +459,9 @@ function modelLines(){
   return out;
 }
 
-function mark(l){
+function mark(l, force){
   var t=esc(l.t);
-  if(!xray) return t;
+  if(!xray && !force) return t;
   (l.marks||[]).forEach(function(m){
     var e=esc(m).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
     t=t.replace(new RegExp('(?![^<]*>)('+e+')'),'<span class="xr-m">$1</span>');
@@ -451,6 +470,7 @@ function mark(l){
 }
 
 function drawModel(){
+     if(view==='sections'){ $('model').innerHTML=sectionHtml(); return; }
   var L=modelLines(), src=[];
   D.phases.forEach(function(p,pi){ phase(pi).forEach(function(l){ src.push(l); }); });
   var out='', drawn=false;
@@ -470,6 +490,71 @@ function drawModel(){
   $('model').innerHTML=out;
 }
 
+   function sectionHtml(){
+  var t=task(), P=D.phases[sp], PN=D.phases.length, src=phase(sp);
+  var start=0, first=0;
+  for(var p=0;p<sp;p++){ phase(p).forEach(function(l){ start+=l.s; first++; }); }
+  var run=start, cut=start>D.limit, html='';
+  src.forEach(function(l,j){
+    run+=l.s;
+    if(!cut && run>D.limit){
+      html+='<span class="sc-cut">'+D.limit+' seconds — the examiner stops you here</span>';
+      cut=true;
+    }
+    html+='<span class="sc-s'+(run>D.limit?' past':'')+'" data-i="'+(first+j)+'">'+
+          mark(l,true)+'</span> ';
+  });
+  var chips=[t.tab, start+'s – '+run+'s of '+D.limit+'s'];
+  if(run>D.limit) chips.push('runs past the minute');
+  return '<div class="sc">' +
+    '<div class="sc-top"><span>Part 2 · '+esc(P.name)+'</span><span>'+(sp+1)+' / '+PN+'</span></div>' +
+    '<div class="sc-body">' +
+      '<p class="sc-ctx">'+esc(t.question)+'</p>' +
+      '<p class="sc-ans">'+html+'</p>' +
+      '<div class="sc-chips">'+chips.map(function(c){
+        return '<span>'+esc(c)+'</span>'; }).join('')+'</div>' +
+    '</div>' + navHtml() + '</div>';
+}
+
+function navHtml(){
+  var PN=D.phases.length, n=D.tasks.length*PN, k=ti*PN+sp;
+  var dots='';
+  D.phases.forEach(function(p,j){
+    dots+='<button type="button" data-go="'+(ti*PN+j)+'"'+(j===sp?' class="on"':'')+
+          ' aria-label="'+esc(p.name)+'"></button>';
+  });
+  return '<div class="sc-nav">' +
+    '<button class="sc-arrow" type="button" data-go="'+(k-1)+'"'+(k===0?' disabled':'')+
+      ' aria-label="Previous">&larr;</button>' +
+    '<div class="sc-dots">'+dots+'</div>' +
+    '<button class="sc-arrow" type="button" data-go="'+(k+1)+'"'+(k===n-1?' disabled':'')+
+      ' aria-label="Next">&rarr;</button></div>';
+}
+
+function goSection(k){
+  var PN=D.phases.length;
+  if(k<0 || k>=D.tasks.length*PN) return;
+  ti=Math.floor(k/PN); sp=k%PN;
+  stopPlay(); chrome(); tools(); drawModel();
+}
+
+function setView(v){
+  if(v===view) return;
+  view=v; sp=0; stopPlay(); tools(); drawModel();
+}
+
+$('model').addEventListener('click',function(e){
+  var b=e.target.closest('[data-go]');
+  if(b && !b.disabled) goSection(+b.dataset.go);
+});
+addEventListener('keydown',function(e){
+  if(view!=='sections' || (mode!=='listen' && mode!=='read')) return;
+  if($('sheet').classList.contains('open')) return;
+  var PN=D.phases.length;
+  if(e.key==='ArrowRight') goSection(ti*PN+sp+1);
+  if(e.key==='ArrowLeft')  goSection(ti*PN+sp-1);
+});
+   
 /* ── PLAY ───────────────────────────────────────────────────────────────── */
 function startPlay(){
   if(!SPEECH) return;
@@ -756,7 +841,7 @@ function chrome(){
     var b=document.createElement('button');
     b.className='vtab'+(i===ti?' active':'');
     b.type='button'; b.textContent=t.tab;
-    b.addEventListener('click',function(){ ti=i; stopPlay(); chrome();
+    b.addEventListener('click',function(){ ti=i; sp=0; stopPlay(); chrome();
       if(mode==='listen'||mode==='read'){ tools(); drawModel(); } else reset(); });
     $('tabs').appendChild(b);
   });
@@ -802,8 +887,9 @@ Promise.all([
     D=d;
     var p=new URLSearchParams(location.search);
     var wt=p.get('topic'); if(wt) D.tasks.forEach(function(t,i){ if(t.id===wt) ti=i; });
-    chrome();
+        chrome();
     var wm=p.get('mode');
+    if(p.get('view')==='sections') view='sections';
     setMode(['listen','read','build'].indexOf(wm)>-1 ? wm : 'listen');
   })
   .catch(function(e){

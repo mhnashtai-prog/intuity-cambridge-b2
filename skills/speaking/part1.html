@@ -311,7 +311,22 @@ body.scrolled .header::after{opacity:1}
 
 .sheet-card .bank-note,
 .sheet-card .bank-miss{font-size:.9rem}
-   
+
+   /* ── SECTIONS VIEW ── same block on every Speaking page ───────────── */
+.tool-sep{width:1px;height:1rem;background:var(--rule);margin:0 .25rem}
+#interview.sections{min-height:15rem}
+#interview.sections .xq p{font-size:1.3rem}
+#interview.sections .xa p{font-size:1.1rem;line-height:1.8}
+.sec-nav{display:flex;align-items:center;justify-content:space-between;
+  gap:.6rem;padding-top:.9rem;margin-top:.4rem;border-top:1px solid var(--rule)}
+.sec-arrow{border:none;background:none;padding:.4rem .6rem;cursor:pointer;
+  font-size:1.1rem;line-height:1;color:var(--faint);transition:color .15s}
+.sec-arrow:disabled{color:var(--rule);cursor:default}
+@media(hover:hover){ .sec-arrow:not(:disabled):hover{color:var(--accent-ink)} }
+.sec-dots{display:flex;gap:.45rem;flex-wrap:wrap;justify-content:center}
+.sec-dots button{width:8px;height:8px;border-radius:50%;border:none;padding:0;
+  cursor:pointer;background:var(--rule);transition:background .2s,transform .2s}
+.sec-dots button.on{background:var(--accent-ink);transform:scale(1.35)}   
 </style>
 </head>
 <body>
@@ -340,8 +355,8 @@ body.scrolled .header::after{opacity:1}
 <main class="wrap">
 
   <nav class="pills" id="pills" aria-label="Mode">
-    <button class="pill-b" type="button" data-m="listen">Listen · full interview</button>
-    <button class="pill-b" type="button" data-m="read">Read · full interview</button>
+ <button class="pill-b" type="button" data-m="listen">Listen</button>
+<button class="pill-b" type="button" data-m="read">Read</button>
     <button class="pill-b on" type="button" data-m="build">Build an answer</button>
     <button class="pill-b" type="button" data-m="bank">Phrase bank</button>
   </nav>
@@ -569,7 +584,7 @@ function finish(s){
 }
 
 /* ── MODES ────────────────────────────────────────────────────────────── */
-var mode='build', xray=false, playing=false, playIx=0;
+var mode='build', xray=false, playing=false, playIx=0, view='full';
 
 /* ONE SOURCE OF TRUTH.
    Listen, Read and Build now read the same ladders out of part1-answers.json.
@@ -639,18 +654,28 @@ function tools(){
     if(dis) b.disabled=true; else b.addEventListener('click',fn);
     T.appendChild(b); return b;
   }
+  function views(){
+    btn('Full interview',view==='full',function(){ setView('full'); });
+    btn('In sections',view==='sections',function(){ setView('sections'); });
+    var s=document.createElement('span'); s.className='tool-sep'; T.appendChild(s);
+  }
+  var sec = view==='sections';
+  var count = (sec ? (ti+1)+' of '+D.topics.length : D.topics.length+' questions')+
+              ' · '+D.voices[vi].tab.toLowerCase();
   if(mode==='listen'){
     if(!ivFor()) return;
-    btn(playing?'■ stop':'▶ play the interview',playing,function(){
+    views();
+    btn(playing?'■ stop':(sec?'▶ play this answer':'▶ play the interview'),playing,function(){
       playing?stopPlay():startPlay(); });
     var n=document.createElement('span'); n.className='tool-n';
-    n.textContent=D.topics.length+' questions · '+D.voices[vi].tab.toLowerCase();
+    n.textContent=count;
     T.appendChild(n);
   } else if(mode==='read'){
     if(!ivFor()) return;
+    views();
     btn('x-ray',xray,function(){ xray=!xray; tools(); drawIv(); });
     var n=document.createElement('span'); n.className='tool-n';
-    n.textContent=xray?'discourse markers underlined':'reveal the markers';
+    n.textContent=xray?'discourse markers underlined':count;
     T.appendChild(n);
   } else {
     btn('Text',!voiceOn,function(){ setVoice(false); tools(); });
@@ -723,22 +748,58 @@ function turns(){
    still a full interview. `jump` is false on first paint, because scrolling
    a student somewhere they did not ask to go is its own rudeness. */
 function drawIv(jump){
-  var here=D.topics[ti].id;
-  $('interview').innerHTML=turns().map(function(t,i){
-    var q=t.who==='q';
-    var mine = D.topics[Math.floor(i/2)].id===here;
+  var sec = view==='sections';
+  var here = D.topics[ti].id;
+  $('interview').classList.toggle('sections', sec);
+  $('interview').innerHTML = turns().map(function(t,i){
+    var q = t.who==='q';
+    var mine = sec || D.topics[Math.floor(i/2)].id===here;
     return '<div class="xturn '+(q?'xq':'xa')+(mine?' here':'')+'" data-i="'+i+'"'+
       (q&&mine?' id="hereQ"':'')+'>'+
       '<div class="xl">'+(q?'Examiner':'Candidate')+'</div>'+
       '<p>'+xr(t)+'</p></div>';
-  }).join('');
+  }).join('') + (sec ? navHtml() : '');
 
-  if(jump){
+  if(jump && !sec){
     var el=$('hereQ');
     if(el && el.scrollIntoView) el.scrollIntoView({behavior:'smooth', block:'start'});
   }
 }
 
+function navHtml(){
+  var n = D.topics.length;
+  return '<div class="sec-nav">' +
+    '<button class="sec-arrow" type="button" data-go="'+(ti-1)+'"'+(ti===0?' disabled':'')+
+      ' aria-label="Previous question">&larr;</button>' +
+    '<div class="sec-dots">' + D.topics.map(function(t,i){
+      return '<button type="button" data-go="'+i+'"'+(i===ti?' class="on"':'')+
+             ' aria-label="'+esc(t.tab)+'"></button>';
+    }).join('') + '</div>' +
+    '<button class="sec-arrow" type="button" data-go="'+(ti+1)+'"'+(ti===n-1?' disabled':'')+
+      ' aria-label="Next question">&rarr;</button></div>';
+}
+
+function goSection(i){
+  if(i<0 || i>=D.topics.length) return;
+  ti=i; step=0; hush(); stopPlay(); chrome(); tools(); drawIv();
+}
+
+function setView(v){
+  if(v===view) return;
+  view=v; stopPlay(); tools(); drawIv();
+}
+
+$('interview').addEventListener('click',function(e){
+  var b=e.target.closest('[data-go]');
+  if(b && !b.disabled) goSection(+b.dataset.go);
+});
+addEventListener('keydown',function(e){
+  if(view!=='sections' || (mode!=='listen' && mode!=='read')) return;
+  if($('sheet').classList.contains('open')) return;
+  if(e.key==='ArrowRight') goSection(ti+1);
+  if(e.key==='ArrowLeft')  goSection(ti-1);
+});
+   
 function startPlay(){
   if(!SPEECH) return;
   var T=turns();
@@ -975,7 +1036,8 @@ Promise.all([
     chrome();
     var wantM=p.get('mode');
     if(['listen','read','build'].indexOf(wantM)===-1) wantM='listen';
-    setMode(wantM);
+      if(p.get('view')==='sections') view='sections';
+      setMode(wantM);
   })
   .catch(function(e){
     $('ask').textContent = 'Could not load Part 1.';

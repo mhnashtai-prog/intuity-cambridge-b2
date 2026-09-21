@@ -179,6 +179,17 @@ body.scrolled .header::after{opacity:1}
   background:none;border:none;border-radius:999px;box-shadow:inset 0 0 0 1px var(--rule);
   padding:.5rem .85rem;cursor:pointer;min-height:36px;white-space:nowrap}
 .fn.on{color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--accent)}
+.frames{margin-top:-.4rem}
+.fn.sub{font-size:.66rem;padding:.42rem .75rem;min-height:34px}
+.fn.sub:disabled{opacity:.4;cursor:default}
+.fn.sub .n{font-family:var(--f-mono);font-size:.58rem;color:var(--faint);margin-left:.25rem}
+/* The frame on its own, above the line: the shape before the content. */
+.skel{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.02em;line-height:1.5;
+  color:var(--accent-ink);margin:0 0 .8rem}
+.dr-line .fr{color:var(--accent-ink);font-weight:700}
+.dr-line .anc{box-shadow:inset 0 -1.5px 0 var(--rule)}
+.added{font-family:var(--f-mono);font-size:.58rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--faint);margin:-.6rem 0 1rem}
 .fn-when{font-size:.9rem;line-height:1.55;color:var(--dim);margin:0 0 1.2rem}
 .dr-ctx{font-size:.92rem;line-height:1.55;color:var(--dim);margin:0 0 1rem}
 .dr-ctx b{display:block;font-family:var(--f-mono);font-size:.6rem;font-weight:400;
@@ -578,16 +589,85 @@ function voice(){
 
 /* ═══════════════════════════════════════════════════════════════════════
    PRACTICE — say it after them
-   Grouped by the job the phrase does, across all eight tasks: every way
-   the models open the comparison, every pivot, every way into the
-   question. Eight versions of one move is how the move becomes yours.
+   Grouped by the job the phrase does, within the selected topic: every
+   way this topic's models open the comparison, pivot, and turn to the
+   question. Change topic, and the same frame comes back with new photos.
    ═══════════════════════════════════════════════════════════════════════ */
 var FN=[
   {id:0, label:'Open the comparison', when:'The first thing you say. Name what both photos share, and the minute has started well.'},
-  {id:1, label:'Pivot to the differences', when:'One phrase turns a description into a comparison.'},
-  {id:2, label:'Answer the question', when:'Where the marks are — and where candidates run out of time.'}
+  {id:1, label:'Pivot to the differences', when:'One phrase turns a description into a comparison. Say each one twice, then change topic above and say the same frame about new photos.'},
+  {id:2, label:'Answer the question', when:'Where the marks are, and where candidates run out of time. Turn to it out loud, then speculate — the frame is what makes an answer sound like one.'}
 ];
-var fnId=0, dItems=[], dIx=0, dRun=false, dTmr=null;
+
+/* ── THE PIVOT, BY FRAME ─────────────────────────────────────────────────
+   Five frames, each drilled on its own. Repetition with ONE thing held
+   still — the frame — and one thing moving — the photos, as the student
+   changes topic. That is how the
+   frame separates from the content and becomes something a student reaches
+   for, rather than a sentence they once heard.
+
+   Lines come from Simple and Natural only. Advanced is left out on
+   purpose: rehearsing "anonymous coexistence" aloud is practising the
+   wrong thing. */
+var FRAMES={
+  /* OPEN — what the two photos share. From the similarities phase only. */
+  0:[
+    {id:'both',   label:'Both photos show', skel:'Both photos show …',
+     re:/\bboth (photos|pictures|photographs|images) show\b|\b(pictures|images|photos) both show\b/i, phases:[0]},
+    {id:'common', label:'What they have in common', skel:'What they have in common is that …',
+     re:/\bwhat (they|these \w+) have in common\b/i, phases:[0]},
+    {id:'inboth', label:'In both situations', skel:'In both situations, …',
+     re:/\bin both (situations|cases)\b/i, phases:[0]},
+    {id:'each',   label:'The first … the second', skel:'In the first one, … In the second, …',
+     re:/^(in )?the (first|second)\b/i, phases:[0]}
+  ],
+  /* PIVOT — from any phase, because the models contrast the photos while
+     answering the question too. */
+  1:[
+    {id:'signal',   label:'Signal the switch', skel:'But there are some big differences.',
+     re:/\b(but|however)\b[^.]*\bdifferen/i, phases:[1]},
+    {id:'while',    label:'While …, the second …', skel:'While the first picture shows …, the second …',
+     re:/\bwhile\b/i},
+    {id:'whereas',  label:'Whereas', skel:'Whereas the first picture shows …, the second …',
+     re:/\bwhereas\b/i},
+    {id:'contrast', label:'By contrast', skel:'The first picture shows … By contrast, the second …',
+     re:/\bby contrast\b|\bin contrast\b/i},
+    {id:'other',    label:'On the other hand', skel:'The first picture shows … On the other hand, the second …',
+     re:/\bon the other hand\b/i}
+  ],
+  /* ANSWER — the half of the minute that carries the marks. From the
+     answer_question phase only. */
+  2:[
+    {id:'turn',  label:'Turn to the question', skel:'So what might be …?',
+     re:/\?\s*$/, hl:/^.*$/, phases:[2]},
+    {id:'asfor', label:'As for …', skel:'As for what might be difficult, I\u2019d say …',
+     re:/\bas for\b/i, phases:[2]},
+    {id:'think', label:'I think … probably', skel:'I think … is probably … / I\u2019d say …',
+     re:/\bI think\b|\bI'd say\b|\bI\u2019d say\b|\bprobably\b/i, phases:[2]},
+    {id:'might', label:'might / could', skel:'They might feel … / It could be …',
+     re:/\b(might|could)\b/i, phases:[2]},
+    {id:'plus',  label:'Plus, … / Also, …', skel:'Plus, … / Also, …',
+     re:/^(plus|also)\b/i, phases:[2]}
+  ]
+};
+
+/* "By contrast" is in none of the model turns. These are written for
+   practice, one per task, in the Simple register, and every one of them is
+   marked as such on screen — the same rule the phrase bank uses for
+   anything not lifted from a model. Move them into part2-turn.json when
+   you are happy with them. */
+var ADDED={ contrast:{
+  'work-situations':      'The first picture shows a formal meeting in an office. By contrast, the second shows someone working on their own in a café.',
+  'social-situations':    'The first picture shows strangers in a busy city at night. By contrast, the second shows friends studying together in a library.',
+  'entertainment-choices':'The first picture shows people watching a film at the cinema. By contrast, the second shows a family playing board games at home.',
+  'shopping-experiences': 'The first picture shows a big, modern shopping mall. By contrast, the second shows a small local market with stalls.',
+  'outdoor-activities':   'The first picture shows people relaxing on a beach. By contrast, the second shows someone hiking up a mountain.',
+  'learning-situations':  'The first picture shows students studying at university. By contrast, the second shows young children learning at home with a parent.',
+  'sports-activities':    'The first picture shows a team playing football outdoors. By contrast, the second shows someone training alone in a gym.',
+  'travel-experiences':   'The first picture shows tourists visiting a busy city. By contrast, the second shows someone alone in a quiet natural place.'
+}};
+
+var fnId=0, frIds={0:'both',1:'while',2:'asfor'}, dItems=[], dIx=0, dRun=false, dTmr=null;
 
 function fnItems(pi){
   var out=[], sid=D.styles[si].id, pid=D.phases[pi].id;
@@ -598,28 +678,89 @@ function fnItems(pi){
   });
   return out;
 }
+
+function frameItems(move,id){
+  var F=(FRAMES[move]||[]).filter(function(f){ return f.id===id; })[0]; if(!F) return [];
+  /* The two photos belong to the topic, in every stage. So Practice draws
+     only from the topic that is selected: change Work to Social and the
+     photos, the question and every line change with it. */
+  var out=[], seen={}, keep=['default','alternative1'];
+  [task()].forEach(function(tk){
+    keep.forEach(function(sid){
+      var T=tk.turns[sid]; if(!T) return;
+      D.phases.forEach(function(p,pi){
+        if(F.phases && F.phases.indexOf(pi)===-1) return;
+        (T[p.id]||[]).forEach(function(l){
+          if(!F.re.test(l.t) || seen[l.t]) return;
+          seen[l.t]=1;
+          out.push({tk:tk, topic:tk.tab, l:{t:l.t, marks:[]}, frame:F, reg:sid});
+        });
+      });
+    });
+    var add=ADDED[id] && ADDED[id][tk.id];
+    if(add && !seen[add]){ seen[add]=1;
+      out.push({tk:tk, topic:tk.tab, l:{t:add, marks:[]}, frame:F, added:true}); }
+  });
+  return out;
+}
+
 function practice(){
-  var f=FN[fnId]; dItems=fnItems(fnId); dIx=0; dRun=false;
+  var f=FN[fnId];
+  if(!frameItems(fnId, frIds[fnId]).length){
+    var alt=FRAMES[fnId].filter(function(F){ return frameItems(fnId,F.id).length; })[0];
+    if(alt) frIds[fnId]=alt.id;
+  }
+  dItems = frameItems(fnId, frIds[fnId]);
+  dIx=0; dRun=false;
+  var frames =
+    '<div class="fn-row frames">'+FRAMES[fnId].map(function(F){
+      var n=frameItems(fnId,F.id).length;
+      return '<button class="fn sub'+(F.id===frIds[fnId]?' on':'')+'" type="button" data-frame="'+F.id+'"'+
+        (n?'':' disabled')+'>'+
+        esc(F.label)+' <span class="n">'+n+'</span></button>';
+    }).join('')+'</div>';
   $('body').innerHTML='<div class="fn-row">'+FN.map(function(x){
     return '<button class="fn'+(x.id===fnId?' on':'')+'" type="button" data-fn="'+x.id+'">'+esc(x.label)+'</button>';
-  }).join('')+'</div><p class="fn-when">'+esc(f.when)+'</p><div id="dr"></div>';
+  }).join('')+'</div>'+frames+'<p class="fn-when">'+esc(f.when)+'</p><div id="dr"></div>';
   drill();
 }
+
+/* The frame lit, and the two anchors it hangs between — "the first",
+   "the second" — underlined, so the shape of the sentence is visible
+   before its content is. */
+function lightFrame(t,F){
+  var s=esc(t);
+  s=s.replace(/\b(the (first|second|other)( one| picture| photo| photograph)?|the top (photo|picture|one)|the bottom (photo|picture|one))\b/gi,
+    '<span class="anc">$1</span>');
+  var R=F.hl||F.re, flags=R.flags.indexOf('g')===-1?R.flags+'g':R.flags;
+  var seen={};
+  (t.match(new RegExp(R.source,flags))||[]).forEach(function(w){
+    if(!w || seen[w]) return; seen[w]=1;
+    var e=esc(w).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    s=s.replace(new RegExp('(?![^<]*>)('+e+')','g'),'<span class="fr">$1</span>');
+  });
+  return s;
+}
+
 /* The line only makes sense against its own photographs, and these lines
    come from eight different tasks. So the sheet follows the line: its
    photos, its question, and the photo the line is about lit. The hub runs
    the drill, as it runs playback in Explore. */
 function drillSheet(){
   var it=dItems[dIx]; if(!it) return;
-  qline(it.tk, it.topic+' · '+(dIx+1)+' of '+dItems.length);
+  qline(it.tk, 'Practice · '+(dIx+1)+' of '+dItems.length);
   pics(dRun?'stop':'play', photoOf(it.l.t, it.tk.photos.map(function(p){ return p.title; })), it.tk);
 }
+
 function drill(){
   var it=dItems[dIx];
-  if(!it){ $('dr').innerHTML='<p class="dr-ctx">No lines tagged for this move yet.</p>'; return; }
+  if(!it){ $('dr').innerHTML='<p class="dr-ctx">No lines use this frame yet.</p>'; return; }
   drillSheet();
+  var line = it.frame ? lightFrame(it.l.t,it.frame) : mark(it.l,true);
   $('dr').innerHTML=
-    '<p class="dr-line">'+mark(it.l,true)+'</p>'+
+    (it.frame ? '<p class="skel">'+esc(it.frame.skel)+'</p>' : '')+
+    '<p class="dr-line">'+line+'</p>'+
+    (it.added ? '<p class="added">written for practice — not from a model turn</p>' : '')+
     '<div class="dr-say" id="drSay">listen</div><div class="bar"><i id="drBar"></i></div>'+
     '<div class="dr-foot">'+
     '<button class="arrow" type="button" data-d="-1"'+(dIx<=0?' disabled':'')+' aria-label="Previous">&larr;</button>'+
@@ -627,6 +768,7 @@ function drill(){
     '<span class="dr-n">'+(dIx+1)+' / '+dItems.length+'</span>'+
     '<button class="arrow" type="button" data-d="1"'+(dIx>=dItems.length-1?' disabled':'')+' aria-label="Next">&rarr;</button></div>';
 }
+
 function drillGo(){
   if(!dRun) return;
   var it=dItems[dIx]; if(!it){ drillStop(); return; }
@@ -794,6 +936,7 @@ document.addEventListener('click',function(e){
   if(t.dataset.go!==undefined && stage==='explore'){ var n=+t.dataset.go;
     if(n>=0 && n<D.phases.length){ stop(); sp=n; explore(); } return; }
   if(t.dataset.fn!==undefined){ drillStop(); fnId=+t.dataset.fn; pref('fn',fnId); practice(); return; }
+  if(t.dataset.frame){ drillStop(); frIds[fnId]=t.dataset.frame; pref('frame'+fnId,t.dataset.frame); practice(); return; }
   if(t.dataset.d!==undefined){
     if(t.dataset.d==='go'){ if(dRun){ drillStop(); drill(); } else { dRun=true; drill(); drillGo(); } }
     else { drillStop(); dIx=Math.max(0,Math.min(dItems.length-1,dIx+(+t.dataset.d))); drill(); }
@@ -829,6 +972,8 @@ Promise.all([
   if(p.get('view')==='sections'||p.get('view')==='section') view='section';
   var ps=+pref('style'); if(ps>=0 && ps<D.styles.length) si=ps;
   var pf=+pref('fn'); if(pf>=0 && pf<FN.length) fnId=pf;
+  [0,1,2].forEach(function(m){ var pr=pref('frame'+m);
+    if(pr && FRAMES[m].some(function(f){ return f.id===pr; })) frIds[m]=pr; });
   var ws=p.get('mode')||p.get('stage')||pref('stage');
   ws=({listen:'explore',read:'explore',build:'quiz',bank:'explore'})[ws]||ws;
   stage=['explore','practice','quiz','talk'].indexOf(ws)>-1?ws:'explore';

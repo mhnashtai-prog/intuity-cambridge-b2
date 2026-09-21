@@ -406,14 +406,27 @@ function lines(s,max){
 
 /* state: { now:[], done:[], hub:'play'|'stop'|'off', tap:bool } */
 function web(state){
-  var P=topic().prompts, W=360, H=250, cx=180, cy=112, R=27;
-  var spots=[ {x:66,y:40}, {x:294,y:40}, {x:66,y:168}, {x:294,y:168}, {x:180,y:222} ];
+  var P=topic().prompts.slice(0,5), W=360, cx=180, R=27, lh=15;
+
+  /* Vertical rhythm is measured, not fixed: the rows are placed from the
+     pills' real heights, with GAP between the upper and lower branches.
+     38 viewBox units is ~1cm on a phone, where the sheet renders at about
+     360px wide. The hub sits in the gap horizontally, between the columns,
+     so a tight gap never pushes the rows apart to make room for it. */
+  var GAP=38, TOP=6, BELOW=14;
+  var LS=P.map(function(p){ return lines(p,15); });
+  var HT=LS.map(function(L){ return L.length*lh+14; });
+  var hT=Math.max(HT[0]||0,HT[1]||0), hL=Math.max(HT[2]||0,HT[3]||0);
+  var yTop=TOP+hT/2, yLow=yTop+hT/2+GAP+hL/2, cy=(yTop+yLow)/2;
+  var yBot=Math.max(yLow+hL/2, cy+R)+BELOW+(HT[4]||0)/2;
+  var H=Math.ceil(yBot+(HT[4]||0)/2+6);
+  var spots=[ {x:66,y:yTop}, {x:294,y:yTop}, {x:66,y:yLow}, {x:294,y:yLow}, {x:180,y:yBot} ];
   var s='<svg viewBox="0 0 '+W+' '+H+'" role="group" aria-label="The task card">';
 
-  P.slice(0,5).forEach(function(p,i){
-    var sp=spots[i], L=lines(p,15), lh=15;
+  P.forEach(function(p,i){
+    var sp=spots[i], L=LS[i];
     var wd=Math.min(128, Math.max.apply(null,L.map(function(l){ return l.length; }))*6.9+26);
-    var ht=L.length*lh+14;
+    var ht=HT[i];
     var bx=sp.x-wd/2, by=sp.y-ht/2;
     /* the branch leaves the hub and bends into the side of the pill */
     var ex = i===4 ? sp.x : (sp.x<cx ? bx+wd : bx);
@@ -769,10 +782,14 @@ function finish(){
    Tap a branch when you have talked about it, the way a candidate glances
    down and knows what is left. Nothing is recorded or marked.
    ═══════════════════════════════════════════════════════════════════════ */
+/* The clock. Two minutes of discussion, as the student asked for.
+   DECIDE is the exam's extra minute after the examiner cuts in; it is 0
+   for now. Set it to D.limit_decide||60 to run the full 2 + 1. */
+var TALK_SECS=120, DECIDE=0;
 var cLeft=0, cTmr=null, cDone=[];
 
 function talk(){
-  var A=D.limit_discuss||120, B=D.limit_decide||60;
+  var A=TALK_SECS, B=DECIDE;
   cLeft=A+B; cDone=[];
   $('body').innerHTML=
     '<div class="clock-row"><span class="clock" id="clk">'+fmt(cLeft)+'</span>'+
@@ -795,7 +812,7 @@ function fmt(s){ s=Math.max(0,s); return Math.floor(s/60)+':'+(s%60<10?'0':'')+(
 
 function clockGo(){
   if(cTmr) return;
-  var A=D.limit_discuss||120, B=D.limit_decide||60, T=A+B;
+  var A=TALK_SECS, B=DECIDE, T=A+B;
   $('lead').style.display='none';
   cTmr=setInterval(function(){
     cLeft--;
@@ -803,7 +820,7 @@ function clockGo(){
     $('clk').classList.toggle('low',cLeft<=10);
     $('clkBar').style.width=Math.max(0,cLeft/T*100)+'%';
     /* The examiner cuts in at two minutes, as in the room. */
-    if(cLeft===B){
+    if(B && cLeft===B){
       $('phase').textContent='decide'; $('phase').classList.add('dec');
       $('exr').style.display='';
     }

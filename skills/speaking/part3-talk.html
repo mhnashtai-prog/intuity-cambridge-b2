@@ -147,6 +147,20 @@ body.scrolled .header::after{opacity:1}
   border:none;padding:.6rem .8rem;cursor:pointer;min-height:44px;min-width:44px}
 .arrow:disabled{color:var(--rule);cursor:default}
 
+/* The dialogue's two switches share one row: how much you see on the
+   left, how it is phrased on the right. Compact, because on a phone the
+   two together have to fit in one line. Everything else about the
+   dialogue — x-ray, the readout — sits quietly underneath. */
+.dlg-hd{flex-wrap:nowrap}
+.seg.sm{padding:.14rem}
+.seg.sm button{font-size:.64rem;padding:.38rem .6rem;min-height:30px}
+.dlg-sub{display:flex;align-items:center;justify-content:space-between;gap:.6rem;
+  margin:-.35rem 0 .8rem}
+.dlg-sub .tool{padding-left:0}
+.dlg-n{font-family:var(--f-mono);font-size:.6rem;color:var(--faint);text-align:right;
+  font-variant-numeric:tabular-nums}
+@media(max-width:360px){ .seg.sm button{padding:.36rem .48rem} }
+
 /* ── PRACTICE · shadowing, grouped by move ─────────────────────────────── */
 .fn-row{display:flex;gap:.3rem;overflow-x:auto;scrollbar-width:none;
   padding-bottom:.2rem;margin-bottom:1rem}
@@ -428,15 +442,15 @@ function web(state){
     var wd=Math.min(128, Math.max.apply(null,L.map(function(l){ return l.length; }))*6.9+26);
     var ht=HT[i];
     var bx=sp.x-wd/2, by=sp.y-ht/2;
-    /* the branch leaves the hub and bends into the side of the pill */
+    /* A straight rule from the hub to the near side of the pill — the
+       printed sheet has no curves, so neither does this. */
     var ex = i===4 ? sp.x : (sp.x<cx ? bx+wd : bx);
     var ey = i===4 ? by : sp.y;
-    var qx = i===4 ? cx : (cx+ex)/2, qy = i===4 ? (cy+ey)/2 : cy;
     var cls='br'+(state.now.indexOf(i)!==-1?' now':'')+
             (state.done.indexOf(i)!==-1?' done':'')+(state.tap?' tap':'');
     s+='<g class="'+cls+'" data-branch="'+i+'"'+
        (state.tap?' role="button" tabindex="0" aria-label="'+esc(p)+'"':'')+'>';
-    s+='<path class="sp" d="M'+cx+' '+cy+' Q'+qx+' '+qy+' '+ex+' '+ey+'"/>';
+    s+='<path class="sp" d="M'+cx+' '+cy.toFixed(1)+' L'+ex.toFixed(1)+' '+ey.toFixed(1)+'"/>';
     s+='<rect class="pl" x="'+bx.toFixed(1)+'" y="'+by.toFixed(1)+'" width="'+wd.toFixed(1)+
        '" height="'+ht+'" rx="'+(ht/2>14?14:ht/2)+'"/>';
     var ty=sp.y-((L.length-1)*lh)/2;
@@ -501,8 +515,8 @@ function turnHtml(t,i){
     '<p>'+body+'</p></div>';
 }
 
-function seg(items,cur,attr){
-  return '<div class="seg" role="tablist">'+items.map(function(it){
+function seg(items,cur,attr,cls){
+  return '<div class="seg'+(cls?' '+cls:'')+'" role="tablist">'+items.map(function(it){
     return '<button type="button" role="tab" '+attr+'="'+it.id+'" aria-selected="'+
       (it.id===cur)+'">'+esc(it.label)+'</button>'; }).join('')+'</div>';
 }
@@ -510,9 +524,11 @@ function seg(items,cur,attr){
 function explore(){
   var seq=run(), N=exCount();
   var head='<div class="dlg-hd">'+
-    seg([{id:'whole',label:'Whole'},{id:'section',label:'Section'}],view,'data-view')+
+    seg([{id:'whole',label:'Whole'},{id:'section',label:'Section'}],view,'data-view','sm')+
+    seg(D.styles.map(function(s,i){ return {id:String(i),label:s.tab}; }),String(si),'data-style','sm')+
+    '</div><div class="dlg-sub">'+
     '<button class="tool'+(xray?' on':'')+'" type="button" data-xray="1">x-ray</button>'+
-    '</div>';
+    '<span class="dlg-n">'+esc(topic().them)+' and you · '+seq.length+' turns</span></div>';
   var body;
   if(view==='whole'){
     body='<div id="talk">'+seq.map(turnHtml).join('')+'</div>';
@@ -901,6 +917,7 @@ document.addEventListener('click',function(e){
   var t=e.target.closest('button'); if(!t) return;
   if(t.dataset.view){ if(t.dataset.view!==view){ stop(); view=t.dataset.view; pref('view',view); xi=0; explore(); } return; }
   if(t.dataset.xray){ xray=!xray; explore(); return; }
+  if(t.dataset.style!==undefined){ stop(); si=+t.dataset.style; pref('style',si); xi=0; draw(); return; }
   if(t.dataset.go!==undefined && stage==='explore'){
     var n=+t.dataset.go; if(n>=0 && n<exCount()){ stop(); xi=n; explore(); } return; }
   if(t.dataset.fn){ drillStop(); fnId=t.dataset.fn; pref('fn',fnId); practice(); return; }
@@ -942,6 +959,7 @@ Promise.all([
   var pv=pref('view'); if(pv==='whole'||pv==='section') view=pv;
   if(p.get('view')==='sections'||p.get('view')==='section') view='section';
   var pf=pref('fn'); if(pf && FN.some(function(f){ return f.id===pf; })) fnId=pf;
+  var ps=+pref('style'); if(ps>=0 && ps<D.styles.length) si=ps;
   var ws=p.get('mode')||p.get('stage')||pref('stage');
   ws=({listen:'explore',read:'explore',build:'quiz',bank:'explore'})[ws]||ws;
   stage=['explore','practice','quiz','talk'].indexOf(ws)>-1?ws:'explore';

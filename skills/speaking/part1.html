@@ -63,26 +63,24 @@ body.scrolled .header::after{opacity:1}
   text-align:center;margin:0 auto .3rem;max-width:28rem}
 .qline small{display:block;font-family:var(--f-mono);font-size:.58rem;font-weight:400;letter-spacing:.12em;
   text-transform:uppercase;color:var(--faint);margin-bottom:.25rem}
-.web svg{width:100%;height:auto;display:block;max-width:30rem;margin:0 auto;overflow:visible}
-.web .sp{fill:none;stroke:var(--rule);stroke-width:1.3;transition:stroke .35s}
-.web .pl{fill:transparent;stroke:var(--rule);stroke-width:1;transition:fill .35s,stroke .35s}
-.web .tx{font-family:var(--f-body);font-size:13px;fill:var(--sentence);transition:fill .35s}
-.web .br.now .sp{stroke:var(--faint)}
-.web .br.now .pl{fill:var(--tile-bg);stroke:var(--faint)}
-.web .br.now .tx{fill:var(--ink)}
-.web .br.done .pl,.web .br.done .sp{stroke:var(--accent)}
-.web .br.done .tx{fill:var(--accent-ink)}
-.web .tk{fill:none;stroke:var(--accent);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;opacity:0;transition:opacity .3s}
-.web .br.done .tk{opacity:1}
-.web .br.tap{cursor:pointer}
-.web .hub{cursor:pointer}
-.web .hub circle{fill:var(--ink);transition:fill .2s}
-.web .hub path,.web .hub rect{fill:var(--bg)}
-.web .hub.off{cursor:default}
-.web .hub.off circle{fill:var(--rule)}
-@media(hover:hover){ .web .hub:not(.off):hover circle{fill:var(--accent-ink)} }
-.web .hub:focus-visible{outline:none}
-.web .hub:focus-visible circle{stroke:var(--accent);stroke-width:3}
+/* The moves, as a plain row of chips — no spider, no branches: Part 1 is
+   one candidate answering, not two people covering a shared task card. */
+.moves-row{display:flex;align-items:center;justify-content:center;gap:.7rem;margin:.3rem auto .2rem;flex-wrap:wrap}
+.moves{display:flex;flex-wrap:wrap;gap:.4rem;justify-content:center}
+.mv{font-family:var(--f-display);font-size:.76rem;font-weight:600;color:var(--dim);background:none;
+  border:1px solid var(--rule);border-radius:999px;padding:.4rem .8rem;cursor:default;transition:color .2s,border-color .2s,background .2s}
+button.mv{cursor:pointer}
+.mv.now{color:var(--ink);border-color:var(--faint);background:var(--tile-bg)}
+.mv.done{color:var(--accent-ink);border-color:var(--accent)}
+.mv .tick{color:var(--accent);margin-left:.3rem}
+.playhub{flex:none;width:52px;height:52px;border-radius:50%;border:none;background:var(--ink);color:var(--bg);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s}
+.playhub::before{content:'';display:block;width:0;height:0;border-style:solid;
+  border-width:9px 0 9px 14px;border-color:transparent transparent transparent currentColor;margin-left:3px}
+.playhub.stop::before{width:14px;height:14px;border:none;background:currentColor;margin:0;border-radius:2px}
+.playhub.off{background:var(--rule);cursor:default}
+@media(hover:hover){ .playhub:not(.off):hover{background:var(--accent-ink)} }
+.playhub:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 /* The seconds, drawn to scale, under the sheet. */
 .tl{position:relative;margin-top:.7rem}
@@ -209,10 +207,13 @@ body.scrolled .header::after{opacity:1}
    SPEAKING PART 1 — REACT, ANSWER, EXPAND · on the Part 2/3 blueprint
 
    Part 1 hands the candidate nothing to look at: the examiner simply asks.
-   So the sheet here is the SHAPE of a good answer — the five moves on the
-   spider, play at the hub, lighting as each is spoken — and under it the
-   seconds, with the 15–20s band a Part 1 answer should land in. The thing
-   on the table is the answer's structure, which is what Part 1 marks.
+   So the sheet here is the SHAPE of a good answer — the five moves as a
+   plain row of chips, a single play button beside them, each chip
+   lighting as it is spoken — and under it the seconds, with the 15–20s
+   band a Part 1 answer should land in. The thing on the table is the
+   answer's structure, which is what Part 1 marks. There is no shared task
+   card here, because Part 1 is one candidate answering, not two people
+   covering five prompts together — that belongs to Part 3.
 
    The right-hand switch in the dialogue header is "whose life": At school,
    At university, Working. Same slot Simple/Natural/Advanced fills on
@@ -254,7 +255,10 @@ body.scrolled .header::after{opacity:1}
   </div>
   <div class="sheet-wrap" id="sheetWrap">
     <p class="qline" id="qline"></p>
-    <div class="web" id="web"></div>
+    <div class="moves-row">
+      <button class="playhub" id="playHub" type="button" aria-label="Play"></button>
+      <div class="moves" id="moves" role="group" aria-label="The shape of the answer"></div>
+    </div>
     <div class="tl" id="tl"></div>
   </div>
   <div id="body"></div>
@@ -317,49 +321,27 @@ function topicMark(cur){
   var on=$('topics').querySelector('.on'); if(on&&on.scrollIntoView) on.scrollIntoView({inline:'center',block:'nearest'});
 }
 
-/* ── THE SHEET ───────────────────────────────────────────────────────────
-   Five branches and a hub, the Part 3 spider. Rows are placed from the
-   pills' real heights with ~1cm between upper and lower; straight rules.
-   state: { labels:[5], now:[], done:[], hub:'play'|'stop'|'off', tap:bool } */
-function lines(s,max){
-  var w=String(s).split(' '), L=[], cur='';
-  w.forEach(function(x){ if((cur+' '+x).trim().length>max && cur){ L.push(cur.trim()); cur=x; } else cur+=' '+x; });
-  if(cur.trim()) L.push(cur.trim());
-  return L.slice(0,2);
+/* ── THE MOVES ───────────────────────────────────────────────────────────
+   A plain row of chips — react / answer / reason / example / contrast —
+   plus one round play button beside them. No branches, no hub, no shared
+   task card: that apparatus belongs to Part 3's two-candidate discussion.
+   In Talk, the chips double as tap targets, so a candidate can mark off
+   each move as they say it, same as the old branches did. */
+function renderMoves(labels,now,done,tap){
+  $('moves').innerHTML=labels.map(function(l,i){
+    var cls='mv'+(now.indexOf(i)!==-1?' now':'')+(done.indexOf(i)!==-1?' done':'');
+    var tick=done.indexOf(i)!==-1?' <span class="tick">&check;</span>':'';
+    return tap
+      ? '<button type="button" class="'+cls+'" data-branch="'+i+'" aria-label="'+esc(l)+
+        (done.indexOf(i)!==-1?', done':'')+'">'+esc(l)+tick+'</button>'
+      : '<span class="'+cls+'">'+esc(l)+tick+'</span>';
+  }).join('');
 }
-function web(state){
-  var P=state.labels.slice(0,5), W=360, cx=180, R=27, lh=15, GAP=38, TOP=6, BELOW=14;
-  var LS=P.map(function(p){ return lines(p,15); }), HT=LS.map(function(L){ return L.length*lh+14; });
-  var hT=Math.max(HT[0]||0,HT[1]||0), hL=Math.max(HT[2]||0,HT[3]||0);
-  var yTop=TOP+hT/2, yLow=yTop+hT/2+GAP+hL/2, cy=(yTop+yLow)/2;
-  var yBot=Math.max(yLow+hL/2,cy+R)+BELOW+(HT[4]||0)/2, H=Math.ceil(yBot+(HT[4]||0)/2+6);
-  var spots=[{x:66,y:yTop},{x:294,y:yTop},{x:66,y:yLow},{x:294,y:yLow},{x:180,y:yBot}];
-  var s='<svg viewBox="0 0 '+W+' '+H+'" role="group" aria-label="'+esc(state.aria||'The sheet')+'">';
-  P.forEach(function(p,i){
-    var sp=spots[i], L=LS[i], ht=HT[i];
-    var wd=Math.min(128,Math.max.apply(null,L.map(function(l){ return l.length; }))*6.9+26);
-    var bx=sp.x-wd/2, by=sp.y-ht/2;
-    var ex=i===4?sp.x:(sp.x<cx?bx+wd:bx), ey=i===4?by:sp.y;
-    var cls='br'+(state.now.indexOf(i)!==-1?' now':'')+(state.done.indexOf(i)!==-1?' done':'')+(state.tap?' tap':'');
-    s+='<g class="'+cls+'" data-branch="'+i+'"'+(state.tap?' role="button" tabindex="0" aria-label="'+esc(p)+'"':'')+'>';
-    s+='<path class="sp" d="M'+cx+' '+cy.toFixed(1)+' L'+ex.toFixed(1)+' '+ey.toFixed(1)+'"/>';
-    s+='<rect class="pl" x="'+bx.toFixed(1)+'" y="'+by.toFixed(1)+'" width="'+wd.toFixed(1)+'" height="'+ht+
-       '" rx="'+(ht/2>14?14:ht/2)+'"/>';
-    var ty=sp.y-((L.length-1)*lh)/2;
-    L.forEach(function(l,k){ s+='<text class="tx" x="'+sp.x+'" y="'+(ty+k*lh).toFixed(1)+
-      '" text-anchor="middle" dominant-baseline="middle">'+esc(l)+'</text>'; });
-    var kx=bx+wd-11, ky=by+5;
-    s+='<path class="tk" d="M'+(kx-4)+' '+(ky+3)+' l2.6 2.8 l4.6-5.6"/></g>';
-  });
-  var lab=state.hub==='stop'?'Stop':(state.hub==='play'?'Play':'');
-  s+='<g class="hub'+(state.hub==='off'?' off':'')+'" data-hub="1"'+
-     (state.hub==='off'?'':' role="button" tabindex="0" aria-label="'+lab+'"')+'>';
-  s+='<circle cx="'+cx+'" cy="'+cy.toFixed(1)+'" r="'+R+'"/>';
-  if(state.hub==='stop') s+='<rect x="'+(cx-8)+'" y="'+(cy-8).toFixed(1)+'" width="16" height="16" rx="2.5"/>';
-  else if(state.hub==='play') s+='<path d="M'+(cx-7)+' '+(cy-11).toFixed(1)+' L'+(cx+12)+' '+cy.toFixed(1)+
-    ' L'+(cx-7)+' '+(cy+11).toFixed(1)+'Z"/>';
-  s+='</g></svg>';
-  $('web').innerHTML=s;
+function setHub(state){
+  var h=$('playHub');
+  h.className='playhub'+(state==='off'?' off':'')+(state==='stop'?' stop':'');
+  h.disabled=state==='off';
+  h.setAttribute('aria-label', state==='stop'?'Stop':'Play');
 }
 
 /* ── THE SECONDS, drawn ──────────────────────────────────────────────────
@@ -466,11 +448,8 @@ function shellWire(){
   $('sheet').addEventListener('click',function(e){ if(e.target===$('sheet')) shutBank(); });
   addEventListener('resize',measure,{passive:true});
   addEventListener('scroll',function(){ document.body.classList.toggle('scrolled',scrollY>4); },{passive:true});
-  /* The hub and branches are SVG, so Enter and Space are wired by hand. */
   document.addEventListener('keydown',function(e){
-    if(e.key==='Escape' && $('sheet').classList.contains('open')){ shutBank(); return; }
-    var g=document.activeElement && document.activeElement.closest && document.activeElement.closest('[data-hub],[data-branch]');
-    if(g && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); g.dispatchEvent(new MouseEvent('click',{bubbles:true})); }
+    if(e.key==='Escape' && $('sheet').classList.contains('open')){ shutBank(); }
   });
 }
 
@@ -537,7 +516,8 @@ function sheetState(){
     else { now=[mi(PI.s.m)]; done=segs.slice(0,PI.j).map(function(s){ return mi(s.m); }); }
   }
   qline(tp);
-  web({labels:labels(), now:now, done:done, hub:SPEECH?(playing?'stop':'play'):'off', aria:'The shape of the answer'});
+  renderMoves(labels(), now, done, false);
+  setHub(SPEECH?(playing?'stop':'play'):'off');
   var tot=segs.reduce(function(a,s){ return a+secs(s.t); },0);
   timeline(items(segs),{limit:20, band:[15,20], left:'react · answer · reason · example', right:readout(tot)});
   if(playing && PI && !PI.q){
@@ -614,7 +594,8 @@ function drill(){
   if(!it){ $('dr').innerHTML='<p class="dr-ctx">Nothing to practise for this move yet.</p>'; return; }
   var tp=D.topics[it.t];
   qline(tp, tp.tab+' · '+(dIx+1)+' of '+dItems.length);
-  web({labels:labels(), now:[mi(dMove)], done:it.before||[], hub:dRun?'stop':'play', aria:'The shape of the answer'});
+  renderMoves(labels(), [mi(dMove)], it.before||[], false);
+  setHub(dRun?'stop':'play');
   $('dr').innerHTML=(it.ctx?'<p class="dr-ctx"><b>'+esc(it.ctxL)+'</b>'+esc(it.ctx)+'</p>':'')+
     '<p class="dr-line">'+mk(it.text,it.marks)+'</p>'+drillFoot();
 }
@@ -633,7 +614,8 @@ function qDraw(fresh,front){
   if(fresh && step>0){ var prev=choose(L.levels[step-1]).map(function(x){ return x.t; });
     for(var i=0;i<segs.length;i++) if(prev.indexOf(segs[i].t)===-1){ newIdx=i; break; } }
   qline(topic());
-  web({labels:labels(), now:r?[mi(r.move)]:[], done:segs.map(function(s){ return mi(s.m); }), hub:'off', aria:'The shape of the answer'});
+  renderMoves(labels(), r?[mi(r.move)]:[], segs.map(function(s){ return mi(s.m); }), false);
+  setHub('off');
   var tot=segs.reduce(function(a,s){ return a+secs(s.t); },0);
   timeline(items(segs),{limit:20, band:[15,20], left:tot+'s of speaking', right:readout(tot)});
   var ans='<p class="answer'+(front?' shift':'')+'">'+segs.map(function(x,i){
@@ -684,7 +666,8 @@ function talk(){
 }
 function talkSheet(el){
   qline(topic());
-  web({labels:labels(), now:[], done:cDone, hub:cTmr?'stop':'play', tap:true, aria:'The shape of the answer'});
+  renderMoves(labels(), [], cDone, true);
+  setHub(cTmr?'stop':'play');
   timeline(el>0?[{phase:el>=15?4:1,s:el}]:[],{limit:20, band:[15,20], scale:20, left:'aim for 15–20 seconds', right:''});
 }
 function fmt(s){ s=Math.max(0,s); return Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60); }
@@ -722,14 +705,14 @@ Array.prototype.forEach.call($('stages').children,function(b){
 function pickTopic(i){ stop(); ti=i; pref('topic',D.topics[i].id); topicRow(D.topics.map(function(t){ return t.tab; }),ti,pickTopic); draw(); }
 
 document.addEventListener('click',function(e){
-  var g=e.target.closest('[data-hub],[data-branch]');
-  if(g && g.dataset.hub){
+  if(e.target.closest('#playHub')){
     if(stage==='explore'){ playing?stop():play(); }
     else if(stage==='talk'){ cTmr?clockStop(false):clockGo(); }
     else if(stage==='practice'){ if(dRun){ drillStop(); drill(); } else { dRun=true; drill(); drillGo(); } }
     return;
   }
-  if(g && g.dataset.branch!==undefined && stage==='talk'){
+  var g=e.target.closest('[data-branch]');
+  if(g && stage==='talk'){
     var k=+g.dataset.branch, at=cDone.indexOf(k); if(at===-1) cDone.push(k); else cDone.splice(at,1);
     talkSheet(TALK-cLeft); return;
   }

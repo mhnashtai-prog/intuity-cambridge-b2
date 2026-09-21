@@ -368,17 +368,18 @@ function photoOf(t,titles){
 /* ═══════════════════════════════════════════════════════════════════════
    THE SHEET
    ═══════════════════════════════════════════════════════════════════════ */
-function qline(){
-  $('qline').innerHTML='<small>Your turn · one minute</small>'+
-    esc(task().question).replace(/(and say[^.]*)/,'<b>$1</b>');
+function qline(tk,label){
+  tk=tk||task();
+  $('qline').innerHTML='<small>'+esc(label||'Your turn · one minute')+'</small>'+
+    esc(tk.question).replace(/(and say[^.]*)/,'<b>$1</b>');
 }
 
 var ICON_PLAY='<svg width="20" height="22" viewBox="0 0 20 22" aria-hidden="true"><path d="M2 1 L19 11 L2 21Z" fill="currentColor"/></svg>';
 var ICON_STOP='<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="2.5" fill="currentColor"/></svg>';
 
 /* hub: 'play' | 'stop' | 'off' ; now: photo indices lit, or null */
-function pics(hub,now){
-  var P=task().photos;
+function pics(hub,now,tk){
+  var P=(tk||task()).photos;
   var talking = now && now.length===1;
   $('pics').className='pics'+(talking?' talking':'');
   $('pics').innerHTML=P.map(function(p,i){
@@ -593,7 +594,7 @@ function fnItems(pi){
   D.tasks.forEach(function(tk){
     var arr=(tk.turns[sid]||{})[pid]||[];
     arr.forEach(function(l){ if(l.marks && l.marks.length)
-      out.push({topic:tk.tab, question:tk.question, l:l}); });
+      out.push({tk:tk, topic:tk.tab, question:tk.question, l:l}); });
   });
   return out;
 }
@@ -604,10 +605,20 @@ function practice(){
   }).join('')+'</div><p class="fn-when">'+esc(f.when)+'</p><div id="dr"></div>';
   drill();
 }
+/* The line only makes sense against its own photographs, and these lines
+   come from eight different tasks. So the sheet follows the line: its
+   photos, its question, and the photo the line is about lit. The hub runs
+   the drill, as it runs playback in Explore. */
+function drillSheet(){
+  var it=dItems[dIx]; if(!it) return;
+  qline(it.tk, it.topic+' · '+(dIx+1)+' of '+dItems.length);
+  pics(dRun?'stop':'play', photoOf(it.l.t, it.tk.photos.map(function(p){ return p.title; })), it.tk);
+}
 function drill(){
   var it=dItems[dIx];
   if(!it){ $('dr').innerHTML='<p class="dr-ctx">No lines tagged for this move yet.</p>'; return; }
-  $('dr').innerHTML='<p class="dr-ctx"><b>'+esc(it.topic)+'</b>'+esc(it.question)+'</p>'+
+  drillSheet();
+  $('dr').innerHTML=
     '<p class="dr-line">'+mark(it.l,true)+'</p>'+
     '<div class="dr-say" id="drSay">listen</div><div class="bar"><i id="drBar"></i></div>'+
     '<div class="dr-foot">'+
@@ -753,8 +764,8 @@ function shutBank(){ $('sheet').classList.remove('open'); }
    ROUTING
    ═══════════════════════════════════════════════════════════════════════ */
 function draw(){
-  qline();
-  $('sheetWrap').style.display = stage==='practice' ? 'none' : '';
+  qline(); 
+  $('tl').style.display = stage==='practice' ? 'none' : '';
   if(stage==='explore') explore();
   else if(stage==='practice') practice();
   else if(stage==='quiz') quiz();
@@ -773,7 +784,10 @@ Array.prototype.forEach.call($('stages').children,function(b){
 document.addEventListener('click',function(e){
   var t=e.target.closest('button'); if(!t) return;
   if(t.dataset.hub){ if(stage==='explore') playing?stop():play();
-                     else if(stage==='talk') cTmr?clockStop(false):clockGo(); return; }
+                     else if(stage==='talk') cTmr?clockStop(false):clockGo();
+                     else if(stage==='practice'){ if(dRun){ drillStop(); drill(); }
+                                                 else { dRun=true; drill(); drillGo(); } }
+                     return; }
   if(t.dataset.view){ if(t.dataset.view!==view){ stop(); view=t.dataset.view; pref('view',view); sp=0; explore(); } return; }
   if(t.dataset.xray){ xray=!xray; explore(); return; }
   if(t.dataset.style!==undefined){ stop(); si=+t.dataset.style; pref('style',si); draw(); return; }

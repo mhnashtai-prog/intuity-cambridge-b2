@@ -99,6 +99,19 @@ body.scrolled .header::after{opacity:1}
   line-height:1.35;color:var(--ink);text-align:center;margin:0 auto .3rem;max-width:26rem}
 .qline small{display:block;font-family:var(--f-mono);font-size:.58rem;font-weight:400;
   letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:.25rem}
+
+/* ── PHASE-FILTER TABS · Full text + one tab per discussion prompt ────────
+   Same job as Part 2's phase tabs, ported: instead of stepping through
+   exchanges two at a time with arrows, a student picks a prompt directly —
+   "show me only the bit about pocket money" — and reads just that. Full
+   text still shows everything, uninterrupted, as Whole always did. */
+.seg.phase{width:100%;margin-bottom:.7rem;flex-wrap:wrap}
+.seg.phase button{flex:1 1 auto;min-width:5.2rem;font-size:.62rem;line-height:1.22;
+  white-space:normal;padding:.5rem .35rem;text-align:center}
+@media(min-width:480px){ .seg.phase button{font-size:.68rem} }
+.mphase{font-family:var(--f-mono);font-size:.6rem;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--faint);margin:0 0 .7rem}
+
 .web svg{width:100%;height:auto;display:block;max-width:30rem;margin:0 auto;overflow:visible}
 .web .sp{fill:none;stroke:var(--rule);stroke-width:1.3;transition:stroke .35s}
 .web .pl{fill:transparent;stroke:var(--rule);stroke-width:1;transition:fill .35s,stroke .35s}
@@ -315,7 +328,7 @@ body.scrolled .header::after{opacity:1}
    STATE
    ═══════════════════════════════════════════════════════════════════════ */
 var D=null, PH=null, ti=0, si=0;
-var stage='explore', view='whole', xray=false, xi=0;
+var stage='explore', view='whole', xray=false, bp=0;
 var playing=false, playIx=-1, tmr=null;
 var TR=null;                                   /* the prompt trace for this run */
 var SPEECH=('speechSynthesis' in window);
@@ -331,7 +344,6 @@ function pref(k,v){
 
 function topic(){ return D.topics[ti]; }
 function run(){ return topic().runs[D.styles[si].id]; }
-function exCount(){ return Math.ceil(run().length/2); }
 
 /* ═══════════════════════════════════════════════════════════════════════
    WHICH BRANCH ARE THEY ON
@@ -378,7 +390,7 @@ function trace(){
   /* stems that belong to exactly one prompt */
   var count={}; pw.forEach(function(ws){ ws.forEach(function(w){ count[w]=(count[w]||0)+1; }); });
 
-  var now=[], done=[], seen={}, last=[];
+  var now=[], done=[], raw=[], seen={}, last=[];
   seq.forEach(function(t,i){
     var hits=[];
     if(t.prompt!==undefined && t.prompt!==null){
@@ -396,12 +408,37 @@ function trace(){
         if(m.length===ws.length || unique) hits.push(k);
       });
     }
+    /* raw: this turn's own evidence, nothing carried forward — what the
+       Practice-style filtered view selects on. now/done (below) carry the
+       last hit forward, which is right for lighting up the spider diagram
+       but wrong for "show me only the turns about X". */
+    raw.push(hits.slice());
     if(hits.length) last=hits;
     hits.forEach(function(k){ seen[k]=1; });
     now.push(last.slice());
     done.push(Object.keys(seen).map(Number));
   });
-  return {now:now, done:done};
+  return {now:now, done:done, raw:raw};
+}
+
+/* Every turn whose raw hits name this prompt, plus its immediate neighbour
+   on each side — the line that prompted it and the line that follows —
+   so the filtered read stays a legible exchange, not isolated fragments. */
+function branchTurns(k){
+  var seq=run(), keep={};
+  (TR.raw||[]).forEach(function(hits,i){
+    if(hits.indexOf(k)===-1) return;
+    keep[i]=1;
+    if(i>0) keep[i-1]=1;
+    if(i<seq.length-1) keep[i+1]=1;
+  });
+  return Object.keys(keep).map(Number).sort(function(a,b){ return a-b; });
+}
+
+function phaseTabs(){
+  var tabs=[{id:'whole',label:'Full text'}];
+  topic().prompts.forEach(function(p,i){ tabs.push({id:'b'+i, label:p}); });
+  return tabs;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -488,7 +525,7 @@ function topics(){
     b.className=i===ti?'on':''; b.setAttribute('aria-selected',String(i===ti));
     b.addEventListener('click',function(){
       if(i===ti) return;
-      stop(); ti=i; xi=0; pref('topic',t.id); topics(); draw();
+      stop(); ti=i; bp=0; pref('topic',t.id); topics(); draw();
     });
     T.appendChild(b);
   });
@@ -522,9 +559,12 @@ function seg(items,cur,attr,cls){
 }
 
 function explore(){
-  var seq=run(), N=exCount();
-  var head='<div class="dlg-hd">'+
-    seg([{id:'whole',label:'Whole'},{id:'section',label:'Section'}],view,'data-view','sm')+
+  var seq=run(), tabs=phaseTabs(), curTab = view==='whole' ? 'whole' : ('b'+bp);
+  var phaseSeg='<div class="seg phase" role="tablist" aria-label="Filter by prompt">'+
+    tabs.map(function(pt){
+      return '<button type="button" role="tab" data-view="'+pt.id+'" aria-selected="'+
+        (pt.id===curTab)+'">'+esc(pt.label)+'</button>'; }).join('')+'</div>';
+  var head=phaseSeg+'<div class="dlg-hd">'+
     seg(D.styles.map(function(s,i){ return {id:String(i),label:s.tab}; }),String(si),'data-style','sm')+
     '</div><div class="dlg-sub">'+
     '<button class="tool'+(xray?' on':'')+'" type="button" data-xray="1">x-ray</button>'+
@@ -533,29 +573,23 @@ function explore(){
   if(view==='whole'){
     body='<div id="talk">'+seq.map(turnHtml).join('')+'</div>';
   } else {
-    var lo=xi*2, pair=seq.slice(lo,lo+2), dots='';
-    for(var j=0;j<N;j++) dots+='<button type="button" data-go="'+j+'"'+(j===xi?' class="on"':'')+
-      ' aria-label="Exchange '+(j+1)+' of '+N+'"></button>';
-    body='<div class="one" id="talk">'+pair.map(function(t,k){ return turnHtml(t,lo+k); }).join('')+
-      '<div class="one-foot">'+
-        '<button class="arrow" type="button" data-go="'+(xi-1)+'"'+(xi<=0?' disabled':'')+
-          ' aria-label="Previous exchange">&larr;</button>'+
-        '<div class="dots">'+dots+'</div>'+
-        '<button class="arrow" type="button" data-go="'+(xi+1)+'"'+(xi>=N-1?' disabled':'')+
-          ' aria-label="Next exchange">&rarr;</button>'+
-      '</div></div>';
+    var idx=branchTurns(bp), label=tabs.filter(function(t){ return t.id==='b'+bp; })[0];
+    var lines = idx.length
+      ? idx.map(function(i){ return turnHtml(seq[i],i); }).join('')
+      : '<p class="dr-ctx">Neither of you named this one directly in this register — try Full text, or another register above.</p>';
+    body='<div id="talk"><div class="mphase">'+esc(label?label.label:'')+'</div>'+lines+'</div>';
   }
   $('body').innerHTML='<section class="dlg" aria-label="The discussion">'+head+body+'</section>';
   sheetState();
 }
 
-/* What the sheet shows, given where we are. */
+/* What the sheet shows, given where we are. Filtered to a prompt and not
+   playing: light that branch on the spider, so the diagram and the text
+   underneath always agree on what is on screen. */
 function sheetState(){
-  var n=run().length, at;
-  if(playing && playIx>=0) at=playIx;
-  else if(view==='section') at=Math.min(n-1,xi*2+1);
-  else at=n-1;
-  web({ now: playing ? TR.now[at] : [], done: TR.done[at],
+  var n=run().length, at=(playing && playIx>=0) ? playIx : n-1;
+  var nowHi = playing ? TR.now[at] : (view!=='whole' ? [bp] : []);
+  web({ now: nowHi, done: TR.done[at],
         hub: SPEECH ? (playing?'stop':'play') : 'off', tap:false });
 }
 
@@ -563,21 +597,23 @@ function sheetState(){
    pinned so it never scrolls away. Section: the exchange on screen. */
 function play(){
   if(!SPEECH) return;
-  var seq=run(), lo=0, hi=seq.length;
-  if(view==='section'){ lo=xi*2; hi=Math.min(seq.length,lo+2); }
-  playing=true; playIx=lo;
+  var seq=run();
+  var idx = view==='whole' ? seq.map(function(_,i){ return i; }) : branchTurns(bp);
+  if(!idx.length) return;
+  playing=true; var pos=0; playIx=idx[0];
   $('talk').classList.add('playing');
   if(view==='whole'){ measure(); $('sheetWrap').classList.add('pin'); }
   (function next(){
-    if(!playing || playIx>=hi){ stop(); return; }
+    if(!playing || pos>=idx.length){ stop(); return; }
+    playIx=idx[pos];
     var t=seq[playIx];
     Array.prototype.forEach.call($('talk').querySelectorAll('.turn'),function(el){
       var live=+el.dataset.i===playIx;
       el.classList.toggle('live',live);
-      if(live && view==='whole' && el.scrollIntoView) el.scrollIntoView({block:'end',behavior:'smooth'});
+      if(live && el.scrollIntoView) el.scrollIntoView({block:'end',behavior:'smooth'});
     });
     sheetState();
-    say(t.t, t.who==='me', function(){ playIx++; tmr=setTimeout(next,280); });
+    say(t.t, t.who==='me', function(){ pos++; tmr=setTimeout(next,280); });
   })();
   sheetState();
 }
@@ -915,11 +951,13 @@ document.addEventListener('click',function(e){
     talkWeb(); return;
   }
   var t=e.target.closest('button'); if(!t) return;
-  if(t.dataset.view){ if(t.dataset.view!==view){ stop(); view=t.dataset.view; pref('view',view); xi=0; explore(); } return; }
+  if(t.dataset.view){
+    var v=t.dataset.view, nv=v==='whole'?'whole':'branch', nb=v==='whole'?bp:+v.slice(1);
+    if(nv!==view || nb!==bp){ stop(); view=nv; bp=nb; pref('view',view); pref('bp',bp); explore(); }
+    return;
+  }
   if(t.dataset.xray){ xray=!xray; explore(); return; }
-  if(t.dataset.style!==undefined){ stop(); si=+t.dataset.style; pref('style',si); xi=0; draw(); return; }
-  if(t.dataset.go!==undefined && stage==='explore'){
-    var n=+t.dataset.go; if(n>=0 && n<exCount()){ stop(); xi=n; explore(); } return; }
+  if(t.dataset.style!==undefined){ stop(); si=+t.dataset.style; pref('style',si); draw(); return; }
   if(t.dataset.fn){ drillStop(); fnId=t.dataset.fn; pref('fn',fnId); practice(); return; }
   if(t.dataset.d!==undefined){
     if(t.dataset.d==='go'){ if(dRun){ drillStop(); drill(); } else { dRun=true; drill(); drillGo(); } }
@@ -935,9 +973,10 @@ document.addEventListener('keydown',function(e){
   var g=document.activeElement && document.activeElement.closest &&
         document.activeElement.closest('[data-hub],[data-branch]');
   if(g && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); g.dispatchEvent(new MouseEvent('click',{bubbles:true})); return; }
-  if(stage==='explore' && view==='section'){
-    if(e.key==='ArrowRight' && xi<exCount()-1){ e.preventDefault(); stop(); xi++; explore(); }
-    if(e.key==='ArrowLeft' && xi>0){ e.preventDefault(); stop(); xi--; explore(); }
+  if(stage==='explore' && view==='branch'){
+    var nP=topic().prompts.length;
+    if(e.key==='ArrowRight' && bp<nP-1){ e.preventDefault(); stop(); bp++; pref('bp',bp); explore(); }
+    if(e.key==='ArrowLeft' && bp>0){ e.preventDefault(); stop(); bp--; pref('bp',bp); explore(); }
   }
 });
 
@@ -956,8 +995,8 @@ Promise.all([
   var p=new URLSearchParams(location.search);
   var wt=p.get('topic')||pref('topic');
   if(wt) D.topics.forEach(function(t,i){ if(t.id===wt) ti=i; });
-  var pv=pref('view'); if(pv==='whole'||pv==='section') view=pv;
-  if(p.get('view')==='sections'||p.get('view')==='section') view='section';
+  var pv=pref('view'); if(pv==='whole'||pv==='branch') view=pv;
+  var pbp=+pref('bp'); if(pbp>=0) bp=pbp;
   var pf=pref('fn'); if(pf && FN.some(function(f){ return f.id===pf; })) fnId=pf;
   var ps=+pref('style'); if(ps>=0 && ps<D.styles.length) si=ps;
   var ws=p.get('mode')||p.get('stage')||pref('stage');

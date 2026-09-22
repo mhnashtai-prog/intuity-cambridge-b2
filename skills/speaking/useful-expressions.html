@@ -225,12 +225,17 @@ body.scrolled .header::after{opacity:1}
 /* List mode: every phrase in the category at once, page-scrolled — no
    per-item paging, no centering. */
 .deck-body.list{display:block;min-height:0;padding:.2rem 0}
-.deck-item{padding:1.1rem 0;border-bottom:1px solid var(--rule)}
-.deck-item:first-child{padding-top:0}
-.deck-item:last-child{border-bottom:none}
-.deck-item .deck-ctx{margin-bottom:.35rem}
-.deck-item .deck-ans{font-size:clamp(1.1rem,3.2vw,1.5rem)}
-.deck-item .deck-extra{margin-top:.6rem;padding-top:.6rem}
+.list-group{padding:1.3rem 0}
+.list-group:first-child{padding-top:0}
+.list-group+.list-group{border-top:1px solid var(--rule)}
+.list-group-hd{margin-bottom:.7rem}
+.list-group-hd b{display:block;font-family:var(--f-display);font-size:.86rem;font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink)}
+.list-group-hd i{display:block;font-style:normal;font-size:.88rem;line-height:1.5;color:var(--dim);margin-top:.2rem}
+.list-item{padding:.8rem 0;border-top:1px solid var(--rule)}
+.list-item:first-of-type{border-top:none}
+.list-item .deck-ans{font-size:clamp(1.05rem,3vw,1.4rem);margin-bottom:.35rem}
+.list-item .deck-extra{margin-top:.5rem;padding-top:.5rem;font-size:.86rem}
 .deck-ctx{margin:0;font-size:.98rem;line-height:1.55;color:var(--dim)}
 .deck-ans{margin:0;font-family:var(--f-display);font-weight:700;line-height:1.3;color:var(--ink);
   font-size:clamp(1.6rem,6vw,2.6rem);letter-spacing:-.01em}
@@ -492,20 +497,25 @@ function shellWire(){
 var PFX='intuity.sl.', PART=0, D=null, PH=null;
 var PART_URL={1:'data/part1-answers.json',2:'data/part2-turn.json',3:'data/part3-talk.json',4:'data/part4-views.json'};
 var PART_LABEL={1:'Interview',2:'Long turn',3:'Collaborate',4:'Discuss'};
-var PARTS={}, tab='functions', fi=0, pk=0, at=0;
+var PARTS={}, tab='functions', pk=0, at=0;
 
 function fnKeys(){ return PH && PH.functions ? Object.keys(PH.functions) : []; }
 
-/* ── FUNCTIONS: one phrase at a time ─────────────────────────────────── */
-function functionSlides(){
-  var k=fnKeys()[fi], f=k?PH.functions[k]:null; if(!f) return [];
-  return f.phrases.map(function(p){
-    var chips=[{t:f.label}];
-    if(p.mouth && p.mouth!=='both') chips.push({t:p.mouth});
-    if(p.joins) chips.push({t:'joins two halves'});
-    if(p.from==='bank') chips.push({t:'wider bank · not in a model turn',bank:true});
-    return {ctx:f.when?f.when.charAt(0).toUpperCase()+f.when.slice(1)+'.':'', ans:esc(p.t), speak:p.t,
-            extra:p.note?'<b>note</b>'+esc(p.note):'', chips:chips};
+/* ── FUNCTIONS: every function tagged to the chosen part, grouped ─────── */
+function functionGroups(){
+  if(!PH || !PH.functions) return [];
+  return fnKeys().filter(function(k){
+    var f=PH.functions[k];
+    return !pk || (f.parts && f.parts.indexOf(pk)!==-1);
+  }).map(function(k){
+    var f=PH.functions[k];
+    return { label:f.label, when:f.when, items:f.phrases.map(function(p){
+      var chips=[];
+      if(p.mouth && p.mouth!=='both') chips.push({t:p.mouth});
+      if(p.joins) chips.push({t:'joins two halves'});
+      if(p.from==='bank') chips.push({t:'wider bank · not in a model turn',bank:true});
+      return {ans:esc(p.t), speak:p.t, extra:p.note?'<b>note</b>'+esc(p.note):'', chips:chips};
+    })};
   });
 }
 
@@ -568,56 +578,61 @@ function topicSlides(){
   });
   return out;
 }
-function slides(){ return tab==='functions'?functionSlides():topicSlides(); }
-function label(){
-  if(tab==='topics') return pk?'Part '+pk+' · '+PART_LABEL[pk]:'All four parts';
-  var k=fnKeys()[fi]; return k?PH.functions[k].label:'Functions';
-}
+function slides(){ return tab==='topics'?topicSlides():[]; }
+function label(){ return pk?'Part '+pk+' · '+PART_LABEL[pk]:'All four parts'; }
 
 /* ── RENDER ──────────────────────────────────────────────────────────── */
 function row(){
-  var list = tab==='functions'
-    ? fnKeys().map(function(k){ return PH.functions[k].label; })
-    : ['All four parts','Part 1','Part 2','Part 3','Part 4'];
-  topicRow(list, tab==='functions'?fi:pk, function(i){ hush(); if(tab==='functions'){ fi=i; pref('fn',i); } else { pk=i; pref('part',i); } at=0; row(); render(); });
-  /* A part whose file did not load is shown, and cannot be picked. */
+  var list = ['All four parts','Part 1','Part 2','Part 3','Part 4'];
+  topicRow(list, pk, function(i){ hush(); pk=i; pref('part',i); at=0; row(); render(); });
+  /* On Topics, a part whose model-answer file did not load is shown, but
+     disabled — List draws on the shared phrase corpus, so it is never affected. */
   if(tab==='topics') Array.prototype.forEach.call($('topics').children,function(b,i){
     if(i>0 && !PARTS[i]){ b.disabled=true; b.style.opacity=.4; } });
 }
 function render(){
-  var S=slides(), body=$('deckBody'), listMode = tab==='functions';
+  var body=$('deckBody'), listMode = tab==='functions';
   body.classList.toggle('list',listMode);
   $('deckLabel').textContent=label();
 
-  if(!S.length){
-    body.innerHTML='<p class="deck-msg">Nothing to show yet.</p>';
-    $('deckN').textContent=''; $('deckDots').innerHTML='';
-    $('prevBtn').disabled=$('nextBtn').disabled=true;
-    $('readBtn').style.display='';
-    return;
-  }
-
-  /* LIST mode: the whole category at once. Prev/next (and the header row)
-     both move between categories — there is no single "current" item. */
+  /* LIST mode: every function tagged to the chosen part, each with its
+     phrases once underneath — no more per-phrase repeated context. */
   if(listMode){
+    var groups=functionGroups();
+    var total=groups.reduce(function(a,g){ return a+g.items.length; },0);
+    if(!groups.length){
+      body.innerHTML='<p class="deck-msg">Nothing to show yet.</p>';
+      $('deckN').textContent=''; $('deckDots').innerHTML='';
+      $('prevBtn').disabled=$('nextBtn').disabled=true; $('readBtn').style.display='';
+      return;
+    }
     $('readBtn').style.display='none';
-    var keys=fnKeys();
-    $('deckN').textContent=S.length+(S.length===1?' phrase':' phrases');
-    body.innerHTML=S.map(function(s){
-      return '<div class="deck-item">'+
-        (s.ctx?'<p class="deck-ctx">'+s.ctx+'</p>':'')+
-        '<p class="deck-ans">'+s.ans+'</p>'+
-        (s.extra?'<p class="deck-extra">'+s.extra+'</p>':'')+
-        (s.chips.length?'<div class="chips">'+s.chips.map(function(c){
-          return '<span'+(c.bank?' class="bank"':'')+'>'+esc(c.t)+'</span>'; }).join('')+'</div>':'')+
+    $('deckN').textContent=groups.length+(groups.length===1?' function · ':' functions · ')+
+      total+(total===1?' phrase':' phrases');
+    body.innerHTML=groups.map(function(g){
+      return '<div class="list-group"><div class="list-group-hd"><b>'+esc(g.label)+'</b>'+
+        (g.when?'<i>'+esc(g.when.charAt(0).toUpperCase()+g.when.slice(1)+'.')+'</i>':'')+'</div>'+
+        g.items.map(function(it){
+          return '<div class="list-item"><p class="deck-ans">'+it.ans+'</p>'+
+            (it.extra?'<p class="deck-extra">'+it.extra+'</p>':'')+
+            (it.chips.length?'<div class="chips">'+it.chips.map(function(c){
+              return '<span'+(c.bank?' class="bank"':'')+'>'+esc(c.t)+'</span>'; }).join('')+'</div>':'')+
+          '</div>';
+        }).join('')+
       '</div>';
     }).join('');
     $('deckDots').innerHTML='';
-    $('prevBtn').disabled = keys.length<=1;
-    $('nextBtn').disabled = keys.length<=1;
+    $('prevBtn').disabled=false; $('nextBtn').disabled=false;
     return;
   }
 
+  var S=slides();
+  if(!S.length){
+    body.innerHTML='<p class="deck-msg">Nothing to show yet.</p>';
+    $('deckN').textContent=''; $('deckDots').innerHTML='';
+    $('prevBtn').disabled=$('nextBtn').disabled=true; $('readBtn').style.display='';
+    return;
+  }
   $('readBtn').style.display='';
   at=Math.max(0,Math.min(S.length-1,at));
   var s=S[at];
@@ -637,13 +652,13 @@ function render(){
 function go(d){
   hush();
   if(tab==='functions'){
-    var keys=fnKeys(), n=keys.length; if(!n) return;
-    fi=(fi+d+n)%n; pref('fn',fi);
+    var n=5;
+    pk=(pk+d+n)%n; pref('part',pk);
     row(); render();
     return;
   }
   var n=slides().length; if(!n) return;
-  at = tab==='topics' ? (at+d+n)%n : Math.max(0,Math.min(n-1,at+d));
+  at=(at+d+n)%n;
   render();
 }
 
@@ -674,7 +689,6 @@ var nums=Object.keys(PART_URL);
 Promise.all([load('data/speaking-phrases.json')].concat(nums.map(function(k){ return load(PART_URL[k]); }))).then(function(res){
   PH=res[0]; nums.forEach(function(k,i){ PARTS[k]=res[i+1]; });
   var pt=pref('tab'); if(pt==='functions'||pt==='topics') tab=pt;
-  var pf=+pref('fn'); if(pf>=0 && pf<fnKeys().length) fi=pf;
   var pp=+pref('part'); if(pp>=0 && pp<=4) pk=pp;
   Array.prototype.forEach.call($('tabs').children,function(x){ x.setAttribute('aria-selected',String(x.dataset.tab===tab)); });
   row(); render();

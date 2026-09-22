@@ -65,6 +65,16 @@ body.scrolled .header::after{opacity:1}
 .dots button.on::after{background:var(--accent);transform:scale(1.25)}
 /* ── end stopgap ── */
 
+/* ── PHASE-FILTER TABS · same .seg pill as the header's stage row, but
+   full width and wrapping on its own line so all four labels fit on a
+   phone: Full text / Similarities / Differences / Answering &
+   Speculating. This replaces the old Whole/Section switch — students pick
+   a phase directly instead of stepping through it with arrows. ──────────── */
+.seg.phase{width:100%;margin-bottom:.7rem}
+.seg.phase button{flex:1 1 0;font-size:.62rem;line-height:1.22;white-space:normal;
+  padding:.5rem .35rem;text-align:center}
+@media(min-width:480px){ .seg.phase button{font-size:.68rem} }
+
 /* ── 1 · THE TOPIC · one line, sliding ─────────────────────────────────── */
 .topics{display:flex;gap:.1rem;overflow-x:auto;scroll-snap-type:x proximity;
   -webkit-overflow-scrolling:touch;scrollbar-width:none;padding:0 1rem;
@@ -339,6 +349,17 @@ var stage='explore', view='whole', xray=false, sp=0;
 var playing=false, playIx=-1, tmr=null;
 var SPEECH=('speechSynthesis' in window);
 
+/* The phase-filter tabs above the transcript. 'whole' = full text (still
+   divided by phase headers, as before); 'p0'/'p1'/'p2' = that phase only.
+   These replace the old Whole/Section switch and its dot navigation —
+   students jump straight to the phase they want. */
+var PHASE_TABS=[
+  {id:'whole', label:'Full text'},
+  {id:'p0', label:'Similarities'},
+  {id:'p1', label:'Differences'},
+  {id:'p2', label:'Answering & Speculating'}
+];
+
 var $=function(id){ return document.getElementById(id); };
 var esc=function(s){ return String(s).replace(/[&<>"]/g,function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
@@ -482,10 +503,14 @@ function seg(items,cur,attr,cls){
 }
 
 function explore(){
-  var L=lines(), N=D.phases.length, lim=D.limit;
+  var L=lines(), lim=D.limit;
   var tot=L.length?L[L.length-1].at:0;
-  var hd='<div class="dlg-hd">'+
-    seg([{id:'whole',label:'Whole'},{id:'section',label:'Section'}],view,'data-view','sm')+
+  var curTab = view==='whole' ? 'whole' : ('p'+sp);
+  var phaseSeg='<div class="seg phase" role="tablist" aria-label="Filter by section">'+
+    PHASE_TABS.map(function(pt){
+      return '<button type="button" role="tab" data-view="'+pt.id+'" aria-selected="'+(pt.id===curTab)+'">'+
+        esc(pt.label)+'</button>'; }).join('')+'</div>';
+  var hd=phaseSeg+'<div class="dlg-hd">'+
     seg(D.styles.map(function(s,i){ return {id:String(i),label:s.tab}; }),String(si),'data-style','sm')+
     '</div><div class="dlg-sub">'+
     '<button class="tool'+(xray?' on':'')+'" type="button" data-xray="1">x-ray</button>'+
@@ -495,21 +520,15 @@ function explore(){
   if(view==='section') cut = show.length && show[0].start>=lim;
   show.forEach(function(l){
     var i=L.indexOf(l);
+    /* Full text still splits by section — the phase headers below are
+       exactly what "Full text" divides on. */
     if(view==='whole' && l.first) body+='<div class="mphase">'+esc(D.phases[l.phase].name)+'</div>';
-    /* The line goes before the first sentence that ENDS past the minute, so
-       the sentence it interrupts is the one you would be stopped inside. */
     if(!cut && l.at>lim){ body+='<div class="cut">'+lim+' seconds — the examiner stops you here</div>'; cut=true; }
     body+='<div class="ml'+(l.at>lim?' past':'')+'" data-i="'+i+'"><span class="c">'+l.at+'s</span>'+
       '<p>'+mark(l)+'</p></div>';
   });
   if(view==='section'){
-    var dots=''; for(var j=0;j<N;j++) dots+='<button type="button" data-go="'+j+'"'+(j===sp?' class="on"':'')+
-      ' aria-label="'+esc(D.phases[j].name)+'"></button>';
-    body='<div class="mphase">'+esc(D.phases[sp].name)+' · '+esc(D.phases[sp].hint)+'</div>'+body+
-      '<div class="one-foot">'+
-      '<button class="arrow" type="button" data-go="'+(sp-1)+'"'+(sp<=0?' disabled':'')+' aria-label="Previous phase">&larr;</button>'+
-      '<div class="dots">'+dots+'</div>'+
-      '<button class="arrow" type="button" data-go="'+(sp+1)+'"'+(sp>=N-1?' disabled':'')+' aria-label="Next phase">&rarr;</button></div>';
+    body='<div class="mphase">'+esc(D.phases[sp].name)+' · '+esc(D.phases[sp].hint)+'</div>'+body;
   }
   $('body').innerHTML='<section class="dlg" aria-label="The model turn">'+hd+
     '<div id="talk" class="'+(view==='section'?'one':'')+'">'+body+'</div></section>';
@@ -930,11 +949,15 @@ document.addEventListener('click',function(e){
                      else if(stage==='practice'){ if(dRun){ drillStop(); drill(); }
                                                  else { dRun=true; drill(); drillGo(); } }
                      return; }
-  if(t.dataset.view){ if(t.dataset.view!==view){ stop(); view=t.dataset.view; pref('view',view); sp=0; explore(); } return; }
+  if(t.dataset.view){
+    var v=t.dataset.view, nv=v==='whole'?'whole':'section', ns=v==='whole'?sp:+v.slice(1);
+    if(nv!==view || ns!==sp){ stop(); view=nv; sp=ns; pref('view',view); pref('sp',sp); explore(); }
+    return;
+  }
   if(t.dataset.xray){ xray=!xray; explore(); return; }
   if(t.dataset.style!==undefined){ stop(); si=+t.dataset.style; pref('style',si); draw(); return; }
   if(t.dataset.go!==undefined && stage==='explore'){ var n=+t.dataset.go;
-    if(n>=0 && n<D.phases.length){ stop(); sp=n; explore(); } return; }
+    if(n>=0 && n<D.phases.length){ stop(); sp=n; pref('sp',sp); explore(); } return; }
   if(t.dataset.fn!==undefined){ drillStop(); fnId=+t.dataset.fn; pref('fn',fnId); practice(); return; }
   if(t.dataset.frame){ drillStop(); frIds[fnId]=t.dataset.frame; pref('frame'+fnId,t.dataset.frame); practice(); return; }
   if(t.dataset.d!==undefined){
@@ -950,8 +973,8 @@ document.addEventListener('click',function(e){
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape' && $('sheet').classList.contains('open')){ shutBank(); return; }
   if(stage==='explore' && view==='section'){
-    if(e.key==='ArrowRight' && sp<D.phases.length-1){ e.preventDefault(); stop(); sp++; explore(); }
-    if(e.key==='ArrowLeft' && sp>0){ e.preventDefault(); stop(); sp--; explore(); }
+    if(e.key==='ArrowRight' && sp<D.phases.length-1){ e.preventDefault(); stop(); sp++; pref('sp',sp); explore(); }
+    if(e.key==='ArrowLeft' && sp>0){ e.preventDefault(); stop(); sp--; pref('sp',sp); explore(); }
   }
 });
 $('bankBtn').addEventListener('click',bank);
@@ -970,6 +993,7 @@ Promise.all([
   var wt=p.get('topic')||pref('topic'); if(wt) D.tasks.forEach(function(t,i){ if(t.id===wt) ti=i; });
   var pv=pref('view'); if(pv==='whole'||pv==='section') view=pv;
   if(p.get('view')==='sections'||p.get('view')==='section') view='section';
+  var psp=+pref('sp'); if(psp>=0 && psp<D.phases.length) sp=psp;
   var ps=+pref('style'); if(ps>=0 && ps<D.styles.length) si=ps;
   var pf=+pref('fn'); if(pf>=0 && pf<FN.length) fnId=pf;
   [0,1,2].forEach(function(m){ var pr=pref('frame'+m);

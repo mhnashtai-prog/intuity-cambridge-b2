@@ -224,6 +224,15 @@ body.scrolled .header::after{opacity:1}
 .deck-top b{font-weight:400;color:var(--accent-ink)}
 .deck-top .tool{padding:0 .1rem;min-height:0}
 .deck-body{min-height:15rem;display:flex;flex-direction:column;justify-content:center;gap:1.1rem;padding:1.4rem 0}
+/* List mode: every phrase in the category at once, page-scrolled — no
+   per-item paging, no centering. */
+.deck-body.list{display:block;min-height:0;padding:.2rem 0}
+.deck-item{padding:1.1rem 0;border-bottom:1px solid var(--rule)}
+.deck-item:first-child{padding-top:0}
+.deck-item:last-child{border-bottom:none}
+.deck-item .deck-ctx{margin-bottom:.35rem}
+.deck-item .deck-ans{font-size:clamp(1.1rem,3.2vw,1.5rem)}
+.deck-item .deck-extra{margin-top:.6rem;padding-top:.6rem}
 .deck-ctx{margin:0;font-size:.98rem;line-height:1.55;color:var(--dim)}
 .deck-ans{margin:0;font-family:var(--f-display);font-weight:700;line-height:1.3;color:var(--ink);
   font-size:clamp(1.6rem,6vw,2.6rem);letter-spacing:-.01em}
@@ -272,7 +281,7 @@ body.scrolled .header::after{opacity:1}
 <main class="wrap wide">
   <div class="stage-row">
     <div class="seg" id="tabs" role="tablist" aria-label="Deck">
-      <button type="button" role="tab" data-tab="functions" aria-selected="true">Functions</button>
+      <button type="button" role="tab" data-tab="functions" aria-selected="true">List</button>
       <button type="button" role="tab" data-tab="topics" aria-selected="false">Topics</button>
     </div>
   </div>
@@ -552,7 +561,7 @@ var BUILD={
       var L=t.levels[t.levels.length-1];
       var mine=L.filter(function(s){ return s.m!=='p'; }), theirs=L.filter(function(s){ return s.m==='p'; });
       return {ctx:esc(t.question), ans:mine.map(function(s){ return mk(s.t,s.marks); }).join(' '),
-        speak:mine.map(function(s){ return s.t; }).join(' '), long:true,
+        speak:mine.map(function(s){ return s.t; }).join(' '),
         extra:theirs.length?'<b>'+esc(t.handover)+'</b>'+theirs.map(function(s){ return mk(s.t,s.marks); }).join(' '):'',
         chips:[{t:t.tab}].concat(movesOf(P,mine))};
     });
@@ -587,16 +596,44 @@ function row(){
     if(i>0 && !PARTS[i]){ b.disabled=true; b.style.opacity=.4; } });
 }
 function render(){
-  var S=slides();
+  var S=slides(), body=$('deckBody'), listMode = tab==='functions';
+  body.classList.toggle('list',listMode);
   $('deckLabel').textContent=label();
+
   if(!S.length){
-    $('deckBody').innerHTML='<p class="deck-msg">Nothing to show yet.</p>';
-    $('deckN').textContent=''; $('deckDots').innerHTML=''; $('prevBtn').disabled=$('nextBtn').disabled=true; return;
+    body.innerHTML='<p class="deck-msg">Nothing to show yet.</p>';
+    $('deckN').textContent=''; $('deckDots').innerHTML='';
+    $('prevBtn').disabled=$('nextBtn').disabled=true;
+    $('readBtn').style.display='';
+    return;
   }
+
+  /* LIST mode: the whole category at once. Prev/next (and the header row)
+     both move between categories — there is no single "current" item. */
+  if(listMode){
+    $('readBtn').style.display='none';
+    var keys=fnKeys();
+    $('deckN').textContent=S.length+(S.length===1?' phrase':' phrases');
+    body.innerHTML=S.map(function(s){
+      return '<div class="deck-item">'+
+        (s.ctx?'<p class="deck-ctx">'+s.ctx+'</p>':'')+
+        '<p class="deck-ans">'+s.ans+'</p>'+
+        (s.extra?'<p class="deck-extra">'+s.extra+'</p>':'')+
+        (s.chips.length?'<div class="chips">'+s.chips.map(function(c){
+          return '<span'+(c.bank?' class="bank"':'')+'>'+esc(c.t)+'</span>'; }).join('')+'</div>':'')+
+      '</div>';
+    }).join('');
+    $('deckDots').innerHTML='';
+    $('prevBtn').disabled = keys.length<=1;
+    $('nextBtn').disabled = keys.length<=1;
+    return;
+  }
+
+  $('readBtn').style.display='';
   at=Math.max(0,Math.min(S.length-1,at));
   var s=S[at];
   $('deckN').textContent=(at+1)+' / '+S.length;
-  $('deckBody').innerHTML=(s.ctx?'<p class="deck-ctx">'+s.ctx+'</p>':'')+
+  body.innerHTML=(s.ctx?'<p class="deck-ctx">'+s.ctx+'</p>':'')+
     '<p class="deck-ans'+(s.long?' long':'')+'">'+s.ans+'</p>'+
     (s.extra?'<p class="deck-extra">'+s.extra+'</p>':'')+
     (s.chips.length?'<div class="chips">'+s.chips.map(function(c){
@@ -609,7 +646,14 @@ function render(){
   $('nextBtn').disabled = tab!=='topics' && at===S.length-1;
 }
 function go(d){
-  var n=slides().length; if(!n) return; hush();
+  hush();
+  if(tab==='functions'){
+    var keys=fnKeys(), n=keys.length; if(!n) return;
+    fi=(fi+d+n)%n; pref('fn',fi);
+    row(); render();
+    return;
+  }
+  var n=slides().length; if(!n) return;
   at = tab==='topics' ? (at+d+n)%n : Math.max(0,Math.min(n-1,at+d));
   render();
 }

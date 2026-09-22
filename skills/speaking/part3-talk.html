@@ -328,7 +328,7 @@ body.scrolled .header::after{opacity:1}
    STATE
    ═══════════════════════════════════════════════════════════════════════ */
 var D=null, PH=null, ti=0, si=0;
-var stage='explore', view='whole', xray=false, bp=0;
+var stage='explore', view='whole', xray=false, fp='view';
 var playing=false, playIx=-1, tmr=null;
 var TR=null;                                   /* the prompt trace for this run */
 var SPEECH=('speechSynthesis' in window);
@@ -421,24 +421,71 @@ function trace(){
   return {now:now, done:done, raw:raw};
 }
 
-/* Every turn whose raw hits name this prompt, plus its immediate neighbour
-   on each side — the line that prompted it and the line that follows —
-   so the filtered read stays a legible exchange, not isolated fragments. */
-function branchTurns(k){
+/* ═══════════════════════════════════════════════════════════════════════
+   WHICH LANGUAGE FUNCTION IS THIS TURN
+   Not a heuristic — the data already carries the answer. Every turn has a
+   `tag`, and almost all of them are literally <respond>_then_<advance>:
+   the turn reacts to the partner, then does its own next job. That
+   compound shape IS what Interactive Communication marks, so one turn
+   sorts into exactly one bucket below by what its tag says it does, in
+   this priority order (checked top to bottom, first match wins):
+
+     1. the turn that closes the discussion (`last:true`, or a tag ending
+        _summarizing) — reaching consensus, wherever it falls
+     2. a bare view (`opinion`, `opinion_with_*`) — expressing a view
+     3. a bare reason (`reasoning`, `acknowledging_then_reasoning`) — justifying
+     4. a tag ending _then_inviting, or `inviting` — handing the floor back
+     5. everything else — reacting: every remaining tag is a
+        <react>_then_<build> compound (partial_agreement_then_disagreement,
+        acknowledging_then_questioning, strong_agreement_then_building...),
+        so rather than force each one into "agree" OR "disagree" — which
+        the tag itself refuses to be — they sit together in one bucket,
+        with x-ray on by default to show where the reaction ends and the
+        candidate's own move begins.
+
+   NOT COVERED: exemplifying. Cambridge's own Part 3 criteria list it
+   alongside justifying, but no tag in this corpus marks a turn as giving
+   an example rather than a reason — so there is no "Exemplifying" tab
+   here. Adding one would mean inventing which turns count, which is worse
+   than leaving the gap visible. Tag the data by hand (a `func:"example"`
+   field, read the same way `prompt` already overrides the Part 2/3
+   heuristics) and a sixth tab drops in without touching this code. */
+function funcOf(t){
+  var tag=t.tag||'';
+  if(t.last===true || /summarizing$/.test(tag)) return 'consensus';
+  if(tag==='opinion' || /^opinion_with/.test(tag)) return 'view';
+  if(tag==='reasoning' || tag==='acknowledging_then_reasoning') return 'justify';
+  if(tag==='inviting' || /_then_inviting$/.test(tag)) return 'invite';
+  return 'react';
+}
+
+var FUNCS=[
+  { id:'view', label:'Expressing a view',
+    hint:'The opening move, and any fresh opinion raised mid-discussion.' },
+  { id:'justify', label:'Justifying',
+    hint:'A reason given for a view, not just the view on its own.' },
+  { id:'react', label:'Agreeing & disagreeing',
+    hint:'Reacting to your partner before adding your own move — x-ray shows where the reaction ends and the next move starts.' },
+  { id:'invite', label:'Handing back',
+    hint:'Ending on a question, so the discussion stays a discussion.' },
+  { id:'consensus', label:'Reaching consensus',
+    hint:'The turn that closes the discussion. Part 3 always ends with one.' }
+];
+
+function phaseTabs(){ return [{id:'whole',label:'Full text'}].concat(FUNCS); }
+
+/* Every turn in this function, plus its immediate neighbour on each side
+   — the line that prompted it and the line that follows — so the
+   filtered read stays a legible exchange, not isolated fragments. */
+function funcTurns(id){
   var seq=run(), keep={};
-  (TR.raw||[]).forEach(function(hits,i){
-    if(hits.indexOf(k)===-1) return;
+  seq.forEach(function(t,i){
+    if(funcOf(t)!==id) return;
     keep[i]=1;
     if(i>0) keep[i-1]=1;
     if(i<seq.length-1) keep[i+1]=1;
   });
   return Object.keys(keep).map(Number).sort(function(a,b){ return a-b; });
-}
-
-function phaseTabs(){
-  var tabs=[{id:'whole',label:'Full text'}];
-  topic().prompts.forEach(function(p,i){ tabs.push({id:'b'+i, label:p}); });
-  return tabs;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -525,7 +572,7 @@ function topics(){
     b.className=i===ti?'on':''; b.setAttribute('aria-selected',String(i===ti));
     b.addEventListener('click',function(){
       if(i===ti) return;
-      stop(); ti=i; bp=0; pref('topic',t.id); topics(); draw();
+      stop(); ti=i; pref('topic',t.id); topics(); draw();
     });
     T.appendChild(b);
   });
@@ -559,8 +606,8 @@ function seg(items,cur,attr,cls){
 }
 
 function explore(){
-  var seq=run(), tabs=phaseTabs(), curTab = view==='whole' ? 'whole' : ('b'+bp);
-  var phaseSeg='<div class="seg phase" role="tablist" aria-label="Filter by prompt">'+
+  var seq=run(), tabs=phaseTabs(), curTab = view==='whole' ? 'whole' : fp;
+  var phaseSeg='<div class="seg phase" role="tablist" aria-label="Filter by language function">'+
     tabs.map(function(pt){
       return '<button type="button" role="tab" data-view="'+pt.id+'" aria-selected="'+
         (pt.id===curTab)+'">'+esc(pt.label)+'</button>'; }).join('')+'</div>';
@@ -573,23 +620,25 @@ function explore(){
   if(view==='whole'){
     body='<div id="talk">'+seq.map(turnHtml).join('')+'</div>';
   } else {
-    var idx=branchTurns(bp), label=tabs.filter(function(t){ return t.id==='b'+bp; })[0];
+    var idx=funcTurns(fp), meta=FUNCS.filter(function(f){ return f.id===fp; })[0];
     var lines = idx.length
       ? idx.map(function(i){ return turnHtml(seq[i],i); }).join('')
-      : '<p class="dr-ctx">Neither of you named this one directly in this register — try Full text, or another register above.</p>';
-    body='<div id="talk"><div class="mphase">'+esc(label?label.label:'')+'</div>'+lines+'</div>';
+      : '<p class="dr-ctx">No turns do this move in this register — try Full text, or another register above.</p>';
+    body='<div id="talk"><div class="mphase">'+esc(meta.label)+'</div>'+
+      '<p class="dr-ctx" style="margin-top:-.4rem">'+esc(meta.hint)+'</p>'+lines+'</div>';
   }
   $('body').innerHTML='<section class="dlg" aria-label="The discussion">'+head+body+'</section>';
   sheetState();
 }
 
-/* What the sheet shows, given where we are. Filtered to a prompt and not
-   playing: light that branch on the spider, so the diagram and the text
-   underneath always agree on what is on screen. */
+/* What the sheet shows, given where we are. The spider's five branches are
+   the discussion PROMPTS (content), not the language functions filtered
+   above, so playback still lights up whichever prompt the current turn
+   happens to be about — the two axes are independent, and both stay true
+   on screen at once. */
 function sheetState(){
   var n=run().length, at=(playing && playIx>=0) ? playIx : n-1;
-  var nowHi = playing ? TR.now[at] : (view!=='whole' ? [bp] : []);
-  web({ now: nowHi, done: TR.done[at],
+  web({ now: playing ? TR.now[at] : [], done: TR.done[at],
         hub: SPEECH ? (playing?'stop':'play') : 'off', tap:false });
 }
 
@@ -598,7 +647,7 @@ function sheetState(){
 function play(){
   if(!SPEECH) return;
   var seq=run();
-  var idx = view==='whole' ? seq.map(function(_,i){ return i; }) : branchTurns(bp);
+  var idx = view==='whole' ? seq.map(function(_,i){ return i; }) : funcTurns(fp);
   if(!idx.length) return;
   playing=true; var pos=0; playIx=idx[0];
   $('talk').classList.add('playing');
@@ -952,8 +1001,11 @@ document.addEventListener('click',function(e){
   }
   var t=e.target.closest('button'); if(!t) return;
   if(t.dataset.view){
-    var v=t.dataset.view, nv=v==='whole'?'whole':'branch', nb=v==='whole'?bp:+v.slice(1);
-    if(nv!==view || nb!==bp){ stop(); view=nv; bp=nb; pref('view',view); pref('bp',bp); explore(); }
+    var v=t.dataset.view, nv=v==='whole'?'whole':'func', nf=v==='whole'?fp:v;
+    if(nv!==view || nf!==fp){
+      stop(); view=nv; fp=nf; if(nv==='func') xray=true;
+      pref('view',view); pref('fp',fp); explore();
+    }
     return;
   }
   if(t.dataset.xray){ xray=!xray; explore(); return; }
@@ -973,10 +1025,10 @@ document.addEventListener('keydown',function(e){
   var g=document.activeElement && document.activeElement.closest &&
         document.activeElement.closest('[data-hub],[data-branch]');
   if(g && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); g.dispatchEvent(new MouseEvent('click',{bubbles:true})); return; }
-  if(stage==='explore' && view==='branch'){
-    var nP=topic().prompts.length;
-    if(e.key==='ArrowRight' && bp<nP-1){ e.preventDefault(); stop(); bp++; pref('bp',bp); explore(); }
-    if(e.key==='ArrowLeft' && bp>0){ e.preventDefault(); stop(); bp--; pref('bp',bp); explore(); }
+  if(stage==='explore' && view==='func'){
+    var ids=FUNCS.map(function(f){ return f.id; }), pos=ids.indexOf(fp);
+    if(e.key==='ArrowRight' && pos<ids.length-1){ e.preventDefault(); stop(); fp=ids[pos+1]; pref('fp',fp); explore(); }
+    if(e.key==='ArrowLeft' && pos>0){ e.preventDefault(); stop(); fp=ids[pos-1]; pref('fp',fp); explore(); }
   }
 });
 
@@ -995,8 +1047,8 @@ Promise.all([
   var p=new URLSearchParams(location.search);
   var wt=p.get('topic')||pref('topic');
   if(wt) D.topics.forEach(function(t,i){ if(t.id===wt) ti=i; });
-  var pv=pref('view'); if(pv==='whole'||pv==='branch') view=pv;
-  var pbp=+pref('bp'); if(pbp>=0) bp=pbp;
+  var pv=pref('view'); if(pv==='whole'||pv==='func') view=pv;
+  var pfp=pref('fp'); if(pfp && FUNCS.some(function(f){ return f.id===pfp; })) fp=pfp;
   var pf=pref('fn'); if(pf && FN.some(function(f){ return f.id===pf; })) fnId=pf;
   var ps=+pref('style'); if(ps>=0 && ps<D.styles.length) si=ps;
   var ws=p.get('mode')||p.get('stage')||pref('stage');

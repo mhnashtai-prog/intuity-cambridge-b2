@@ -256,6 +256,25 @@ body.scrolled .header::after{opacity:1}
   .deck-ans{font-size:3.2rem} .deck-ans.long{font-size:1.6rem}
   .deck-ctx,.deck-extra{font-size:1.1rem}
 }
+
+/* ── FUNCTION FILTER · List mode only ────────────────────────────────────
+   Two tiers: category (coarse — Keeping going / Stance / With your
+   partner / Describing) and function (fine — the actual 5-15 phrase
+   groups). Both reuse the .fn-row/.fn chip look already defined above
+   for the shadowing drill, so nothing new is introduced visually.
+   Category narrows which function chips are offered; function narrows
+   which groups render in the list. Neither tier is exclusive-select —
+   toggling a chip on/off is how a student isolates exactly the set of
+   functions they want to drill (e.g. Similarities + Differences +
+   Speculating for Part 2), leaving the rest out entirely. ───────────── */
+.filter-row{margin-bottom:.7rem}
+.filter-row .fn-row{margin-bottom:0}
+.filter-cat .fn{box-shadow:inset 0 0 0 1px var(--rule);color:var(--faint)}
+.filter-cat .fn.on{color:var(--accent-ink);box-shadow:inset 0 0 0 1.5px var(--accent-ink)}
+.filter-clear{font-family:var(--f-mono);font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--faint);background:none;border:none;cursor:pointer;padding:.4rem .1rem;min-height:32px;
+  text-decoration:underline;text-underline-offset:2px}
+.filter-clear[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -282,6 +301,11 @@ body.scrolled .header::after{opacity:1}
   <section class="deck" aria-live="polite">
     <div class="deck-top"><span id="deckLabel">Loading…</span>
       <span><button class="tool" type="button" id="readBtn">▶ read</button> · <b id="deckN"></b></span></div>
+    <div class="filter-row" id="filterRow" hidden>
+      <div class="fn-row filter-cat" id="catChips" role="group" aria-label="Filter by category"></div>
+      <div class="fn-row" id="fnChips" role="group" aria-label="Filter by function"></div>
+      <button type="button" class="filter-clear" id="filterClear" hidden>Clear filter</button>
+    </div>
     <div class="deck-body" id="deckBody"><p class="deck-msg">Loading…</p></div>
     <div class="deck-foot">
       <button class="arrow" type="button" id="prevBtn" aria-label="Previous">&larr;</button>
@@ -501,12 +525,88 @@ var PARTS={}, tab='functions', pk=0, at=0;
 
 function fnKeys(){ return PH && PH.functions ? Object.keys(PH.functions) : []; }
 
-/* ── FUNCTIONS: every function tagged to the chosen part, grouped ─────── */
-function functionGroups(){
-  if(!PH || !PH.functions) return [];
+/* ── FILTERS · category (coarse) + function (fine) ───────────────────────
+   Two independent toggle-sets, both scoped to whatever the Part slider
+   currently allows. Neither is exclusive-select: a student ticks exactly
+   the functions they want — e.g. Similarities + Differences + Speculating
+   inside Part 2 — and everything else drops out of the list. Empty set on
+   either tier means "no restriction on that tier". Selections persist
+   across reloads and are pruned whenever the Part changes so a stale pick
+   (a function not tagged to the new part) can't silently filter to zero. */
+var selectedCats=new Set(), selectedFns=new Set();
+function loadFilters(){
+  var c=pref('cats'), f=pref('fns');
+  if(c) c.split(',').filter(Boolean).forEach(function(x){ selectedCats.add(x); });
+  if(f) f.split(',').filter(Boolean).forEach(function(x){ selectedFns.add(x); });
+}
+function saveFilters(){
+  pref('cats',Array.from(selectedCats).join(','));
+  pref('fns',Array.from(selectedFns).join(','));
+}
+/* Function keys tagged to the current Part — the pool either chip row draws from. */
+function availFnKeys(){
   return fnKeys().filter(function(k){
     var f=PH.functions[k];
     return !pk || (f.parts && f.parts.indexOf(pk)!==-1);
+  });
+}
+/* Distinct categories present among those functions, in the order PH.categories defines. */
+function availCats(){
+  var present={}; availFnKeys().forEach(function(k){ present[PH.functions[k].category]=1; });
+  return Object.keys(PH.categories||{}).filter(function(c){ return present[c]; });
+}
+/* Drop any selection that no longer applies once the Part changes. */
+function pruneFilters(){
+  var avail=availFnKeys(), cats=availCats();
+  selectedFns.forEach(function(k){ if(avail.indexOf(k)===-1) selectedFns.delete(k); });
+  selectedCats.forEach(function(c){ if(cats.indexOf(c)===-1) selectedCats.delete(c); });
+  saveFilters();
+}
+function renderFilters(){
+  var cats=availCats();
+  /* Category row: only worth showing when there's more than one category on offer. */
+  $('catChips').innerHTML = cats.length<2 ? '' : cats.map(function(c){
+    var on=selectedCats.has(c);
+    return '<button type="button" class="fn'+(on?' on':'')+'" data-cat="'+esc(c)+'">'+esc(PH.categories[c].label)+'</button>';
+  }).join('');
+  /* Function row: narrowed by the category selection, if any. */
+  var fnPool=availFnKeys().filter(function(k){
+    return !selectedCats.size || selectedCats.has(PH.functions[k].category);
+  });
+  $('fnChips').innerHTML = fnPool.map(function(k){
+    var on=selectedFns.has(k);
+    return '<button type="button" class="fn'+(on?' on':'')+'" data-fn="'+esc(k)+'">'+esc(PH.functions[k].label)+'</button>';
+  }).join('');
+  $('filterClear').hidden = !(selectedCats.size || selectedFns.size);
+}
+$('catChips').addEventListener('click',function(e){
+  var b=e.target.closest('[data-cat]'); if(!b) return;
+  var c=b.dataset.cat;
+  if(selectedCats.has(c)) selectedCats.delete(c); else selectedCats.add(c);
+  /* A function selection that no longer belongs to an active category is dropped,
+     so the two tiers never silently disagree with each other. */
+  if(selectedCats.size) selectedFns.forEach(function(k){
+    if(!selectedCats.has(PH.functions[k].category)) selectedFns.delete(k);
+  });
+  saveFilters(); render();
+});
+$('fnChips').addEventListener('click',function(e){
+  var b=e.target.closest('[data-fn]'); if(!b) return;
+  var k=b.dataset.fn;
+  if(selectedFns.has(k)) selectedFns.delete(k); else selectedFns.add(k);
+  saveFilters(); render();
+});
+$('filterClear').addEventListener('click',function(){
+  selectedCats.clear(); selectedFns.clear(); saveFilters(); render();
+});
+
+/* ── FUNCTIONS: every function tagged to the chosen part, grouped ─────── */
+function functionGroups(){
+  if(!PH || !PH.functions) return [];
+  return availFnKeys().filter(function(k){
+    if(selectedCats.size && !selectedCats.has(PH.functions[k].category)) return false;
+    if(selectedFns.size && !selectedFns.has(k)) return false;
+    return true;
   }).map(function(k){
     var f=PH.functions[k];
     return { label:f.label, when:f.when, items:f.phrases.map(function(p){
@@ -519,7 +619,7 @@ function functionGroups(){
   });
 }
 
-/* ── TOPICS: every model answer, whole, from all four parts ──────────── */
+/* ── TOPICS: every model answer, whole, from all four parts ────────────── */
 var BUILD={
   1:function(P){
     var vid=P.voices[0].id;
@@ -584,7 +684,7 @@ function label(){ return pk?'Part '+pk+' · '+PART_LABEL[pk]:'All four parts'; }
 /* ── RENDER ──────────────────────────────────────────────────────────── */
 function row(){
   var list = ['All four parts','Part 1','Part 2','Part 3','Part 4'];
-  topicRow(list, pk, function(i){ hush(); pk=i; pref('part',i); at=0; row(); render(); });
+  topicRow(list, pk, function(i){ hush(); pk=i; pref('part',i); at=0; pruneFilters(); row(); render(); });
   /* On Topics, a part whose model-answer file did not load is shown, but
      disabled — List draws on the shared phrase corpus, so it is never affected. */
   if(tab==='topics') Array.prototype.forEach.call($('topics').children,function(b,i){
@@ -594,6 +694,8 @@ function render(){
   var body=$('deckBody'), listMode = tab==='functions';
   body.classList.toggle('list',listMode);
   $('deckLabel').textContent=label();
+  $('filterRow').hidden = !listMode;
+  if(listMode) renderFilters();
 
   /* LIST mode: every function tagged to the chosen part, each with its
      phrases once underneath — no more per-phrase repeated context. */
@@ -601,7 +703,8 @@ function render(){
     var groups=functionGroups();
     var total=groups.reduce(function(a,g){ return a+g.items.length; },0);
     if(!groups.length){
-      body.innerHTML='<p class="deck-msg">Nothing to show yet.</p>';
+      body.innerHTML='<p class="deck-msg">'+(selectedFns.size||selectedCats.size?
+        'Nothing matches this filter — try clearing it.':'Nothing to show yet.')+'</p>';
       $('deckN').textContent=''; $('deckDots').innerHTML='';
       $('prevBtn').disabled=$('nextBtn').disabled=true; $('readBtn').style.display='';
       return;
@@ -654,7 +757,7 @@ function go(d){
   if(tab==='functions'){
     var n=5;
     pk=(pk+d+n)%n; pref('part',pk);
-    row(); render();
+    pruneFilters(); row(); render();
     return;
   }
   var n=slides().length; if(!n) return;
@@ -690,6 +793,7 @@ Promise.all([load('data/speaking-phrases.json')].concat(nums.map(function(k){ re
   PH=res[0]; nums.forEach(function(k,i){ PARTS[k]=res[i+1]; });
   var pt=pref('tab'); if(pt==='functions'||pt==='topics') tab=pt;
   var pp=+pref('part'); if(pp>=0 && pp<=4) pk=pp;
+  loadFilters();
   Array.prototype.forEach.call($('tabs').children,function(x){ x.setAttribute('aria-selected',String(x.dataset.tab===tab)); });
   row(); render();
 });

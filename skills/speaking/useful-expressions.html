@@ -326,6 +326,15 @@ var SPEECH=('speechSynthesis' in window), tmr=null;
 function pref(k,v){ try{ if(v===undefined) return localStorage.getItem(PFX+k);
   localStorage.setItem(PFX+k,v); }catch(e){ return null; } }
 function measure(){ var h=$('hdr'); if(h) document.documentElement.style.setProperty('--hh',h.offsetHeight+'px'); }
+/* Reset scroll to the top of the page. Called whenever the Part, the
+   List/Topics tab, or a filter chip changes — because without it the
+   browser keeps whatever scroll depth the person was already at, and the
+   new (correctly filtered) list renders underneath them, out of view.
+   'buying_time' belongs to every Part and always sorts last (it has the
+   most parts tagged), so a person scrolled to its tail sees the exact
+   same three phrases no matter which Part they tap — it looks frozen
+   even though the data underneath has genuinely changed. */
+function toTop(){ try{ window.scrollTo({top:0,left:0,behavior:'auto'}); }catch(e){ try{ window.scrollTo(0,0); }catch(e2){} } }
 function secs(t){ return Math.round(String(t).split(/\s+/).filter(function(x){ return /[A-Za-z0-9]/.test(x); }).length/2.5); }
 function seg(items,cur,attr,cls){
   return '<div class="seg'+(cls?' '+cls:'')+'" role="tablist">'+items.map(function(it){
@@ -588,16 +597,16 @@ $('catChips').addEventListener('click',function(e){
   if(selectedCats.size) selectedFns.forEach(function(k){
     if(!selectedCats.has(PH.functions[k].category)) selectedFns.delete(k);
   });
-  saveFilters(); render();
+  saveFilters(); toTop(); render();
 });
 $('fnChips').addEventListener('click',function(e){
   var b=e.target.closest('[data-fn]'); if(!b) return;
   var k=b.dataset.fn;
   if(selectedFns.has(k)) selectedFns.delete(k); else selectedFns.add(k);
-  saveFilters(); render();
+  saveFilters(); toTop(); render();
 });
 $('filterClear').addEventListener('click',function(){
-  selectedCats.clear(); selectedFns.clear(); saveFilters(); render();
+  selectedCats.clear(); selectedFns.clear(); saveFilters(); toTop(); render();
 });
 
 /* ── FUNCTIONS: every function tagged to the chosen part, grouped ─────── */
@@ -695,7 +704,7 @@ function label(){ return pk?'Part '+pk+' · '+PART_LABEL[pk]:'All four parts'; }
 /* ── RENDER ──────────────────────────────────────────────────────────── */
 function row(){
   var list = ['All four parts','Part 1','Part 2','Part 3','Part 4'];
-  topicRow(list, pk, function(i){ hush(); pk=i; pref('part',i); at=0; pruneFilters(); row(); render(); });
+  topicRow(list, pk, function(i){ hush(); toTop(); pk=i; pref('part',i); at=0; pruneFilters(); row(); render(); });
   /* On Topics, a part whose model-answer file did not load is shown, but
      disabled — List draws on the shared phrase corpus, so it is never affected. */
   if(tab==='topics') Array.prototype.forEach.call($('topics').children,function(b,i){
@@ -768,7 +777,7 @@ function go(d){
   if(tab==='functions'){
     var n=5;
     pk=(pk+d+n)%n; pref('part',pk);
-    pruneFilters(); row(); render();
+    pruneFilters(); toTop(); row(); render();
     return;
   }
   var n=slides().length; if(!n) return;
@@ -778,7 +787,7 @@ function go(d){
 
 $('tabs').addEventListener('click',function(e){
   var b=e.target.closest('button'); if(!b || b.dataset.tab===tab) return;
-  hush(); tab=b.dataset.tab; pref('tab',tab); at=0;
+  hush(); toTop(); tab=b.dataset.tab; pref('tab',tab); at=0;
   Array.prototype.forEach.call($('tabs').children,function(x){ x.setAttribute('aria-selected',String(x===b)); });
   row(); render();
 });

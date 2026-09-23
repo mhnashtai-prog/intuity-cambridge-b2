@@ -530,7 +530,7 @@ function shellWire(){
 var PFX='intuity.sl.', PART=0, D=null, PH=null;
 var PART_URL={1:'data/part1-answers.json',2:'data/part2-turn.json',3:'data/part3-talk.json',4:'data/part4-views.json'};
 var PART_LABEL={1:'Interview',2:'Long turn',3:'Collaborate',4:'Discuss'};
-var PARTS={}, tab='functions', pk=0, at=0;
+var PARTS={}, tab='functions', pk=0, at=0, secIx=0;
 
 function fnKeys(){ return PH && PH.functions ? Object.keys(PH.functions) : []; }
 
@@ -667,12 +667,23 @@ var BUILD={
         chips:[{t:t.tab}].concat(movesOf(P,segs))};
     });
   },
+  /* Part 2: kept as three separate sections — Similarities, Differences,
+     Speculating — rather than joined into one paragraph. 'Speculating'
+     overrides the JSON's own phase name ('The question') so the label
+     matches the List view's category naming; the underlying phase id
+     (answer_question) and its data are untouched. */
   2:function(P){
+    var PHASE_LABEL={similarities:'Similarities',differences:'Differences',answer_question:'Speculating'};
     return P.tasks.map(function(tk){
-      var T=tk.turns.default||{}, all=[], n=0;
-      P.phases.forEach(function(ph){ (T[ph.id]||[]).forEach(function(l){ all.push(l); n+=l.s; }); });
-      return {ctx:esc(tk.question), ans:all.map(function(l){ return mk(l.t,l.marks); }).join(' '),
-        speak:all.map(function(l){ return l.t; }).join(' '), long:true,
+      var T=tk.turns.default||{}, n=0;
+      var sections=P.phases.map(function(ph){
+        var lines=T[ph.id]||[];
+        n+=lines.reduce(function(a,l){ return a+l.s; },0);
+        return { id:ph.id, label:PHASE_LABEL[ph.id]||ph.name,
+          ans:lines.map(function(l){ return mk(l.t,l.marks); }).join(' '),
+          speak:lines.map(function(l){ return l.t; }).join(' ') };
+      });
+      return {ctx:esc(tk.question), sections:sections, long:true,
         chips:[{t:tk.tab},{t:n+'s against '+P.limit+'s'}]};
     });
   },
@@ -721,7 +732,7 @@ function label(){ return pk?'Part '+pk+' · '+PART_LABEL[pk]:'All four parts'; }
 /* ── RENDER ──────────────────────────────────────────────────────────── */
 function row(){
   var list = ['All four parts','Part 1','Part 2','Part 3','Part 4'];
-  topicRow(list, pk, function(i){ hush(); toTop(); pk=i; pref('part',i); at=0; pruneFilters(); row(); render(); });
+  topicRow(list, pk, function(i){ hush(); toTop(); pk=i; pref('part',i); at=0; secIx=0; pruneFilters(); row(); render(); });
   /* On Topics, a part whose model-answer file did not load is shown, but
      disabled — List draws on the shared phrase corpus, so it is never affected. */
   if(tab==='topics') Array.prototype.forEach.call($('topics').children,function(b,i){
@@ -777,8 +788,18 @@ function render(){
   at=Math.max(0,Math.min(S.length-1,at));
   var s=S[at];
   $('deckN').textContent=(at+1)+' / '+S.length;
-  body.innerHTML=(s.ctx?'<p class="deck-ctx">'+s.ctx+'</p>':'')+
-    '<p class="deck-ans'+(s.long?' long':'')+'">'+s.ans+'</p>'+
+  var mid;
+  if(s.sections){
+    secIx=Math.max(0,Math.min(s.sections.length-1,secIx));
+    mid='<div class="seg sm" role="tablist" aria-label="Section" style="margin-bottom:1rem">'+
+      s.sections.map(function(sec,i){
+        return '<button type="button" role="tab" data-sec="'+i+'" aria-selected="'+(i===secIx)+'">'+esc(sec.label)+'</button>';
+      }).join('')+'</div>'+
+      '<p class="deck-ans'+(s.long?' long':'')+'">'+s.sections[secIx].ans+'</p>';
+  } else {
+    mid='<p class="deck-ans'+(s.long?' long':'')+'">'+s.ans+'</p>';
+  }
+  body.innerHTML=(s.ctx?'<p class="deck-ctx">'+s.ctx+'</p>':'')+mid+
     (s.extra?'<p class="deck-extra">'+s.extra+'</p>':'')+
     (s.chips.length?'<div class="chips">'+s.chips.map(function(c){
       return '<span'+(c.bank?' class="bank"':'')+'>'+esc(c.t)+'</span>'; }).join('')+'</div>':'');
@@ -798,23 +819,28 @@ function go(d){
     return;
   }
   var n=slides().length; if(!n) return;
-  at=(at+d+n)%n;
+  at=(at+d+n)%n; secIx=0;
   render();
 }
 
 $('tabs').addEventListener('click',function(e){
   var b=e.target.closest('button'); if(!b || b.dataset.tab===tab) return;
-  hush(); toTop(); tab=b.dataset.tab; pref('tab',tab); at=0;
+  hush(); toTop(); tab=b.dataset.tab; pref('tab',tab); at=0; secIx=0;
   Array.prototype.forEach.call($('tabs').children,function(x){ x.setAttribute('aria-selected',String(x===b)); });
   row(); render();
 });
-$('deckDots').addEventListener('click',function(e){ var b=e.target.closest('[data-i]'); if(b){ hush(); at=+b.dataset.i; render(); } });
+$('deckDots').addEventListener('click',function(e){ var b=e.target.closest('[data-i]'); if(b){ hush(); at=+b.dataset.i; secIx=0; render(); } });
 $('prevBtn').addEventListener('click',function(){ go(-1); });
 $('nextBtn').addEventListener('click',function(){ go(1); });
+$('deckBody').addEventListener('click',function(e){
+  var b=e.target.closest('[data-sec]'); if(!b) return;
+  secIx=+b.dataset.sec; render();
+});
 $('readBtn').addEventListener('click',function(){
   var s=slides()[at]; if(!s) return;
+  var text = s.sections ? (s.sections[secIx]||s.sections[0]).speak : (s.speak||'');
   if(SPEECH && speechSynthesis.speaking){ hush(); return; }
-  say(s.speak||'', true, 1.05, null);
+  say(text||'', true, 1.05, null);
 });
 addEventListener('keydown',function(e){
   if(e.key==='ArrowRight') go(1);

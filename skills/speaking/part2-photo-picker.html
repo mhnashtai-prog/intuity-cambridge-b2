@@ -37,6 +37,8 @@ section.slot{background:var(--card);border:1px solid var(--rule);margin-bottom:1
 .pick{position:relative;border:none;padding:0;background:var(--tile);cursor:pointer;aspect-ratio:4/3;overflow:hidden;border-radius:3px}
 .pick img{width:100%;height:100%;object-fit:cover;display:block}
 .pick .lic{position:absolute;left:.3rem;bottom:.3rem;font:500 .6rem var(--m);background:rgba(250,248,245,.92);color:var(--ink);padding:.1rem .3rem;border-radius:2px}
+.pick .nopv{display:none}
+.pick.noimg .nopv{display:flex;position:absolute;inset:0;align-items:center;justify-content:center;padding:.5rem;font-size:.72rem;color:var(--dim);text-align:center}
 .pick.on{box-shadow:0 0 0 3px var(--accent)}
 .pick.on::after{content:"✓";position:absolute;top:.3rem;right:.3rem;width:1.4rem;height:1.4rem;border-radius:50%;
   background:var(--accent);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:.8rem}
@@ -117,7 +119,7 @@ function openverse(q){
 }
 function commons(q){
   var u='https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit=16'+
-        '&gsrsearch='+encodeURIComponent(q+' filetype:bitmap')+'&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=1200';
+        '&gsrsearch='+encodeURIComponent(q+' filetype:bitmap')+'&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=1280';
   return fetch(u).then(function(r){ if(!r.ok) throw new Error('Commons '+r.status); return r.json(); }).then(function(j){
     var pages=j.query&&j.query.pages?Object.keys(j.query.pages).map(function(k){ return j.query.pages[k]; }):[];
     pages.sort(function(a,b){ return (a.index||0)-(b.index||0); });
@@ -125,7 +127,7 @@ function commons(q){
       var ii=(p.imageinfo||[])[0]||{}, m=ii.extmetadata||{};
       var lic=(m.LicenseShortName&&m.LicenseShortName.value)||'';
       var ok=/^(cc0|public domain|pd|cc[- ]by(-sa)?[- ][\d.]+)/i.test(lic) && !/nc|nd/i.test(lic);
-      return ok&&ii.thumburl?{thumb:ii.thumburl.replace(/\/\d+px-/,'/400px-'), src:ii.thumburl, title:(p.title||'').replace(/^File:/,''),
+      return ok&&ii.thumburl?{thumb:ii.thumburl.replace(/\/\d+px-/,'/330px-'), src:ii.thumburl, title:(p.title||'').replace(/^File:/,''),
         credit:strip(m.Artist&&m.Artist.value)||'Unknown', license:lic, licenseUrl:(m.LicenseUrl&&m.LicenseUrl.value)||'', page:ii.descriptionurl||''}:null;
     }).filter(Boolean);
   });
@@ -136,7 +138,7 @@ function build(){
     return '<section class="slot" id="s'+i+'"><div class="slot-h"><h2>'+esc(s[2])+'</h2><span class="tag">'+esc(s[0])+' · photo '+(s[1]+1)+'</span></div>'+
       '<p class="brief"><b>The answers describe:</b> '+esc(s[3])+'</p>'+
       '<div class="row"><input type="search" value="'+esc(s[4])+'" aria-label="Search words for '+esc(s[2])+'" data-q="'+i+'">'+
-      '<select data-src="'+i+'" aria-label="Library"><option value="ov">Openverse</option><option value="wc">Wikimedia Commons</option></select>'+
+      '<select data-src="'+i+'" aria-label="Library"><option value="wc">Wikimedia Commons</option><option value="ov">Openverse</option></select>'+
       '<button class="btn" type="button" data-go="'+i+'">Search</button></div>'+
       '<div class="grid" id="g'+i+'"><p class="msg">Searching…</p></div>'+
       '<p class="chosen" id="c'+i+'"></p></section>';
@@ -148,12 +150,20 @@ function build(){
   } else SLOTS.forEach(function(_,i){ search(i); });
 }
 var RES={};
+/* One search at a time, a moment apart: both libraries throttle bursts,
+   and sixteen slots searching at once looked like one. */
+var QUEUE=Promise.resolve();
+function queued(fn){ var p=QUEUE.then(fn); QUEUE=p.catch(function(){}).then(function(){ return new Promise(function(r){ setTimeout(r,450); }); }); return p; }
+function why(e){ var m=String(e&&e.message||e);
+  return /429/.test(m)?'the library is busy — wait a minute, then press Search':/Failed to fetch|NetworkError|Load failed/i.test(m)?'no connection to the library':m; }
 function search(i){
   var q=document.querySelector('[data-q="'+i+'"]').value.trim(), lib=document.querySelector('[data-src="'+i+'"]').value, g=$('g'+i);
   if(!q) return;
   g.innerHTML='<p class="msg">Searching…</p>';
-  (lib==='ov'?openverse(q):commons(q)).catch(function(e){
-    return lib==='ov'?commons(q):Promise.reject(e);          // Openverse busy? Commons instead.
+  queued(function(){ return lib==='ov'?openverse(q):commons(q); }).catch(function(e){
+    if(lib!=='ov') return Promise.reject(e);
+    document.querySelector('[data-src="'+i+'"]').value='wc';   // Openverse busy? Commons instead.
+    return queued(function(){ return commons(q); });
   }).then(function(list){
     RES[i]=list;
     if(!list.length){ g.innerHTML='<p class="msg">Nothing with a reusable licence. Try fewer or different words, or the other library.</p>'; return; }
@@ -161,9 +171,9 @@ function search(i){
     g.innerHTML=list.map(function(x,n){
       var on=chosen[k]&&chosen[k].src===x.src;
       return '<button class="pick'+(on?' on':'')+'" type="button" data-pick="'+i+'" data-n="'+n+'" aria-pressed="'+on+'" title="'+esc(x.title+' — '+x.credit)+'">'+
-        '<img src="'+esc(x.thumb)+'" alt="'+esc(x.title)+'" loading="lazy"><span class="lic">'+esc(x.license)+'</span></button>'; }).join('');
+        '<img src="'+esc(x.thumb)+'" alt="'+esc(x.title)+'" loading="lazy" onerror="this.parentNode.classList.add(\'noimg\');this.remove()"><span class="nopv">'+esc(x.title||'Preview unavailable')+'</span><span class="lic">'+esc(x.license)+'</span></button>'; }).join('');
   }).catch(function(e){
-    g.innerHTML='<p class="msg">Couldn\'t reach the library ('+esc(e.message)+'). Check your connection and press Search again.</p>';
+    g.innerHTML='<p class="msg">Couldn\'t load photos: '+esc(why(e))+'.</p>';
   });
 }
 function pick(i,n){
@@ -210,6 +220,9 @@ $('copy').addEventListener('click',function(){
   (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){ $('done').textContent='Choices copied — paste them into the chat if you\'d like me to merge them.'; })
     .catch(function(){ $('done').textContent='Copy blocked by the browser — use "Add photos to my file" instead.'; });
 });
+if(/github\.com$/.test(location.hostname)){
+  document.querySelector('main').insertAdjacentHTML('afterbegin','<div class="intro"><b>This is GitHub\'s view of the file.</b> Open it here instead: <a href="https://intuity.space/skills/speaking/part2-photo-picker.html">intuity.space/skills/speaking/part2-photo-picker.html</a></div>');
+}
 build();
 </script>
 </body>

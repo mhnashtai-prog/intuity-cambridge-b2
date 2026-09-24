@@ -22,7 +22,7 @@ BANK = [
  # initiate
  "Shall we start with", "Why don't we begin with", "Let's start with", "What about", "How about", "Let's move on to",
  "Moving on to", "Another idea is", "Right,", "OK,", "Shall we talk about", "Let's think about", "Should we look at",
- "building on that", "to add to that", "following on from that", "That links to", "That connects to", "connects to",
+ "building on that", "building on your point", "that links to what you said", "to add to that", "following on from that", "That links to", "That connects to", "connects to",
  "I agree", "That's true", "That's a good point", "I see your point", "Absolutely", "Exactly", "Maybe, but", "I'm not so sure",
  "You're right", "Good point",
  # view
@@ -681,7 +681,7 @@ FN = {1: ("Move on", "start a point, or move the discussion to a new prompt"),
       7: ("Build on", "take your partner's idea further"),
       8: ("Decide", "negotiate and reach a decision")}
 MOVE  = r"^(Shall we (start with|talk about)|Why don't we begin|Let's (start|move on|think about)|Moving on|Another idea|Should we look at|What about|How about|OK, (being|how))"
-BUILD = r"(building on that|to add to that|following on from that|connects to|links to|a bit like|same with|brings us back|is similar)"
+BUILD = r"(building on|to add to that|following on from that|connects to|links to|a bit like|same with|brings us back|is similar)"
 DIS   = r"(^Maybe, but|I'm not so sure|I see your point, but|I see what you mean|That's true, but|^But\b|^Yes, but|^I know,|OK, but|not everyone)"
 AGR   = r"^(I agree|Absolutely|Exactly|You're right|That's true|Definitely|Yes\b)"
 def fn_of(seg, part, prompts):
@@ -695,31 +695,39 @@ def fn_of(seg, part, prompts):
     if m == "t" and any(p.split()[0] in t.lower() for p in prompts) and re.search(r"^(What about|How about|Shall we|Should we|Let's)", t): return 1
     return {"v": 2, "d": 3, "t": 4}.get(m, 2)
 
-EDITS = {}   # (task, version, turn) → {"i": …, "v": …}: hand-written build-ons, filled in below
+EDITS = {('tech', 0, 3): {'i': 'Exactly — and building on that,', 'v': "I'd say it's one of the most useful things,"},
+ ('tech', 1, 8): {'i': 'Yes, and that links to what you said —', 'v': "I think it's because you can't hear the tone of voice,"},
+ ('tech', 1, 9): {'i': "You're right, and building on that,", 'v': "I'd say finding information and communicating need the same skill —"},
+ ('tech', 2, 1): {'i': 'Absolutely, and to add to that,', 'v': "I think it's especially good for shy people,"},
+ ('school', 0, 7): {'i': 'Exactly — and building on that,', 'v': 'I think sleep and a timetable are connected,'},
+ ('school', 0, 8): {'i': "That's true, and following on from that,", 'v': 'studying with friends could be part of the plan,'},
+ ('school', 1, 8): {'i': 'Yes, and to add to that,', 'v': "I'd say you have to turn them off,"},
+ ('school', 2, 1): {'i': 'Absolutely — and building on that,', 'v': "I think it's especially good for people who panic before exams,"},
+ ('school', 2, 3): {'i': "You're right, and following on from that,", 'v': "I'd say phones are the real problem,"},
+ ('money', 0, 7): {'i': 'Yes, and building on that,', 'v': "I think it's good for your CV too,"},
+ ('money', 0, 8): {'i': "That's true, and following on from that,", 'v': 'selling online can look good on a CV as well,'},
+ ('money', 1, 8): {'i': 'True, and that links to what you said —', 'v': 'I think babysitting has the same problem,'},
+ ('money', 1, 9): {'i': 'Yes, actually! And building on that,', 'v': "I'd say a café is clearer,"},
+ ('money', 2, 1): {'i': 'Absolutely, and to add to that,', 'v': 'I think it also helps you,'},
+ ('health', 0, 8): {'i': 'Good idea — and building on that,', 'v': 'mental health lessons could include things like sleep and food too,'},
+ ('health', 0, 9): {'i': 'Absolutely, and to add to that,', 'v': 'I think a sports club helps mental health too,'},
+ ('health', 1, 7): {'i': 'Absolutely — and building on that,', 'v': "I'd say teenagers need to learn how to talk about their feelings,"},
+ ('health', 1, 8): {'i': 'Yes, and following on from that,', 'v': 'a club can help with that too,'},
+ ('health', 2, 1): {'i': 'Absolutely — and building on that,', 'v': 'I think talking about it openly helps,'},
+ ('health', 2, 8): {'i': 'Yes, and following on from that,', 'v': "that's why more PE might be fairer,"},
+ ('future', 0, 1): {'i': 'I agree, and to add to that,', 'v': "I think it's also easy,"},
+ ('future', 1, 8): {'i': 'Definitely, and building on that,', 'v': "maybe that's why the beach clean-up is so useful —"},
+ ('future', 2, 1): {'i': 'Absolutely — and building on that,', 'v': 'I think swapping clothes with friends is a good solution,'},
+ ('future', 2, 8): {'i': 'Sometimes! And following on from that,', 'v': 'I think schools should teach it,'},
+ ('people', 0, 8): {'i': 'Yes, all the time! And building on that,', 'v': 'I think grandparents also give you a different kind of advice,'},
+ ('people', 0, 9): {'i': 'Definitely, and to add to that,', 'v': 'doing sport together is another way to connect generations,'},
+ ('people', 1, 8): {'i': 'All the time! But building on your point,', 'v': "I think that's part of the fun,"}}   # (task, version, turn): hand-written build-ons
 def apply_edits(tid, ai, part, turns):
     if part != "discuss": return
     for (t, a, k), ch in EDITS.items():
         if t == tid and a == ai:
             for s in turns[k]["segs"]:
                 if s["m"] in ch: s["t"] = ch[s["m"]]
-
-OPENERS = ["Exactly — and building on that,", "Yes, and to add to that,", "Right, and following on from that,"]
-_op = [0]
-def ensure_build_ons(turns, need=2):
-    have = sum(1 for tn in turns for s in tn["segs"] if re.search(BUILD, s["t"]))
-    for k in range(2, len(turns)):
-        if have >= need: break
-        tn, prev = turns[k], turns[k - 1]
-        if tn["p"] != prev["p"] or tn["p"] < 0: continue
-        i = next((s for s in tn["segs"] if s["m"] == "i"), None)
-        v = next((s for s in tn["segs"] if s["m"] == "v"), None)
-        if not i or not v or re.search(BUILD, i["t"]) or re.search(DIS, i["t"]) or re.search(r"\bbut\b", i["t"]): continue
-        if not re.search(AGR + "|^(Good point|That's a good point|OK)", i["t"]): continue
-        if re.match(r"(But|And|Also|So|Or)\b", v["t"]): continue          # "…to add to that, but…" would not be English
-        i["t"] = OPENERS[_op[0] % 3]; _op[0] += 1
-        if not v["t"].startswith(("I ", "I'", "I,")): v["t"] = v["t"][0].lower() + v["t"][1:]
-        have += 1
-    return have
 
 # ═══════════════════════════ build + checks
 def secs(t): return round(len([w for w in t.split() if re.search(r'[A-Za-z0-9]', w)])/2.5)

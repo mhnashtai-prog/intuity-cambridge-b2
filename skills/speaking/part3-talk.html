@@ -214,27 +214,33 @@ button.mv{cursor:pointer}
 }
 
 /* ═══ PART 3 ════════════════════════════════════════════════════════════ */
-/* THE SPIDER WEB · the task as candidates see it on the exam paper: the
-   topic at the centre, five branches out to the prompts. Compact: the nodes
-   sit on a pentagon, the branches are one hairline SVG underneath. The
-   branch being discussed turns orange; prompts already covered keep an
-   orange number. */
-.spider{position:relative;height:11.5rem;margin:0 0 .9rem}
-@media(min-width:560px){ .spider{height:9.5rem} }
-.spider svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
-.spider line{stroke:var(--rule);stroke-width:1;vector-effect:non-scaling-stroke;transition:stroke .2s}
-.spider line.now{stroke:var(--accent);stroke-width:2}
-.hub{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:4.2rem;height:4.2rem;border-radius:50%;
-  background:var(--card,#FAF8F5);border:1px solid var(--rule);display:flex;align-items:center;justify-content:center;
-  text-align:center;padding:.3rem;font-family:var(--f-mono);font-size:.54rem;letter-spacing:.06em;text-transform:uppercase;
-  line-height:1.25;color:var(--dim)}
-.pr{position:absolute;transform:translate(-50%,-50%);max-width:34%;width:max-content;text-align:center;
-  font-size:.76rem;line-height:1.25;color:var(--sentence);border:1px solid var(--rule);border-radius:var(--r-chip,4px);
-  padding:.3rem .5rem;background:var(--card,#FAF8F5);transition:border-color .2s,color .2s,background .2s}
-@media(min-width:560px){ .pr{font-size:.8rem;max-width:28%} }
-.pr .n{font-family:var(--f-mono);font-size:.56rem;color:var(--faint);margin-right:.25rem}
-.pr.now{border-color:var(--accent);color:var(--ink);background:var(--tile-bg)}
-.pr.seen .n{color:var(--accent-ink)}
+/* THE TASK CARD · the Cambridge layout: the question in a central box,
+   two prompts on each side and one below, joined by straight hairlines.
+   A 3 × 3 grid; the centre spans two rows so the side lines meet its edge.
+   The lines are pseudo-elements that bridge the grid gap. The prompt being
+   discussed fills grey and its line turns orange; covered prompts keep an
+   orange border. */
+.taskmap{--gx:1.1rem;--gy:.55rem;display:grid;grid-template-columns:1fr 1.3fr 1fr;
+  grid-template-areas:"p0 c p1" "p4 c p2" ". p3 .";column-gap:var(--gx);row-gap:var(--gy);margin:.7rem 0 1rem}
+@media(min-width:560px){ .taskmap{--gx:2rem;--gy:.7rem;grid-template-columns:1fr 1.15fr 1fr} }
+.tq{grid-area:c;display:flex;align-items:center;justify-content:center;text-align:center;padding:.7rem .6rem;
+  border:1.5px solid var(--ink);border-radius:.7rem;background:var(--card,#FAF8F5);
+  font-family:var(--f-display);font-weight:700;font-size:.86rem;line-height:1.3;color:var(--ink)}
+@media(min-width:560px){ .tq{font-size:.98rem;padding:.9rem 1rem} }
+.pr{position:relative;display:flex;align-items:center;justify-content:center;text-align:center;min-height:2.9rem;
+  padding:.45rem .5rem;border:1px solid var(--rule);border-radius:.6rem;background:var(--card,#FAF8F5);
+  font-family:var(--f-display);font-weight:600;font-size:.76rem;line-height:1.25;color:var(--sentence);
+  transition:border-color .2s,color .2s,background .2s}
+@media(min-width:560px){ .pr{font-size:.86rem;min-height:3.3rem} }
+.pr::after{content:'';position:absolute;background:var(--rule);transition:background .2s}
+.pr[data-pr="0"]::after,.pr[data-pr="4"]::after{top:50%;right:calc(-1 * var(--gx) - 1px);width:var(--gx);height:1px}
+.pr[data-pr="1"]::after,.pr[data-pr="2"]::after{top:50%;left:calc(-1 * var(--gx) - 1px);width:var(--gx);height:1px}
+.pr[data-pr="3"]::after{left:50%;top:calc(-1 * var(--gy) - 1px);height:var(--gy);width:1px}
+.pr.seen{border-color:var(--accent)}
+.pr.now{border-color:var(--accent);background:var(--tile-bg);color:var(--ink)}
+.pr.now::after{background:var(--accent)}
+.pr.now[data-pr="0"]::after,.pr.now[data-pr="1"]::after,.pr.now[data-pr="2"]::after,.pr.now[data-pr="4"]::after{height:2px;margin-top:-.5px}
+.pr.now[data-pr="3"]::after{width:2px;margin-left:-.5px}
 /* the dialogue */
 .dlg{margin:1rem 0 0}
 .tn{padding:.1rem 0 .1rem .9rem;border-left:2px solid var(--accent);margin:0 0 .85rem;transition:opacity .3s}
@@ -285,7 +291,7 @@ button.mv{cursor:pointer}
   <article class="card" id="card" aria-live="polite">
     <div class="card-top"><span class="lbl">Examiner</span><span class="count" id="count"></span></div>
     <h2 class="q" id="q"></h2>
-    <div class="spider" id="taskCard" role="img" aria-label="The task"></div>
+    <div class="taskmap" id="taskCard" role="img" aria-label="The task"></div>
     <div class="card-ctl"><div id="modes"></div><div id="alts"></div></div>
     <div class="moves-row">
       <button class="playhub" id="playHub" type="button" aria-label="Play"></button>
@@ -374,13 +380,12 @@ function head(){
   $('count').textContent=task().tab+' · '+(ti+1)+' / '+D.tasks.length;
   document.querySelector('.card-top .lbl').textContent=mode==='discuss'?'Examiner · talk to each other':'Examiner · now decide';
   $('q').textContent=qText();
-  /* five nodes on a pentagon around the hub; x,y in % of the web */
-  var P=[[50,10],[86,40],[72,90],[28,90],[14,40]];
-  $('taskCard').setAttribute('aria-label','The task: '+task().question+' Prompts: '+task().prompts.join(', ')+'.');
-  $('taskCard').innerHTML='<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">'+
-      P.map(function(q,i){ return '<line data-ln="'+i+'" x1="50" y1="50" x2="'+q[0]+'" y2="'+q[1]+'"/>'; }).join('')+'</svg>'+
-    '<div class="hub">'+esc(task().tab)+'</div>'+
-    task().prompts.map(function(p,i){ return '<span class="pr" data-pr="'+i+'" style="left:'+P[i][0]+'%;top:'+P[i][1]+'%"><span class="n">'+(i+1)+'</span>'+esc(p)+'</span>'; }).join('');
+  /* the Cambridge card: the question in the middle, the five prompts around it */
+  $('taskCard').setAttribute('aria-label','The task: '+task().question+' — '+task().prompts.join(', ')+'.');
+  $('taskCard').innerHTML='<div class="tq">'+esc(task().question)+'</div>'+
+    task().prompts.map(function(p,i){ return '<div class="pr" data-pr="'+i+'" style="grid-area:p'+i+'">'+esc(p)+'</div>'; }).join('');
+  /* the question now lives in the card; the heading only carries the decision question */
+  $('q').style.display=mode==='discuss'?'none':'';
   $('modes').innerHTML=seg(Object.keys(D.modes).map(function(k){ return {id:k,label:D.modes[k].label}; }),mode,'data-mode','sm');
   $('alts').innerHTML=seg(D.voices.map(function(v,i){ return {id:String(i),label:v.tab}; }),String(ai),'data-alt','sm');
   var d=''; for(var j=0;j<D.tasks.length;j++) d+='<button type="button" data-dot="'+j+'"'+(j===ti?' class="on" aria-current="true"':'')+' aria-label="'+esc(D.tasks[j].tab)+'"></button>';
@@ -389,7 +394,6 @@ function head(){
 function lightPrompts(now,seen){
   Array.prototype.forEach.call(document.querySelectorAll('[data-pr]'),function(el){
     var i=+el.dataset.pr; el.classList.toggle('now',i===now); el.classList.toggle('seen',seen.indexOf(i)>-1); });
-  Array.prototype.forEach.call(document.querySelectorAll('[data-ln]'),function(el){ el.classList.toggle('now',+el.dataset.ln===now); });
 }
 function go(i,dir){
   stop(); ti=i; revealed={}; pref('topic',task().id);

@@ -138,7 +138,10 @@ button.mv{cursor:pointer}
 .answer.split .sg{display:block;margin-bottom:.55rem}
 .answer.split .sg:last-child{margin-bottom:0}
 .playing .sg{opacity:.3} .playing .sg.live{opacity:1}
-.xr{box-shadow:inset 0 -2px 0 var(--accent)}
+/* X-RAY · the coursebook convention: key expressions in one colour, nothing
+   else changes. Off, the answer reads as plain speech. */
+.xr{transition:color .2s}
+.card.xray .xr{color:var(--accent-ink);font-weight:600}
 /* Cover: the chunk keeps its width, loses its ink. Tap to bring it back. */
 .gap{font:inherit;line-height:inherit;display:inline;min-height:0;height:auto;vertical-align:baseline;color:transparent;background:var(--sunk,#EDE9E2);border:none;padding:0 .1em;margin:0;
   cursor:pointer;box-shadow:inset 0 -2px 0 var(--accent);border-radius:var(--r-field,3px)}
@@ -314,7 +317,7 @@ function mk(t,marks,cover,key){
 function shuffle(a){ a=a.slice(); for(var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=a[i]; a[i]=a[j]; a[j]=t; } return a; }
 
 /* ═══ STATE ════════════════════════════════════════════════════════════ */
-var ci=0, qi=0, ai=0, mode='turn', stage='explore', cover=false, playing=false, PI=null;
+var xray=false, ci=0, qi=0, ai=0, mode='turn', stage='explore', cover=false, playing=false, PI=null;
 function chapter(){ return D.chapters[ci]; }
 function card(){ return chapter().cards[qi]; }
 function ready(ch){ return ch.cards.every(function(c){ return c.alts && c.alts.length; }); }
@@ -453,8 +456,9 @@ function explore(){
   $('body').innerHTML=
     '<p class="answer'+(mode==='turn'?' split':'')+'" id="ansP">'+a.segs.map(function(s,j){
       return '<span class="sg" data-j="'+j+'">'+mk(s.t,s.marks,cover,ai+'-'+j)+'</span>'; }).join(' ')+'</p>'+
-    '<div class="card-tools"><button class="tool'+(cover?' on':'')+'" type="button" data-cover="1" aria-pressed="'+cover+'">'+
-      (cover?'Show the chunks':'Cover the chunks')+'</button>'+
+    '<div class="card-tools"><span><button class="tool'+(xray?' on':'')+'" type="button" data-xray="1" aria-pressed="'+xray+'">X-ray</button> '+
+      '<button class="tool'+(cover?' on':'')+'" type="button" data-cover="1" aria-pressed="'+cover+'">'+
+      (cover?'Show the chunks':'Cover the chunks')+'</button></span>'+
       (cover?'<span class="count">tap a gap to check it</span>':'')+'</div>'+
     '<div class="frame"><h3>The pattern</h3><p>'+esc(a.frame).replace(/_{3,}/g,'<span class="blank" aria-label="blank"></span>').replace(/\n/g,'<br><br>')+'</p>'+
     (a.why?'<p class="why-shape">'+esc(a.why)+'</p>':'')+'</div>';
@@ -626,6 +630,8 @@ document.addEventListener('click',function(e){
   if(t.dataset.dot!==undefined){ var n=+t.dataset.dot; if(n!==qi) go(ci,n,n>qi?1:-1); return; }
   if(t.dataset.mode!==undefined){ if(t.dataset.mode!==mode){ stop(); mode=t.dataset.mode; setMode(); revealed={}; pref('mode',mode); draw(); } return; }
   if(t.dataset.alt!==undefined){ stop(); ai=+t.dataset.alt; revealed={}; pref('alt',voiceOf().id); draw(); return; }
+  if(t.dataset.xray){ xray=!xray; pref('xray',xray?'1':''); $('card').classList.toggle('xray',xray);
+    t.classList.toggle('on',xray); t.setAttribute('aria-pressed',String(xray)); return; }
   if(t.dataset.cover){ stop(); cover=!cover; revealed={}; pref('cover',cover?'1':''); explore(); return; }
   if(t.dataset.d!==undefined){ drillStop(); hush(); dIx=Math.max(0,Math.min(segs().length-1,dIx+(+t.dataset.d))); drill(); return; }
   if(t.dataset.again){ quiz(); return; }
@@ -654,7 +660,7 @@ fetch('data/part2-turn.json').then(function(r){ if(!r.ok) throw new Error('statu
   var wt=p.get('topic')||pref('topic'); D.tasks.forEach(function(t,i){ if(t.id===wt) qi=i; });
   var wm=p.get('mode')||pref('mode'); if(D.modes[wm]) mode=wm; setMode();
   var wa=p.get('alt')||pref('alt'); D.voices.forEach(function(v,i){ if(v.id===wa) ai=i; });
-  cover=pref('cover')==='1';
+  cover=pref('cover')==='1'; xray=pref('xray')==='1'; $('card').classList.toggle('xray',xray);
   var ws=p.get('stage')||pref('stage'); stage=['explore','practice','quiz','talk'].indexOf(ws)>-1?ws:'explore';
   Array.prototype.forEach.call($('stages').children,function(b){ b.setAttribute('aria-selected',String(b.dataset.s===stage)); });
   chapters(); draw();

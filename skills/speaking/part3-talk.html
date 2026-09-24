@@ -214,14 +214,25 @@ button.mv{cursor:pointer}
 }
 
 /* ═══ PART 3 ════════════════════════════════════════════════════════════ */
-/* The task card: the question and its five prompts, as the candidates see it. */
-.task-card{border:1px solid var(--rule);border-radius:var(--r-field,3px);padding:.75rem .8rem .8rem;margin:0 0 1rem;background:var(--screen,#F3F1ED)}
-.task-card .lbl{display:block;margin-bottom:.5rem;font-family:var(--f-mono);font-size:.6rem;letter-spacing:.11em;text-transform:uppercase;color:var(--faint);line-height:1.5}
-.card-ctl>div{min-width:0;max-width:100%}
-.prompts{display:flex;flex-wrap:wrap;gap:.35rem}
-.pr{font-size:.82rem;line-height:1.3;color:var(--sentence);border:1px solid var(--rule);border-radius:var(--r-chip,4px);
-  padding:.35rem .6rem;background:var(--card,#FAF8F5);transition:border-color .2s,color .2s,background .2s}
-.pr .n{font-family:var(--f-mono);font-size:.58rem;color:var(--faint);margin-right:.3rem}
+/* THE SPIDER WEB · the task as candidates see it on the exam paper: the
+   topic at the centre, five branches out to the prompts. Compact: the nodes
+   sit on a pentagon, the branches are one hairline SVG underneath. The
+   branch being discussed turns orange; prompts already covered keep an
+   orange number. */
+.spider{position:relative;height:13.5rem;margin:0 0 1rem}
+@media(min-width:560px){ .spider{height:12rem} }
+.spider svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.spider line{stroke:var(--rule);stroke-width:1;vector-effect:non-scaling-stroke;transition:stroke .2s}
+.spider line.now{stroke:var(--accent);stroke-width:2}
+.hub{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:4.6rem;height:4.6rem;border-radius:50%;
+  background:var(--card,#FAF8F5);border:1px solid var(--rule);display:flex;align-items:center;justify-content:center;
+  text-align:center;padding:.3rem;font-family:var(--f-mono);font-size:.54rem;letter-spacing:.06em;text-transform:uppercase;
+  line-height:1.25;color:var(--dim)}
+.pr{position:absolute;transform:translate(-50%,-50%);max-width:34%;width:max-content;text-align:center;
+  font-size:.76rem;line-height:1.25;color:var(--sentence);border:1px solid var(--rule);border-radius:var(--r-chip,4px);
+  padding:.3rem .5rem;background:var(--card,#FAF8F5);transition:border-color .2s,color .2s,background .2s}
+@media(min-width:560px){ .pr{font-size:.8rem;max-width:28%} }
+.pr .n{font-family:var(--f-mono);font-size:.56rem;color:var(--faint);margin-right:.25rem}
 .pr.now{border-color:var(--accent);color:var(--ink);background:var(--tile-bg)}
 .pr.seen .n{color:var(--accent-ink)}
 /* the dialogue */
@@ -274,11 +285,11 @@ button.mv{cursor:pointer}
   <article class="card" id="card" aria-live="polite">
     <div class="card-top"><span class="lbl">Examiner</span><span class="count" id="count"></span></div>
     <h2 class="q" id="q"></h2>
-    <div class="task-card" id="taskCard"></div>
+    <div class="spider" id="taskCard" role="img" aria-label="The task"></div>
     <div class="card-ctl"><div id="modes"></div><div id="alts"></div></div>
     <div class="moves-row">
       <button class="playhub" id="playHub" type="button" aria-label="Play"></button>
-      <div class="moves" id="moves" role="group" aria-label="The loop"></div>
+      <div class="moves" id="moves" role="group" aria-label="The eight functions"></div>
     </div>
     <div class="tl" id="tl"></div>
     <div id="body"></div>
@@ -297,7 +308,7 @@ button.mv{cursor:pointer}
       <svg width="15" height="15" viewBox="0 0 15 15" aria-hidden="true"><path d="M3 3 L12 12 M12 3 L3 12"
         stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>
     </button>
-    <h2 id="bankH">Initiate, view, develop, throw</h2>
+    <h2 id="bankH">The eight functions</h2>
     <div id="bankBody"></div>
   </div>
 </div>
@@ -309,7 +320,7 @@ var esc=function(s){ return String(s).replace(/[&<>"]/g,function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
 var SPEECH=('speechSynthesis' in window), tmr=null;
 var RM=matchMedia('(prefers-reduced-motion:reduce)');
-var PFX='intuity.p3.', D=null, ORDER=['i','v','d','t','z'], LIM=120, BAND=[100,120];
+var PFX='intuity.p3.', D=null, ORDER=[1,2,3,4,5,6,7,8], LIM=120, BAND=[100,120];
 function pref(k,v){ try{ if(v===undefined) return localStorage.getItem(PFX+k); localStorage.setItem(PFX+k,v); }catch(e){ return null; } }
 function secs(t){ return Math.round(String(t).split(/\s+/).filter(function(x){ return /[A-Za-z0-9]/.test(x); }).length/2.5); }
 function seg(items,cur,attr,cls){
@@ -363,8 +374,13 @@ function head(){
   $('count').textContent=task().tab+' · '+(ti+1)+' / '+D.tasks.length;
   document.querySelector('.card-top .lbl').textContent=mode==='discuss'?'Examiner · talk to each other':'Examiner · now decide';
   $('q').textContent=qText();
-  $('taskCard').innerHTML='<span class="lbl">'+(mode==='discuss'?'The task':'The task · '+esc(task().question))+'</span><div class="prompts">'+
-    task().prompts.map(function(p,i){ return '<span class="pr" data-pr="'+i+'"><span class="n">'+(i+1)+'</span>'+esc(p)+'</span>'; }).join('')+'</div>';
+  /* five nodes on a pentagon around the hub; x,y in % of the web */
+  var P=[[50,11],[88,38],[74,88],[26,88],[12,38]];
+  $('taskCard').setAttribute('aria-label','The task: '+task().question+' Prompts: '+task().prompts.join(', ')+'.');
+  $('taskCard').innerHTML='<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">'+
+      P.map(function(q,i){ return '<line data-ln="'+i+'" x1="50" y1="50" x2="'+q[0]+'" y2="'+q[1]+'"/>'; }).join('')+'</svg>'+
+    '<div class="hub">'+esc(task().tab)+'</div>'+
+    task().prompts.map(function(p,i){ return '<span class="pr" data-pr="'+i+'" style="left:'+P[i][0]+'%;top:'+P[i][1]+'%"><span class="n">'+(i+1)+'</span>'+esc(p)+'</span>'; }).join('');
   $('modes').innerHTML=seg(Object.keys(D.modes).map(function(k){ return {id:k,label:D.modes[k].label}; }),mode,'data-mode','sm');
   $('alts').innerHTML=seg(D.voices.map(function(v,i){ return {id:String(i),label:v.tab}; }),String(ai),'data-alt','sm');
   var d=''; for(var j=0;j<D.tasks.length;j++) d+='<button type="button" data-dot="'+j+'"'+(j===ti?' class="on" aria-current="true"':'')+' aria-label="'+esc(D.tasks[j].tab)+'"></button>';
@@ -373,6 +389,7 @@ function head(){
 function lightPrompts(now,seen){
   Array.prototype.forEach.call(document.querySelectorAll('[data-pr]'),function(el){
     var i=+el.dataset.pr; el.classList.toggle('now',i===now); el.classList.toggle('seen',seen.indexOf(i)>-1); });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-ln]'),function(el){ el.classList.toggle('now',+el.dataset.ln===now); });
 }
 function go(i,dir){
   stop(); ti=i; revealed={}; pref('topic',task().id);
@@ -386,7 +403,7 @@ function renderMoves(use,now,done){
   $('moves').innerHTML=ORDER.map(function(k){
     var off=use.indexOf(k)===-1, isDone=done.indexOf(k)!==-1;
     var cls='mv'+(off?' off':'')+(now.indexOf(k)!==-1?' now':'')+(isDone?' done':'');
-    return '<span class="'+cls+'">'+esc(D.moves[k].name)+(isDone?' <span class="tick">&check;</span>':'')+'</span>'; }).join('');
+    return '<span class="'+cls+'" title="'+esc(D.functions[k].hint)+'">'+esc(D.functions[k].name)+(isDone?' <span class="tick">&check;</span>':'')+'</span>'; }).join('');
 }
 function setHub(state){
   var h=$('playHub'); h.className='playhub'+(state==='off'?' off':'')+(state==='stop'?' stop':'');
@@ -412,11 +429,11 @@ function playhead(from,to,ms){
   el.style.transitionDuration=ms+'ms'; el.style.left=(to/sc*100)+'%';
 }
 
-function usedMoves(ts){ var u=[]; ts.forEach(function(tn){ tn.segs.forEach(function(s){ if(u.indexOf(s.m)<0) u.push(s.m); }); }); return u; }
+function usedMoves(ts){ var u=[]; ts.forEach(function(tn){ tn.segs.forEach(function(s){ if(u.indexOf(s.f)<0) u.push(s.f); }); }); return u; }
 function items(ts){ return ts.map(function(tn){ return {phase:tn.who==='a'?4:1, s:tsecs(tn)+0.7}; }); }
 function strip(upto){
   var ts=turns(), use=usedMoves(ts);
-  renderMoves(use, PI&&!PI.ex?[PI.s.m]:[], PI&&!PI.ex?turns()[PI.k].segs.slice(0,PI.j).map(function(s){ return s.m; }):use);
+  renderMoves(use, PI&&!PI.ex?[PI.s.f]:[], PI&&!PI.ex?turns()[PI.k].segs.slice(0,PI.j).map(function(s){ return s.f; }):use);
   timeline(items(ts),{limit:LIM,band:BAND,left:ts.length+' turns · '+V().a+' & '+V().b,right:readout(total(ts))});
   if(PI&&!PI.ex){ var st=total(ts.slice(0,PI.k))+(PI.k?0.7:0)+turns()[PI.k].segs.slice(0,PI.j).reduce(function(a,s){ return a+secs(s.t); },0);
     playhead(st,st+secs(PI.s.t),secs(PI.s.t)*1000); }
@@ -460,7 +477,7 @@ function explore(){
     (cover?'<span class="count">tap a gap to check it</span>':'')+'</div>'+
     '<div class="frame"><h3>The loop</h3>'+ts.map(function(tn){ return '<p class="fr"><b>'+esc(nameOf(tn.who))+':</b> '+
       esc(tn.frame).replace(/_{3,}/g,'<span class="blank" aria-label="blank"></span>')+'</p>'; }).join('')+
-    '<p class="why-shape">Every turn: catch it, give your view, develop it — then throw it back.</p></div>';
+    '<p class="why-shape">Every turn: react or build on your partner, give your opinion, justify it — then ask them. Keep the ball moving.</p></div>';
   setHub(SPEECH?(playing?'stop':'play'):'off');
   var seen=[]; ts.forEach(function(tn){ if(tn.p>=0&&seen.indexOf(tn.p)<0) seen.push(tn.p); });
   lightPrompts(-1, mode==='discuss'?seen:[]);
@@ -494,7 +511,7 @@ var dIx=0, dRun=false, dTmr=null;
 function practice(){ dIx=0; dRun=false; drill(); }
 function drill(){
   var ts=turns(), tn=ts[dIx];
-  renderMoves(tn.segs.map(function(s){ return s.m; }),[],[]);
+  renderMoves(tn.segs.map(function(s){ return s.f; }),[],[]);
   timeline(items(ts.slice(0,dIx+1)),{limit:LIM,band:BAND,scale:LIM,left:'turn '+(dIx+1)+' of '+ts.length,right:''});
   setHub(dRun?'stop':'play'); lightPrompts(tn.p,[]);
   $('body').innerHTML=(dIx?'<p class="dr-ctx"><b>'+esc(nameOf(ts[dIx-1].who))+' said</b>'+esc(ts[dIx-1].segs.map(function(s){ return s.t; }).join(' '))+'</p>':'<p class="dr-ctx"></p>')+
@@ -525,7 +542,7 @@ var qK=0, locked=false;
 function quiz(){ qK=0; qDraw(); }
 function qDraw(){
   var ts=turns(), shown=ts.slice(0,qK+1), next=ts[qK+1];
-  renderMoves(['i','v','d','t','z'], next?[next.segs[0].m]:[], []); setHub('off');
+  renderMoves(ORDER, next?[next.segs[0].f]:[], []); setHub('off');
   timeline(items(shown),{limit:LIM,band:BAND,left:shown.length+' of '+ts.length+' turns',right:readout(total(shown))});
   lightPrompts(ts[qK].p,[]);
   var html='<div class="dlg">'+shown.map(function(tn,k){ return turnHTML(tn,k); }).join('')+'</div>';
@@ -558,7 +575,7 @@ function talk(){
     '<div class="clock" id="clk">'+fmt(LIM)+'</div>'+
     '<p class="talk-lead" id="lead">Press play. The examiner starts the task, your partner speaks their lines — and on yours, the model is hidden. '+
     'Catch what they said, give your view, develop it, throw it back.</p><div class="dlg" id="tdlg"></div>';
-  renderMoves(['i','v','d','t','z'],[],[]); setHub('play'); lightPrompts(-1,[]);
+  renderMoves(ORDER,[],[]); setHub('play'); lightPrompts(-1,[]);
   timeline([],{limit:LIM,band:BAND,scale:LIM,left:'you are '+nameOf(role),right:''});
 }
 function talkGo(){

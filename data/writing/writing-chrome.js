@@ -35,6 +35,7 @@ emails:   { label:'Email',   part:'Part 2', back:'/skills/writing/writing-door.h
                        sample:  '/skills/writing/articles/article-sample.html' } },
   story:    { label:'Story',   part:'Part 2', back:'/skills/writing/writing-door.html',
               stages:{ question:'/skills/writing/narrative/narrative-question.html',
+                       model:   '/skills/writing/narrative/narrative-cards.html',
                        sample:  '/skills/writing/narrative/narrative-sample.html' } }
 };
 

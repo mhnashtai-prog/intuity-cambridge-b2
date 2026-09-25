@@ -209,6 +209,7 @@ width:min(420px,90vw);height:min(560px,100%);
 .toast{position:fixed;bottom:5rem;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:0.45rem 1.1rem;border-radius:2rem;font-family:'Barlow Condensed',sans-serif;font-size:0.7rem;font-weight:900;letter-spacing:0.06em;opacity:0;pointer-events:none;transition:opacity 0.25s;z-index:600;white-space:nowrap}
 .toast.show{opacity:1}
 </style>
+<link rel="stylesheet" href="/data/writing/sample.css?v=1">
 </head>
 <body data-writing="reports" data-stage="sample">
 <div class="shell">
@@ -239,31 +240,25 @@ width:min(420px,90vw);height:min(560px,100%);
       </div>
 
       <div class="card-toolbar">
+        <div class="seg sm" id="styleSeg" role="tablist" aria-label="Version">
         <button class="style-btn active" id="styleDefault" onclick="selectStyle('default')">Default</button>
-        <button class="style-btn" id="styleFormal" onclick="selectStyle('formal')">Alternative 1</button>
-        <button class="style-btn" id="stylePro" onclick="selectStyle('professional')">Alternative 2</button>
+        <button class="style-btn" id="styleFormal" onclick="selectStyle('formal')"><span class="w-long">Alternative </span><span class="w-short">Alt </span>1</button>
+        <button class="style-btn" id="stylePro" onclick="selectStyle('professional')"><span class="w-long">Alternative </span><span class="w-short">Alt </span>2</button>
+        </div>
         <div class="toolbar-spacer"></div>
         <div class="view-toggle">
-          <button class="vt-btn active" id="switchFullText" onclick="setViewMode(true)">Full Text</button>
+          <button class="vt-btn active" id="switchFullText" onclick="setViewMode(true)">Full</button>
           <button class="vt-btn" id="switchSections" onclick="setViewMode(false)">Sections</button>
         </div>
       </div>
 
       <div class="xray-row">
-        <div class="xray-toggle" onclick="toggleXRay()">
-          <div class="xray-switch" id="xraySwitch"></div>
-          <span class="xray-label">X-Ray</span>
-        </div>
-        <div class="xray-toggle" onclick="togglePhrases()">
-          <div class="xray-switch" id="phraseSwitch"></div>
-          <span class="xray-label">Phrases<span class="phrase-badge" id="phraseBadge"></span></span>
-        </div>
-        <div class="legend" id="legend">
-          <span class="legend-item"><span class="legend-dot"></span>Signpost</span>
-        </div>
+        <span><button class="tool on" type="button" id="xraySwitch" onclick="toggleXRay()" aria-pressed="true">X-ray</button>
+        <button class="tool on" type="button" id="phraseSwitch" onclick="togglePhrases()" aria-pressed="true">Phrases<span class="phrase-badge" id="phraseBadge"></span></button> <button class="tool" type="button" onclick="copyAllSections()">Copy</button></span>
+        <div class="legend" id="legend"></div>
       </div>
 
-      <div class="stage-dots-row hidden" id="stageDots"></div>
+      <div class="stage-dots-row hidden" id="stageDots" hidden></div>
 
       <div class="card-scroll" id="infographic">
         <div class="state-msg">Loading sample…</div>
@@ -312,8 +307,8 @@ let question      = null;
 let sections      = [];     // Array of {heading, content}
 let currentSection = 0;
 let currentStyle  = 'default';
-let xrayOn        = false;
-let phrasesOn     = false;
+let xrayOn        = true;
+let phrasesOn     = true;
 let fullTextMode  = true;
 let phraseDB      = {};
 let phraseReady   = false;
@@ -487,7 +482,7 @@ function enhancePhrases(html) {
         if (seen.has(k)) return match;
         seen.add(k); count++;
         const safe = phrase.replace(/'/g,"\\'").replace(/"/g,'\\"');
-        return `<span class="phrase-enhanced"><span class="phrase-text" onclick="showAlts('${safe}')">${match}</span><button class="phrase-hint-btn" onclick="event.stopPropagation();showAlts('${safe}')">💡</button></span>`;
+        return `<span class="phrase-enhanced"><span class="phrase-text" onclick="showAlts('${safe}')">${match}</span><span class="phrase-count" onclick="event.stopPropagation();showAlts('${safe}')">${phraseDB[phrase].alternatives.length}</span></span>`;
       });
     });
   return { html: out, count };
@@ -527,85 +522,36 @@ function setViewMode(isFullText) {
 function render() {
   const box = document.getElementById('infographic');
   box.classList.toggle('board-cols', fullTextMode);
-  if (!sections.length) {
-    box.innerHTML = `<div class="state-msg">No sample report found for this question yet.</div>`;
-    return;
+  if (!sections.length) { box.innerHTML = `<div class="state-msg">No sample report found for this question yet.</div>`; return; }
+  let total = 0;
+  const xr = xrayOn ? 'xray-on' : '';
+  function dress(sec, idx, withTopic) {
+    let heading = sec.heading, content = sec.content;
+    if (phrasesOn) { const r1 = enhancePhrases(heading); heading = r1.html; total += r1.count;
+                     const r2 = enhancePhrases(content); content = r2.html; total += r2.count; }
+    const tp = withTopic ? topicFor(idx) : null;
+    if (tp && tp.function) content = markTopic(content, tp.span, tp.function).html;
+    if (xrayOn) { heading = wrapDM(heading); content = wrapDM(content); }
+    return { heading, content };
   }
-
-  let html = '';
-  let totalPhraseCount = 0;
-
   if (fullTextMode) {
-    html = sections.map((sec, idx) => {
-      const label = SECTION_LABELS[idx] || `Section ${idx+1}`;
-      let heading = sec.heading;
-      let content = sec.content;
-
-      if (phrasesOn) {
-        const r1 = enhancePhrases(heading);
-        heading = r1.html;
-        totalPhraseCount += r1.count;
-
-        const r2 = enhancePhrases(content);
-        content = r2.html;
-        totalPhraseCount += r2.count;
-      }
-
-      const tp = topicFor(idx);
-      if (tp && tp.function) content = markTopic(content, tp.span, tp.function).html;
-
-      if (xrayOn) {
-        heading = wrapDM(heading);
-        content = wrapDM(content);
-      }
-
-      return `<div class="para-label">${label}</div>
-              <div class="section-heading">${heading}</div>
-              <div class="para-text ${xrayOn ? 'xray-on' : ''}">${content}</div>`;
-    }).join('');
-    box.innerHTML = html;
-
+    /* FULL — the report as a student writes it: its own headings, one column */
+    box.innerHTML = '<div class="measure">' + sections.map((sec, idx) => {
+      const d = dress(sec, idx, true);
+      return `<section class="fpara"><h4 class="rp-head ${xr}">${d.heading}</h4><div class="para-text ${xr}">${d.content}</div></section>`;
+    }).join('') + '</div>';
   } else {
+    /* SECTIONS — one section per card; the report's own heading is the headline */
     const sec = sections[currentSection];
-    if (!sec) {
-      box.innerHTML = `<div class="state-msg">No content for this section.</div>`;
-      return;
-    }
-
-    let heading = sec.heading;
-    let content = sec.content;
-
-    if (phrasesOn) {
-      const r1 = enhancePhrases(heading);
-      heading = r1.html;
-      totalPhraseCount += r1.count;
-
-      const r2 = enhancePhrases(content);
-      content = r2.html;
-      totalPhraseCount += r2.count;
-    }
-
-    if (xrayOn) {
-      heading = wrapDM(heading);
-      content = wrapDM(content);
-    }
-
-    const label = SECTION_LABELS[currentSection] || `Section ${currentSection+1}`;
-    box.innerHTML = `
-      <div class="para-label">${label}</div>
-      <div class="section-heading">${heading}</div>
-      <div class="para-text ${xrayOn ? 'xray-on' : ''}">${content}</div>`;
+    if (!sec) { box.innerHTML = `<div class="state-msg">No content for this section.</div>`; return; }
+    const d = dress(sec, currentSection, true);
+    box.innerHTML = `<div class="measure"><article class="pcard"><div class="poster-kick"><i></i><span>Section ${currentSection+1} of ${sections.length}</span></div>`+
+      `<h3 class="poster-head ${xr}">${d.heading}</h3><div class="pc-rule"></div><div class="para-text ${xr}">${d.content}</div></article></div>`;
   }
-
   const badge = document.getElementById('phraseBadge');
-  if (phrasesOn && totalPhraseCount > 0) {
-    badge.textContent = totalPhraseCount;
-    badge.classList.add('on');
-  } else {
-    badge.classList.remove('on');
-  }
-
-  if (!fullTextMode) updateNav();
+  badge.textContent = (phrasesOn && total) ? total : '';
+  badge.classList.toggle('on', !!(phrasesOn && total));
+  updateNav();
 }
 
 /* ════════════════════════════════
@@ -623,7 +569,7 @@ function buildDots(count) {
 function updateNav() {
   document.getElementById('btnPrev').disabled = currentSection === 0;
   document.getElementById('btnNext').disabled = currentSection >= sections.length - 1;
-  document.getElementById('paraLabel').textContent = SECTION_LABELS[currentSection] || `Section ${currentSection+1}`;
+  document.getElementById('paraLabel').textContent = (currentSection+1) + ' / ' + sections.length;
   document.querySelectorAll('.stage-dot-wrapper').forEach((el,i) =>
     el.classList.toggle('current', i === currentSection));
 }
@@ -631,20 +577,22 @@ function updateNav() {
 function goPrev() { if (currentSection > 0) { currentSection--; render(); } }
 function goNext() { if (currentSection < sections.length-1) { currentSection++; render(); } }
 function goTo(i)  { if (i >= 0 && i < sections.length) { currentSection = i; render(); } }
+document.addEventListener('keydown', e => { if (fullTextMode) return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); goNext(); } if (e.key === 'ArrowLeft') { e.preventDefault(); goPrev(); } });
 
 /* ════════════════════════════════
    TOOLS
 ════════════════════════════════ */
 function toggleXRay() {
   xrayOn = !xrayOn;
-  document.getElementById('xraySwitch').classList.toggle('on', xrayOn);
+  const xb=document.getElementById('xraySwitch'); xb.classList.toggle('on', xrayOn); xb.setAttribute('aria-pressed', String(xrayOn));
   render();
 }
 
 function togglePhrases() {
   if (!phraseReady) { showToast('Phrase bank not loaded'); return; }
   phrasesOn = !phrasesOn;
-  document.getElementById('phraseSwitch').classList.toggle('on', phrasesOn);
+  const pb=document.getElementById('phraseSwitch'); pb.classList.toggle('on', phrasesOn); pb.setAttribute('aria-pressed', String(phrasesOn));
   render();
 }
 
@@ -711,10 +659,10 @@ function closeAlt(e) {
    MENU
 ════════════════════════════════ */
 function toggleMenu() { document.getElementById('menuDropdown').classList.toggle('open'); }
-function closeMenu()  { document.getElementById('menuDropdown').classList.remove('open'); }
+function closeMenu()  { const m=document.getElementById('menuDropdown'); if (m) m.classList.remove('open'); }
 document.addEventListener('click', e => {
-  if (!document.getElementById('menuDropdown').contains(e.target) &&
-      !document.getElementById('menuBtn').contains(e.target)) closeMenu();
+  const md=document.getElementById('menuDropdown'), mb=document.getElementById('menuBtn');
+  if (md && mb && !md.contains(e.target) && !mb.contains(e.target)) closeMenu();
 });
 
 /* ════════════════════════════════
@@ -767,7 +715,7 @@ function navTo(dest) {
 async function init() {
   fetch('data/reports-expressions.json')
     .then(r => r.ok ? r.json() : null)
-    .then(d => { if (d) buildPhraseDB(d); })
+    .then(d => { if (d) { buildPhraseDB(d); if (sections.length) render(); } })
     .catch(() => {});
 
   try { question = JSON.parse(sessionStorage.getItem('currentReportQuestion')); } catch(e) {}

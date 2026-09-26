@@ -4,7 +4,7 @@
    Agreement: see choose.js.
    ═══════════════════════════════════════════════════════════════════════ */
 (window.ChallengeGames=window.ChallengeGames||{}).odd={
-  title:'Odd one out',
+  title:'Odd one out', kind:'exam', skill:'receptive',
   solution:r=>'The odd one out: “'+r.answer+'”',
   render(host,r,ctx){
     const L='ABCD';

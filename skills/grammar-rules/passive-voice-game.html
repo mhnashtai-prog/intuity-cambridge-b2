@@ -56,6 +56,10 @@
 .example p:last-child{margin:0}
 .example .ans{color:var(--accent-ink,#9A5A2C);font-weight:700}
 .gate .seg{margin:1.1rem 0 1.2rem}
+/* the one instruction on the gate; it becomes the chosen set once there is one */
+.pick{font-family:var(--f-mono);font-size:.74rem!important;letter-spacing:.14em;text-transform:uppercase;color:var(--ink)!important;
+  margin:1.5rem 0 .2rem;padding:.8rem 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);width:100%;max-width:30rem}
+.pick.chosen{color:var(--accent-ink,#9A5A2C)!important}
 .startbtn{font-family:var(--f-display);font-weight:700;font-size:.95rem;color:#fff;background:var(--ink);
   padding:.85rem 2.2rem;border:none;border-radius:999px;cursor:pointer;transition:transform .12s}
 .startbtn:active{transform:scale(.96)}
@@ -199,12 +203,9 @@
       <div class="kick" id="gateKick">Passive voice · Game</div>
       <h1 id="gateTitle">Choose the passive</h1>
       <p id="gateText">Read the active sentence. Then tap the pendulum with the verb form that completes it in the passive.</p>
-      <div class="example">
-        <span class="lab">Active</span><p>The new firm is designing our head office in Lisbon.</p>
-        <span class="lab">Passive</span><p>Our head office <span class="ans">is being designed</span> in Lisbon.</p>
-      </div>
+      <p class="pick" id="pickMsg" aria-live="polite">Pick a set above to start</p>
       <div id="lenSeg"></div>
-      <button class="startbtn" id="startBtn" type="button">Start</button>
+      <button class="startbtn" id="startBtn" type="button" disabled>Start</button>
       <div class="loadmsg" id="loadMsg">Loading the rounds…</div>
     </section>
 
@@ -253,7 +254,7 @@ const sfxWin=()=>{ if(!ac) return; [523,659,784,1047].forEach((f,i)=>tone(f,.35,
 let D=null, order=[], ri=0, cur=null, tries=0, stars=3, busy=false, epoch=0;
 let score=0, streak=0, best=0, hits=0, slips=0, starLog=[], missed=[];
 let len=pref('len')||'90', running=false, tEnd=0, tMs=0, raf=null;
-let sel=P.get('set')||pref('set')||'simple';   /* an area key ("modals") or a mix ("mix1") */
+let sel=P.get('set')||'';   /* an area key ("modals") or a mix ("mix1"); empty until the student picks */
 function roundsFor(k){ if(!D) return [];
   const m=/^mix(\d+)$/.exec(k);
   return D.rounds.map((r,i)=>(m? (r.mix||[]).includes(+m[1]) : r.set===k)?i:-1).filter(i=>i>=0); }
@@ -285,6 +286,7 @@ function paintStars(){ $('stars').innerHTML=[0,1,2].map(i=>STAR.replace('<svg','
 
 /* ── a round ── */
 function start(){
+  if(!sel||!roundsFor(sel).length) return;
   audio(); score=0; streak=0; best=0; hits=0; slips=0; starLog=[]; missed=[];
   order=shuffle(roundsFor(sel)); ri=0;
   $('gate').hidden=true; $('result').hidden=true; $('round').hidden=false; $('hud').hidden=false;
@@ -352,7 +354,7 @@ function finish(done){
     '<div class="acts"><a class="ghost" href="passive-voice-rules.html">Back to the rules</a><button class="ghost" type="button" id="again">Play again</button>'+
     (nextMix()?'<button class="primary" type="button" id="nextMix">'+esc(nextMix().label)+' →</button>':'')+'</div>';
   $('again').onclick=openGate;
-  const nb=$('nextMix'); if(nb) nb.onclick=()=>{ sel=nextMix().key; pref('set',sel); drawTabs(); openGate(); };
+  const nb=$('nextMix'); if(nb) nb.onclick=()=>{ sel=nextMix().key; drawTabs(); openGate(); };
 }
 
 /* ── the mixes: the second tier, as on the rules page ── */
@@ -364,12 +366,15 @@ function drawTabs(){
 function openGate(){
   stopClock(); epoch++;
   $('round').hidden=true; $('result').hidden=true; $('hud').hidden=true; $('gate').hidden=false;
-  $('loadMsg').textContent=labelOf(sel)+' · '+roundsFor(sel).length+' sentences';
+  const pm=$('pickMsg'), n=sel?roundsFor(sel).length:0;
+  pm.textContent=n?labelOf(sel)+' · '+n+' sentences':'Pick a set above to start';
+  pm.classList.toggle('chosen',!!n);
+  $('startBtn').disabled=!n; $('loadMsg').textContent='';
 }
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-set]'); if(!t) return;
   const k=t.dataset.set; if(k===sel && !$('gate').hidden) return;
-  sel=k; pref('set',sel); drawTabs(); openGate();
+  sel=k; drawTabs(); openGate();
 });
 
 /* ── wiring ── */
@@ -386,7 +391,7 @@ fetch(SRC,{cache:'no-store'}).then(r=>{ if(!r.ok) throw new Error('HTTP '+r.stat
   if(d.topic){ $('gateKick').textContent=d.topic+' · Game'; $('subtitle').textContent='B2 First '+d.topic; }
   if(d.level) $('level').textContent=d.level;
   if(d.instructions) $('gateText').textContent=d.instructions;
-  if(!tabs().some(t=>t.key===sel)) sel=tabs().length?tabs()[0].key:'';
+  if(!tabs().some(t=>t.key===sel)) sel='';
   drawTabs(); openGate();
 }).catch(e=>{ $('loadMsg').textContent='The rounds didn’t load ('+e.message+'). Reload to try again.'; $('startBtn').disabled=true; });
 })();

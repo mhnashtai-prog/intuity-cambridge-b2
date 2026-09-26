@@ -64,13 +64,18 @@
 
 /* ── A ROUND ── */
 .rhead{display:flex;justify-content:space-between;align-items:center;gap:.4rem 1rem;flex-wrap:wrap}
-/* the mix choice on the gate: the rules page's second tier, in small */
-.gate-mix{display:flex;justify-content:center;gap:.2rem;flex-wrap:wrap;margin:.9rem 0 0}
-.gate-mix:empty{display:none}
-.gate-mix .vtab{position:relative;font-family:var(--f-mono);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);
-  background:none;border:none;padding:.5rem .6rem;cursor:pointer}
-.gate-mix .vtab.active{color:var(--ink)}
-.gate-mix .vtab.active::after{content:'';position:absolute;left:.6rem;right:.6rem;bottom:.25rem;height:1.5px;background:var(--accent,#DD8E58)}
+/* the tier stays on one line on phones: seven short tabs, set a little tighter */
+@media(max-width:560px){
+  .header .set-tabs{flex-wrap:nowrap;justify-content:center;gap:0;overflow-x:auto;scrollbar-width:none;
+    width:auto;max-width:100%;margin-left:0!important;margin-right:0!important;box-sizing:border-box;padding-left:.2rem;padding-right:.2rem}
+  .header .set-tabs::-webkit-scrollbar{display:none}
+  .header .set-tabs .vtab{font-size:.52rem;letter-spacing:.02em;padding-left:.22rem;padding-right:.22rem;white-space:nowrap;flex:none}
+  .set-tabs .vtab.mix-first{margin-left:.55rem}
+  .set-tabs .vtab.mix-first::before{left:-.3rem}
+}
+/* a divider between the five areas and the two mixes */
+.set-tabs .vtab.mix-first{margin-left:.9rem;position:relative}
+.set-tabs .vtab.mix-first::before{content:'';position:absolute;left:-.5rem;top:30%;bottom:30%;width:1px;background:var(--rule)}
 .stars{display:flex;gap:3px}
 .stars svg{width:20px;height:20px;fill:var(--star-off);transition:fill .2s}
 .stars svg.on{fill:var(--star)}
@@ -142,13 +147,13 @@
 .res .acts .ghost{background:var(--tile-bg);color:var(--sentence)}
 /* short screens (small phones, laptops with toolbars): tighter still */
 @media(max-height:700px){
-  .opts .dial-b{--dial:clamp(92px,min(30vw,19.6vh),132px)}
+  .opts .dial-b{--dial:clamp(92px,min(30vw,18.6vh),132px)}
   .opts{margin:.9rem 0 .7rem;row-gap:1rem}
   .sent .passive{font-size:1.15rem}
   .note{font-size:.86rem;line-height:1.45}
 }
 @media(max-height:660px) and (max-width:560px){
-  .opts .dial-b{--dial:clamp(88px,min(29vw,17.4vh),118px)}
+  .opts .dial-b{--dial:clamp(88px,min(27vw,17.4vh),118px)}
   .opts{row-gap:.8rem;margin:.7rem 0 .6rem}
 }
 /* small phones: the rings stay readable; the text and spacing around them give way */
@@ -182,6 +187,7 @@
     <a class="mode-btn" href="passive-voice-rules.html?mode=quiz">Quiz</a>
     <span class="mode-btn active" aria-current="page">Game</span>
   </nav>
+  <div class="set-tabs" id="setTabs" role="tablist" aria-label="Area"></div>
 </header>
 
 <main class="wrap">
@@ -197,7 +203,6 @@
         <span class="lab">Active</span><p>The new firm is designing our head office in Lisbon.</p>
         <span class="lab">Passive</span><p>Our head office <span class="ans">is being designed</span> in Lisbon.</p>
       </div>
-      <div class="gate-mix" id="mixTabs" role="tablist" aria-label="Mix"></div>
       <div id="lenSeg"></div>
       <button class="startbtn" id="startBtn" type="button">Start</button>
       <div class="loadmsg" id="loadMsg">Loading the rounds…</div>
@@ -248,8 +253,13 @@ const sfxWin=()=>{ if(!ac) return; [523,659,784,1047].forEach((f,i)=>tone(f,.35,
 let D=null, order=[], ri=0, cur=null, tries=0, stars=3, busy=false, epoch=0;
 let score=0, streak=0, best=0, hits=0, slips=0, starLog=[], missed=[];
 let len=pref('len')||'90', running=false, tEnd=0, tMs=0, raf=null;
-let mix=+(P.get('mix')||pref('mix')||1);
-const roundsOf=m=>D.rounds.filter(r=>(r.mix||1)===m);
+let sel=P.get('set')||pref('set')||'simple';   /* an area key ("modals") or a mix ("mix1") */
+function roundsFor(k){ if(!D) return [];
+  const m=/^mix(\d+)$/.exec(k);
+  return D.rounds.map((r,i)=>(m? (r.mix||[]).includes(+m[1]) : r.set===k)?i:-1).filter(i=>i>=0); }
+function tabs(){ const t=[]; Object.keys((D&&D.sets)||{}).forEach(k=>t.push({key:k,label:D.sets[k]}));
+  ((D&&D.mixes)||[]).forEach(m=>t.push({key:'mix'+m.id,label:m.label,mix:true})); return t; }
+function labelOf(k){ const t=tabs().find(x=>x.key===k); return t?t.label:''; }
 const STAR='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.4c.4 0 .7.2.9.6l2.5 5.1 5.6.8c.8.1 1.1 1.1.5 1.7l-4 4 .9 5.6c.1.8-.7 1.4-1.4 1L12 18.6l-5 2.6c-.7.4-1.5-.2-1.4-1l.9-5.6-4-4c-.6-.6-.3-1.6.5-1.7l5.6-.8L11.1 3c.2-.4.5-.6.9-.6z"/></svg>';
 
 function seg(items,cur){ return '<div class="seg sm" role="tablist">'+items.map(it=>
@@ -276,14 +286,14 @@ function paintStars(){ $('stars').innerHTML=[0,1,2].map(i=>STAR.replace('<svg','
 /* ── a round ── */
 function start(){
   audio(); score=0; streak=0; best=0; hits=0; slips=0; starLog=[]; missed=[];
-  order=shuffle(D.rounds.map((r,i)=>(r.mix||1)===mix?i:-1).filter(i=>i>=0)); ri=0;
+  order=shuffle(roundsFor(sel)); ri=0;
   $('gate').hidden=true; $('result').hidden=true; $('round').hidden=false; $('hud').hidden=false;
   hud(); startClock(); load();
 }
 function load(){
   epoch++; const ep=epoch; tries=0; stars=3; busy=false; paintStars();
   cur=D.rounds[order[ri]];
-  $('rKick').textContent='Round '+(ri+1)+' of '+order.length+(cur.tag?' · '+cur.tag:'');
+  $('rKick').textContent=labelOf(sel)+' · '+(ri+1)+' / '+order.length+(cur.tag?' · '+cur.tag:'');
   $('active').textContent=cur.active;
   $('passive').innerHTML=esc(cur.passive).replace('___','<span class="gap" id="gap">&nbsp;</span>');
   $('note').textContent='';
@@ -326,7 +336,7 @@ async function choose(b,o,ep){
 function next(){ ri++; if(ri>=order.length) finish(true); else load(); }
 
 /* ── the result ── */
-function nextMix(){ const ms=(D&&D.mixes)||[]; const i=ms.findIndex(m=>m.id===mix); return i>=0&&i<ms.length-1?ms[i+1]:null; }
+function nextMix(){ const t=tabs(); const i=t.findIndex(x=>x.key===sel); return i>=0&&i<t.length-1?t[i+1]:null; }
 function finish(done){
   stopClock(); epoch++; if(done) sfxWin();
   const n=hits+slips, acc=n?hits/n:0;
@@ -342,25 +352,24 @@ function finish(done){
     '<div class="acts"><a class="ghost" href="passive-voice-rules.html">Back to the rules</a><button class="ghost" type="button" id="again">Play again</button>'+
     (nextMix()?'<button class="primary" type="button" id="nextMix">'+esc(nextMix().label)+' →</button>':'')+'</div>';
   $('again').onclick=openGate;
-  const nb=$('nextMix'); if(nb) nb.onclick=()=>{ mix=nextMix().id; pref('mix',String(mix)); drawTabs(); openGate(); };
+  const nb=$('nextMix'); if(nb) nb.onclick=()=>{ sel=nextMix().key; pref('set',sel); drawTabs(); openGate(); };
 }
 
 /* ── the mixes: the second tier, as on the rules page ── */
 function drawTabs(){
-  const mixes=(D&&D.mixes)||[];
-  if(mixes.length<2){ $('mixTabs').innerHTML=''; return; }
-  $('mixTabs').innerHTML=mixes.map(m=>`<button type="button" class="vtab${m.id===mix?' active':''}" role="tab" aria-selected="${m.id===mix}" data-mix="${m.id}">${esc(m.label)}</button>`).join('');
+  let first=true;
+  $('setTabs').innerHTML=tabs().map(t=>{ const c='vtab'+(t.key===sel?' active':'')+(t.mix&&first?' mix-first':''); if(t.mix) first=false;
+    return `<button type="button" class="${c}" role="tab" aria-selected="${t.key===sel}" data-set="${t.key}">${esc(t.label)}</button>`; }).join('');
 }
 function openGate(){
   stopClock(); epoch++;
   $('round').hidden=true; $('result').hidden=true; $('hud').hidden=true; $('gate').hidden=false;
-  const n=D?roundsOf(mix).length:0;
-  $('loadMsg').textContent=(D&&D.mixes?(D.mixes.find(m=>m.id===mix)||{}).label+' · ':'')+n+' sentences';
+  $('loadMsg').textContent=labelOf(sel)+' · '+roundsFor(sel).length+' sentences';
 }
 document.addEventListener('click',e=>{
-  const t=e.target.closest('[data-mix]'); if(!t) return;
-  const m=+t.dataset.mix; if(m===mix && !$('gate').hidden) return;
-  mix=m; pref('mix',String(mix)); drawTabs(); openGate();
+  const t=e.target.closest('[data-set]'); if(!t) return;
+  const k=t.dataset.set; if(k===sel && !$('gate').hidden) return;
+  sel=k; pref('set',sel); drawTabs(); openGate();
 });
 
 /* ── wiring ── */
@@ -377,7 +386,7 @@ fetch(SRC,{cache:'no-store'}).then(r=>{ if(!r.ok) throw new Error('HTTP '+r.stat
   if(d.topic){ $('gateKick').textContent=d.topic+' · Game'; $('subtitle').textContent='B2 First '+d.topic; }
   if(d.level) $('level').textContent=d.level;
   if(d.instructions) $('gateText').textContent=d.instructions;
-  if(!d.mixes || !d.mixes.some(m=>m.id===mix)) mix=(d.mixes&&d.mixes[0].id)||1;
+  if(!tabs().some(t=>t.key===sel)) sel=tabs().length?tabs()[0].key:'';
   drawTabs(); openGate();
 }).catch(e=>{ $('loadMsg').textContent='The rounds didn’t load ('+e.message+'). Reload to try again.'; $('startBtn').disabled=true; });
 })();

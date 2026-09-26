@@ -4,7 +4,7 @@
    Agreement: see choose.js.
    ═══════════════════════════════════════════════════════════════════════ */
 (window.ChallengeGames=window.ChallengeGames||{}).gap={
-  title:'Fill the gap',
+  title:'Fill the gap', kind:'exam', skill:'productive',
   solution:r=>r.answer[0],
   render(host,r,ctx){
     const norm=s=>String(s).toLowerCase().replace(/[’']/g,"'").replace(/[.!?,]/g,'').replace(/\s+/g,' ').trim();

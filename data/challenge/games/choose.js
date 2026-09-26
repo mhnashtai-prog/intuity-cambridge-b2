@@ -13,7 +13,7 @@
    Round: { prompt: "… ___ …", options: [4], answer, note }
    ═══════════════════════════════════════════════════════════════════════ */
 (window.ChallengeGames=window.ChallengeGames||{}).choose={
-  title:'Choose',
+  title:'Choose', kind:'exam', skill:'receptive',
   solution:r=>r.answer,
   render(host,r,ctx){
     const L='ABCD';

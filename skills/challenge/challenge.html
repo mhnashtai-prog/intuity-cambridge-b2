@@ -234,7 +234,7 @@
     </div>
     <div class="board" id="board"></div>
     <p class="hint" id="hint">Tap 01 to begin</p>
-    <div class="legend"><span><i class="o"></i>Next</span><span><i class="d"></i>Done</span><span><i></i>Locked</span></div>
+    <div class="legend"><span><i></i>To do</span><span><i class="o"></i>Open</span><span><i class="d"></i>Done</span></div>
     <div class="cta"><button class="btn" id="again" type="button" hidden>Start again</button></div>
   </article>
 </main>
@@ -268,7 +268,7 @@ const NOTE={game:'Game · the INTUITY games, one per cell. Three lives, another 
 
 /* ══ STATE ══ */
 let mode=P.get('mode')==='exam'?'exam':'game', TOPICS=null, topic=null, pool=[], plan=[];
-let at=0, lives=3, score=0, playing=false, t0=0, tick=null, tries=0, log=[];
+let lives=3, score=0, playing=false, t0=0, tick=null, tries=0, log=[];
 
 /* ══ 1 · THE HEADER AND THE GATE ══ */
 function drawModes(){
@@ -388,48 +388,62 @@ function drawBoard(){
 
 
 /* ══ 2 · THE TRACK ══ */
-function reset(){ stop(); at=0; lives=3; score=0; playing=false; log=[]; $('clock').textContent='0:00'; $('answered').textContent='0 / '+N; $('hint').hidden=false; $('again').hidden=true; }
+/* FREE ORDER: after 01 starts the run, any cell from 02 to 13 can be opened,
+   in any order. A card closed without an answer leaves its cell to do, to
+   come back to later — as on a real paper. FINISH opens once all twelve are
+   done. The lives (Game) still count across the whole run. */
+let doneSet=new Set(), triesAt={};
+function reset(){ stop(); doneSet=new Set(); triesAt={}; lives=3; score=0; playing=false; log=[]; cur=null;
+  $('clock').textContent='0:00'; $('answered').textContent='0 / '+N; $('hint').hidden=false; $('hint').textContent='Tap 01 to begin'; $('again').hidden=true; }
 function stop(){ clearInterval(tick); tick=null; }
+function allDone(){ return doneSet.size>=N; }
 function paint(){
   document.querySelectorAll('.cell,.num,.cap-txt').forEach(t=>{
-    const i=+t.dataset.i, done=(i>0&&i<=at)||(i===0&&playing), open=playing&&i===at+1;
-    t.classList.toggle('done',done); t.classList.toggle('open',open);
-    if(t.classList.contains('cell')){ const live=open||(!playing&&i===0&&!log.length); t.setAttribute('tabindex',live?'0':'-1'); t.style.cursor=live?'pointer':''; } });
-  $('score').textContent=score; $('answered').textContent=log.length+' / '+N;
+    const i=+t.dataset.i;
+    const done=(i===0&&playing)||doneSet.has(i)||(i===N+1&&!playing&&allDone()&&log.length);
+    const open=playing&&((cur&&cur.i===i&&!$('scrim').hidden)||(i===N+1&&allDone()));
+    t.classList.toggle('done',done&&!open); t.classList.toggle('open',open);
+    if(t.classList.contains('cell')){
+      const live=(!playing&&i===0&&!log.length)||(playing&&i>=1&&i<=N&&!doneSet.has(i))||(playing&&i===N+1&&allDone());
+      t.setAttribute('tabindex',live?'0':'-1'); t.style.cursor=live?'pointer':''; } });
+  $('score').textContent=score; $('answered').textContent=doneSet.size+' / '+N;
   $('lives').innerHTML=[0,1,2].map(i=>`<svg viewBox="0 0 24 24" class="${i<lives?'':'gone'}"><path d="M12 21s-7.5-4.6-9.6-9.3C.9 8.3 3 4.5 6.7 4.5c2.1 0 3.6 1.2 4.3 2.4.7-1.2 2.2-2.4 4.3-2.4 3.7 0 5.8 3.8 4.3 7.2C19.5 16.4 12 21 12 21z"/></svg>`).join('');
+  if(playing) $('hint').textContent=allDone()?'All done — tap 14 to finish':'Pick any cell, in any order';
 }
-function begin(){ reset(); plan=draw(); playing=true; t0=performance.now(); $('hint').hidden=true;
+function begin(){ reset(); plan=draw(); playing=true; t0=performance.now(); $('hint').hidden=false;
   tick=setInterval(()=>{ const s=Math.floor((performance.now()-t0)/1000); $('clock').textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); },500);
   paint(); }
 function tap(i){
-  if(!playing){ if(i===0&&!log.length){ begin(); openCell(1); } return; }
-  if(i!==at+1) return; if(i===N+1){ finish(true); return; } openCell(i); }
+  if(!playing){ if(i===0&&!log.length) begin(); return; }
+  if(i===N+1){ if(allDone()) finish(true); return; }
+  if(i>=1&&i<=N&&!doneSet.has(i)) openCell(i); }
 
 /* ══ THE FOCUS CARD — the page runs the rules; the game draws the round ══ */
 let cur=null, settled=false;
 function openCard(html){ $('focus').innerHTML='<button class="x" type="button" aria-label="Close" id="fx">✕</button>'+html;
   const s=$('scrim'); s.hidden=false; requestAnimationFrame(()=>s.classList.add('on')); $('fx').onclick=closeCard; }
-function closeCard(){ const s=$('scrim'); s.classList.remove('on'); setTimeout(()=>{ s.hidden=true; },250); }
+function closeCard(){ const s=$('scrim'); s.classList.remove('on'); setTimeout(()=>{ s.hidden=true; paint(); },250); }
 function openCell(i){
-  const r=plan[i-1], g=G[r.game]; cur={i,r,g}; settled=false; tries=0;
+  const r=plan[i-1], g=G[r.game]; cur={i,r,g}; settled=false; tries=triesAt[i]||0;
   openCard(`<div class="kick">Cell ${String(i+1).padStart(2,'0')} of 14${r.tag?' · '+esc(r.tag):''}</div><h2 id="fTitle">${esc(g.title)}</h2>
     <div id="host"></div><p class="feedback" id="fb" aria-live="polite"></p><div class="cta" id="next" hidden><button class="btn fill" type="button" id="nextBtn">Continue</button></div>`);
   g.render($('host'), r, {exam:mode==='exam', esc, shuffle, answer});
+  paint();
 }
 function answer(ok,given){
   if(settled) return false;
   const fb=$('fb');
   if(mode==='exam'){                                   /* one attempt, nothing revealed */
-    settled=true; log.push({r:cur.r,g:cur.g,ok,given}); fb.innerHTML='<b>Answer saved.</b> Your results come at the end.';
-    showNext(()=>{ closeCard(); at=cur.i; paint(); }); return false;
+    settled=true; log.push({i:cur.i,r:cur.r,g:cur.g,ok,given}); doneSet.add(cur.i); fb.innerHTML='<b>Answer saved.</b> Your results come at the end.';
+    showNext(()=>{ closeCard(); }); return false;
   }
   if(ok){
-    settled=true; const pts=tries?50:100; score+=pts; log.push({r:cur.r,g:cur.g,ok:true,given});
+    settled=true; const pts=tries?50:100; score+=pts; log.push({i:cur.i,r:cur.r,g:cur.g,ok:true,given}); doneSet.add(cur.i);
     fb.innerHTML='<b>Right · +'+pts+'.</b> '+esc(cur.r.note||'');
-    showNext(()=>{ closeCard(); at=cur.i; paint(); }); return false;
+    showNext(()=>{ closeCard(); }); return false;
   }
-  tries++; lives--; paint();
-  if(lives<=0){ settled=true; log.push({r:cur.r,g:cur.g,ok:false,given}); fb.innerHTML='<b>No lives left.</b> '+esc(cur.r.note||'');
+  tries++; triesAt[cur.i]=tries; lives--; paint();
+  if(lives<=0){ settled=true; log.push({i:cur.i,r:cur.r,g:cur.g,ok:false,given}); fb.innerHTML='<b>No lives left.</b> '+esc(cur.r.note||'');
     showNext(()=>finish(false),'See your result'); return false; }
   fb.innerHTML='Not quite — <b>'+lives+'</b> '+(lives===1?'life':'lives')+' left. Try again.'; return true;
 }
@@ -437,26 +451,26 @@ function showNext(fn,label){ $('next').hidden=false; const b=$('nextBtn'); if(la
 
 /* ══ 3 · THE RESULT ══ */
 function finish(won){
-  playing=false; stop(); if(won) at=N+1; paint(); $('again').hidden=false;
+  playing=false; stop(); cur=null; paint(); $('hint').hidden=true; $('again').hidden=false;
   const t=$('clock').textContent;
   if(mode==='exam'){
     const right=log.filter(x=>x.ok).length, pct=Math.round(right/N*100);
     const grade=pct>=90?'Grade A':pct>=75?'Grade B':pct>=60?'Grade C':'Not yet — keep practising';
     openCard(`<div class="kick">${esc(topic.label)} · Exam</div><h2 id="fTitle">Your result</h2>
       <div class="big">${pct}%</div><div class="grade">${grade} · ${right} of ${N} right · ${t}</div>
-      <ul class="review">${log.map((x,k)=>`<li><div class="rh"><span>Cell ${String(k+2).padStart(2,'0')} · ${esc(x.g.title)}</span><span class="${x.ok?'ok':'no'}">${x.ok?'Right':'Wrong'}</span></div>
+      <ul class="review">${log.slice().sort((a,b)=>a.i-b.i).map(x=>`<li><div class="rh"><span>Cell ${String(x.i+1).padStart(2,'0')} · ${esc(x.g.title)}</span><span class="${x.ok?'ok':'no'}">${x.ok?'Right':'Wrong'}</span></div>
         ${x.ok?'':`Your answer: ${esc(x.given)}<br>`}<b>${esc(x.g.solution(x.r))}</b>${x.r.note?' — '+esc(x.r.note):''}</li>`).join('')}</ul>
       <div class="cta"><button class="btn fill" type="button" id="rAgain">Try again</button></div>`);
   }else{
     openCard(`<div class="kick">${won?'Challenge complete':'Challenge over'}</div><h2 id="fTitle">${won?'Finish.':'So close.'}</h2>
-      <div class="big">${score}</div><p class="cg-prompt">${won?`All ${N} games in <b>${t}</b>, with <b>${lives}</b> ${lives===1?'life':'lives'} to spare.`:`You reached cell <b>${String(at+1).padStart(2,'0')}</b> of 14 in <b>${t}</b>.`}</p>
+      <div class="big">${score}</div><p class="cg-prompt">${won?`All ${N} games in <b>${t}</b>, with <b>${lives}</b> ${lives===1?'life':'lives'} to spare.`:`You finished <b>${doneSet.size}</b> of ${N} cells in <b>${t}</b>.`}</p>
       <div class="cta"><button class="btn fill" type="button" id="rAgain">Try again</button></div>`);
   }
   $('rAgain').onclick=()=>{ closeCard(); reset(); paint(); };
 }
 $('again').onclick=()=>{ reset(); paint(); };
-$('scrim').addEventListener('click',e=>{ if(e.target.id==='scrim' && (settled||!playing)) closeCard(); });
-document.addEventListener('keydown',e=>{ if(e.key==='Escape' && !$('scrim').hidden && (settled||!playing)) closeCard(); });
+$('scrim').addEventListener('click',e=>{ if(e.target.id==='scrim' && !(playing&&lives<=0)) closeCard(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && !$('scrim').hidden && !(playing&&lives<=0)) closeCard(); });
 
 /* ══ LOAD ══ */
 drawModes();

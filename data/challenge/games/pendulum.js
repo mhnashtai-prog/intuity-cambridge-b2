@@ -6,7 +6,7 @@
    Agreement: see choose.js.
    ═══════════════════════════════════════════════════════════════════════ */
 (window.ChallengeGames=window.ChallengeGames||{}).pendulum={
-  title:'Swing and choose',
+  title:'Swing and choose', kind:'game', skill:'receptive',
   solution:r=>r.answer,
   render(host,r,ctx){
     host.innerHTML=`<div class="cg-dials">${ctx.shuffle(r.options).map((o,k)=>`<button class="dial-b" type="button" data-o="${ctx.esc(o)}" aria-label="${ctx.esc(o)}">

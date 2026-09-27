@@ -159,6 +159,7 @@ html.embedded .hud{ top:66px; }
 .pathSvg .sage{ fill:none; stroke:#8AA79C; stroke-width:var(--bw-b); stroke-linejoin:round; }
 .pathSvg .cell{ fill:none; stroke:#201E1C; stroke-width:var(--bw); stroke-linejoin:miter; transition:stroke .35s, opacity .35s; }
 .pathSvg .cell.burnt{ stroke:var(--faint); opacity:.45; }
+.pathSvg .cell.done{ stroke:var(--caramel); opacity:1; }
 
 .fuseHead{
   position:absolute; width:15px; height:15px; border-radius:50%;
@@ -177,36 +178,18 @@ html.embedded .hud{ top:66px; }
    centring and the circle would jump to the corner of its point. */
 .circle{
   position:absolute; width:var(--size,72px); height:var(--size,72px);
-  border-radius:50%; cursor:pointer;
-  background:linear-gradient(145deg,#FFFFFF,#E4DDD1);
+  border-radius:50%; cursor:pointer; background:none;
   display:flex; align-items:center; justify-content:center; text-align:center;
-  box-shadow:-2px -2px 4px rgba(255,255,255,.9), 2px 3px 6px rgba(var(--shade),.28);
-  transition:box-shadow .2s, transform .25s var(--spring), filter .25s;
+  transition:transform .25s var(--spring), filter .25s;
   font-family:'JetBrains Mono','DM Mono',monospace; font-size:calc(var(--size,72px) * .19);
   color:#E5D1B8;
   transform:translate(-50%,-50%);
 }
-/* the sage ring, then the ink core on top of it — two flat layers instead
-   of the old grey pill, matching the pendulum medallion and the Challenge
-   track's own bezel/sage/core rendering */
-.circle::before{
-  content:''; position:absolute; inset:6.5%; border-radius:50%;
-  background:#8AA79C; z-index:0;
-}
-.circle .core{
-  position:absolute; inset:15%; border-radius:50%;
-  background:#201E1C; transition:background .3s; z-index:0;
-}
-.circle.done .core{ background:var(--caramel); }
-.circle:hover{ box-shadow:-2px -2px 4px rgba(255,255,255,.95), 3px 4px 8px rgba(var(--shade),.36); }
+.circle:hover{ filter:brightness(1.15); }
 .circle:active{ transform:translate(-50%,-50%) scale(.96); }
 
-.circle.done{
-  cursor:default;
-  filter:drop-shadow(-3px -3px 5px rgba(255,255,255,.95))
-         drop-shadow(3px 4px 7px rgba(var(--shade),.22));
-}
-.circle.done:hover{ transform:translate(-50%,-50%); }
+.circle.done{ cursor:default; }
+.circle.done:hover{ transform:translate(-50%,-50%); filter:none; }
 .circle.done:active{ transform:translate(-50%,-50%); }
 .circle .n{ position:relative; z-index:1; }
 .circle .word{
@@ -237,23 +220,11 @@ html.embedded .hud{ top:66px; }
   100%{ transform:translate(-50%,-50%) }
 }
 
-/* ── THE PIN ──
-   A small caramel marker sitting on top of every circle, whether it has
-   been answered yet or not. This is what actually reads as "the path": the
-   connecting lines say where the route runs, the pins say these twenty (and
-   only these twenty) dots are live stops on it. Purely decorative — it
-   never intercepts the click, and it sits above the number/word but clear
-   of the tick/cross corner badges. */
-.circle .pin{
-  position:absolute; top:5%; left:50%; width:21%; height:21%;
-  min-width:11px; min-height:11px;
-  border-radius:50%; transform:translate(-50%,0);
-  background:radial-gradient(circle at 35% 30%, #E9BE8F 0%, var(--caramel) 52%, #6E4A2C 100%);
-  box-shadow:0 1px 0 rgba(255,255,255,.55) inset,
-             0 0 0 1.5px rgba(110,74,44,.6),
-             0 3px 6px rgba(var(--shade),.45);
-  pointer-events:none; z-index:1;
-}
+/* the pin marker that used to sit on every circle is gone — with the
+   medallion puck removed, the circles are just transparent click-targets
+   over the continuous band, so a floating marker would have nothing to
+   sit on. The band's own cut lines are what read as "the path" now, the
+   same way they do on the Challenge track. */
 
 .mk{
   position:absolute; opacity:0; transform:scale(.5); transform-origin:50% 50%;
@@ -672,8 +643,7 @@ const TICK = '<svg class="mk tick" viewBox="0 0 24 24" fill="none" stroke="var(-
 const CROSS = '<svg class="mk cross" viewBox="0 0 24 24" fill="none" stroke="var(--cross)" ' +
   'stroke-width="5.8" stroke-linecap="round" aria-hidden="true">' +
   '<path d="M5.4 5c4.2 4.2 8.6 9.2 13.4 14.2M18.6 5.4C14.2 9.4 9.6 14.6 5.2 19"/></svg>';
-const PIN = '<span class="pin" aria-hidden="true"></span>';
-const CORE = '<span class="core" aria-hidden="true"></span>';
+
 
 /* ── THE ONE MIX ──
    Old Board offered Mix 1/2/3 with a chooser screen up front. That choice
@@ -884,7 +854,7 @@ function drawPath(){
     const isStart = i === 0, isFinish = i === slots.length - 1;
     el.setAttribute('aria-label', isStart ? 'Start, hole 1' : isFinish ? 'Finish, hole ' + (i+1) : 'Hole ' + (i+1));
     const label = isStart ? 'start' : isFinish ? 'finish' : null;
-    el.innerHTML = CORE + PIN + (label
+    el.innerHTML = (label
       ? '<span class="word end">' + label + '</span>'
       : '<span class="n">' + (i+1) + '</span>') + TICK + CROSS;
     el.onclick = () => openCircle(i);
@@ -1044,8 +1014,9 @@ function answer(pile){
   if (ok){
     slot.done = true; done++;
     if (!slot.missed) clean++;
+    if (route.cellEls[open]) route.cellEls[open].classList.add('done');
     el.className = 'circle done flip' + (slot.missed ? ' second' : '');
-    el.innerHTML = CORE + PIN + '<span class="word">' + esc(c.forms[c.pile]) + '</span>' + TICK;
+    el.innerHTML = '<span class="word">' + esc(c.forms[c.pile]) + '</span>' + TICK;
     fitWord(el, c.forms[c.pile]);
     el.setAttribute('aria-label', 'Turned: ' + c.forms[c.pile]);
     $('veil').classList.remove('show');

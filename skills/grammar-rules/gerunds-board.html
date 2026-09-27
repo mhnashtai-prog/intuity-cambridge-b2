@@ -136,11 +136,10 @@ html.embedded .header{ height:auto; padding:.35rem 1rem .4rem; gap:.3rem; }
 @keyframes hudPulse{ 0%,100%{ opacity:1 } 50%{ opacity:.4 } }
 
 /* ══ THE FIELD + PATH ══
-   .stage now STRETCHES its child instead of centering a shrink-fit grid —
-   the field has to fill the whole available area for cell math to work.
-   .board is the shared positioning context: a faint field of decorative
-   dots (non-interactive) plus the twenty real circles, absolutely placed
-   on top at the coordinates generatePath() chose. */
+   .board is the shared positioning context: the fixed Challenge-shaped
+   band, rendered as an SVG (bezel, sage rim, ink cells), plus the twenty
+   real circles, absolutely placed on top at the coordinates buildRoute()
+   worked out along that same band. */
 .stage{
   position:fixed; top:calc(var(--header-h) + var(--hud-h)); left:0; right:0; bottom:var(--bar-h);
   padding:.9rem; display:flex; align-items:stretch; justify-content:stretch;
@@ -156,8 +155,10 @@ html.embedded .hud{ top:66px; }
   transform:translate(-50%,-50%); pointer-events:none;
 }
 .pathSvg{ position:absolute; inset:0; pointer-events:none; }
-.pathSvg line{ stroke:var(--caramel); stroke-width:3; stroke-linecap:round; opacity:.5; transition:stroke .3s, opacity .3s; }
-.pathSvg line.burnt{ stroke:var(--faint); opacity:.28; }
+.pathSvg .bezel{ fill:none; stroke:url(#bezelShade); stroke-width:var(--bw-a); stroke-linejoin:round; filter:url(#raise); }
+.pathSvg .sage{ fill:none; stroke:#8AA79C; stroke-width:var(--bw-b); stroke-linejoin:round; }
+.pathSvg .cell{ fill:none; stroke:#201E1C; stroke-width:var(--bw); stroke-linejoin:miter; transition:stroke .35s, opacity .35s; }
+.pathSvg .cell.burnt{ stroke:var(--faint); opacity:.45; }
 
 .fuseHead{
   position:absolute; width:15px; height:15px; border-radius:50%;
@@ -559,13 +560,13 @@ html.embedded .away{ display:none; }
 /* ======================================================================
    THE BOARD — DEAL
 
-   Twenty circles on a path. The path's shape comes from PATH_LIBRARY: a
-   small set of hand-drawn 20-cell routes (comb, spiral, zigzag, hook —
-   see pickPath()), each using only straight up/down/left/right steps so
-   the connecting lines are always plain horizontal/vertical segments,
-   never crossing. Every deal picks one shape at random and places it on
-   the board with a random mirror/flip and a random offset, so the same
-   handful of templates still produce visibly different deals.
+   Twenty circles on a path. The path is the exact same winding shape used
+   on the Challenge track (the same SVG path string, the same raised
+   bezel/sage-rim/ink-core rendering), just cut into twenty equal stops
+   instead of fourteen. One fixed shape, always — no more random library of
+   comb/spiral/zigzag templates, no mirroring, no per-deal offset. This is
+   deliberate: the shape is now part of INTUITY's visual identity, and
+   should look the same wherever it appears.
 
    Answer order is free — tap any open circle. But the deal is a single
    continuous attempt: one wrong answer ends it immediately (see the
@@ -577,9 +578,14 @@ html.embedded .away{ display:none; }
    picker — Deal just deals. */
 
 const DATA_URL = '../../data/grammar-rules/gerunds-infinitives-complete.json';
-const FIELD_ROWS = 6, FIELD_COLS = 6;
 const PATH_LEN = 20;
 const SLOTS = PATH_LEN, GOAL = PATH_LEN;
+
+/* the exact path from the Challenge track, unrolled at the same
+   proportions — just split into twenty cells here instead of fourteen */
+const PATH_D = 'M 80 26 L 80 248 Q 80 318 150 318 L 197 318 Q 267 318 267 248 L 267 124 Q 267 48 350 48 Q 434 48 434 124 L 434 336';
+const PATH_VIEWBOX = '22 -18 474 400';
+const BAND_W = 65;                 /* the band's width in viewBox units */
 
 /* ── THE FUSE ──
    A single clock for the WHOLE deal, not per pill — free answer order plus a
@@ -604,7 +610,7 @@ let DECK = [], slots = [], open = null, mark = -1;
 let done = 0, clean = 0, tries = 0, locked = false, started = false, dealClean = true;
 let score = 0, dealEnded = false;
 let roundStartPerf = 0, lastAnswerPerf = 0, fuseRafId = null, fuseFrac = 0, lastCriticalSecond = -1;
-let segLens = [], cumLens = [0], totalLen = 0;
+let route = null;                  /* the built path: {probe, L, bounds, mids, cellEls} */
 
 const $  = id => document.getElementById(id);
 const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -747,58 +753,51 @@ function applyMix(){
 }
 
 /* ── THE PATH ──
-   Every shape below is hand-drawn: a fixed sequence of (row,col) cells,
-   each step exactly one grid unit up/down/left/right from the last, never
-   revisiting a cell, always exactly PATH_LEN (20) long. Nothing here is
-   generated at runtime — that's the point. A random walk can fold back on
-   itself and cross its own lines (see the old generatePath()); a drawn
-   shape simply can't, because we drew it that way once and checked it.
-
-   Every comb-style shape follows one rhythm to avoid a cramped look: a full
-   line of 6 pills, a SINGLE connector pill in the next line over, then the
-   next full line of 6 — never two adjacent rows (or columns) both densely
-   packed side by side. hook and spiral are a single continuous L/loop
-   rather than parallel lines, so they were already this sparse and are
-   untouched.
-
-   pickPath() just chooses one shape per deal, optionally mirrors it
-   horizontally and/or vertically, then drops it at a random position
-   inside the FIELD_ROWS x FIELD_COLS board — so six templates still feel
-   varied deal to deal without ever risking an ugly path. */
-const PATH_LIBRARY = [
-  { name:'comb-wide',  cells:[[0,0],[0,1],[0,2],[0,3],[0,4],[0,5],[1,5],[2,5],[2,4],[2,3],[2,2],[2,1],[2,0],[3,0],[4,0],[4,1],[4,2],[4,3],[4,4],[4,5]] },
-  { name:'comb-block', cells:[[1,0],[1,1],[1,2],[1,3],[1,4],[1,5],[2,5],[3,5],[3,4],[3,3],[3,2],[3,1],[3,0],[4,0],[5,0],[5,1],[5,2],[5,3],[5,4],[5,5]] },
-  { name:'comb-tall',  cells:[[0,0],[1,0],[2,0],[3,0],[4,0],[5,0],[5,1],[5,2],[4,2],[3,2],[2,2],[1,2],[0,2],[0,3],[0,4],[1,4],[2,4],[3,4],[4,4],[5,4]] },
-  { name:'hook',       cells:[[0,0],[0,1],[0,2],[0,3],[0,4],[0,5],[1,5],[2,5],[3,5],[3,4],[3,3],[3,2],[3,1],[3,0],[4,0],[5,0],[5,1],[5,2],[5,3],[5,4]] },
-  { name:'spiral',     cells:[[0,0],[0,1],[0,2],[0,3],[0,4],[0,5],[1,5],[2,5],[3,5],[4,5],[5,5],[5,4],[5,3],[5,2],[5,1],[5,0],[4,0],[3,0],[2,0],[1,0]] },
-  { name:'zigzag',     cells:[[0,1],[1,1],[2,1],[3,1],[4,1],[5,1],[5,2],[5,3],[4,3],[3,3],[2,3],[1,3],[0,3],[0,4],[0,5],[1,5],[2,5],[3,5],[4,5],[5,5]] },
-];
-
-function boundsOf(cells){
-  let minR=Infinity, maxR=-Infinity, minC=Infinity, maxC=-Infinity;
-  cells.forEach(([r,c]) => {
-    if (r<minR) minR=r; if (r>maxR) maxR=r;
-    if (c<minC) minC=c; if (c>maxC) maxC=c;
-  });
-  return { minR, maxR, minC, maxC };
+   No more hand-drawn library, no mirroring, no random offset. buildRoute()
+   takes the one fixed PATH_D, measures its real length once it's on the
+   page (getTotalLength — the same trick the Challenge track uses), and
+   slices that length into twenty equal stretches. Each stretch's midpoint
+   is where a circle sits; the stretch itself becomes a <path class="cell">
+   segment of the rendered band, so the band can show progress (burnt grey
+   behind the fuse) exactly the way the Challenge track shows a cell done. */
+function buildRoute(){
+  const svg = $('pathSvg'), probe = svg.querySelector('.sage'), L = probe.getTotalLength();
+  const unit = L / SLOTS;
+  const bounds = []; let at0 = 0;
+  for (let i = 0; i < SLOTS; i++){ const a = at0, b = at0 + unit; bounds.push([a,b]); at0 = b; }
+  const mids = bounds.map(([a,b]) => probe.getPointAtLength((a + b) / 2));
+  return { probe, L, bounds, mids, cellEls: [] };
 }
 
-function pickPath(){
-  const shape = PATH_LIBRARY[(Math.random()*PATH_LIBRARY.length)|0];
-  const b = boundsOf(shape.cells);
-  const hflip = Math.random() < 0.5, vflip = Math.random() < 0.5;
+function drawCells(){
+  const ns = 'http://www.w3.org/2000/svg';
+  const gc = $('cells'); gc.innerHTML = '';
+  route.cellEls = route.bounds.map(([a,b]) => {
+    const p = document.createElementNS(ns, 'path');
+    p.setAttribute('d', PATH_D); p.setAttribute('class', 'cell');
+    p.style.strokeDasharray = (b - a) + ' ' + route.L;
+    p.style.strokeDashoffset = String(-a);
+    gc.appendChild(p);
+    return p;
+  });
+}
 
-  let cells = shape.cells.map(([r,c]) => [
-    vflip ? (b.minR + b.maxR - r) : r,
-    hflip ? (b.minC + b.maxC - c) : c
-  ]);
-  if (Math.random() < 0.5) cells = cells.slice().reverse(); // walk it start-to-finish either way
-
-  const h = b.maxR - b.minR + 1, w = b.maxC - b.minC + 1;
-  const rOff = Math.floor(Math.random() * (FIELD_ROWS - h + 1));
-  const cOff = Math.floor(Math.random() * (FIELD_COLS - w + 1));
-
-  return cells.map(([r,c]) => ({ r: r - b.minR + rOff, c: c - b.minC + cOff }));
+/* Turns a point in the SVG's own viewBox coordinates into a pixel position
+   inside .board — reproducing by hand what preserveAspectRatio="xMidYMid
+   meet" does internally, since the circles are plain HTML buttons layered
+   on top of the SVG rather than SVG-native elements like the Challenge
+   track's numerals are. */
+function computeTransform(){
+  const b = $('board'), svg = $('pathSvg'), vb = svg.viewBox.baseVal;
+  const rect = b.getBoundingClientRect();
+  const scale = Math.min(rect.width / vb.width, rect.height / vb.height);
+  const offX = (rect.width - vb.width * scale) / 2 - vb.x * scale;
+  const offY = (rect.height - vb.height * scale) / 2 - vb.y * scale;
+  return { scale, offX, offY };
+}
+function toPx(vx, vy, t){
+  t = t || computeTransform();
+  return { x: vx * t.scale + t.offX, y: vy * t.scale + t.offY };
 }
 
 async function boot(){
@@ -827,8 +826,6 @@ $('gateStart').onclick = () => { sfx('unlock'); start(); };
 function start(){
   applyMix();
   const picked = interleave(sample(DECK, SLOTS, MIX.piles, MIX.mode, MAX_RUN), MAX_RUN);
-  const route = pickPath();
-  slots = picked.map((card,i) => ({ card, r:route[i].r, c:route[i].c, done:false, missed:false }));
   mark = -1; done = 0; clean = 0; tries = 0; locked = false; open = null; dealClean = true;
   score = 0; dealEnded = false; lastCriticalSecond = -1;
   started = true;
@@ -837,20 +834,31 @@ function start(){
   $('veil').classList.remove('show');
   $('hudScore').textContent = '0';
   $('hudTime').classList.remove('critical');
-  drawLadder(); drawField(); drawPath(); layout(); paint();
+  drawLadder(); drawField();
+  route = buildRoute();
+  drawCells();
+  slots = picked.map((card,i) => ({ card, vx:route.mids[i].x, vy:route.mids[i].y, done:false, missed:false }));
+  drawPath(); layout(); paint();
   startFuse();
 }
 
 function drawField(){
   const b = $('board');
-  b.innerHTML = '<svg class="pathSvg" id="pathSvg"></svg><div class="fuseHead" id="fuseHead"></div>';
-  for (let r = 0; r < FIELD_ROWS; r++){
-    for (let c = 0; c < FIELD_COLS; c++){
-      const d = document.createElement('div');
-      d.className = 'dot'; d.dataset.r = r; d.dataset.c = c;
-      b.appendChild(d);
-    }
-  }
+  const D = BAND_W / .7044, SG = D * .0929, BZ = D * .0549;   /* same ring proportions as the Challenge track */
+  b.innerHTML =
+    '<svg viewBox="' + PATH_VIEWBOX + '" class="pathSvg" id="pathSvg" ' +
+      'style="--bw:' + BAND_W + 'px;--bw-a:' + (BAND_W + 2*(SG+BZ)) + 'px;--bw-b:' + (BAND_W + 2*SG) + 'px">' +
+      '<defs>' +
+        '<linearGradient id="bezelShade" gradientUnits="userSpaceOnUse" x1="40" y1="0" x2="360" y2="370">' +
+          '<stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#E4DDD1"/></linearGradient>' +
+        '<filter id="raise" x="-10%" y="-10%" width="120%" height="120%">' +
+          '<feDropShadow dx="-' + (D*.0417).toFixed(1) + '" dy="-' + (D*.0417).toFixed(1) + '" stdDeviation="' + (D*.0469).toFixed(1) + '" flood-color="#FFFFFF" flood-opacity=".9"/>' +
+          '<feDropShadow dx="' + (D*.052).toFixed(1) + '" dy="' + (D*.052).toFixed(1) + '" stdDeviation="' + (D*.0677).toFixed(1) + '" flood-color="#2B2129" flood-opacity=".16"/>' +
+        '</filter>' +
+      '</defs>' +
+      '<path class="bezel" d="' + PATH_D + '"/><path class="sage" d="' + PATH_D + '"/>' +
+      '<g id="cells"></g></svg>' +
+    '<div class="fuseHead" id="fuseHead"></div>';
 }
 
 function drawPath(){
@@ -871,50 +879,24 @@ function drawPath(){
   });
 }
 
-/* Cell math is plain division since the field is a fixed rows x cols grid
-   (not solved for like the old 36-hole board, which searched for the
-   largest clean divisor of a variable slot count). */
+/* Positions are now a straight transform of the fixed path's own
+   coordinates (see toPx above) rather than a solved rows x cols grid — the
+   shape never changes, so only the transform needs recomputing on resize. */
 function layout(){
   const b = $('board');
-  const w = b.clientWidth, h = b.clientHeight;
-  if (!w || !h || !slots.length) return;
-
-  const cellW = w / FIELD_COLS, cellH = h / FIELD_ROWS;
-  const cell = Math.min(cellW, cellH);
-  const dotSize = Math.max(4, Math.min(10, cell * 0.22));
-  const circleSize = Math.max(34, Math.min(96, cell * 0.86));
+  if (!b.clientWidth || !b.clientHeight || !slots.length || !route) return;
+  const t = computeTransform();
+  const circleSize = clamp(t.scale * BAND_W, 34, 96);
   b.style.setProperty('--size', circleSize + 'px');
   b.style.setProperty('--word', Math.max(8, Math.round(circleSize * 0.19)) + 'px');
 
-  b.querySelectorAll('.dot').forEach(el => {
-    const r = +el.dataset.r, c = +el.dataset.c;
-    el.style.left = ((c + 0.5) * cellW) + 'px';
-    el.style.top  = ((r + 0.5) * cellH) + 'px';
-    el.style.width = el.style.height = dotSize + 'px';
-  });
-
   slots.forEach((s,i) => {
-    s.cx = (s.c + 0.5) * cellW; s.cy = (s.r + 0.5) * cellH;
+    const p = toPx(s.vx, s.vy, t);
+    s.cx = p.x; s.cy = p.y;
     const el = $('c' + i);
-    if (!el) return;
-    el.style.left = s.cx + 'px';
-    el.style.top  = s.cy + 'px';
+    if (el){ el.style.left = s.cx + 'px'; el.style.top = s.cy + 'px'; }
   });
 
-  const svg = $('pathSvg');
-  if (svg){
-    svg.setAttribute('width', w); svg.setAttribute('height', h);
-    let lines = '';
-    segLens = []; cumLens = [0]; totalLen = 0;
-    for (let i = 1; i < slots.length; i++){
-      const a = slots[i-1], b2 = slots[i];
-      lines += '<line id="seg' + (i-1) + '" x1="' + a.cx + '" y1="' + a.cy +
-               '" x2="' + b2.cx + '" y2="' + b2.cy + '"/>';
-      const d = Math.hypot(b2.cx - a.cx, b2.cy - a.cy);
-      segLens.push(d); totalLen += d; cumLens.push(totalLen);
-    }
-    svg.innerHTML = lines;
-  }
   if (started) positionFuse(fuseFrac);
 }
 window.addEventListener('resize', () => {
@@ -924,6 +906,67 @@ window.addEventListener('resize', () => {
     const el = $('c' + i); if (el) fitWord(el, s.card.forms[s.card.pile]);
   });
 });
+
+/* ── THE FUSE, driving the path ──
+   roundStartPerf marks the moment the deal began; every frame we work out
+   how much of ROUND_MS has elapsed, convert that fraction of the fixed
+   path's total length into an actual point via getPointAtLength (the same
+   call buildRoute() used to lay out the circles), and move the lit head
+   there. Every cell whose stretch of the path the head has now fully
+   passed gets marked .burnt, so the band visibly greys out behind it. In
+   the last CRITICAL_MS the HUD clock and the head both start pulsing, and
+   a tick plays once per second remaining. If the head reaches the end
+   before all twenty circles are done, the deal ends the same way a miss
+   does, just for a different reason. */
+function startFuse(){
+  roundStartPerf = performance.now();
+  fuseFrac = 0; lastCriticalSecond = -1;
+  cancelAnimationFrame(fuseRafId);
+  const tick = () => {
+    if (!started || dealEnded) return;
+    const elapsed = performance.now() - roundStartPerf;
+    fuseFrac = clamp(elapsed / ROUND_MS, 0, 1);
+    positionFuse(fuseFrac);
+
+    const remainMs = Math.max(0, ROUND_MS - elapsed);
+    $('hudTime').textContent = fmtMs(remainMs);
+    const critical = remainMs <= CRITICAL_MS;
+    $('hudTime').classList.toggle('critical', critical);
+    $('fuseHead').classList.toggle('critical', critical);
+    if (critical){
+      const sec = Math.ceil(remainMs / 1000);
+      if (sec !== lastCriticalSecond){ lastCriticalSecond = sec; sfx('tick'); }
+    }
+
+    if (elapsed >= ROUND_MS){ fuseBurnOut(); return; }
+    fuseRafId = requestAnimationFrame(tick);
+  };
+  fuseRafId = requestAnimationFrame(tick);
+}
+
+function positionFuse(frac){
+  if (!route) return;
+  const t = computeTransform();
+  const len = clamp(frac, 0, 1) * route.L;
+  const pt = route.probe.getPointAtLength(len);
+  const p = toPx(pt.x, pt.y, t);
+  const fh = $('fuseHead');
+  if (fh){ fh.style.left = p.x + 'px'; fh.style.top = p.y + 'px'; }
+  route.cellEls.forEach((el,i) => el.classList.toggle('burnt', route.bounds[i][1] <= len));
+}
+
+function fuseBurnOut(){
+  if (dealEnded) return;
+  dealEnded = true; locked = true;
+  cancelAnimationFrame(fuseRafId);
+  if (window.INTUITY) INTUITY.session('gerunds-infinitives', 'board',
+    { mix: MIX.id, turned: done, clean: clean, tries: tries, perfect: false });
+  $('overBig').textContent = 'Time';
+  $('overSub').textContent = 'The fuse reached the end at ' + done + ' of ' + SLOTS +
+    '. Deal again to try for the cup.';
+  sfx('wrong');
+  $('over').classList.add('show');
+}
 
 function fitWord(el, text){
   const base = parseFloat(getComputedStyle($('board')).getPropertyValue('--word')) || 14;
@@ -1028,6 +1071,8 @@ function answer(pile){
    screen. There's no partial credit to negotiate; the only way forward
    is a new deal. */
 function failDeal(){
+  dealEnded = true;
+  cancelAnimationFrame(fuseRafId);
   if (window.INTUITY) INTUITY.session('gerunds-infinitives', 'board',
     { mix: MIX.id, turned: done, clean: clean, tries: tries, perfect: false });
 
@@ -1061,6 +1106,8 @@ function paint(){
 }
 
 function finish(){
+  dealEnded = true;
+  cancelAnimationFrame(fuseRafId);
   if (window.INTUITY) INTUITY.session('gerunds-infinitives', 'board',
     { mix: MIX.id, turned: done, clean: clean, tries: tries, perfect: dealClean });
 

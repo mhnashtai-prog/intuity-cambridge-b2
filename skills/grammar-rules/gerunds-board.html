@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#FAF7F2">
+<title>INTUITY — The Board</title>
+<meta name="intuity-build" content="2026-09-01-board-deal1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@500;700;900&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<script>
+  if (window.self !== window.top) document.documentElement.classList.add('embedded');
+</script>
+<style>
+/* ═══ THE BOARD — DEAL ═══
+   Sort and the old Board did the same job in two different skins: read a
+   trigger, pick the form. This merges them. Click Deal and a path of twenty
+   circles is drawn across a field of decorative dots, start to finish, a
+   different shape every time. Tap any of the twenty, in any order — the
+   path is the shape of the deal, not a required order. Answer all twenty
+   and the deal is over. Answer all twenty right on the FIRST try, and the
+   cup goes off.
+
+   Everything below the CIRCLE / VEIL / LADDER / GATE / OVER sections is
+   carried over unchanged from the old Board. Only the layout engine (how
+   circles get their positions) and the win condition are new. */
+
+*,*::before,*::after{ margin:0; padding:0; box-sizing:border-box; }
+
+:root{
+  --ground:#EBE8E1;
+  --pill:#9D9D9D;
+  --band:#FAF7F2;
+  --ink:#17171A;
+  --dim:#5C6366;
+  --faint:#8A9093;
+  --rule:#C2956E;
+  --caramel:#B0865C;
+  --tick:#6B3FA0;
+  --cross:#E8632A;
+  --egg-right:#A3B26A;
+  --bad:#B8402A;
+  --hot:#B44A22;
+  --gold:#C9A227;
+  --shade:40,50,54;
+
+  --m0:#C2956E; --m1:#B0865C; --m2:#B44A22; --m3:#E8632A; --m4:#6B3FA0;
+
+  --header-h:104px; --bar-h:46px; --hud-h:34px;
+  --spring:cubic-bezier(.2,1.4,.4,1);
+
+  --poster:#ECE9E3;
+  --poster-ink:#14110E;
+  --poster-soft:rgba(20,17,14,.6);
+  --poster-faint:rgba(20,17,14,.5);
+  --poster-rule:rgba(20,17,14,.2);
+  --f-mono2:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+
+html,body{ width:100%; height:100%; overflow:hidden; }
+body{
+  background:var(--ground); color:var(--ink);
+  font-family:'DM Sans',system-ui,sans-serif; -webkit-font-smoothing:antialiased;
+  user-select:none; -webkit-user-select:none; touch-action:manipulation;
+}
+button{ font:inherit; border:none; background:none; cursor:pointer; color:inherit; }
+:focus-visible{ outline:2px solid var(--hot); outline-offset:3px; }
+
+html.embedded .htop{ display:none; }
+html.embedded .header{ height:auto; padding:.35rem 1rem .4rem; gap:.3rem; }
+
+/* ══ HEADER ══ */
+.header{
+  position:fixed; top:0; left:0; right:0; z-index:20; height:var(--header-h);
+  display:flex; flex-direction:column; justify-content:center; gap:.5rem;
+  padding:.6rem 1rem; background:var(--band); border-bottom:1px solid var(--rule);
+}
+.htop{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; }
+.back{
+  justify-self:start; text-decoration:none;
+  font-family:'Space Grotesk',sans-serif; font-size:.6rem; font-weight:700;
+  letter-spacing:.08em; text-transform:uppercase; color:var(--faint); transition:color .2s;
+}
+.back:hover{ color:var(--ink); }
+.title{ display:flex; flex-direction:column; align-items:center; line-height:1.1; }
+.title b{
+  font-family:'Space Grotesk',sans-serif; font-size:1rem; font-weight:900;
+  letter-spacing:.2em; color:var(--ink);
+}
+.title span{
+  font-size:.56rem; font-weight:600; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--faint); margin-top:.15rem;
+}
+.mute{ justify-self:end; font-size:.95rem; opacity:.5; transition:opacity .2s; }
+.mute:hover{ opacity:1; }
+
+.ladder{ display:flex; align-items:center; justify-content:center; gap:.42rem; }
+.mark{ display:flex; flex-direction:column; align-items:center; gap:.2rem; width:40px; }
+.mark .dot{
+  width:15px; height:15px; border-radius:50%; background:var(--ground);
+  box-shadow:inset 2px 2px 4px rgba(var(--shade),.24),
+             inset -2px -2px 4px rgba(255,255,255,.9);
+  transition:background .3s, box-shadow .3s, transform .3s var(--spring);
+}
+.mark.done .dot{
+  background:var(--mc,var(--caramel)); transform:scale(1.1);
+  box-shadow:-2px -2px 4px rgba(255,255,255,.9), 2px 3px 6px rgba(var(--shade),.24);
+}
+.mark .lbl{
+  font-family:'DM Mono',monospace; font-size:.44rem; letter-spacing:.09em;
+  text-transform:uppercase; color:var(--faint); transition:color .3s;
+  white-space:nowrap; overflow:visible;
+}
+.mark.done .lbl{ color:var(--dim); }
+.link{ width:13px; height:2px; border-radius:2px; background:rgba(var(--shade),.16); transition:background .3s; }
+.link.done{ background:var(--caramel); }
+
+/* ══ THE HUD — score + the fuse's countdown ══ */
+.hud{
+  position:fixed; top:var(--header-h); left:0; right:0; height:var(--hud-h); z-index:18;
+  display:flex; align-items:center; justify-content:space-between; gap:.6rem;
+  padding:0 1rem; background:var(--band); border-bottom:1px solid rgba(var(--shade),.1);
+  font-family:'DM Mono',monospace; font-size:.62rem; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--faint);
+}
+.hud b{
+  font-family:'Space Grotesk',sans-serif; font-weight:900; color:var(--ink);
+  font-variant-numeric:tabular-nums; margin-left:.4rem; font-size:.86rem; letter-spacing:0;
+}
+.hud .time{
+  font-family:'Space Grotesk',sans-serif; font-weight:900; font-size:.86rem;
+  letter-spacing:0; color:var(--ink); font-variant-numeric:tabular-nums; transition:color .25s;
+}
+.hud .time.critical{ color:var(--hot); animation:hudPulse .5s infinite; }
+@keyframes hudPulse{ 0%,100%{ opacity:1 } 50%{ opacity:.4 } }
+
+/* ══ THE FIELD + PATH ══
+   .board is the shared positioning context: the fixed Challenge-shaped
+   band, rendered as an SVG (bezel, sage rim, ink cells), plus the twenty
+   real circles, absolutely placed on top at the coordinates buildRoute()
+   worked out along that same band. */
+.stage{
+  position:fixed; top:calc(var(--header-h) + var(--hud-h)); left:0; right:0; bottom:var(--bar-h);
+  padding:.9rem; display:flex; align-items:stretch; justify-content:stretch;
+}
+html.embedded .stage{ top:calc(66px + var(--hud-h)); padding:.6rem; }
+html.embedded .hud{ top:66px; }
+.board{
+  position:relative; width:100%; height:100%;
+}
+
+.dot{
+  position:absolute; border-radius:50%; background:rgba(23,23,26,.14);
+  transform:translate(-50%,-50%); pointer-events:none;
+}
+.pathSvg{ position:absolute; inset:0; pointer-events:none; }
+.pathSvg .bezel{ fill:none; stroke:url(#bezelShade); stroke-width:var(--bw-a); stroke-linejoin:round; filter:url(#raise); }
+.pathSvg .sage{ fill:none; stroke:#8AA79C; stroke-width:var(--bw-b); stroke-linejoin:round; }
+.pathSvg .cell{ fill:none; stroke:#201E1C; stroke-width:var(--bw); stroke-linejoin:miter; transition:stroke .35s, opacity .35s; }
+.pathSvg .cell.burnt{ stroke:var(--faint); opacity:.45; }
+
+.fuseHead{
+  position:absolute; width:15px; height:15px; border-radius:50%;
+  background:radial-gradient(circle,#FFF3DE 0%,var(--hot) 55%,rgba(180,74,34,0) 78%);
+  box-shadow:0 0 9px 3px rgba(180,74,34,.55);
+  transform:translate(-50%,-50%); pointer-events:none; z-index:3;
+}
+.fuseHead.critical{ animation:fuseCritical .4s infinite; }
+@keyframes fuseCritical{ 0%,100%{ transform:translate(-50%,-50%) scale(1) } 50%{ transform:translate(-50%,-50%) scale(1.4) } }
+
+/* ── A CIRCLE ──
+   Now absolutely positioned rather than a grid child — left/top are set by
+   JS to the cell centre it belongs to. Every transform below carries the
+   translate(-50%,-50%) centring term explicitly, because CSS transform is
+   not additive: a bare `transform:scale(.96)` would silently drop the
+   centring and the circle would jump to the corner of its point. */
+.circle{
+  position:absolute; width:var(--size,72px); height:var(--size,72px);
+  border-radius:50%; cursor:pointer; background:var(--pill);
+  display:flex; align-items:center; justify-content:center; text-align:center;
+  box-shadow:inset 3px 4px 8px rgba(var(--shade),.22),
+             inset -3px -3px 7px rgba(255,255,255,.9);
+  transition:box-shadow .2s, transform .25s var(--spring), filter .25s;
+  font-family:'DM Mono',monospace; font-size:calc(var(--size,72px) * .19);
+  color:var(--faint);
+  transform:translate(-50%,-50%);
+}
+.circle:hover{ box-shadow:inset 4px 5px 10px rgba(var(--shade),.27),
+                          inset -3px -3px 7px rgba(255,255,255,.9); color:var(--dim); }
+.circle:active{ transform:translate(-50%,-50%) scale(.96); }
+
+.circle.done{
+  cursor:default; box-shadow:none;
+  filter:drop-shadow(-3px -3px 5px rgba(255,255,255,.95))
+         drop-shadow(3px 4px 7px rgba(var(--shade),.22));
+}
+.circle.done:hover{ transform:translate(-50%,-50%); }
+.circle.done:active{ transform:translate(-50%,-50%); }
+.circle .word{
+  font-family:'Space Grotesk',sans-serif; font-weight:700;
+  font-size:var(--w,var(--word,.8rem)); color:var(--tick);
+  max-width:84%; padding:0 .1rem; line-height:1.14;
+  overflow-wrap:normal; word-break:normal; hyphens:none;
+}
+.circle.done.second .word{ color:#6E7A46; }
+.circle .word.end{ color:#000000; }
+
+/* the start pill wobbles until it's been tapped, so a first-time player's
+   eye is drawn to where the deal actually begins */
+@keyframes wobbleStart{
+  0%,100%{ transform:translate(-50%,-50%) rotate(0deg); }
+  15%{ transform:translate(-50%,-50%) rotate(-7deg); }
+  30%{ transform:translate(-50%,-50%) rotate(6deg); }
+  45%{ transform:translate(-50%,-50%) rotate(-5deg); }
+  60%{ transform:translate(-50%,-50%) rotate(3deg); }
+  75%{ transform:translate(-50%,-50%) rotate(-2deg); }
+  90%{ transform:translate(-50%,-50%) rotate(1deg); }
+}
+.circle.start-pill:not(.done){ animation:wobbleStart 2.4s ease-in-out infinite; }
+.circle.flip{ animation:flip .5s; }
+@keyframes flip{
+  50%{ transform:translate(-50%,-50%) rotateY(88deg) scale(.92) }
+  100%{ transform:translate(-50%,-50%) }
+}
+
+/* ── THE PIN ──
+   A small caramel marker sitting on top of every circle, whether it has
+   been answered yet or not. This is what actually reads as "the path": the
+   connecting lines say where the route runs, the pins say these twenty (and
+   only these twenty) dots are live stops on it. Purely decorative — it
+   never intercepts the click, and it sits above the number/word but clear
+   of the tick/cross corner badges. */
+.circle .pin{
+  position:absolute; top:5%; left:50%; width:21%; height:21%;
+  min-width:11px; min-height:11px;
+  border-radius:50%; transform:translate(-50%,0);
+  background:radial-gradient(circle at 35% 30%, #E9BE8F 0%, var(--caramel) 52%, #6E4A2C 100%);
+  box-shadow:0 1px 0 rgba(255,255,255,.55) inset,
+             0 0 0 1.5px rgba(110,74,44,.6),
+             0 3px 6px rgba(var(--shade),.45);
+  pointer-events:none; z-index:1;
+}
+
+.mk{
+  position:absolute; opacity:0; transform:scale(.5); transform-origin:50% 50%;
+  transition:opacity .2s, transform .3s var(--spring); pointer-events:none; z-index:2;
+}
+.mk.tick{ width:21%; right:9%; bottom:9%; }
+.mk.cross{ width:22%; right:12%; top:11%; }
+.circle.missed:not(.done) .mk.cross{ opacity:.9; transform:scale(1); }
+.circle.done:not(.second) .mk.tick{ opacity:1; transform:scale(1); }
+
+.circle.failed{ animation:fail .45s; }
+@keyframes fail{
+  0%,100%{ transform:translate(-50%,-50%) }
+  25%{ transform:translate(-50%,-50%) translateX(-7px) rotate(-4deg) }
+  50%{ transform:translate(-50%,-50%) translateX(6px) rotate(3deg) }
+  75%{ transform:translate(-50%,-50%) translateX(-3px) }
+}
+
+/* ══ THE CARD (POP-UP MODAL) ══ — unchanged from the confirmed-working
+   version: Sort's poster, the big Anton cue word, the pills row. */
+.veil{
+  position:fixed; inset:0; z-index:30; display:none; align-items:center; justify-content:center;
+  background:#EBE8E1;
+  padding:1.1rem;
+  transition:opacity .28s ease;
+}
+.veil.show{ display:flex; }
+
+.panel{
+  position:relative; text-align:left;
+  width:min(560px,92vw);
+  max-height:88vh;
+  overflow-y:auto;
+  padding:clamp(1.5rem,5vw,2.3rem) clamp(1.3rem,4.6vw,2rem);
+  background:var(--poster);
+  border-radius:0;
+ box-shadow:0 3px 10px rgba(0,0,0,.14);
+  min-width:0; min-height:0;
+  transition:transform .28s cubic-bezier(.2,.9,.3,1), opacity .28s;
+  animation:rise .26s var(--spring);
+}
+@keyframes rise{ from{ opacity:0; transform:translateY(14px) scale(.97) } }
+.panel.bad{ animation:bad .5s; }
+@keyframes bad{ 0%,100%{ transform:none } 15%{ transform:translateX(-13px) }
+                32%{ transform:translateX(11px) } 50%{ transform:translateX(-7px) }
+                70%{ transform:translateX(4px) } }
+
+.panel .kick{
+  display:flex; align-items:center; gap:9px;
+  font-family:var(--f-mono2); font-size:.56rem; letter-spacing:.22em;
+  text-transform:uppercase; color:var(--poster-faint); margin-bottom:1.1rem;
+}
+.panel .kick i{ display:block; width:26px; height:10px; flex:none; background:var(--caramel); }
+.panel .cue{
+  font-family:'Anton',Impact,sans-serif;font-weight:400;text-transform:uppercase;
+  font-size:clamp(2.2rem,10vw,3.6rem);line-height:.92;letter-spacing:-.005em;
+  color:var(--poster-ink);margin:0 0 clamp(14px,3.5vw,20px);
+}
+.panel .cue::after{
+  content:'';display:block;width:44px;height:3px;
+  background:var(--poster-ink);margin-top:clamp(12px,3vw,18px);
+}
+.sentence{
+  font-family:'DM Sans',sans-serif; font-weight:400; line-height:1.4;
+  font-size:clamp(.85rem,3vw,1.05rem); color:var(--poster-soft);
+}
+.sentence b{
+  font-family:'Anton',Impact,sans-serif; font-weight:400;
+  letter-spacing:.02em; color:var(--poster-ink);
+}
+.sentence i{
+  font-style:normal; letter-spacing:.14em; color:var(--poster-faint); padding:0 .12em;
+}
+
+.forms{
+  display:flex; justify-content:flex-start; align-items:flex-start;
+  gap:.6rem; margin-top:1.15rem;
+}
+.form{ flex:0 0 auto; position:relative; display:flex; flex-direction:column; align-items:center; gap:.3rem; }
+.form .egg{
+  border-radius:999px; background:#BFBFC2;
+  padding:.35rem .8em .4rem;
+  display:flex; align-items:center; justify-content:center;
+  transition:background .18s ease;
+}
+.form .egg span{
+  font-family:'Space Grotesk',sans-serif; font-weight:700;
+  font-size:clamp(.7rem,2.6vw,.85rem); letter-spacing:.015em;
+  color:#17171A; line-height:1.15; white-space:nowrap;
+}
+.form:hover .egg{ background:var(--hot); }
+.form:hover .egg span{ color:#FFF7F3; }
+.form.tell .egg{ background:var(--egg-right); }
+.form .k{
+  font-family:'DM Mono',monospace; font-size:.5rem; letter-spacing:.13em;
+  text-transform:uppercase; color:var(--dim); text-align:center;
+}
+.rule{
+  margin-top:.9rem; min-height:1.2rem;
+  font-family:var(--f-mono2); font-weight:500; font-size:.78rem; color:var(--poster-ink);
+  background:rgba(20,17,14,.09); border-radius:3px; padding:.42em .7em;
+  display:inline-block; opacity:0; transition:opacity .2s;
+}
+.rule.show{ opacity:1; }
+
+body.two-forms .forms{ }
+body.two-forms #fm-bare{ display:none; }
+
+/* ══ THE BAR ══ */
+.bar{
+  position:fixed; bottom:0; left:0; right:0; height:var(--bar-h); z-index:15;
+  display:flex; align-items:center; gap:.8rem;
+  padding:0 1rem calc(env(safe-area-inset-bottom,0px) * .5);
+  background:var(--band); border-top:1px solid rgba(var(--shade),.14);
+  font-family:'DM Mono',monospace; font-size:.6rem; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--faint);
+}
+.track{
+  position:relative; flex:1; height:7px; border-radius:999px; overflow:hidden;
+  box-shadow:inset 2px 2px 4px rgba(var(--shade),.2),
+             inset -2px -2px 4px rgba(255,255,255,.9);
+}
+.fill{
+  position:relative; height:100%; width:0; border-radius:999px; overflow:hidden;
+  background:var(--caramel);
+  transition:width .45s cubic-bezier(.2,.9,.3,1), background .3s;
+}
+.fill::after{
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.9),transparent);
+  transform:translateX(-100%); opacity:0;
+}
+.fill.gain::after{ animation:sweep .55s ease-out; }
+@keyframes sweep{ 0%{ transform:translateX(-100%); opacity:1 } 100%{ transform:translateX(220%); opacity:0 } }
+.track.knock{ animation:knock .4s; }
+@keyframes knock{ 0%,100%{ transform:none } 25%{ transform:translateX(-5px) } 60%{ transform:translateX(4px) } }
+.fill.sting{ background:var(--bad); }
+.bar .n{ font-variant-numeric:tabular-nums; color:var(--dim); }
+
+.banner{
+  position:fixed; left:50%; top:calc(var(--header-h) + 14px); z-index:40;
+  transform:translateX(-50%) translateY(-8px) scale(.9); pointer-events:none;
+  display:flex; align-items:center; gap:.5rem;
+  font-family:'Space Grotesk',sans-serif; font-weight:900; font-size:.82rem;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--ink);
+  background:var(--band); border-radius:999px; padding:.5rem 1.15rem;
+  box-shadow:0 6px 16px rgba(var(--shade),.2);
+  opacity:0; transition:opacity .28s, transform .45s var(--spring);
+}
+.banner.show{ opacity:1; transform:translateX(-50%) translateY(0) scale(1); }
+.banner .pip{ width:10px; height:10px; border-radius:50%; background:currentColor; }
+
+/* ══ FX ══ */
+.fx{ position:fixed; inset:0; z-index:35; pointer-events:none; overflow:hidden; }
+.spark{ position:absolute; width:5px; height:5px; border-radius:50%; pointer-events:none; }
+.fw-flash{
+  width:64px; height:64px; border-radius:50%;
+  background:radial-gradient(circle,#fff 0%,rgba(194,149,110,.75) 38%,rgba(194,149,110,0) 70%);
+}
+.fw-ring{ width:56px; height:56px; border-radius:50%; border:3px solid rgba(107,63,160,.55); }
+.fw-crackle{ width:3px; height:3px; border-radius:50%; background:var(--tick); box-shadow:0 0 7px rgba(107,63,160,.7); }
+.ribbon{ position:absolute; border-radius:3px; pointer-events:none; }
+
+/* ══ THE PENDULUM ══ */
+.pend{
+  position:relative; width:104px; height:104px; margin:0 auto .95rem;
+  transform-origin:50% -40px; animation:pendSwing 2.7s ease-in-out infinite;
+}
+.pend::before{
+  content:''; position:absolute; left:50%; top:-40px; width:2px; height:40px;
+  border-left:1.5px solid var(--caramel); transform:translateX(-50%);
+}
+.pend::after{
+  content:''; position:absolute; left:50%; top:-43px; width:7px; height:7px;
+  border-radius:50%; background:var(--caramel); transform:translateX(-50%);
+}
+.pend-dial{
+  position:relative; width:100%; height:100%; border-radius:50%;
+  background:linear-gradient(145deg,#FFFFFF,var(--ground));
+  box-shadow:5px 5px 13px rgba(var(--shade),.2);
+  display:flex; align-items:center; justify-content:center;
+}
+.pend-dial::before{ content:''; position:absolute; inset:0; border-radius:50%; background:var(--caramel); }
+.pend-dial::after{ content:''; position:absolute; inset:8.5%; border-radius:50%; background:var(--ink); }
+.pend-dial span{
+  position:relative; z-index:2; font-family:'Space Grotesk',sans-serif;
+  font-weight:900; font-size:1rem; color:#E5D1B8;
+}
+@keyframes pendSwing{ 0%,100%{ transform:rotate(-11deg) } 50%{ transform:rotate(11deg) } }
+
+/* ══ THE ENTRY GATE ══ */
+.gate{
+  position:fixed; inset:0; z-index:50; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:.15rem;
+  padding:2rem 1.5rem; text-align:center; background:var(--ground);
+}
+.gate .gate-loading{ font-size:.86rem; color:var(--faint); }
+.gate .kicker{
+  font-family:'DM Mono',monospace; font-size:.62rem; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--faint); margin-bottom:.5rem;
+}
+.gate .msg{
+  font-family:'Space Grotesk',sans-serif; font-weight:700;
+  font-size:clamp(1rem,3.8vw,1.3rem); line-height:1.35; color:var(--ink);
+  max-width:22rem; margin:0 auto;
+}
+.gate .sub{ margin-top:.55rem; font-size:.82rem; color:var(--dim); max-width:21rem; line-height:1.55; }
+.gate .go{ margin-top:1.2rem; }
+body.started .gate{ display:none; }
+body:not(.started) .stage,
+body:not(.started) .bar{ display:none; }
+
+/* ══ END OF DEAL ══ */
+.over{
+  position:fixed; inset:0; z-index:45; display:none;
+  flex-direction:column; align-items:center; justify-content:center;
+  gap:.55rem; padding:2rem 1.5rem; text-align:center; background:var(--ground);
+}
+.over.show{ display:flex; }
+.over .big{
+  font-family:'Anton',Impact,sans-serif; font-weight:400;
+  font-size:clamp(2.6rem,13vw,4rem); letter-spacing:.02em;
+  text-transform:uppercase; color:var(--ink); line-height:1;
+}
+.over .sub{ font-size:.86rem; color:var(--dim); max-width:23rem; line-height:1.6; }
+.acts{ display:flex; flex-wrap:wrap; gap:.6rem; justify-content:center; margin-top:1.1rem; }
+.go{
+  font-family:'Space Grotesk',sans-serif; font-size:.7rem; font-weight:700;
+  letter-spacing:.06em; padding:.6rem 1.4rem; border-radius:999px;
+  background:var(--hot); color:#FFF7F3; transition:transform .1s var(--spring);
+}
+.go:active{ transform:scale(.95); }
+.quiet{
+  font-family:'Space Grotesk',sans-serif; font-size:.7rem; font-weight:700;
+  letter-spacing:.06em; padding:.6rem 1.2rem; border-radius:999px;
+  background:rgba(var(--shade),.08); color:var(--dim); transition:transform .1s var(--spring);
+}
+.quiet:active{ transform:scale(.95); }
+.away{ margin-top:1.3rem; }
+html.embedded .away{ display:none; }
+
+.err{ color:var(--bad); line-height:1.7; text-align:center; max-width:30rem; }
+
+@media (prefers-reduced-motion:reduce){
+  *{ animation-duration:.01ms !important; transition-duration:.01ms !important; }
+  .pend{ animation:none; }
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="htop">
+    <a class="back" href="/?openModal=grammar" target="_top">← Grammar</a>
+    <div class="title"><b>INTUITY</b><span>Gerunds &amp; Infinitives</span></div>
+    <button class="mute" id="mute" aria-label="Sound">🔊</button>
+  </div>
+  <div class="ladder" id="ladder"></div>
+</header>
+
+<div class="hud" id="hud">
+  <span>Score<b id="hudScore">0</b></span>
+  <span class="time" id="hudTime">1:30</span>
+</div>
+
+<div class="stage"><div class="board" id="board"></div></div>
+
+<div class="bar">
+  <span class="n" id="tally">0 first time</span>
+  <div class="track" id="track"><div class="fill" id="fill"></div></div>
+  <span class="n" id="goal">0 of 20</span>
+</div>
+
+<div class="fx" id="fx" aria-hidden="true"></div>
+
+<div class="veil" id="veil">
+  <div class="panel" id="panel">
+    <div class="kick"><i></i>Gerunds &amp; Infinitives</div>
+    <div class="cue" id="cue"></div>
+    <div class="sentence" id="sentence">…</div>
+    <div class="forms">
+      <button class="form" id="fm-ing"  onclick="answer('-ing')"><span class="egg"><span id="w-ing">…</span></span><span class="k">gerund</span></button>
+      <button class="form" id="fm-to"   onclick="answer('to')"><span class="egg"><span id="w-to">…</span></span><span class="k">infinitive</span></button>
+      <button class="form" id="fm-bare" onclick="answer('bare')"><span class="egg"><span id="w-bare">…</span></span><span class="k">no &ldquo;to&rdquo;</span></button>
+    </div>
+    <div class="rule" id="rule" aria-live="polite"></div>
+  </div>
+</div>
+
+<div class="banner" id="banner"><span class="pip"></span><span id="bannerText"></span></div>
+
+<div class="gate" id="gate">
+  <div class="pend" aria-hidden="true"><div class="pend-dial"><span>?</span></div></div>
+  <div class="gate-loading" id="gateLoading">Loading the deck…</div>
+  <div id="gateReady" style="display:none">
+    <div class="kicker">The Board</div>
+    <div class="msg">Twenty circles, a path from start to finish</div>
+    <div class="sub">Tap any circle in any order — but one miss ends the deal, and a 90-second fuse is burning down the path behind you. Clear all twenty before it reaches the end and the cup goes off.</div>
+    <div class="sub" id="gateBest" style="margin-top:.4rem"></div>
+    <button class="go" id="gateStart">Deal</button>
+  </div>
+</div>
+
+<div class="over" id="over">
+  <div class="big" id="overBig">20</div>
+  <div class="sub" id="overSub"></div>
+  <div class="sub" id="overBest" style="margin-top:.2rem"></div>
+  <div class="acts">
+    <button class="go" onclick="start()">New deal →</button>
+  </div>
+  <button class="quiet away" onclick="(window.top||window).location.href='/?openModal=grammar'">Back to grammar</button>
+</div>
+
+<script src="intuity-log.js"></script>
+<script src="intuity-sound.js"></script>
+<script>
+/* ======================================================================
+   THE BOARD — DEAL
+
+   Twenty circles on a path. The path is the exact same winding shape used
+   on the Challenge track (the same SVG path string, the same raised
+   bezel/sage-rim/ink-core rendering), just cut into twenty equal stops
+   instead of fourteen. One fixed shape, always — no more random library of
+   comb/spiral/zigzag templates, no mirroring, no per-deal offset. This is
+   deliberate: the shape is now part of INTUITY's visual identity, and
+   should look the same wherever it appears.
+
+   Answer order is free — tap any open circle. But the deal is a single
+   continuous attempt: one wrong answer ends it immediately (see the
+   `else` branch of answer(), which calls failDeal() instead of letting
+   play continue). Reach all twenty without a miss and the cup goes off.
+
+   There is exactly one difficulty: true odds, all three forms (-ing / to
+   / bare), sampled at the rate the language actually uses them. No mix
+   picker — Deal just deals. */
+
+const DATA_URL = '../../data/grammar-rules/gerunds-infinitives-complete.json';
+const PATH_LEN = 20;
+const SLOTS = PATH_LEN, GOAL = PATH_LEN;
+
+/* the exact path from the Challenge track, unrolled at the same
+   proportions — just split into twenty cells here instead of fourteen */
+const PATH_D = 'M 80 26 L 80 248 Q 80 318 150 318 L 197 318 Q 267 318 267 248 L 267 124 Q 267 48 350 48 Q 434 48 434 124 L 434 336';
+const PATH_VIEWBOX = '22 -18 474 400';
+const BAND_W = 65;                 /* the band's width in viewBox units */
+
+/* ── THE FUSE ──
+   A single clock for the WHOLE deal, not per pill — free answer order plus a
+   ticking deadline means the real skill is triage: bank the pills you're sure
+   of first, save the shaky ones for whatever time is left. The countdown is
+   drawn as a literal fuse: a lit head travels the caramel path from start to
+   finish over ROUND_MS, and the path behind it visibly burns out to grey. If
+   the head reaches the finish pin before the player reaches pill 20, the deal
+   ends exactly like a miss does — just for a different reason. */
+const ROUND_MS = 90000;
+const CRITICAL_MS = 12000;
+
+const MARKS = [
+  { at:4,  label:'Spark', col:'var(--m0)' },
+  { at:8,  label:'Ember', col:'var(--m1)' },
+  { at:12, label:'Flame', col:'var(--m2)' },
+  { at:16, label:'Blaze', col:'var(--m3)' },
+  { at:20, label:'Crown', col:'var(--m4)' },
+];
+
+let DECK = [], slots = [], open = null, mark = -1;
+let done = 0, clean = 0, tries = 0, locked = false, started = false, dealClean = true;
+let score = 0, dealEnded = false;
+let roundStartPerf = 0, lastAnswerPerf = 0, fuseRafId = null, fuseFrac = 0, lastCriticalSecond = -1;
+let route = null;                  /* the built path: {probe, L, bounds, mids, cellEls} */
+
+const $  = id => document.getElementById(id);
+const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[b[i],b[j]]=[b[j],b[i]];} return b; };
+const clamp = (n,lo,hi) => Math.max(lo, Math.min(hi,n));
+const slug = p => p.replace('-','');
+const sfx = (name) => { try { if (window.SFX && SFX[name]) SFX[name](); } catch(e){} };
+
+/* ── PERSONAL BEST ──
+   Two numbers, both worth chasing for different reasons: bestScore rewards
+   any run (even a losing one racked up points), bestCleanMs only ever gets
+   set by an actual first-try clear, so it can't be padded by a messy deal
+   that merely finished. */
+const BEST_KEY = 'intuity-board-best';
+function loadBoardBest(){ try{ return JSON.parse(localStorage.getItem(BEST_KEY) || '{}'); }catch(e){ return {}; } }
+function saveBoardBest(patch){
+  try{
+    const b = loadBoardBest();
+    Object.assign(b, patch);
+    localStorage.setItem(BEST_KEY, JSON.stringify(b));
+  }catch(e){}
+}
+function updateBest(cleanMs){
+  const b = loadBoardBest();
+  let changed = false;
+  if (!b.bestScore || score > b.bestScore){ b.bestScore = score; changed = true; }
+  if (cleanMs != null && (!b.bestCleanMs || cleanMs < b.bestCleanMs)){ b.bestCleanMs = cleanMs; changed = true; }
+  if (changed) saveBoardBest(b);
+  return b;
+}
+function fmtMs(ms){
+  const s = Math.max(0, Math.round(ms/1000));
+  return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+}
+function paintBestLine(el){
+  if (!el) return;
+  const b = loadBoardBest();
+  el.textContent = b.bestScore
+    ? 'Best score ' + b.bestScore + (b.bestCleanMs ? ' · fastest clean deal ' + fmtMs(b.bestCleanMs) : '')
+    : '';
+}
+
+const TICK = '<svg class="mk tick" viewBox="0 0 24 24" fill="none" stroke="var(--tick)" ' +
+  'stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M3 13.5c2.6 1.4 4.4 3.2 5.8 5.4C11.4 13 15.2 8 21 4.2"/></svg>';
+const CROSS = '<svg class="mk cross" viewBox="0 0 24 24" fill="none" stroke="var(--cross)" ' +
+  'stroke-width="5.8" stroke-linecap="round" aria-hidden="true">' +
+  '<path d="M5.4 5c4.2 4.2 8.6 9.2 13.4 14.2M18.6 5.4C14.2 9.4 9.6 14.6 5.2 19"/></svg>';
+const PIN = '<span class="pin" aria-hidden="true"></span>';
+
+/* ── THE ONE MIX ──
+   Old Board offered Mix 1/2/3 with a chooser screen up front. That choice
+   is gone: every deal now runs "true odds" — all three forms, sampled at
+   the rate the language actually uses them (mostly gerunds) — so the
+   player is dealt real English, not odds tilted in their favour. */
+const MIX = {
+  id:'m3', piles:['-ing','to','bare'], mode:'natural'
+};
+
+function sample(pool, n, piles, mode, maxRun){
+  const usable = pool.filter(c => piles.indexOf(c.pile) !== -1);
+
+  if (mode === 'natural'){
+    const by = new Map();
+    usable.forEach(c => { if (!by.has(c.pile)) by.set(c.pile, []); by.get(c.pile).push(c); });
+    by.forEach((v, k) => by.set(k, shuffle(v)));
+    const keys = [...by.keys()];
+    const share = k => by.get(k).length / usable.length;
+
+    const quota = {}; let placed = 0;
+    keys.forEach(k => { quota[k] = Math.min(by.get(k).length, Math.floor(share(k) * n)); placed += quota[k]; });
+    keys.slice().sort((a,b) => (share(b)*n - Math.floor(share(b)*n)) - (share(a)*n - Math.floor(share(a)*n)))
+        .forEach(k => { while (placed < n && quota[k] < by.get(k).length){ quota[k]++; placed++; } });
+
+    const cap = Math.floor(maxRun * (n + 1) / (maxRun + 1));
+    let surplus = 0;
+    keys.forEach(k => { if (quota[k] > cap){ surplus += quota[k] - cap; quota[k] = cap; } });
+    keys.forEach(k => { while (surplus > 0 && quota[k] < Math.min(cap, by.get(k).length)){ quota[k]++; surplus--; } });
+
+    const out = [];
+    keys.forEach(k => { for (let i = 0; i < quota[k]; i++) out.push(by.get(k).pop()); });
+    return out;
+  }
+
+  const by = new Map();
+  usable.forEach(c => { if (!by.has(c.pile)) by.set(c.pile, []); by.get(c.pile).push(c); });
+  by.forEach((v, k) => by.set(k, shuffle(v)));
+  const keys = [...by.keys()], out = [];
+  while (out.length < n){
+    let moved = false;
+    for (const k of keys){
+      const b = by.get(k);
+      if (b && b.length){ out.push(b.pop()); moved = true; if (out.length >= n) break; }
+    }
+    if (!moved) break;
+  }
+  return out;
+}
+
+function interleave(cards, maxRun){
+  const by = new Map();
+  cards.forEach(c => { if (!by.has(c.pile)) by.set(c.pile, []); by.get(c.pile).push(c); });
+  by.forEach((v, k) => by.set(k, shuffle(v)));
+
+  const feasible = (counts) => {
+    const total = Object.values(counts).reduce((a,x) => a + x, 0);
+    const mx = Object.values(counts).reduce((a,x) => Math.max(a,x), 0);
+    return mx <= maxRun * (total - mx + 1);
+  };
+
+  const out = []; let last = null, run = 0;
+  while (out.length < cards.length){
+    const live = [...by.keys()].filter(k => by.get(k).length);
+    if (!live.length) break;
+    let legal = live.filter(k => !(k === last && run >= maxRun));
+    if (!legal.length) legal = live;
+
+    const counts = {}; live.forEach(k => counts[k] = by.get(k).length);
+    let safe = legal.filter(k => {
+      const after = Object.assign({}, counts);
+      if (--after[k] === 0) delete after[k];
+      return feasible(after);
+    });
+    if (!safe.length) safe = [legal.reduce((m,k) => by.get(k).length > by.get(m).length ? k : m, legal[0])];
+
+    const weight = safe.reduce((t,k) => t + by.get(k).length, 0);
+    let r = Math.random() * weight, pick = safe[safe.length - 1];
+    for (const k of safe){ r -= by.get(k).length; if (r <= 0){ pick = k; break; } }
+
+    if (pick === last) run++; else { last = pick; run = 1; }
+    out.push(by.get(pick).pop());
+  }
+  return out;
+}
+
+const MAX_RUN = 2;
+
+function applyMix(){
+  document.body.classList.toggle('two-forms', MIX.piles.length === 2);
+}
+
+/* ── THE PATH ──
+   No more hand-drawn library, no mirroring, no random offset. buildRoute()
+   takes the one fixed PATH_D, measures its real length once it's on the
+   page (getTotalLength — the same trick the Challenge track uses), and
+   slices that length into twenty equal stretches. Each stretch's midpoint
+   is where a circle sits; the stretch itself becomes a <path class="cell">
+   segment of the rendered band, so the band can show progress (burnt grey
+   behind the fuse) exactly the way the Challenge track shows a cell done. */
+function buildRoute(){
+  const svg = $('pathSvg'), probe = svg.querySelector('.sage'), L = probe.getTotalLength();
+  const unit = L / SLOTS;
+  const bounds = []; let at0 = 0;
+  for (let i = 0; i < SLOTS; i++){ const a = at0, b = at0 + unit; bounds.push([a,b]); at0 = b; }
+  const mids = bounds.map(([a,b]) => probe.getPointAtLength((a + b) / 2));
+  return { probe, L, bounds, mids, cellEls: [] };
+}
+
+function drawCells(){
+  const ns = 'http://www.w3.org/2000/svg';
+  const gc = $('cells'); gc.innerHTML = '';
+  route.cellEls = route.bounds.map(([a,b]) => {
+    const p = document.createElementNS(ns, 'path');
+    p.setAttribute('d', PATH_D); p.setAttribute('class', 'cell');
+    p.style.strokeDasharray = (b - a) + ' ' + route.L;
+    p.style.strokeDashoffset = String(-a);
+    gc.appendChild(p);
+    return p;
+  });
+}
+
+/* Turns a point in the SVG's own viewBox coordinates into a pixel position
+   inside .board — reproducing by hand what preserveAspectRatio="xMidYMid
+   meet" does internally, since the circles are plain HTML buttons layered
+   on top of the SVG rather than SVG-native elements like the Challenge
+   track's numerals are. */
+function computeTransform(){
+  const b = $('board'), svg = $('pathSvg'), vb = svg.viewBox.baseVal;
+  const rect = b.getBoundingClientRect();
+  const scale = Math.min(rect.width / vb.width, rect.height / vb.height);
+  const offX = (rect.width - vb.width * scale) / 2 - vb.x * scale;
+  const offY = (rect.height - vb.height * scale) / 2 - vb.y * scale;
+  return { scale, offX, offY };
+}
+function toPx(vx, vy, t){
+  t = t || computeTransform();
+  return { x: vx * t.scale + t.offX, y: vy * t.scale + t.offY };
+}
+
+async function boot(){
+  paintMute();
+  drawLadder();
+  applyMix();
+  try{
+    const res = await fetch(DATA_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    DECK = (d.sorting && d.sorting.cards) || d.cards || [];
+    if (!DECK.length) throw new Error('no cards in the data');
+    $('gateLoading').style.display = 'none';
+    $('gateReady').style.display = '';
+    $('hudTime').textContent = fmtMs(ROUND_MS);
+    paintBestLine($('gateBest'));
+    $('gateStart').focus();
+  }catch(e){
+    $('gateLoading').innerHTML = '<p class="err">Could not load <b>' + esc(DATA_URL) + '</b>.<br>' +
+      'Open this from the site rather than as a local file — browsers block file:// requests.</p>';
+  }
+}
+
+$('gateStart').onclick = () => { sfx('unlock'); start(); };
+
+function start(){
+  applyMix();
+  const picked = interleave(sample(DECK, SLOTS, MIX.piles, MIX.mode, MAX_RUN), MAX_RUN);
+  mark = -1; done = 0; clean = 0; tries = 0; locked = false; open = null; dealClean = true;
+  score = 0; dealEnded = false; lastCriticalSecond = -1;
+  started = true;
+  document.body.classList.add('started');
+  $('over').classList.remove('show');
+  $('veil').classList.remove('show');
+  $('hudScore').textContent = '0';
+  $('hudTime').classList.remove('critical');
+  drawLadder(); drawField();
+  route = buildRoute();
+  drawCells();
+  slots = picked.map((card,i) => ({ card, vx:route.mids[i].x, vy:route.mids[i].y, done:false, missed:false }));
+  drawPath(); layout(); paint();
+  startFuse();
+}
+
+function drawField(){
+  const b = $('board');
+  const D = BAND_W / .7044, SG = D * .0929, BZ = D * .0549;   /* same ring proportions as the Challenge track */
+  b.innerHTML =
+    '<svg viewBox="' + PATH_VIEWBOX + '" class="pathSvg" id="pathSvg" ' +
+      'style="--bw:' + BAND_W + 'px;--bw-a:' + (BAND_W + 2*(SG+BZ)) + 'px;--bw-b:' + (BAND_W + 2*SG) + 'px">' +
+      '<defs>' +
+        '<linearGradient id="bezelShade" gradientUnits="userSpaceOnUse" x1="40" y1="0" x2="360" y2="370">' +
+          '<stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#E4DDD1"/></linearGradient>' +
+        '<filter id="raise" x="-10%" y="-10%" width="120%" height="120%">' +
+          '<feDropShadow dx="-' + (D*.0417).toFixed(1) + '" dy="-' + (D*.0417).toFixed(1) + '" stdDeviation="' + (D*.0469).toFixed(1) + '" flood-color="#FFFFFF" flood-opacity=".9"/>' +
+          '<feDropShadow dx="' + (D*.052).toFixed(1) + '" dy="' + (D*.052).toFixed(1) + '" stdDeviation="' + (D*.0677).toFixed(1) + '" flood-color="#2B2129" flood-opacity=".16"/>' +
+        '</filter>' +
+      '</defs>' +
+      '<path class="bezel" d="' + PATH_D + '"/><path class="sage" d="' + PATH_D + '"/>' +
+      '<g id="cells"></g></svg>' +
+    '<div class="fuseHead" id="fuseHead"></div>';
+}
+
+function drawPath(){
+  const b = $('board');
+  slots.forEach((s,i) => {
+    const el = document.createElement('button');
+    el.className = 'circle' + (i === 0 ? ' start-pill' : '');
+    el.id = 'c' + i;
+    const isStart = i === 0, isFinish = i === slots.length - 1;
+    el.setAttribute('aria-label', isStart ? 'Start, hole 1' : isFinish ? 'Finish, hole ' + (i+1) : 'Hole ' + (i+1));
+    const label = isStart ? 'start' : isFinish ? 'finish' : null;
+    el.innerHTML = PIN + (label
+      ? '<span class="word end">' + label + '</span>'
+      : '<span class="n">' + (i+1) + '</span>') + TICK + CROSS;
+    el.onclick = () => openCircle(i);
+    b.appendChild(el);
+    if (label) fitWord(el, label);
+  });
+}
+
+/* Positions are now a straight transform of the fixed path's own
+   coordinates (see toPx above) rather than a solved rows x cols grid — the
+   shape never changes, so only the transform needs recomputing on resize. */
+function layout(){
+  const b = $('board');
+  if (!b.clientWidth || !b.clientHeight || !slots.length || !route) return;
+  const t = computeTransform();
+  const circleSize = clamp(t.scale * BAND_W, 34, 96);
+  b.style.setProperty('--size', circleSize + 'px');
+  b.style.setProperty('--word', Math.max(8, Math.round(circleSize * 0.19)) + 'px');
+
+  slots.forEach((s,i) => {
+    const p = toPx(s.vx, s.vy, t);
+    s.cx = p.x; s.cy = p.y;
+    const el = $('c' + i);
+    if (el){ el.style.left = s.cx + 'px'; el.style.top = s.cy + 'px'; }
+  });
+
+  if (started) positionFuse(fuseFrac);
+}
+window.addEventListener('resize', () => {
+  layout();
+  slots.forEach((s, i) => {
+    if (!s.done) return;
+    const el = $('c' + i); if (el) fitWord(el, s.card.forms[s.card.pile]);
+  });
+});
+
+/* ── THE FUSE, driving the path ──
+   roundStartPerf marks the moment the deal began; every frame we work out
+   how much of ROUND_MS has elapsed, convert that fraction of the fixed
+   path's total length into an actual point via getPointAtLength (the same
+   call buildRoute() used to lay out the circles), and move the lit head
+   there. Every cell whose stretch of the path the head has now fully
+   passed gets marked .burnt, so the band visibly greys out behind it. In
+   the last CRITICAL_MS the HUD clock and the head both start pulsing, and
+   a tick plays once per second remaining. If the head reaches the end
+   before all twenty circles are done, the deal ends the same way a miss
+   does, just for a different reason. */
+function startFuse(){
+  roundStartPerf = performance.now();
+  fuseFrac = 0; lastCriticalSecond = -1;
+  cancelAnimationFrame(fuseRafId);
+  const tick = () => {
+    if (!started || dealEnded) return;
+    const elapsed = performance.now() - roundStartPerf;
+    fuseFrac = clamp(elapsed / ROUND_MS, 0, 1);
+    positionFuse(fuseFrac);
+
+    const remainMs = Math.max(0, ROUND_MS - elapsed);
+    $('hudTime').textContent = fmtMs(remainMs);
+    const critical = remainMs <= CRITICAL_MS;
+    $('hudTime').classList.toggle('critical', critical);
+    $('fuseHead').classList.toggle('critical', critical);
+    if (critical){
+      const sec = Math.ceil(remainMs / 1000);
+      if (sec !== lastCriticalSecond){ lastCriticalSecond = sec; sfx('tick'); }
+    }
+
+    if (elapsed >= ROUND_MS){ fuseBurnOut(); return; }
+    fuseRafId = requestAnimationFrame(tick);
+  };
+  fuseRafId = requestAnimationFrame(tick);
+}
+
+function positionFuse(frac){
+  if (!route) return;
+  const t = computeTransform();
+  const len = clamp(frac, 0, 1) * route.L;
+  const pt = route.probe.getPointAtLength(len);
+  const p = toPx(pt.x, pt.y, t);
+  const fh = $('fuseHead');
+  if (fh){ fh.style.left = p.x + 'px'; fh.style.top = p.y + 'px'; }
+  route.cellEls.forEach((el,i) => el.classList.toggle('burnt', route.bounds[i][1] <= len));
+}
+
+function fuseBurnOut(){
+  if (dealEnded) return;
+  dealEnded = true; locked = true;
+  cancelAnimationFrame(fuseRafId);
+  if (window.INTUITY) INTUITY.session('gerunds-infinitives', 'board',
+    { mix: MIX.id, turned: done, clean: clean, tries: tries, perfect: false });
+  $('overBig').textContent = 'Time';
+  $('overSub').textContent = 'The fuse reached the end at ' + done + ' of ' + SLOTS +
+    '. Deal again to try for the cup.';
+  sfx('wrong');
+  $('over').classList.add('show');
+}
+
+function fitWord(el, text){
+  const base = parseFloat(getComputedStyle($('board')).getPropertyValue('--word')) || 14;
+  const longest = String(text).split(/\s+/).reduce((m,t) => Math.max(m, t.length), 0);
+  const scale = longest > 8 ? Math.max(.66, 8 / longest) : 1;
+  el.style.setProperty('--w', (base * scale).toFixed(1) + 'px');
+}
+
+function drawLadder(){
+  const l = $('ladder'); l.innerHTML = '';
+  MARKS.forEach((m, i) => {
+    if (i){
+      const k = document.createElement('div');
+      k.className = 'link' + (i <= mark ? ' done' : '');
+      l.appendChild(k);
+    }
+    const el = document.createElement('div');
+    el.className = 'mark' + (i <= mark ? ' done' : '');
+    el.style.setProperty('--mc', m.col);
+    el.innerHTML = '<div class="dot"></div><div class="lbl">' + m.label + '</div>';
+    l.appendChild(el);
+  });
+}
+
+function openCircle(i){
+  if (!started || locked || slots[i].done) return;
+  open = i;
+  const c = slots[i].card;
+  const stem = c.stem || c.trigger || '', trig = c.trigger || '';
+  const words = stem.split(/\s+/);
+  const n = Math.min(trig.split(/\s+/).length, words.length);
+
+  $('cue').textContent = trig.toUpperCase();
+
+  $('sentence').innerHTML =
+    esc(words.slice(0, words.length - n).join(' ')) + ' <b>' +
+    esc(words.slice(words.length - n).join(' ')) + '</b> <i>_____</i> ' + esc(c.tail || '');
+
+  const F = c.forms || {};
+  $('w-ing').textContent  = F['-ing'] || '-ing';
+  $('w-to').textContent   = F['to']   || 'to …';
+  $('w-bare').textContent = F['bare'] || 'bare';
+
+  ['ing','to','bare'].forEach(p => $('fm-' + p).classList.remove('tell'));
+  $('rule').textContent = ''; $('rule').classList.remove('show');
+  $('veil').classList.add('show');
+  sfx('tick');
+}
+
+function answer(pile){
+  if (open === null || locked) return;
+  if (MIX.piles.indexOf(pile) === -1) return;
+  locked = true;
+  tries++;
+  const slot = slots[open], c = slot.card, el = $('c' + open);
+  const ok = pile === c.pile;
+
+  if (window.INTUITY) INTUITY.log('gerunds-infinitives', c.trigger, ok,
+    { game:'board', mix:MIX.id });
+
+  if (ok){
+    slot.done = true; done++;
+    if (!slot.missed) clean++;
+    el.className = 'circle done flip' + (slot.missed ? ' second' : '');
+    el.innerHTML = PIN + '<span class="word">' + esc(c.forms[c.pile]) + '</span>' + TICK;
+    fitWord(el, c.forms[c.pile]);
+    el.setAttribute('aria-label', 'Turned: ' + c.forms[c.pile]);
+    $('veil').classList.remove('show');
+    $('fill').classList.add('gain');
+    sfx('correct');
+    setTimeout(() => burst(el), 60);
+    checkMark();
+    open = null; locked = false;
+    paint();
+    if (done >= GOAL) setTimeout(finish, 950);
+  } else {
+    dealClean = false;
+    const p = $('panel');
+    p.classList.remove('bad'); void p.offsetWidth; p.classList.add('bad');
+    $('rule').textContent = c.rule || '';
+    $('rule').classList.add('show');
+    $('fm-' + slug(c.pile)).classList.add('tell');
+    slot.missed = true;
+    el.classList.add('missed');
+    el.classList.remove('failed'); void el.offsetWidth; el.classList.add('failed');
+    $('track').classList.remove('knock'); void $('track').offsetWidth;
+    $('track').classList.add('knock');
+    $('fill').classList.add('sting');
+    sfx('wrong');
+    setTimeout(() => {
+      $('veil').classList.remove('show');
+      p.classList.remove('bad');
+      $('fill').classList.remove('sting');
+      failDeal();
+    }, 1800);
+  }
+}
+
+/* One miss, whole deal — the player still sees the rule and the correct
+   pill light up first (that pause above is deliberate: it's the teaching
+   moment), then the board locks and this hands off straight to the Sorry
+   screen. There's no partial credit to negotiate; the only way forward
+   is a new deal. */
+function failDeal(){
+  dealEnded = true;
+  cancelAnimationFrame(fuseRafId);
+  if (window.INTUITY) INTUITY.session('gerunds-infinitives', 'board',
+    { mix: MIX.id, turned: done, clean: clean, tries: tries, perfect: false });
+
+  $('overBig').textContent = 'Sorry';
+  $('overSub').textContent = 'You reached ' + done + ' of ' + SLOTS +
+    ' before a miss. Deal again to try for the cup.';
+  sfx('wrong');
+  $('over').classList.add('show');
+}
+
+function checkMark(){
+  let m = -1;
+  MARKS.forEach((x, i) => { if (done >= x.at) m = i; });
+  if (m <= mark) return;
+  mark = m;
+  drawLadder();
+  const b = $('banner');
+  $('bannerText').textContent = MARKS[m].label;
+  b.style.color = MARKS[m].col;
+  b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+  sfx(m === MARKS.length - 1 ? 'fanfare' : 'pop');
+  setTimeout(() => b.classList.remove('show'), 1500);
+}
+
+function paint(){
+  $('tally').textContent = clean + ' first time';
+  $('goal').textContent  = done + ' of ' + GOAL;
+  const f = $('fill');
+  f.style.width = Math.min(100, done / GOAL * 100) + '%';
+  setTimeout(() => f.classList.remove('gain'), 600);
+}
+
+function finish(){
+  dealEnded = true;
+  cancelAnimationFrame(fuseRafId);
+  if (window.INTUITY) INTUITY.session('gerunds-infinitives', 'board',
+    { mix: MIX.id, turned: done, clean: clean, tries: tries, perfect: dealClean });
+
+  if (dealClean){
+    $('overBig').textContent = '🏆';
+    $('overSub').textContent = 'Perfect deal — all ' + SLOTS + ' right, first try.';
+    celebrateCup();
+  } else {
+    $('overBig').textContent = done;
+    const acc = done ? Math.round(clean / done * 100) : 0;
+    $('overSub').textContent = clean + ' first time · ' + acc + '% clean';
+  }
+  sfx('fanfare');
+  $('over').classList.add('show');
+}
+
+/* ── THE CUP ──
+   Ribbon confetti, not the per-circle spark burst below — long thin
+   rotating strips raining from top-centre, distinct from the small
+   celebratory pop that fires on every single correct answer. */
+function celebrateCup(){
+  if (matchMedia('(prefers-reduced-motion:reduce)').matches) return;
+  const fx = $('fx');
+  const cx = window.innerWidth / 2, cy = window.innerHeight * 0.32;
+  const COLS = ['#6B3FA0','#E8632A','#C2956E','#A3B26A','#B44A22','#FFFFFF'];
+
+  for (let i = 0; i < 46; i++){
+    const rib = document.createElement('div');
+    rib.className = 'ribbon';
+    const col = COLS[(Math.random()*COLS.length)|0];
+    rib.style.width = '6px';
+    rib.style.height = (16 + Math.random()*14) + 'px';
+    rib.style.background = col;
+    const startX = cx + (Math.random()-0.5) * 90;
+    rib.style.left = startX + 'px';
+    rib.style.top = cy + 'px';
+    fx.appendChild(rib);
+
+    const dx = (Math.random()-0.5) * window.innerWidth * 0.85;
+    const dy = window.innerHeight * 0.62 + Math.random()*220;
+    const rot = Math.random()*720 - 360;
+    const dur = 1500 + Math.random()*1000;
+    const delay = Math.random()*260;
+
+    rib.animate([
+      { transform:'translate(-50%,-50%) rotate(0deg)', opacity:1 },
+      { transform:'translate(' + (dx*0.5) + 'px,' + (dy*0.4 - 60) + 'px) rotate(' + (rot*0.5) + 'deg)', opacity:1, offset:.45 },
+      { transform:'translate(' + dx + 'px,' + dy + 'px) rotate(' + rot + 'deg)', opacity:0 }
+    ], { duration:dur, delay, easing:'cubic-bezier(.15,.7,.3,1)' });
+    setTimeout(() => rib.remove(), dur + delay + 60);
+  }
+}
+
+/* ── THE BURST, FIRED AT THE CIRCLE THAT WAS WON (unchanged) ── */
+function burst(el){
+  if (matchMedia('(prefers-reduced-motion:reduce)').matches) return;
+  const fx = $('fx');
+  const r  = el.getBoundingClientRect();
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  const COLS = ['#6B3FA0','#E8632A','#C2956E','#A3B26A','#FFFFFF','#B44A22'];
+
+  const flash = document.createElement('div');
+  flash.className = 'spark fw-flash';
+  flash.style.left = cx + 'px'; flash.style.top = cy + 'px';
+  fx.appendChild(flash);
+  flash.animate([{ transform:'translate(-50%,-50%) scale(.15)', opacity:1 },
+                 { transform:'translate(-50%,-50%) scale(3.4)', opacity:0 }],
+                { duration:440, easing:'cubic-bezier(.1,.8,.2,1)' });
+  setTimeout(() => flash.remove(), 460);
+
+  [0,120].forEach((delay,k) => setTimeout(() => {
+    const ring = document.createElement('div');
+    ring.className = 'spark fw-ring';
+    ring.style.left = cx + 'px'; ring.style.top = cy + 'px';
+    fx.appendChild(ring);
+    ring.animate([{ transform:'translate(-50%,-50%) scale(.12)', opacity:.9 },
+                  { transform:'translate(-50%,-50%) scale(' + (2.4 + k) + ')', opacity:0 }],
+                 { duration:640 + k*170, easing:'cubic-bezier(.1,.7,.2,1)' });
+    setTimeout(() => ring.remove(), 840 + k*170);
+  }, delay));
+
+  shell(fx, cx, cy, 20, 34, 100, 480, ['#FFFFFF','#C2956E']);
+  setTimeout(() => shell(fx, cx, cy, 38, 70, 220, 1000, COLS), 90);
+
+  setTimeout(() => {
+    for (let i = 0; i < 16; i++){
+      const c = document.createElement('div');
+      c.className = 'spark fw-crackle';
+      const a = Math.random()*Math.PI*2, d = 26 + Math.random()*120;
+      c.style.left = (cx + Math.cos(a)*d*.55) + 'px';
+      c.style.top  = (cy + Math.sin(a)*d*.55) + 'px';
+      fx.appendChild(c);
+      c.animate([{ opacity:0, transform:'translate(-50%,-50%) scale(.3)' },
+                 { opacity:1, transform:'translate(-50%,-50%) scale(1.4)', offset:.22 },
+                 { opacity:0, transform:'translate(-50%,-50%) scale(.3)' }],
+                { duration:300 + Math.random()*260, easing:'ease-out' });
+      setTimeout(() => c.remove(), 600);
+    }
+  }, 260);
+}
+
+function shell(fx, cx, cy, n, near, far, life, cols){
+  for (let i = 0; i < n; i++){
+    const p = document.createElement('div');
+    p.className = 'spark';
+    const col = cols[(Math.random()*cols.length)|0];
+    const size = 3 + Math.random()*4.5;
+    p.style.cssText += 'left:'+cx+'px; top:'+cy+'px; width:'+size+'px; height:'+size+
+      'px; background:'+col+'; box-shadow:0 0 '+(size*2.6)+'px '+col+';';
+    fx.appendChild(p);
+    const a = Math.random()*Math.PI*2, d = near + Math.random()*(far-near);
+    const dx = Math.cos(a)*d, dy = Math.sin(a)*d;
+    const fall = 50 + Math.random()*100, dur = life * (.75 + Math.random()*.5);
+    p.animate([
+      { transform:'translate(-50%,-50%) translate(0,0) scale(1.3)', opacity:1 },
+      { transform:'translate(-50%,-50%) translate('+(dx*.6).toFixed(0)+'px,'+(dy*.6-14).toFixed(0)+'px) scale(1)', opacity:1, offset:.4 },
+      { transform:'translate(-50%,-50%) translate('+dx.toFixed(0)+'px,'+(dy+fall).toFixed(0)+'px) scale(.2)', opacity:0 }
+    ], { duration:dur, easing:'cubic-bezier(.1,.75,.3,1)' });
+    setTimeout(() => p.remove(), dur + 40);
+  }
+}
+
+/* ── SOUND ── */
+function paintMute(){
+  const on = !window.SFX || SFX.isOn();
+  $('mute').textContent = on ? '🔊' : '🔇';
+  $('mute').setAttribute('aria-label', on ? 'Sound on' : 'Sound off');
+}
+$('mute').onclick = () => { if (window.SFX) SFX.toggle(); paintMute(); };
+
+$('veil').addEventListener('click', e => {
+  if (e.target === $('veil') && !locked){ $('veil').classList.remove('show'); open = null; }
+});
+
+document.addEventListener('keydown', e => {
+  if (!started){ if (e.key === 'Enter' || e.key === ' ') $('gateStart').click(); return; }
+  if (open === null) return;
+  if (e.key === 'Escape' && !locked){ $('veil').classList.remove('show'); open = null; }
+  if (e.key === '1' || e.key === 'ArrowLeft')  answer('-ing');
+  if (e.key === '2' || e.key === 'ArrowUp')    answer('to');
+  if (e.key === '3' || e.key === 'ArrowRight') answer('bare');
+});
+
+boot();
+</script>
+</body>
+</html>

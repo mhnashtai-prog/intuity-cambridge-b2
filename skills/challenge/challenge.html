@@ -241,12 +241,14 @@ window.ChallengeGames=window.ChallengeGames||{};
 <script src="/data/challenge/games/choose.js?v=2"></script>
 <script src="/data/challenge/games/pendulum.js?v=2"></script>
 <script src="/data/challenge/games/gap.js?v=2"></script>
-<script src="/data/challenge/games/order.js?v=2"></script>
-<script src="/data/challenge/games/odd.js?v=2"></script>
+<script src="/data/challenge/games/order.js?v=3"></script>
+<script src="/data/challenge/games/odd.js?v=3"></script>
 <script src="/data/challenge/games/sort.js?v=2"></script>
 <script src="/data/challenge/games/transform.js?v=1"></script>
 <script src="/data/challenge/games/correct.js?v=1"></script>
 <script src="/data/challenge/games/match.js?v=1"></script>
+<script src="/data/challenge/games/defuse.js?v=1"></script>
+<script src="/data/challenge/games/forge.js?v=1"></script>
 <script>
 (function(){
 'use strict';
@@ -256,8 +258,8 @@ const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=(Math.random
 const G=window.ChallengeGames, P=new URLSearchParams(location.search);
 const BASE='/data/challenge/';
 const N=14;                    /* fourteen cells, all identical — every one fetches its own exercise */
-const NOTE={game:'Game · the INTUITY games, one per cell. Three lives, another try after a mistake, the answer explained straight away.',
-            exam:'Exam · fourteen exam formats, half recognising and half producing. One attempt per cell, no feedback until the end — then your percentage, a grade and a full review.'};
+const NOTE={game:'Game · half recognising, half producing, with Defuse, Forge and the pendulum mixed in. Three lives, another try after a mistake, the answer explained straight away.',
+            exam:'Exam · eight exam formats across fourteen cells, half recognising and half producing. One attempt per cell, no feedback until the end — then your percentage, a grade and a full review.'};
 
 /* ══ STATE ══ */
 let mode=P.get('mode')==='exam'?'exam':'game', TOPICS=null, topic=null, pool=[], plan=[];
@@ -294,26 +296,33 @@ async function choose(id){
 }
 
 /* ══ THE DRAW — fourteen cells, a surprise each ══
-   EXAM: only exam formats, seven that ask the student to RECOGNISE (choose,
-   odd one out, sort, match) and seven that ask them to PRODUCE (fill the gap,
-   put in order, key word transformation, correct the error).
-   GAME: the INTUITY games. Until more of them are converted, the games we
-   have are topped up with exam formats, so a Game run is never thin.
-   Both: the same format never twice in a row, and no round repeated. */
+   Both modes: seven cells that ask the student to RECOGNISE and seven that
+   ask them to PRODUCE, the same format never twice in a row, and no
+   sentence twice in a run.
+   EXAM: only exam formats — recognise (choose, odd one out, sort, match),
+   produce (fill the gap, put in order, key word transformation, correct the
+   error). No clock, no feedback until the end.
+   GAME: the same split, with up to half of each side handed to the INTUITY
+   games — pendulum and Defuse on the recognising side, Forge on the
+   producing side — so a Game run is never lighter on writing than an Exam.
+   A game that declares `accepts` plays the topic's existing rounds (Defuse
+   and Forge play the choose and pendulum sentences); a game without it
+   plays only rounds written for it. */
 function draw(){
   const by={}; pool.forEach(r=>(by[r.game]=by[r.game]||[]).push(r));
+  Object.keys(G).forEach(k=>{ if(G[k].accepts){ const rs=pool.filter(G[k].accepts); if(rs.length) by[k]=rs; } });
   const kind=k=>G[k].kind||'exam', skill=k=>G[k].skill||'receptive';
-  const fill=(types,n)=>{ const s=shuffle(types).slice(0,n); while(s.length<n) s.push(types[(Math.random()*types.length)|0]); return s; };
-  let slots;
-  if(mode==='exam'){
-    const rec=Object.keys(by).filter(k=>kind(k)==='exam'&&skill(k)==='receptive'), pro=Object.keys(by).filter(k=>kind(k)==='exam'&&skill(k)==='productive');
-    slots=rec.length&&pro.length? fill(rec,N/2).concat(fill(pro,N/2)) : fill(Object.keys(by),N);
-  }else{
-    const games=Object.keys(by).filter(k=>kind(k)==='game'), rest=Object.keys(by).filter(k=>kind(k)!=='game');
-    const nGame=Math.min(N, games.length>=4?N:Math.max(4,games.length*4));   /* at least a third of the run is games */
-    slots=[]; for(let i=0;i<nGame&&games.length;i++) slots.push(games[i%games.length]);
-    slots=slots.concat(fill(rest,N-slots.length));
-  }
+  const have=Object.keys(by).filter(k=>G[k]);
+  const fill=(types,n)=>{ if(!types.length||n<=0) return []; const s=shuffle(types).slice(0,n); while(s.length<n) s.push(types[(Math.random()*types.length)|0]); return s; };
+  const side=(sk,half)=>{
+    const ex=have.filter(k=>kind(k)==='exam'&&skill(k)===sk), gm=have.filter(k=>kind(k)==='game'&&skill(k)===sk);
+    if(mode==='exam') return fill(ex.length?ex:gm,half);
+    const nG=gm.length?Math.min(gm.length*2,Math.ceil(half/2)):0;       /* at most half, at most two per game */
+    const g=shuffle(gm), picks=[]; for(let i=0;i<nG;i++) picks.push(g[i%g.length]);   /* taken in turn, so no game crowds the others */
+    return picks.concat(fill(ex.length?ex:gm,half-nG));
+  };
+  let slots=side('receptive',N/2).concat(side('productive',N/2));
+  if(slots.length<N) slots=slots.concat(fill(have,N-slots.length));
   let seq=null;
   for(let t=0;t<600&&!seq;t++){
     const c=shuffle(slots), count={}; c.forEach(x=>count[x]=(count[x]||0)+1);
@@ -321,9 +330,14 @@ function draw(){
   }
   if(!seq) seq=shuffle(slots);
   const left={}; Object.keys(by).forEach(k=>left[k]=shuffle(by[k]));
-  return seq.map(k=>left[k].pop()||shuffle(by[k])[0]);
+  /* one sentence, one cell: Defuse, Forge and Choose can play the same
+     rounds, so the game with the fewest to choose from picks first */
+  const used=new Set(), out=new Array(seq.length);
+  seq.map((k,i)=>i).sort((a,b)=>by[seq[a]].length-by[seq[b]].length).forEach(i=>{ const k=seq[i];
+    let r; while((r=left[k].pop())&&used.has(r)); if(!r) r=shuffle(by[k]).find(x=>!used.has(x))||by[k][0];
+    used.add(r); out[i]=Object.assign({},r,{game:k,src:r.game}); });
+  return out;
 }
-
 /* ══ THE TRACK — the sketch as one band, cut into cells ══
    Every cell is the same path, dashed to show only its own stretch, so the
    cells meet edge to edge like the segments in the drawing. Cross-lines are

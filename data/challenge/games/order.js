@@ -1,10 +1,10 @@
-/* ═══ CHALLENGE GAME · PUT IT IN ORDER ══════════════════════════════════
+/* ═══ CHALLENGE EXAM · PUT IT IN ORDER ══════════════════════════════════
    Words in a jumble, tapped into the right order.
    Round: { prompt, words: ["The","bridge","was","built","in","1998."], note }
    Agreement: see choose.js.
    ═══════════════════════════════════════════════════════════════════════ */
 (window.ChallengeGames=window.ChallengeGames||{}).order={
-  title:'Put it in order',
+  title:'Put it in order', kind:'exam', skill:'productive',
   solution:r=>r.words.join(' '),
   render(host,r,ctx){
     const seq=[];

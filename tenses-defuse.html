@@ -1,0 +1,1407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>INTUITY — Bomb Defusal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- BUILD 2026-08-28-defuse-fix2 — see CHANGELOG comment in the script for
+     the itemised list of what changed from the previous build. -->
+<meta name="intuity-build" content="2026-08-28-defuse-fix2">
+
+<!-- THE SHELL. Tokens, base, header, mode row, tabs, tile family, close
+     control, sheets and view transitions — shared verbatim with
+     tenses-rules.html. This file no longer carries its own copy, so the
+     three headers cannot drift apart again. -->
+<link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=2">
+<style>
+:root{
+  /* ── WHAT ONLY THIS PAGE OWNS ──
+     Every colour, face and shared component now lives in intuity-shell.css.
+     What remains here is this game's own object and its own layout metrics:
+     nothing another page has, and nothing another page could contradict. */
+  --mark-sweep:#F26430;               /* Defuse: the bomb bezel */
+  --mark-rest:#201E1C;
+  --mark-core:radial-gradient(circle at 38% 32%,#4A433D,#201E1C 72%);
+  --mark-ink:#F4EFE6;
+
+  --wire-h:140px; --player-h:34px; --hud-h:40px;
+}
+
+/* A game fills the viewport and must not scroll, rubber-band or select text
+   under a finger. The shell deliberately does NOT set these — Explore and the
+   Quiz are reading surfaces that scroll. */
+html,body{width:100%;height:100%;overflow:hidden}
+body{user-select:none;-webkit-user-select:none;touch-action:manipulation}
+
+/* ══ HUD ══ */
+.hud{position:fixed;top:var(--header-h);left:0;right:0;height:var(--hud-h);z-index:25;
+  display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:0 1rem;
+  font-family:'DM Mono',monospace;font-size:.72rem;color:var(--faint);
+  border-bottom:1px solid rgba(43,33,41,.05);flex-wrap:wrap}
+.hud .grp{display:flex;align-items:center;gap:.55rem}
+.score-n{font-family:'Space Grotesk',sans-serif;font-weight:900;font-size:1.05rem;
+  color:var(--paper);font-variant-numeric:tabular-nums}
+.streak{font-family:'Space Grotesk',sans-serif;font-weight:900;font-size:1rem;color:var(--faint);
+  transition:color .15s,transform .15s;font-variant-numeric:tabular-nums}
+.streak.live{color:var(--accent)}
+.streak.pop{transform:scale(1.3)}
+.modes{display:flex;gap:.18rem}
+.mbtn{font-family:'DM Mono',monospace;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;
+  padding:.14rem .5rem;border-radius:99px;border:1px solid transparent;color:rgba(43,33,41,.34)}
+.mbtn:hover{color:rgba(43,33,41,.7)}
+.mbtn.on{color:var(--accent);border-color:rgba(var(--accent-rgb),.45);background:rgba(var(--accent-rgb),.1)}
+.threat-tag{font-family:'DM Mono',monospace;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;
+  padding:.2rem .6rem;border-radius:999px;border:1px solid var(--phase-color);color:var(--phase-color);
+  transition:color .3s,border-color .3s;white-space:nowrap}
+.mutebtn{font-size:.95rem;opacity:.55}
+.mutebtn:hover{opacity:1}
+@media(max-width:600px){.modes{display:none}}
+
+/* ══ ARENA ══ */
+.arena{position:fixed;top:calc(var(--header-h) + var(--hud-h));left:0;right:0;
+  bottom:calc(var(--wire-h) + var(--player-h));
+  overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:1.35rem;padding-bottom:.4rem;background:none}
+.arena.shakeit{animation:bigshake .4s}
+@keyframes bigshake{0%,100%{transform:translate(0,0)}15%{transform:translate(-9px,3px) rotate(-.4deg)}
+  30%{transform:translate(7px,-4px) rotate(.4deg)}45%{transform:translate(-6px,4px)}
+  60%{transform:translate(5px,-3px)}75%{transform:translate(-3px,2px)}90%{transform:translate(2px,-1px)}}
+
+.threat-panel{width:100%;display:flex;flex-direction:column;align-items:center;gap:.35rem}
+.threat-name{font-family:'DM Mono',monospace;font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--phase-color);transition:color .3s}
+.threat-bar-track{width:min(72%,340px);height:9px;border-radius:999px;background:rgba(43,33,41,.13);
+  border:1px solid rgba(43,33,41,.12);overflow:hidden;box-shadow:inset 0 1px 3px rgba(43,33,41,.08)}
+.threat-bar-fill{height:100%;border-radius:999px;
+  background:linear-gradient(90deg,var(--phase-color),color-mix(in srgb,var(--phase-color) 55%,white));
+  box-shadow:0 0 12px rgba(var(--phase-rgb),.55);
+  transition:width .35s cubic-bezier(.2,.8,.2,1),background .3s}
+.threat-meta{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--faint)}
+
+.device{width:min(94%,420px);display:flex;flex-direction:column;align-items:center;gap:.55rem;
+  padding:.6rem .8rem 1rem;position:relative;background:none;border:none;box-shadow:none}
+.status-row{display:flex;align-items:center;gap:.4rem;font-family:'DM Mono',monospace;
+  font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--phase-color)}
+.status-dot.pulse{animation:dotpulse 1s infinite}
+@keyframes dotpulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* ══ THE DIAL — the ONE dark object on the page ══
+   Three concentric layers lit from the top-left. Insets are percentages, so
+   the whole object scales from phone to projector without a single override. */
+.bombring{width:210px;height:210px;border-radius:50%;position:relative;
+  background:linear-gradient(145deg,#FFFFFF,#E4DDD1);
+  box-shadow:-5px -5px 12px rgba(255,255,255,.9),7px 7px 18px rgba(43,33,41,.16),
+             inset 0 0 0 1px rgba(43,33,41,.04);
+  display:flex;align-items:center;justify-content:center;transition:box-shadow .2s}
+.bombring::before{content:'';position:absolute;inset:4.8%;border-radius:50%;
+  background:conic-gradient(var(--phase-color) calc(var(--pct,100)*1%),#201E1C 0);
+  box-shadow:inset 0 1px 2px rgba(255,255,255,.5),0 2px 6px rgba(43,33,41,.14);
+  transition:background .12s linear}
+.bombring::after{content:'';position:absolute;inset:12%;border-radius:50%;
+  background:var(--mark-core);
+  box-shadow:inset 0 2px 5px rgba(0,0,0,.55),inset 0 -1px 0 rgba(255,255,255,.06),
+             0 1px 0 rgba(255,255,255,.7)}
+/* The face is a stacked core — big count, small mark beneath — the same
+   structure as Forge's dial, so the two pages read as siblings while the
+   objects stay distinct: orange bezel and a device here, caramel and a
+   percentage there. */
+.bombring .core{position:relative;z-index:2;display:flex;flex-direction:column;
+  align-items:center;gap:.02rem;line-height:1}
+.bombring .num{font-family:'DM Mono',monospace;font-weight:700;font-size:3.2rem;
+  color:var(--mark-ink);letter-spacing:-.02em;font-variant-numeric:tabular-nums;
+  line-height:1;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.bombring .mark{font-size:1rem;line-height:1;margin-top:.12rem;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.55))}
+.bombring.critical{animation:ringpulse .5s infinite}
+.bombring.critical .num{color:var(--accent)}
+@keyframes ringpulse{
+  0%,100%{box-shadow:-5px -5px 12px rgba(255,255,255,.9),7px 7px 18px rgba(43,33,41,.16),0 0 0 0 rgba(var(--wrong-rgb),.35)}
+  50%    {box-shadow:-5px -5px 12px rgba(255,255,255,.9),7px 7px 18px rgba(43,33,41,.16),0 0 0 9px rgba(var(--wrong-rgb),.14)}}
+.bombring.practice .num{font-size:1.6rem;color:#D8CBB4}
+
+/* ══ THE MARK — shared pendulum shell, coloured by the --mark-* tokens ══ */
+.pend{position:relative;width:118px;height:118px;margin:1.1rem auto .9rem;
+  transform-origin:50% -46px;
+  animation:pendSwing 5.4s cubic-bezier(.36,.07,.28,.99) forwards}
+.pend::before{content:'';position:absolute;left:50%;top:-46px;width:1px;height:46px;
+  background:linear-gradient(180deg,transparent,var(--edge));transform:translateX(-50%)}
+.pend::after{content:'';position:absolute;left:50%;top:-49px;width:7px;height:7px;
+  border-radius:50%;background:var(--edge);transform:translateX(-50%)}
+.pend-dial{position:absolute;inset:0;border-radius:50%;
+  background:linear-gradient(145deg,#FFFFFF,#E4DDD1);
+  box-shadow:-4px -4px 9px rgba(255,255,255,.9),5px 5px 13px rgba(43,33,41,.16);
+  display:flex;align-items:center;justify-content:center}
+.pend-dial::before{content:'';position:absolute;inset:5%;border-radius:50%;
+  background:conic-gradient(var(--mark-sweep) 72%, var(--mark-rest) 0)}
+.pend-dial::after{content:'';position:absolute;inset:13.5%;border-radius:50%;background:var(--mark-core)}
+.pend-dial span{position:relative;z-index:2;font-family:'DM Mono',monospace;
+  font-weight:700;font-size:1.5rem;color:var(--mark-ink);font-variant-numeric:tabular-nums}
+@keyframes pendSwing{0%{transform:rotate(-9deg)}22%{transform:rotate(7deg)}45%{transform:rotate(-4.5deg)}
+  66%{transform:rotate(2.4deg)}83%{transform:rotate(-1.1deg)}100%{transform:rotate(0deg)}}
+@media (prefers-reduced-motion:reduce){.pend{animation:none}}
+
+/* ══ THE GATE ══ */
+.gate{position:fixed;inset:0;z-index:65;display:none;align-items:center;justify-content:center;
+  padding:1.2rem;background:rgba(250,247,242,.94)}
+.gate.show{display:flex}
+.gate-card{width:min(360px,100%);text-align:center;background:none;border:none;padding:0}
+.gate-kicker{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:.5rem}
+.gate-set{font-family:'Space Grotesk',sans-serif;font-weight:900;
+  font-size:clamp(1.6rem,7vw,2.2rem);letter-spacing:.02em;color:var(--ink);line-height:1}
+.gate-mode{font-family:'DM Mono',monospace;font-size:.78rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--faint);margin:.5rem 0 1.5rem}
+.gate-go{display:inline-flex;align-items:center;justify-content:center;
+  min-width:168px;padding:.78rem 1.7rem;border:none;border-radius:999px;cursor:pointer;
+  font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:.92rem;
+  letter-spacing:.06em;text-transform:uppercase;color:#FFFFFF;background:#F26430;
+  box-shadow:0 4px 14px rgba(242,100,48,.34);
+  transition:transform .12s,box-shadow .15s,background .15s}
+.gate-go:hover{background:#DB5524;box-shadow:0 6px 18px rgba(242,100,48,.42)}
+.gate-go:active{transform:translateY(2px);box-shadow:0 2px 8px rgba(242,100,48,.34)}
+.gate-hint{font-size:.78rem;color:var(--faint);margin-top:1rem;line-height:1.4}
+
+/* ══ IDLE / PICK-A-MIX ══ */
+.idle-panel{display:flex;flex-direction:column;align-items:center;gap:.2rem;text-align:center;
+  padding:1rem 1.5rem}
+.idle-pend{position:relative;width:104px;height:104px;margin:0 auto .4rem;
+  transform-origin:50% -40px;animation:idlePendSwing 2.6s ease-in-out infinite}
+.idle-pend::before{content:'';position:absolute;left:50%;top:-40px;width:1px;height:40px;
+  background:linear-gradient(180deg,transparent,var(--edge));transform:translateX(-50%)}
+.idle-pend::after{content:'';position:absolute;left:50%;top:-43px;width:7px;height:7px;
+  border-radius:50%;background:var(--edge);transform:translateX(-50%)}
+.idle-pend .pend-dial{position:absolute;inset:0}
+.pend-dial .glyph{font-size:1.6rem;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
+@keyframes idlePendSwing{0%,100%{transform:rotate(-11deg)}50%{transform:rotate(11deg)}}
+@media(prefers-reduced-motion:reduce){.idle-pend{animation:none;transform:rotate(0deg)}}
+.idle-msg{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:clamp(1.1rem,3.8vw,1.4rem);
+  line-height:1.35;letter-spacing:-.005em;color:var(--ink);max-width:22rem;margin:0 auto}
+.idle-sub{margin-top:.6rem;font-size:.86rem;color:var(--faint);max-width:21rem;line-height:1.5}
+.idle-go{margin-top:1.1rem}
+@media(min-width:761px){.idle-msg{font-size:1.05rem}.idle-sub{font-size:.74rem}}
+
+/* ══ FOCUS MODE ══
+   During a round the screen holds three things: the dial, the sentence, the
+   four answers. Everything chosen BEFORE play goes away. One DOM, re-framed
+   by a class on <body>. 100dvh, not 100vh — a phone's address bar collapses. */
+body.playing .header,
+body.playing .hud,
+body.playing .set-tabs{display:none !important}
+body.playing .arena{top:0;bottom:calc(var(--wire-h) + var(--player-h));height:auto}
+body.playing{height:100dvh;overflow:hidden}
+body.playing{--wire-h:158px}
+body.playing .bombring{width:292px;height:292px}
+body.playing .bombring .num{font-size:4.6rem}
+body.playing .bombring .mark{font-size:1.5rem}
+body.playing .sentence{font-size:clamp(1.15rem,4.2vw,1.6rem)}
+body.playing .wire .label{font-size:clamp(.95rem,4.2vw,1.15rem)}
+body.playing .wire .k{font-size:1rem}
+body.playing .wire{padding:.55rem .45rem;justify-content:center}
+body.playing .wires-label{display:none}
+body.playing .arena{gap:1.8rem}
+
+/* a phone has less to give, so it grows less */
+@media (max-width:520px){
+  body.playing{--wire-h:150px}
+  body.playing .bombring{width:232px;height:232px}
+  body.playing .bombring .num{font-size:3.7rem}
+  body.playing .bombring .mark{font-size:1.25rem}
+}
+
+/* ══ PROJECTION ══
+   A whiteboard is read from across a room, so type is sized against the
+   viewport's SHORT edge rather than left at phone pixel values — and every
+   value is capped, so a 1920 projector doesn't inflate the dial into a
+   beach ball. Only fires on a screen that is genuinely large in BOTH axes,
+   so a landscape phone is untouched. */
+@media (min-width:1024px) and (min-height:660px){
+  body.playing .bombring{width:clamp(292px,30vmin,380px);height:clamp(292px,30vmin,380px)}
+  body.playing .bombring .num{font-size:clamp(4.6rem,9vmin,6.4rem)}
+  body.playing .bombring .mark{font-size:clamp(1.5rem,2.9vmin,2.1rem)}
+  body.playing .bombring.practice .num{font-size:clamp(2rem,4vmin,2.8rem)}
+  body.playing .sentence{font-size:clamp(1.6rem,3.2vmin,2.2rem)}
+  body.playing .wire .label{font-size:clamp(1.15rem,2.1vmin,1.55rem)}
+  body.playing .wire .k{font-size:clamp(1rem,1.5vmin,1.25rem)}
+  body.playing{--wire-h:min(20vh,180px);--player-h:40px}
+  body.playing .arena{gap:clamp(1.8rem,3.4vh,3rem)}
+  body.playing .wires{gap:.7rem;max-width:1100px;margin:0 auto;width:100%}
+  body.playing .device{width:min(80%,760px)}
+  body.playing .fbnote{font-size:clamp(.95rem,1.7vmin,1.2rem)}
+}
+
+/* the close control is the shell's .close-btn / .close-fixed; only the
+   `gated` and `playing` visibility rules there are game-specific */
+
+/* ══ THE QUESTION ══
+   Grey and plain — a game sentence is READ, not decoded. Weight does what
+   three colours were doing. The blank is a recess in the tile family, so it
+   reads as "something goes here" rather than as a rule under a word. */
+.sentence{font-size:clamp(1rem,3vw,1.3rem);font-weight:500;line-height:1.75;
+  text-align:center;color:var(--sentence);letter-spacing:-.005em}
+.sentence mark{background:none;color:var(--sentence);font-weight:700;text-decoration:none}
+.sentence .slot{display:inline-flex;align-items:center;justify-content:center;
+  min-width:4.2em;height:1.85em;padding:0 .8em;margin:0 .25em;vertical-align:middle;
+  border-radius:999px;border:none;background:var(--slot-bg);box-shadow:none;
+  color:var(--dim);font-weight:600;font-size:.9em;letter-spacing:.08em}
+
+/* corrective feedback, delivered while the sentence is still in mind — not
+   held back for the summary, where it arrives too late to be used */
+.fbnote{min-height:1.2em;font-size:.86rem;line-height:1.45;color:var(--dim);
+  text-align:center;max-width:34ch;opacity:0;transition:opacity .2s}
+.fbnote.show{opacity:1}
+.fbnote b{color:var(--ok);font-weight:700}
+.fbnote.bad b{color:var(--wrong)}
+
+.tapstart{font-family:'DM Mono',monospace;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--faint);background:none;border:none;padding:.2rem .4rem;pointer-events:none;
+  transition:opacity .4s;white-space:nowrap}
+.tapstart.gone{opacity:0;position:absolute}
+
+.dmg-num{position:fixed;z-index:36;font-family:'Space Grotesk',sans-serif;font-weight:900;
+  font-size:1.05rem;pointer-events:none;text-shadow:0 0 12px currentColor}
+.dmg-num.pos{color:var(--ok)}
+.dmg-num.neg{color:var(--wrong)}
+.dmg-num.overdrive{color:var(--accent);font-size:1.4rem}
+
+.boom{position:fixed;inset:0;z-index:41;pointer-events:none;opacity:0;
+  background:radial-gradient(circle at 50% 46%,rgba(242,100,48,.45),rgba(172,90,62,.14) 42%,transparent 72%)}
+.boom.show{animation:boomFlash .5s ease-out forwards}
+@keyframes boomFlash{0%{opacity:0}12%{opacity:1}100%{opacity:0}}
+
+/* ══ PLAYER BAR — deliberately COOL. The orange belongs to the dial. ══ */
+.player-wrap{position:fixed;bottom:var(--wire-h);left:0;right:0;height:var(--player-h);z-index:21;
+  display:flex;align-items:center;gap:.6rem;padding:0 1rem;
+  background:rgba(250,247,242,.96);border-top:1px solid rgba(43,33,41,.12)}
+.player-label{font-family:'Space Grotesk',sans-serif;font-size:.7rem;font-weight:700;letter-spacing:.1em;
+  color:var(--dim);text-transform:uppercase;white-space:nowrap}
+.player-bar-track{flex:1;height:9px;border-radius:999px;background:rgba(43,33,41,.12);
+  overflow:hidden;border:1px solid rgba(43,33,41,.1)}
+.player-bar-fill{height:100%;border-radius:999px;
+  background:linear-gradient(90deg,#4A6B5C 0%,#708A81 55%,#BCB1A0 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45);transition:width .3s,background .3s;width:100%}
+.player-bar-fill.low{background:linear-gradient(90deg,#AC5A3E,var(--wrong));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.3)}
+.player-hp-text{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--faint);min-width:2.8rem;text-align:right}
+
+/* ══ THE ANSWERS ══
+   Flat tan cards in the tile family. The dark wire channel is gone: four
+   near-black slots along the bottom edge carried more dark area than the
+   dial did, so the eye went to the row instead of the object. */
+.wires-wrap{position:fixed;bottom:0;left:0;right:0;height:var(--wire-h);z-index:20;
+  display:flex;flex-direction:column;gap:.2rem;padding:.35rem .5rem .4rem;
+  background:rgba(255,255,255,.97);border-top:1px solid rgba(43,33,41,.05)}
+.wires-label{font-family:'DM Mono',monospace;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--faint);text-align:center;opacity:.7}
+.wires{flex:1;display:grid;grid-template-columns:repeat(4,1fr);gap:.4rem}
+/* Not a full capsule: these hold two-line labels, and a 999px radius on a
+   60px-tall card throws away the ends of both lines. 1.35rem is the largest
+   radius that still lets the text use its box — the same call Apple makes
+   between a chip and a large button. */
+.wire{position:relative;border-radius:1.35rem;padding:.5rem .55rem;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.28rem;
+  border:none;background:var(--tile-bg);box-shadow:none;
+  transition:transform .1s cubic-bezier(.2,.8,.2,1),background .12s,opacity .2s}
+.wire:active,.wire.tap{transform:scale(.96);background:var(--tile-bg-press)}
+.wire .label{font-family:'Space Grotesk',sans-serif;font-weight:600;
+  font-size:clamp(.82rem,3.6vw,1rem);color:var(--tile-ink);text-align:center;line-height:1.2;
+  padding:0 .15rem;word-break:normal;overflow-wrap:break-word;hyphens:none;
+  letter-spacing:-.01em}
+.wire .k{font-family:'DM Mono',monospace;font-size:.8rem;font-weight:500;color:#8E857A}
+/* the cut: the card itself shears and settles, since there is no longer a
+   wire in a channel to snip */
+.wire.snip{animation:wirePress .24s cubic-bezier(.2,.8,.2,1)}
+@keyframes wirePress{0%{transform:scale(1)}40%{transform:scale(.93)}100%{transform:scale(1)}}
+/* the result is carried by the FILL alone — a coloured outline would put the
+   rim straight back */
+.wire.correctcut{background:#D2E3D6}
+.wire.correctcut .label{color:#1F4230}
+.wire.correctcut .k{color:#4A6B5C}
+.wire.wrongcut{background:#F3D9D2}
+.wire.wrongcut .label{color:#6E2416}
+.wire.wrongcut .k{color:#A23B2C}
+.wire.locked{opacity:.42;pointer-events:none}
+.wire.locked.correctcut,.wire.locked.wrongcut{opacity:1}
+
+.banner{position:fixed;left:50%;top:34%;transform:translate(-50%,-50%) scale(.8);z-index:35;
+  font-family:'Space Grotesk',sans-serif;font-weight:900;font-size:clamp(1.2rem,5.6vw,2.3rem);
+  letter-spacing:.1em;text-transform:uppercase;opacity:0;pointer-events:none;text-align:center;
+  text-shadow:0 0 26px currentColor;transition:opacity .18s,transform .35s cubic-bezier(.2,1.6,.4,1)}
+.banner.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+
+/* ══ THE SUMMARY ══ */
+.over{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;
+  padding:1.2rem;background:rgba(43,33,41,.14)}
+.over.show{display:flex}
+.over-card{position:relative;width:100%;max-width:23rem;max-height:min(82vh,34rem);overflow-y:auto;
+  display:flex;flex-direction:column;align-items:center;gap:.35rem;text-align:center;
+  padding:1.6rem 1.5rem 1.4rem;border-radius:1.1rem;
+  background:linear-gradient(165deg,#FFFFFF,#F6F1E8);
+  border:1px solid rgba(201,169,97,.25);
+  box-shadow:0 20px 55px rgba(43,33,41,.16);
+  animation:cardIn .28s cubic-bezier(.2,1,.4,1) both}
+@keyframes cardIn{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+.over .closex{position:absolute;top:.7rem;right:.7rem}
+.over .outcome{font-family:'Space Grotesk',sans-serif;font-weight:900;font-size:.75rem;
+  letter-spacing:.16em;text-transform:uppercase;padding:.25rem .8rem;border-radius:999px;border:1px solid currentColor}
+.over .outcome.win{color:var(--ok)}
+.over .outcome.loss{color:var(--wrong)}
+.over .score{font-family:'Space Grotesk',sans-serif;font-weight:900;margin-top:.3rem;
+  font-size:clamp(2rem,7vw,2.8rem);font-variant-numeric:tabular-nums}
+.over .score .gr{font-size:.5em;margin-left:.3rem;vertical-align:.35em}
+.g-a{color:#F26430} .g-b{color:var(--ok)} .g-c{color:#708A81} .g-d{color:var(--wrong)} .g-p{color:var(--dim)}
+.over .setname{font-family:'DM Mono',monospace;font-size:.72rem;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--dim)}
+.over .note{margin-top:.6rem;font-size:.88rem;color:var(--dim)}
+.over .note b{color:var(--paper)}
+.over .missed{margin-top:.7rem;font-size:.88rem;line-height:1.85;color:var(--dim);text-align:left;width:100%}
+.over .missed .mline{margin-bottom:.35rem}
+.over .missed b{color:var(--gold);font-weight:700}
+.over .missed .mnote{display:block;color:var(--faint);font-size:.82rem;margin-top:.05rem}
+.acts{display:flex;gap:.6rem;flex-wrap:wrap;justify-content:center;margin-top:1.1rem}
+.over .go{padding:.7rem 1.7rem;border-radius:99px;background:var(--accent);color:#FFFFFF;
+  font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:.8rem;
+  letter-spacing:.1em;text-transform:uppercase}
+.over .quiet{padding:.7rem 1.5rem;border-radius:99px;color:var(--dim);
+  border:1px solid rgba(43,33,41,.16);font-size:.78rem;
+  letter-spacing:.08em;text-transform:uppercase;font-family:'Space Grotesk',sans-serif;font-weight:700}
+.over .quiet:hover{color:var(--paper)}
+.over .away{margin-top:.9rem;font-size:.76rem;border:none;padding:.3rem}
+
+.reviewpill{display:inline-flex;align-items:center;justify-content:center;
+  font-family:'Space Grotesk',sans-serif;font-size:.72rem;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--sentence);
+  background:none;border:1px solid var(--edge);border-radius:999px;
+  padding:.42rem 1rem;margin:.6rem 0 .4rem;cursor:pointer;transition:background .15s}
+.reviewpill:hover{background:#F4EFE6}
+.review{text-align:left;width:100%;margin-bottom:.6rem;padding-right:.2rem}
+.rv-head{font-family:'DM Mono',monospace;font-size:.66rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--faint);margin:.5rem 0 .2rem}
+.rv-head:first-child{margin-top:0}
+.reviewpill .cnt{margin-left:.4rem;color:var(--wrong);font-variant-numeric:tabular-nums}
+.rv{display:flex;gap:.5rem;align-items:flex-start;padding:.42rem 0;
+  border-bottom:1px solid var(--rule);font-size:.86rem;line-height:1.45;color:var(--sentence)}
+.rv:last-child{border-bottom:none}
+.rv-mark{flex:none;width:1.1em;font-weight:700;color:var(--ok)}
+.rv.bad .rv-mark{color:var(--wrong)}
+.rv-body{flex:1;min-width:0}
+.rv-sent b{font-weight:700}
+.rv.bad .rv-sent b{color:var(--wrong)}
+.rv-chose{display:block;font-size:.78rem;color:var(--faint);margin-top:.1rem}
+.rv-tense{display:inline-block;font-family:'DM Mono',monospace;font-size:.68rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-top:.1rem}
+.rv-empty{color:var(--faint);font-size:.86rem;padding:.5rem 0}
+
+.loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  background:var(--screen);z-index:99;font-family:'DM Mono',monospace;font-size:.82rem;color:var(--faint)}
+.err{color:var(--wrong);font-size:.9rem;line-height:1.6;max-width:26rem;text-align:center;padding:2rem}
+
+@media(max-width:600px){
+  :root{--header-h:168px;--wire-h:150px;--player-h:30px}
+  .device{padding:.5rem .6rem .8rem}
+  .bombring{width:172px;height:172px}
+  .bombring .num{font-size:2.6rem}
+  .bombring .mark{font-size:.9rem}
+  .bombring.practice .num{font-size:1.5rem}
+}
+@media(prefers-reduced-motion:reduce){
+  .wire,.streak,.banner,.threat-bar-fill,.player-bar-fill,.bombring{transition:none!important}
+  .arena.shakeit,.bombring.critical,.wire.snip{animation:none}
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-top">
+<a class="back-link" href="#" onclick="history.back();return false;" target="_top">← Grammar</a>
+    <div class="header-title"><div class="app-title">INTUITY</div><div class="app-subtitle">B2 First Tenses</div></div>
+    <span class="header-spacer">Level <b>B2–C1</b></span>
+  </div>
+  <div class="mode-selector">
+    <a class="mode-btn" href="/skills/grammar-rules/tenses-rules">Explore</a>
+    <a class="mode-btn" href="/skills/grammar-rules/tenses-rules?mode=practice">Practice</a>
+    <a class="mode-btn" href="/skills/grammar-rules/tenses-rules?mode=quiz">Quiz</a>
+    <span class="mode-btn active">Defuse</span>
+    <a class="mode-btn" href="/skills/grammar-rules/tenses-forge">Forge</a>
+  </div>
+  <div class="set-tabs" id="setTabs"></div>
+</header>
+
+<div class="hud">
+  <span class="grp"><span>score <span class="score-n" id="score">0</span></span></span>
+  <span class="grp"><span class="streak" id="streak">×1</span></span>
+  <span class="modes" id="modes">
+    <button class="mbtn" data-m="90">90s</button>
+    <button class="mbtn" data-m="120">120s</button>
+    <button class="mbtn" data-m="practice">Practice</button>
+  </span>
+  <span class="grp">
+    <span class="threat-tag" id="threatTag">steady</span>
+    <button class="mutebtn" id="muteBtn" title="Sound on or off">🔊</button>
+  </span>
+</div>
+
+<div class="boom" id="boom"></div>
+<div class="banner" id="banner"></div>
+
+<button class="close-btn close-fixed" id="exitBtn" aria-label="Leave and choose another mix">
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+       stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+</button>
+
+<div class="gate" id="gate">
+  <div class="gate-card">
+    <div class="gate-kicker">Bomb Defusal</div>
+    <div class="pend"><div class="pend-dial"><span id="gateSecs">90</span></div></div>
+    <div class="gate-set" id="gateSet">SET</div>
+    <div class="gate-mode" id="gateMode">90 seconds</div>
+    <button class="gate-go" id="gateGo">Start</button>
+    <div class="gate-hint">Choose a mix above, or start this one</div>
+  </div>
+</div>
+
+<div class="arena" id="arena">
+  <div class="idle-panel" id="idlePanel">
+    <div class="idle-pend"><div class="pend-dial"><span class="glyph">💣</span></div></div>
+    <div class="idle-msg">Tick tock! Pick a MIX above to defuse your first bomb</div>
+    <div class="idle-sub">Each mix is a different set of sentences — the clock starts once you choose one.</div>
+    <button class="gate-go idle-go" id="idleStart">Start</button>
+  </div>
+
+  <div class="threat-panel" id="threatPanel" style="display:none">
+    <div class="threat-name" id="threatName">BUILDING THREAT</div>
+    <div class="threat-bar-track"><div class="threat-bar-fill" id="threatFill" style="width:100%"></div></div>
+    <div class="threat-meta"><span id="threatHpText">1000 / 1000</span></div>
+  </div>
+
+  <div class="device" id="device" style="display:none">
+    <div class="status-row" aria-live="polite">
+      <span class="status-dot pulse" id="statusDot"></span><span id="statusText">ARMED</span>
+    </div>
+    <div class="bombring" id="bombring">
+      <div class="core"><span class="num" id="ringNum">--</span><span class="mark">💣</span></div>
+    </div>
+    <div class="sentence" id="sentence">Loading…</div>
+    <div class="fbnote" id="fbNote" aria-live="polite" aria-atomic="true"></div>
+    <div class="tapstart" id="tapStart">Cut the correct wire</div>
+  </div>
+</div>
+
+<div class="player-wrap" id="playerWrap" style="display:none">
+  <span class="player-label">You</span>
+  <div class="player-bar-track"><div class="player-bar-fill" id="playerFill" style="width:100%"></div></div>
+  <span class="player-hp-text" id="playerHpText">1000 / 1000</span>
+</div>
+
+<div class="wires-wrap" id="wiresWrap" style="display:none">
+  <div class="wires-label">select a wire to cut</div>
+  <div class="wires" id="wires"></div>
+</div>
+
+<div class="over" id="over">
+  <div class="over-card">
+    <button class="close-btn closex" id="closeX" aria-label="Close">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+           stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <div class="outcome" id="ovOutcome"></div>
+    <div class="score" id="ovScore"></div>
+    <div class="setname" id="ovSet"></div>
+    <div class="note" id="ovNote"></div>
+    <div class="missed" id="ovMissed"></div>
+    <button class="reviewpill" id="reviewBtn">Check your answers</button>
+    <div class="review" id="ovReview" hidden></div>
+    <div class="acts">
+      <button class="quiet" id="prevBtn">← Previous</button>
+      <button class="quiet" id="againBtn">↻ Play again</button>
+      <button class="go" id="nextBtn">Next mix →</button>
+    </div>
+    <button class="quiet away" id="hubBtn">Back to grammar</button>
+  </div>
+</div>
+
+<div class="loading" id="loading">Loading…</div>
+
+<script src="/data/challenge/challenge-mixes.js?v=1"></script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   BOMB DEFUSAL — one sentence, one ticking clock, four answers.
+
+   Reads the blind Mix file so the tab cannot leak the tense before the
+   sentence is read. Explore/Practice/Quiz keep the labelled file, where
+   knowing the category up front is appropriate scaffolding.
+
+   THE LOOP: idle → gate → focused round → summary → gate. Nothing starts
+   until a mix is chosen; the round can be abandoned at any point and the
+   page can be left at any point.
+   ══════════════════════════════════════════════════════════════════════
+
+   CHANGELOG (fix2 — on top of fix1)
+   6. finish() now takes a `reason` ('timeout' | 'depleted' | 'cleared')
+      alongside `outcome`. Previously the grade formula always multiplied
+      accuracy by coverageOf(total) — comparing questions answered against
+      the FULL round length — regardless of why the round ended. That
+      formula is correct for a timeout (someone who let the clock run out
+      after one lucky answer should not score as if they'd played a full
+      round), but it also fired on a depletion win or a cleared-set win,
+      where the round ending EARLY *is* the best-case outcome: a high streak
+      multiplier does more threat damage per hit, so a strong player reaches
+      threatHP<=0 or clears the set in fewer questions than expectedCount()
+      assumes. That was scoring perfect, undefeated rounds (e.g. 11/11, 0
+      wrong) as a D. Coverage is now only applied when reason==='timeout';
+      a depleted/cleared win is scored on accuracy alone.
+   7. The "answered N of about M — a fuller round scores higher" note in the
+      summary had the same blind spot as #6, telling a player who won by
+      depleting the bomb early that a fuller round would have scored higher
+      — which is backwards, since there was no fuller round to have played.
+      It's now gated behind the same reason==='timeout' check.
+   8. A timeout with hits === misses used to fall through the strict `>` to
+      a loss with no comment either way. Changed to `hits >= misses &&
+      hits > 0`, so a genuine tie (or a clock that expires with nothing
+      answered) resolves in the learner's favour rather than by an
+      unstated default, matching how ties are handled everywhere else in
+      the summary (grade floors round in the learner's favour too).
+   ══════════════════════════════════════════════════════════════════════
+
+   CHANGELOG (fix1)
+   1. multiplierFor(streak) is now the ONE place that maps streak → bonus.
+      Previously resolveWire() computed the real bonus with one formula
+      while setStreak() painted the HUD badge with a completely different
+      one (1 + floor(n/5), uncapped) — so the number on screen (up to ×5+)
+      never matched the number actually being scored (capped at ×2.2). Both
+      call sites now read from the same function, so they cannot diverge
+      again short of someone deliberately editing this one place twice.
+   2. finish() now takes a token captured when the round began and refuses
+      to run if a newer round (or an exit back to idle) has started since
+      the timer was scheduled. Previously the two win-condition timeouts
+      inside resolveWire() (setCleared / threatHP<=0) had no such guard,
+      unlike the sibling nextBomb() timeout which checked `running`. Cutting
+      a winning wire and then exiting within ~650-900ms let an orphaned
+      finish('win') fire over the idle screen and throw on
+      GROUPS[-1].label — silently, since the page-level error handler only
+      repaints while the loading screen is still visible. That whole class
+      of timer is now guarded the same way.
+   3. The tap-hint flag (TAPPED_KEY) is now actually read and written, as
+      the comment above it always claimed. Before, it was declared and never
+      touched again, so the hint reappeared every reload instead of
+      persisting after the first tap the way it does in Decide.
+   4. cutWire() now sets `resolved = true` synchronously, before the 110ms
+      snip-animation delay, instead of leaving it to resolveWire(). Two key
+      presses inside that 110ms window used to both pass the "not resolved
+      yet" guard and both animate/sound as a cut, even though only the
+      first was ever scored.
+   5. Every localStorage read/write goes through safeGet/safeSet so a
+      storage-blocked browser (private mode, strict extensions) degrades to
+      "doesn't persist" instead of throwing out of a click handler.
+   ══════════════════════════════════════════════════════════════════════ */
+
+window.addEventListener('error', e => {
+  const l = document.getElementById('loading');
+  if (l && l.style.display !== 'none') l.innerHTML =
+    '<p class="err"><b>Defuse hit an error.</b><br>' + String(e.message||e).replace(/[<>]/g,'') +
+    '<br><span style="opacity:.6">' + ((e.filename||'').split('/').pop()+':'+(e.lineno||'?')) + '</span></p>';
+});
+
+/* ?topic=<id> reads that Challenge topic through /data/challenge/challenge-mixes.js;
+   no topic keeps the tenses mix file, exactly as before. */
+const TOPIC = new URLSearchParams(location.search).get('topic');
+const DATA_URL = new URLSearchParams(location.search).get('data') || '../../data/grammar-rules/tense-mix-data.json';
+
+const WIRE_N = 4;
+const KEYS = ['1','2','3','4'];
+const THREAT_MAX = 1000, PLAYER_MAX = 1000;
+const BASE_THREAT_DMG = 78, BASE_PLAYER_DMG = 95;
+
+const $ = id => document.getElementById(id);
+const esc = t => String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[b[i],b[j]]=[b[j],b[i]];} return b; };
+const clamp = (n,lo,hi) => Math.max(lo,Math.min(hi,n));
+
+/* FIX #5: a single guarded pair for every localStorage touch in the file. */
+function safeGet(key, fallback){
+  try{ const v = localStorage.getItem(key); return v === null ? fallback : v; }
+  catch(e){ return fallback; }
+}
+function safeSet(key, value){
+  try{ localStorage.setItem(key, value); return true; }
+  catch(e){ return false; }
+}
+
+let GROUPS = [], groupIdx = -1;
+let running = false, started = false, rafId = null;
+/* FIX #3: read once at boot, exactly like Decide does, so the hint truly
+   shows only until the first wire this device has ever cut. */
+const TAPPED_KEY = 'intuity-defuse-tapped';
+let tappedBefore = safeGet(TAPPED_KEY, null) === '1';
+let wires = [], curItem = null, curItems = null, resolved = false;
+
+/* FIX #2: every round gets a token. A timeout scheduled during round N only
+   acts if roundToken is still N when it fires — a newer round or an exit to
+   idle bumps the token and turns older timers into silent no-ops instead of
+   letting them run finish()/nextBomb() against stale or absent state. */
+let roundToken = 0;
+
+/* ── WHAT COMES BACK, AND WHEN ────────────────────────────────────────────
+   Re-testing something answered confidently has poor returns: it spends a
+   question slot a shaky item could have used. But one correct answer is not
+   proof either — at four options that is 25% guess odds. So the interval
+   EXPANDS with each success:
+     missed     -> eligible again after 2 questions
+     right once -> after 8
+     right twice-> retired for the rest of the round
+   This is WITHIN-round throttling. Long-term history lives in localStorage. */
+const REPEAT_EVERY = 4;
+const GAP_AFTER_MISS = 2, GAP_AFTER_ONE = 8, RETIRE_AT = 2;
+let seenThisRun = [], missedThisRun = [], qCount = 0;
+let correctCount = {}, dueAt = {};
+
+/* A shuffled queue, refilled when empty, so a fresh draw is genuinely fresh
+   until every item in the set has been served once. */
+let freshQueue = [];
+function refillQueue(items){ freshQueue = shuffle(items.map((_,i) => i)); }
+
+let score = 0, streak = 0, bestStreak = 0, hits = 0, misses = 0, missLog = [];
+let threatHP = THREAT_MAX, playerHP = PLAYER_MAX, overdriveReady = false, overdriveMark = 0;
+let lastTickSecond = -1;
+
+const MODES = ['90','120','practice'];
+let mode = safeGet('intuity-defuse-mode', null);
+if (MODES.indexOf(mode) === -1) { mode = '90'; safeSet('intuity-defuse-mode', mode); }
+
+/* ── ONE clock ── the round, not the question. A chosen round length makes a
+   game a fixed unit, which is what makes "next" and "play again" mean
+   anything. Practice keeps no clock at all. */
+let roundEnd = 0, roundMs = 0;
+const answerLog = [];
+
+/* FIX #1: the ONE place that maps a streak length to its score multiplier.
+   resolveWire() uses this to compute the actual bonus; setStreak() uses it
+   to paint the HUD badge. Previously these were two independent formulas —
+   correct-looking on their own, silently inconsistent with each other. */
+function multiplierFor(n){
+  return n>=15 ? 2.2 : n>=10 ? 1.7 : n>=5 ? 1.3 : 1;
+}
+
+/* ── MEMORY ──
+   One key SHARED with Forge: an item missed while building it is exactly the
+   one Defuse should serve first, and vice versa. The two games are a system,
+   not two apps. */
+const MEM_KEY = 'intuity-tenses-mem';
+const BEST_KEY = 'intuity-defuse-best';
+function loadMem(){ try{ return JSON.parse(safeGet(MEM_KEY,'{}')||'{}'); }catch(e){ return {}; } }
+function saveMem(m){ safeSet(MEM_KEY, JSON.stringify(m)); }
+const memKey = it => it.group + ':' + it.idx;
+function noteResult(it, ok){
+  const m = loadMem(), k = memKey(it), e = m[k] || {miss:0,seen:0};
+  e.seen++; if (ok) e.miss = Math.max(0,e.miss-1); else e.miss++;
+  m[k] = e; saveMem(m);
+}
+function loadBest(){ try{ return JSON.parse(safeGet(BEST_KEY,'{}')||'{}'); }catch(e){ return {}; } }
+function saveBest(id, sc){
+  const b = loadBest();
+  if (!(b[id] >= sc)) { b[id] = sc; safeSet(BEST_KEY, JSON.stringify(b)); }
+}
+
+/* ── AUDIO ── */
+let ac = null, master = null, musicOn = safeGet('intuity-defuse-sound', 'on') !== 'off';
+function audio(){
+  if (!ac){
+    ac = new (window.AudioContext||window.webkitAudioContext)();
+    master = ac.createGain(); master.gain.value = .5; master.connect(ac.destination);
+  }
+  if (ac.state === 'suspended') ac.resume();
+  return ac;
+}
+function tone(f,d,ty,v,when,glide){
+  if (!musicOn || !ac) return;
+  const c = ac, t0 = when || c.currentTime;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = ty||'sine'; o.frequency.setValueAtTime(f,t0);
+  if (glide) o.frequency.exponentialRampToValueAtTime(glide,t0+d);
+  g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(v||.14,t0+.008);
+  g.gain.exponentialRampToValueAtTime(.0008,t0+d);
+  o.connect(g); g.connect(master); o.start(t0); o.stop(t0+d+.02);
+}
+function noise(d,v,when,hp){
+  if (!musicOn || !ac) return;
+  const c = ac, t0 = when||c.currentTime, n = Math.floor(c.sampleRate*d);
+  const buf = c.createBuffer(1,n,c.sampleRate), dd = buf.getChannelData(0);
+  for (let i=0;i<n;i++) dd[i]=(Math.random()*2-1)*(1-i/n);
+  const s = c.createBufferSource(); s.buffer = buf;
+  const g = c.createGain(); g.gain.value = v||.06;
+  const fl = c.createBiquadFilter(); fl.type = hp?'highpass':'lowpass'; fl.frequency.value = hp?6000:900;
+  s.connect(fl); fl.connect(g); g.connect(master); s.start(t0);
+}
+function sfxTick(u){ if(!ac)return; tone(880 + u*260, .045, 'square', .05 + u*.05, ac.currentTime); }
+function sfxSnip(){ if(!ac)return; const t=ac.currentTime; noise(.06,.08,t,true); tone(1400,.04,'square',.05,t+.02); }
+function sfxDefuse(){ if(!ac)return; const t=ac.currentTime; [523,659,784].forEach((f,i)=>tone(f,.22,'triangle',.15,t+i*.06)); }
+function sfxBoom(){ if(!ac)return; const t=ac.currentTime; tone(90,.5,'sawtooth',.22,t,35); noise(.4,.16,t,false); }
+function sfxSteady(){ if(!ac)return; const t=ac.currentTime;
+  [392,494,587,659].forEach((f,i)=>tone(f,.35,'triangle',.13,t+i*.05)); noise(.25,.08,t,true); }
+function sfxVictory(){ if(!ac)return; const t=ac.currentTime;
+  [523,659,784,1047].forEach((f,i)=>tone(f,.4,'triangle',.16,t+i*.11)); }
+function sfxDefeat(){ if(!ac)return; const t=ac.currentTime;
+  [392,349,293,220].forEach((f,i)=>tone(f,.5,'sawtooth',.14,t+i*.14,f*.7)); }
+function vibrate(p){ try{ if (navigator.vibrate) navigator.vibrate(p); }catch(e){} }
+
+/* ── DATA ── */
+function itemsOf(g){
+  return (g.items||[]).map((it,idx)=>({
+    cue: it.cue||'', after: it.after||'', mark: it.mark||[],
+    answer: it.answer,
+    options: it.options && it.options.length===WIRE_N ? it.options : null,
+    note: it.note||'', tense: it.tense || it.rule || '',
+    group: g.id, color: g.color, idx
+  })).filter(it => it.options && it.options.includes(it.answer));
+}
+/* long-term history biases the ORDER of the fresh queue: anything the learner
+   has missed before, in either game, comes up early */
+function refillQueueWeighted(items){
+  const mem = loadMem();
+  const idxs = shuffle(items.map((_,i) => i));
+  idxs.sort((a,b) => ((mem[memKey(items[b])]?.miss)||0) - ((mem[memKey(items[a])]?.miss)||0));
+  freshQueue = idxs;
+}
+function pickNext(items){
+  if (!freshQueue.length) refillQueueWeighted(items);
+  let idx = null;
+  for (let n = 0; n < freshQueue.length; n++){
+    const cand = freshQueue[n];
+    const done = (correctCount[cand] || 0) >= RETIRE_AT;
+    const early = dueAt[cand] !== undefined && qCount < dueAt[cand];
+    if (!done && !early){ idx = cand; freshQueue.splice(n,1); break; }
+  }
+  if (idx === null){
+    refillQueueWeighted(items);
+    const open = freshQueue.filter(i => (correctCount[i] || 0) < RETIRE_AT);
+    idx = open.length ? open[(Math.random()*open.length)|0]
+                      : freshQueue[(Math.random()*freshQueue.length)|0];
+    const at = freshQueue.indexOf(idx); if (at >= 0) freshQueue.splice(at,1);
+  }
+  return items[idx];
+}
+/* Every REPEAT_EVERY-th question, resurface something still shaky — served
+   exactly as it was the first time, so answering it is unaided recall rather
+   than UI memory. If nothing is shaky there is nothing to practise, so draw
+   fresh instead. */
+function pickRepeat(items){
+  const last = seenThisRun[seenThisRun.length - 1];
+  const pool = missedThisRun.filter(i =>
+    i !== last && qCount >= (dueAt[i] || 0) && (correctCount[i] || 0) < RETIRE_AT);
+  if (!pool.length) return null;
+  return items[pool[(Math.random()*pool.length)|0]];
+}
+/* every item answered right twice = the set is genuinely cleared. A better
+   win than "the bar emptied", and it removes the pointless tail. */
+function setCleared(){
+  if (!curItems) return false;
+  return curItems.every((_,i) => (correctCount[i] || 0) >= RETIRE_AT);
+}
+function sentenceHTML(item){
+  let s = esc(item.cue) + (item.cue ? ' ' : '') +
+          '<span class="slot">?</span> ' + esc(item.after);
+  (item.mark||[]).forEach(w=>{
+    const re = new RegExp('\\b'+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i');
+    s = s.replace(re, m => '<mark>'+m+'</mark>');
+  });
+  return s;
+}
+
+/* ── THREAT ──
+   Monotonic heat: the identity orange at rest, deepening as the building is
+   cleared. The old map opened on muted brick, so the bomb only wore its own
+   colour after a third of the round had gone. */
+function threatOf(hp){
+  const f = hp / THREAT_MAX;
+  if (f > .66) return { name:'steady',   color:'#F26430', rgb:'242,100,48', dmgMult:1,   timeMult:1   };
+  if (f > .33) return { name:'tense',    color:'#DB5524', rgb:'219,85,36',  dmgMult:1.3, timeMult:.82 };
+  return              { name:'critical', color:'#A23B2C', rgb:'162,59,44',  dmgMult:1.6, timeMult:.65 };
+}
+function applyThreat(){
+  const t = threatOf(threatHP);
+  document.documentElement.style.setProperty('--phase-color', t.color);
+  document.documentElement.style.setProperty('--phase-rgb', t.rgb);
+  $('threatTag').textContent = t.name;
+  return t;
+}
+
+/* ── THE ANSWERS ── */
+function paintWires(item){
+  wires = shuffle(item.options);
+  const el = $('wires');
+  el.innerHTML = wires.map((p,i)=>
+    `<button class="wire" data-i="${i}"><span class="label">${esc(p)}</span><span class="k">${KEYS[i]}</span></button>`).join('');
+  el.querySelectorAll('.wire').forEach(b=>{
+    b.addEventListener('pointerdown', e=>{ e.preventDefault(); firstTouch(); cutWire(+b.dataset.i); });
+  });
+}
+function lockWires(){ $('wires').querySelectorAll('.wire').forEach(b=>b.classList.add('locked')); }
+function firstTouch(){
+  if (started) return;
+  started = true;
+  audio();
+  if (!tappedBefore){ tappedBefore = true; safeSet(TAPPED_KEY, '1'); }
+  $('tapStart').classList.add('gone');
+}
+
+/* ── IDLE ── nothing about a round means anything before a mix is chosen, so
+   none of it is shown at rest. */
+function showIdle(){
+  $('idlePanel').style.display = 'flex';
+  $('threatPanel').style.display = 'none';
+  $('device').style.display = 'none';
+  $('playerWrap').style.display = 'none';
+  $('wiresWrap').style.display = 'none';
+  $('gate').classList.remove('show');
+  document.body.classList.remove('gated');
+}
+function hideIdle(){
+  $('idlePanel').style.display = 'none';
+  $('threatPanel').style.display = 'flex';
+  $('device').style.display = 'flex';
+  $('playerWrap').style.display = 'flex';
+  $('wiresWrap').style.display = 'flex';
+}
+
+/* ── RUN ── */
+function startRun(){
+  roundToken++;              /* FIX #2: invalidate any timers from the last round */
+  const g = GROUPS[groupIdx];
+  curItems = itemsOf(g);
+  score = 0; streak = 0; bestStreak = 0; hits = 0; misses = 0; missLog = [];
+  roundEnd = 0; roundMs = 0; answerLog.length = 0;
+  threatHP = THREAT_MAX; playerHP = PLAYER_MAX; overdriveReady = false; overdriveMark = 0;
+  seenThisRun = []; missedThisRun = []; qCount = 0;
+  correctCount = {}; dueAt = {}; freshQueue = [];
+  $('score').textContent = '0'; setStreak(0);
+  $('threatName').textContent = g.label.toUpperCase();
+  hideIdle();
+  updateBars();
+  applyThreat();
+  $('over').classList.remove('show');
+  /* ARM, do not start. Nothing is more disorientating than a timer that
+     starts before you have looked at the screen. */
+  showGate(g);
+}
+
+function showGate(g){
+  $('gateSet').textContent  = ((g && g.label) || 'Set').toUpperCase();
+  $('gateMode').textContent = mode === 'practice' ? 'No clock' : mode + ' seconds';
+  $('gateSecs').textContent = mode === 'practice' ? '∞' : mode;
+  const pend = document.querySelector('.pend');
+  if (pend){ pend.style.animation = 'none'; void pend.offsetWidth; pend.style.animation = ''; }
+  $('gate').classList.add('show');
+  document.body.classList.add('gated');   /* the exit must be reachable here too */
+}
+
+function beginRound(){
+  $('gate').classList.remove('show');
+  document.body.classList.remove('gated');
+  running = true;
+  document.body.classList.add('playing');
+  /* the clock is armed HERE, synchronously, at the moment Start is pressed.
+     Leaving it to a lazy init meant that abandoning a round and resuming it
+     kept the ORIGINAL deadline — real time had kept passing while paused, so
+     a long pause ended the round the instant the learner came back. */
+  if (mode !== 'practice'){
+    const secs = parseInt(mode,10);
+    roundMs  = isFinite(secs) ? secs*1000 : 90000;
+    roundEnd = performance.now() + roundMs;
+    lastTickSecond = Math.ceil(roundMs/1000);
+  }
+  nextBomb();
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = requestAnimationFrame(loop);
+}
+
+function nextBomb(){
+  qCount++;
+  curItem = null;
+  if (qCount % REPEAT_EVERY === 0 && seenThisRun.length >= 2) curItem = pickRepeat(curItems);
+  if (!curItem){
+    curItem = pickNext(curItems);
+    seenThisRun.push(curItems.indexOf(curItem));
+  }
+  resolved = false;
+  $('sentence').innerHTML = sentenceHTML(curItem);
+  $('fbNote').textContent = ''; $('fbNote').className = 'fbnote';
+  paintWires(curItem);
+  $('statusText').textContent = 'ARMED';
+  $('statusDot').classList.add('pulse');
+
+  const ring = $('bombring');
+  applyThreat();
+  if (mode === 'practice'){
+    ring.classList.add('practice'); ring.classList.remove('critical');
+    ring.style.setProperty('--pct', 100);
+    $('ringNum').textContent = '∞';
+  } else {
+    ring.classList.remove('practice');
+  }
+}
+
+function loop(now){
+  if (!running) return;
+  if (mode !== 'practice'){
+    const left = Math.max(0, roundEnd - now);
+    const pct  = roundMs ? clamp(left/roundMs, 0, 1) : 0;
+    const ring = $('bombring');
+    ring.style.setProperty('--pct', pct*100);
+    $('ringNum').textContent = Math.ceil(left/1000);
+    const critical = left <= 10000;
+    ring.classList.toggle('critical', critical);
+    const secLeft = Math.ceil(left/1000);
+    if (secLeft !== lastTickSecond && secLeft >= 0){
+      lastTickSecond = secLeft;
+      if (critical) sfxTick(1);
+    }
+    /* FIX #8: a timeout tie (or a timeout with nothing answered) used to
+       fall through `hits > misses` straight to a loss with no stated
+       reasoning either way. A tie is not a loss, so it now resolves as a
+       win as long as at least one hit was scored. */
+    if (left <= 0){ finish((hits >= misses && hits > 0) ? 'win' : 'loss', 'timeout'); return; }
+  }
+  rafId = requestAnimationFrame(loop);
+}
+
+function cutWire(i){
+  if (!running || !curItem || resolved) return;
+  /* FIX #4: mark resolved immediately, not after the animation delay below.
+     Previously a second key press or tap landing inside the 110ms window
+     also passed this guard (resolved was still false) and animated/sounded
+     a second "cut" even though only the first ever reaches resolveWire(). */
+  resolved = true;
+  const el = $('wires').querySelectorAll('.wire')[i];
+  if (el) el.classList.add('snip');
+  sfxSnip();
+  setTimeout(()=> resolveWire(wires[i]), 110);
+}
+
+function resolveWire(chosen){
+  if (!running || !curItem) return;
+  const item = curItem;
+  const pos = curItems.indexOf(item);
+  lockWires();
+  const ok = chosen === item.answer;
+  const wireEls = $('wires').querySelectorAll('.wire');
+  const correctEl = wireEls[wires.indexOf(item.answer)];
+
+  noteResult(item, ok);
+  try{ if (window.INTUITY) INTUITY.log('tenses', item.group+':'+item.idx, ok, {game:'defuse'}); }catch(e){}
+
+  const threat = applyThreat();
+  $('sentence').innerHTML = sentenceHTML(item).replace(/<span class="slot">\?<\/span>/, '<mark>'+esc(item.answer)+'</mark>');
+  $('tapStart').classList.add('gone');
+
+  /* FIX #2: capture the token this round is running under. Any timeout
+     scheduled below only acts if the token is still current when it fires —
+     if the player has exited to idle, or a new round has started, in the
+     meantime, these become silent no-ops instead of touching stale state. */
+  const myToken = roundToken;
+  const stillCurrent = () => running && roundToken === myToken;
+
+  if (ok){
+    /* logged BEFORE any effect runs: a throw in the sfx/animation chain must
+       never be able to cost the learner their review entry */
+    answerLog.push({ ok:true, id:item.group+':'+item.idx, cue:item.cue, answer:item.answer,
+                     after:item.after, tense:tenseLabel(item) });
+    hits++; streak++; bestStreak = Math.max(bestStreak,streak);
+    const mi = missedThisRun.indexOf(pos); if (mi >= 0) missedThisRun.splice(mi,1);
+    correctCount[pos] = (correctCount[pos] || 0) + 1;
+    dueAt[pos] = qCount + (correctCount[pos] >= RETIRE_AT ? 9999 : GAP_AFTER_ONE);
+    let mult = multiplierFor(streak);
+    let isOverdrive = false;
+    if (overdriveReady){ mult *= 1.9; isOverdrive = true; overdriveReady = false; }
+    score += Math.round(90*mult);
+    const dmg = Math.round(BASE_THREAT_DMG * mult);
+    threatHP = clamp(threatHP - dmg, 0, THREAT_MAX);
+
+    $('statusText').textContent = 'DEFUSED';
+    $('statusDot').classList.remove('pulse');
+    if (correctEl) correctEl.classList.add('correctcut');
+    sfxDefuse(); vibrate(isOverdrive ? [30,30,30,30,60] : 22);
+    spawnDamage(dmg, 'pos', isOverdrive);
+    showNote(item, true);
+    if (streak>0 && streak % 15 === 0 && streak !== overdriveMark){
+      overdriveMark = streak; overdriveReady = true;
+      banner('Steady hands armed','#F26430'); sfxSteady();
+    }
+    setStreak(streak); $('score').textContent = score; updateBars(); applyThreat();
+    /* FIX #6: these two win paths are the round ending EARLY through good
+       play, not through the clock. finish() is told so via the `reason`
+       argument, which decides whether the coverage penalty applies. */
+    if (setCleared()){ setTimeout(()=>{ if (stillCurrent()) finish('win','cleared'); }, 700); return; }
+    if (threatHP <= 0){ setTimeout(()=>{ if (stillCurrent()) finish('win','depleted'); }, 650); return; }
+    setTimeout(()=>{ if (stillCurrent()) nextBomb(); }, 900);
+
+  } else {
+    answerLog.push({ ok:false, id:item.group+':'+item.idx, cue:item.cue, answer:item.answer,
+                     after:item.after, tense:tenseLabel(item), chose: chosen || '—' });
+    misses++; streak = 0; overdriveMark = 0; missLog.push(item);
+    if (pos >= 0 && !missedThisRun.includes(pos)) missedThisRun.push(pos);
+    if (pos >= 0){ correctCount[pos] = 0; dueAt[pos] = qCount + GAP_AFTER_MISS; }
+    const dmg = Math.round(BASE_PLAYER_DMG * threat.dmgMult);
+    playerHP = clamp(playerHP - dmg, 0, PLAYER_MAX);
+    $('statusText').textContent = 'WRONG WIRE';
+    $('statusDot').classList.remove('pulse');
+    if (correctEl) correctEl.classList.add('correctcut');
+    const wi = wires.indexOf(chosen);
+    if (wi >= 0 && wireEls[wi]) wireEls[wi].classList.add('wrongcut');
+    sfxBoom(); vibrate([60,40,80]);
+    triggerBoom();
+    spawnDamage(dmg, 'neg', false);
+    showNote(item, false);
+    setStreak(0); updateBars(); applyThreat();
+    if (playerHP <= 0){ setTimeout(()=>{ if (stillCurrent()) finish('loss','depleted'); }, 800); return; }
+    setTimeout(()=>{ if (stillCurrent()) nextBomb(); }, 1700);
+  }
+}
+
+/* Corrective feedback in the pause that already exists — the moment it is
+   useful is while the sentence is still in mind, not in the summary. */
+function showNote(item, ok){
+  const el = $('fbNote');
+  const bits = ['<b>' + esc(item.answer) + '</b>'];
+  if (item.tense) bits.push(esc(item.tense));
+  const line = bits.join(' · ') + (item.note ? ' — ' + esc(item.note) : '');
+  el.innerHTML = line;
+  el.className = 'fbnote show' + (ok ? '' : ' bad');
+}
+
+function updateBars(){
+  $('threatFill').style.width = clamp(threatHP/THREAT_MAX*100,0,100) + '%';
+  $('threatHpText').textContent = Math.max(0,threatHP) + ' / ' + THREAT_MAX;
+  $('playerFill').style.width = clamp(playerHP/PLAYER_MAX*100,0,100) + '%';
+  $('playerFill').classList.toggle('low', playerHP/PLAYER_MAX < .3);
+  $('playerHpText').textContent = Math.max(0,playerHP) + ' / ' + PLAYER_MAX;
+}
+function triggerBoom(){
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const b = $('boom'); b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+  const a = $('arena'); a.classList.remove('shakeit'); void a.offsetWidth; a.classList.add('shakeit');
+  setTimeout(()=>{ b.classList.remove('show'); a.classList.remove('shakeit'); }, 520);
+}
+function spawnDamage(amount, cls, overdrive){
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const anchor = cls === 'pos' ? $('threatFill') : $('playerFill');
+  const r = anchor.getBoundingClientRect();
+  const el = document.createElement('div');
+  el.className = 'dmg-num ' + cls + (overdrive ? ' overdrive' : '');
+  el.textContent = '−' + amount;
+  el.style.left = (r.left + r.width * Math.random()*.8 + r.width*.1) + 'px';
+  el.style.top = (r.top - 6) + 'px';
+  document.body.appendChild(el);
+  el.animate([{transform:'translateY(0)',opacity:1},{transform:'translateY(-34px)',opacity:0}],
+    {duration:700,easing:'cubic-bezier(.1,.8,.2,1)'});
+  setTimeout(()=>el.remove(),720);
+}
+function setStreak(n){
+  const el = $('streak');
+  const mult = multiplierFor(n);
+  el.textContent = '×' + mult.toFixed(1).replace(/\.0$/,'') + (n ? '  '+n : '');
+  el.classList.toggle('live', n>=5);
+  el.classList.add('pop'); setTimeout(()=>el.classList.remove('pop'),150);
+}
+function banner(txt,col){
+  const b = $('banner'); b.textContent = txt; b.style.color = col;
+  b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+  setTimeout(()=>b.classList.remove('show'),850);
+}
+
+/* ── THE SUMMARY ──
+   Accuracy alone rewards doing nothing: one correct answer in ninety seconds
+   scored 100%. The grade combines accuracy with COVERAGE — how much of what
+   the round had time for was actually attempted — so the only way to a high
+   grade is to answer a lot AND get them right. Practice has no clock, so it
+   is not graded on a curve it cannot meet.
+
+   FIX #6/#7: coverage is a penalty for STOPPING EARLY, not for WINNING
+   EARLY. It only makes sense to apply when the round ended because the
+   clock ran out (reason === 'timeout'); a round that ended because the
+   threat bar hit zero or the set was fully cleared ended on its own merits
+   and is graded on accuracy alone. */
+const SECONDS_PER_Q = 4.6;
+function expectedCount(){
+  if (mode === 'practice') return 0;
+  const secs = parseInt(mode, 10);
+  return isFinite(secs) ? Math.max(4, Math.round(secs / SECONDS_PER_Q)) : 0;
+}
+function coverageOf(total){
+  const exp = expectedCount();
+  return exp ? Math.min(1, total / exp) : 1;
+}
+function scale(acc){
+  const A = [[0,140],[.60,160],[.72,173],[.80,180],[1,190]];
+  for (let i=1;i<A.length;i++){
+    const [a0,s0]=A[i-1],[a1,s1]=A[i];
+    if (acc<=a1) return Math.round(s0+(acc-a0)/(a1-a0)*(s1-s0));
+  }
+  return 190;
+}
+const grade = s => s>=180?['A','Excellent']:s>=173?['B','Very good']:s>=160?['C','Pass']:['D','Try again'];
+
+function finish(outcome, reason){
+  /* FIX #2: guard against a stale/orphaned call — e.g. the player exited to
+     idle (groupIdx === -1) while this timeout was in flight. running is also
+     cleared by exitToEntry(), so this is a second, cheap line of defence. */
+  if (!running || groupIdx < 0 || !GROUPS[groupIdx]) return;
+  running = false; cancelAnimationFrame(rafId);
+  document.body.classList.remove('playing');
+  try{ if (window.INTUITY) INTUITY.session('tenses','defuse',{hits,misses,best:bestStreak,score,outcome}); }catch(e){}
+
+  if (outcome === 'win'){ banner('Building secured','#4A6B5C'); sfxVictory(); }
+  else { banner('Bomb detonated','#A23B2C'); sfxDefeat(); }
+
+  const total = hits+misses, acc = total ? hits/total : 0;
+  const practice = mode === 'practice';
+  /* FIX #6: only a timeout applies the coverage penalty. A depleted/cleared
+     win (or a loss from playerHP hitting 0) is scored on accuracy alone —
+     the round ending was the outcome, not a shortfall against it. */
+  const gradedOnCoverage = reason === 'timeout';
+  const sc = scale(gradedOnCoverage ? acc * coverageOf(total) : acc);
+  const [letter,word] = grade(sc);
+
+  $('ovOutcome').className = 'outcome ' + (outcome==='win'?'win':'loss');
+  $('ovOutcome').textContent = outcome==='win' ? 'Building secured' : 'Bomb detonated';
+
+  if (practice){
+    $('ovScore').className = 'score g-p';
+    $('ovScore').innerHTML = Math.round(acc*100) + '<span class="gr">%</span>';
+    $('ovSet').textContent = 'Practice · ' + GROUPS[groupIdx].label;
+  } else {
+    $('ovScore').className = 'score g-'+letter.toLowerCase();
+    $('ovScore').innerHTML = sc + '<span class="gr">'+letter+'</span>';
+    $('ovSet').textContent = word + ' · ' + GROUPS[groupIdx].label;
+    saveBest(GROUPS[groupIdx].id, sc);
+  }
+
+  $('ovNote').innerHTML = '<b>'+hits+'</b> defused, <b>'+misses+'</b> wrong · best streak <b>'+
+    bestStreak+'</b> · composure <b>'+Math.max(0,playerHP)+'</b>' +
+    /* FIX #7: same reason guard as the coverage penalty itself — a round
+       that ended by depleting the threat bar or clearing the set had no
+       "fuller round" available to answer more of, so the hint no longer
+       shows in that case. */
+    (gradedOnCoverage && !practice && expectedCount() && total < expectedCount()
+      ? ' · answered <b>' + total + '</b> of about <b>' + expectedCount() + '</b> — a fuller round scores higher'
+      : '');
+
+  const seen = new Map();
+  missLog.forEach(m=>{ const k = m.group+':'+m.idx; if(!seen.has(k)) seen.set(k, m); });
+  $('ovMissed').innerHTML = seen.size
+    ? '<div style="font-family:\'DM Mono\',monospace;font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:#7A6F73;margin-bottom:.4rem">Worth another look</div>' +
+      [...seen.values()].map(m =>
+        '<div class="mline"><b>' + esc(m.answer) + '</b>' +
+        (m.tense ? ' <span class="rv-tense">' + esc(m.tense) + '</span>' : '') +
+        (m.note ? '<span class="mnote">' + esc(m.note) + '</span>' : '') + '</div>').join('')
+    : '';
+
+  $('ovReview').hidden = true;
+  setReviewLabel(false);
+  buildTabs();
+  $('over').classList.add('show');
+}
+
+
+/* ── WHAT THE REVIEW NEEDS FROM AN ITEM ──────────────────────────────────
+   The log asked for item.tense and no data file has ever had that field —
+   the tense is item.cat.label. So every review row has been missing its
+   tense chip since the feature was written: the CSS is there, the markup is
+   there, the value was always undefined. */
+function tenseLabel(it){
+  return (it && it.cat && it.cat.label) ? it.cat.label : (it && it.tense) || '';
+}
+
+function renderReview(){
+  const box = $('ovReview');
+  if (!answerLog.length){ box.innerHTML = '<div class="rv-empty">Nothing answered this round.</div>'; return; }
+  /* ── ONE ROW PER ITEM ──
+     Both games re-serve a missed item later in the same round, which is the
+     point of the spaced repetition — but it made the review list the same
+     sentence two or three times, once per attempt, so a ten-item round could
+     show fifteen rows and read as a bug. Keep the LAST attempt for each item:
+     that is what the student ended up knowing. */
+  const byItem = new Map();
+  answerLog.forEach(a => byItem.set(a.id || (a.cue + '|' + a.answer), a));
+  const log = [...byItem.values()];
+  const bad = log.filter(a => !a.ok), good = log.filter(a => a.ok);
+  const row = a =>
+    '<div class="rv' + (a.ok ? '' : ' bad') + '">' +
+      '<span class="rv-mark">' + (a.ok ? '\u2713' : '\u2715') + '</span>' +
+      '<span class="rv-body">' +
+        '<span class="rv-sent">' + esc(a.cue) + ' <b>' + esc(a.answer) + '</b> ' + esc(a.after) + '</span>' +
+        (a.tense ? '<span class="rv-tense">' + esc(a.tense) + '</span>' : '') +
+        (!a.ok && a.chose ? '<span class="rv-chose">you chose ' + esc(a.chose) + '</span>' : '') +
+      '</span>' +
+    '</div>';
+  /* wrong first: these are the reason the list exists */
+  box.innerHTML =
+    (bad.length  ? '<div class="rv-head">Got wrong (' + bad.length + ')</div>' + bad.map(row).join('') : '') +
+    (good.length ? '<div class="rv-head">Got right (' + good.length + ')</div>' + good.map(row).join('') : '');
+}
+
+/* ── TABS ── */
+function buildTabs(){
+  const mem = loadMem(), best = loadBest(), wrap = $('setTabs');
+  wrap.innerHTML = '';
+  GROUPS.forEach((g,i)=>{
+    const its = itemsOf(g);
+    const due = its.some(it => (mem[memKey(it)]?.miss||0) > 0);
+    const played = its.some(it => mem[memKey(it)]);
+    const cleared = played && !due;
+    const btn = document.createElement('button');
+    btn.className = 'vtab' + (i===groupIdx?' active':'') + (due?' has-due':'') + (cleared?' cleared':'');
+    btn.style.setProperty('--vc', g.color);
+    btn.innerHTML = esc(g.label) + '<span class="due"></span>' +
+      (best[g.id] ? '<span class="best">' + grade(best[g.id])[0] + '</span>' : '');
+    btn.title = g.desc || '';
+    btn.onclick = () => { if (i===groupIdx) return; switchGroup(i); };
+    wrap.appendChild(btn);
+  });
+}
+function switchGroup(i){
+  groupIdx = i;
+  buildTabs();
+  syncHeader();
+  const u = new URL(location.href); u.searchParams.set('set', GROUPS[i].id);
+  history.replaceState(null,'',u);
+  startRun();
+}
+
+/* ── MODE / MUTE ── */
+function setMode(m){
+  mode = m; safeSet('intuity-defuse-mode', m);
+  document.querySelectorAll('.mbtn').forEach(b=>b.classList.toggle('on', b.dataset.m===m));
+  /* only restart if a mix has actually been chosen — changing the clock
+     should not silently pick Mix 1 for the learner */
+  if (GROUPS.length && groupIdx >= 0) startRun();
+}
+$('modes').querySelectorAll('.mbtn').forEach(b=>b.addEventListener('click', ()=>setMode(b.dataset.m)));
+document.querySelectorAll('.mbtn').forEach(b=>b.classList.toggle('on', b.dataset.m===mode));
+
+function setMute(on){
+  musicOn = on; safeSet('intuity-defuse-sound', on?'on':'off');
+  $('muteBtn').textContent = on ? '🔊' : '🔈';
+}
+$('muteBtn').addEventListener('click', ()=> setMute(!musicOn));
+setMute(musicOn);
+
+/* ── EVENTS ── */
+/* Leaving a round means leaving it — back to the entry screen where a mix is
+   chosen, not to the gate of the mix just abandoned. Two things have to be
+   undone as well as the round itself:
+     · groupIdx is cleared, or the tab just left is still "active" and tapping
+       it again is swallowed by switchGroup's own no-op guard.
+     · ?set= is stripped, or a reload re-arms that mix and the learner lands
+       mid-game at the entry screen. */
+function exitToEntry(){
+  roundToken++;   /* FIX #2: any in-flight timeout from the abandoned round is now stale */
+  running = false;
+  if (rafId) cancelAnimationFrame(rafId);
+  document.body.classList.remove('playing');
+  document.body.classList.remove('gated');
+  $('over').classList.remove('show');
+  groupIdx = -1;
+  const u = new URL(location.href); u.searchParams.delete('set');
+  history.replaceState(null,'',u);
+  buildTabs();
+  syncHeader();
+  showIdle();
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape'){ exitToEntry(); return; }
+  const i = KEYS.indexOf(e.key);
+  if (i >= 0 && running){ firstTouch(); cutWire(i); }
+});
+/* Closing the summary is also an exit: dismissing it used to leave the dead
+   board from the finished round on screen. */
+$('closeX').addEventListener('click', exitToEntry);
+$('over').addEventListener('click', e => { if (e.target === $('over')) exitToEntry(); });
+$('againBtn').addEventListener('click', () => { $('over').classList.remove('show'); startRun(); });
+$('nextBtn').addEventListener('click', () => { const n=(groupIdx+1)%GROUPS.length; switchGroup(n); });
+$('prevBtn').addEventListener('click', () => { const p=(groupIdx-1+GROUPS.length)%GROUPS.length; switchGroup(p); });
+function setReviewLabel(open){
+  /* counted the same way the list is built, or the pill says "5 wrong" over a
+     list of three. */
+  const seen = new Map();
+  answerLog.forEach(a => seen.set(a.id || (a.cue + '|' + a.answer), a));
+  const n = [...seen.values()].filter(a => !a.ok).length;
+  $('reviewBtn').innerHTML = (open ? 'Hide answers' : 'Check your answers') +
+    (!open && n ? '<span class="cnt">' + n + ' wrong</span>' : '');
+}
+$('reviewBtn').addEventListener('click', () => {
+  const box = $('ovReview'), open = !box.hidden;
+  if (!open) renderReview();
+  box.hidden = open;
+  setReviewLabel(!open);
+  /* The card is the scroll container. scrollIntoView on the list moved the
+     list's own scroller instead, so the card never budged and pressing the
+     button looked like it did nothing. */
+  if (!open) requestAnimationFrame(() => {
+    const card = box.closest('.over-card');
+    if (card) card.scrollTo({ top: box.offsetTop - 56, behavior:'smooth' });
+  });
+});
+$('gateGo').addEventListener('click', () => { firstTouch(); beginRound(); });
+$('idleStart').addEventListener('click', () => {
+  if (!GROUPS.length) return;
+  firstTouch();
+  switchGroup(0);
+});
+$('exitBtn').addEventListener('click', exitToEntry);
+$('hubBtn').addEventListener('click', () => { (window.top||window).location.href = '/?openModal=grammar'; });
+
+/* ── LAYOUT SYNC — measures the real header height instead of trusting the
+   CSS guess, since the tab row wraps to 2–3 lines on a narrow phone. ── */
+function syncHeader(){
+  const h = document.querySelector('.header'), hu = document.querySelector('.hud');
+  if (h) document.documentElement.style.setProperty('--header-h', h.offsetHeight+'px');
+  if (hu) document.documentElement.style.setProperty('--hud-h', hu.offsetHeight+'px');
+}
+window.addEventListener('resize', syncHeader);
+window.addEventListener('orientationchange', ()=>setTimeout(syncHeader,120));
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncHeader);
+
+/* ── BOOT ── */
+async function boot(){
+  let data;
+  try {
+    if (TOPIC && window.ChallengeMixes){
+      const m = await ChallengeMixes.load(TOPIC, 'choice');
+      ChallengeMixes.dress(m.topic, 'defuse'); data = m.groups;
+    } else {
+      const res = await fetch(DATA_URL, { cache:'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      data = await res.json();
+    }
+  } catch (e) {
+    $('loading').innerHTML =
+      `<p class="err">Couldn't load <b>${TOPIC ? 'the '+TOPIC+' topic' : DATA_URL}</b> (${String(e.message||e).replace(/[<>]/g,'')}).<br>` +
+      `If you opened this file directly (file://), your browser blocks local JSON fetches — serve it over http:// instead.</p>`;
+    return;
+  }
+  GROUPS = data.map(g => ({ id:g.id, label:g.label, color:g.color, desc:g.desc, items:g.items }))
+               .filter(g => itemsOf(g).length >= WIRE_N);
+  if (!GROUPS.length){
+    $('loading').innerHTML = '<p class="err">No set in the data file has items with a 4-option <b>options</b> array containing the <b>answer</b>.</p>';
+    return;
+  }
+  /* Only pre-select a mix when the URL names one via ?set= — a link from
+     Next/Previous, or a bookmark. Arriving with no ?set= is a first visit:
+     show the whole page and wait for a tap. */
+  const want = (new URLSearchParams(location.search).get('set') || '').toLowerCase();
+  const foundIdx = want ? GROUPS.findIndex(g => g.id.toLowerCase() === want) : -1;
+  buildTabs();
+  syncHeader();
+  $('loading').style.display = 'none';
+  if (foundIdx >= 0){ groupIdx = foundIdx; buildTabs(); startRun(); }
+  else showIdle();
+}
+boot();
+</script>
+</body>
+</html>

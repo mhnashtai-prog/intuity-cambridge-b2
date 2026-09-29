@@ -113,5 +113,91 @@
     });
   }
 
-  window.ChallengeMixes = { load, dress, RULES };
+
+  /* ═══ VOCABULARY ════════════════════════════════════════════════════════
+     The same groups for Defuse, from the vocabulary files the pages already
+     read. Word-bank sets ({ words:[…], sentences:[{ text, correct }] }) give
+     each sentence four options: the right word and three others from the
+     SAME set — the near-synonyms or the same family, which are exactly the
+     words the page teaches the learner to tell apart. A four-word set gives
+     all four; a larger one gives three, picked from the sentence itself so a
+     sentence always gets the same three. One mix is one of the page's own
+     tests (five sets), split in two when it runs past 25 sentences, so
+     Defuse's tabs line up with the page's numbered tabs. */
+  const VBASE = '/data/similar-words/', VPAGE = '/skills/similar-words/';
+  const WORDBANK_TRIO = [['similar-words','Similar Words','vocabulary.html'],
+                         ['topic-vocabulary','Topic Vocabulary','topic-vocabulary.html'],
+                         ['academic','Academic','academic-vocabulary.html']];
+  const VOCAB = {
+    'similar-words':    { label:'Similar Words',          file:'similar-words.json',             home:'vocabulary.html',        nav:WORDBANK_TRIO },
+    'topic-vocabulary': { label:'Topic Vocabulary',       file:'topic-vocabulary.json',          home:'topic-vocabulary.html',  nav:WORDBANK_TRIO },
+    'academic':         { label:'Academic Vocabulary',    file:'academic-vocabulary-sets.json',  home:'academic-vocabulary.html', nav:WORDBANK_TRIO },
+    'collocations':     { label:'Collocations',           file:'data-collocations-gapfill.json', home:'collocations.html' },
+    'collective':       { label:'Collective Expressions', file:'collective-expressions-data.json', home:'collective-expressions-master.html', kind:'questions' }
+  };
+  const MAX_MIX = 25;
+
+  function seedOf(s){ let h = 2166136261; for (let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+  function pickOthers(words, correct, text){
+    const others = words.filter((_, i) => i !== correct);
+    if (others.length <= 3) return others;
+    let h = seedOf(text); const pool = others.slice(), out = [];
+    while (out.length < 3){ h = Math.imul(h ^ (h >>> 15), 2246822519) >>> 0; out.push(pool.splice(h % pool.length, 1)[0]); }
+    return out;
+  }
+  function gapItem(text, answer, options, note, tag){
+    const m = String(text).match(/_{3,}/); if (!m) return null;
+    return { cue: text.slice(0, m.index).trim(), after: text.slice(m.index + m[0].length).trim(),
+             answer, options, note: note || '', tense: tag || '' };
+  }
+
+  async function loadVocab(id){
+    const v = VOCAB[id]; if (!v) throw new Error('No vocabulary set called "' + id + '"');
+    const d = await (await fetch(VBASE + v.file, { cache:'no-store' })).json();
+    const tests = [];                                   /* [{ label, desc, items }] */
+    if (v.kind === 'questions'){
+      const cats = d.expressions || {}, by = {};
+      (d.practiceQuestions || []).forEach(q => {
+        if (!Array.isArray(q.options) || q.options.length !== 4 || !q.options.includes(q.correct)) return;
+        const it = gapItem(q.sentence, q.correct, q.options.slice(), q.explanation, (cats[q.category] || {}).title);
+        if (it) (by[q.category] = by[q.category] || []).push(it);
+      });
+      Object.keys(by).forEach(c => tests.push({ label: (cats[c] && cats[c].title) || c, desc: v.label, items: by[c] }));
+    } else {
+      const sets = d.sets || [], per = d.setsPerTest || 5;
+      for (let i = 0; i < sets.length; i += per){
+        const block = sets.slice(i, i + per), items = [];
+        block.forEach(s => (s.sentences || []).forEach(q => {
+          const w = s.words || [], a = w[q.correct]; if (a == null) return;
+          const it = gapItem(q.text, a, [a].concat(pickOthers(w, q.correct, q.text)), '', s.label || s.topic || '');
+          if (it && it.options.length === 4) items.push(it);
+        }));
+        const names = block.map(s => s.label || s.topic).filter(x => x && x !== 'None');
+        tests.push({ label: 'Test ' + (tests.length + 1), desc: names.length ? names.join(' \u00b7 ') : v.label, items });
+      }
+    }
+    const groups = [];
+    tests.forEach((t, k) => {
+      const n = Math.max(1, Math.ceil(t.items.length / MAX_MIX)), size = Math.ceil(t.items.length / n);
+      for (let j = 0; j < n; j++){
+        const part = t.items.slice(j * size, (j + 1) * size); if (part.length < 4) continue;
+        groups.push({ id: id + '-' + (k + 1) + (n > 1 ? 'abc'[j] : ''), label: t.label + (n > 1 ? ' ' + 'ABC'[j] : ''),
+                      color: COLORS[groups.length % COLORS.length], desc: t.desc, items: part });
+      }
+    });
+    return { vocab: Object.assign({ id }, v), groups };
+  }
+
+  /* The header on a vocabulary run: the page's own siblings, then Defuse. */
+  function dressVocab(v){
+    const sub = document.querySelector('.app-subtitle'); if (sub) sub.textContent = v.label + ' \u00b7 B2 First';
+    document.title = 'INTUITY \u2014 ' + v.label + ' \u00b7 Defuse';
+    const lv = document.querySelector('.header-spacer b'); if (lv) lv.textContent = 'B2';
+    const row = document.querySelector('.mode-selector'); if (!row) return;
+    const nav = v.nav || [[v.id, v.label, v.home]];
+    row.innerHTML = nav.map(([, label, page]) => `<a class="mode-btn" href="${VPAGE + page}">${label}</a>`).join('')
+      + '<span class="mode-btn active">Defuse</span>';
+  }
+
+  window.ChallengeMixes = { load, dress, RULES, loadVocab, dressVocab, VOCAB };
 })();

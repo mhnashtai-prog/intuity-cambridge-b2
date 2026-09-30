@@ -110,6 +110,7 @@
       const h = a.getAttribute('href') || '';
       if (/tenses-rules/.test(h) && topic.rules) a.setAttribute('href', h.replace('tenses-rules', topic.rules));
       else if (/tenses-(defuse|forge)/.test(h)) a.setAttribute('href', h.split('?')[0] + '?topic=' + encodeURIComponent(topic.id));
+      else if (/challenge\.html\?board=1/.test(h)) a.setAttribute('href', '/skills/challenge/challenge.html?board=1&topic=' + encodeURIComponent(topic.id));   /* Board replaced Forge */
     });
   }
 

@@ -133,7 +133,11 @@
     'topic-vocabulary': { label:'Topic Vocabulary',       file:'topic-vocabulary.json',          home:'topic-vocabulary.html',  nav:WORDBANK_TRIO },
     'academic':         { label:'Academic Vocabulary',    file:'academic-vocabulary-sets.json',  home:'academic-vocabulary.html', nav:WORDBANK_TRIO },
     'collocations':     { label:'Collocations',           file:'data-collocations-gapfill.json', home:'collocations.html' },
-    'collective':       { label:'Collective Expressions', file:'collective-expressions-data.json', home:'collective-expressions-master.html', kind:'questions' }
+    'collective':       { label:'Collective Expressions', file:'collective-expressions-data.json', home:'collective-expressions-master.html', kind:'questions' },
+    /* Descriptive Words' (Expression Master's) own Practice questions, one tab per topic tab on
+       the page: the same twenty sentences, now against the clock */
+    'expressions':      { label:'Descriptive Words', url:'/skills/similar-words/data/master-practice.json', home:'collective-expressions-master.html', kind:'topics',
+                          topics:[['adjectives','Adjectives'],['adverbs','Adverbs'],['collective-nouns','Collective nouns'],['descriptive-verbs','Verbs']] }
   };
   const MAX_MIX = 25;
 
@@ -153,9 +157,15 @@
 
   async function loadVocab(id){
     const v = VOCAB[id]; if (!v) throw new Error('No vocabulary set called "' + id + '"');
-    const d = await (await fetch(VBASE + v.file, { cache:'no-store' })).json();
-    const tests = [];                                   /* [{ label, desc, items }] */
-    if (v.kind === 'questions'){
+    const d = await (await fetch(v.url || (VBASE + v.file), { cache:'no-store' })).json();
+    const tests = [];                                   /* [{ label, desc, items, key }] */
+    if (v.kind === 'topics'){
+      v.topics.forEach(([key, label]) => {
+        const items = (d[key] || []).filter(q => Array.isArray(q.options) && q.options.length === 4 && q.options.includes(q.correct))
+          .map(q => gapItem(q.sentence, q.correct, q.options.slice(), q.explanation, label)).filter(Boolean);
+        tests.push({ label, desc: v.label + ' \u00b7 ' + label, items, key });
+      });
+    } else if (v.kind === 'questions'){
       const cats = d.expressions || {}, by = {};
       (d.practiceQuestions || []).forEach(q => {
         if (!Array.isArray(q.options) || q.options.length !== 4 || !q.options.includes(q.correct)) return;
@@ -181,7 +191,7 @@
       const n = Math.max(1, Math.ceil(t.items.length / MAX_MIX)), size = Math.ceil(t.items.length / n);
       for (let j = 0; j < n; j++){
         const part = t.items.slice(j * size, (j + 1) * size); if (part.length < 4) continue;
-        groups.push({ id: id + '-' + (k + 1) + (n > 1 ? 'abc'[j] : ''), label: t.label + (n > 1 ? ' ' + 'ABC'[j] : ''),
+        groups.push({ id: id + '-' + (t.key || (k + 1)) + (n > 1 ? 'abc'[j] : ''), label: t.label + (n > 1 ? ' ' + 'ABC'[j] : ''),
                       color: COLORS[groups.length % COLORS.length], desc: t.desc, items: part });
       }
     });
@@ -190,9 +200,11 @@
 
   /* The header on a vocabulary run: the page's own siblings, then Defuse. */
   function dressVocab(v){
-    const sub = document.querySelector('.app-subtitle'); if (sub) sub.textContent = v.label + ' \u00b7 B2 First';
+    const sub = document.querySelector('.app-subtitle'); if (sub) sub.textContent = v.label.length > 16 ? v.label : v.label + ' \u00b7 B2 First';
     document.title = 'INTUITY \u2014 ' + v.label + ' \u00b7 Defuse';
     const lv = document.querySelector('.header-spacer b'); if (lv) lv.textContent = 'B2';
+    const back = document.querySelector('.back-link');
+    if (back){ back.textContent = '\u2190 Vocabulary'; back.onclick = null; back.removeAttribute('onclick'); back.setAttribute('href', VPAGE + v.home); }
     const row = document.querySelector('.mode-selector'); if (!row) return;
     const nav = v.nav || [[v.id, v.label, v.home]];
     row.innerHTML = nav.map(([, label, page]) => `<a class="mode-btn" href="${VPAGE + page}">${label}</a>`).join('')

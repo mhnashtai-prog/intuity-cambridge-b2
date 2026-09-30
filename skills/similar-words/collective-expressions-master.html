@@ -2,83 +2,1275 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#F3F1ED">
-  <title>INTUITY — Collocations</title>
-
+  <title>INTUITY — Descriptive Words</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500&family=Anton&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=5">
-  <!-- vocab.css carries the poster palette, the card, the strip, the action
-       bar and the sage accent. colloc.css adds only what a BANK needs. Two
-       links rather than a copy: the card is one card in two pages. -->
-  <link rel="stylesheet" href="/data/similar-words/vocab.css?v=3">
-  <link rel="stylesheet" href="/data/similar-words/colloc.css?v=1">
+  <link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=7">
+  <link rel="stylesheet" href="/data/similar-words/vocab.css?v=7">
   <style>
-    .vtab .pct{font-family:var(--f-mono);font-size:.82em;opacity:.7;
-      font-variant-numeric:tabular-nums}
-    /* Browse has nothing to score, so the strip carries a count instead of a
-       tally and the dots stay empty. Same row, doing the job the mode needs. */
-    .strip-tally{margin-left:.55rem}
+/* ═══ DESCRIPTIVE WORDS (EXPRESSION MASTER), ON THE SHELL ══════════════════════════════════════
+   The page was the last one in the old black-and-gold theme. It now wears
+   the same header, mode row, tabs, poster cards, tiles and action bar as
+   Similar Words, from the same two stylesheets. Everything below is only
+   what this page has and the others don't: the list of expressions, the
+   one-card gallery, the tooltip and the result sheet. The script is the
+   old one — every id and class it touches is kept. */
+
+body{color:var(--ink,#232C31);background:var(--screen,#F3F1ED)}
+[hidden],.hidden{display:none!important}
+
+/* the categories: the page's own set tabs, one tier down */
+.strip.cats{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;
+  padding:.2rem 0 .9rem;margin-bottom:1.1rem;border-bottom:1px solid var(--rule)}
+.cat-nav-buttons{display:flex;flex-wrap:wrap;gap:.35rem;flex:1}
+.cat-nav-btn{font:inherit;font-size:.8rem;font-weight:600;color:var(--dim);background:none;
+  border:1px solid transparent;border-radius:var(--r-chip);padding:.32rem .7rem;cursor:pointer}
+.cat-nav-btn:hover{color:var(--ink)}
+.cat-nav-btn.active{background:var(--tile-bg);color:var(--tile-ink)}
+.cat-nav-btn:focus-visible,.option-btn:focus-visible,.gallery-nav:focus-visible,.card-actions .action-btn:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px}
+.question-counter{display:none;font-family:var(--f-mono);font-size:.72rem;color:var(--faint);font-variant-numeric:tabular-nums}
+.question-counter .current{color:var(--ink)}
+body[data-mode="practice"] .question-counter{display:block}
+
+/* the card every mode sits on: the poster, as on Similar Words */
+.poster{background:var(--card,#FAF8F5);box-shadow:0 1px 2px rgba(35,44,49,.06),0 10px 26px -18px rgba(35,44,49,.35);
+  padding:1.3rem 1.4rem;margin-bottom:1.1rem}
+.kick{display:flex;align-items:center;gap:.6rem;font-family:var(--f-mono);font-size:.62rem;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--faint);margin:0 0 .9rem}
+.kick::before{content:'';width:26px;height:10px;background:#B0865C;flex:none}
+
+/* ── LEARN: a list per page, a row per expression ── */
+.expression-list{background:var(--card,#FAF8F5);box-shadow:0 1px 2px rgba(35,44,49,.06),0 10px 26px -18px rgba(35,44,49,.35);padding:.4rem 1.4rem}
+.expression-item{padding:1rem 0;border-bottom:1px solid var(--rule);cursor:copy}
+.expression-item:last-child{border-bottom:none}
+.expression-header{display:flex;align-items:baseline;justify-content:space-between;gap:1rem}
+.expression-phrase{font-family:var(--f-display);font-weight:800;font-size:1.12rem;letter-spacing:var(--track-display);color:var(--ink)}
+.difficulty-badge{flex:none;font-family:var(--f-mono);font-size:.64rem;color:var(--faint);border:1px solid var(--rule);border-radius:var(--r-chip);padding:.1rem .4rem}
+.expression-meaning{font-size:.95rem;color:var(--dim);margin:.25rem 0 .45rem;line-height:1.5}
+.expression-example{font-size:.95rem;color:var(--sentence);line-height:1.55;padding-left:.8rem;border-left:2px solid var(--tile-bg)}
+.expression-tags,.card-tags{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.6rem}
+.tag,.card-tag{font-size:.72rem;color:var(--dim);background:var(--tile-bg);border-radius:var(--r-chip);padding:.15rem .5rem}
+
+/* ── EXPLORE: one card, the phrase as its headline ── */
+.swipe-wrapper{position:relative}
+.vocab-card{display:none;text-align:center;background:var(--card,#FAF8F5);
+  box-shadow:0 1px 2px rgba(35,44,49,.06),0 14px 34px -20px rgba(35,44,49,.4);padding:2.4rem 1.6rem 2rem;min-height:18rem}
+.vocab-card.active{display:flex;flex-direction:column;align-items:center;justify-content:center;animation:emIn .28s ease-out}
+@keyframes emIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.card-word{font-family:'Anton',Impact,var(--f-display),sans-serif;font-weight:400;font-size:clamp(2.1rem,7vw,3.2rem);line-height:1.05;color:var(--ink)}
+.card-word::after{content:'';display:block;width:40px;height:3px;background:var(--ink);margin:.9rem auto 0}
+.card-pronunciation{font-family:var(--f-mono);font-size:.8rem;color:var(--faint);margin-top:.5rem}
+.card-meaning{font-size:1.05rem;color:var(--dim);margin:1rem 0 .8rem;max-width:30rem;line-height:1.5}
+.card-example{font-size:1.02rem;color:var(--sentence);max-width:32rem;line-height:1.6}
+.card-tags{justify-content:center;margin-top:1.2rem}
+.gallery-controls{display:flex;align-items:center;justify-content:center;gap:1.2rem;margin:1.1rem 0 .7rem}
+.gallery-nav{width:2.6rem;height:2.6rem;border:none;border-radius:var(--r-chip);background:var(--tile-bg);color:var(--tile-ink);font-size:1.1rem;cursor:pointer}
+.gallery-nav:disabled{opacity:.32;cursor:default}
+.card-counter{font-family:var(--f-mono);font-size:.8rem;color:var(--faint);font-variant-numeric:tabular-nums;min-width:4.5rem;text-align:center}
+.card-counter .current{color:var(--ink)}
+.card-actions{display:flex;justify-content:center;gap:.5rem}
+.card-actions .action-btn{background:var(--tile-bg);color:var(--dim)}
+.card-actions .action-btn.saved{background:var(--accent);color:#fff}
+
+/* ── PRACTICE and TEST: the sentence, the slot, the tiles ── */
+.practice-card{background:var(--card,#FAF8F5);box-shadow:0 1px 2px rgba(35,44,49,.06),0 10px 26px -18px rgba(35,44,49,.35);padding:1.8rem 1.5rem}
+.sentence-display{font-family:var(--f-display);font-weight:700;font-size:clamp(1.15rem,3.4vw,1.45rem);line-height:1.55;color:var(--ink);margin-bottom:1.4rem}
+.blank{display:inline-block;min-width:5.5em;padding:.05em .5em;border-radius:var(--r-field);background:var(--slot-bg);color:transparent;text-align:center;line-height:1.35}
+.blank.filled{color:var(--accent-ink)}
+.blank.correct{background:var(--tile-ok-bg);color:var(--tile-ok-ink)}
+.blank.incorrect{background:var(--tile-no-bg);color:var(--tile-no-ink);text-decoration:line-through;text-decoration-thickness:1px}
+.options-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}
+.option-btn{font:inherit;font-size:1rem;font-weight:700;text-align:left;padding:.8rem .9rem;border:none;border-radius:var(--r-field);
+  background:var(--tile-bg);color:var(--tile-ink);cursor:pointer;transition:transform .1s}
+.option-btn:active:not(:disabled){transform:scale(.98)}
+.option-btn.selected{box-shadow:0 0 0 2px var(--accent-ink) inset}
+.option-btn.correct{background:var(--tile-ok-bg);color:var(--tile-ok-ink)}
+.option-btn.incorrect{background:var(--tile-no-bg);color:var(--tile-no-ink)}
+.option-btn:disabled{cursor:default}
+.option-btn:disabled:not(.correct):not(.incorrect):not(.selected){opacity:.55}
+.feedback-panel{display:none;margin-top:1rem;padding:1rem 1.2rem;background:var(--card,#FAF8F5);border-left:3px solid var(--ok)}
+.feedback-panel.show{display:block}
+.feedback-panel.incorrect{border-left-color:var(--wrong)}
+.feedback-title{font-weight:800;color:var(--ok);margin-bottom:.2rem}
+.feedback-panel.incorrect .feedback-title{color:var(--wrong)}
+.feedback-text{font-size:.95rem;color:var(--sentence);line-height:1.55}
+.test-sentence-row{background:var(--card,#FAF8F5);box-shadow:0 1px 2px rgba(35,44,49,.06),0 10px 26px -18px rgba(35,44,49,.35);padding:1.2rem 1.3rem;margin-bottom:.9rem}
+.test-sentence-text{font-size:1.02rem;line-height:1.6;color:var(--sentence)}
+.question-number{flex:none;width:1.4rem;height:1.4rem;display:grid;place-items:center;font-family:var(--f-mono);font-size:.7rem;
+  background:var(--tile-bg);color:var(--dim);border-radius:3px;margin-top:.15rem}
+.question-number.answered{background:var(--ink);color:#fff}
+
+/* the buttons live in the fixed bar at the foot, as on Similar Words */
+.nav-controls{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;justify-content:center;gap:.625rem;
+  background:var(--screen);border-top:1px solid var(--rule);padding:.75rem .75rem calc(.75rem + env(safe-area-inset-bottom,0px))}
+.nav-btn{font-family:var(--f-display);font-size:.78rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  padding:.68rem 1.4rem;border:none;border-radius:var(--r-chip);cursor:pointer;background:var(--tile-bg);color:var(--dim)}
+.nav-btn.primary{background:var(--accent);color:#fff}
+.nav-btn:disabled{opacity:.32;cursor:default}
+.nav-btn:active:not(:disabled){transform:scale(.96)}
+
+/* ── the hover meaning, the result sheet, the note ── */
+.vocab-tooltip{position:fixed;z-index:60;max-width:16rem;pointer-events:none;opacity:0;transition:opacity .15s;
+  background:var(--ink);color:#F6F1E6;padding:.6rem .75rem;border-radius:var(--r-chip);font-size:.84rem;line-height:1.4}
+.vocab-tooltip.show{opacity:1}
+.tooltip-word{font-weight:800}
+.tooltip-synonyms{opacity:.7;margin-top:.25rem;font-size:.78rem}
+.modal-overlay{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;padding:1rem;
+  background:rgba(20,17,14,.34);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.modal-overlay.active{display:flex}
+.modal-overlay > .result-sheet{width:min(26rem,100%);max-height:none;overflow:visible;background:var(--card,#FAF8F5);padding:1.6rem 1.5rem;box-shadow:0 24px 60px -18px rgba(20,17,14,.38)}
+.modal-title{font-family:'Anton',Impact,var(--f-display),sans-serif;font-weight:400;font-size:2rem;line-height:1;color:var(--ink);margin:0}
+.modal-title::after{content:'';display:block;width:40px;height:3px;background:var(--ink);margin:.65rem 0 0}
+.modal-subtitle{font-size:.9rem;color:var(--faint);margin-top:.7rem}
+.score-number{font-family:'Anton',Impact,var(--f-display),sans-serif;font-size:3.4rem;line-height:1;color:var(--ink);margin:1.1rem 0 .2rem}
+.score-label{font-size:.95rem;color:var(--accent-ink);font-weight:700}
+.modal-footer{display:flex;gap:.5rem;margin-top:1.4rem}
+.modal-btn{font-family:var(--f-display);font-size:.74rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:.65rem 1.2rem;border:none;border-radius:var(--r-chip);cursor:pointer}
+.modal-btn-secondary{background:var(--tile-bg);color:var(--dim)}
+.modal-btn-primary{background:var(--accent);color:#fff}
+.toast{position:fixed;left:50%;bottom:5.2rem;z-index:90;transform:translate(-50%,10px);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;
+  background:var(--ink);color:#F6F1E6;font-size:.86rem;padding:.55rem .9rem;border-radius:var(--r-chip);max-width:calc(100% - 2rem)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.error{background:var(--wrong)}
+
+@media(max-width:560px){
+  .poster,.practice-card,.test-sentence-row{padding:1.1rem 1rem}
+  .expression-list{padding:.2rem 1rem}
+  .options-grid{grid-template-columns:1fr!important}
+  .nav-btn{padding:.6rem .9rem;font-size:.72rem}
+}
+@media(prefers-reduced-motion:reduce){.vocab-card.active{animation:none}.toast,.vocab-tooltip{transition:none}}
   </style>
 </head>
-<body>
+<body data-mode="learn">
 
 <header class="header">
   <div class="header-top">
     <a class="back-link" href="/index.html?openModal=vocabulary" target="_top">← Vocabulary</a>
     <div class="header-title">
       <div class="app-title">INTUITY</div>
-      <div class="app-subtitle">Collocations · B2–C1</div>
+      <div class="app-subtitle">Descriptive Words</div>
     </div>
-    <span class="header-spacer">Level <b>B2–C1</b></span>
+    <span class="header-spacer">Level <b>B2</b></span>
   </div>
 
-  <!-- Two real modes, not two sibling pages. Browse is the resource and
-       Practice is generated from it, which is why they belong in one row on
-       one page rather than being two entries in the menu. -->
+  <!-- The four ways into one topic. The script switches the first four by
+       their ids; Defuse is a separate page and follows the topic tab. -->
   <div class="mode-selector">
-    <button class="mode-btn active" type="button" data-mode="browse">Browse</button>
-    <button class="mode-btn" type="button" data-mode="practice">Practice</button>
-    <a class="mode-btn" href="/skills/grammar-rules/tenses-defuse?vocab=collocations">Defuse</a>
+    <button class="mode-btn tab active" type="button" onclick="switchMode('learn')" id="learnTab">Learn</button>
+    <button class="mode-btn tab" type="button" onclick="switchMode('explore')" id="exploreTab">Explore</button>
+    <button class="mode-btn tab" type="button" onclick="switchMode('practice')" id="practiceTab">Practice</button>
+    <button class="mode-btn tab" type="button" onclick="switchMode('test')" id="testTab">Test</button>
+    <a class="mode-btn" id="defuseLink" href="/skills/grammar-rules/tenses-defuse?vocab=expressions&amp;set=expressions-adjectives">Defuse</a>
   </div>
 
-  <!-- The seven pattern families. The only axis that is not the node, and it
-       is here because a teacher planning a lesson thinks in patterns even
-       though a learner looking a word up does not. -->
-  <div class="set-tabs" id="setTabs"></div>
+  <div class="set-tabs" id="topicSelector" role="tablist" aria-label="Topic">
+    <button class="vtab topic-btn active" type="button" onclick="selectTopic('adjectives')" data-topic="adjectives">Adjectives</button>
+    <button class="vtab topic-btn" type="button" onclick="selectTopic('adverbs')" data-topic="adverbs">Adverbs</button>
+    <button class="vtab topic-btn" type="button" onclick="selectTopic('collective-nouns')" data-topic="collective-nouns">Collective nouns</button>
+    <button class="vtab topic-btn" type="button" onclick="selectTopic('descriptive-verbs')" data-topic="descriptive-verbs">Verbs</button>
+  </div>
 </header>
 
-<div class="wrap">
-  <div class="strip">
-    <span><span class="strip-label" id="stripLabel">The partners that go with each word</span><span class="strip-tally" id="tally"></span></span>
-    <div class="dots" id="dots"></div>
+<main class="wrap">
+
+  <div class="strip cats" id="categoryQuickNav">
+    <div class="cat-nav-buttons" id="catNavButtons"></div>
+    <div class="question-counter" id="questionCounter">0/0</div>
   </div>
-  <div id="board" class="bank"><div class="loading">Loading…</div></div>
+
+  <!-- LEARN · every expression in the topic, tap one to copy it -->
+  <section id="learnMode" class="learn-container">
+    <div class="expression-list" id="expressionList"></div>
+  </section>
+
+  <!-- EXPLORE · one card at a time; swipe, or the arrow keys -->
+  <section id="exploreMode" class="gallery-container hidden">
+    <div class="swipe-wrapper" id="swipeWrapper"></div>
+    <div class="gallery-controls">
+      <button class="gallery-nav" type="button" onclick="prevCard()" id="prevCardBtn" aria-label="Previous card">‹</button>
+      <div class="card-counter"><span class="current" id="currentCard">1</span> / <span id="totalCards">0</span></div>
+      <button class="gallery-nav" type="button" onclick="nextCard()" id="nextCardBtn" aria-label="Next card">›</button>
+    </div>
+    <div class="card-actions">
+      <button class="action-btn" type="button" onclick="toggleFavorite()" id="favoriteBtn">Save</button>
+      <button class="action-btn" type="button" onclick="playAudio()">Hear</button>
+      <button class="action-btn" type="button" onclick="showRelated()">Related</button>
+    </div>
+  </section>
+
+  <!-- PRACTICE · one sentence, four tiles, an answer explained -->
+  <section id="practiceMode" class="practice-container hidden">
+    <div class="practice-card">
+      <div class="kick">Choose the expression</div>
+      <div class="sentence-display" id="sentenceDisplay"></div>
+      <div class="options-grid" id="optionsGrid"></div>
+    </div>
+    <div class="feedback-panel" id="feedbackPanel">
+      <div class="feedback-title" id="feedbackTitle"></div>
+      <div class="feedback-text" id="feedbackText"></div>
+    </div>
+    <div class="nav-controls">
+      <button class="nav-btn" type="button" onclick="prevQuestion()" id="prevBtn" disabled>‹ Prev</button>
+      <button class="nav-btn primary" type="button" onclick="checkAnswer()" id="checkBtn">Check</button>
+      <button class="nav-btn" type="button" onclick="nextQuestion()" id="nextBtn" disabled>Next ›</button>
+    </div>
+  </section>
+
+  <!-- TEST · every sentence at once, marked together -->
+  <section id="testMode" class="test-container hidden">
+    <div id="testQuestions">
+      <div class="test-sentences" id="testSentences"></div>
+      <div class="nav-controls" id="testNavControls">
+        <button class="nav-btn" type="button" onclick="clearTestAnswers()" id="clearTestBtn">Clear</button>
+        <button class="nav-btn primary" type="button" onclick="submitTest()" id="submitTestBtn" disabled>Submit</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div class="vocab-tooltip" id="vocabTooltip" role="tooltip">
+  <div class="tooltip-word" id="tooltipWord"></div>
+  <div class="tooltip-meaning" id="tooltipMeaning"></div>
+  <div class="tooltip-synonyms" id="tooltipSynonyms"></div>
 </div>
 
-<div class="action-bar" id="actionBar" style="display:none">
-  <button class="action-btn secondary" id="clearBtn" type="button">New set</button>
-  <button class="action-btn primary" id="checkBtn" type="button" disabled>Check</button>
+<div class="modal-overlay" id="scoreModal">
+  <div class="result-sheet" role="dialog" aria-labelledby="modalTitle">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modalTitle">Your result</h2>
+      <div class="modal-subtitle" id="modalSubtitle"></div>
+    </div>
+    <div class="score-display">
+      <div class="score-number" id="scoreNumber">0/0</div>
+      <div class="score-label" id="scoreLabel"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-secondary" type="button" onclick="closeModal()">Review answers</button>
+      <button class="modal-btn modal-btn-primary" type="button" onclick="retryTest()">Try again</button>
+    </div>
+  </div>
 </div>
 
-<script src="/skills/grammar-rules/intuity-sound.js"></script>
-<script src="/data/similar-words/colloc.js?v=1"></script>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
-function syncHeader(){
-  var h = document.querySelector('.header');
-  if (h) document.documentElement.style.setProperty('--header-h', h.offsetHeight + 'px');
+const TOPIC_CONFIG = {
+  'adjectives': {
+    rulesFile: 'data/adjectives.json',
+    practiceFile: 'data/master-practice.json',
+    testFile: 'data/master-test.json',
+    categories: ['personality', 'appearance', 'emotion', 'quality']
+  },
+  'adverbs': {
+    rulesFile: 'data/adverbs.json',
+    practiceFile: 'data/master-practice.json',
+    testFile: 'data/master-test.json',
+    categories: ['manner', 'frequency', 'degree', 'time']
+  },
+  'collective-nouns': {
+    rulesFile: 'data/collective-expressions-data.json',
+    practiceFile: 'data/master-practice.json',
+    testFile: 'data/master-test.json',
+    categories: ['quantity', 'variety', 'sequence', 'collection', 'emotion', 'intensity']
+  },
+  'descriptive-verbs': {
+    rulesFile: 'data/descriptive-verbs.json',
+    practiceFile: 'data/master-practice.json',
+    testFile: 'data/master-test.json',
+    categories: ['movement', 'communication', 'appearance', 'change']
+  }
+};
+
+// State management
+let currentTopic = 'adjectives';
+let EXPRESSIONS_DATA = null;
+let PRACTICE_QUESTIONS = null;
+let currentMode = 'learn';
+let currentQuestion = 0;
+let practiceAnswers = [];
+let selectedAnswer = null;
+let filters = { category: 'all' };
+let testAnswers = {};
+let isTestChecked = false;
+let shuffledQuestions = [];
+let galleryCards = [];
+let currentCardIndex = 0;
+let favorites = JSON.parse(localStorage.getItem('intuity_favorites') || '[]');
+let tooltipTimeout = null;
+
+// ==========================================
+// CORE DATA LOADING & MANAGEMENT
+// ==========================================
+
+async function loadTopicData(topic) {
+  try {
+    const config = TOPIC_CONFIG[topic];
+    if (!config) throw new Error(`Unknown topic: ${topic}`);
+
+    // Load expressions for Learn/Explore
+    const rulesResponse = await fetch(config.rulesFile);
+    if (!rulesResponse.ok) throw new Error(`Failed to load ${config.rulesFile}`);
+    const rulesData = await rulesResponse.json();
+    EXPRESSIONS_DATA = rulesData.expressions;
+    
+    // Load practice questions
+    const practiceResponse = await fetch(config.practiceFile);
+    if (!practiceResponse.ok) throw new Error(`Failed to load ${config.practiceFile}`);
+    const practiceData = await practiceResponse.json();
+    PRACTICE_QUESTIONS = practiceData[topic]; // Get topic-specific questions
+    
+    return true;
+  } catch (error) {
+    console.error('Error loading topic data:', error);
+    showToast(`Error loading ${topic}`, 'error');
+    return false;
+  }
 }
-addEventListener('resize', syncHeader);
-addEventListener('orientationchange', function(){ setTimeout(syncHeader, 120); });
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncHeader);
-if (window.ResizeObserver) {
-  var hh = document.querySelector('.header');
-  if (hh) new ResizeObserver(syncHeader).observe(hh);
+async function selectTopic(topic) {
+  currentTopic = topic;
+  /* Defuse follows the topic on screen */
+  const dl = document.getElementById('defuseLink');
+  if (dl) dl.href = '/skills/grammar-rules/tenses-defuse?vocab=expressions&set=expressions-' + topic;
+  
+  document.querySelectorAll('.topic-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelector(`[data-topic="${topic}"]`).classList.add('active');
+  
+  const loaded = await loadTopicData(topic);
+  
+  if (loaded) {
+    filters.category = 'all';
+    buildCategoryNavButtons();
+    
+    if (currentMode === 'learn') {
+      renderAllExpressions();
+    } else if (currentMode === 'explore') {
+      initGallery();
+    } else if (currentMode === 'practice') {
+      startPractice();
+    } else if (currentMode === 'test') {
+      startTest();
+    }
+  }
 }
-syncHeader();
+
+// ==========================================
+// EXPRESSION LOOKUP - SIMPLIFIED
+// ==========================================
+
+// ... [rest of your code stays the same - irregular verbs, etc.]
+
+// ==========================================
+// EXPRESSION LOOKUP - SIMPLIFIED
+// ==========================================
+
+// Irregular verb mappings for verbs used in the app
+const IRREGULAR_VERBS = {
+  'strode': 'stride',
+  'rang': 'ring',
+  'sang': 'sing',
+  'sank': 'sink',
+  'shone': 'shine',
+  'shook': 'shake',
+  'shot': 'shoot',
+  'slept': 'sleep',
+  'slid': 'slide',
+  'spoke': 'speak',
+  'sped': 'speed',
+  'spent': 'spend',
+  'spilt': 'spill',
+  'spun': 'spin',
+  'split': 'split',
+  'spread': 'spread',
+  'sprang': 'spring',
+  'stood': 'stand',
+  'stole': 'steal',
+  'stuck': 'stick',
+  'stung': 'sting',
+  'stank': 'stink',
+  'struck': 'strike',
+  'strung': 'string',
+  'strove': 'strive',
+  'swore': 'swear',
+  'swept': 'sweep',
+  'swam': 'swim',
+  'swung': 'swing',
+  'took': 'take',
+  'taught': 'teach',
+  'tore': 'tear',
+  'told': 'tell',
+  'thought': 'think',
+  'threw': 'throw',
+  'woke': 'wake',
+  'wore': 'wear',
+  'wove': 'weave',
+  'wept': 'weep',
+  'won': 'win',
+  'wound': 'wind',
+  'withdrew': 'withdraw',
+  'wrung': 'wring',
+  'wrote': 'write',
+  'rose': 'rise',
+  'fell': 'fall',
+  'ran': 'run',
+  'came': 'come',
+  'went': 'go',
+  'saw': 'see',
+  'gave': 'give',
+  'knew': 'know',
+  'grew': 'grow',
+  'threw': 'throw',
+  'flew': 'fly',
+  'drew': 'draw',
+  'began': 'begin',
+  'drank': 'drink',
+  'drove': 'drive',
+  'ate': 'eat',
+  'froze': 'freeze',
+  'hid': 'hide',
+  'rode': 'ride',
+  'broke': 'break',
+  'chose': 'choose',
+  'got': 'get',
+  'forgot': 'forget',
+  'blew': 'blow',
+  'knew': 'know'
+};
+
+function findExpressionByPhrase(phrase) {
+  if (!EXPRESSIONS_DATA) {
+    console.warn('EXPRESSIONS_DATA is null');
+    return null;
+  }
+  
+  const phraseLower = phrase.toLowerCase();
+  
+  // Iterate through all categories
+  for (const [categoryKey, categoryData] of Object.entries(EXPRESSIONS_DATA)) {
+    const expressions = categoryData.expressions;
+    
+    if (Array.isArray(expressions)) {
+      // First try exact match
+      let found = expressions.find(expr => 
+        expr.phrase.toLowerCase() === phraseLower
+      );
+      
+      // If not found and it's verbs mode, try matching verb conjugations
+      if (!found && currentTopic === 'descriptive-verbs') {
+        // Check irregular verbs first
+        let baseForm = IRREGULAR_VERBS[phraseLower];
+        
+        if (baseForm) {
+          found = expressions.find(expr => 
+            expr.phrase.toLowerCase() === baseForm
+          );
+        }
+        
+        // If still not found, try regular verb conjugation patterns
+        if (!found) {
+          found = expressions.find(expr => {
+            const basePhrase = expr.phrase.toLowerCase();
+            
+            // Remove common verb endings to get base form
+            let strippedPhrase = phraseLower
+              .replace(/ied$/, 'y')      // tried -> try
+              .replace(/ed$/, '')         // walked -> walk
+              .replace(/ing$/, '')        // walking -> walk
+              .replace(/es$/, '')         // watches -> watch
+              .replace(/s$/, '');         // walks -> walk
+            
+            // Handle double consonants (e.g., running -> run, stopping -> stop)
+            if (strippedPhrase.match(/(.)\1$/)) {
+              strippedPhrase = strippedPhrase.slice(0, -1);
+            }
+            
+            // Check if matches base form
+            return basePhrase === strippedPhrase || 
+                   phraseLower.startsWith(basePhrase);
+          });
+        }
+      }
+      
+      if (found) {
+        return found;
+      }
+    }
+  }
+  
+  console.warn('Expression not found:', phrase);
+  return null;
+}
+  
+// ==========================================
+// CATEGORY FILTERS
+// ==========================================
+
+function buildCategoryNavButtons() {
+  const container = document.getElementById('catNavButtons');
+  const config = TOPIC_CONFIG[currentTopic];
+  
+  let html = '<button class="cat-nav-btn' + (filters.category === 'all' ? ' active' : '') + '" onclick="filterCategory(\'all\')">All</button>';
+  
+  config.categories.forEach(cat => {
+    const label = cat.charAt(0).toUpperCase() + cat.slice(1).replace('-', ' ');
+    const activeClass = (filters.category === cat) ? ' active' : '';
+    html += `<button class="cat-nav-btn${activeClass}" onclick="filterCategory('${cat}')">${label}</button>`;
+  });
+  
+  container.innerHTML = html;
+}
+
+function filterCategory(category) {
+  filters.category = category;
+  
+  // Update nav buttons
+  document.querySelectorAll('.cat-nav-btn').forEach(btn => {
+    btn.classList.remove('active');
+    const btnText = btn.textContent.toLowerCase().replace(' ', '-');
+    if (btnText === category || (category === 'all' && btn.textContent === 'All')) {
+      btn.classList.add('active');
+    }
+  });
+  
+  // Refresh current mode
+  switch(currentMode) {
+    case 'learn':
+      renderAllExpressions();
+      break;
+    case 'explore':
+      initGallery();
+      break;
+    case 'practice':
+      startPractice();
+      break;
+    case 'test':
+      startTest();
+      break;
+  }
+}
+
+// ==========================================
+// MODE SWITCHING
+// ==========================================
+
+function switchMode(mode) {
+  currentMode = mode;
+  document.body.dataset.mode = mode;
+  
+  document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+  document.getElementById(`${mode}Tab`).classList.add('active');
+  
+  document.getElementById('learnMode').classList.add('hidden');
+  document.getElementById('exploreMode').classList.add('hidden');
+  document.getElementById('practiceMode').classList.add('hidden');
+  document.getElementById('testMode').classList.add('hidden');
+  document.getElementById('categoryQuickNav').classList.add('hidden');
+
+  switch(mode) {
+    case 'learn':
+      document.getElementById('learnMode').classList.remove('hidden');
+      document.getElementById('categoryQuickNav').classList.remove('hidden');
+      buildCategoryNavButtons();
+      renderAllExpressions();
+      break;
+    case 'explore':
+      document.getElementById('exploreMode').classList.remove('hidden');
+      document.getElementById('categoryQuickNav').classList.remove('hidden');
+      buildCategoryNavButtons();
+      initGallery();
+      break;
+    case 'practice':
+      document.getElementById('practiceMode').classList.remove('hidden');
+      document.getElementById('categoryQuickNav').classList.remove('hidden');
+      buildCategoryNavButtons();
+      startPractice();
+      break;
+    case 'test':
+      document.getElementById('testMode').classList.remove('hidden');
+      document.getElementById('categoryQuickNav').classList.remove('hidden');
+      buildCategoryNavButtons();
+      startTest();
+      break;
+  }
+}
+
+// ==========================================
+// LEARN MODE
+// ==========================================
+
+function renderAllExpressions() {
+  if (!EXPRESSIONS_DATA) return;
+  
+  const list = document.getElementById('expressionList');
+  list.innerHTML = '';
+  
+  let allExpressions = [];
+  
+  Object.entries(EXPRESSIONS_DATA).forEach(([key, category]) => {
+    if (filters.category === 'all' || filters.category === key) {
+      if (category.expressions) {
+        allExpressions.push(...category.expressions);
+      }
+    }
+  });
+  
+  if (allExpressions.length === 0) {
+    list.innerHTML = '<div style="text-align: center; color: var(--faint); padding: 2rem;">No items match the current filters.</div>';
+    return;
+  }
+  
+  allExpressions.forEach(expr => {
+    const item = document.createElement('div');
+    item.className = 'expression-item';
+    item.onclick = () => copyExpression(expr.phrase);
+    
+    item.innerHTML = `
+      <div class="expression-header">
+        <div class="expression-phrase">${expr.phrase}</div>
+        <span class="difficulty-badge difficulty-${expr.difficulty.toLowerCase()}">${expr.difficulty}</span>
+      </div>
+      <div class="expression-meaning">${expr.meaning}</div>
+      <div class="expression-example">"${expr.example}"</div>
+      <div class="expression-tags">
+        ${expr.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+      </div>
+    `;
+    
+    list.appendChild(item);
+  });
+}
+
+// ==========================================
+// EXPLORE MODE (GALLERY)
+// ==========================================
+
+function initGallery() {
+  if (!EXPRESSIONS_DATA) return;
+  
+  galleryCards = [];
+  currentCardIndex = 0;
+  
+  Object.entries(EXPRESSIONS_DATA).forEach(([key, category]) => {
+    if (filters.category === 'all' || filters.category === key) {
+      if (category.expressions) {
+        galleryCards.push(...category.expressions);
+      }
+    }
+  });
+  
+  if (galleryCards.length === 0) {
+    document.getElementById('swipeWrapper').innerHTML = '<div style="padding: 3rem; text-align: center; color: var(--faint);">No items match the current filters.</div>';
+    return;
+  }
+  
+  renderGalleryCards();
+  updateCardCounter();
+  updateNavigationButtons();
+}
+
+function renderGalleryCards() {
+  const wrapper = document.getElementById('swipeWrapper');
+  wrapper.innerHTML = '';
+  
+  galleryCards.forEach((expr, index) => {
+    const card = document.createElement('div');
+    card.className = 'vocab-card';
+    
+    if (index === currentCardIndex) {
+      card.classList.add('active');
+    } else if (index < currentCardIndex) {
+      card.classList.add('prev');
+    } else {
+      card.classList.add('next');
+    }
+    
+    card.innerHTML = `
+      <div class="card-word">${expr.phrase}</div>
+      ${expr.pronunciation ? `<div class="card-pronunciation">${expr.pronunciation}</div>` : ''}
+      <div class="card-meaning">${expr.meaning}</div>
+      <div class="card-example">"${expr.example}"</div>
+      <div class="card-tags">
+        ${expr.tags.map(tag => `<span class="card-tag">${tag}</span>`).join('')}
+        <span class="card-tag">${expr.difficulty}</span>
+      </div>
+    `;
+    
+    wrapper.appendChild(card);
+  });
+  
+  updateFavoriteButton();
+}
+
+function nextCard() {
+  if (currentCardIndex < galleryCards.length - 1) {
+    currentCardIndex++;
+    updateCardStates();
+    updateCardCounter();
+    updateNavigationButtons();
+    updateFavoriteButton();
+  }
+}
+
+function prevCard() {
+  if (currentCardIndex > 0) {
+    currentCardIndex--;
+    updateCardStates();
+    updateCardCounter();
+    updateNavigationButtons();
+    updateFavoriteButton();
+  }
+}
+
+function updateCardStates() {
+  const cards = document.querySelectorAll('.vocab-card');
+  
+  cards.forEach((card, index) => {
+    card.classList.remove('active', 'prev', 'next');
+    
+    if (index === currentCardIndex) {
+      card.classList.add('active');
+    } else if (index < currentCardIndex) {
+      card.classList.add('prev');
+    } else {
+      card.classList.add('next');
+    }
+  });
+}
+
+function updateCardCounter() {
+  document.getElementById('currentCard').textContent = currentCardIndex + 1;
+  document.getElementById('totalCards').textContent = galleryCards.length;
+}
+
+function updateNavigationButtons() {
+  document.getElementById('prevCardBtn').disabled = currentCardIndex === 0;
+  document.getElementById('nextCardBtn').disabled = currentCardIndex === galleryCards.length - 1;
+}
+
+function toggleFavorite() {
+  const currentExpr = galleryCards[currentCardIndex];
+  const index = favorites.indexOf(currentExpr.phrase);
+  
+  if (index === -1) {
+    favorites.push(currentExpr.phrase);
+    showToast(`Saved: ${currentExpr.phrase}`, 'success');
+  } else {
+    favorites.splice(index, 1);
+    showToast(`Removed from favorites`, 'success');
+  }
+  
+  localStorage.setItem('intuity_favorites', JSON.stringify(favorites));
+  updateFavoriteButton();
+}
+
+function updateFavoriteButton() {
+  const btn = document.getElementById('favoriteBtn');
+  if (!btn || galleryCards.length === 0) return;
+  
+  const currentExpr = galleryCards[currentCardIndex];
+  if (favorites.includes(currentExpr.phrase)) {
+    btn.classList.add('saved');
+    btn.textContent = 'Saved';
+  } else {
+    btn.classList.remove('saved');
+    btn.textContent = 'Save';
+  }
+}
+  
+// Speech settings - simple and reliable
+function playAudio() {
+  const currentExpr = galleryCards[currentCardIndex];
+  if (!currentExpr) return;
+  
+  // Cancel any ongoing speech
+  speechSynthesis.cancel();
+  
+  // Small delay to ensure cancellation is processed
+  setTimeout(() => {
+    const utterance = new SpeechSynthesisUtterance(currentExpr.phrase);
+    
+    // Use standard rate for all devices - browser will handle it
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+    utterance.lang = 'en-GB';
+    
+    utterance.onerror = (e) => {
+      console.error('Speech error:', e);
+      showToast('Audio playback failed', 'error');
+    };
+    
+    utterance.onend = () => {
+      console.log('✅ Audio completed');
+    };
+    
+    // Speak with default voice - let the browser choose the best one
+    speechSynthesis.speak(utterance);
+  }, 50);
+}
+
+function showRelated() {
+  const currentExpr = galleryCards[currentCardIndex];
+  if (currentExpr.synonyms && currentExpr.synonyms.length > 0) {
+    showToast(`Similar: ${currentExpr.synonyms.slice(0, 3).join(', ')}`, 'success');
+  } else {
+    showToast('No related words available', 'error');
+  }
+}
+
+// ==========================================
+// PRACTICE MODE
+// ==========================================
+
+function getFilteredQuestions() {
+  if (!PRACTICE_QUESTIONS) return [];
+  let questions = PRACTICE_QUESTIONS;
+  
+  if (filters.category !== 'all') {
+    questions = questions.filter(q => q.category === filters.category);
+  }
+  
+  return questions;
+}
+
+function startPractice() {
+  const questions = getFilteredQuestions();
+  
+  if (questions.length === 0) {
+    document.getElementById('practiceMode').innerHTML = `
+      <div style="padding: 3rem; text-align: center;">
+        <div style="font-size: 2rem; margin-bottom: 1rem;">📚</div>
+        <div style="font-size: 1rem; color: #f1f5f9; margin-bottom: 0.5rem;">No Practice Questions Available</div>
+        <div style="font-size: 0.8125rem; color: var(--faint);">Try different filter settings</div>
+      </div>
+    `;
+    return;
+  }
+  
+  shuffledQuestions = shuffleArray(questions);
+  currentQuestion = 0;
+  practiceAnswers = new Array(shuffledQuestions.length).fill(null);
+  selectedAnswer = null;
+  renderPracticeQuestion();
+  updatePracticeProgress();
+}
+
+function renderPracticeQuestion() {
+  const question = shuffledQuestions[currentQuestion];
+  
+  const currentAnswer = practiceAnswers[currentQuestion];
+  const blankText = currentAnswer || '______';
+  const blankClass = currentAnswer ? 'filled' : '';
+  
+  document.getElementById('sentenceDisplay').innerHTML = question.sentence.replace('___', `<span class="blank ${blankClass}" id="answerBlank">${blankText}</span>`);
+  
+  const optionsGrid = document.getElementById('optionsGrid');
+  optionsGrid.innerHTML = '';
+  
+  const shuffledOptions = shuffleArray(question.options);
+  
+  shuffledOptions.forEach(option => {
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+    btn.textContent = option;
+    
+    const isAnswered = practiceAnswers[currentQuestion] !== null;
+    
+    if (!isAnswered) {
+      btn.onclick = () => selectOption(option, btn);
+    } else {
+      btn.disabled = true;
+    }
+    
+    btn.addEventListener('mouseenter', (e) => {
+      showTooltip(e, option);
+    });
+
+    btn.addEventListener('mouseleave', () => {
+      hideTooltip();
+    });
+    
+    if (practiceAnswers[currentQuestion] === option) {
+      btn.classList.add('selected');
+      selectedAnswer = option;
+    }
+    
+    optionsGrid.appendChild(btn);
+  });
+  
+  document.getElementById('feedbackPanel').classList.remove('show');
+  updatePracticeNavigationButtons();
+}
+  
+function selectOption(option, btnElement) {
+  if (practiceAnswers[currentQuestion] !== null) return;
+  
+  document.querySelectorAll('#optionsGrid .option-btn').forEach(btn => {
+    btn.classList.remove('selected');
+  });
+  
+  btnElement.classList.add('selected');
+  selectedAnswer = option;
+  
+  const blank = document.getElementById('answerBlank');
+  if (blank) {
+    blank.textContent = option;
+    blank.classList.remove('correct', 'incorrect');
+    blank.classList.add('filled');
+  }
+  
+  document.getElementById('checkBtn').disabled = false;
+}
+
+function checkAnswer() {
+  if (!selectedAnswer) {
+    showToast('Please select an answer first', 'error');
+    return;
+  }
+  
+  const question = shuffledQuestions[currentQuestion];
+  const isCorrect = selectedAnswer === question.correct;
+  
+  practiceAnswers[currentQuestion] = selectedAnswer;
+  
+  const blank = document.getElementById('answerBlank');
+  blank.textContent = selectedAnswer;
+  blank.classList.remove('filled');
+  blank.classList.add(isCorrect ? 'correct' : 'incorrect');
+  
+  const buttons = document.querySelectorAll('#optionsGrid .option-btn');
+  buttons.forEach(btn => {
+    btn.disabled = true;
+    if (btn.textContent === question.correct) {
+      btn.classList.add('correct');
+    } else if (btn.textContent === selectedAnswer && !isCorrect) {
+      btn.classList.add('incorrect');
+    }
+  });
+  
+  const feedbackPanel = document.getElementById('feedbackPanel');
+  feedbackPanel.classList.remove('incorrect');
+  feedbackPanel.classList.add('show');
+  
+  if (isCorrect) {
+    document.getElementById('feedbackTitle').textContent = '✓ Correct!';
+    document.getElementById('feedbackText').textContent = question.explanation;
+  } else {
+    feedbackPanel.classList.add('incorrect');
+    document.getElementById('feedbackTitle').textContent = '✗ Incorrect';
+    document.getElementById('feedbackText').textContent = `The correct answer is "${question.correct}". ${question.explanation}`;
+  }
+  
+  document.getElementById('checkBtn').disabled = true;
+  document.getElementById('nextBtn').disabled = false;
+  updatePracticeProgress();
+}
+
+function nextQuestion() {
+  if (currentQuestion < shuffledQuestions.length - 1) {
+    currentQuestion++;
+    selectedAnswer = null;
+    renderPracticeQuestion();
+    updatePracticeProgress();
+  }
+}
+
+function prevQuestion() {
+  if (currentQuestion > 0) {
+    currentQuestion--;
+    selectedAnswer = practiceAnswers[currentQuestion];
+    renderPracticeQuestion();
+    updatePracticeProgress();
+  }
+}
+
+function updatePracticeNavigationButtons() {
+  document.getElementById('prevBtn').disabled = currentQuestion === 0;
+  document.getElementById('checkBtn').disabled = practiceAnswers[currentQuestion] !== null;
+  document.getElementById('nextBtn').disabled = practiceAnswers[currentQuestion] === null || currentQuestion === shuffledQuestions.length - 1;
+}
+
+function updatePracticeProgress() {
+  const answered = practiceAnswers.filter(a => a !== null).length;
+  const total = shuffledQuestions.length;
+  
+  const counter = document.getElementById('questionCounter');
+  counter.innerHTML = `<span class="current">${currentQuestion + 1}</span>/${total}`;
+}
+
+// ==========================================
+// TEST MODE
+// ==========================================
+
+function startTest() {
+  if (!EXPRESSIONS_DATA) return;
+  
+  testAnswers = {};
+  isTestChecked = false;
+  
+  const questions = getFilteredQuestions();
+  shuffledQuestions = shuffleArray(questions);
+  
+  renderTestQuestions();
+}
+
+function renderTestQuestions() {
+  const container = document.getElementById('testSentences');
+  container.innerHTML = '';
+  
+  shuffledQuestions.forEach((question, idx) => {
+    const row = document.createElement('div');
+    row.className = 'test-sentence-row';
+    
+    const userAnswer = testAnswers[idx] || '';
+    const hasAnswer = userAnswer.trim() !== '';
+    
+    const headerDiv = document.createElement('div');
+    headerDiv.style.display = 'flex';
+    headerDiv.style.gap = '0.75rem';
+    headerDiv.style.marginBottom = '1rem';
+    
+    const numDiv = document.createElement('div');
+    numDiv.className = hasAnswer ? 'question-number answered' : 'question-number';
+    numDiv.textContent = idx + 1;
+    
+    const sentenceDiv = document.createElement('div');
+    sentenceDiv.className = 'test-sentence-text';
+    sentenceDiv.style.flex = '1';
+    
+    const blankText = hasAnswer ? userAnswer : '______';
+    let blankClass = hasAnswer ? 'filled' : '';
+    
+    if (isTestChecked) {
+      if (userAnswer === question.correct) {
+        blankClass = 'correct';
+      } else if (hasAnswer) {
+        blankClass = 'incorrect';
+      }
+    }
+    
+    sentenceDiv.innerHTML = question.sentence.replace('___', `<span class="blank ${blankClass}">${blankText}</span>`);
+    
+    headerDiv.appendChild(numDiv);
+    headerDiv.appendChild(sentenceDiv);
+    row.appendChild(headerDiv);
+    
+    const optionsGrid = document.createElement('div');
+    optionsGrid.className = 'options-grid';
+    optionsGrid.style.gridTemplateColumns = 'repeat(2, 1fr)';
+    optionsGrid.style.gap = '0.5rem';
+    
+    const shuffledOptions = shuffleArray(question.options);
+    
+    shuffledOptions.forEach(option => {
+      const isSelected = userAnswer === option;
+      const btn = document.createElement('button');
+      btn.className = 'option-btn';
+      btn.style.textAlign = 'left';
+      btn.textContent = option;
+      
+      btn.addEventListener('mouseenter', (e) => {
+        showTooltip(e, option);
+      });
+
+      btn.addEventListener('mouseleave', () => {
+        hideTooltip();
+      });
+      
+      if (isTestChecked) {
+        btn.disabled = true;
+        if (option === question.correct) {
+          btn.classList.add('correct');
+        } else if (isSelected && option !== question.correct) {
+          btn.classList.add('incorrect');
+        }
+      } else if (isSelected) {
+        btn.classList.add('selected');
+      }
+      
+      btn.onclick = () => selectTestOption(idx, option);
+      optionsGrid.appendChild(btn);
+    });
+    
+    row.appendChild(optionsGrid);
+    container.appendChild(row);
+  });
+  
+  const answered = Object.keys(testAnswers).filter(k => testAnswers[k] && testAnswers[k].trim()).length;
+  document.getElementById('submitTestBtn').disabled = answered !== shuffledQuestions.length;
+}
+
+function selectTestOption(idx, option) {
+  if (isTestChecked) return;
+  
+  testAnswers[idx] = option;
+  renderTestQuestions();
+}
+
+function clearTestAnswers() {
+  testAnswers = {};
+  isTestChecked = false;
+  renderTestQuestions();
+}
+
+function submitTest() {
+  let correct = 0;
+  let total = shuffledQuestions.length;
+  
+  shuffledQuestions.forEach((question, idx) => {
+    const userAnswer = testAnswers[idx] || '';
+    if (userAnswer === question.correct) correct++;
+  });
+  
+  isTestChecked = true;
+  renderTestQuestions();
+  
+  const percentage = Math.round((correct / total) * 100);
+  const topicName = currentTopic.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
+  document.getElementById('modalSubtitle').textContent = topicName;
+  document.getElementById('scoreNumber').textContent = `${correct}/${total}`;
+  document.getElementById('scoreLabel').textContent = `${percentage}% Correct`;
+  
+  showModal();
+}
+
+function retryTest() {
+  closeModal();
+  startTest();
+}
+
+// ==========================================
+// TOOLTIP SYSTEM
+// ==========================================
+
+function showTooltip(event, phrase) {
+  const expr = findExpressionByPhrase(phrase);
+  if (!expr) {
+    console.warn('Tooltip: Expression not found for:', phrase);
+    return;
+  }
+  
+  clearTimeout(tooltipTimeout);
+  
+  const tooltip = document.getElementById('vocabTooltip');
+  document.getElementById('tooltipWord').textContent = expr.phrase;
+  document.getElementById('tooltipMeaning').textContent = expr.meaning;
+  
+  if (expr.synonyms && expr.synonyms.length > 0) {
+    document.getElementById('tooltipSynonyms').textContent = `Similar: ${expr.synonyms.slice(0, 3).join(', ')}`;
+  } else {
+    document.getElementById('tooltipSynonyms').textContent = '';
+  }
+  
+  const rect = event.target.getBoundingClientRect();
+  tooltip.style.left = `${rect.left + rect.width / 2}px`;
+  tooltip.style.top = `${rect.top - 10}px`;
+  tooltip.style.transform = 'translate(-50%, -100%)';
+  
+  tooltipTimeout = setTimeout(() => {
+    tooltip.classList.add('show');
+  }, 300);
+}
+
+function hideTooltip() {
+  clearTimeout(tooltipTimeout);
+  document.getElementById('vocabTooltip').classList.remove('show');
+}
+
+// ==========================================
+// UTILITY FUNCTIONS
+// ==========================================
+
+function shuffleArray(array) {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+function copyExpression(phrase) {
+  navigator.clipboard.writeText(phrase).then(() => {
+    showToast(`Copied: ${phrase}`, 'success');
+  });
+}
+
+function showModal() {
+  document.getElementById('scoreModal').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('scoreModal').classList.remove('active');
+}
+
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = 'toast show';
+  if (type === 'error') toast.classList.add('error');
+  
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.className = 'toast', 300);
+  }, 2500);
+}
+
+// ==========================================
+// EVENT LISTENERS
+// ==========================================
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Swipe gestures
+  const wrapper = document.getElementById('swipeWrapper');
+  let touchStartX = 0;
+  let touchEndX = 0;
+  
+  wrapper.addEventListener('touchstart', e => {
+    touchStartX = e.changedTouches[0].screenX;
+  });
+
+  wrapper.addEventListener('touchend', e => {
+    touchEndX = e.changedTouches[0].screenX;
+    const diff = touchEndX - touchStartX;
+    const swipeThreshold = 50;
+    
+    if (Math.abs(diff) > swipeThreshold) {
+      if (diff > 0) {
+        prevCard();
+      } else {
+        nextCard();
+      }
+    }
+  });
+  
+  // Keyboard navigation
+  document.addEventListener('keydown', e => {
+    if (currentMode === 'explore') {
+      if (e.key === 'ArrowLeft') prevCard();
+      if (e.key === 'ArrowRight') nextCard();
+    }
+  });
+
+  // Modal click outside
+  document.getElementById('scoreModal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+});
+
+// ==========================================
+// INITIALIZE APP
+// ==========================================
+
+async function init() {
+  await selectTopic('adjectives');
+}
+
+init();
 </script>
 </body>
 </html>

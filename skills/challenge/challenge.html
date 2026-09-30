@@ -289,6 +289,7 @@ window.ChallengeGames=window.ChallengeGames||{};
 <script src="/data/challenge/games/pairs.js?v=2"></script>
 <script src="/data/challenge/games/flip.js?v=2"></script>
 <script src="/data/challenge/games/hunt.js?v=1"></script>
+<script src="/data/challenge/challenge-mixes.js?v=5"></script>
 <script>
 (function(){
 'use strict';
@@ -297,6 +298,8 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;',
 const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[a[i],a[j]]=[a[j],a[i]];}return a;};
 const G=window.ChallengeGames, P=new URLSearchParams(location.search);
 const BASE='/data/challenge/';
+const SECTION=P.get('section')||'grammar';
+const SEC=()=>TOPICS.sections.find(s=>s.id===SECTION)||TOPICS.sections[0];
 const N=14;                    /* fourteen cells, all identical — every one fetches its own exercise */
 const NOTE={game:'Game · fourteen tiles, fourteen games — Defuse, Swing, Knock-out, Sort, Pegs, Forge, Pairs, Flip and Hunt. Three lives, another try after a mistake, the answer explained straight away.',
             exam:'Exam · eight exam formats across fourteen cells, half recognising and half producing. One attempt per cell, no feedback until the end — then your percentage, a grade and a full review.'};
@@ -315,7 +318,7 @@ function drawModes(){
     : '<span><svg viewBox="0 0 12 12"><circle cx="6" cy="6" r="2.6" fill="var(--ring-ink)" stroke="var(--ring-core)" stroke-width="1.2"/></svg>Answered</span><span><svg viewBox="0 0 12 12"><path d="M2 6.4l2.8 3 5-5.8" fill="none" stroke="var(--mark-right)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" fill="none" stroke="var(--mark-wrong)" stroke-width="2.2" stroke-linecap="round"/></svg>Marked at the end</span>';
   document.body.classList.toggle('mode-game', mode==='game');     /* Game's caramel rim */
   document.querySelectorAll('#modeRow [data-mode], #topicTabs [data-mode]').forEach(b=>{ const on=b.dataset.mode===mode; b.classList.toggle('active',on); on?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'); });
-  $('modeNote').textContent=NOTE[mode]; $('gKick').textContent=(TOPICS?TOPICS.sections[0].label:'Grammar')+' · '+(mode==='game'?'Game':'Exam');
+  $('modeNote').textContent=NOTE[mode]; $('gKick').textContent=(TOPICS?SEC().label:'Grammar')+' · '+(mode==='game'?'Game':'Exam');
   if(topic){ $('tKick').textContent=topic.label+' · '+(mode==='game'?'Game':'Exam');
     $('mScore').hidden=mode==='exam'; $('mLives').hidden=mode==='exam'; $('mDone').hidden=mode!=='exam'; }
 }
@@ -324,21 +327,39 @@ function wireModes(){ document.querySelectorAll('#modeRow [data-mode], #topicTab
 wireModes();
 function drawTopics(){
   if(BOARD) return;                                   /* a Board has one topic and no tabs */
-  const sec=TOPICS.sections[0];
+const sec=SEC();
   $('topicTabs').innerHTML=sec.topics.map(t=>`<button type="button" role="tab" class="vtab${topic&&topic.id===t.id?' active':''}" data-t="${esc(t.id)}"
-     aria-selected="${!!(topic&&topic.id===t.id)}" title="${esc(t.label)}${t.file?'':' · coming soon'}"${t.file?'':' disabled'}>${esc(t.short||t.label)}</button>`).join('');
+     aria-selected="${!!(topic&&topic.id===t.id)}" title="${esc(t.label)}${(t.file||t.vocab)?'':' · coming soon'}"${(t.file||t.vocab)?'':' disabled'}>${esc(t.short||t.label)}</button>`).join('');
   $('topicTabs').querySelectorAll('[data-t]:not(:disabled)').forEach(b=>b.onclick=()=>choose(b.dataset.t));
 }
 async function choose(id){
-  const t=TOPICS.sections[0].topics.find(x=>x.id===id); if(!t||!t.file) return;
+  const t=SEC().topics.find(x=>x.id===id); if(!t||!(t.file||t.vocab)) return;
   $('pick').textContent='Loading '+t.label+'…';
   try{
-    const d=await (await fetch(BASE+t.file,{cache:'no-store'})).json();
-    let rounds=(d.rounds||[]).slice();
-    for(const im of d.imports||[]){                    /* reuse a game's own rounds instead of copying them */
-      try{ const x=await (await fetch(im.file,{cache:'no-store'})).json(); (x.rounds||[]).forEach(r=>rounds.push(Object.assign({game:im.game},r))); }catch(e){}
+    if(t.vocab){
+      /* a vocabulary topic: turn each page's own sentences into choose rounds */
+      let all=[];
+      for(const vid of t.vocab){
+        try{
+          const m=await ChallengeMixes.loadVocab(vid);
+          let rs=[];
+          m.groups.forEach(g=>g.items.forEach(it=>rs.push({game:'choose',
+            prompt:(it.cue+' ___ '+it.after).trim(),options:it.options,answer:it.answer,
+            note:it.note,tag:it.tense})));
+          if(t.vocab.length>1) rs=shuffle(rs).slice(0,40);   /* keep a mix balanced */
+          all=all.concat(rs);
+        }catch(e){}
+      }
+      pool=all.filter(r=>G[r.game]); topic={id,label:t.label,focus:t.focus||''};
+    }else{
+      const d=await (await fetch(BASE+t.file,{cache:'no-store'})).json();
+      let rounds=(d.rounds||[]).slice();
+      for(const im of d.imports||[]){
+        try{ const x=await (await fetch(im.file,{cache:'no-store'})).json(); (x.rounds||[]).forEach(r=>rounds.push(Object.assign({game:im.game},r))); }catch(e){}
+      }
+      pool=rounds.filter(r=>G[r.game]); topic={id,label:d.topic||t.label,focus:t.focus||''};
     }
-    pool=rounds.filter(r=>G[r.game]); topic={id,label:d.topic||t.label,focus:t.focus||''};   /* focus: the card's one-line aim */
+    if(!pool.length) throw new Error('no rounds');
   }catch(e){ $('pick').textContent='That topic didn’t load — pick it again'; return; }
   $('gate').hidden=true; $('trackCard').hidden=false; drawTopics(); drawModes();
   reset(); drawBoard(); scrollTo(0,0);
@@ -646,6 +667,11 @@ document.querySelector('.header').addEventListener('click', e => {
   e.preventDefault();
   location.replace(a.href);
 });
+
+   if(SECTION==='vocabulary'&&!BOARD){
+  const b=document.querySelector('.back-link');
+  if(b){ b.textContent='← Vocabulary'; b.setAttribute('href','/index.html?openModal=vocabulary'); }
+}
    
 /* ══ LOAD ══ */
 drawModes();

@@ -131,6 +131,8 @@ body.mode-game{ --ring-sage:#C2956E; --mark-sweep:#C2956E; }   /* --mark-sweep: 
 
 /* ── the games' shared parts (cg-*) ── */
 .cg-prompt{font-size:.98rem;line-height:1.55;color:var(--sentence);margin:1rem 0 .9rem}
+body.board-page .board-toggle{display:flex;justify-content:center;padding:.2rem 0 .9rem;border-bottom:1px solid var(--rule,#D8CFC2);margin-bottom:.4rem}
+body.board-page .board-toggle .viewtog{margin:0}
 .aim{font-size:.86rem;line-height:1.5;color:var(--dim);margin:.6rem 0 0;padding-left:.7rem;border-left:3px solid var(--deco-ochre,#B0865C)}   /* not .focus: that is the card */
 .cg-line{font-family:var(--f-display);font-weight:700;font-size:1.12rem;line-height:1.5;color:var(--ink);margin:.9rem 0 1rem}
 .cg-blank{display:inline-block;min-width:5.5em;border-bottom:2px solid var(--ink);text-align:center;color:var(--accent-ink)}
@@ -227,7 +229,7 @@ body.mode-game{ --ring-sage:#C2956E; --mark-sweep:#C2956E; }   /* --mark-sweep: 
     <div class="header-title"><div class="app-title">INTUITY</div><div class="app-subtitle">The Challenge</div></div>
     <span class="header-spacer"><button class="mute" id="mute" type="button" aria-label="Sound on" aria-pressed="true">&#128266;</button> Level <b>B2</b></span>
   </div>
-  <nav class="mode-selector" aria-label="How to play">
+  <nav class="mode-selector" id="modeRow" aria-label="How to play">
     <button class="mode-btn active" type="button" data-mode="game" aria-current="page">Game</button>
     <button class="mode-btn" type="button" data-mode="exam">Exam</button>
   </nav>
@@ -312,14 +314,16 @@ function drawModes(){
     ? '<span><svg viewBox="0 0 12 12"><path d="M2 6.4l2.8 3 5-5.8" fill="none" stroke="var(--mark-right)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Right</span><span><svg viewBox="0 0 12 12"><path d="M2 6.4l2.8 3 5-5.8" fill="none" stroke="var(--mark-right)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" fill="none" stroke="var(--mark-wrong)" stroke-width="2.2" stroke-linecap="round"/></svg>After a mistake</span><span><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" fill="none" stroke="var(--mark-wrong)" stroke-width="2.2" stroke-linecap="round"/></svg>Wrong</span>'
     : '<span><svg viewBox="0 0 12 12"><circle cx="6" cy="6" r="2.6" fill="var(--ring-ink)" stroke="var(--ring-core)" stroke-width="1.2"/></svg>Answered</span><span><svg viewBox="0 0 12 12"><path d="M2 6.4l2.8 3 5-5.8" fill="none" stroke="var(--mark-right)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" fill="none" stroke="var(--mark-wrong)" stroke-width="2.2" stroke-linecap="round"/></svg>Marked at the end</span>';
   document.body.classList.toggle('mode-game', mode==='game');     /* Game's caramel rim */
-  document.querySelectorAll('.mode-selector [data-mode]').forEach(b=>{ const on=b.dataset.mode===mode; b.classList.toggle('active',on); on?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'); });
+  document.querySelectorAll('#modeRow [data-mode], #topicTabs [data-mode]').forEach(b=>{ const on=b.dataset.mode===mode; b.classList.toggle('active',on); on?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'); });
   $('modeNote').textContent=NOTE[mode]; $('gKick').textContent=(TOPICS?TOPICS.sections[0].label:'Grammar')+' · '+(mode==='game'?'Game':'Exam');
   if(topic){ $('tKick').textContent=topic.label+' · '+(mode==='game'?'Game':'Exam');
     $('mScore').hidden=mode==='exam'; $('mLives').hidden=mode==='exam'; $('mDone').hidden=mode!=='exam'; }
 }
-document.querySelectorAll('.mode-selector [data-mode]').forEach(b=>b.onclick=()=>{
-  if(b.dataset.mode===mode) return; mode=b.dataset.mode; drawModes(); if(topic){ reset(); paint(); } });
+function wireModes(){ document.querySelectorAll('#modeRow [data-mode], #topicTabs [data-mode]').forEach(b=>b.onclick=()=>{
+  if(b.dataset.mode===mode) return; mode=b.dataset.mode; drawModes(); if(topic){ reset(); paint(); } }); }
+wireModes();
 function drawTopics(){
+  if(BOARD) return;                                   /* a Board has one topic and no tabs */
   const sec=TOPICS.sections[0];
   $('topicTabs').innerHTML=sec.topics.map(t=>`<button type="button" role="tab" class="vtab${topic&&topic.id===t.id?' active':''}" data-t="${esc(t.id)}"
      aria-selected="${!!(topic&&topic.id===t.id)}" title="${esc(t.label)}${t.file?'':' · coming soon'}"${t.file?'':' disabled'}>${esc(t.short||t.label)}</button>`).join('');
@@ -594,11 +598,54 @@ $('again').onclick=()=>{ reset(); paint(); };
 $('scrim').addEventListener('click',e=>{ if(e.target.id==='scrim' && !(playing&&lives<=0)) closeCard(); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape' && !$('scrim').hidden && !(playing&&lives<=0)) closeCard(); });
 
+/* ══ BOARD — the Challenge for one topic, opened from that topic's page ══
+   ?board=1&topic=inversion. Same engine, same rounds, same games, cards,
+   marks and celebration — only the frame changes: the header shows the
+   topic page's own mode row with Board lit, Game · Exam moves down to a
+   small switch where the topic tabs were, and the page calls itself The
+   Board. The row is read from the topic page itself, so a page that gains
+   or loses a mode never falls out of step with its Board. */
+const BOARD=P.get('board')==='1'&&!!P.get('topic');
+const RULES_PAGE={passive:'passive-voice-rules',tenses:'tenses-rules',conditionals:'conditionals-rules','past-modals':'past-modals-rules',
+  comparatives:'comparatives-rules',reported:'reported-speech-rules',linking:'linking-words-rules',inversion:'inversion-rules',
+  gerunds:'gerunds-infinitives-rules',misc:'miscellaneous-rules'};
+if(BOARD){
+  document.body.classList.add('board-page');
+  document.querySelectorAll('h1.title').forEach(x=>x.textContent='The Board');
+  const tabs=$('topicTabs'); tabs.removeAttribute('role'); tabs.className='board-toggle';
+  tabs.innerHTML='<div class="viewtog" role="group" aria-label="How to play"><button class="viewbtn" type="button" data-mode="game">Game</button><button class="viewbtn" type="button" data-mode="exam">Exam</button></div>';
+  $('modeRow').setAttribute('aria-label','Topic modes'); $('modeRow').innerHTML='<span class="mode-btn active" aria-current="page">Board</span>';
+  wireModes();
+}
+async function boardHeader(t){
+  const page=RULES_PAGE[t.id]; if(!page) return;
+  const url='/skills/grammar-rules/'+page;
+  document.querySelector('.app-subtitle').textContent=t.label+' · Board';
+  document.title='INTUITY — '+t.label+' · Board';
+  const back=document.querySelector('.back-link'); if(back){ back.textContent='← '+t.label; back.href=url; back.removeAttribute('target'); }
+  try{
+    const html=await (await fetch(url+'.html',{cache:'no-store'})).text();
+    const row=new DOMParser().parseFromString(html,'text/html').querySelector('.mode-selector'); if(!row) return;
+    let placed=false; const out=[];
+    [...row.children].forEach(el=>{
+      const label=el.textContent.trim(), m=el.dataset&&el.dataset.mode, href=el.getAttribute&&el.getAttribute('href');
+      if(/^(forge|board)$/i.test(label)&&!m||/challenge\.html/.test(href||'')){          /* Forge's place — or a Board link — is ours */
+        if(!placed){ out.push('<span class="mode-btn active" aria-current="page">Board</span>'); placed=true; } return; }
+      if(el.classList.contains('mode-soon')) return;
+      const go=m?(m==='explore'?url:url+'?mode='+m):href?new URL(href,location.origin+url).pathname+new URL(href,location.origin+url).search:null;
+      if(go) out.push(`<a class="mode-btn" href="${esc(go)}">${esc(m==='board'?'Trail':label)}</a>`);
+    });
+    if(!placed) out.push('<span class="mode-btn active" aria-current="page">Board</span>');
+    $('modeRow').innerHTML=out.join('');
+  }catch(e){}
+}
+
 /* ══ LOAD ══ */
 drawModes();
 fetch(BASE+'challenge-topics.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{
   TOPICS=d; drawTopics(); drawModes();
   const want=P.get('topic'); if(want) choose(want);      /* a teacher's link: ?topic=passive&mode=exam */
+  if(BOARD){ const t=d.sections[0].topics.find(x=>x.id===want); if(t) boardHeader(t); }
 }).catch(()=>{ $('pick').textContent='The topics didn’t load — reload to try again'; });
 })();
 </script>

@@ -45,6 +45,7 @@
       setTimeout(() => back.focus(), 250);
       const go = () => {
         if (host.dataset.locked) return; const v = K.norm(inp.value); if (!v) return;
+        if (ctx.nudge && (r.alsoRight || []).map(K.norm).includes(v) && ctx.nudge(r.alsoNote)){ K.shake(inp); inp.select(); return; }
         const ok = r.answer.map(K.norm).includes(v), again = ctx.answer(ok, inp.value.trim());
         if (ok){ const s = document.createElement('span'); s.className = 'gk-good'; s.textContent = inp.value.trim(); inp.replaceWith(s); }
         else K.shake(inp);

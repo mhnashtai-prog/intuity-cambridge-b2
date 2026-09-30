@@ -137,9 +137,78 @@
     /* Descriptive Words' (Expression Master's) own Practice questions, one tab per topic tab on
        the page: the same twenty sentences, now against the clock */
     'expressions':      { label:'Descriptive Words', url:'/skills/similar-words/data/master-practice.json', home:'collective-expressions-master.html', kind:'topics',
-                          topics:[['adjectives','Adjectives'],['adverbs','Adverbs'],['collective-nouns','Collective nouns'],['descriptive-verbs','Verbs']] }
+                          topics:[['adjectives','Adjectives'],['adverbs','Adverbs'],['collective-nouns','Collective nouns'],['descriptive-verbs','Verbs']] },
+    /* Phrasal Verbs 1. Defuse plays the verb groups (one tab per verb, as on
+       the page); Forge plays the key word transformations. */
+    'phrasal-verbs':    { label:'Phrasal Verbs', url:'/data/grammar-rules/phrasal-verbs-data.json', kind:'phrasal',
+                          home:'/skills/grammar-rules/phrasal-verbs-quiz.html', games:['defuse','forge'],
+                          nav:[['learn','Learn','?mode=learn'],['quiz','Quiz','?mode=quiz'],['gap','Practice','?mode=gap'],['match','Match','?mode=match']] }
   };
   const MAX_MIX = 25;
+
+  /* ── phrasal verbs ────────────────────────────────────────────────────
+     DEFUSE. The options are PARTICLES, as in the page's own Quiz, and the
+     verb stands in the sentence just before the gap. Offering whole phrasal
+     verbs ("take off") would be wrong wherever the sentence needs "comes
+     with" or "has been putting about" — a third of the examples. The verb is
+     marked, so the learner sees which one they are completing.
+     FORGE. The transformations already carry the answer in its right form
+     (takes after, came down with), so the tiles are its words plus the
+     forms the question tempts: the verb's other form, and three of its
+     other particles. */
+  const IRREG = { gave:'give', given:'give', took:'take', taken:'take', broke:'break', broken:'break', came:'come',
+    got:'get', gotten:'get', went:'go', gone:'go', ran:'run', kept:'keep', brought:'bring', made:'make', held:'hold',
+    caught:'catch', dealt:'deal', set:'set', put:'put', cut:'cut', saw:'see', seen:'see', fell:'fall', left:'leave' };
+  const PAST = { give:'gave', take:'took', break:'broke', come:'came', get:'got', go:'went', run:'ran', keep:'kept',
+    bring:'brought', make:'made', hold:'held', catch:'caught', deal:'dealt', see:'saw', fall:'fell', leave:'left' };
+  function lemma(w, verbs){
+    const x = w.toLowerCase();
+    if (IRREG[x]) return IRREG[x];
+    if (verbs[x]) return x;
+    for (const cut of [/ies$/, /ing$/, /ed$/, /es$/, /s$/]){
+      const s = x.replace(cut, cut.source === 'ies$' ? 'y' : '');
+      if (verbs[s]) return s; if (verbs[s + 'e']) return s + 'e';
+      if (/(.)\1$/.test(s) && verbs[s.slice(0, -1)]) return s.slice(0, -1);
+    }
+    return null;
+  }
+  function otherForm(w, base){
+    if (w.toLowerCase() !== base) return base;
+    return PAST[base] || (base.endsWith('e') ? base + 'd' : base + 'ed');
+  }
+  function pvDefuse(d){
+    return (d.groups || []).map(g => ({
+      label: g.label.replace(/^MIX (\d)$/, 'Mix $1'), key: g.id, desc: 'Phrasal Verbs \u00b7 ' + g.label,
+      items: (g.items || []).map(it => {
+        const verb = it.verb || g.id, m = String(it.example || '').match(/_{3,}/);
+        if (!m || !Array.isArray(it.options) || it.options.length !== 4 || !it.options.includes(it.particle)) return null;
+        const before = it.example.slice(0, m.index).replace(/\s+$/, '');
+        return { cue: (before ? before + ' ' : '') + verb, after: it.example.slice(m.index + m[0].length).trim(),
+                 mark: [verb], answer: it.particle, options: it.options.slice(),
+                 note: verb + ' ' + it.particle + ' \u2014 ' + (it.meaning || ''), tense: verb + ' ' + it.particle };
+      }).filter(Boolean)
+    }));
+  }
+  function pvForge(d){
+    const verbs = d.verbs || {};
+    return (d.practice || []).map((test, k) => ({
+      label: 'Test ' + (k + 1), desc: test.title || 'Key word transformations',
+      items: (test.transformations || []).map(tr => {
+        const m = String(tr.sentence2 || '').match(/_{3,}/); if (!m) return null;
+        const answer = String(tr.answer).trim().split(/\s+/); if (answer.length < 2) return null;
+        const base = lemma(answer[0], verbs), extra = [];
+        if (base){
+          extra.push(otherForm(answer[0], base));
+          (verbs[base] || []).forEach(p => p.split(' ').forEach(w => {
+            if (extra.length < 4 && !answer.some(a => a.toLowerCase() === w) && !extra.includes(w)) extra.push(w); }));
+        }
+        const before = tr.sentence2.slice(0, m.index).trim();
+        return { cue: tr.sentence1.trim() + ' \u2192 ' + before, after: tr.sentence2.slice(m.index + m[0].length).trim(),
+                 mark: [], answer, bank: answer.concat(extra), note: 'Key word: ' + String(tr.keyWord || '').toUpperCase(),
+                 tense: 'Key word ' + String(tr.keyWord || '').toUpperCase() };
+      }).filter(Boolean)
+    }));
+  }
 
   function seedOf(s){ let h = 2166136261; for (let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
   function pickOthers(words, correct, text){
@@ -155,11 +224,15 @@
              answer, options, note: note || '', tense: tag || '' };
   }
 
-  async function loadVocab(id){
+  async function loadVocab(id, shape){
     const v = VOCAB[id]; if (!v) throw new Error('No vocabulary set called "' + id + '"');
+    shape = shape || 'choice';
+    if (shape === 'forge' && v.kind !== 'phrasal') throw new Error(v.label + ' has no Forge rounds');
     const d = await (await fetch(v.url || (VBASE + v.file), { cache:'no-store' })).json();
     const tests = [];                                   /* [{ label, desc, items, key }] */
-    if (v.kind === 'topics'){
+    if (v.kind === 'phrasal'){
+      (shape === 'forge' ? pvForge(d) : pvDefuse(d)).forEach(x => tests.push(x));
+    } else if (v.kind === 'topics'){
       v.topics.forEach(([key, label]) => {
         const items = (d[key] || []).filter(q => Array.isArray(q.options) && q.options.length === 4 && q.options.includes(q.correct))
           .map(q => gapItem(q.sentence, q.correct, q.options.slice(), q.explanation, label)).filter(Boolean);
@@ -195,20 +268,29 @@
                       color: COLORS[groups.length % COLORS.length], desc: t.desc, items: part });
       }
     });
+    /* the page's current verb rides along as ?verb=take — open on that tab */
+    try { const u = new URL(location.href), verb = u.searchParams.get('verb');
+      if (verb && !u.searchParams.get('set')){ const g = groups.find(x => x.id === id + '-' + verb);
+        if (g){ u.searchParams.set('set', g.id); history.replaceState(null, '', u); } } } catch(e){}
     return { vocab: Object.assign({ id }, v), groups };
   }
 
   /* The header on a vocabulary run: the page's own siblings, then Defuse. */
-  function dressVocab(v){
+  function dressVocab(v, here){
+    here = here || 'defuse';
     const sub = document.querySelector('.app-subtitle'); if (sub) sub.textContent = v.label.length > 16 ? v.label : v.label + ' \u00b7 B2 First';
-    document.title = 'INTUITY \u2014 ' + v.label + ' \u00b7 Defuse';
+    document.title = 'INTUITY \u2014 ' + v.label + ' \u00b7 ' + (here === 'forge' ? 'Forge' : 'Defuse');
     const lv = document.querySelector('.header-spacer b'); if (lv) lv.textContent = 'B2';
     const back = document.querySelector('.back-link');
-    if (back){ back.textContent = '\u2190 Vocabulary'; back.onclick = null; back.removeAttribute('onclick'); back.setAttribute('href', VPAGE + v.home); }
+    const homeUrl = v.home.charAt(0) === '/' ? v.home : VPAGE + v.home;
+    if (back){ back.textContent = '\u2190 Vocabulary'; back.onclick = null; back.removeAttribute('onclick'); back.setAttribute('href', homeUrl); }
     const row = document.querySelector('.mode-selector'); if (!row) return;
     const nav = v.nav || [[v.id, v.label, v.home]];
-    row.innerHTML = nav.map(([, label, page]) => `<a class="mode-btn" href="${VPAGE + page}">${label}</a>`).join('')
-      + '<span class="mode-btn active">Defuse</span>';
+    const link = page => page.charAt(0) === '?' ? homeUrl + page : page.charAt(0) === '/' ? page : VPAGE + page;
+    const games = { defuse:['Defuse','/skills/grammar-rules/tenses-defuse'], forge:['Forge','/skills/grammar-rules/tenses-forge'] };
+    row.innerHTML = nav.map(([, label, page]) => `<a class="mode-btn" href="${link(page)}">${label}</a>`).join('')
+      + (v.games || ['defuse']).map(g => g === here ? `<span class="mode-btn active">${games[g][0]}</span>`
+          : `<a class="mode-btn" href="${games[g][1]}?vocab=${encodeURIComponent(v.id)}">${games[g][0]}</a>`).join('');
   }
 
   window.ChallengeMixes = { load, dress, RULES, loadVocab, dressVocab, VOCAB };

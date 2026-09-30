@@ -13,6 +13,7 @@
       <button class="cg-btn" type="button" id="cgCheck">Check</button></div>`;
     const inp=host.querySelector('#cgIn'), go=()=>{
       if(host.dataset.locked) return; const v=norm(inp.value); if(!v) return;
+      if(ctx.nudge&&(r.alsoRight||[]).map(norm).includes(v)&&ctx.nudge(r.alsoNote)){ inp.select(); return; }
       const ok=r.answer.map(norm).includes(v);
       const again=ctx.answer(ok,inp.value.trim());
       if(ok&&!ctx.exam) host.querySelector('#cgBlank').textContent=r.answer[0];

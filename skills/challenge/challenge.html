@@ -332,25 +332,46 @@ const sec=SEC();
      aria-selected="${!!(topic&&topic.id===t.id)}" title="${esc(t.label)}${(t.file||t.vocab)?'':' · coming soon'}"${(t.file||t.vocab)?'':' disabled'}>${esc(t.short||t.label)}</button>`).join('');
   $('topicTabs').querySelectorAll('[data-t]:not(:disabled)').forEach(b=>b.onclick=()=>choose(b.dataset.t));
 }
+/* one vocabulary sentence → several round shapes, so the Board has variety */
+function vocabRounds(items){
+  const full=(it,w)=>[it.cue,w,it.after].filter(Boolean).join(' ').replace(/\s+/g,' ').trim();
+  const wrongOf=it=>shuffle(it.options.filter(o=>o!==it.answer))[0];
+  const out=[];
+  items.forEach(it=>{
+    const tag=it.tense||'', note=it.note||'';
+    const line=(it.cue+' ___ '+it.after).trim();
+    out.push({game:'choose',prompt:line,options:it.options,answer:it.answer,note,tag});
+    out.push({game:'gap',prompt:line+'  ('+it.answer.charAt(0)+'…)',answer:[it.answer],note,tag});
+    const words=full(it,it.answer).split(' ');
+    if(words.length>=4&&words.length<=14)
+      out.push({game:'order',prompt:'Put the words in order.',words,note,tag});
+    out.push({game:'correct',sentence:full(it,wrongOf(it)),answer:[it.answer],note,tag});
+  });
+  const sh=shuffle(items);
+  for(let i=0;i+3<sh.length;i+=4){
+    const g=sh.slice(i,i+4), bad=g[0], odd=full(bad,wrongOf(bad));
+    out.push({game:'odd',options:[odd].concat(g.slice(1).map(x=>full(x,x.answer))),answer:odd,
+      note:'Correct version: '+full(bad,bad.answer),tag:bad.tense||''});
+  }
+  return out;
+}
+
 async function choose(id){
   const t=SEC().topics.find(x=>x.id===id); if(!t||!(t.file||t.vocab)) return;
   $('pick').textContent='Loading '+t.label+'…';
   try{
-    if(t.vocab){
-      /* a vocabulary topic: turn each page's own sentences into choose rounds */
-      let all=[];
+      if(t.vocab){
+      let items=[];
       for(const vid of t.vocab){
         try{
           const m=await ChallengeMixes.loadVocab(vid);
-          let rs=[];
-          m.groups.forEach(g=>g.items.forEach(it=>rs.push({game:'choose',
-            prompt:(it.cue+' ___ '+it.after).trim(),options:it.options,answer:it.answer,
-            note:it.note,tag:it.tense})));
-          if(t.vocab.length>1) rs=shuffle(rs).slice(0,40);   /* keep a mix balanced */
-          all=all.concat(rs);
+          let its=[]; m.groups.forEach(g=>g.items.forEach(it=>its.push(it)));
+          if(t.vocab.length>1) its=shuffle(its).slice(0,40);   /* keep Mixed balanced */
+          items=items.concat(its);
         }catch(e){}
       }
-      pool=all.filter(r=>G[r.game]); topic={id,label:t.label,focus:t.focus||''};
+      pool=vocabRounds(items).filter(r=>G[r.game]); topic={id,label:t.label,focus:t.focus||''};
+    }
     }else{
       const d=await (await fetch(BASE+t.file,{cache:'no-store'})).json();
       let rounds=(d.rounds||[]).slice();
@@ -412,6 +433,27 @@ function draw(){
   seq.map((k,i)=>i).sort((a,b)=>by[seq[a]].length-by[seq[b]].length).forEach(i=>{ const k=seq[i];
     let r; while((r=left[k].pop())&&used.has(r)); if(!r) r=shuffle(by[k]).find(x=>!used.has(x))||by[k][0];
     used.add(r); out[i]=Object.assign({},r,{game:k,src:r.game}); });
+     /* Match: four different words, each paired with its own sentence */
+  const mh=shuffle(items);
+  for(let i=0;i+3<mh.length;i+=4){
+    const g=mh.slice(i,i+4);
+    if(new Set(g.map(x=>x.answer)).size<4) continue;
+    out.push({game:'match',prompt:'Match each word to its sentence.',
+      pairs:g.map(x=>[x.answer,(x.cue+' ___ '+x.after).trim()]),note:'',tag:''});
+  }
+  /* Sort it: two sets with at least three different words each */
+  const bySet={};
+  items.forEach(it=>{ const t=it.tense; if(!t||/^none$/i.test(t)) return;
+    (bySet[t]=bySet[t]||new Map()).set(it.answer,it); });
+  const sets=shuffle(Object.keys(bySet).filter(t=>bySet[t].size>=3));
+  for(let i=0;i+1<sets.length&&i<12;i+=2){
+    const a=sets[i], b=sets[i+1];
+    const wa=shuffle([...bySet[a].keys()]).slice(0,3);
+    const wb=shuffle([...bySet[b].keys()]).filter(w=>!wa.includes(w)).slice(0,3);
+    if(wb.length<3) continue;
+    out.push({game:'sort',prompt:'Sort the words into their sets.',bins:[a,b],
+      items:wa.map(w=>[w,0]).concat(wb.map(w=>[w,1])),note:'',tag:''});
+  }
   return out;
 }
 /* ══ THE TRACK — the sketch as one band, cut into cells ══

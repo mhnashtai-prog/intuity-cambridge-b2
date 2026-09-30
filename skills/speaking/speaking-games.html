@@ -18,8 +18,14 @@
    so nothing here is chosen by the page. Recalling a phrase from memory
    fixes it far better than reading it again, and a stock of phrases is
    what lets a candidate sound fluent under exam pressure.
-   One page for Parts 1 and 4 (?part=1 or ?part=4), reading the same files
-   as their Build pages: data/part1-answers.json, data/part4-views.json.
+   ORDER — Writing's Sequence, brought here too: the answer's sentences come
+   shuffled; put them back, then name each move (React, View, Reason…). Every
+   answer in the data has one order and no repeated move, so there is always
+   exactly one right shape — and naming it is the point: the shape is what a
+   candidate reuses with any question in the exam.
+   One page for Parts 1 and 4 (?part=1 or ?part=4) and both games
+   (?mode=recall or ?mode=order), reading the same files as the Build pages:
+   data/part1-answers.json, data/part4-views.json.
    ═══════════════════════════════════════════════════════════════════════ */
 body{color:var(--ink,#232C31);background:var(--screen,#F3F1ED)}
 [hidden]{display:none!important}
@@ -60,8 +66,28 @@ mark.rc-mk{background:none;color:var(--accent-ink);font-weight:700;border-bottom
 .rc-result b{font-family:'Anton',Impact,var(--f-display),sans-serif;font-weight:400;font-size:1.5rem;color:var(--ink);margin-right:.35rem;vertical-align:-2px}
 .rc-why{font-size:.9rem;color:var(--dim);margin:.4rem 0 0}
 .rc-err{color:var(--wrong,#B4513A)}
-@media(max-width:560px){ .poster{padding:1.1rem 1rem} .rc-text{font-size:1rem} }
-@media(prefers-reduced-motion:reduce){ .rc-shake{animation:none} }
+.or-built{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.45rem;counter-reset:or}
+.or-line{display:grid;grid-template-columns:1.6rem 1fr auto;gap:.6rem;align-items:start;padding:.55rem .6rem;background:#fff;border-radius:4px;box-shadow:0 1px 0 rgba(20,17,14,.06)}
+.or-line.or-in{animation:orIn .28s ease-out}
+@keyframes orIn{from{opacity:0;transform:translateY(8px)}}
+.or-n{font-family:var(--f-mono);font-size:.7rem;color:var(--faint);padding-top:.25rem}
+.or-t{font-size:1rem;line-height:1.55;color:var(--sentence)}
+.or-tag{align-self:center;font-family:var(--f-mono);font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;padding:.25rem .5rem;border-radius:999px;
+  border:1.5px dashed var(--rule);color:var(--faint);white-space:nowrap}
+.or-tag.or-now{border-color:var(--accent-ink,#9A5A2C);color:var(--accent-ink,#9A5A2C)}
+.or-tag.or-named{border:none;background:var(--ring-core,#201E1C);color:var(--ring-ink,#E5D1B8)}
+.or-hint{grid-column:2 / -1;font-size:.8rem;color:var(--faint);margin-top:-.2rem}
+.or-slot{border:1.5px dashed var(--rule);border-radius:4px;padding:.8rem;text-align:center;color:var(--faint);font-size:.85rem}
+.or-deck{display:flex;flex-direction:column;gap:.45rem;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--rule)}
+.or-card{font:inherit;font-size:1rem;line-height:1.5;text-align:left;padding:.7rem .85rem;border:none;border-radius:6px;background:var(--tile-bg,#E8E1D6);color:var(--tile-ink,#232C31);cursor:pointer}
+.or-card:hover{box-shadow:0 0 0 2px var(--accent-ink,#9A5A2C)}
+.or-names{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--rule)}
+.or-name{font:inherit;font-family:var(--f-display);font-weight:700;font-size:.85rem;padding:.5rem .95rem;border:none;border-radius:999px;background:var(--tile-bg,#E8E1D6);color:var(--tile-ink,#232C31);cursor:pointer}
+.or-name:hover{box-shadow:0 0 0 2px var(--accent-ink,#9A5A2C)}
+.or-name:disabled{opacity:.35;cursor:default;box-shadow:none}
+.or-shape{font-family:var(--f-mono);font-size:.7rem;letter-spacing:.08em;color:var(--dim);margin:.7rem 0 0}
+@media(max-width:560px){ .poster{padding:1.1rem 1rem} .rc-text{font-size:1rem} .or-line{grid-template-columns:1.2rem 1fr} .or-tag{grid-column:2;justify-self:start} }
+@media(prefers-reduced-motion:reduce){ .rc-shake,.or-line.or-in{animation:none} }
 </style>
 </head>
 <body>
@@ -71,7 +97,7 @@ mark.rc-mk{background:none;color:var(--accent-ink);font-weight:700;border-bottom
     <a class="back-link" href="/index.html?openModal=speaking" target="_top">← Speaking</a>
     <div class="header-title">
       <div class="app-title">INTUITY</div>
-      <div class="app-subtitle" id="sub">Speaking · Recall</div>
+      <div class="app-subtitle" id="sub">Speaking</div>
     </div>
     <span class="header-spacer">Level <b>B2</b></span>
   </div>
@@ -91,7 +117,8 @@ mark.rc-mk{background:none;color:var(--accent-ink);font-weight:700;border-bottom
     <!-- which view: Build is the part's own page, Recall is this one -->
     <div class="viewtog" role="group" aria-label="How to practise">
       <a class="viewbtn" id="toBuild" href="part1.html">Build</a>
-      <button class="viewbtn active" type="button" aria-current="page">Recall</button>
+      <button class="viewbtn" type="button" data-mode="recall">Recall</button>
+      <button class="viewbtn" type="button" data-mode="order">Order</button>
     </div>
   </div>
   <div class="rc-qs">
@@ -122,10 +149,12 @@ mark.rc-mk{background:none;color:var(--accent-ink);font-weight:700;border-bottom
   const norm = s => String(s).toLowerCase().replace(/[’']/g, "'").replace(/[—–-]/g, ' ').replace(/[.,!?;:…]/g, '').replace(/\s+/g, ' ').trim();
   const sfx = n => { try { if (window.SFX && SFX.isOn() && SFX[n]) SFX[n](); } catch(e){} };
   let D, ci = 0, qi = 0, vi = 0, stage = 'read', marks = [], hints = false, won = {};
+  let MODE = P.get('mode') === 'order' ? 'order' : 'recall';
+  let od = null;                       /* Order's round: { segs, deck, placed, named, slipsO, slipsN, names } */
 
   const chapter = () => D.chapters[ci], card = () => chapter().cards[qi], alt = () => card().alts[vi];
   const voice = () => D.voices[vi] || {};
-  const key = () => chapter().id + ':' + qi + ':' + vi;
+  const key = () => MODE + ':' + chapter().id + ':' + qi + ':' + vi;
   const store = () => { try { localStorage.setItem('intuity.speakrecall.p' + PART, JSON.stringify(won)); } catch(e){} };
   try { won = JSON.parse(localStorage.getItem('intuity.speakrecall.p' + PART) || '{}') || {}; } catch(e){ won = {}; }
 
@@ -169,6 +198,7 @@ mark.rc-mk{background:none;color:var(--accent-ink);font-weight:700;border-bottom
 
   function draw(){
     try { speechSynthesis.cancel(); } catch(e){}
+    if (MODE === 'order') return drawOrder();
     const c = card(), n = marks.length;
     $('kick').textContent = 'Question ' + (qi + 1) + ' of ' + chapter().cards.length + ' · ' + (voice().tab || 'Model answer');
     $('ask').textContent = c.question;
@@ -237,9 +267,69 @@ mark.rc-mk{background:none;color:var(--accent-ink);font-weight:700;border-bottom
          { id:'bNext', label: last ? 'Next topic ›' : 'Next question ›', primary:true, on: next }]);
     paintNav();
   }
+  /* ═══ ORDER ═══ */
+  const turnSegs = () => (PART === 4 ? alt().turn.segs : alt().segs);
+  function newOrder(){
+    const segs = turnSegs(), idx = segs.map((_, i) => i);
+    let deck; do { deck = idx.slice().sort(() => Math.random() - .5); } while (segs.length > 1 && deck.every((v, i) => v === i));
+    const present = [...new Set(segs.map(s => s.m))], others = Object.keys(D.moves).filter(k => !present.includes(k) && !['n', 'o'].includes(k));
+    const names = present.concat(others.length ? [others[Math.floor(Math.random() * others.length)]] : []).sort(() => Math.random() - .5);
+    od = { segs, deck, placed: [], named: 0, slipsO: 0, slipsN: 0, names, step: 'order' };
+  }
+  function drawOrder(){
+    if (!od) newOrder();
+    const c = card(), segs = od.segs, mv = k => (D.moves[k] || { name: k });
+    $('kick').textContent = 'Question ' + (qi + 1) + ' of ' + chapter().cards.length + ' · ' + (voice().tab || 'Model answer');
+    $('ask').textContent = c.question;
+    $('result').hidden = true; $('result').innerHTML = '';
+    const lines = od.placed.map((si, n) => {
+      const named = n < od.named, now = od.step === 'name' && n === od.named, m = mv(segs[si].m);
+      return `<li class="or-line${n === od.placed.length - 1 && od.step === 'order' ? ' or-in' : ''}"><span class="or-n">${n + 1}</span><span class="or-t">${esc(segs[si].t)}</span>` +
+        (od.step !== 'order' ? `<span class="or-tag${named ? ' or-named' : now ? ' or-now' : ''}">${named ? esc(m.name) : now ? 'Which move?' : '?'}</span>` : '') +
+        (named && m.hint ? `<span class="or-hint">${esc(m.hint)}</span>` : '') + '</li>';
+    }).join('');
+    const slots = od.step === 'order' ? segs.slice(od.placed.length).map((_, k) => k === 0 ? `<li class="or-slot">${od.placed.length ? 'What comes next?' : 'Which sentence comes first?'}</li>` : '').join('') : '';
+    let below = '';
+    if (od.step === 'order') below = '<div class="or-deck">' + od.deck.filter(i => !od.placed.includes(i)).map(i =>
+      `<button class="or-card" type="button" data-i="${i}">${esc(segs[i].t)}</button>`).join('') + '</div>';
+    else if (od.step === 'name') below = '<div class="or-names">' + od.names.map(k =>
+      `<button class="or-name" type="button" data-k="${k}">${esc(mv(k).name)}</button>`).join('') + '</div>';
+    $('body').innerHTML = (PART === 4 ? `<p class="rc-who">${esc(voice().a || 'Candidate A')}</p>` : '') + `<ol class="or-built">${lines}${slots}</ol>` + below;
+    $('stage').innerHTML = od.step === 'order' ? 'Put the answer back together, <b>one sentence at a time</b>.'
+      : od.step === 'name' ? 'Now <b>name each move</b>. What is sentence ' + (od.named + 1) + ' doing?' : '<b>The shape of the answer.</b>';
+    document.querySelectorAll('.or-card').forEach(b => b.onclick = () => placeOrder(+b.dataset.i, b));
+    document.querySelectorAll('.or-name').forEach(b => b.onclick = () => nameMove(b.dataset.k, b));
+    if (od.step === 'done') finishOrder(true);
+    else bar([{ id:'bRe', label:'Start again', on: () => { od = null; drawOrder(); } }]);
+    paintNav();
+  }
+  function shake(el){ el.classList.remove('rc-shake'); void el.offsetWidth; el.classList.add('rc-shake'); }
+  function placeOrder(i, el){
+    if (i === od.placed.length){ od.placed.push(i); if (od.placed.length === od.segs.length) od.step = 'name'; drawOrder(); }
+    else { od.slipsO++; shake(el); sfx('wrong'); }
+  }
+  function nameMove(k, el){
+    const want = od.segs[od.placed[od.named]].m;
+    if (k === want){ od.named++; if (od.named === od.segs.length) od.step = 'done'; drawOrder(); }
+    else { od.slipsN++; shake(el); sfx('wrong'); }
+  }
+  function finishOrder(){
+    const clean = !od.slipsO && !od.slipsN;
+    if (!od.scored){ od.scored = true; if (clean){ won[key()] = 1; store(); sfx('correct'); } else sfx('pop'); }
+    const shape = od.segs.map(s => (D.moves[s.m] || { name: s.m }).name).join(' → ');
+    const why = alt().why || (alt().turn && alt().turn.why);
+    $('result').hidden = false;
+    $('result').innerHTML = `<p class="rc-result"><b>${clean ? '✓' : od.slipsO + od.slipsN}</b>${clean ? 'Built and named without a slip' :
+      (od.slipsO ? od.slipsO + ' in the order' : 'none in the order') + ' · ' + (od.slipsN ? od.slipsN + ' in the names' : 'none in the names')}</p>` +
+      `<p class="or-shape">${esc(shape)}</p>` + (why ? `<p class="rc-why">${esc(why)}</p>` : '');
+    const last = qi >= chapter().cards.length - 1;
+    bar([{ id:'bAgain', label:'Again', on: () => { od = null; drawOrder(); } },
+         { id:'bNext', label: last ? 'Next topic ›' : 'Next question ›', primary:true, on: next }]);
+  }
+
   function next(){
     if (qi < chapter().cards.length - 1) qi++; else { ci = (ci + 1) % D.chapters.length; qi = 0; }
-    stage = 'read'; draw(); sync();
+    stage = 'read'; od = null; draw(); sync();
   }
   function hear(){
     try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(plain()); u.lang = 'en-GB'; u.rate = .95; speechSynthesis.speak(u); } catch(e){}
@@ -249,24 +339,32 @@ mark.rc-mk{background:none;color:var(--accent-ink);font-weight:700;border-bottom
   function paintNav(){
     document.querySelectorAll('#tabs .vtab').forEach((b, i) => { b.classList.toggle('active', i === ci); b.setAttribute('aria-selected', i === ci); });
     $('dots').innerHTML = chapter().cards.map((c, i) => {
-      const ok = D.voices.some((v, j) => won[chapter().id + ':' + i + ':' + j]);
-      return `<button class="rc-dot${i === qi ? ' on' : ''}${ok ? ' ok' : ''}" type="button" data-q="${i}" aria-label="Question ${i + 1}${ok ? ', recalled' : ''}"></button>`; }).join('');
-    $('dots').querySelectorAll('.rc-dot').forEach(b => b.onclick = () => { qi = +b.dataset.q; stage = 'read'; draw(); sync(); });
+      const ok = D.voices.some((v, j) => won[MODE + ':' + chapter().id + ':' + i + ':' + j]);
+      return `<button class="rc-dot${i === qi ? ' on' : ''}${ok ? ' ok' : ''}" type="button" data-q="${i}" aria-label="Question ${i + 1}${ok ? ', done' : ''}"></button>`; }).join('');
+    $('dots').querySelectorAll('.rc-dot').forEach(b => b.onclick = () => { qi = +b.dataset.q; stage = 'read'; od = null; draw(); sync(); });
     $('voices').innerHTML = D.voices.map((v, i) => `<button type="button" class="${i === vi ? 'active' : ''}" data-v="${i}">${esc(v.tab)}</button>`).join('');
-    $('voices').querySelectorAll('button').forEach(b => b.onclick = () => { vi = +b.dataset.v; stage = 'read'; draw(); sync(); });
+    $('voices').querySelectorAll('button').forEach(b => b.onclick = () => { vi = +b.dataset.v; stage = 'read'; od = null; draw(); sync(); });
     const v = voice();
     $('toBuild').href = `${BUILD}?topic=${encodeURIComponent(chapter().id)}&q=${qi + 1}&alt=${encodeURIComponent(v.id || '')}`;
   }
+  function paintMode(){
+    document.querySelectorAll('.viewtog [data-mode]').forEach(b => { const on = b.dataset.mode === MODE; b.classList.toggle('active', on);
+      on ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'); });
+    const name = MODE === 'order' ? 'Order' : 'Recall';
+    $('sub').textContent = 'Speaking · Part ' + PART + ' · ' + name; document.title = 'INTUITY — Speaking Part ' + PART + ' · ' + name;
+    document.querySelectorAll('#parts [data-part]').forEach(a => { a.href = '?part=' + a.dataset.part + '&mode=' + MODE; });
+  }
+  document.querySelectorAll('.viewtog [data-mode]').forEach(b => b.onclick = () => {
+    if (b.dataset.mode === MODE) return; MODE = b.dataset.mode; stage = 'read'; od = null; paintMode(); draw(); sync(); });
   function sync(){
-    const u = new URL(location.href); u.searchParams.set('part', PART); u.searchParams.set('topic', chapter().id);
+    const u = new URL(location.href); u.searchParams.set('part', PART); u.searchParams.set('mode', MODE); u.searchParams.set('topic', chapter().id);
     u.searchParams.set('q', qi + 1); u.searchParams.set('alt', voice().id || ''); history.replaceState(null, '', u);
   }
 
   async function boot(){
     document.querySelectorAll('#parts [data-part]').forEach(a => { const on = +a.dataset.part === PART;
       a.classList.toggle('active', on); if (on) a.setAttribute('aria-current', 'page'); });
-    $('sub').textContent = 'Speaking · Part ' + PART + ' · Recall';
-    document.title = 'INTUITY — Speaking Part ' + PART + ' · Recall';
+    paintMode();
     try {
       const r = await fetch(FILE, { cache:'no-store' }); if (!r.ok) throw new Error('HTTP ' + r.status); D = await r.json();
       if (!D.chapters || !D.voices) throw new Error('unexpected file');
@@ -278,7 +376,7 @@ mark.rc-mk{background:none;color:var(--accent-ink);font-weight:700;border-bottom
     qi = Math.max(0, Math.min(chapter().cards.length - 1, (+P.get('q') || 1) - 1));
     const wa = P.get('alt'); D.voices.forEach((v, i) => { if (v.id === wa) vi = i; });
     $('tabs').innerHTML = D.chapters.map((c, i) => `<button class="vtab" type="button" role="tab" data-c="${i}">${esc(c.tab)}</button>`).join('');
-    $('tabs').querySelectorAll('.vtab').forEach(b => b.onclick = () => { ci = +b.dataset.c; qi = 0; stage = 'read'; draw(); sync(); });
+    $('tabs').querySelectorAll('.vtab').forEach(b => b.onclick = () => { ci = +b.dataset.c; qi = 0; stage = 'read'; od = null; draw(); sync(); });
     draw(); sync();
   }
   boot();

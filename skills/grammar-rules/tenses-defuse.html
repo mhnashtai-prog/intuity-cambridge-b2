@@ -1367,15 +1367,39 @@ function syncHeader(){
 window.addEventListener('resize', syncHeader);
 window.addEventListener('orientationchange', ()=>setTimeout(syncHeader,120));
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncHeader);
-
+/* each vocabulary set's own page, so Defuse can borrow its mode row */
+const VOCAB_PAGE={
+  collocations:'/skills/similar-words/collocations.html',
+  'similar-words':'/skills/similar-words/similar-words.html'
+  /* add the other vocabulary pages here */
+};
+async function vocabHeader(id){
+  const url=VOCAB_PAGE[id]; if(!url) return;
+  try{
+    const html=await (await fetch(url,{cache:'no-store'})).text();
+    const row=new DOMParser().parseFromString(html,'text/html').querySelector('.mode-selector'); if(!row) return;
+    const base=url.replace(/\.html$/,'');
+    const out=[...row.children].map(el=>{
+      const label=el.textContent.trim(), m=el.dataset&&el.dataset.mode, href=el.getAttribute('href');
+      if(/^defuse$/i.test(label)) return '<span class="mode-btn active" aria-current="page">Defuse</span>';
+      if(el.classList.contains('mode-soon')) return '';
+      const go=m?(m==='explore'?base:base+'?mode='+m):href;
+      return go?`<a class="mode-btn" href="${esc(go)}">${esc(label)}</a>`:
+        `<a class="mode-btn" href="${esc(base)}">${esc(label)}</a>`;   /* the page's own (active) tab */
+    });
+    document.querySelector('.mode-selector').innerHTML=out.join('');
+  }catch(e){}
+}
+     
 /* ── BOOT ── */
 async function boot(){
   let data;
   try {
-    if (VOCAB_ID && window.ChallengeMixes){
-      const m = await ChallengeMixes.loadVocab(VOCAB_ID);
-      ChallengeMixes.dressVocab(m.vocab); data = m.groups;
-    } else if (TOPIC && window.ChallengeMixes){
+   if (VOCAB_ID && window.ChallengeMixes){
+  const m = await ChallengeMixes.loadVocab(VOCAB_ID);
+  ChallengeMixes.dressVocab(m.vocab); data = m.groups;
+  await vocabHeader(VOCAB_ID);
+} else if (TOPIC && window.ChallengeMixes){
       const m = await ChallengeMixes.load(TOPIC, 'choice');
       ChallengeMixes.dress(m.topic, 'defuse'); data = m.groups;
     } else {

@@ -3,7 +3,7 @@
    with the right form before the fuse burns down. Letting it burn out
    counts as a wrong cut — a life in Game mode — and the fuse relights,
    shorter, for another try.
-   Receptive, like Choose: it plays the same rounds (choose and pendulum),
+   Receptive, like Choose: it plays the Choose rounds,
    so it changes the pressure, never the question.
    Game only: the Exam has no clock inside a cell.
    Agreement: see choose.js. `accepts` says which rounds this game can play.
@@ -27,7 +27,7 @@
 
   (window.ChallengeGames = window.ChallengeGames || {}).defuse = {
     title:'Defuse', kind:'game', skill:'receptive',
-    accepts: r => (r.game === 'choose' || r.game === 'pendulum') && Array.isArray(r.options) && r.options.length === 4,
+    accepts: r => r.game === 'choose' && Array.isArray(r.options) && r.options.length === 4,   /* the situation rounds are Swing's */
     solution: r => r.answer,
     render(host, r, ctx){
       if (!styled){ const s = document.createElement('style'); s.textContent = CSS; document.head.appendChild(s); styled = true; }

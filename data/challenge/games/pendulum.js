@@ -8,7 +8,7 @@
    Agreement: see choose.js.
    ═══════════════════════════════════════════════════════════════════════ */
 (window.ChallengeGames=window.ChallengeGames||{}).pendulum={
-  title:'Swing and choose', kind:'game', skill:'receptive',
+  title:'Swing', kind:'game', skill:'receptive',
   solution:r=>r.answer,
   render(host,r,ctx){
     /* Passive rounds carry active/passive; any other topic carries context/line

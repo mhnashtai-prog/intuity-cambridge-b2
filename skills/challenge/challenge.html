@@ -202,6 +202,19 @@ body.mode-game{ --ring-sage:#C2956E; --mark-sweep:#C2956E; }   /* --mark-sweep: 
 .mk.cross{stroke:var(--mark-wrong);stroke-width:3.4}
 .mk.dot{fill:var(--mark-answered);stroke:none}
 .legend svg{width:12px;height:12px;margin-right:.4rem;vertical-align:-2px;overflow:visible}
+.mute{border:none;background:none;cursor:pointer;font-size:.9rem;line-height:1;padding:0 .35rem 0 0;vertical-align:-1px}
+.mute.off{opacity:.32;filter:grayscale(1)}
+/* GLITTER: a small burst from a tile's new tick — Game only, never over a card */
+.glitter{position:fixed;left:0;top:0;width:0;height:0;pointer-events:none;z-index:40}
+.glitter i{position:absolute;left:0;top:0;width:var(--s);height:var(--s);margin:calc(var(--s) / -2) 0 0 calc(var(--s) / -2);background:var(--c);
+  border-radius:var(--r);opacity:0;animation:glit var(--d) cubic-bezier(.15,.7,.3,1) var(--w) forwards}
+@keyframes glit{0%{opacity:0;transform:translate(0,0) rotate(0) scale(.4)}15%{opacity:1}
+  100%{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--rot)) scale(1)}}
+.mk.tick.pop{transform-box:fill-box;transform-origin:center;animation:tickPop .45s cubic-bezier(.3,1.6,.5,1)}
+@keyframes tickPop{0%{transform:scale(.2)}100%{transform:scale(1)}}
+.cup{display:block;width:92px;height:92px;margin:.6rem 0 .2rem}
+.cup .rim{fill:none;stroke:#C2956E;stroke-width:5}
+@media(prefers-reduced-motion:reduce){ .glitter{display:none} .mk.tick.pop{animation:none} }
 @media(prefers-reduced-motion:reduce){ .scrim,.focus,.cell,.num,.mk{transition:none} .dial-b .pend-hang{animation:none} }
 </style>
 </head>
@@ -211,7 +224,7 @@ body.mode-game{ --ring-sage:#C2956E; --mark-sweep:#C2956E; }   /* --mark-sweep: 
   <div class="header-top">
     <a class="back-link" href="/index.html?openModal=grammar" target="_top">← Grammar</a>
     <div class="header-title"><div class="app-title">INTUITY</div><div class="app-subtitle">The Challenge</div></div>
-    <span class="header-spacer">Level <b>B2</b></span>
+    <span class="header-spacer"><button class="mute" id="mute" type="button" aria-label="Sound on" aria-pressed="true">&#128266;</button> Level <b>B2</b></span>
   </div>
   <nav class="mode-selector" aria-label="How to play">
     <button class="mode-btn active" type="button" data-mode="game" aria-current="page">Game</button>
@@ -253,6 +266,8 @@ body.mode-game{ --ring-sage:#C2956E; --mark-sweep:#C2956E; }   /* --mark-sweep: 
 /* the games register themselves here */
 window.ChallengeGames=window.ChallengeGames||{};
 </script>
+<!-- one sound engine and one mute for every INTUITY page -->
+<script src="/skills/grammar-rules/intuity-sound.js"></script>
 <script src="/data/challenge/games/choose.js?v=2"></script>
 <script src="/data/challenge/games/pendulum.js?v=3"></script>
 <script src="/data/challenge/games/gap.js?v=2"></script>
@@ -288,6 +303,9 @@ let mode=P.get('mode')==='game'?'game':'exam',     /* Exam by default; Game is o
 let lives=3, score=0, playing=false, t0=0, tick=null, tries=0, log=[];
 
 /* ══ 1 · THE HEADER AND THE GATE ══ */
+function paintMute(){ const m=$('mute'); if(!m||!window.SFX) return; const on=SFX.isOn(); m.classList.toggle('off',!on); m.setAttribute('aria-pressed',on); m.setAttribute('aria-label',on?'Sound on':'Sound off'); }
+if($('mute')) $('mute').onclick=()=>{ if(window.SFX){ SFX.toggle(); paintMute(); } };
+paintMute();
 function drawModes(){
   const lg=$('legend'); if(lg) lg.innerHTML=mode==='game'
     ? '<span><svg viewBox="0 0 12 12"><path d="M2 6.4l2.8 3 5-5.8" fill="none" stroke="var(--mark-right)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Right</span><span><svg viewBox="0 0 12 12"><path d="M2 6.4l2.8 3 5-5.8" fill="none" stroke="var(--mark-right)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" fill="none" stroke="var(--mark-wrong)" stroke-width="2.2" stroke-linecap="round"/></svg>After a mistake</span><span><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" fill="none" stroke="var(--mark-wrong)" stroke-width="2.2" stroke-linecap="round"/></svg>Wrong</span>'
@@ -481,7 +499,8 @@ function tap(i){
 let cur=null, settled=false;
 function openCard(html){ $('focus').innerHTML='<button class="x" type="button" aria-label="Close" id="fx">✕</button>'+html;
   const s=$('scrim'); s.hidden=false; requestAnimationFrame(()=>s.classList.add('on')); $('fx').onclick=closeCard; }
-function closeCard(){ const s=$('scrim'); s.classList.remove('on'); setTimeout(()=>{ s.hidden=true; paint(); },250); }
+function closeCard(){ const s=$('scrim'); s.classList.remove('on'); setTimeout(()=>{ s.hidden=true; paint();
+  if(owed){ const o=owed; owed=null; requestAnimationFrame(()=>burst(o.i,o.first)); } },250); }
 function openCell(i){
   const r=plan[i], g=G[r.game]; cur={i,r,g}; settled=false; tries=triesAt[i]||0;
   /* the round's tag (a tense, an area) would give the answer away — it is
@@ -499,6 +518,7 @@ function answer(ok,given){
     const last=doneSet.size>=N; showNext(last?()=>finish(true):()=>{ closeCard(); }, last?'See your result':undefined); return false;
   }
   if(ok){
+    celebrate(cur.i, !tries);
     settled=true; const pts=tries?50:100; score+=pts; log.push({i:cur.i,r:cur.r,g:cur.g,ok:true,given}); doneSet.add(cur.i);
     fb.innerHTML='<b>Right · +'+pts+(cur.r.tag?' · '+esc(cur.r.tag):'')+'.</b> '+esc(cur.r.note||'');
     const last=doneSet.size>=N; showNext(last?()=>finish(true):()=>{ closeCard(); }, last?'See your result':undefined); return false;
@@ -507,6 +527,29 @@ function answer(ok,given){
   if(lives<=0){ settled=true; log.push({i:cur.i,r:cur.r,g:cur.g,ok:false,given}); paint();   /* the cross lands now */ fb.innerHTML='<b>No lives left'+(cur.r.tag?' · '+esc(cur.r.tag):'')+'.</b> '+esc(cur.r.note||'');
     showNext(()=>finish(false),'See your result'); return false; }
   fb.innerHTML='Not quite — <b>'+lives+'</b> '+(lives===1?'life':'lives')+' left. Try again.'; return true;
+}
+/* ══ CELEBRATION (Game only) ══
+   A right answer is heard at once, in the card: the struck bowl the other
+   INTUITY games use, or the drier two-note pop when it took a second try.
+   The glitter waits for the card to close and bursts from the tile's new
+   tick on the track, so nothing ever covers the sentence or its note.
+   Sound follows the device-wide mute; the glitter follows reduced motion. */
+let owed=null;
+const sfx=name=>{ try{ if(window.SFX&&SFX.isOn()&&SFX[name]) SFX[name](); }catch(e){} };
+function celebrate(i,first){ if(mode!=='game') return; sfx(first?'correct':'pop'); owed={i,first}; }
+function burst(i,first){
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const tk=document.querySelector(`#marks g[data-i="${i}"] .tick`); if(!tk) return;
+  tk.classList.remove('pop'); void tk.getBoundingClientRect(); tk.classList.add('pop');
+  const b=tk.getBoundingClientRect(), g=document.createElement('div'); g.className='glitter';
+  g.style.left=(b.left+b.width/2)+'px'; g.style.top=(b.top+b.height/2)+'px';
+  const cols=['#C2956E','var(--ring-ink)','var(--mark-right)','#F6F1E6','#E9C98F'], n=first?16:9;
+  for(let k=0;k<n;k++){ const a=Math.PI*2*k/n+Math.random()*.5, d=(first?30:20)+Math.random()*(first?26:14), s=2.5+Math.random()*(first?4:3);
+    const e=document.createElement('i');
+    e.style.cssText=`--x:${(Math.cos(a)*d).toFixed(1)}px;--y:${(Math.sin(a)*d-6).toFixed(1)}px;--s:${s.toFixed(1)}px;`+
+      `--c:${cols[k%cols.length]};--r:${k%3?'1px':'50%'};--rot:${Math.round(Math.random()*240-120)}deg;--d:${650+Math.round(Math.random()*250)}ms;--w:${Math.round(Math.random()*70)}ms`;
+    g.appendChild(e); }
+  document.body.appendChild(g); setTimeout(()=>g.remove(),1100);
 }
 function showNext(fn,label){ $('next').hidden=false; const b=$('nextBtn'); if(label) b.textContent=label; b.onclick=fn; setTimeout(()=>b.focus(),60); }
 
@@ -523,8 +566,12 @@ function finish(won){
         ${x.ok?'':`Your answer: ${esc(x.given)}<br>`}<b>${esc(x.g.solution(x.r))}</b>${x.r.note?' — '+esc(x.r.note):''}</li>`).join('')}</ul>
       <div class="cta"><button class="btn fill" type="button" id="rAgain">Try again</button></div>`);
   }else{
-    openCard(`<div class="kick">${won?'Challenge complete':'Challenge over'}</div><h2 id="fTitle">${won?'Finish.':'So close.'}</h2>
-      <div class="big">${score}</div><p class="cg-prompt">${won?`All ${N} games in <b>${t}</b>, with <b>${lives}</b> ${lives===1?'life':'lives'} to spare.`:`You finished <b>${doneSet.size}</b> of ${N} cells in <b>${t}</b>.`}</p>
+    const clean=won&&log.length===N&&log.every(x=>x.ok)&&!Object.values(triesAt).some(v=>v>0);
+    owed=null; sfx(clean?'fanfare':won?'bowlLow':'');
+    const CUP=`<svg class="cup" viewBox="0 0 92 92" aria-hidden="true"><circle cx="46" cy="46" r="43" fill="var(--ring-core)"/><circle class="rim" cx="46" cy="46" r="40"/>
+      <path d="M31 27h30v9c0 9-6.5 16-15 16s-15-7-15-16z M31 31h-7c0 8 4 12 9 12 M61 31h7c0 8-4 12-9 12 M46 52v9 M36 66h20" fill="none" stroke="#E9C98F" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    openCard(`<div class="kick">${clean?'A clean run':won?'Challenge complete':'Challenge over'}</div>${clean?CUP:''}<h2 id="fTitle">${clean?'The cup.':won?'Finish.':'So close.'}</h2>
+      <div class="big">${score}</div><p class="cg-prompt">${clean?`All ${N} right first time, in <b>${t}</b>.`:won?`All ${N} games in <b>${t}</b>, with <b>${lives}</b> ${lives===1?'life':'lives'} to spare.`:`You finished <b>${doneSet.size}</b> of ${N} cells in <b>${t}</b>.`}</p>
       <div class="cta"><button class="btn fill" type="button" id="rAgain">Try again</button></div>`);
   }
   $('rAgain').onclick=()=>{ closeCard(); reset(); paint(); };

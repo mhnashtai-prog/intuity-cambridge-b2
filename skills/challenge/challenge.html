@@ -131,6 +131,7 @@ body.mode-game{ --ring-sage:#C2956E; --mark-sweep:#C2956E; }   /* --mark-sweep: 
 
 /* ── the games' shared parts (cg-*) ── */
 .cg-prompt{font-size:.98rem;line-height:1.55;color:var(--sentence);margin:1rem 0 .9rem}
+.aim{font-size:.86rem;line-height:1.5;color:var(--dim);margin:.6rem 0 0;padding-left:.7rem;border-left:3px solid var(--deco-ochre,#B0865C)}   /* not .focus: that is the card */
 .cg-line{font-family:var(--f-display);font-weight:700;font-size:1.12rem;line-height:1.5;color:var(--ink);margin:.9rem 0 1rem}
 .cg-blank{display:inline-block;min-width:5.5em;border-bottom:2px solid var(--ink);text-align:center;color:var(--accent-ink)}
 .cg-opts{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
@@ -270,11 +271,11 @@ window.ChallengeGames=window.ChallengeGames||{};
 <script src="/skills/grammar-rules/intuity-sound.js"></script>
 <script src="/data/challenge/games/choose.js?v=2"></script>
 <script src="/data/challenge/games/pendulum.js?v=3"></script>
-<script src="/data/challenge/games/gap.js?v=2"></script>
+<script src="/data/challenge/games/gap.js?v=3"></script>
 <script src="/data/challenge/games/order.js?v=3"></script>
 <script src="/data/challenge/games/odd.js?v=3"></script>
 <script src="/data/challenge/games/sort.js?v=2"></script>
-<script src="/data/challenge/games/transform.js?v=1"></script>
+<script src="/data/challenge/games/transform.js?v=2"></script>
 <script src="/data/challenge/games/correct.js?v=1"></script>
 <script src="/data/challenge/games/match.js?v=1"></script>
 <script src="/data/challenge/games/game-kit.js?v=1"></script>
@@ -283,8 +284,8 @@ window.ChallengeGames=window.ChallengeGames||{};
 <script src="/data/challenge/games/knockout.js?v=1"></script>
 <script src="/data/challenge/games/sortgame.js?v=1"></script>
 <script src="/data/challenge/games/pegs.js?v=1"></script>
-<script src="/data/challenge/games/pairs.js?v=1"></script>
-<script src="/data/challenge/games/flip.js?v=1"></script>
+<script src="/data/challenge/games/pairs.js?v=2"></script>
+<script src="/data/challenge/games/flip.js?v=2"></script>
 <script src="/data/challenge/games/hunt.js?v=1"></script>
 <script>
 (function(){
@@ -333,7 +334,7 @@ async function choose(id){
     for(const im of d.imports||[]){                    /* reuse a game's own rounds instead of copying them */
       try{ const x=await (await fetch(im.file,{cache:'no-store'})).json(); (x.rounds||[]).forEach(r=>rounds.push(Object.assign({game:im.game},r))); }catch(e){}
     }
-    pool=rounds.filter(r=>G[r.game]); topic={id,label:d.topic||t.label};
+    pool=rounds.filter(r=>G[r.game]); topic={id,label:d.topic||t.label,focus:t.focus||''};   /* focus: the card's one-line aim */
   }catch(e){ $('pick').textContent='That topic didn’t load — pick it again'; return; }
   $('gate').hidden=true; $('trackCard').hidden=false; drawTopics(); drawModes();
   reset(); drawBoard(); scrollTo(0,0);
@@ -505,10 +506,23 @@ function openCell(i){
   const r=plan[i], g=G[r.game]; cur={i,r,g}; settled=false; tries=triesAt[i]||0;
   /* the round's tag (a tense, an area) would give the answer away — it is
      shown only after answering, in the feedback and in the Exam review */
-  openCard(`<div class="kick">Tile ${String(i+1).padStart(2,'0')} of ${N}</div><h2 id="fTitle">${esc(g.title)}</h2>
-    <div id="host"></div><p class="feedback" id="fb" aria-live="polite"></p><div class="cta" id="next" hidden><button class="btn fill" type="button" id="nextBtn">Continue</button></div>`);
-  g.render($('host'), r, {exam:mode==='exam', esc, shuffle, answer});
+  /* …but the TOPIC is not a secret: every card says what is being
+     practised, and in one plain line what that means — a learner who chose
+     the tab by accident, or came back after a break, still knows the aim */
+  openCard(`<div class="kick">${esc(topic.label)} · Tile ${String(i+1).padStart(2,'0')} of ${N}</div><h2 id="fTitle">${esc(g.title)}</h2>
+    ${topic.focus?`<p class="aim">${esc(topic.focus)}</p>`:''}<div id="host"></div><p class="feedback" id="fb" aria-live="polite"></p><div class="cta" id="next" hidden><button class="btn fill" type="button" id="nextBtn">Continue</button></div>`);
+  g.render($('host'), r, {exam:mode==='exam', esc, shuffle, answer, nudge});
   paint();
+}
+/* RIGHT, BUT NOT THIS ONE. Some rounds list alsoRight: answers that are
+   correct English but not the structure the topic practises ("If I were
+   you" on an Inversion card). In Game those get a nudge, not a lost life.
+   The Exam gives no feedback, so it marks them as it marks any other
+   answer; the focus line on the card is what tells the learner the aim. */
+function nudge(note){
+  if(settled||mode==='exam') return false;
+  $('fb').innerHTML='<b>That’s correct English</b> — but not the one we’re after. '+esc(note||('Try it again with '+topic.label.toLowerCase()+'.'));
+  return true;
 }
 function answer(ok,given){
   if(settled) return false;

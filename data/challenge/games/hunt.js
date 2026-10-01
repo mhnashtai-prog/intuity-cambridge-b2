@@ -3,12 +3,15 @@
    the learner hunts down the faulty part — tap a word to strike it, tap
    its neighbours to widen the strike. A box opens right after the struck
    words; type the fix there and the sentence reads corrected.
-   Why the typed fix is what gets marked: the rounds store the correction,
-   not which words were wrong, so the strike can't be checked on its own —
-   it is where the learner aims. Marking the fix keeps it exactly as fair
-   as Correct the error in the Exam, which marks the same thing.
+   THE HUNT IS CHECKED WHEN THE ROUND SAYS WHERE THE ERROR IS. A round with
+   `wrong` ("would have", or the wrong word in a vocabulary sentence) is
+   right only if the struck words contain it AND the typed fix is accepted:
+   finding the fault is half the skill, so it is half the mark. Striking any
+   word and typing the right form no longer passes. A round without `wrong`
+   is marked on the fix alone, as before, until its data says where the
+   error sits.
    Productive: the correction is written, not picked.
-   Round: { sentence, answer: [accepted…], note }
+   Round: { sentence, answer: [accepted…], wrong: "the faulty words", note }
    Agreement: see choose.js.
    ═══════════════════════════════════════════════════════════════════════ */
 (function(){
@@ -41,6 +44,16 @@
       const board = host.querySelector('#htBoard'), btns = [...board.querySelectorAll('.ht-w')], ring = host.querySelector('#htRing'),
             hint = host.querySelector('#htHint'), check = host.querySelector('#htCheck');
       const hit = new Set(); let inp = null;
+      /* the strike must be one run of words that contains the faulty words */
+      const bare = w => K.norm(w).replace(/[;:"()]/g, '');
+      const foundIt = idx => {
+        if (!r.wrong) return true;
+        if (!idx.length || idx[idx.length - 1] - idx[0] !== idx.length - 1) return false;
+        const want = String(r.wrong).trim().split(/\s+/).map(bare), got = idx.map(i => bare(words[i]));
+        for (let k = 0; k + want.length <= got.length; k++)
+          if (want.every((w, j) => got[k + j] === w)) return true;
+        return false;
+      };
       const place = () => {
         const last = Math.max(...hit);
         if (!inp){ inp = document.createElement('input'); inp.className = 'gk-in'; inp.autocomplete = 'off'; inp.autocapitalize = 'off'; inp.spellcheck = false;
@@ -61,7 +74,10 @@
       });
       const go = () => {
         if (host.dataset.locked || !inp) return; const v = K.norm(inp.value); if (!v) return;
-        const ok = r.answer.map(K.norm).includes(v), again = ctx.answer(ok, inp.value.trim());
+        const struck = [...hit].sort((x, y) => x - y), struckText = struck.map(i => words[i]).join(' ');
+        const fixOk = r.answer.map(K.norm).includes(v);
+        const ok = fixOk && foundIt(struck);
+        const again = ctx.answer(ok, (r.wrong ? '[' + struckText + '] → ' : '') + inp.value.trim());
         if (ok){
           board.classList.add('ht-done'); btns.forEach(b => b.disabled = true);
           const s = document.createElement('span'); s.className = 'gk-good ht-w'; s.textContent = inp.value.trim(); inp.replaceWith(s); inp = null;

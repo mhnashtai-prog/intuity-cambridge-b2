@@ -108,6 +108,25 @@
   .btn.primary{background:var(--pill);color:var(--poster-ink)}.btn.primary:active{background:var(--pill-press)}
   .btn.quiet{background:transparent;color:var(--dim);min-width:0;padding:0 16px}
   .btn:disabled{opacity:.4;cursor:default}
+  /* MARK CALCULATOR */
+  .crow{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 10px;padding:10px 0;border-bottom:1px solid var(--poster-rule)}
+  .crow>span{font-size:15px;font-weight:600;color:var(--poster-ink)}
+  .chips{display:flex;gap:6px}
+  .chip{width:38px;height:38px;border-radius:50%;background:var(--poster-fill);font-size:15px;font-weight:800;color:var(--poster-ink);transition:background .15s,color .15s,transform .15s}
+  .chip:active{transform:scale(.94)}
+  .chip.on{background:var(--poster-ink);color:#fff}
+  .note{font-size:14px;line-height:1.5;color:var(--poster-body);padding:10px 0 4px}
+
+  /* VIEW TOGGLE + PAGE LAYOUT */
+  .viewrow{display:flex;justify-content:center;padding-bottom:.8rem}
+  .seg{display:grid;grid-template-columns:1fr 1fr;height:30px;width:200px;padding:2px;border-radius:10px;background:var(--poster-fill)}
+  .seg button{border-radius:8px;font-size:13px;font-weight:600;color:var(--dim);transition:background .2s,color .2s}
+  .seg button.on{background:#fff;color:var(--poster-ink);box-shadow:0 1px 3px rgba(20,17,14,.12)}
+  .pm{width:100%;max-width:42rem;margin:0 auto;padding:24px 20px calc(40px + env(safe-area-inset-bottom))}
+  .pg{border-top:1px solid var(--poster-rule);padding:20px 0 8px}
+  .ptitle{font-family:var(--f-poster);font-weight:400;font-size:26px;line-height:1.05;letter-spacing:.01em;color:var(--poster-ink);margin:8px 0 6px}
+  .pg .sec:first-of-type{border-top:none;padding-top:6px}
+  .pm .guide{margin-top:22px;font-size:14px;line-height:1.7;color:var(--poster-body);border-top:1px solid var(--poster-rule);padding-top:14px}
   @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
 </head>
@@ -126,9 +145,15 @@
     <button class="mode-btn active" type="button" data-m="overview">Overview</button>
     <button class="mode-btn" type="button" data-m="comparison">Comparison</button>
     <button class="mode-btn" type="button" data-m="check">Self-check</button>
+    <button class="mode-btn" type="button" data-m="grades">Grades</button>
   </nav>
+  <div class="viewrow"><div class="seg" id="seg" role="group" aria-label="Layout">
+    <button class="on" type="button" data-v="page">Page</button>
+    <button type="button" data-v="cards">Cards</button>
+  </div></div>
 </header>
-<main>
+<main id="main">
+  <section class="pm" id="pm" style="display:none"></section>
   <section class="deck" id="deck">
     <h2 class="deck-h" id="deckHead"></h2>
     <div class="track" id="track" tabindex="0"></div>
@@ -186,6 +211,8 @@ let off=0; checklist.forEach(c=>{c.off=off;off+=c.items.length;});
 
 let mode='overview', si=0, cur=0, isOpen=false, pushed=false;
 const ticked=new Set();
+const CRIT=['Content','Communicative Achievement','Organisation','Language'], calc={};
+const bindCalc=(root,redraw)=>root.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{calc[b.dataset.k]=+b.dataset.v;redraw();});
 const catCount=c=>c.items.filter((_,i)=>ticked.has(c.off+i)).length;
 
 /* each tab is a set of cards: poster (deck) + body (modal) */
@@ -199,6 +226,26 @@ function cards(){
     head:'<b>Band 5 vs 4 vs 3.</b> <span>Choose what to compare.</span>',
     list:compare.map(a=>({cls:'b5',kick:'Compare',title:a.a,preview:a.b5,foot:'<span>Band 5 shown</span><span>Tap to compare all three</span>',
       body:()=>'<div class="sec">'+[['b5',5,a.b5],['b4',4,a.b4],['b3',3,a.b3]].map(r=>'<div class="row '+r[0]+'"><span class="tag">'+r[1]+'</span><p>'+r[2]+'</p></div>').join('')+'</div>'}))};
+  if(mode==='grades'){
+    const tot=CRIT.reduce((s,k)=>s+(calc[k]||0),0), done=CRIT.every(k=>calc[k]!=null);
+    const row=(cls,t,p,w)=>'<div class="row '+cls+'"><span class="tag"'+(w?' style="width:'+w+'px"':'')+'>'+t+'</span><p>'+p+'</p></div>';
+    return {
+      head:'<b>Grades.</b> <span>How your writing is marked.</span>',
+      list:[
+        {cls:'b4',kick:'Marking',title:'Marks out of 40',preview:'Each task is marked on four criteria, 0 to 5 each. That is 20 marks per task, and you write two tasks.',foot:'<span><b>4</b> criteria</span><span>0–5 each</span>',
+         body:()=>'<div class="b4"><div class="sec"><div class="lab">Four criteria, each marked 0–5</div><ul class="crit"><li><b>Content</b>: did you answer the task fully?</li><li><b>Communicative Achievement</b>: right style and tone for the reader?</li><li><b>Organisation</b>: clear structure, linked ideas, good paragraphs</li><li><b>Language</b>: range and control of grammar and vocabulary</li></ul></div>'+
+           '<div class="sec"><div class="lab">The sums</div><div class="counter"><div><b>20</b><span>per task</span></div><div><b>40</b><span>two tasks</span></div><div><b>20%</b><span>of the exam</span></div></div><p class="note">Whole marks only, no half marks. Write 140–190 words for each task.</p></div></div>'},
+        {cls:'b5',kick:'Marking',title:'What each mark means',preview:'5 is full marks. 3 is pass level. 0 means there was not enough to mark.',foot:'<span><b>0–5</b> scale</span><span>For every criterion</span>',
+         body:()=>'<div class="sec">'+row('b5',5,'Full marks: the criterion is fully met and the writing works very well for the reader.')+row('b5',4,'In between: better than pass level, but not yet full marks.')+row('b4',3,'Pass level: satisfactory, with some weaknesses.')+row('b3',2,'In between: below pass level, but not at the lowest band.')+row('b3',1,'Weak: the criterion is only partly met and the reader may struggle.')+row('b3',0,'Not enough to mark, or nothing relevant to the task.')+'</div><p class="note">Examiners describe Bands 5, 3 and 1. Bands 4 and 2 are given when writing is better than the lower band but does not reach the higher one.</p>'},
+        {cls:'b5',kick:'Try it',title:'Give a mark',preview:'Mark a piece of writing out of 5 on each criterion and see the total out of 20.',foot:'<span><b>'+(done?tot:'–')+'</b> of 20</span><span>'+(done?Math.round(tot/20*100)+'%':'Tap to try')+'</span>',
+         body:()=>'<div class="sec">'+CRIT.map((k,i)=>'<div class="crow"><span>'+k+'</span><div class="chips">'+[0,1,2,3,4,5].map(v=>'<button class="chip'+(calc[k]===v?' on':'')+'" type="button" data-k="'+k+'" data-v="'+v+'" aria-pressed="'+(calc[k]===v)+'">'+v+'</button>').join('')+'</div></div>').join('')+'</div>'+
+           '<div class="counter" style="margin-top:14px"><div><b>'+(done?tot:'–')+'/20</b><span>total</span></div><div><b>'+(done?Math.round(tot/20*100)+'%':'–')+'</b><span>score</span></div></div>'+
+           '<p class="note">'+(!done?'Choose a mark for every criterion.':tot>=12?'At or above 12/20 (60%): about pass level for this task.':'Below 12/20 (60%): below pass level for this task. Look at your lowest criterion first.')+'</p>'},
+        {cls:'b4',kick:'Results',title:'Your grade',preview:'Grade A, B or C means you reached B2. A score of 160 or more is a pass.',foot:'<span><b>140–190</b> scale</span><span>Cambridge English Scale</span>',
+         body:()=>'<div class="sec">'+row('b5','A','180–190: top grade, reaching Level C1',44)+row('b5','B','173–179: strong B2',44)+row('b4','C','160–172: B2 pass',44)+row('b3','B1','140–159: Level B1, below the B2 pass',44)+'</div>'+
+           '<p class="note">Writing is one of five papers (Reading, Use of English, Writing, Listening, Speaking). Each is worth 20% and is converted to the Cambridge English Scale. Exact boundaries can change, so check the current Cambridge scale before an exam.</p>'}
+      ]};
+  }
   const n=ticked.size;
   return {
     head:'<b>Self-check.</b> <span>'+n+' of '+TOTAL+' ticked · '+level(n)+'</span>',
@@ -206,7 +253,7 @@ function cards(){
       foot:'<span><b>'+catCount(c)+'</b> of '+c.items.length+' ticked</span><span>'+(catCount(c)===c.items.length?'Done':'')+'</span>',
       body:()=>'<div class="counter"><div><b>'+catCount(c)+'/'+c.items.length+'</b><span>this section</span></div><div><b>'+ticked.size+'/'+TOTAL+'</b><span>overall</span></div><div><b style="font-size:15px;padding:4px 0">'+level(ticked.size)+'</b><span>estimate</span></div></div>'+
         '<div class="opts">'+c.items.map((t,i)=>{const id=c.off+i,on=ticked.has(id);return '<button class="opt'+(on?' ok':'')+'" type="button" role="checkbox" aria-checked="'+on+'" data-id="'+id+'"><span class="mk"></span><span>'+t+'</span></button>';}).join('')+'</div>'+
-        '<div class="sec" style="margin-top:14px;font-size:14px;line-height:1.7;color:var(--poster-body)"><div class="lab">Score guide</div>18–21 ticked: Band 5 level<br>14–17: Band 4 level<br>10–13: Band 3 level<br>Below 10: needs significant practice</div>'}))};
+        '<div class="sec guide" style="margin-top:14px;font-size:14px;line-height:1.7;color:var(--poster-body)"><div class="lab">Score guide</div>18–21 ticked: Band 5 level<br>14–17: Band 4 level<br>10–13: Band 3 level<br>Below 10: needs significant practice</div>'}))};
 }
 
 /* ═══ DECK ═══ */
@@ -246,7 +293,7 @@ document.querySelectorAll('#tabs .mode-btn').forEach(b=>b.onclick=()=>{
   if(isOpen) return;
   mode=b.dataset.m; si=0;
   document.querySelectorAll('#tabs .mode-btn').forEach(x=>x.classList.toggle('active',x===b));
-  renderDeck();
+  render(); $('main').scrollTop=0;
 });
 
 /* ═══ CARD ═══ */
@@ -260,6 +307,7 @@ function paint(keepScroll){
   $('cbody').querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
     const id=+b.dataset.id; ticked.has(id)?ticked.delete(id):ticked.add(id); paint(true);
   });
+  bindCalc($('cbody'),()=>paint(true));
   const last=cur===s.length-1;
   $('actions').innerHTML=(cur>0?'<button class="btn quiet" id="prev" type="button">Previous</button>':'')+
     '<button class="btn primary" id="next" type="button">'+(last?'Back to the cards':'Next')+'</button>';
@@ -282,7 +330,45 @@ window.addEventListener('popstate',()=>{pushed=false;if(isOpen) closeCard();});
 $('close').onclick=requestClose; $('scrim').onclick=requestClose;
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&isOpen) requestClose();});
 
-renderDeck();
+/* ═══ PAGE VIEW — the same cards, laid out as one scrolling page ═══ */
+const INTRO={
+  overview:['Organisation','Organisation is one of four marking criteria for Cambridge B2 First Writing, alongside Content, Communicative Achievement and Language. It is worth 25% of your writing mark and assesses how you structure your text, connect ideas and guide the reader.'],
+  comparison:['What makes the difference','To move from Band 4 to Band 5, replace mechanical linking with natural, varied organisation.'],
+  check:['Review your writing','Tick each statement that is true of your own writing. Be honest: it shows you where to improve.'],
+  grades:['How marks are awarded','Your writing is marked on four criteria, each out of 5. See how the marks add up, what each mark means, and how they turn into a grade.']
+};
+function renderPage(){
+  const pm=$('pm'), top=$('main').scrollTop, s=cards(), t=INTRO[mode];
+  let h='<div class="pk">'+({overview:'Organisation criteria',comparison:'Band 5 vs 4 vs 3',check:'Self-check',grades:'Marks and grades'}[mode])+'</div><h1 class="title" style="margin-top:10px">'+t[0]+'</h1><p class="lead">'+t[1]+'</p>';
+  if(mode==='check') h+='<div class="counter"><div><b>'+ticked.size+'</b><span>ticked</span></div><div><b>'+TOTAL+'</b><span>statements</span></div><div><b style="font-size:15px;padding:4px 0">'+level(ticked.size)+'</b><span>estimate</span></div></div>';
+  h+=s.list.map(c=>'<section class="pg '+c.cls+'"><div class="pk">'+c.kick+'</div><h2 class="ptitle">'+c.title+'</h2>'+c.body()+'</section>').join('');
+  if(mode==='check') h+='<div class="guide"><div class="lab">Score guide</div>18–21 ticked: Band 5 level<br>14–17: Band 4 level<br>10–13: Band 3 level<br>Below 10: needs significant practice</div>';
+  pm.innerHTML=h;
+  pm.querySelectorAll('.pg .counter,.pg .guide').forEach(x=>x.remove());   /* one counter and one guide for the whole page */
+  pm.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
+    const id=+b.dataset.id; ticked.has(id)?ticked.delete(id):ticked.add(id); renderPage();
+  });
+  bindCalc(pm,renderPage);
+  $('main').scrollTop=top;
+}
+
+/* ═══ VIEW TOGGLE ═══ */
+let view='page';
+try{ if(localStorage.getItem('intuity-bands-view')==='cards') view='cards'; }catch(e){}
+function render(){
+  const page=view==='page';
+  $('deck').style.display=page?'none':'';
+  $('pm').style.display=page?'':'none';
+  document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.v===view));
+  if(page) renderPage(); else renderDeck();
+}
+document.querySelectorAll('#seg button').forEach(b=>b.onclick=()=>{
+  if(isOpen||b.dataset.v===view) return;
+  view=b.dataset.v;
+  try{ localStorage.setItem('intuity-bands-view',view); }catch(e){}
+  render(); $('main').scrollTop=0;
+});
+render();
 })();
 </script>
 <script src="sentence-structure-nav.js"></script>

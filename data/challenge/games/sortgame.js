@@ -3,7 +3,10 @@
    time, and each goes to its pile. A right pile takes the card and its
    ring counts up; a wrong pile throws it back. The piles fill as you go,
    so the two categories build up in front of the learner.
-   Receptive, like Sort it. One life per tile (see game-kit.js).
+   Receptive, like Sort it. Every wrong pile costs a life (see game-kit.js)
+   and the card then goes to the pile it belongs to, marked as missed: the
+   penalty costs something and still teaches, and the same card can't be
+   tried again on the other pile.
    Keys: 1, 2, 3 for the piles.
    Round: { prompt, bins: ["A","B"], items: [["item",0],…], note }
    Agreement: see choose.js.
@@ -36,6 +39,8 @@
 .sg-pile ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.25rem}
 .sg-pile li{font-size:.84rem;line-height:1.35;color:var(--sentence);background:#fff;border-radius:3px;padding:.25rem .45rem}
 .sg-pile.sg-wrong{border-color:var(--wrong,#B4513A);background:rgba(180,81,58,.07)}
+.sg-pile li.sg-missed{color:var(--wrong,#B4513A)}
+.sg-pile li.sg-missed::after{content:' \u2715';font-size:.72em;margin-left:.3em}
 .sg-pile:disabled{cursor:default}
 @media(prefers-reduced-motion:reduce){.sg-card{animation:none!important}}`);
 
@@ -44,7 +49,7 @@
     accepts: r => r.game === 'sort' && Array.isArray(r.bins) && r.bins.length >= 2 && Array.isArray(r.items) && r.items.length,
     solution: r => r.bins.map((b, k) => b + ': ' + r.items.filter(x => x[1] === k).map(x => x[0]).join(', ')).join(' · '),
     render(host, r, ctx){
-      const deck = ctx.shuffle(r.items), life = K.oneLife(ctx), placed = r.bins.map(() => []);
+      const deck = ctx.shuffle(r.items), life = K.slips(ctx), placed = r.bins.map(() => []);
       let at = 0, busy = false;
       host.innerHTML = `<p class="cg-prompt">${ctx.esc(r.prompt)} Send each card to its pile.</p>
         <div class="sg-deck" id="sgDeck"><span class="gk-hint sg-count" id="sgCount"></span><div class="sg-card" id="sgCard"></div></div>
@@ -60,21 +65,25 @@
       const given = () => r.bins.map((b, k) => b + ': ' + placed[k].join(', ')).join(' · ');
       const drop = k => {
         if (host.dataset.locked || busy || !host.isConnected) return;
-        const [w, bin] = deck[at], pile = piles[k];
+        const [w, bin] = deck[at];
+        let missed = false;
         if (bin !== k){
-          K.shake(card); pile.classList.add('sg-wrong'); setTimeout(() => pile.classList.remove('sg-wrong'), 450);
-          if (!life.miss(given() + ' · ' + w + ' → ' + r.bins[k])) lock();
-          return;
+          const wrong = piles[k];
+          K.shake(card); wrong.classList.add('sg-wrong'); setTimeout(() => wrong.classList.remove('sg-wrong'), 450);
+          if (!life.miss(given() + ' · ' + w + ' → ' + r.bins[k])){ lock(); return; }
+          missed = true;                  /* still alive: the card goes where it belongs, marked */
         }
-        busy = true; placed[k].push(w);
-        card.classList.add('sg-go-' + Math.min(k, 2));
+        const pile = piles[bin];
+        busy = true; placed[bin].push(w);
+        setTimeout(() => card.classList.add('sg-go-' + Math.min(bin, 2)), missed ? 450 : 0);
         setTimeout(() => {
-          const li = document.createElement('li'); li.textContent = w; pile.querySelector('ul').appendChild(li);
-          const ring = pile.querySelector('.gk-ring'); ring.textContent = placed[k].length; ring.classList.remove('gk-settle'); void ring.offsetWidth; ring.classList.add('gk-settle');
+          const li = document.createElement('li'); li.textContent = w; if (missed) li.className = 'sg-missed';
+          pile.querySelector('ul').appendChild(li);
+          const ring = pile.querySelector('.gk-ring'); ring.textContent = placed[bin].length; ring.classList.remove('gk-settle'); void ring.offsetWidth; ring.classList.add('gk-settle');
           at++; busy = false;
           if (at >= deck.length){ card.remove(); count.textContent = 'All sorted'; ctx.answer(true, given()); lock(); }
           else show();
-        }, 300);
+        }, missed ? 750 : 300);
       };
       const key = e => { const n = +e.key; if (n >= 1 && n <= r.bins.length && host.isConnected) drop(n - 1); else if (!host.isConnected) document.removeEventListener('keydown', key); };
       piles.forEach(p => p.onclick = () => drop(+p.dataset.bin));

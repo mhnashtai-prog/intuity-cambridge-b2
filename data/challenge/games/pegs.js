@@ -5,7 +5,8 @@
    wrong one throws it back. Pegs can be picked in either order: peg then
    row, or row then peg. Built for long items too (a whole sentence on
    each side), so the rows stack rather than sit in a ring of discs.
-   Receptive, like Match. One life per tile (see game-kit.js).
+   Receptive, like Match. Every wrong pairing costs a life (see
+   game-kit.js), so pegs can't be tried row after row until one fits.
    Round: { prompt, pairs: [["left","right"],…], note }
    Agreement: see choose.js.
    ═══════════════════════════════════════════════════════════════════════ */
@@ -37,7 +38,7 @@
     accepts: r => r.game === 'match' && Array.isArray(r.pairs) && r.pairs.length >= 2,
     solution: r => r.pairs.map(p => p[0] + ' → ' + p[1]).join(' · '),
     render(host, r, ctx){
-      const life = K.oneLife(ctx), seated = {};
+      const life = K.slips(ctx), seated = {};
       let peg = null, aim = null;
       host.innerHTML = `<p class="cg-prompt">${ctx.esc(r.prompt || 'Match each one to its partner.')} Pick up a peg, then tap its row.</p>
         <div class="pg-rows">${r.pairs.map((p, i) =>

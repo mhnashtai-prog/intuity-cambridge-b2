@@ -1,8 +1,10 @@
 /* ═══ CHALLENGE GAME · PAIRS ════════════════════════════════════════════
-   Fill the gap, as Phrasal Verbs 2's Pairs plays it: a card lies face
-   down with only its ring showing — the word in brackets, the clue.
-   Turn it over and the sentence is there, with the answer typed straight
-   into the gap, inside the sentence rather than in a box underneath.
+   Fill the gap on a card: the clue — the word in brackets — sits in the
+   ring in the corner, and the answer is typed straight into the gap,
+   inside the sentence rather than in a box underneath.
+   The card used to lie face down first and had to be turned over. The
+   turn hid nothing (the clue was on the back as well as the front), so it
+   was a tap with no decision in it, and it has gone.
    Productive, like Fill the gap: typed, and marked exactly as the Exam
    marks it (game-kit.js normalising, every accepted answer).
    Round: { prompt: "… ___ (clue) …", answer: [accepted…], note }
@@ -10,6 +12,10 @@
    ═══════════════════════════════════════════════════════════════════════ */
 (function(){
   const K = window.GameKit;
+  K.style('gk-pairs', `
+.pr-card{position:relative;margin:.5rem 0 .2rem;padding:1.1rem 1.3rem 1rem;border-radius:8px;background:#fff;display:flex;flex-direction:column;gap:.8rem;
+  box-shadow:0 1px 0 rgba(20,17,14,.08),0 16px 32px -18px rgba(20,17,14,.55)}
+.pr-card .cg-line{margin:0;font-size:clamp(1.05rem,3vw,1.25rem);line-height:1.8}`);
 
   const clueOf = p => { const m = String(p).match(/___\s*\(([^)]+)\)/); return m ? m[1] : null; };
 
@@ -21,21 +27,15 @@
       const clue = clueOf(r.prompt);
       const line = clue ? r.prompt.replace(/___\s*\([^)]+\)/, '___') : r.prompt;
       const [pre, post] = [line.split('___')[0], line.split('___').slice(1).join('___')];
-      host.innerHTML = `<p class="cg-prompt">Turn the card over and write the missing words into the sentence.</p>
-        <div class="fc-stage"><div class="fc-card" id="fcCard">
-          <div class="fc-face fc-back" id="fcBack" role="button" tabindex="0" aria-label="Turn the card over">
-            <span class="gk-ring${(clue || '').length > 7 ? ' gk-pill' : ''}">${ctx.esc(clue || '?')}</span><span class="gk-hint">Tap to turn over</span></div>
-          <div class="fc-face fc-front">
-            ${clue ? `<span class="fc-corner"><span class="gk-ring">${ctx.esc(clue)}</span></span>` : ''}
-            <p class="cg-line">${ctx.esc(pre)}<input class="gk-in" id="fcIn" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="The missing words" tabindex="-1">${ctx.esc(post)}</p>
-            <div class="fc-row"><button class="cg-btn" type="button" id="fcCheck" tabindex="-1">Check</button></div>
-          </div></div></div>`;
-      const card = host.querySelector('#fcCard'), back = host.querySelector('#fcBack'), inp = host.querySelector('#fcIn'), btn = host.querySelector('#fcCheck');
+      host.innerHTML = `<p class="cg-prompt">Write the missing words into the sentence.</p>
+        <div class="pr-card">
+          ${clue ? `<span class="fc-corner"><span class="gk-ring">${ctx.esc(clue)}</span></span>` : ''}
+          <p class="cg-line">${ctx.esc(pre)}<input class="gk-in" id="fcIn" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="The missing words">${ctx.esc(post)}</p>
+          <div class="fc-row"><button class="cg-btn" type="button" id="fcCheck">Check</button></div>
+        </div>`;
+      const inp = host.querySelector('#fcIn'), btn = host.querySelector('#fcCheck');
       K.grow(inp);
-      const turn = () => { if (card.classList.contains('fc-over')) return; card.classList.add('fc-over');
-        inp.tabIndex = 0; btn.tabIndex = 0; back.tabIndex = -1; setTimeout(() => inp.focus(), 420); };
-      back.onclick = turn; back.onkeydown = e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); turn(); } };
-      setTimeout(() => back.focus(), 250);
+      setTimeout(() => inp.focus(), 250);
       const go = () => {
         if (host.dataset.locked) return; const v = K.norm(inp.value); if (!v) return;
         if (ctx.nudge && (r.alsoRight || []).map(K.norm).includes(v) && ctx.nudge(r.alsoNote)){ K.shake(inp); inp.select(); return; }

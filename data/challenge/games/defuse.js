@@ -6,22 +6,49 @@
    Receptive, like Choose: it plays the Choose rounds,
    so it changes the pressure, never the question.
    Game only: the Exam has no clock inside a cell.
+
+   THE FUSE IS THE RING. It used to be a 6px bar, which read as a progress
+   line, not a fuse. It is now the product's ring, as on the Defuse page:
+   the seconds left in the core, the rim burning down around them, turning
+   clay for the last five seconds. The rim takes the page's --ring-sage, so
+   it is caramel in Game mode like every other ring on the card.
+
+   THE FUSE REMEMBERS. Closing the card and opening it again used to light
+   a fresh 20 seconds with every wire back, so the pressure was optional.
+   The time left and the wires already cut are now kept on the round, so a
+   card reopened carries on exactly where it was.
+   It also PAUSES while the card is closed. A closed card stays on the page,
+   only hidden, and the old fuse kept burning there: left long enough it ran
+   out unseen and took lives from a card nobody was looking at. Now no life
+   is lost behind a closed card, and none is given back by closing one.
+   A new run draws fresh copies of the rounds, so nothing leaks between runs.
+
    Agreement: see choose.js. `accepts` says which rounds this game can play.
    ═══════════════════════════════════════════════════════════════════════ */
 (function(){
+  const R = 26, C = 2 * Math.PI * R;          /* the ring's radius and rim length, in a 64-unit box */
   const CSS = `
-.cg-fuse{height:6px;background:var(--rule);margin:.2rem 0 1rem;overflow:hidden}
-.cg-fuse i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#F0B35A,#DD8E58 60%,#C4402F);transform-origin:left;transition:transform .2s linear}
-.cg-fuse.cg-hot i{animation:cgHot .5s steps(2) infinite}
-@keyframes cgHot{50%{opacity:.45}}
+.df-top{display:flex;align-items:center;gap:1rem;margin:.9rem 0 .4rem}
+.df-top .df-text{flex:1;min-width:0}
+.df-top .cg-line{margin:.2rem 0}
+.df-ring{flex:none;width:3.6rem;height:3.6rem;position:relative}
+.df-ring svg{display:block;width:100%;height:100%;transform:rotate(-90deg)}
+.df-ring .df-core{fill:var(--ring-core,#201E1C)}
+.df-ring .df-track{fill:none;stroke:rgba(20,17,14,.12);stroke-width:5}
+.df-ring .df-burn{fill:none;stroke:var(--ring-sage,#8AA79C);stroke-width:5;stroke-linecap:round;transition:stroke .3s}
+.df-ring.df-hot .df-burn{stroke:var(--wrong,#B4653A)}
+.df-ring b{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--f-display,system-ui);font-weight:800;
+  font-size:1.05rem;color:var(--ring-ink,#E5D1B8);font-variant-numeric:tabular-nums}
+.df-ring.df-hot b{animation:dfHot .5s steps(2) infinite}
+@keyframes dfHot{50%{opacity:.45}}
 .cg-lead{font-size:.95rem;color:var(--dim);margin:0 0 .35rem}
-.cg-wires{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.4rem}
+.cg-wires{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.6rem}
 .cg-wire{position:relative;font:inherit;font-size:.96rem;font-weight:600;text-align:left;padding:.85rem .8rem .85rem 1.6rem;border:1px solid var(--rule);background:#fff;color:var(--ink);cursor:pointer;overflow:hidden}
 .cg-wire::before{content:'';position:absolute;left:0;top:0;bottom:0;width:.55rem;background:var(--w)}
 .cg-wire.cg-ok{background:#DCEFE2} .cg-wire.cg-no{background:#F6DDD7;text-decoration:line-through;opacity:.7}
 .cg-wire:disabled{cursor:default}
 @media(max-width:420px){.cg-wires{grid-template-columns:1fr}}
-@media(prefers-reduced-motion:reduce){.cg-fuse.cg-hot i{animation:none}}`;
+@media(prefers-reduced-motion:reduce){.df-ring.df-hot b{animation:none}.df-ring .df-burn{transition:none}}`;
   const WIRES = ['#C4402F','#2F6FB0','#D9A21B','#1F7A4A'];
   let styled = false;
 
@@ -31,36 +58,52 @@
     solution: r => r.answer,
     render(host, r, ctx){
       if (!styled){ const s = document.createElement('style'); s.textContent = CSS; document.head.appendChild(s); styled = true; }
+      /* the fuse's state lives on the round, so closing the card can't reset it */
+      const st = r._fuse || (r._fuse = { secs:20, left:20, cut:[] });
       const pen = (r.src || r.game) === 'pendulum';
       const lead = pen ? (r.active != null ? r.active : r.context) : '';
       const line = pen ? (r.passive != null ? r.passive : r.line) : r.prompt;
-      host.innerHTML = `<div class="cg-fuse" id="cgFuse"><i></i></div>
-        ${lead ? `<p class="cg-lead">${ctx.esc(lead)}</p>` : ''}
-        <p class="cg-line">${ctx.esc(line).replace('___', '<span class="cg-blank" id="cgBlank">&nbsp;</span>')}</p>
-        <div class="cg-wires">${ctx.shuffle(r.options).map((o, k) =>
-          `<button class="cg-wire" type="button" style="--w:${WIRES[k]}" data-o="${ctx.esc(o)}">${ctx.esc(o)}</button>`).join('')}</div>`;
-      const fuse = host.querySelector('#cgFuse'), bar = fuse.firstElementChild;
-      let secs = 20, left = secs, t = null;
+      if (!st.order) st.order = ctx.shuffle(r.options);          /* the wires stay where they were */
+      host.innerHTML = `<div class="df-top"><div class="df-text">
+          ${lead ? `<p class="cg-lead">${ctx.esc(lead)}</p>` : ''}
+          <p class="cg-line">${ctx.esc(line).replace('___', '<span class="cg-blank" id="cgBlank">&nbsp;</span>')}</p></div>
+          <div class="df-ring" id="dfRing" role="timer" aria-label="Seconds left">
+            <svg viewBox="0 0 64 64" aria-hidden="true"><circle class="df-core" cx="32" cy="32" r="${R - 4}"/>
+              <circle class="df-track" cx="32" cy="32" r="${R}"/><circle class="df-burn" id="dfBurn" cx="32" cy="32" r="${R}"
+              stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="0"/></svg><b id="dfSecs"></b></div></div>
+        <div class="cg-wires">${st.order.map((o, k) =>
+          `<button class="cg-wire${st.cut.includes(o) ? ' cg-no' : ''}" type="button" style="--w:${WIRES[k]}" data-o="${ctx.esc(o)}"${st.cut.includes(o) ? ' disabled' : ''}>${ctx.esc(o)}</button>`).join('')}</div>`;
+      const ring = host.querySelector('#dfRing'), burn = host.querySelector('#dfBurn'), secs = host.querySelector('#dfSecs');
+      let t = null, last = 0;
+      const draw = () => {
+        const f = Math.max(0, st.left / st.secs);
+        burn.setAttribute('stroke-dashoffset', (C * (1 - f)).toFixed(2));
+        secs.textContent = Math.ceil(Math.max(0, st.left));
+        ring.classList.toggle('df-hot', st.left <= 5);
+      };
       const stop = () => { clearInterval(t); t = null; };
-      const lock = () => { stop(); host.dataset.locked = '1'; host.querySelectorAll('.cg-wire').forEach(x => x.disabled = true); };
-      const light = () => { left = secs; fuse.classList.remove('cg-hot'); bar.style.transform = 'scaleX(1)';
-        stop(); t = setInterval(() => {
-          if (!host.isConnected){ stop(); return; }            /* card closed: the fuse goes out */
-          left -= .2; bar.style.transform = 'scaleX(' + Math.max(0, left / secs) + ')';
-          if (left <= 5) fuse.classList.add('cg-hot');
-          if (left <= 0){ stop(); if (host.dataset.locked) return;
+      const lock = () => { stop(); st.done = true; host.dataset.locked = '1'; host.querySelectorAll('.cg-wire').forEach(x => x.disabled = true); };
+      const run = () => {
+        stop(); last = performance.now(); draw();
+        t = setInterval(() => {
+          const now = performance.now();
+          if (!host.isConnected){ stop(); return; }          /* another card opened: this one is gone */
+          if (host.offsetParent === null){ last = now; return; }   /* card closed: the fuse pauses */
+          st.left -= (now - last) / 1000; last = now; draw();
+          if (st.left <= 0){ stop(); if (host.dataset.locked) return;
             const again = ctx.answer(false, 'the fuse ran out');
-            if (again){ secs = Math.max(8, secs - 5); light(); } else lock(); }
-        }, 200); };
+            if (again){ st.secs = Math.max(8, st.secs - 5); st.left = st.secs; run(); } else lock(); }
+        }, 100);
+      };
       host.querySelectorAll('.cg-wire').forEach(b => b.onclick = () => {
-        if (host.dataset.locked) return;
+        if (host.dataset.locked || b.disabled) return;
         const ok = b.dataset.o === r.answer;
         b.classList.add(ok ? 'cg-ok' : 'cg-no');
         if (ok){ const bl = host.querySelector('#cgBlank'); if (bl) bl.textContent = r.answer; }
         const again = ctx.answer(ok, b.dataset.o);
-        if (again){ b.disabled = true; } else lock();
+        if (again){ b.disabled = true; st.cut.push(b.dataset.o); } else lock();
       });
-      light();
+      if (st.done) lock(); else run();
     }
   };
 })();

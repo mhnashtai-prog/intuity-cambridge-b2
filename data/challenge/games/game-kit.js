@@ -8,9 +8,14 @@
    · one SHAKE for a wrong move, one SETTLE for a right one.
    · the same NORMALISING as the exam formats, so a typed answer is marked
      identically in Game and Exam.
-   · ONE LIFE PER TILE for games played in steps (Sort, Pegs): the first
-     slip on a tile costs a life, later slips on the same tile don't — the
-     Exam charges one mark for one wrong Check, and so does this.
+   · EVERY SLIP COUNTS for games played in steps (Sort, Pegs). It used to
+     be one life per tile: the first slip cost a life and every later slip
+     was free, so after one mistake a tile could be won by tapping blindly
+     until the right pile or row took the card. Tested, it scored "Right"
+     with no knowledge at all. Now each wrong move costs a life, exactly as
+     a wrong card does in Knock-out, so guessing loses the run instead of
+     winning the tile. (The Exam is untouched: there one wrong answer
+     settles the cell, so these games never reach it.)
 
    Loaded before the games that use it.
    ═══════════════════════════════════════════════════════════════════════ */
@@ -24,11 +29,11 @@
   K.norm = s => String(s).toLowerCase().replace(/[’']/g, "'").replace(/[.!?,]/g, '').replace(/\s+/g, ' ').trim();
   K.shake = el => { if (!el) return; el.classList.remove('gk-shake'); void el.offsetWidth; el.classList.add('gk-shake'); };
 
-  /* a tile played in steps: miss() charges the tile once and says whether
-     play can go on (false = no lives left, the round is over) */
-  K.oneLife = ctx => {
-    let charged = false, alive = true;
-    return { miss(given){ if (!charged){ charged = true; alive = ctx.answer(false, given); } return alive; } };
+  /* a tile played in steps: miss() charges a life for EVERY wrong move and
+     says whether play can go on (false = no lives left, the round is over) */
+  K.slips = ctx => {
+    let alive = true;
+    return { miss(given){ if (alive) alive = ctx.answer(false, given); return alive; } };
   };
 
   /* an input that grows with what is typed, sitting inside the sentence */

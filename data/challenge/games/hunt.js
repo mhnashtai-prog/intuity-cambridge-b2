@@ -39,7 +39,7 @@
       const words = r.sentence.trim().split(/\s+/);
       host.innerHTML = `<p class="cg-prompt">One part of this sentence is wrong. Hunt it down — tap the wrong word or words — then type the fix.</p>
         <div class="ht-board" id="htBoard">${words.map((w, i) => `<button class="ht-w" type="button" data-i="${i}">${ctx.esc(w)}</button>`).join('')}</div>
-        <div class="ht-foot"><span class="ht-status"><span class="gk-ring" id="htRing">0</span><span class="gk-hint" id="htHint">Tap the fault</span></span>
+        <div class="ht-foot"><span class="ht-status"><span class="gk-ring" id="htRing">0</span><span class="gk-hint" id="htHint">Tap the wrong word or words</span></span>
           <button class="cg-btn" type="button" id="htCheck" disabled>Check</button></div>`;
       const board = host.querySelector('#htBoard'), btns = [...board.querySelectorAll('.ht-w')], ring = host.querySelector('#htRing'),
             hint = host.querySelector('#htHint'), check = host.querySelector('#htCheck');
@@ -68,7 +68,8 @@
       };
       const refresh = () => {
         ring.textContent = hit.size;
-        hint.textContent = hit.size ? 'Type the fix after the struck words' : 'Tap the fault';
+        /* the ring counts the struck words, so the line beside it says so */
+        hint.textContent = hit.size ? (hit.size === 1 ? '1 word struck' : hit.size + ' words struck') + ' — now type the right word in the gap' : 'Tap the wrong word or words';
         check.disabled = !hit.size;
         if (hit.size) place(); else if (inp){ inp.remove(); }
       };

@@ -13,7 +13,7 @@
 .cg-slots{display:inline-flex;flex-wrap:wrap;gap:.35rem .3rem;vertical-align:middle;margin:0 .15rem}
 .cg-slot{min-width:3.4em;height:2.1em;border:none;border-bottom:2px solid var(--ink);background:rgba(20,17,14,.05);font:inherit;font-weight:700;color:var(--accent-ink);padding:0 .45rem;cursor:pointer}
 .cg-slot:empty{cursor:default}
-.cg-slots.cg-ok .cg-slot{background:#DCEFE2;color:#1B4A31;border-color:var(--good)}
+.cg-slots.cg-ok .cg-slot{background:var(--right-soft,rgba(74,107,92,.12));color:var(--right,#4A6B5C);border-color:var(--good)}
 .cg-bank{margin-top:.6rem}`;
   let styled = false;
   const words = s => String(s).trim().split(/\s+/);

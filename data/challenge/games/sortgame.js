@@ -15,12 +15,12 @@
   const K = window.GameKit;
   K.style('gk-sort', `
 .sg-deck{position:relative;display:grid;place-items:center;min-height:7.2rem;margin:.4rem 0 1rem}
-.sg-deck::before,.sg-deck::after{content:'';position:absolute;inset:.5rem 12% auto;height:calc(100% - 1rem);background:#fff;border-radius:6px;
+.sg-deck::before,.sg-deck::after{content:'';position:absolute;inset:.5rem 12% auto;height:calc(100% - 1rem);background:var(--sheet,#FEFCF9);border-radius:var(--r-box,16px);
   box-shadow:0 1px 0 rgba(20,17,14,.06);transform:translate(6px,6px) rotate(1.5deg);z-index:0}
 .sg-deck::after{transform:translate(3px,3px) rotate(.6deg)}
 .sg-deck.sg-last::before,.sg-deck.sg-last::after{display:none}
-.sg-card{position:relative;z-index:1;width:76%;min-height:6rem;display:grid;place-items:center;text-align:center;padding:1rem 1.2rem;background:#fff;
-  border-radius:6px;box-shadow:0 1px 0 rgba(20,17,14,.08),0 14px 28px -16px rgba(20,17,14,.5);font-family:var(--f-display);font-weight:700;
+.sg-card{position:relative;z-index:1;width:76%;min-height:6rem;display:grid;place-items:center;text-align:center;padding:1rem 1.2rem;background:var(--sheet,#FEFCF9);
+  border-radius:var(--r-box,16px);box-shadow:0 1px 0 rgba(20,17,14,.08),0 14px 28px -16px rgba(20,17,14,.5);font-family:var(--f-display);font-weight:700;
   font-size:clamp(1rem,3vw,1.2rem);line-height:1.4;color:var(--ink)}
 .sg-card.sg-go-0{animation:sgGo0 .32s ease-in forwards}.sg-card.sg-go-1{animation:sgGo1 .32s ease-in forwards}.sg-card.sg-go-2{animation:sgGo2 .32s ease-in forwards}
 @keyframes sgGo0{to{transform:translate(-40%,90%) scale(.4);opacity:0}}
@@ -31,15 +31,15 @@
 .sg-count{position:absolute;right:0;top:0;z-index:2}
 .sg-piles{display:grid;gap:.6rem}
 .sg-pile{display:flex;flex-direction:column;align-items:stretch;gap:.5rem;font:inherit;text-align:left;padding:.8rem .8rem .7rem;border:1px dashed var(--rule);
-  border-radius:6px;background:transparent;cursor:pointer;min-height:6.5rem;transition:background .15s,border-color .15s}
+  border-radius:var(--r-box,16px);background:transparent;cursor:pointer;min-height:6.5rem;transition:background .15s,border-color .15s}
 .sg-pile:hover:not(:disabled){background:rgba(138,167,156,.10);border-color:var(--ring-sage,#8AA79C)}
 .sg-head{display:flex;align-items:center;gap:.7rem}
 .sg-head .gk-ring{width:2.2rem;height:2.2rem;font-size:.9rem;box-shadow:0 0 0 3px var(--ring-sage,#8AA79C)}
 .sg-head b{font-family:var(--f-display);font-size:.95rem;color:var(--ink)}
 .sg-pile ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.25rem}
-.sg-pile li{font-size:.84rem;line-height:1.35;color:var(--sentence);background:#fff;border-radius:3px;padding:.25rem .45rem}
-.sg-pile.sg-wrong{border-color:var(--wrong,#B4513A);background:rgba(180,81,58,.07)}
-.sg-pile li.sg-missed{color:var(--wrong,#B4513A)}
+.sg-pile li{font-size:.84rem;line-height:1.35;color:var(--sentence);background:var(--sheet,#FEFCF9);border-radius:var(--r-box,16px);padding:.25rem .45rem}
+.sg-pile.sg-wrong{border-color:var(--wrong,#B4653A);background:rgba(180,81,58,.07)}
+.sg-pile li.sg-missed{color:var(--wrong,#B4653A)}
 .sg-pile li.sg-missed::after{content:' \u2715';font-size:.72em;margin-left:.3em}
 .sg-pile:disabled{cursor:default}
 @media(prefers-reduced-motion:reduce){.sg-card{animation:none!important}}`);

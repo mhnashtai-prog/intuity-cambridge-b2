@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>INTUITY — Challenge check</title>
+<style>
+  /* An author tool, not a learner page: it reads the live Challenge data and
+     says whether every round can be remembered. Three rules, checked on every
+     open:
+       1. every round has an id and an exam part, and no id appears twice
+          anywhere — the memory keys every mistake by its id;
+       2. every "correct the error" round says where the error is (`wrong`),
+          and that those words really occur in its sentence, by the same
+          matching rule Hunt uses;
+       3. every vocabulary topic names its exam part.
+     Colours are the locked roles: dark sage for right, clay for wrong. */
+  :root{--stage:#FAF7F2;--paper:#FEFCF9;--ink:#2B2129;--soft:#5C4E52;--mute:#8B7B78;--rule:#D9C0A4;
+        --right:#4A6B5C;--wrong:#B4653A}
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--stage);color:var(--ink);font:15px/1.5 'Geist','Inter',system-ui,sans-serif;padding:2rem 1rem 4rem}
+  main{max-width:46rem;margin:0 auto}
+  h1{font-size:1.5rem;font-weight:700;letter-spacing:-.01em}
+  .lede{color:var(--soft);margin:.3rem 0 1.6rem}
+  .verdict{background:var(--paper);border-radius:16px;padding:1.1rem 1.3rem;margin-bottom:1.4rem;
+    box-shadow:0 1px 2px rgba(43,33,41,.05),0 12px 28px rgba(43,33,41,.06);display:flex;gap:1rem;align-items:center}
+  .dot{flex:none;width:2.6rem;height:2.6rem;border-radius:999px;display:grid;place-items:center;color:var(--paper);font-weight:700;font-size:1.1rem}
+  .ok .dot{background:var(--right)} .bad .dot{background:var(--wrong)} .wait .dot{background:var(--mute)}
+  .verdict b{display:block;font-size:1.05rem}
+  .verdict span{color:var(--soft);font-size:.9rem}
+  .wrap{overflow-x:auto;background:var(--paper);border-radius:16px;padding:.4rem 1rem}
+  table{width:100%;border-collapse:collapse;font-size:.88rem}
+  th,td{text-align:left;padding:.55rem .4rem;border-bottom:1px solid rgba(217,192,164,.5);white-space:nowrap}
+  th{color:var(--mute);font-weight:600}
+  tr:last-child td{border-bottom:none}
+  td.n{text-align:right;font-variant-numeric:tabular-nums}
+  .pass{color:var(--right);font-weight:600} .fail{color:var(--wrong);font-weight:600}
+  h2{font-size:1rem;margin:1.6rem 0 .6rem}
+  ul.issues{background:var(--paper);border-radius:16px;padding:.9rem 1.3rem .9rem 2.3rem;color:var(--wrong);font-size:.9rem}
+  ul.issues li{margin:.2rem 0}
+  p.note{color:var(--soft);font-size:.85rem;margin-top:.8rem}
+</style>
+</head>
+<body>
+<main>
+  <h1>Challenge check</h1>
+  <p class="lede">Reads the live Challenge data and confirms every round can be remembered.</p>
+  <div class="verdict wait" id="verdict"><div class="dot">…</div><div><b>Checking</b><span>Reading the topic files</span></div></div>
+  <div class="wrap"><table id="table"><thead><tr><th>Topic</th><th class="n">Rounds</th><th class="n">Error rounds</th>
+    <th>Parts</th><th>Next free id</th><th>Status</th></tr></thead><tbody></tbody></table></div>
+  <div id="more"></div>
+</main>
+<script>
+const PARTS = ['UoE1','UoE2','UoE3','UoE4'];
+const norm = s => String(s).toLowerCase().replace(/[’']/g, "'").replace(/[.!?,]/g, '').replace(/\s+/g, ' ').trim();
+const bare = w => norm(w).replace(/[;:"()]/g, '').replace(/^['‘’"]+|['‘’"]+$/g, '');   /* as in hunt.js */
+const occurs = (sentence, alt) => {
+  const got = sentence.trim().split(/\s+/).map(bare), want = String(alt).trim().split(/\s+/).map(bare);
+  for (let k = 0; k + want.length <= got.length; k++) if (want.every((w, j) => got[k + j] === w)) return true;
+  return false;
+};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const get = async u => { const r = await fetch(u, {cache:'no-store'}); if (!r.ok) throw new Error(u + ' → ' + r.status); return r.json(); };
+
+(async () => {
+  const issues = [], seen = new Map(), rows = []; let total = 0;
+  const say = (ok, head, sub) => {
+    const v = document.getElementById('verdict');
+    v.className = 'verdict ' + (ok ? 'ok' : 'bad');
+    v.innerHTML = `<div class="dot">${ok ? '✓' : '✕'}</div><div><b>${esc(head)}</b><span>${esc(sub)}</span></div>`;
+  };
+  try {
+    const topics = await get('/data/challenge/challenge-topics.json');
+    const sources = [];
+    for (const sec of topics.sections) for (const t of sec.topics) {
+      if (t.vocab){ if (!PARTS.includes(t.part)) issues.push(`Vocabulary topic “${t.id}” has no exam part.`); continue; }
+      if (t.file) sources.push({label: t.label || t.id, url: '/data/challenge/' + t.file, file: t.file});
+    }
+    const files = new Set(sources.map(s => s.url));
+    for (const s of [...sources]) {
+      const d = await get(s.url);
+      for (const im of d.imports || []) if (!files.has(im.file)) { files.add(im.file); sources.push({label: s.label + ' · ' + (im.game === 'pendulum' ? 'Swing' : im.game), url: im.file, file: im.file.split('/').pop()}); }
+    }
+    for (const s of sources) {
+      const d = await get(s.url), rs = d.rounds || [], before = issues.length, parts = {}; total += rs.length;
+      let errs = 0, maxN = 0, prefix = '';
+      rs.forEach((r, i) => {
+        const where = `${s.file} · round ${i + 1}`;
+        if (!r.id) issues.push(`${where}: no id.`);
+        else {
+          if (seen.has(r.id)) issues.push(`${where}: id “${r.id}” is also used in ${seen.get(r.id)}.`); else seen.set(r.id, where);
+          const m = /^(.*)-(\d+)$/.exec(r.id); if (m){ prefix = m[1]; maxN = Math.max(maxN, +m[2]); }
+        }
+        if (!PARTS.includes(r.part)) issues.push(`${where}: exam part “${r.part || ''}” is not one of ${PARTS.join(', ')}.`);
+        else parts[r.part] = (parts[r.part] || 0) + 1;
+        if (r.game === 'correct'){
+          errs++;
+          if (!r.wrong) issues.push(`${where}: an error round with no “wrong”.`);
+          else [].concat(r.wrong).forEach(a => { if (!occurs(r.sentence, a)) issues.push(`${where}: “${a}” is not in “${r.sentence}”.`); });
+        }
+      });
+      rows.push(`<tr><td>${esc(s.label)}</td><td class="n">${rs.length}</td><td class="n">${errs}</td>
+        <td>${Object.entries(parts).map(([p, n]) => p + ' ' + n).join(' · ')}</td>
+        <td>${prefix ? esc(prefix + '-' + String(maxN + 1).padStart(3, '0')) : '—'}</td>
+        <td class="${issues.length === before ? 'pass">Ready' : 'fail">' + (issues.length - before) + ' to fix'}</td></tr>`);
+    }
+    document.querySelector('#table tbody').innerHTML = rows.join('');
+    if (issues.length){
+      say(false, issues.length + (issues.length === 1 ? ' thing to fix' : ' things to fix'), total + ' rounds read');
+      document.getElementById('more').innerHTML = '<h2>To fix</h2><ul class="issues">' + issues.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>';
+    } else {
+      say(true, 'Every round can be remembered', total + ' rounds, every id unique, every error located');
+      document.getElementById('more').innerHTML = '<p class="note">A new round takes the topic’s next free id, and keeps it for good — even if it is moved or edited.</p>';
+    }
+  } catch (e) { say(false, 'Could not read the data', e.message); }
+})();
+</script>
+</body>
+</html>

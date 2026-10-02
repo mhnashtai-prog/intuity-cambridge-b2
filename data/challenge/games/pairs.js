@@ -22,14 +22,14 @@
   (window.ChallengeGames = window.ChallengeGames || {}).pairs = {
     title:'Pairs', kind:'game', skill:'productive',
     /* fill-the-gap rounds, and word formation (Part 3): the stem word becomes the clue in the ring */
-    accepts: r => (r.game === 'gap' || r.game === 'wordform') && typeof r.prompt === 'string' && r.prompt.includes('___') && Array.isArray(r.answer) && r.answer.length,
+    accepts: r => (r.game === 'gap' || r.game === 'wordform' || r.game === 'opencloze') && typeof r.prompt === 'string' && r.prompt.includes('___') && Array.isArray(r.answer) && r.answer.length,
     solution: r => r.answer[0],
     render(host, r, ctx){
-      const wf = (r.src || r.game) === 'wordform';
+      const wf = (r.src || r.game) === 'wordform', oc = (r.src || r.game) === 'opencloze';
       const clue = wf ? r.stem : clueOf(r.prompt);
       const line = !wf && clue ? r.prompt.replace(/___\s*\([^)]+\)/, '___') : r.prompt;
       const [pre, post] = [line.split('___')[0], line.split('___').slice(1).join('___')];
-      host.innerHTML = `<p class="cg-prompt">${wf ? 'Change the word in the ring so it fits the gap.' : 'Write the missing words into the sentence.'}</p>
+      host.innerHTML = `<p class="cg-prompt">${wf ? 'Change the word in the ring so it fits the gap.' : oc ? 'Write one word in the gap.' : 'Write the missing words into the sentence.'}</p>
         <div class="pr-card">
           ${clue ? `<span class="fc-corner"><span class="gk-ring">${ctx.esc(clue)}</span></span>` : ''}
           <p class="cg-line">${ctx.esc(pre)}<input class="gk-in" id="fcIn" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="The missing words">${ctx.esc(post)}</p>
@@ -40,6 +40,8 @@
       setTimeout(() => inp.focus(), 250);
       const go = () => {
         if (host.dataset.locked) return; const v = K.norm(inp.value); if (!v) return;
+        /* open cloze is one word only; in Game that is a reminder, not a lost life */
+        if (oc && /\s/.test(v)){ const fb = document.getElementById('fb'); if (fb) fb.innerHTML = '<b>One word only</b> — in Part 2 every gap takes exactly one word.'; inp.select(); return; }
         if (ctx.nudge && (r.alsoRight || []).map(K.norm).includes(v) && ctx.nudge(r.alsoNote)){ K.shake(inp); inp.select(); return; }
         const ok = r.answer.map(K.norm).includes(v), again = ctx.answer(ok, inp.value.trim());
         if (ok){ const s = document.createElement('span'); s.className = 'gk-good'; s.textContent = inp.value.trim(); inp.replaceWith(s); }

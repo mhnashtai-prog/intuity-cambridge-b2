@@ -195,6 +195,7 @@ body.board-page .board-toggle .viewtog{margin:0}
 
 /* ── 3 · THE RESULT ── */
 .big{font-family:'Anton',Impact,var(--f-display),sans-serif;font-size:3.2rem;line-height:1;color:var(--ink);margin:.8rem 0 .2rem}
+.partno{font-size:.82rem;color:var(--soft,#5C4E52);margin:.15rem 0 .7rem}
 .grade{font-family:var(--f-mono);font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;color:var(--accent-ink)}
 /* what the run did to the learner's mistakes: plain sentence case, dark sage for the numbers */
 .ring-line{font-size:.92rem;line-height:1.55;color:var(--soft,#5C4E52);margin:.9rem 0 .2rem;padding:.75rem .9rem;border-radius:12px;background:rgba(74,107,92,.07)}
@@ -309,7 +310,15 @@ const SECTION=P.get('section')||'grammar';
 const SEC=()=>TOPICS.sections.find(s=>s.id===SECTION)||TOPICS.sections[0];
 const N=14;                    /* fourteen cells, all identical — every one fetches its own exercise */
 const NOTE={game:'Game · fourteen tiles, fourteen games — Defuse, Swing, Knock-out, Sort, Pegs, Forge, Pairs, Flip and Hunt. Three lives, another try after a mistake, the answer explained straight away.',
-            exam:'Exam · eight exam formats across fourteen cells, half recognising and half producing. One attempt per cell, no feedback until the end — then your percentage, a grade and a full review.'};
+            exam:'Exam · Cambridge task types only: multiple choice, open cloze (Part 2), word formation (Part 3) and key word transformation (Part 4). One attempt per cell, no feedback until the end — then your percentage, how close you are, and a full review.'};
+/* THE EXAM PLAYS ONLY WHAT THE PAPER ASKS. Odd one out, Sort it, Match, Put
+   it in order, Correct the error and the bracketed-verb gap are good
+   practice and live on in Game, as Knock-out, Sort, Pegs, Forge, Hunt and
+   Pairs — but none of them is a B2 First task, so a score built on them
+   would partly measure tasks the learner will never sit. The value is the
+   label shown on the card: '' for multiple choice, which is a sentence-level
+   cousin of Part 1 and not claimed as Part 1 itself. */
+const CAMBRIDGE={choose:'',opencloze:'Part 2',wordform:'Part 3',transform:'Part 4'};
 
 /* ══ STATE ══ */
 let mode=P.get('mode')==='game'?'game':'exam',     /* Exam by default; Game is one tap away */ TOPICS=null, topic=null, pool=[], plan=[];
@@ -410,9 +419,9 @@ async function choose(id){
    Both modes: seven cells that ask the student to RECOGNISE and seven that
    ask them to PRODUCE, the same format never twice in a row, and no
    sentence twice in a run.
-   EXAM: only exam formats — recognise (choose, odd one out, sort, match),
-   produce (fill the gap, put in order, key word transformation, correct the
-   error). No clock, no feedback until the end.
+   EXAM: only Cambridge task types (see CAMBRIDGE) — recognise (multiple
+   choice), produce (open cloze, word formation, key word transformation).
+   No feedback until the end.
    GAME: the same split, and every tile a game — each exam format played as
    the INTUITY game that does its job: Choose as Defuse, the situation
    rounds as Swing, Odd one out as Knock-out, Sort it as Sort, Match as
@@ -460,23 +469,32 @@ function draw(){
   const dueIn=k=>by[k].reduce((n,r)=>n+due(r),0);
   const have=Object.keys(by).filter(k=>G[k]);
   const fill=(types,n)=>{ if(!types.length||n<=0) return []; const s=shuffle(types).slice(0,n); while(s.length<n) s.push(types[(Math.random()*types.length)|0]); return s; };
-  const side=(sk,half)=>{
-    const ex=have.filter(k=>kind(k)==='exam'&&skill(k)===sk), gm=have.filter(k=>kind(k)==='game'&&skill(k)===sk);
+  const exOK=k=>kind(k)==='exam'&&(k in CAMBRIDGE);
+  const side=(sk,want)=>{
+    const ex=have.filter(k=>exOK(k)&&skill(k)===sk), gm=have.filter(k=>kind(k)==='game'&&skill(k)===sk);
     /* EXAM plays the exam formats, GAME plays the games — every tile a game.
        Either way the formats are taken in turn, so each gets its share and
        none crowds the others; a topic missing one shares its tiles out. */
     /* in Game, the spare tiles go to the games holding the most waiting mistakes */
-    const pl=mode==='exam'?(ex.length?ex:gm):(gm.length?gm:ex), g=shuffle(pl), picks=[];
+    /* the Exam never falls back to a game */
+    const pl=mode==='exam'?ex:(gm.length?gm:ex), g=shuffle(pl), picks=[], n={};
     if(mode==='game') g.sort((a,b)=>dueIn(b)-dueIn(a));
     if(!g.length) return [];
-    for(let i=0;i<half;i++) picks.push(g[i%g.length]);
+    /* formats in turn — but never more tiles for a format than it has
+       rounds, or the same round would come back twice in one run */
+    for(let i=0;picks.length<want&&i<(want+1)*g.length;i++){ const k=g[i%g.length]; if((n[k]||0)<by[k].length){ picks.push(k); n[k]=(n[k]||0)+1; } }
     return picks;
   };
-  let slots=side('receptive',N/2).concat(side('productive',N/2));
+  /* seven to recognise and seven to produce — unless one side is thin: then
+     it lends its spare tiles to the other. Passive has six multiple-choice
+     rounds, so its Exam is six and eight, never seven with a repeat. */
+  let rec=side('receptive',N/2), pro=side('productive',N-rec.length);
+  if(rec.length+pro.length<N) rec=side('receptive',N-pro.length);
+  let slots=rec.concat(pro);
   /* a topic with nothing on one side (Word formation has no recognising
      rounds) fills the gap from its own mode's formats: never a game in the
      Exam, never a bare exam format in Game */
-  const own=have.filter(k=>mode==='exam'?kind(k)==='exam':kind(k)==='game');
+  const own=have.filter(k=>mode==='exam'?exOK(k):kind(k)==='game');
   if(slots.length<N) slots=slots.concat(fill(own.length?own:have,N-slots.length));
   let seq=null;
   for(let t=0;t<600&&!seq;t++){
@@ -635,7 +653,7 @@ function openCell(i){
   /* …but the TOPIC is not a secret: every card says what is being
      practised, and in one plain line what that means — a learner who chose
      the tab by accident, or came back after a break, still knows the aim */
-  openCard(`<div class="kick">${esc(topic.label)} · Tile ${String(i+1).padStart(2,'0')} of ${N}</div><h2 id="fTitle">${esc(g.title)}</h2>
+  openCard(`<div class="kick">${esc(topic.label)} · Tile ${String(i+1).padStart(2,'0')} of ${N}</div><h2 id="fTitle">${esc(g.title)}</h2>${mode==='exam'&&CAMBRIDGE[r.game]?`<div class="partno">Use of English · ${CAMBRIDGE[r.game]}</div>`:''}
     ${topic.focus?`<p class="aim">${esc(topic.focus)}</p>`:''}<div id="host"></div><p class="feedback" id="fb" aria-live="polite"></p><div class="cta" id="next" hidden><button class="btn fill" type="button" id="nextBtn">Continue</button></div>`);
   g.render($('host'), r, {exam:mode==='exam', esc, shuffle, answer, nudge});
   paint();

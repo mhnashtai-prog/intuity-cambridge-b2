@@ -11,7 +11,7 @@
    is marked on the fix alone, as before, until its data says where the
    error sits.
    Productive: the correction is written, not picked.
-   Round: { sentence, answer: [accepted…], wrong: "the faulty words", note }
+   Round: { sentence, answer: [accepted…], wrong: "the faulty words" | ["or", "these"], note }
    Agreement: see choose.js.
    ═══════════════════════════════════════════════════════════════════════ */
 (function(){
@@ -45,14 +45,20 @@
             hint = host.querySelector('#htHint'), check = host.querySelector('#htCheck');
       const hit = new Set(); let inp = null;
       /* the strike must be one run of words that contains the faulty words */
-      const bare = w => K.norm(w).replace(/[;:"()]/g, '');
+      /* quote marks at a word's edges don't count ('So → so), the apostrophe inside "don't" does */
+      const bare = w => K.norm(w).replace(/[;:"()]/g, '').replace(/^['‘’"]+|['‘’"]+$/g, '');
       const foundIt = idx => {
         if (!r.wrong) return true;
         if (!idx.length || idx[idx.length - 1] - idx[0] !== idx.length - 1) return false;
-        const want = String(r.wrong).trim().split(/\s+/).map(bare), got = idx.map(i => bare(words[i]));
-        for (let k = 0; k + want.length <= got.length; k++)
-          if (want.every((w, j) => got[k + j] === w)) return true;
-        return false;
+        const got = idx.map(i => bare(words[i]));
+        /* `wrong` may list alternatives where the error can honestly be struck in more than one
+           place: "Unless you don't hurry" is fixed by striking "don't" or by striking "Unless" */
+        return [].concat(r.wrong).some(alt => {
+          const want = String(alt).trim().split(/\s+/).map(bare);
+          for (let k = 0; k + want.length <= got.length; k++)
+            if (want.every((w, j) => got[k + j] === w)) return true;
+          return false;
+        });
       };
       const place = () => {
         const last = Math.max(...hit);

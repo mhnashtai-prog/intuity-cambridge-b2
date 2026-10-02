@@ -70,6 +70,8 @@
 .lives{display:flex;gap:4px;margin-left:.35rem}
 .lives svg{width:15px;height:15px;fill:var(--bad);transition:fill .3s,transform .3s}
 .lives svg.gone{fill:var(--rule);transform:scale(.8)}
+/* practice: the hearts give way to one quiet word — a state, not a failure */
+.lives .practice{font-family:var(--f-display);font-size:.8rem;font-weight:600;letter-spacing:0;text-transform:none;color:var(--soft,#5C4E52)}
 .hint{text-align:center;font-family:var(--f-mono);font-size:.58rem;letter-spacing:.22em;text-transform:uppercase;color:var(--faint);margin:.6rem 0 0}
 /* ── THE TRACK · 1930s minimal ──────────────────────────────────────
    The sketch: the track IS the tiles — one band, cut into cells by straight
@@ -194,6 +196,9 @@ body.board-page .board-toggle .viewtog{margin:0}
 /* ── 3 · THE RESULT ── */
 .big{font-family:'Anton',Impact,var(--f-display),sans-serif;font-size:3.2rem;line-height:1;color:var(--ink);margin:.8rem 0 .2rem}
 .grade{font-family:var(--f-mono);font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;color:var(--accent-ink)}
+/* what the run did to the learner's mistakes: plain sentence case, dark sage for the numbers */
+.ring-line{font-size:.92rem;line-height:1.55;color:var(--soft,#5C4E52);margin:.9rem 0 .2rem;padding:.75rem .9rem;border-radius:12px;background:rgba(74,107,92,.07)}
+.ring-line b{color:#4A6B5C}
 .review{margin:1rem 0 0;border-top:1px solid var(--rule)}
 .review li{list-style:none;padding:.65rem 0;border-bottom:1px solid var(--rule);font-size:.88rem;line-height:1.45;color:var(--sentence)}
 .review .rh{display:flex;justify-content:space-between;gap:.6rem;font-family:var(--f-mono);font-size:.56rem;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:.2rem}
@@ -286,6 +291,9 @@ body.board-page .board-toggle .viewtog{margin:0}
 <script src="/data/challenge/games/pairs.js?v=3"></script>
 <script src="/data/challenge/games/flip.js?v=2"></script>
 <script src="/data/challenge/games/hunt.js?v=3"></script>
+<!-- what happened (the report reads it) and what to bring back (the Ring) -->
+<script src="/tools/intuity-log.js?v=1"></script>
+<script src="/tools/intuity-ring.js?v=1"></script>
 <script src="/data/challenge/challenge-mixes.js?v=5"></script>
 <script>
 (function(){
@@ -304,6 +312,9 @@ const NOTE={game:'Game · fourteen tiles, fourteen games — Defuse, Swing, Knoc
 /* ══ STATE ══ */
 let mode=P.get('mode')==='game'?'game':'exam',     /* Exam by default; Game is one tap away */ TOPICS=null, topic=null, pool=[], plan=[];
 let lives=3, score=0, playing=false, t0=0, tick=null, tries=0, log=[], vocabItems=[];
+/* practice: lives ran out, the run carries on without points. ring: what this
+   run did to the learner's mistakes, for the result card */
+let practice=false, practiceAt=0, ringRun={came:0,fixed:0,half:0};
 
 /* ══ 1 · THE HEADER AND THE GATE ══ */
 function paintMute(){ const m=$('mute'); if(!m||!window.SFX) return; const on=SFX.isOn(); m.classList.toggle('off',!on); m.setAttribute('aria-pressed',on); m.setAttribute('aria-label',on?'Sound on':'Sound off'); }
@@ -330,6 +341,13 @@ function drawTopics(){
   $('topicTabs').querySelectorAll('[data-t]:not(:disabled)').forEach(b=>b.onclick=()=>choose(b.dataset.t));
 }
 /* one vocabulary sentence → several round shapes, so the Board has variety */
+/* a short, stable fingerprint of a vocabulary item's text: the same item
+   gets the same id on every device and every visit, without editing the
+   vocabulary files. Edit the item's words and it becomes a new item. */
+const fp=s=>{ let h=5381; s=String(s); for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))>>>0; return h.toString(36); };
+const vid=(it,g)=>'v-'+fp([it.cue,it.answer,it.after].join('|'))+'-'+g;
+/* is any round built from this vocabulary item waiting in the Ring? */
+const itemDue=it=>{ try{ return !!window.IntuityRing&&['choose','gap','correct','odd'].some(g=>IntuityRing.isDue(vid(it,g))); }catch(e){ return false; } };
 function vocabRounds(items){
   const full=(it,w)=>[it.cue,w,it.after].filter(Boolean).join(' ').replace(/\s+/g,' ').trim();
   const wrongOf=it=>shuffle(it.options.filter(o=>o!==it.answer))[0];
@@ -337,17 +355,17 @@ function vocabRounds(items){
   items.forEach(it=>{
     const tag=it.tense||'', note=it.note||'';
     const line=(it.cue+' ___ '+it.after).trim();
-    out.push({game:'choose',prompt:line,options:it.options,answer:it.answer,note,tag});
-    out.push({game:'gap',prompt:line+'  ('+it.answer.charAt(0)+'…)',answer:[it.answer],note,tag});
+    out.push({id:vid(it,'choose'),game:'choose',prompt:line,options:it.options,answer:it.answer,note,tag});
+    out.push({id:vid(it,'gap'),game:'gap',prompt:line+'  ('+it.answer.charAt(0)+'…)',answer:[it.answer],note,tag});
     /* no "put the words in order" here: built from a vocabulary sentence it
        tests word order, not the word — the one thing this round is about */
     const bad=wrongOf(it);
-    out.push({game:'correct',sentence:full(it,bad),answer:[it.answer],wrong:bad,note,tag});   /* `wrong`: Hunt checks the strike */
+    out.push({id:vid(it,'correct'),game:'correct',sentence:full(it,bad),answer:[it.answer],wrong:bad,note,tag});   /* `wrong`: Hunt checks the strike */
   });
   const sh=shuffle(items);
   for(let i=0;i+3<sh.length;i+=4){
     const g=sh.slice(i,i+4), bad=g[0], odd=full(bad,wrongOf(bad));
-    out.push({game:'odd',options:[odd].concat(g.slice(1).map(x=>full(x,x.answer))),answer:odd,
+    out.push({id:vid(bad,'odd'),game:'odd',options:[odd].concat(g.slice(1).map(x=>full(x,x.answer))),answer:odd,
       note:'Correct version: '+full(bad,bad.answer),tag:bad.tense||''});
   }
   return out;
@@ -363,11 +381,13 @@ async function choose(id){
         try{
           const m=await ChallengeMixes.loadVocab(vid);
           let its=[]; m.groups.forEach(g=>g.items.forEach(it=>its.push(it)));
-          if(t.vocab.length>1) its=shuffle(its).slice(0,40);   /* keep Mixed balanced */
+          /* keep Mixed balanced: 40 from each source — but waiting mistakes are
+             kept first, or a mistake could fall outside the sample and never come back */
+          if(t.vocab.length>1){ its=shuffle(its); its.sort((a,b)=>itemDue(b)-itemDue(a)); its=its.slice(0,40); }
           items=items.concat(its);
         }catch(e){}
       }
-      pool=vocabRounds(items).filter(r=>G[r.game]); topic={id,label:t.label,focus:t.focus||''};
+      pool=vocabRounds(items).filter(r=>G[r.game]).map(r=>Object.assign(r,{part:t.part||'UoE1'})); topic={id,label:t.label,focus:t.focus||''};
       vocabItems=items;
     }else{
       vocabItems=[];
@@ -434,6 +454,8 @@ function draw(){
   Object.keys(G).forEach(k=>{ if(G[k].accepts){ const rs=all.filter(G[k].accepts); if(rs.length) by[k]=rs; } });
 
   const kind=k=>G[k].kind||'exam', skill=k=>G[k].skill||'receptive';
+  const due=r=>(mode==='game'&&r.id&&window.IntuityRing&&IntuityRing.isDue(r.id))?1:0;
+  const dueIn=k=>by[k].reduce((n,r)=>n+due(r),0);
   const have=Object.keys(by).filter(k=>G[k]);
   const fill=(types,n)=>{ if(!types.length||n<=0) return []; const s=shuffle(types).slice(0,n); while(s.length<n) s.push(types[(Math.random()*types.length)|0]); return s; };
   const side=(sk,half)=>{
@@ -441,7 +463,9 @@ function draw(){
     /* EXAM plays the exam formats, GAME plays the games — every tile a game.
        Either way the formats are taken in turn, so each gets its share and
        none crowds the others; a topic missing one shares its tiles out. */
+    /* in Game, the spare tiles go to the games holding the most waiting mistakes */
     const pl=mode==='exam'?(ex.length?ex:gm):(gm.length?gm:ex), g=shuffle(pl), picks=[];
+    if(mode==='game') g.sort((a,b)=>dueIn(b)-dueIn(a));
     if(!g.length) return [];
     for(let i=0;i<half;i++) picks.push(g[i%g.length]);
     return picks;
@@ -454,7 +478,11 @@ function draw(){
     if(c.every((x,i)=>i===0||x!==c[i-1]) && c.every(x=>count[x]<=by[x].length)) seq=c;
   }
   if(!seq) seq=shuffle(slots);
-  const left={}; Object.keys(by).forEach(k=>left[k]=shuffle(by[k]));
+  /* GAME serves due mistakes first: each list is shuffled, then the due
+     rounds are moved to the end, where pop() takes them first. The EXAM
+     keeps a fair random sample — a measure weighted to your mistakes would
+     understate you, and one weighted away from them would flatter you. */
+  const left={}; Object.keys(by).forEach(k=>{ left[k]=shuffle(by[k]); left[k].sort((a,b)=>due(a)-due(b)); });
   /* one sentence, one cell: Defuse, Forge and Choose can play the same
      rounds, so the game with the fewest to choose from picks first */
   const used=new Set(), out=new Array(seq.length);
@@ -537,7 +565,21 @@ function drawBoard(){
    answered — there's no separate finish tile to tap. */
 let doneSet=new Set(), triesAt={}, revealed=false;
 function reset(){ stop(); doneSet=new Set(); triesAt={}; revealed=false; lives=3; score=0; playing=false; log=[]; cur=null;
-  $('clock').textContent='0:00'; $('answered').textContent='0 / '+N; $('hint').hidden=false; $('hint').textContent='Tap any tile to begin'; $('again').hidden=true; }
+  practice=false; practiceAt=0; ringRun={came:0,fixed:0,half:0};
+  const waiting=dueCount();
+  $('clock').textContent='0:00'; $('answered').textContent='0 / '+N; $('hint').hidden=false;
+  $('hint').textContent='Tap any tile to begin'+(waiting?' · '+waiting+' to fix from last time':''); $('again').hidden=true; }
+/* mistakes waiting in this topic (Game only: the Exam doesn't serve them first) */
+function dueCount(){ if(mode!=='game'||!window.IntuityRing) return 0; try{ return IntuityRing.count(pool.map(r=>r.id).filter(Boolean)); }catch(e){ return 0; } }
+/* ONE place writes every result down: the log for the report, the Ring for
+   what comes back. Called once per tile — its first answer decides it. */
+function remember(r,ok){
+  if(!r||!r.id) return;
+  try{ if(window.IntuityRing){ const was=IntuityRing.has(r.id);
+    if(ok){ IntuityRing.right(r.id); if(was){ IntuityRing.has(r.id)?ringRun.half++:ringRun.fixed++; } }
+    else IntuityRing.miss(r.id,{topic:topic.id,part:r.part}); } }catch(e){}
+  try{ if(window.INTUITY) INTUITY.log(topic.id, r.id, ok, {game:(BOARD?'board':'challenge')+'-'+mode}); }catch(e){}
+}
 function stop(){ clearInterval(tick); tick=null; }
 function allDone(){ return doneSet.size>=N; }
 function paint(){
@@ -559,10 +601,13 @@ function paint(){
     g.querySelector('.cross').classList.toggle('on', show&&(ok===false||(mode==='game'&&ok===true&&missed)));
     g.querySelector('.dot').classList.toggle('on', mode==='exam'&&!revealed&&done); });
   $('score').textContent=score; $('answered').textContent=doneSet.size+' / '+N;
+  if(practice) $('lives').innerHTML='<span class="practice">Practice</span>'; else
   $('lives').innerHTML=[0,1,2].map(i=>`<svg viewBox="0 0 24 24" class="${i<lives?'':'gone'}"><path d="M12 21s-7.5-4.6-9.6-9.3C.9 8.3 3 4.5 6.7 4.5c2.1 0 3.6 1.2 4.3 2.4.7-1.2 2.2-2.4 4.3-2.4 3.7 0 5.8 3.8 4.3 7.2C19.5 16.4 12 21 12 21z"/></svg>`).join('');
   if(playing) $('hint').textContent=allDone()?'All done':'Pick any tile, in any order';
 }
-function begin(){ reset(); plan=draw(); playing=true; t0=performance.now(); $('hint').hidden=false;
+function begin(){ reset(); plan=draw(); playing=true;
+  try{ if(window.IntuityRing) ringRun.came=plan.filter(r=>r.id&&IntuityRing.isDue(r.id)).length; }catch(e){}
+  t0=performance.now(); $('hint').hidden=false;
   tick=setInterval(()=>{ const s=Math.floor((performance.now()-t0)/1000); $('clock').textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); },500);
   paint(); }
 function tap(i){
@@ -603,18 +648,29 @@ function answer(ok,given){
   if(settled) return false;
   const fb=$('fb');
   if(mode==='exam'){                                   /* one attempt, nothing revealed */
-    settled=true; log.push({i:cur.i,r:cur.r,g:cur.g,ok,given}); doneSet.add(cur.i); fb.innerHTML='<b>Answer saved.</b> Your results come at the end.';
+    settled=true; log.push({i:cur.i,r:cur.r,g:cur.g,ok,given}); doneSet.add(cur.i); remember(cur.r,ok); fb.innerHTML='<b>Answer saved.</b> Your results come at the end.';
     const last=doneSet.size>=N; showNext(last?()=>finish(true):()=>{ closeCard(); }, last?'See your result':undefined); return false;
   }
   if(ok){
     celebrate(cur.i, !tries);
-    settled=true; const pts=tries?50:100; score+=pts; log.push({i:cur.i,r:cur.r,g:cur.g,ok:true,given}); doneSet.add(cur.i);
-    fb.innerHTML='<b>Right · +'+pts+(cur.r.tag?' · '+esc(cur.r.tag):'')+'.</b> '+esc(cur.r.note||'');
+    settled=true; const pts=practice?0:tries?50:100; score+=pts; log.push({i:cur.i,r:cur.r,g:cur.g,ok:true,given}); doneSet.add(cur.i);
+    if(!tries) remember(cur.r,true);
+    fb.innerHTML='<b>Right'+(pts?' · +'+pts:'')+(cur.r.tag?' · '+esc(cur.r.tag):'')+'.</b> '+esc(cur.r.note||'');
     const last=doneSet.size>=N; showNext(last?()=>finish(true):()=>{ closeCard(); }, last?'See your result':undefined); return false;
   }
-  tries++; triesAt[cur.i]=tries; lives--; paint();
-  if(lives<=0){ settled=true; log.push({i:cur.i,r:cur.r,g:cur.g,ok:false,given}); paint();   /* the cross lands now */ fb.innerHTML='<b>No lives left'+(cur.r.tag?' · '+esc(cur.r.tag):'')+'.</b> '+esc(cur.r.note||'');
-    showNext(()=>finish(false),'See your result'); return false; }
+  if(!tries) remember(cur.r,false);                   /* the tile's first slip is what's remembered */
+  tries++; triesAt[cur.i]=tries;
+  /* PRACTICE: no lives to lose, so another try costs nothing — the mistake is already in the Ring */
+  if(practice){ paint(); fb.innerHTML='Not quite — try again.'; return true; }
+  lives--; paint();
+  /* NO DEAD END. Running out of lives used to end the run — and on a Board,
+     the learner who most needs the topic was the first one sent away. Now
+     the tile is settled with its answer shown, and the run carries on as
+     practice: no more points, every tile still played and remembered. */
+  if(lives<=0){ settled=true; practice=true; practiceAt=doneSet.size; log.push({i:cur.i,r:cur.r,g:cur.g,ok:false,given}); doneSet.add(cur.i); paint();
+    fb.innerHTML='<b>No lives left'+(cur.r.tag?' · '+esc(cur.r.tag):'')+'.</b> '+esc(cur.r.note||'')+
+      '<br><br>The rest of the run is practice: no more points, but every tile still counts towards fixing your mistakes.';
+    const last=doneSet.size>=N; showNext(last?()=>finish(true):()=>{ closeCard(); }, last?'See your result':'Carry on'); return false; }
   fb.innerHTML='Not quite — <b>'+lives+'</b> '+(lives===1?'life':'lives')+' left. Try again.'; return true;
 }
 /* ══ CELEBRATION (Game only) ══
@@ -643,6 +699,16 @@ function burst(i,first){
 function showNext(fn,label){ $('next').hidden=false; const b=$('nextBtn'); if(label) b.textContent=label; b.onclick=fn; setTimeout(()=>b.focus(),60); }
 
 /* ══ 3 · THE RESULT ══ */
+/* what this run did to the learner's mistakes, in one plain line */
+function ringLine(){
+  const waiting=(()=>{ try{ return window.IntuityRing?pool.filter(r=>r.id&&IntuityRing.has(r.id)).length:0; }catch(e){ return 0; } })();
+  const bits=[];
+  if(ringRun.came) bits.push(`<b>${ringRun.came}</b> ${ringRun.came===1?'tile was a mistake':'tiles were mistakes'} from before`);
+  if(ringRun.fixed) bits.push(`<b>${ringRun.fixed}</b> fixed for good`);
+  if(ringRun.half) bits.push(`<b>${ringRun.half}</b> right today — ${ringRun.half===1?'it comes':'they come'} back tomorrow to make sure`);
+  const head=bits.length?bits.join(' · ')+'. ':'';
+  return `<p class="ring-line">${head}${waiting?`Still to fix in ${esc(topic.label)}: <b>${waiting}</b>.`:'Nothing left to fix in '+esc(topic.label)+'.'}</p>`;
+}
 function finish(won){
   playing=false; stop(); cur=null; revealed=true; paint(); $('hint').hidden=true; $('again').hidden=false;
   const t=$('clock').textContent;
@@ -656,21 +722,23 @@ function finish(won){
       <div class="big">${pct}%</div><div class="grade">${grade} · ${right} of ${N} right · ${t}</div>
       <ul class="review">${log.slice().sort((a,b)=>a.i-b.i).map(x=>`<li><div class="rh"><span>Cell ${String(x.i+1).padStart(2,'0')} · ${esc(x.g.title)}${x.r.tag&&x.r.tag!==x.g.title?' · '+esc(x.r.tag):''}</span><span class="${x.ok?'ok':'no'}">${x.ok?'Right':'Wrong'}</span></div>
         ${x.ok?'':`Your answer: ${esc(x.given)}<br>`}<b>${esc(x.g.solution(x.r))}</b>${x.r.note?' — '+esc(x.r.note):''}</li>`).join('')}</ul>
-      <div class="cta"><button class="btn fill" type="button" id="rAgain">Try again</button></div>`);
+      ${ringLine()}<div class="cta"><button class="btn fill" type="button" id="rAgain">Try again</button></div>`);
   }else{
     const clean=won&&log.length===N&&log.every(x=>x.ok)&&!Object.values(triesAt).some(v=>v>0);
     owed=null; sfx(clean?'fanfare':won?'bowlLow':'');
     const CUP=`<svg class="cup" viewBox="0 0 92 92" aria-hidden="true"><circle cx="46" cy="46" r="43" fill="var(--ring-core)"/><circle class="rim" cx="46" cy="46" r="40"/>
       <path d="M31 27h30v9c0 9-6.5 16-15 16s-15-7-15-16z M31 31h-7c0 8 4 12 9 12 M61 31h7c0 8-4 12-9 12 M46 52v9 M36 66h20" fill="none" stroke="#E9C98F" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-    openCard(`<div class="kick">${clean?'A clean run':won?'Challenge complete':'Challenge over'}</div>${clean?CUP:''}<h2 id="fTitle">${clean?'The cup.':won?'Finish.':'So close.'}</h2>
-      <div class="big">${score}</div><p class="cg-prompt">${clean?`All ${N} right first time, in <b>${t}</b>.`:won?`All ${N} games in <b>${t}</b>, with <b>${lives}</b> ${lives===1?'life':'lives'} to spare.`:`You finished <b>${doneSet.size}</b> of ${N} cells in <b>${t}</b>.`}</p>
+    const said=practice?`All ${N} tiles in <b>${t}</b>: <b>${practiceAt+1}</b> played for points, ${N-practiceAt-1} as practice.`
+      :clean?`All ${N} right first time, in <b>${t}</b>.`:`All ${N} games in <b>${t}</b>, with <b>${lives}</b> ${lives===1?'life':'lives'} to spare.`;
+    openCard(`<div class="kick">${clean?'A clean run':practice?'Challenge complete · with practice':'Challenge complete'}</div>${clean?CUP:''}<h2 id="fTitle">${clean?'The cup.':'Finish.'}</h2>
+      <div class="big">${score}</div><p class="cg-prompt">${said}</p>${ringLine()}
       <div class="cta"><button class="btn fill" type="button" id="rAgain">Try again</button></div>`);
   }
   $('rAgain').onclick=()=>{ closeCard(); reset(); paint(); };
 }
 $('again').onclick=()=>{ reset(); paint(); };
-$('scrim').addEventListener('click',e=>{ if(e.target.id==='scrim' && !(playing&&lives<=0)) closeCard(); });
-document.addEventListener('keydown',e=>{ if(e.key==='Escape' && !$('scrim').hidden && !(playing&&lives<=0)) closeCard(); });
+$('scrim').addEventListener('click',e=>{ if(e.target.id==='scrim') closeCard(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && !$('scrim').hidden) closeCard(); });
 
 /* ══ BOARD — the Challenge for one topic, opened from that topic's page ══
    ?board=1&topic=inversion. Same engine, same rounds, same games, cards,

@@ -46,12 +46,12 @@
 @keyframes gkShake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
 .gk-settle{animation:gkSettle .35s ease-out}
 @keyframes gkSettle{0%{transform:scale(1.08)}100%{transform:none}}
-.gk-in{font:inherit;font-weight:700;color:var(--accent-ink,#8A4B26);background:rgba(20,17,14,.06);border:none;border-bottom:2px solid var(--ink,#232C31);
-  padding:.05em .35em;margin:0 .15em;min-width:7ch;border-radius:3px 3px 0 0;outline:none}
+.gk-in{font:inherit;font-weight:700;color:var(--accent-ink,#8A6440);background:rgba(20,17,14,.06);border:none;border-bottom:2px solid var(--ink,#232C31);
+  padding:.05em .35em;margin:0 .15em;min-width:7ch;border-radius:var(--r-box,16px) 3px 0 0;outline:none}
 .gk-in:focus{background:rgba(221,142,88,.12)}
 .gk-in:disabled{opacity:1}
-.gk-good{background:#DCEFE2;color:#1B4A31;border-radius:3px;padding:0 .3em;font-weight:700}
-.gk-hint{font-family:var(--f-mono,monospace);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;color:var(--faint,#8A8F8F)}
+.gk-good{background:var(--right-soft,rgba(74,107,92,.12));color:var(--right,#4A6B5C);border-radius:var(--r-tap,999px);padding:0 .4em;font-weight:700}
+.gk-hint{font-family:var(--f-display,system-ui);font-size:.82rem;letter-spacing:0;color:var(--faint,#8B7B78)}
 @media(prefers-reduced-motion:reduce){.gk-shake,.gk-settle{animation:none}}`);
 
   /* the turn-over card, shared by Pairs and Flip */
@@ -59,10 +59,10 @@
 .fc-stage{perspective:1200px;margin:.5rem 0 .2rem}
 .fc-card{position:relative;min-height:12rem;transform-style:preserve-3d;transition:transform .55s cubic-bezier(.3,.7,.2,1)}
 .fc-card.fc-over{transform:rotateY(180deg)}
-.fc-face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:8px;background:#fff;
+.fc-face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:var(--r-box,16px);background:var(--sheet,#FEFCF9);
   box-shadow:0 1px 0 rgba(20,17,14,.08),0 16px 32px -18px rgba(20,17,14,.55);padding:1.3rem 1.3rem 1.1rem;display:flex;flex-direction:column}
 .fc-back{align-items:center;justify-content:center;gap:1rem;cursor:pointer;
-  background:repeating-linear-gradient(135deg,#fff 0 14px,#F6F2EA 14px 28px)}
+  background:repeating-linear-gradient(135deg,var(--sheet,#FEFCF9) 0 14px,rgba(229,209,184,.38) 14px 28px)}   /* the back of a card: paper and a wash of the home page's sand */
 .fc-back:focus-visible{outline:2px solid var(--accent-ink);outline-offset:3px}
 .fc-back .gk-ring{width:5.6rem;height:5.6rem;min-width:5.6rem;font-size:1.05rem;padding:.4rem .9rem;text-align:center;line-height:1.15}
 .fc-front{transform:rotateY(180deg);justify-content:center;gap:1rem}

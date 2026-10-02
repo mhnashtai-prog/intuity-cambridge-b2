@@ -21,13 +21,15 @@
 
   (window.ChallengeGames = window.ChallengeGames || {}).pairs = {
     title:'Pairs', kind:'game', skill:'productive',
-    accepts: r => r.game === 'gap' && typeof r.prompt === 'string' && r.prompt.includes('___') && Array.isArray(r.answer) && r.answer.length,
+    /* fill-the-gap rounds, and word formation (Part 3): the stem word becomes the clue in the ring */
+    accepts: r => (r.game === 'gap' || r.game === 'wordform') && typeof r.prompt === 'string' && r.prompt.includes('___') && Array.isArray(r.answer) && r.answer.length,
     solution: r => r.answer[0],
     render(host, r, ctx){
-      const clue = clueOf(r.prompt);
-      const line = clue ? r.prompt.replace(/___\s*\([^)]+\)/, '___') : r.prompt;
+      const wf = (r.src || r.game) === 'wordform';
+      const clue = wf ? r.stem : clueOf(r.prompt);
+      const line = !wf && clue ? r.prompt.replace(/___\s*\([^)]+\)/, '___') : r.prompt;
       const [pre, post] = [line.split('___')[0], line.split('___').slice(1).join('___')];
-      host.innerHTML = `<p class="cg-prompt">Write the missing words into the sentence.</p>
+      host.innerHTML = `<p class="cg-prompt">${wf ? 'Change the word in the ring so it fits the gap.' : 'Write the missing words into the sentence.'}</p>
         <div class="pr-card">
           ${clue ? `<span class="fc-corner"><span class="gk-ring">${ctx.esc(clue)}</span></span>` : ''}
           <p class="cg-line">${ctx.esc(pre)}<input class="gk-in" id="fcIn" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="The missing words">${ctx.esc(post)}</p>

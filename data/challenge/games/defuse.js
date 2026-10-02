@@ -43,13 +43,15 @@
 @keyframes dfHot{50%{opacity:.45}}
 .cg-lead{font-size:.95rem;color:var(--dim);margin:0 0 .35rem}
 .cg-wires{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.6rem}
-.cg-wire{position:relative;font:inherit;font-size:.96rem;font-weight:600;text-align:left;padding:.85rem .8rem .85rem 1.6rem;border:1px solid var(--rule);background:#fff;color:var(--ink);cursor:pointer;overflow:hidden}
-.cg-wire::before{content:'';position:absolute;left:0;top:0;bottom:0;width:.55rem;background:var(--w)}
-.cg-wire.cg-ok{background:#DCEFE2} .cg-wire.cg-no{background:#F6DDD7;text-decoration:line-through;opacity:.7}
+.cg-wire{position:relative;font:inherit;font-size:.96rem;font-weight:600;text-align:left;padding:.85rem 1rem .85rem 1.7rem;border:1px solid var(--rule);border-radius:var(--r-tap,999px);background:var(--sheet,#FEFCF9);color:var(--ink);cursor:pointer;overflow:hidden}
+.cg-wire::before{content:'';position:absolute;left:0;top:0;bottom:0;width:.7rem;background:var(--w)}
+.cg-wire.cg-ok{background:var(--right-soft,rgba(74,107,92,.12))} .cg-wire.cg-no{background:var(--wrong-soft,rgba(180,101,58,.13));text-decoration:line-through;opacity:.7}
 .cg-wire:disabled{cursor:default}
 @media(max-width:420px){.cg-wires{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.df-ring.df-hot b{animation:none}.df-ring .df-burn{transition:none}}`;
-  const WIRES = ['#C4402F','#2F6FB0','#D9A21B','#1F7A4A'];
+  /* four wires in the home page's own tones — sage, caramel, sand, charcoal —
+     so a wire's colour says "a different wire", never "right" or "wrong" */
+  const WIRES = ['#708A81','#C2956E','#E5D1B8','#484641'];
   let styled = false;
 
   (window.ChallengeGames = window.ChallengeGames || {}).defuse = {

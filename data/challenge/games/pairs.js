@@ -13,7 +13,7 @@
 (function(){
   const K = window.GameKit;
   K.style('gk-pairs', `
-.pr-card{position:relative;margin:.5rem 0 .2rem;padding:1.1rem 1.3rem 1rem;border-radius:8px;background:#fff;display:flex;flex-direction:column;gap:.8rem;
+.pr-card{position:relative;margin:.5rem 0 .2rem;padding:1.1rem 1.3rem 1rem;border-radius:var(--r-box,16px);background:var(--sheet,#FEFCF9);display:flex;flex-direction:column;gap:.8rem;
   box-shadow:0 1px 0 rgba(20,17,14,.08),0 16px 32px -18px rgba(20,17,14,.55)}
 .pr-card .cg-line{margin:0;font-size:clamp(1.05rem,3vw,1.25rem);line-height:1.8}`);
 

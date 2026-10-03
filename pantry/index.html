@@ -200,6 +200,20 @@ footer{max-width:46rem;margin:0 auto;padding:1rem .9rem 2rem;font-size:.8rem;col
 #toasts{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 1rem);display:flex;flex-direction:column;gap:.4rem;align-items:center;z-index:50;pointer-events:none;width:calc(100% - 2rem);max-width:30rem}
 .toast{background:var(--ink);color:var(--bg);padding:.6rem 1rem;border-radius:12px;font-weight:700;font-size:.92rem;box-shadow:0 4px 14px rgba(0,0,0,.3);animation:pop .3s}
 @keyframes pop{from{transform:translateY(10px);opacity:0}to{transform:none;opacity:1}}
+
+/* v2.3 effects and feedback */
+#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:60}
+.combo{min-width:6rem;white-space:nowrap}
+.bump{display:inline-block;animation:bump .55s}
+@keyframes bump{0%{transform:scale(1)}35%{transform:scale(1.35);color:var(--suf)}100%{transform:scale(1)}}
+.fb.ok{animation:glow .9s}
+@keyframes glow{0%{box-shadow:0 0 0 0 rgba(61,214,181,.7)}100%{box-shadow:0 0 0 18px rgba(61,214,181,0)}}
+.stars{font-size:2.4rem;letter-spacing:.12em;color:var(--dim);line-height:1;margin-bottom:.4rem}
+.stars .on{color:#F5B700;display:inline-block;animation:tw 1.6s ease-in-out infinite;animation-delay:calc(var(--i)*.25s)}
+@keyframes tw{0%,100%{transform:scale(1) rotate(0)}50%{transform:scale(1.2) rotate(8deg)}}
+.coach{margin:1rem auto 0;padding:.8rem 1rem;border-radius:12px;background:var(--tint);color:var(--ink);text-align:left;font-size:.92rem}
+.coach b{font-family:var(--disp)}
+.coach p{margin:.25rem 0 0}
 </style>
 </head>
 <body>
@@ -232,7 +246,7 @@ const KEY='wf2_progress', DAILY=10, BLITZ=60;
 const TITLES=['Rookie','Word smith','Affix hunter','Morpheme master','Word wizard','Spelling sniper','Prefix pro','Suffix sage','Lexicon legend','Grammar guru','Word-formation champion'];
 
 let D,ALL=[],tab='practice',S=null,L=null,resetArm=false,fOpen=false,TM=null;
-const freshP=()=>({xp:0,streak:0,last:'',forms:{},mistakes:[],found:[],best:0,perfect:0,rounds:0,labFams:[],typed:0,blitzBest:0,badges:[],daily:{d:'',n:0}});
+const freshP=()=>({xp:0,streak:0,last:'',forms:{},mistakes:[],found:[],best:0,perfect:0,rounds:0,labFams:[],typed:0,blitzBest:0,badges:[],daily:{d:'',n:0},right:0,total:0,bestRound:0,fx:true});
 let P=freshP();
 let F={kind:'all',cls:'all',level:'all',topic:'all',q:''};
 try{const s=localStorage.getItem(KEY);if(s)P=Object.assign(P,JSON.parse(s))}catch(e){}
@@ -322,8 +336,82 @@ function toast(m){
 }
 function bumpDaily(){
   const t=ymd(new Date());if(P.daily.d!==t)P.daily={d:t,n:0};
-  P.daily.n++;if(P.daily.n===DAILY){P.xp+=20;toast('Daily goal reached! +20 XP')}
+  P.daily.n++;if(P.daily.n===DAILY){gain(20);toast('Daily goal reached! +20 XP');fireworks(2)}
 }
+/* ---------- sparkle effects ---------- */
+const FX={cv:null,ctx:null,ps:[],run:false};
+const reduceMotion=()=>{try{return matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){return false}};
+function fxReady(){
+  if(P.fx===false||reduceMotion())return false;
+  if(!FX.cv){
+    try{
+      const c=document.createElement('canvas');c.id='fx';c.setAttribute('aria-hidden','true');document.body.appendChild(c);
+      FX.cv=c;FX.ctx=c.getContext('2d');
+      addEventListener('resize',fxSize);fxSize();
+    }catch(e){FX.ctx=null}
+  }
+  return !!FX.ctx;
+}
+function fxSize(){if(!FX.cv||!FX.ctx)return;const r=window.devicePixelRatio||1;FX.cv.width=innerWidth*r;FX.cv.height=innerHeight*r;FX.ctx.setTransform(r,0,0,r,0,0)}
+const FXC=['#FFE066','#FF8A7A','#3DD6B5','#8EA2FF','#FF7AD9','#FFFFFF','#FFB347'];
+const rnd=(a,b)=>a+Math.random()*(b-a);
+function fxAdd(a){FX.ps.push(...a);if(FX.ps.length>700)FX.ps.splice(0,FX.ps.length-700);if(!FX.run){FX.run=true;requestAnimationFrame(fxLoop)}}
+function fxStar(c,x,y,r){c.beginPath();for(let i=0;i<8;i++){const a=i*Math.PI/4,rr=i%2?r*.28:r;c.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr)}c.closePath();c.fill()}
+function fxLoop(){
+  const c=FX.ctx;if(!c){FX.run=false;return}
+  c.clearRect(0,0,innerWidth,innerHeight);
+  FX.ps=FX.ps.filter(p=>p.life>0);
+  for(const p of FX.ps){
+    p.vx*=.985;p.vy=p.vy*.985+p.g;p.x+=p.vx;p.y+=p.vy;p.life--;p.rot+=p.vr;
+    c.globalAlpha=Math.max(0,Math.min(1,p.life/p.max*1.4))*(.65+.35*Math.sin(p.life*.6));
+    c.fillStyle=p.col;
+    if(p.shape==='star')fxStar(c,p.x,p.y,p.size);
+    else if(p.shape==='dot'){c.beginPath();c.arc(p.x,p.y,p.size*.5,0,6.283);c.fill()}
+    else{c.save();c.translate(p.x,p.y);c.rotate(p.rot);c.fillRect(-p.size/2,-p.size/4,p.size,p.size/2);c.restore()}
+  }
+  c.globalAlpha=1;
+  if(FX.ps.length)requestAnimationFrame(fxLoop);else{FX.run=false;c.clearRect(0,0,innerWidth,innerHeight)}
+}
+function glitterAt(el){
+  if(!el||!fxReady())return;
+  const r=el.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2,a=[];
+  for(let i=0;i<34;i++){const ang=rnd(0,6.283),sp=rnd(1.5,6.5),life=Math.round(rnd(45,85));
+    a.push({x:x+rnd(-r.width/3,r.width/3),y,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp-2,g:.13,life,max:life,size:rnd(3,7),col:pick(FXC),shape:pick(['star','star','sq','dot']),rot:rnd(0,6),vr:rnd(-.3,.3)})}
+  fxAdd(a);
+}
+function burst(x,y,n){
+  const a=[],c1=pick(FXC),c2=pick(FXC);
+  for(let i=0;i<n;i++){const ang=i/n*6.283+rnd(-.05,.05),sp=rnd(2,7.5)*(i%2?1:.6),life=Math.round(rnd(55,95));
+    a.push({x,y,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp,g:.06,life,max:life,size:rnd(2.5,5.5),col:i%3?c1:c2,shape:i%4?'dot':'star',rot:0,vr:0})}
+  fxAdd(a);
+}
+function fireworks(n){
+  if(!fxReady())return;
+  for(let i=0;i<(n||3);i++)setTimeout(()=>{if(fxReady())burst(innerWidth*rnd(.18,.82),innerHeight*rnd(.12,.5),72)},i*330);
+}
+function celebrate(){
+  glitterAt(document.querySelector('.pick.is-answer')||$('gap'));
+  if(S&&S.combo>0&&S.combo%5===0)fireworks(3);
+  else if(S&&S.combo===3)fireworks(1);
+}
+function gain(n){
+  const l0=level();P.xp+=n;
+  if(level()>l0){toast('⬆ Level up! Level '+level()+': '+title(level()));fireworks(3)}
+}
+const PRAISE=['Nice!','Correct!','Well done!','Spot on!','Brilliant!','Great spelling!','You got it!'];
+const COMBO_MSG={3:'3 in a row!',5:'5 in a row. On fire!',7:'7 in a row. Unstoppable!',10:'10 in a row. Word wizard!'};
+const praise=()=>COMBO_MSG[S.combo]||pick(PRAISE);
+function coach(){
+  if(!S.missed.length)return S.blitz?'No mistakes. Try a longer round or Type it for a tougher challenge.':'No mistakes to review. Try Type it for a tougher challenge.';
+  const cnt={};
+  S.missed.forEach(q=>{const f=q.f,r=f.rule&&ruleOf(f.rule),k=r?'r:'+r.id:'a:'+f.affix;(cnt[k]=cnt[k]||{n:0,r,f}).n++});
+  return Object.values(cnt).sort((a,b)=>b.n-a.n).slice(0,2).map(t=>{
+    if(t.r)return `Spelling pattern to revisit: <b>${esc(t.r.title)}</b>. ${esc(t.r.text)}`;
+    const x=D.affixes[t.f.affix];
+    return `Ending or prefix to revisit: <b>${esc(t.f.affix)}</b>${x?' ('+esc(x.meaning)+'). '+esc(x.tip||''):'.'}`;
+  }).join('<br>');
+}
+
 const BADGES=[
  {id:'first',n:'First steps',d:'Finish a round',t:()=>P.rounds>=1},
  {id:'perfect',n:'Flawless',d:'Get every question right in a round',t:()=>P.perfect>=1},
@@ -345,7 +433,7 @@ function checkBadges(){
   const got=BADGES.filter(b=>!P.badges.includes(b.id)&&b.t());
   if(!got.length)return;
   got.forEach(b=>P.badges.push(b.id));saveP();
-  toast('🏅 New badge: '+got.map(b=>b.n).join(', '));
+  toast('🏅 New badge: '+got.map(b=>b.n).join(', '));fireworks(2);
 }
 
 /* ---------- filters ---------- */
@@ -501,8 +589,9 @@ function practiceHome(){
     ${m('weak','Weak spots','Only words you missed or have not learnt yet'+(weak?` (${weak} waiting).`:'.'))}
    </div>
    <p class="count" style="margin-top:1rem">${pool.length} forms in this selection.</p>
-   <button class="btn" data-act="ftoggle" aria-expanded="${fOpen}">${fOpen?'Hide filters':'Filter by topic, level or word type'}</button>${fOpen?'<div style="margin-top:.8rem">'+filtersHTML(false)+'</div>':''}`;
+   <button class="btn" data-act="fxtoggle" aria-pressed="${P.fx!==false}">✨ Effects: ${P.fx!==false?'on':'off'}</button> <button class="btn" data-act="ftoggle" aria-expanded="${fOpen}">${fOpen?'Hide filters':'Filter by topic, level or word type'}</button>${fOpen?'<div style="margin-top:.8rem">'+filtersHTML(false)+'</div>':''}`;
 }
+function scoreText(){return S.blitz?`${S.score} right${S.combo>=2?' · 🔥 '+S.combo:''}`:`✓ ${S.score}/${S.answered}${S.combo>=2?' 🔥 '+S.combo:''}`}
 function stopClock(){if(TM){clearInterval(TM);TM=null}}
 function tick(){
   if(!S||!S.blitz){stopClock();return}
@@ -532,8 +621,8 @@ function showQ(){
     :`<div class="picks">${q.opts.map((o,j)=>`<button class="pick" data-act="pick" data-j="${j}"><span class="k" aria-hidden="true">${j+1}</span>${esc(capIf(o))}</button>`).join('')}</div>`;
   const top=S.blitz
     ?`<div class="prog"><i id="clockbar" style="width:${Math.max(0,(S.end-Date.now())/(BLITZ*10))}%"></i></div><span class="combo" id="clock">${S.left}s</span>`
-    :`<div class="prog"><i style="width:${S.i/S.items.length*100}%"></i></div><span class="combo">${S.combo>=2?'🔥 '+S.combo:''}</span>`;
-  const meta=S.blitz?`${esc(q.kick)} · ${S.score} right${S.combo>=2?' · 🔥 '+S.combo:''}`:`${esc(q.kick)} · question ${S.i+1} of ${S.items.length}`;
+    :`<div class="prog"><i style="width:${S.i/S.items.length*100}%"></i></div><span class="combo" id="sc">${scoreText()}</span>`;
+  const meta=S.blitz?`${esc(q.kick)} · <span id="sc">${scoreText()}</span>`:`${esc(q.kick)} · question ${S.i+1} of ${S.items.length}`;
   $('view').innerHTML=`<div class="sbar"><button class="x" data-act="quit" aria-label="Stop practising">✕</button>${top}</div>
    <article class="card q" id="qcard"><div class="meta">${meta}</div>
    <h2 class="node">${esc(q.f._n.base)}</h2>
@@ -556,7 +645,9 @@ function judge(val){
   else{st.b=0;st.m++;if(!P.mistakes.includes(f.id))P.mistakes.push(f.id)}
   if(ok&&q.t==='type'&&!S.hint)P.typed++;
   P.best=Math.max(P.best,S.combo);
-  P.xp+=xp;touchStreak();bumpDaily();saveP();renderMe();checkBadges();
+  P.total++;if(ok)P.right++;
+  gain(xp);touchStreak();bumpDaily();saveP();renderMe();checkBadges();
+  const sc=$('sc');if(sc){sc.textContent=scoreText();sc.classList.remove('bump');void sc.offsetWidth;if(ok)sc.classList.add('bump')}
   /* paint */
   const gap=$('gap');
   if(gap){gap.className='gap '+(ok?'ok':'miss');gap.textContent=q.t==='affix'?q.show(ok?q.answer:v):(q.cap&&q.t!=='fix'?(ok?q.answer:v).replace(/^./,c=>c.toUpperCase()):(ok?q.answer:v))}
@@ -571,22 +662,27 @@ function judge(val){
     why+=`<p>Answer: <b>${esc(q.answer)}</b></p>`;
   }
   const fb=$('fb');fb.hidden=false;fb.className='fb '+(ok?'ok':'no');
-  fb.innerHTML=`<div class="fb-h">${ok?'Correct'+(xp?' +'+xp+' XP':''):'Not quite'}</div>${why}<p>${buildHTML(f)}</p>${f.gloss?`<p>Meaning: ${esc(f.gloss)}.</p>`:''}<button class="btn primary" data-act="next">${S.i+1<S.items.length?'Next question':'See results'}</button>`;
+  fb.innerHTML=`<div class="fb-h">${ok?esc(praise())+(xp?' +'+xp+' XP':''):(near?'So close!':'Not quite.')}</div>${why}<p>${buildHTML(f)}</p>${f.gloss?`<p>Meaning: ${esc(f.gloss)}.</p>`:''}<button class="btn primary" data-act="next">${S.i+1<S.items.length?'Next question':'See results'}</button>`;
   fb.querySelector('.btn').focus();
+  if(ok)celebrate();
 }
 function results(){
   stopClock();
   const n=S.blitz?S.answered:S.items.length,pct=n?Math.round(S.score/n*100):0;
   let rec='',bonus=0;
-  P.rounds++;
+  P.rounds++;if(!S.blitz)P.bestRound=Math.max(P.bestRound,S.score);
   if(S.blitz){const nb=S.score>P.blitzBest;if(nb)P.blitzBest=S.score;rec=nb&&S.score>0?`<p><b>New best: ${S.score}!</b></p>`:`<p>Your best: ${P.blitzBest}</p>`}
-  else if(n>=5&&S.score===n){P.perfect++;bonus=10;P.xp+=bonus;S.xp+=bonus}
+  else if(n>=5&&S.score===n){P.perfect++;bonus=10;gain(bonus);S.xp+=bonus}
   touchStreak();saveP();renderMe();checkBadges();
   const msg=n&&S.score===n?'Perfect round.':pct>=70?'Strong round.':'Good practice. Mistakes are how these stick.';
-  $('view').innerHTML=`<article class="card res"><div class="big">${S.blitz?S.score:S.score+'/'+n}</div><p style="margin:.3rem auto 0">${S.blitz?`correct in ${BLITZ} seconds. `:''}${msg} You earned ${S.xp} XP${bonus?' (including a +10 perfect-round bonus)':''}.</p>${rec}
+  const stars=S.blitz?(S.score>=15?3:S.score>=8?2:S.score>0?1:0):(!n?0:pct>=90?3:pct>=70?2:1);
+  $('view').innerHTML=`<article class="card res"><div class="stars" aria-label="${stars} out of 3 stars">${[0,1,2].map(i=>`<span class="${i<stars?'on':''}" style="--i:${i}">${i<stars?'★':'☆'}</span>`).join('')}</div><div class="big">${S.blitz?S.score:S.score+'/'+n}</div><p style="margin:.3rem auto 0">${S.blitz?`correct in ${BLITZ} seconds. `:''}${msg} You earned ${S.xp} XP${bonus?' (including a +10 perfect-round bonus)':''}.</p>${rec}
+   <div class="coach"><b>Coach says</b><p>${coach()}</p></div>
    ${S.missed.length?`<div class="miss-list"><h2 style="font-size:1.1rem;margin-bottom:.3rem">Review these</h2>${S.missed.map(q=>`<div class="row"><div class="rw"><span class="w">${esc(q.f.w)}</span><span class="cl">${CL[q.f.cls]}</span></div><p class="eg">${buildHTML(q.f)}</p></div>`).join('')}</div>`:''}
    <div class="acts"><button class="btn primary" data-act="start" data-m="${S.mode}">Another round</button>${S.missed.length?'<button class="btn" data-act="start" data-m="weak">Practise weak spots</button>':''}<button class="btn" data-act="tab" data-t="practice">Change mode</button></div></article>`;
+  const cheer=stars===3?4:stars===2?2:0;
   S=null;window.scrollTo(0,0);
+  if(cheer)setTimeout(()=>fireworks(cheer),250);
 }
 
 /* ---------- word lab ---------- */
@@ -616,15 +712,16 @@ function labView(){
     ${L.over?`<div class="lose">Out of tries. Here ${missed.length===1?'is the word':'are the words'} you missed. Try another family.</div>`:''}</article>
    <div class="list" style="margin-top:.8rem">${found.length?`<article class="card">${found.map(rowHTML).join('')}<div class="pop" hidden></div></article>`:''}${missed.length?`<article class="card"><div class="meta">Missed</div>${missed.map(rowHTML).join('')}<div class="pop" hidden></div></article>`:''}</div>`;
 }
-function labTap(a){
+function labTap(a,el){
   if(L.over||L.done)return;
   const n=L.n,hits=n.forms.filter(f=>f.affix===a);
   if(hits.length){
-    hits.forEach(f=>{L.found.add(f.id);if(!P.found.includes(f.id)){P.found.push(f.id);P.xp+=5}});
+    hits.forEach(f=>{L.found.add(f.id);if(!P.found.includes(f.id)){P.found.push(f.id);gain(5)}});
+    glitterAt(el);
     L.msg='';
     if(n.forms.every(f=>L.found.has(f.id))){
-      L.done=true;
-      if(!P.labFams.includes(n.base)){P.labFams.push(n.base);if(L.lives===LIVES){P.xp+=10;L.flawless=true}}
+      L.done=true;fireworks(3);
+      if(!P.labFams.includes(n.base)){P.labFams.push(n.base);if(L.lives===LIVES){gain(10);L.flawless=true}}
     }
   }else{
     L.tried.add(a);L.lives--;
@@ -646,7 +743,9 @@ function progressView(){
    <div class="stat"><b>${P.streak||0}</b><span>day streak</span></div>
    <div class="stat"><b>${mast.length}<small style="font-size:1rem;font-weight:500"> / ${ALL.length}</small></b><span>words mastered</span></div>
    <div class="stat"><b>${P.found.length}</b><span>found in the lab</span></div>
-   <div class="stat"><b>${P.blitzBest}</b><span>best in Beat the clock</span></div></div>
+   <div class="stat"><b>${P.blitzBest}</b><span>best in Beat the clock</span></div>
+   <div class="stat"><b>${P.total?Math.round(P.right/P.total*100):0}%</b><span>accuracy (${P.right} of ${P.total})</span></div>
+   <div class="stat"><b>${P.bestRound}<small style="font-size:1rem;font-weight:500"> / 10</small></b><span>best round</span></div></div>
    <p class="tip">A word is mastered after you get it right three times in a row.</p>
    <section class="sec"><h2>Badges <small style="font-size:.9rem;font-weight:500;color:var(--dim)">${P.badges.length} of ${BADGES.length}</small></h2><div class="badges">${BADGES.map(b=>{const g=P.badges.includes(b.id);return `<div class="badge${g?'':' locked'}"><b>${g?'🏅':'🔒'} ${esc(b.n)}</b><span>${esc(b.d)}</span></div>`}).join('')}</div></section>
    <section class="sec"><h2>Needs more practice</h2>${weak.length?weak.map(f=>`<span class="pill">${esc(f.w)}</span>`).join('')+'<p style="margin-top:.6rem"><button class="btn primary" data-act="start" data-m="weak">Practise weak spots</button></p>':'<p>Nothing here yet. Play a round to see which words need work.</p>'}</section>
@@ -670,6 +769,7 @@ document.addEventListener('click',e=>{
   if(!D)return;
   if(a==='tab'){tab=el.dataset.t;if(tab!=='practice'){S=null;stopClock()}resetArm=false;render();window.scrollTo(0,0)}
   else if(a==='ftoggle'){fOpen=!fOpen;render()}
+  else if(a==='fxtoggle'){P.fx=P.fx===false;if(P.fx===false)FX.ps=[];saveP();render();if(P.fx)setTimeout(()=>{glitterAt(document.querySelector('[data-act=fxtoggle]'));fireworks(1)},50)}
   else if(a==='f'){F[el.dataset.k]=el.dataset.v;render()}
   else if(a==='say')say(el.dataset.t);
   else if(a==='aff'||a==='rule'){
@@ -686,7 +786,7 @@ document.addEventListener('click',e=>{
   else if(a==='submit')judge($('ti').value);
   else if(a==='hint'){const q=S.items[S.i];if(q.done)return;S.hint=true;$('ti').placeholder=q.answer.slice(0,2)+'…  ('+q.answer.length+' letters)';$('ti').focus()}
   else if(a==='next'){S.i++;S.i<S.items.length?showQ():results()}
-  else if(a==='chip')labTap(el.dataset.a);
+  else if(a==='chip')labTap(el.dataset.a,el);
   else if(a==='labnew'){labNew();labView()}
   else if(a==='reset'){if(resetArm){P=freshP();saveP();renderMe();resetArm=false}else resetArm=true;progressView()}
 });

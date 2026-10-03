@@ -214,6 +214,14 @@ footer{max-width:46rem;margin:0 auto;padding:1rem .9rem 2rem;font-size:.8rem;col
 .coach{margin:1rem auto 0;padding:.8rem 1rem;border-radius:12px;background:var(--tint);color:var(--ink);text-align:left;font-size:.92rem}
 .coach b{font-family:var(--disp)}
 .coach p{margin:.25rem 0 0}
+
+  .hotpill{display:inline-flex;align-items:center;gap:.55rem;padding:.35rem .9rem .35rem .45rem;min-height:40px;border-radius:999px;background:var(--tint);color:var(--ink);font-weight:700;font-size:.9rem}
+.hotpill i{width:34px;height:20px;border-radius:999px;background:var(--rule);position:relative;transition:background .2s}
+.hotpill i::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s}
+.hotpill.on{background:var(--ink);color:var(--bg)}
+.hotpill.on i{background:var(--suf)}
+.hotpill.on i::after{transform:translateX(14px)}
+  
 </style>
 </head>
 <body>
@@ -227,12 +235,13 @@ footer{max-width:46rem;margin:0 auto;padding:1rem .9rem 2rem;font-size:.8rem;col
    <button data-act="tab" data-t="explore">Explore</button>
    <button data-act="tab" data-t="progress">My progress</button>
   </nav>
+   <div id="hotbar" style="grid-column:1/-1"></div>
  </div>
 </header>
 <main id="view"><div class="skel" aria-busy="true"><i></i><i></i><i></i></div></main>
 <footer id="foot"></footer>
 
-
+<script src="hotlist.js"></script>
 <script>
 (function(){
 'use strict';
@@ -246,7 +255,7 @@ const KEY='wf2_progress', DAILY=10, BLITZ=60;
 const TITLES=['Rookie','Word smith','Affix hunter','Morpheme master','Word wizard','Spelling sniper','Prefix pro','Suffix sage','Lexicon legend','Grammar guru','Word-formation champion'];
 
 let D,ALL=[],tab='practice',S=null,L=null,resetArm=false,fOpen=false,TM=null;
-const freshP=()=>({xp:0,streak:0,last:'',forms:{},mistakes:[],found:[],best:0,perfect:0,rounds:0,labFams:[],typed:0,blitzBest:0,badges:[],daily:{d:'',n:0},right:0,total:0,bestRound:0,fx:true});
+const freshP=()=>({xp:0,streak:0,last:'',forms:{},mistakes:[],found:[],best:0,perfect:0,rounds:0,labFams:[],typed:0,blitzBest:0,badges:[],daily:{d:'',n:0},right:0,total:0,bestRound:0,fx:true,hot:false});
 let P=freshP();
 let F={kind:'all',cls:'all',level:'all',topic:'all',q:''};
 try{const s=localStorage.getItem(KEY);if(s)P=Object.assign(P,JSON.parse(s))}catch(e){}
@@ -263,7 +272,7 @@ function normalise(d){
 }
 let SRC='built-in data';
 function setData(d,src){
-  SRC=src||SRC;D=normalise(d);ALL=[];
+ SRC=src||SRC;D=normalise(addHot(d));ALL=[];
   D.nodes.forEach(n=>n.forms.forEach(f=>{f.id=n.base+':'+f.w;f._n=n;ALL.push(f)}));
   F={kind:'all',cls:'all',level:'all',topic:'all',q:''};S=null;L=null;
 }
@@ -289,6 +298,7 @@ function validate(d){
 const ruleOf=id=>D.rules.find(r=>r.id===id);
 const match=f=>{
   const n=f._n;
+  if(P.hot&&!n.hot)return false;
   if(F.kind!=='all'&&f.type!==F.kind)return false;
   if(F.cls!=='all'&&f.cls!==F.cls)return false;
   if(F.level!=='all'&&n.level!==F.level)return false;
@@ -688,7 +698,7 @@ function results(){
 /* ---------- word lab ---------- */
 const LIVES=5;
 function labNew(n){
-  n=n||pick(D.nodes);
+  n=n||pick(P.hot?D.nodes.filter(x=>x.hot):D.nodes);
   const real=[...new Set(n.forms.map(f=>f.affix))];
   const decoys=shuffle(Object.keys(D.affixes).filter(a=>!real.includes(a))).slice(0,6);
   L={n,chips:shuffle(real.concat(decoys)),found:new Set(),tried:new Set(),msg:'',lives:LIVES,over:false,done:false,flawless:false};
@@ -701,7 +711,7 @@ function labView(){
     const done=n.forms.some(f=>f.affix===a&&L.found.has(f.id)),tried=L.tried.has(a);
     return `<button class="tile ${pre?'pre':'suf'}${done?' done':''}${tried?' tried':''}" data-act="chip" data-a="${esc(a)}"${done||locked?' disabled':''}>${esc(a)}</button>`};
   const hearts='❤️'.repeat(L.lives)+'🖤'.repeat(LIVES-L.lives);
-  $('view').innerHTML=`<div class="lab-top"><label class="sel">Word <select id="labSel">${D.nodes.map(x=>`<option value="${esc(x.base)}"${x===n?' selected':''}>${esc(x.base)}</option>`).join('')}</select></label><button class="btn" data-act="labnew">Surprise me</button></div>
+  $('view').innerHTML=`<div class="lab-top"><label class="sel">Word <select id="labSel">${(P.hot?D.nodes.filter(x=>x.hot):D.nodes).map(x=>`<option value="${esc(x.base)}"${x===n?' selected':''}>${esc(x.base)}</option>`).join('')}</select></label><button class="btn" data-act="labnew">Surprise me</button></div>
    <article class="card stage"><p class="tip" style="margin:0 auto .7rem">Tap an affix to join it to the word. Find every real word. Each wrong guess costs a heart.</p>
     <div class="hearts" aria-label="${L.lives} of ${LIVES} tries left">${hearts}</div>
     <span class="tile base">${esc(n.base)}</span>
@@ -758,6 +768,8 @@ function progressView(){
 
 /* ---------- routing & events ---------- */
 function render(){
+  if(P.hot&&!D.nodes.some(n=>n.hot))P.hot=false;
+  $('hotbar').innerHTML=D.nodes.some(n=>n.hot)&&tab!=='progress'?hotPill():'';
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
   if(tab==='explore')exploreView();else if(tab==='practice')S?showQ():practiceHome();
   else if(tab==='lab')labView();else progressView();
@@ -771,6 +783,7 @@ document.addEventListener('click',e=>{
   else if(a==='ftoggle'){fOpen=!fOpen;render()}
   else if(a==='fxtoggle'){P.fx=P.fx===false;if(P.fx===false)FX.ps=[];saveP();render();if(P.fx)setTimeout(()=>{glitterAt(document.querySelector('[data-act=fxtoggle]'));fireworks(1)},50)}
   else if(a==='f'){F[el.dataset.k]=el.dataset.v;render()}
+  else if(a==='hot'){P.hot=!P.hot;saveP();L=null;S=null;stopClock();render()}
   else if(a==='say')say(el.dataset.t);
   else if(a==='aff'||a==='rule'){
     const card=el.closest('.card'),pop=card.querySelector('.pop'),key=a+(el.dataset.a||el.dataset.r);
@@ -808,7 +821,8 @@ document.addEventListener('keydown',e=>{
     if(q&&!q.done&&q.opts&&/^[1-4]$/.test(e.key)&&q.opts[+e.key-1]!==undefined)judge(q.opts[+e.key-1]);
   }
 });
-
+  const hotPill=()=>`<button type="button" class="hotpill${P.hot?' on':''}" data-act="hot" aria-pressed="${!!P.hot}"><i></i>🎯 Exam traps</button>`;
+  function addHot(d){const h=window.HOT_DATA;if(!h)return d;d.affixes=Object.assign(d.affixes||{},h.affixes||{});const m=new Set(h.mark||[]);d.nodes.forEach(n=>{if(m.has(n.base))n.hot=true});(h.nodes||[]).forEach(n=>{if(!d.nodes.some(x=>x.base===n.base)){n.hot=true;d.nodes.push(n)}});return d}
 const DATA_URL=new URLSearchParams(location.search).get('data')||'wordformation-v2.json';
 function showError(err){
   const local=location.protocol==='file:';

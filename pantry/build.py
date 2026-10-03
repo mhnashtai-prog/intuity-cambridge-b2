@@ -1,71 +1,52 @@
 #!/usr/bin/env python3
-"""Build the Word Formation page from one source.
+"""Build the two versions of the Word formation lab from one template.
 
-    python3 build.py                 regenerate the JSON and the standalone page
-    python3 build.py --install DIR   also lay the INTUITY files out under DIR
-                                     (skills/similar-words/, data/similar-words/)
+  python build.py
 
-SOURCE OF TRUTH
-    build_wordformation.py   the words (-> wordformation.json)
-    wordformation.js         all behaviour, used by BOTH pages
-    wordformation.css        every style this page adds, used by BOTH pages
-    word-formation.html      the INTUITY page (hand-kept, unchanged by this build)
-    standalone-shell.html    the frame of the standalone page only
+Reads   template.html, wordformation-v2.json   (next to this script)
+Writes  index.html                    fetches wordformation-v2.json at load time (needs a web server)
+        wordformation-standalone.html has the JSON inlined (works by double-click)
 
-GENERATED
-    wordformation.json
-    word-formation-standalone.html   shell + css + data + js, inlined
+Edit the JSON, run this, done. Nothing else needs touching.
 """
-import json, pathlib, shutil, subprocess, sys
+import json, sys
+from pathlib import Path
 
-HERE = pathlib.Path(__file__).resolve().parent
+here = Path(__file__).parent
+data_file = here / (sys.argv[1] if len(sys.argv) > 1 else "wordformation-v2.json")
+data = json.loads(data_file.read_text(encoding="utf-8"))   # fails loudly if the JSON is broken
 
-def read(name):
-    return (HERE / name).read_text(encoding='utf-8')
+# --- checks (same ones the page runs in My progress > Your data) ---
+warn, rules, seen = [], {r["id"] for r in data.get("rules", [])}, set()
+for n in data["nodes"]:
+    forms = {f["w"] for f in n["forms"]}
+    for f in n["forms"]:
+        fid = n["base"] + ":" + f["w"]
+        if fid in seen: warn.append(f"Duplicate form {fid}")
+        seen.add(fid)
+        for k in ("ex", "teen"):
+            if f.get(k) and f["w"].lower() not in f[k].lower():
+                warn.append(f"{f['w']}: '{k}' sentence does not contain the word")
+        if not f.get("ex"): warn.append(f"{f['w']}: no example sentence")
+        if data.get("affixes") and f.get("affix") not in data["affixes"]:
+            warn.append(f"{f['w']}: affix {f.get('affix')} not in glossary")
+        if f.get("rule") and f["rule"] not in rules: warn.append(f"{f['w']}: unknown rule {f['rule']}")
+        if "alts" in f:
+            b = f["affix"].replace("-", "")
+            ok = f["w"].startswith(b) if f["type"] == "prefix" else f["w"].endswith(b)
+            if len(f["alts"]) != 3 or not ok: warn.append(f"{f['w']}: alts must be 3 items and match the word's affix")
+    for a in n.get("avoid", []):
+        if a["for"] not in forms: warn.append(f"{a['w']}: 'for' {a['for']} is not a form of {n['base']}")
 
-def once(text, marker):
-    if text.count(marker) != 1:
-        sys.exit('standalone-shell.html must contain %r exactly once' % marker)
+template = (here / "template.html").read_text(encoding="utf-8")
+marker = "<script>/*WF_INLINE*/</script>"
+assert marker in template, "template.html is missing the WF_INLINE marker"
 
-# 1 ── the words
-r = subprocess.run([sys.executable, 'build_wordformation.py'], cwd=HERE,
-                   capture_output=True, text=True)
-sys.stdout.write(r.stdout)
-if r.returncode != 0:
-    sys.exit('build_wordformation.py reported problems:\n' + r.stdout + r.stderr)
+(here / "index.html").write_text(template.replace(marker, ""), encoding="utf-8")
+inline = "<script>window.WF_DATA = " + json.dumps(data, ensure_ascii=False).replace("</", "<\\/") + ";</script>"
+(here / "wordformation-standalone.html").write_text(template.replace(marker, inline), encoding="utf-8")
 
-# 2 ── the standalone page
-shell, css, js = read('standalone-shell.html'), read('wordformation.css'), read('wordformation.js')
-data = json.loads(read('wordformation.json'))
-for m in ('/*__WORDFORMATION_CSS__*/', '/*__DATA__*/null', '/*__WORDFORMATION_JS__*/'):
-    once(shell, m)
-for name, body in (('wordformation.js', js), ('wordformation.css', css)):
-    if '</script' in body.lower() or '</style' in body.lower():
-        sys.exit(name + ' contains a closing tag that would end its inline block')
-
-blob = json.dumps(data, ensure_ascii=False, separators=(',', ':')).replace('</', '<\\/')
-out = (shell.replace('/*__WORDFORMATION_CSS__*/', css)
-            .replace('/*__DATA__*/null', blob)
-            .replace('/*__WORDFORMATION_JS__*/', js))
-(HERE / 'word-formation-standalone.html').write_text(out, encoding='utf-8')
-print('wrote word-formation-standalone.html (%d KB)' % (len(out.encode()) // 1024))
-
-# 3 ── syntax check, when node is there
-if shutil.which('node'):
-    tmp = HERE / '.check.js'
-    tmp.write_text(js, encoding='utf-8')
-    ok = subprocess.run(['node', '--check', str(tmp)]).returncode == 0
-    tmp.unlink()
-    if not ok:
-        sys.exit('wordformation.js has a syntax error')
-    print('wordformation.js: syntax ok')
-
-# 4 ── optional: lay the INTUITY files out where the app expects them
-if '--install' in sys.argv:
-    root = pathlib.Path(sys.argv[sys.argv.index('--install') + 1])
-    (root / 'skills/similar-words').mkdir(parents=True, exist_ok=True)
-    (root / 'data/similar-words').mkdir(parents=True, exist_ok=True)
-    shutil.copy(HERE / 'word-formation.html', root / 'skills/similar-words/word-formation.html')
-    for f in ('wordformation.js', 'wordformation.css', 'wordformation.json'):
-        shutil.copy(HERE / f, root / 'data/similar-words' / f)
-    print('installed under', root)
+forms = sum(len(n["forms"]) for n in data["nodes"])
+print(f"Built index.html (fetch) and wordformation-standalone.html (inline): {len(data['nodes'])} families, {forms} forms.")
+print("Data check:", "no problems." if not warn else f"{len(warn)} issue(s)")
+for w in warn: print("  -", w)

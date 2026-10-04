@@ -162,9 +162,38 @@ main.wf{padding-top:calc(var(--wf-head,170px) + 1rem)}
 .cross-link{display:block;text-align:center;margin-top:2rem;font-size:.9rem;color:var(--soft)}
 .cross-link a{color:var(--ink);font-weight:600}
 
+/* ── the affix chooser ── */
+.affix-row{display:flex;flex-wrap:wrap;justify-content:center;gap:.4rem;margin:0 0 1.1rem}
+.chip{border:1px solid var(--rule);background:var(--sheet);color:var(--ink);border-radius:var(--r-tap);padding:.38rem .8rem;font-size:.88rem;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s}
+.chip:hover{border-color:var(--ink)}
+.chip small{margin-left:.35rem;color:var(--mute);font-weight:600;font-size:.76rem}
+.chip.on{background:#14110E;border-color:#14110E;color:var(--sheet)}
+.chip.on small{color:var(--ring-ink)}
+/* on a phone the pills are one row that scrolls sideways, the next one cut off at the edge
+   to show there is more — the row stays one pill high however long the list */
+@media (max-width:600px){
+  .affix-row{flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:none;
+    margin-left:-1rem;margin-right:-1rem;padding:0 1rem .15rem;-webkit-overflow-scrolling:touch;
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 2rem),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 2rem),transparent)}
+  .affix-row::-webkit-scrollbar{display:none}
+  .chip{flex:none;scroll-snap-align:start}
+}
+.aff-meaning{text-align:center;font-size:1rem;color:var(--soft);margin:0 0 .3rem}
+.aff-meaning b{color:#14110E;font-size:1.1rem}
+.chip{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 /* game controls are tapped, not read: no long-press menu on a phone */
 .aff,.opt,.fam,.ring,.btn,.dots{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 @media (prefers-reduced-motion:reduce){ .ring.snap,.ring.shake{animation:none} .fam,.aff{transition:none} }
+
+/* ── EXPLORE CARDS: the app's own card, square like every INTUITY card — a small
+      caramel label on top, the word in solid black, the line beneath in grey.
+      The card that opens on tap is square too; buttons stay pills. ── */
+.fam{border-radius:0;border:1px solid rgba(217,192,164,.6);box-shadow:0 1px 2px rgba(43,33,41,.05);padding:.8rem .85rem .9rem;gap:.3rem}
+.fam .k{display:flex;align-items:center;gap:.45rem;font:600 .6rem/1.2 'Geist Mono',ui-monospace,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--caramel-ink)}
+.fam .k i{flex:none;width:1.1rem;height:.4rem;background:var(--caramel);display:block}
+.fam b{color:#14110E;font-weight:800}
+.fam span{color:var(--mute)}
+.card{border-radius:0}
 </style>
 </head>
 <body>
@@ -213,10 +242,27 @@ const SETS=[['verb','Verbs'],['noun','Nouns'],['adjective','Adjectives'],['adver
 const LADDER={mix1:['core'],mix2:['core','traps-1','traps-2'],mix3:['core','traps-1','traps-2','traps-3','traps-4']};
 const P=new URLSearchParams(location.search);
 let D=null, RULES={}, mode=P.get('mode')||'explore', set=P.get('set')||'mix1', kind=P.get('kind')==='prefix'?'prefix':'suffix';
+/* THE AFFIX CHOOSER — the back of a good coursebook: every prefix and suffix,
+   with what it means and every word built with it. The student combines
+   freely: a word class (or a Mix), Prefixes or Suffixes, then one affix.
+   On the class tabs the pills are that class's groups; on a Mix tab the same
+   affix is gathered across every class, so dis- shows disagree, disagreement
+   and dishonest together. Explore and Practice follow the choice; the Word
+   Lab does not, because it needs several affixes on one word. */
+let aff=P.get('aff')||'';
+const CLASSES=['verb','noun','adjective','adverb'];
 
 /* ── the pool: every form that matches the tab and the toggle ── */
 function inSet(n,f){ return LADDER[set] ? LADDER[set].includes(n.set) : f.cls===set; }
-function pool(){ const out=[]; D.nodes.forEach(n=>n.forms.forEach(f=>{ if(f.type===kind&&inSet(n,f)) out.push({n,f}); })); return out; }
+function inGroup(f,label){ const g=(((D.groups||{})[f.cls]||{})[kind]||[]).find(x=>x.label===label); return !!g&&g.affixes.includes(f.affix); }
+function basePool(){ const out=[]; D.nodes.forEach(n=>n.forms.forEach(f=>{ if(f.type===kind&&inSet(n,f)) out.push({n,f}); })); return out; }
+function pool(){ return basePool().filter(x=>!aff||inGroup(x.f,aff)); }
+/* the groups on offer here, with how many forms each has in this tab */
+function groupsHere(){ const classes=LADDER[set]?CLASSES:[set], m=new Map(), B=basePool();
+  classes.forEach(c=>(((D.groups||{})[c]||{})[kind]||[]).forEach(g=>{ if(!m.has(g.label)) m.set(g.label,{label:g.label,meaning:[],n:0}); const e=m.get(g.label);
+    if(!e.meaning.some(x=>x.m===g.meaning)) e.meaning.push({c,m:g.meaning}); }));
+  m.forEach(e=>{ e.n=B.filter(x=>inGroup(x.f,e.label)).length; });
+  return [...m.values()].filter(e=>e.n>0); }
 const src=(n,f)=>f.from||n.base;
 const ok=(f,v)=>[f.w,f.us].filter(Boolean).map(norm).includes(norm(v));
 const due=id=>{ try{ return !!(window.IntuityRing&&IntuityRing.isDue(id)); }catch(e){ return false; } };
@@ -243,25 +289,38 @@ function drawNav(){
   document.querySelectorAll('#modes .mode-btn').forEach(b=>{ const on=b.dataset.mode===mode; b.classList.toggle('active',on); on?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'); });
   document.querySelectorAll('#kind button').forEach(b=>{ const on=b.dataset.kind===kind; b.classList.toggle('on',on); b.setAttribute('aria-selected',on); });
   ['explore','practice','game'].forEach(v=>$(v).classList.toggle('hidden',v!==mode));
-  const q=new URLSearchParams({mode,set,kind}); history.replaceState(null,'',location.pathname+'?'+q);
+  const q=new URLSearchParams({mode,set,kind}); if(aff) q.set('aff',aff); history.replaceState(null,'',location.pathname+'?'+q);
 }
-function go(){ drawNav(); if(mode==='explore') explore(); else if(mode==='practice') practiceGate(); else labStart(); }
+function go(){ if(D&&aff&&!groupsHere().some(g=>g.label===aff)) aff=''; drawNav(); if(mode==='explore') explore(); else if(mode==='practice') practiceGate(); else labStart(); }
 $('modes').addEventListener('click',e=>{ const b=e.target.closest('[data-mode]'); if(b){ mode=b.dataset.mode; go(); } });
 $('sets').addEventListener('click',e=>{ const b=e.target.closest('[data-set]'); if(b){ set=b.dataset.set; go(); } });
 $('kind').addEventListener('click',e=>{ const b=e.target.closest('[data-kind]'); if(b){ kind=b.dataset.kind; go(); } });
 
 /* ══ EXPLORE: the families that have a form here; one opens as a modal card ══ */
+function affixRow(){ const G=groupsHere(); if(!G.length) return '';
+  return `<div class="affix-row" role="group" aria-label="Choose an affix"><button type="button" class="chip${aff?'':' on'}" data-aff="">All</button>${G.map(g=>`<button type="button" class="chip${g.label===aff?' on':''}" data-aff="${esc(g.label)}">${esc(g.label)}<small>${g.n}</small></button>`).join('')}</div>`; }
+function showChosen(){ const c=document.querySelector('.affix-row .chip.on'); if(c&&c.scrollIntoView) c.scrollIntoView({block:'nearest',inline:'center'}); }
 function explore(){
+  if(aff){ exploreAffix(); return showChosen(); }
   const P2=pool(), fams=new Map();
   P2.forEach(({n,f})=>{ if(!fams.has(n)) fams.set(n,[]); fams.get(n).push(f); });
   const list=[...fams.entries()].sort((a,b)=>a[0].base.localeCompare(b[0].base));
   const label=(SETS.find(s=>s[0]===set)||[])[1]||'';
-  $('explore').innerHTML=list.length?`<p class="lead">Tap a word to see its family: how each form is built, what it means, and the spellings to watch.</p>
+  $('explore').innerHTML=list.length?`${affixRow()}<p class="lead">Tap a word to see its family: how each form is built, what it means, and the spellings to watch.</p>
     <p class="count">${list.length} ${list.length===1?'family':'families'} · ${P2.length} ${kind==='prefix'?'prefixed':'suffixed'} forms in ${esc(label)}</p>
-    <div class="fam-grid">${list.map(([n,fs])=>`<button class="fam" type="button" data-base="${esc(n.base)}"><b>${esc(n.base)}${fs.some(f=>due(f.id))?'<i class="due" title="Still to fix"></i>':''}</b><span>${fs.map(f=>esc(f.w)).join(' · ')}</span></button>`).join('')}</div>`
+    <div class="fam-grid">${list.map(([n,fs])=>`<button class="fam" type="button" data-base="${esc(n.base)}"><small class="k"><i></i>${esc(n.pos)}</small><b>${esc(n.base)}${fs.some(f=>due(f.id))?'<i class="due" title="Still to fix"></i>':''}</b><span>${fs.map(f=>esc(f.w)).join(' · ')}</span></button>`).join('')}</div>`
     :`<p class="lead">No ${kind==='prefix'?'prefixed':'suffixed'} words in this set. Try ${kind==='prefix'?'Suffixes':'Prefixes'}, or another tab.</p>`;
 }
-$('explore').addEventListener('click',e=>{ const b=e.target.closest('.fam'); if(b) openFamily(D.nodes.find(n=>n.base===b.dataset.base)); });
+function exploreAffix(){
+  const g=groupsHere().find(x=>x.label===aff), words=pool().slice().sort((a,b)=>a.f.w.localeCompare(b.f.w));
+  const many=g.meaning.length>1;
+  const meaning=g.meaning.map(x=>esc(x.m)+(many?` <span class="cls">(${esc(x.c)}s)</span>`:'')).join(' · ');
+  $('explore').innerHTML=`${affixRow()}<p class="aff-meaning"><b>${esc(g.label)}</b> · ${meaning}</p>
+    <p class="count">${words.length} ${words.length===1?'word':'words'} · tap one to see its whole family</p>
+    <div class="fam-grid">${words.map(({n,f})=>`<button class="fam" type="button" data-base="${esc(n.base)}"><small class="k"><i></i>${esc(f.cls)}</small><b>${esc(f.w)}${due(f.id)?'<i class="due" title="Still to fix"></i>':''}</b><span>${f.type==='prefix'?esc(f.affix)+' + '+esc(src(n,f)):esc(src(n,f))+' + '+esc(f.affix)}</span></button>`).join('')}</div>`;
+}
+$('explore').addEventListener('click',e=>{ const c=e.target.closest('.chip'); if(c){ aff=c.dataset.aff; drawNav(); explore(); return; }
+  const b=e.target.closest('.fam'); if(b) openFamily(D.nodes.find(n=>n.base===b.dataset.base)); });
 function openFamily(n){
   const here=new Set(pool().filter(x=>x.n===n).map(x=>x.f));
   const forms=n.forms.slice().sort((a,b)=>(here.has(b)-here.has(a)));
@@ -293,10 +352,11 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeCard(); });
 let S=null;
 function practiceGate(){
   const n=pool().length, d=pool().filter(x=>due(x.f.id)).length;
-  $('practice').innerHTML=n?`<div class="q result"><p class="lead">Ten questions from ${n} ${kind==='prefix'?'prefixed':'suffixed'} forms.${d?` <b>${d}</b> ${d===1?'is a mistake':'are mistakes'} from last time, so ${d===1?'it comes':'they come'} first.`:''}</p>
+  $('practice').innerHTML=n?`${affixRow()}<div class="q result"><p class="lead">Ten questions from ${n} ${aff?'words with <b>'+esc(aff)+'</b>':(kind==='prefix'?'prefixed':'suffixed')+' forms'}.${d?` <b>${d}</b> ${d===1?'is a mistake':'are mistakes'} from last time, so ${d===1?'it comes':'they come'} first.`:''}</p>
     <button class="btn" type="button" id="pStart">Start</button></div>`
     :`<p class="lead">No ${kind==='prefix'?'prefixed':'suffixed'} words in this set. Try another tab.</p>`;
   const b=$('pStart'); if(b) b.onclick=startPractice;
+  $('practice').querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ aff=c.dataset.aff; drawNav(); practiceGate(); });
 }
 function startPractice(){
   const all=shuffle(pool()); all.sort((a,b)=>due(b.f.id)-due(a.f.id));

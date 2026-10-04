@@ -234,6 +234,7 @@ footer{max-width:46rem;margin:0 auto;padding:1rem .9rem 2rem;font-size:.8rem;col
    <button data-act="tab" data-t="lab">Word lab</button>
    <button data-act="tab" data-t="explore">Explore</button>
    <button data-act="tab" data-t="progress">My progress</button>
+    <button data-act="tab" data-t="cloze">Open cloze</button>
   </nav>
    <div id="hotbar" style="grid-column:1/-1"></div>
  </div>
@@ -242,6 +243,10 @@ footer{max-width:46rem;margin:0 auto;padding:1rem .9rem 2rem;font-size:.8rem;col
 <footer id="foot"></footer>
 
 <script src="hotlist.js"></script>
+<script src="hotlist2.js"></script>
+<script src="hotlist3.js"></script>
+<script src="hotlist4.js"></script>
+<script src="cloze.js"></script>
 <script>
 (function(){
 'use strict';
@@ -769,10 +774,10 @@ function progressView(){
 /* ---------- routing & events ---------- */
 function render(){
   if(P.hot&&!D.nodes.some(n=>n.hot))P.hot=false;
-  $('hotbar').innerHTML=D.nodes.some(n=>n.hot)&&tab!=='progress'?hotPill():'';
+  $('hotbar').innerHTML=D.nodes.some(n=>n.hot)&&tab!=='progress'&&tab!=='cloze'?hotPill():'';
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
   if(tab==='explore')exploreView();else if(tab==='practice')S?showQ():practiceHome();
-  else if(tab==='lab')labView();else progressView();
+  else if(tab==='lab')labView();else if(tab==='cloze')clozeView();else progressView();
 }
 document.addEventListener('click',e=>{
   const el=e.target.closest('[data-act]');if(!el)return;
@@ -821,6 +826,76 @@ document.addEventListener('keydown',e=>{
     if(q&&!q.done&&q.opts&&/^[1-4]$/.test(e.key)&&q.opts[+e.key-1]!==undefined)judge(q.opts[+e.key-1]);
   }
 });
+
+  /* ---------- Open cloze (Part 2) ---------- */
+const CZC={prep:'Prepositions',link:'Linkers',struct:'Structures',rel:'Relative words',quant:'Quantifiers',fixed:'Fixed phrases',pv:'Phrasal verbs'};
+let C=null;
+const czList=()=>window.CLOZE||[];
+function clozeView(){C?czShow():czHome()}
+function czHome(){
+ const L=czList(),m=P.cz||{};
+ if(!L.length){$('view').innerHTML='<div class="empty">Open cloze items not found. Check that cloze.js is in the same folder as this page.</div>';return}
+ const cur=P.czc||'all',weak=L.filter(x=>m[x.id]&&m[x.id].b<2).length;
+ $('view').innerHTML=`<div class="goal"><div class="goal-t"><b>Part 2: open cloze</b><span>${L.length} gaps</span></div><p class="tip">One word is missing. UK spelling only.</p></div>
+ <div class="modes"><button class="mode hero" data-cz="start" data-m="choose"><h3>Tap the missing word</h3><p>Ten gaps, four options each.</p></button>
+ <button class="mode" data-cz="start" data-m="type"><h3>Type it</h3><p>No options, as in the exam.</p></button>
+ <button class="mode" data-cz="start" data-m="weak"><h3>Weak spots</h3><p>Gaps you missed${weak?' ('+weak+' waiting)':''}.</p></button></div>
+ <p style="margin-top:1rem"><label class="sel">Gap type <select id="czSel"><option value="all">Everything</option>${Object.keys(CZC).map(k=>`<option value="${k}"${cur===k?' selected':''}>${CZC[k]}</option>`).join('')}</select></label></p>`;
+}
+function czStart(mode){
+ const m=P.cz||(P.cz={});let pool=czList().filter(x=>!P.czc||P.czc==='all'||x.c===P.czc);
+ if(mode==='weak')pool=pool.filter(x=>m[x.id]&&m[x.id].b<2);
+ if(!pool.length){toast('Nothing to practise here yet. Try Tap or Type first.');return}
+ const w=x=>m[x.id]?(m[x.id].b>=2?1:4):3,items=[],p=pool.slice();
+ while(items.length<10&&p.length){let r=Math.random()*p.reduce((a,x)=>a+w(x),0),i=0;for(;i<p.length-1;i++){r-=w(p[i]);if(r<=0)break}items.push(p.splice(i,1)[0])}
+ C={mode:mode==='weak'?'choose':mode,items,i:0,score:0,combo:0,xp:0,miss:[],done:false};czShow();
+}
+function czShow(){
+ const q=C.items[C.i];C.done=false;C.o=shuffle([q.a].concat(q.o));
+ const stem=esc(q.s).replace('___','<span class="gap" id="czgap"></span>');
+ const ctl=C.mode==='type'?`<div class="typebox"><input id="czti" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="one word" aria-label="Your answer"><button class="btn primary" data-cz="submit">Check</button></div>`:`<div class="picks">${C.o.map((o,j)=>`<button class="pick" data-cz="pick" data-j="${j}">${esc(o)}</button>`).join('')}</div>`;
+ $('view').innerHTML=`<div class="sbar"><button class="x" data-cz="quit" aria-label="Stop practising">✕</button><div class="prog"><i style="width:${C.i/C.items.length*100}%"></i></div><span class="combo">✓ ${C.score}/${C.i}${C.combo>1?' 🔥 '+C.combo:''}</span></div>
+ <article class="card q" id="czcard"><div class="meta">${esc(CZC[q.c])} · gap ${C.i+1} of ${C.items.length}</div><p class="stem">${stem}</p>${ctl}<div class="fb" id="czfb" hidden></div></article>`;
+ const t=$('czti');if(t&&matchMedia('(pointer:fine)').matches)t.focus();
+}
+function czJudge(v){
+ if(C.done)return;v=String(v).trim().toLowerCase();if(!v)return;C.done=true;
+ const q=C.items[C.i],ok=v===q.a||(q.alt||[]).includes(v);
+ C.combo=ok?C.combo+1:0;const xp=ok?(C.mode==='type'?15:10)+Math.min(C.combo-1,5):0;
+ C.xp+=xp;if(ok)C.score++;else C.miss.push(q);
+ const m=P.cz||(P.cz={}),st=m[q.id]||(m[q.id]={b:0,m:0});
+ if(ok)st.b=Math.min(4,st.b+1);else{st.b=0;st.m++}
+ P.total++;if(ok)P.right++;P.best=Math.max(P.best,C.combo);
+ gain(xp);touchStreak();bumpDaily();saveP();renderMe();checkBadges();
+ const g=$('czgap'),shown=q.s.startsWith('___')?q.a[0].toUpperCase()+q.a.slice(1):q.a;
+ g.className='gap '+(ok?'ok':'miss');g.textContent=ok?shown:v;
+ document.querySelectorAll('.pick').forEach((b,j)=>{b.disabled=true;if(C.o[j]===q.a)b.classList.add('is-answer');else if(C.o[j]===v)b.classList.add('is-wrong')});
+ const t=$('czti');if(t)t.disabled=true;if(!ok)$('czcard').classList.add('shake');
+ const fb=$('czfb');fb.hidden=false;fb.className='fb '+(ok?'ok':'no');
+ fb.innerHTML=`<div class="fb-h">${ok?esc(pick(PRAISE))+(xp?' +'+xp+' XP':''):'Not quite.'}</div>${ok?'':`<p>Answer: <b>${esc(shown)}</b></p>`}<p>${esc(q.w)}</p><button class="btn primary" data-cz="next">${C.i+1<C.items.length?'Next gap':'See results'}</button>`;
+ fb.querySelector('.btn').focus();if(ok)glitterAt(document.querySelector('.pick.is-answer')||g);
+}
+function czEnd(){
+ const n=C.items.length,pct=Math.round(C.score/n*100);P.rounds++;if(C.score===n){P.perfect++;gain(10);C.xp+=10}
+ saveP();renderMe();checkBadges();
+ const by={};C.miss.forEach(q=>by[q.c]=(by[q.c]||0)+1);const top=Object.entries(by).sort((a,b)=>b[1]-a[1])[0];
+ $('view').innerHTML=`<article class="card res"><div class="big">${C.score}/${n}</div><p style="margin:.3rem auto 0">${pct>=70?'Strong round.':'Good practice. Mistakes are how these stick.'} You earned ${C.xp} XP.</p>
+ <div class="coach"><b>Coach says</b><p>${top?'Revisit: <b>'+esc(CZC[top[0]])+'</b> ('+top[1]+' missed).':'No mistakes. Try Type it for a tougher challenge.'}</p></div>
+ ${C.miss.length?`<div class="miss-list"><h2 style="font-size:1.1rem;margin-bottom:.3rem">Review these</h2>${C.miss.map(q=>`<div class="row"><p class="eg">${esc(q.s).replace('___','<b>'+esc(q.a)+'</b>')}</p><p class="tip">${esc(q.w)}</p></div>`).join('')}</div>`:''}
+ <div class="acts"><button class="btn primary" data-cz="start" data-m="${C.mode}">Another round</button><button class="btn" data-cz="home">Change mode</button></div></article>`;
+ if(C.score===n)setTimeout(()=>fireworks(3),250);C=null;window.scrollTo(0,0);
+}
+document.addEventListener('click',e=>{
+ const el=e.target.closest('[data-cz]');if(!el||!D)return;const a=el.dataset.cz;
+ if(a==='start')czStart(el.dataset.m);
+ else if(a==='home'||a==='quit'){C=null;render()}
+ else if(a==='pick')czJudge(C.o[+el.dataset.j]);
+ else if(a==='submit')czJudge($('czti').value);
+ else if(a==='next'){C.i++;C.i<C.items.length?czShow():czEnd()}
+});
+document.addEventListener('change',e=>{if(e.target.id==='czSel'){P.czc=e.target.value;saveP();czHome()}});
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='czti'){e.preventDefault();czJudge(e.target.value)}});
+  
   const hotPill=()=>`<button type="button" class="hotpill${P.hot?' on':''}" data-act="hot" aria-pressed="${!!P.hot}"><i></i>🎯 Exam traps</button>`;
   function addHot(d){const h=window.HOT_DATA;if(!h)return d;d.affixes=Object.assign(d.affixes||{},h.affixes||{});const m=new Set(h.mark||[]);d.nodes.forEach(n=>{if(m.has(n.base))n.hot=true});(h.nodes||[]).forEach(n=>{if(!d.nodes.some(x=>x.base===n.base)){n.hot=true;d.nodes.push(n)}});return d}
 const DATA_URL=new URLSearchParams(location.search).get('data')||'wordformation-v2.json';

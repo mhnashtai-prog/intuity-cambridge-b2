@@ -224,7 +224,7 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
 const TOPIC='master-part4', PART='UoE4';
-const SETS=[['tense','Tenses'],['pv','Phrasal verbs'],['phrase','Phrases'],['cond','Conditionals'],['wish','Wishes'],['modal','Modals'],['mix','Mix']];
+const SETS=[['tense','Tenses'],['pv','Phrasal'],['phrase','Phrases'],['cond','Conditionals'],['wish','Wishes'],['modal','Modals'],['report','Reported'],['passive','Passive'],['mix','Mix']];
 const P=new URLSearchParams(location.search);
 let D=null, mode=P.get('mode')||'explore', set=P.get('set')||'mix';
 
@@ -237,19 +237,22 @@ function remember(i,right){
 
 /* ── marking: the pantry's kwt.js rules, which are the exam's ── */
 const norm=t=>String(t).toLowerCase().replace(/[\u2018\u2019]/g,"'").replace(/[^a-z' -]/g,' ').replace(/\s+/g,' ').trim();
-const wc=t=>t.split(' ').filter(Boolean).length+(t.match(/n't\b|'(ll|ve|re|m|d|s)\b/g)||[]).length;
+/* a contraction counts as two words (don't = do not); a possessive 's does not (everyone's is one word) */
+const wc=t=>t.split(' ').filter(Boolean).length+(t.match(/n't\b|'(ll|ve|re|m|d)\b/g)||[]).length;
 function variants(t){
   t=t.replace(/\bwon't\b/g,'will not').replace(/\bcan't\b/g,'can not').replace(/\bshan't\b/g,'shall not')
      .replace(/n't\b/g,' not').replace(/'ll\b/g,' will').replace(/'ve\b/g,' have').replace(/'re\b/g,' are').replace(/'m\b/g,' am');
   let out=[t];
-  [["'d",['would','had']],["'s",['is','has']]].forEach(([c,subs])=>{ out=out.flatMap(x=>x.includes(c)?subs.map(s=>x.split(c).join(' '+s)):[x]); });
+  /* 's and 'd can be a contraction OR not: keep the original too, so a possessive (everyone's surprise) still matches */
+  [["'d",['would','had']],["'s",['is','has']]].forEach(([c,subs])=>{ out=out.flatMap(x=>x.includes(c)?[x].concat(subs.map(s=>x.split(c).join(' '+s))):[x]); });
   /* cannot and can not are the same answer */
   return out.flatMap(x=>{ x=x.replace(/\s+/g,' ').trim(); return [x,x.replace(/\bcan not\b/g,'cannot'),x.replace(/\bcannot\b/g,'can not')]; });
 }
 const halves=a=>a.split('|').map(s=>s.trim());
+/* both sides are expanded the same way, so "don't" in a stored answer still matches "do not" typed, and back */
 function score(i,t){ const vs=variants(norm(t)); let best=0;
-  i.a.forEach(ans=>{ const [h1,h2]=halves(ans).map(s=>norm(s)); const full=(h1+' '+h2).trim();
-    vs.forEach(v=>{ let m=0; if(v===full) m=2; else { const a1=v===h1||v.startsWith(h1+' '), a2=v===h2||v.endsWith(' '+h2); m=(a1||a2)?1:0; } if(m>best) best=m; }); });
+  i.a.forEach(ans=>{ const hs=halves(ans), h1s=variants(norm(hs[0])), h2s=variants(norm(hs[1])), fulls=variants(norm(hs.join(' ')));
+    vs.forEach(v=>{ let m=0; if(fulls.includes(v)) m=2; else { const a1=h1s.some(h=>v===h||v.startsWith(h+' ')), a2=h2s.some(h=>v===h||v.endsWith(' '+h)); m=(a1||a2)?1:0; } if(m>best) best=m; }); });
   return best; }
 const keyIn=(i,t)=>variants(norm(t)).some(v=>v.split(' ').includes(i.k.toLowerCase()));
 function answerHTML(ans){ const [h1,h2]=halves(ans); return `<span class="half1">${esc(h1)}</span> <span class="half2">${esc(h2)}</span>`; }

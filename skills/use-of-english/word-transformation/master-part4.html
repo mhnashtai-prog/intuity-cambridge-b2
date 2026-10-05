@@ -187,6 +187,35 @@ main.wf{padding-top:calc(var(--wf-head,170px) + 1rem)}
 .fam b{color:#14110E;font-weight:800}
 .fam span{color:var(--mute)}
 .card{border-radius:0}
+
+/* ── the Practice map ── */
+.map-card{padding:1.2rem 1.1rem}
+.map-head{font-size:.95rem;color:var(--soft);margin:0 0 .6rem;text-align:center}
+.map-head b{color:#14110E}
+.map-head span{color:var(--mute)}
+.bar{display:flex;height:6px;background:rgba(217,192,164,.45);margin:0 0 1rem;overflow:hidden}
+.bar i{display:block;height:100%}
+.bar .master{background:var(--right)} .bar .tried{background:var(--sage)} .bar .fix{background:var(--wrong)}
+.quick{display:flex;flex-wrap:wrap;justify-content:center;gap:.5rem;margin:0 0 1.1rem}
+.map{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin:0 0 .9rem}
+.sq{width:16px;height:16px;padding:0;border:none;border-radius:2px;cursor:pointer;display:inline-block;flex:none}
+.sq.new{background:rgba(217,192,164,.55)} .sq.tried{background:var(--sage)} .sq.master{background:var(--right)} .sq.fix{background:var(--wrong)}
+.map .sq:hover{outline:2px solid var(--ink);outline-offset:1px}
+.map-legend{display:flex;flex-wrap:wrap;justify-content:center;gap:.9rem;font-size:.8rem;color:var(--soft);margin:0 0 .3rem}
+.map-legend span{display:inline-flex;align-items:center;gap:.35rem}
+.map-legend .sq{width:11px;height:11px;cursor:default}
+.map-tip{text-align:center;font-size:.85rem;color:var(--mute);margin:.2rem 0 0}
+@media (max-width:600px){ .sq{width:18px;height:18px} }
+/* ── the Game round ── */
+.round-head{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin:0 0 .6rem}
+.round-head .dots{margin:0}
+.dots i.late{background:var(--caramel)}
+.streak{font-size:.8rem;font-weight:700;color:var(--caramel-ink);min-width:5.5rem;text-align:center}
+.newbest{display:inline-block;background:#14110E;color:var(--ring-ink);border-radius:999px;padding:.3rem .9rem;font-size:.85rem;font-weight:700;margin:.2rem 0 .6rem}
+.missed{width:100%;text-align:left;padding-left:1.1rem}
+.missed li{font-size:.92rem;line-height:1.5;margin:.35rem 0;color:var(--soft)}
+.dots.snap{animation:snap .45s cubic-bezier(.22,1,.36,1)}
+.sq{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 </style>
 </head>
 <body>
@@ -293,26 +322,56 @@ function openCard(html){ closeCard(); const s=document.createElement('div'); s.c
 function closeCard(){ const s=$('scrim'); if(s) s.remove(); }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeCard(); });
 
-/* ══ PRACTICE: ten transformations, marked in halves ══ */
+/* ══ PRACTICE: the map of the whole tab, then ten — or any one — at a time ══
+   Every transformation is a square, coloured by where the learner stands
+   with it, so the whole bank is visible, the progress is measurable and any
+   item can be chosen. The states come from what the app already records:
+     to fix    — a mistake the Ring is asking for now
+     new       — never answered
+     mastered  — right at least twice, the last two right, nothing to fix
+     tried     — everything in between
+   Corrections come at once: Practice is for learning, and a mistake fixed
+   while the learner is still thinking about it is the one that sticks. */
 let S=null;
+const LOGT=()=>{ try{ return (window.INTUITY&&INTUITY.items()[TOPIC])||{}; }catch(e){ return {}; } };
+/* "to fix" means due NOW: a mistake answered right today turns sage at once, and
+   turns clay again tomorrow when the Ring brings it back for the second time */
+function state(i,L){ let held=false; try{ if(window.IntuityRing){ if(IntuityRing.isDue(i.id)) return 'fix'; held=IntuityRing.has(i.id); } }catch(e){}
+  const r=L[i.id]; if(!r||!r.seen) return 'new'; if(!held&&r.right>=2&&/rr$/.test(r.trail||'')) return 'master'; return 'tried'; }
+const STATE_NAME={master:'mastered',tried:'tried',fix:'to fix',new:'new'};
 function gate(){
-  const n=pool().length, d=pool().filter(i=>due(i.id)).length;
-  $('practice').innerHTML=`<div class="q result"><p class="lead">Ten transformations from ${n}, marked as in the exam: two marks each, one for each half.${d?` <b>${d}</b> ${d===1?'is a mistake':'are mistakes'} from last time, so ${d===1?'it comes':'they come'} first.`:''}</p>
-    <button class="btn" type="button" id="pStart">Start</button></div>`;
-  $('pStart').onclick=start;
+  const L=LOGT(), P=pool(), st=new Map(P.map(i=>[i,state(i,L)])), c={master:0,tried:0,fix:0,new:0};
+  st.forEach(v=>c[v]++); const label=(SETS.find(x=>x[0]===set)||[])[1]||'';
+  const pc=k=>P.length?(100*c[k]/P.length).toFixed(2):0;
+  $('practice').innerHTML=`<div class="q map-card">
+    <p class="map-head"><b>${c.master}</b> mastered · <b>${c.fix}</b> to fix · <b>${c.tried}</b> tried · <b>${c.new}</b> new<span> — ${P.length} in ${esc(label)}</span></p>
+    <div class="bar" aria-hidden="true"><i class="master" style="width:${pc('master')}%"></i><i class="tried" style="width:${pc('tried')}%"></i><i class="fix" style="width:${pc('fix')}%"></i></div>
+    <div class="quick">
+      <button class="btn" type="button" data-q="new"${c.new?'':' disabled'}>${Math.min(10,c.new)||10} new</button>
+      <button class="btn quiet" type="button" data-q="fix"${c.fix?'':' disabled'}>${Math.min(10,c.fix)||10} to fix</button>
+      <button class="btn quiet" type="button" data-q="mix">10 mixed</button></div>
+    <div class="map" role="group" aria-label="Every transformation in ${esc(label)}">${P.map(i=>`<button class="sq ${st.get(i)}" type="button" data-id="${esc(i.id)}" title="${esc(i.k)} · ${STATE_NAME[st.get(i)]}" aria-label="${esc(i.k)}, ${STATE_NAME[st.get(i)]}"></button>`).join('')}</div>
+    <p class="map-legend"><span><i class="sq master"></i>Mastered</span><span><i class="sq tried"></i>Tried</span><span><i class="sq fix"></i>To fix</span><span><i class="sq new"></i>New</span></p>
+    <p class="map-tip">Tap any square to answer that one, or let the buttons choose ten.</p></div>`;
+  $('practice').querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{
+    const q=b.dataset.q, all=shuffle(P);
+    const pick=q==='new'?all.filter(i=>st.get(i)==='new'):q==='fix'?all.filter(i=>st.get(i)==='fix'):all.sort((x,y)=>due(y.id)-due(x.id));
+    start(pick.slice(0,10)); });
+  $('practice').querySelectorAll('.sq[data-id]').forEach(b=>b.onclick=()=>start([D.items.find(i=>i.id===b.dataset.id)],true));
 }
-function start(){ const all=shuffle(pool()); all.sort((a,b)=>due(b.id)-due(a.id)); S={items:all.slice(0,Math.min(10,all.length)),i:0,res:[],marks:0,fixed:0,half:0}; showQ(); }
+function start(items,single){ S={items,i:0,res:[],marks:0,fixed:0,half:0,single:!!single}; showQ(); }
 function showQ(){
   const i=S.items[S.i]; if(!i) return results();
-  const dots=S.items.map((x,k)=>`<i class="${S.res[k]===2?'ok':S.res[k]!==undefined?'no':k===S.i?'now':''}"></i>`).join('');
-  $('practice').innerHTML=`<div class="dots" aria-label="Transformation ${S.i+1} of ${S.items.length}">${dots}</div><div class="q">
+  const dots=S.single?'':S.items.map((x,k)=>`<i class="${S.res[k]===2?'ok':S.res[k]!==undefined?'no':k===S.i?'now':''}"></i>`).join('');
+  $('practice').innerHTML=`${dots?`<div class="dots" aria-label="Transformation ${S.i+1} of ${S.items.length}">${dots}</div>`:''}<div class="q">
     <p class="ask">Complete the second sentence so it means the same as the first. Use the word given and two to five words.</p>
     <p class="orig">${esc(i.s)}</p><span class="kw">${esc(i.k)}</span>
     <p class="sent">${second(i,'<span class="blank" id="blank">&nbsp;</span>')}</p>
     <div class="field" style="margin-top:.9rem"><input id="ans" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Two to five words" aria-label="Your answer"><button class="btn" type="button" id="chk">Check</button></div>
-    <div class="fb" id="fb" aria-live="polite"></div><div class="next-row hidden" id="nextRow"><button class="btn" type="button" id="next">${S.i+1<S.items.length?'Next':'See your result'}</button></div></div>`;
+    <div class="fb" id="fb" aria-live="polite"></div><div class="next-row hidden" id="nextRow"><button class="btn quiet" type="button" id="toMap">Back to the map</button><button class="btn" type="button" id="next">${S.single?'Another one':S.i+1<S.items.length?'Next':'See your result'}</button></div></div>`;
   const inp=$('ans'); $('chk').onclick=()=>answer(inp.value); inp.addEventListener('keydown',e=>{ if(e.key==='Enter') answer(inp.value); }); setTimeout(()=>inp.focus(),80);
-  $('next').onclick=()=>{ S.i++; showQ(); };
+  $('next').onclick=()=>{ if(S.single){ start(shuffle(pool()).sort((x,y)=>due(y.id)-due(x.id)).slice(0,10)); return; } S.i++; showQ(); };
+  $('toMap').onclick=gate;
 }
 function answer(v){
   const i=S.items[S.i], fb=$('fb'); if(S.res[S.i]!==undefined) return; const t=norm(v); if(!t) return;
@@ -333,42 +392,93 @@ function results(){
   const bits=[]; if(S.fixed) bits.push(`<b>${S.fixed}</b> ${S.fixed===1?'mistake':'mistakes'} fixed for good`); if(S.half) bits.push(`<b>${S.half}</b> right today — ${S.half===1?'it comes':'they come'} back tomorrow to make sure`);
   $('practice').innerHTML=`<div class="q result"><p class="kick" style="justify-content:center"><i></i>Practice</p><div class="big">${S.marks} of ${max}</div>
     <p class="lead">marks, two for each transformation</p><p class="ring-line">${bits.length?bits.join(' · ')+'. ':''}${waiting?`Still to fix here: <b>${waiting}</b>.`:'Nothing left to fix in this set.'}</p>
-    <button class="btn" type="button" id="again">Ten more</button></div>`;
-  $('again').onclick=start;
+    <div class="quick"><button class="btn quiet" type="button" id="toMap">See the map</button><button class="btn" type="button" id="again">Ten more</button></div></div>`;
+  $('again').onclick=()=>start(shuffle(pool()).sort((x,y)=>due(y.id)-due(x.id)).slice(0,10)); $('toMap').onclick=gate;
 }
 
-/* ══ GAME · BUILD IT — the key word in the ring; build the answer from tiles ══
-   The answer's own words, shuffled, with two traps from other answers.
-   Tap them in order; a wrong build costs a heart and starts again. */
-let B=null;
+/* ══ GAME · BUILD IT, IN ROUNDS OF SIX ══
+   A game needs a goal, stakes and a reason to play again, so:
+     goal    — six transformations to build, said before the round starts
+     stakes  — three hearts for the whole ROUND, not per sentence: every
+               mistake carries weight, and the last heart ends the round
+     return  — a personal best for each tab, kept on this phone
+   The six circles fill as you go: sage, built first time; caramel, built
+   after a mistake; clay, missed. A streak counts first-time builds in a row.
+   Corrections come at once, as on the Board; the measure is the round. */
+let B=null; const ROUND=6;
 const HEART='<svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.6-9.3C.9 8.3 3 4.5 6.7 4.5c2.1 0 3.6 1.1 5.3 3 1.7-1.9 3.2-3 5.3-3 3.7 0 5.8 3.8 4.3 7.2C19.5 16.4 12 21 12 21z"/></svg>';
-function buildStart(){ const q=shuffle(pool()); q.sort((a,b)=>due(b.id)-due(a.id)); B={q,at:0}; buildDeal(); }
+const bestKey=()=>'intuity.master4.best.'+set;
+const getBest=()=>{ try{ return +(localStorage.getItem(bestKey())||0); }catch(e){ return 0; } };
+const setBest=n=>{ try{ localStorage.setItem(bestKey(),String(n)); }catch(e){} };
+function buildStart(){
+  const best=getBest(), n=Math.min(ROUND,pool().length), played=(()=>{ try{ return localStorage.getItem(bestKey())!==null; }catch(e){ return false; } })();
+  $('game').innerHTML=`<div class="lab"><div class="ring"><span>${n}</span></div>
+    <p class="lead">${n} transformations to build. <b>Three hearts</b> for the whole round. ${played?`Your best here: <b>${best} of ${n}</b>.`:'Your first round sets the best to beat.'}</p>
+    <button class="btn" type="button" id="bGo">Start the round</button></div>`;
+  $('bGo').onclick=roundStart;
+}
+function roundStart(){ const q=shuffle(pool()); q.sort((a,b)=>due(b.id)-due(a.id)); B={items:q.slice(0,Math.min(ROUND,q.length)),k:0,res:[],hearts:3,streak:0,top:0,over:false}; buildDeal(); }
 function buildDeal(){
-  const i=B.q[B.at%B.q.length], words=halves(i.a[0]).join(' ').split(' ');
+  const i=B.items[B.k]; if(!i) return roundEnd();
+  const words=halves(i.a[0]).join(' ').split(' ');
   const others=[...new Set(D.items.filter(x=>x!==i).flatMap(x=>halves(x.a[0]).join(' ').split(' ')))].filter(w=>!words.map(norm).includes(norm(w)));
-  Object.assign(B,{i,need:words.length,tiles:shuffle(words.concat(shuffle(others).slice(0,2))).map((w,k)=>({w,k})),picked:[],hearts:3,state:''});
+  Object.assign(B,{i,need:words.length,tiles:shuffle(words.concat(shuffle(others).slice(0,2))).map((w,k)=>({w,k})),picked:[],miss:0,state:''});
   buildDraw();
 }
+function circles(){ return B.items.map((x,k)=>`<i class="${B.res[k]||(k===B.k&&!B.over?'now':'')}"></i>`).join(''); }
 function buildDraw(msg){
-  const i=B.i, done=B.state==='done', dead=B.hearts<=0;
-  $('game').innerHTML=`<div class="lab-head"><span>Build the missing words around the key word</span><span class="hearts">${[0,1,2].map(k=>HEART.replace('<svg',`<svg class="${k<B.hearts?'':'gone'}"`)).join('')}</span></div>
+  const i=B.i, done=B.state==='done', shown=B.state==='shown', last=B.k+1>=B.items.length||B.over;
+  $('game').innerHTML=`<div class="round-head"><div class="dots" aria-label="Transformation ${B.k+1} of ${B.items.length}">${circles()}</div>
+      <span class="streak${B.streak>=2?' on':''}">${B.streak>=2?B.streak+' in a row':''}</span>
+      <span class="hearts">${[0,1,2].map(k=>HEART.replace('<svg',`<svg class="${k<B.hearts?'':'gone'}"`)).join('')}</span></div>
     <div class="lab"><p class="orig" style="text-align:center">${esc(i.s)}</p>
       <div class="ring" id="ring"><span>${esc(i.k)}</span></div>
-      <p class="sent" style="text-align:center">${esc(i.b)} <span class="built" id="built">${done||dead?answerHTML(i.a[0]):B.picked.map(t=>`<span>${esc(t.w)}</span>`).join(' ')||'&nbsp;'}</span> ${esc(i.e)}</p>
-      <div class="tiles">${B.tiles.map(t=>`<button class="tile-btn" type="button" data-k="${t.k}"${B.picked.includes(t)||done||dead?' disabled':''}>${esc(t.w)}</button>`).join('')}</div>
-      <p class="lab-msg" aria-live="polite">${msg||(done?'Built.':dead?'Out of hearts — here it is.':`${B.picked.length} of ${B.need} words`)}</p>
-      ${done||dead?`<p class="gloss" style="text-align:center">${esc(i.why)}</p>`:''}
-      <div class="lab-foot"><button class="btn quiet" type="button" id="bUndo"${B.picked.length&&!done&&!dead?'':' disabled'}>Undo</button><button class="btn" type="button" id="bNext">${done||dead?'Next':'Skip'}</button></div></div>`;
+      <p class="sent" style="text-align:center">${esc(i.b)} <span class="built" id="built">${done||shown?answerHTML(i.a[0]):B.picked.map(t=>`<span>${esc(t.w)}</span>`).join(' ')||'&nbsp;'}</span> ${esc(i.e)}</p>
+      <div class="tiles">${B.tiles.map(t=>`<button class="tile-btn" type="button" data-k="${t.k}"${B.picked.includes(t)||done||shown?' disabled':''}>${esc(t.w)}</button>`).join('')}</div>
+      <p class="lab-msg" aria-live="polite">${msg||(done?(B.miss?'Built, after a mistake.':'Built first time.'):shown?(B.over?'Out of hearts — here it is.':'Here it is.'):`${B.picked.length} of ${B.need} words`)}</p>
+      ${done||shown?`<p class="gloss" style="text-align:center">${esc(i.why)}</p>`:''}
+      <div class="lab-foot"><button class="btn quiet" type="button" id="bUndo"${B.picked.length&&!done&&!shown?'':' disabled'}>Undo</button>
+        ${done||shown?`<button class="btn" type="button" id="bNext">${last?'See your round':'Next'}</button>`:`<button class="btn quiet" type="button" id="bShow">Show me</button>`}</div></div>`;
   $('game').querySelectorAll('.tile-btn').forEach(b=>b.onclick=()=>buildTap(B.tiles[+b.dataset.k]));
   $('bUndo').onclick=()=>{ B.picked.pop(); buildDraw(); };
-  $('bNext').onclick=()=>{ B.at++; buildDeal(); };              /* skipping is not a mistake */
+  if($('bNext')) $('bNext').onclick=()=>{ if(last) return roundEnd(); B.k++; buildDeal(); };
+  if($('bShow')) $('bShow').onclick=()=>{ if(!B.miss) remember(i,false); B.res[B.k]='no'; B.state='shown'; B.streak=0; buildDraw(); };
 }
 function buildTap(t){
   B.picked.push(t);
   if(B.picked.length<B.need){ buildDraw(); return; }
   const built=B.picked.map(x=>x.w).join(' ');
-  if(score(B.i,built)===2){ B.state='done'; remember(B.i,true); buildDraw(); $('ring').classList.add('snap'); }
-  else { B.hearts--; if(B.hearts<=0){ remember(B.i,false); buildDraw(); } else { B.picked=[]; buildDraw(`"${built}" is not it — try again.`); } $('ring').classList.add('shake'); }
+  if(score(B.i,built)===2){
+    B.state='done'; B.res[B.k]=B.miss?'late':'ok';
+    if(!B.miss){ remember(B.i,true); B.streak++; B.top=Math.max(B.top,B.streak); } else B.streak=0;
+    buildDraw(); $('ring').classList.add('snap');
+  } else {
+    if(!B.miss) remember(B.i,false);
+    B.miss++; B.hearts--; B.streak=0;
+    if(B.hearts<=0){ B.over=true; B.res[B.k]='no'; B.state='shown'; buildDraw(); }
+    else if(B.miss>=2){ B.res[B.k]='no'; B.state='shown'; buildDraw(`"${built}" is not it either.`); }
+    else { B.picked=[]; buildDraw(`"${built}" is not it — one more try.`); }
+    $('ring').classList.add('shake');
+  }
+}
+function roundEnd(){
+  /* a celebration has to mean something: on the very first round any score is a "best", so it
+     isn't called one — it becomes the best to beat. A new best is only one that beats an earlier one. */
+  const n=B.items.length, first=B.res.filter(r=>r==='ok').length, best=getBest(), firstRound=(()=>{ try{ return localStorage.getItem(bestKey())===null; }catch(e){ return false; } })();
+  const isBest=!firstRound&&first>best;
+  if(firstRound||first>best) setBest(first);
+  const missed=B.items.filter((x,k)=>B.res[k]!=='ok'&&B.res[k]!==undefined), unreached=B.items.filter((x,k)=>B.res[k]===undefined);
+  const head=first===n?'A perfect round.':isBest?'A new best.':firstRound?'Your first round.':B.over?'Out of hearts.':'Round complete.';
+  $('game').innerHTML=`<div class="lab result"><div class="dots">${B.items.map((x,k)=>`<i class="${B.res[k]||''}"></i>`).join('')}</div>
+    <p class="kick" style="justify-content:center"><i></i>${esc(head)}</p>
+    <div class="big">${first} of ${n}</div><p class="lead">built first time${B.top>=2?` · best streak ${B.top}`:''}${firstRound?` · your best to beat is now ${first}`:!isBest&&best?` · your best is ${best}`:''}</p>
+    ${isBest&&first>0?'<p class="newbest">New best for this tab</p>':''}
+    ${missed.length?`<ul class="missed">${missed.map(i=>`<li>${esc(i.b)} ${answerHTML(i.a[0])} ${esc(i.e)}</li>`).join('')}</ul>`:''}
+    ${unreached.length?`<p class="map-tip">${unreached.length} not reached — they'll be in the next round.</p>`:''}
+    ${missed.length?'<p class="ring-line">Every one you missed is in the Ring, so it comes back first.</p>':''}
+    <div class="quick"><button class="btn" type="button" id="bAgain">Play another round</button></div></div>`;
+  if(first===n||isBest){ const r=document.querySelector('#game .dots'); if(r) r.classList.add('snap'); }
+  $('bAgain').onclick=roundStart;
 }
 
 /* the header's real height, kept up to date as tabs wrap or the phone turns */

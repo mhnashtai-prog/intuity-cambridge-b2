@@ -235,6 +235,11 @@ main.wf{padding-top:calc(var(--wf-head,170px) + 1rem)}
     <button class="mode-btn" data-mode="game" type="button">Game</button>
   </div>
   <div class="set-tabs" id="sets"></div>
+  <!-- part 3: which level. Exam level is what B2 First sets; the warm-up is the easier
+       material, kept for students who need a step before the exam -->
+  <div class="view-row"><div class="seg" id="lvl" role="group" aria-label="Level">
+    <button type="button" data-lvl="B2">Exam level</button><button type="button" data-lvl="B1">Warm-up</button>
+  </div></div>
 </header>
 
 <main class="wf" id="wf">
@@ -257,7 +262,10 @@ const SETS=[['tense','Tenses'],['pv','Phrasal'],['phrase','Phrases'],['cond','Co
 const P=new URLSearchParams(location.search);
 let D=null, mode=P.get('mode')||'explore', set=P.get('set')||'mix';
 
-const pool=()=>D.items.filter(i=>set==='mix'||i.tab===set);
+/* every item is graded: B2 = what B2 First sets (two elements, one mark each); B1 = the warm-up */
+let lvl=new URLSearchParams(location.search).get('lvl')==='B1'?'B1':'B2';
+const pool=()=>D.items.filter(i=>(set==='mix'||i.tab===set)&&(i.level||'B2')===lvl);
+function emptyNote(){ return `<p class="lead">${lvl==='B1'?'No warm-up items in this tab. Try another tab, or Mix.':'No items in this tab yet.'}</p>`; }
 const due=id=>{ try{ return !!(window.IntuityRing&&IntuityRing.isDue(id)); }catch(e){ return false; } };
 function remember(i,right){
   try{ if(window.IntuityRing){ right?IntuityRing.right(i.id):IntuityRing.miss(i.id,{topic:TOPIC,part:PART}); } }catch(e){}
@@ -285,21 +293,25 @@ function score(i,t){ const vs=variants(norm(t)); let best=0;
   return best; }
 const keyIn=(i,t)=>variants(norm(t)).some(v=>v.split(' ').includes(i.k.toLowerCase()));
 function answerHTML(ans){ const [h1,h2]=halves(ans); return `<span class="half1">${esc(h1)}</span> <span class="half2">${esc(h2)}</span>`; }
-function second(i,inner){ return `${esc(i.b)} ${inner} ${esc(i.e)}`.trim(); }
+function second(i,inner){ const e=String(i.e||''); return `${esc(i.b)} ${inner}${/^[,.;:!?]/.test(e)?'':' '}${esc(e)}`.trim(); }
 
 /* ══ NAVIGATION ══ */
 function drawNav(){
   $('sets').innerHTML=SETS.map(([k,l])=>`<button class="vtab${k===set?' active':''}" type="button" data-set="${k}">${l}</button>`).join('');
   document.querySelectorAll('#modes .mode-btn').forEach(b=>{ const on=b.dataset.mode===mode; b.classList.toggle('active',on); on?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'); });
   ['explore','practice','game'].forEach(v=>$(v).classList.toggle('hidden',v!==mode));
-  history.replaceState(null,'',location.pathname+'?'+new URLSearchParams({mode,set}));
+  document.querySelectorAll('#lvl button').forEach(b=>{ const on=b.dataset.lvl===lvl; b.classList.toggle('on',on); b.setAttribute('aria-selected',on); });
+  const q=new URLSearchParams({mode,set}); if(lvl==='B1') q.set('lvl','B1');
+  history.replaceState(null,'',location.pathname+'?'+q);
 }
 function go(){ drawNav(); if(mode==='explore') explore(); else if(mode==='practice') gate(); else buildStart(); }
 $('modes').addEventListener('click',e=>{ const b=e.target.closest('[data-mode]'); if(b){ mode=b.dataset.mode; go(); } });
 $('sets').addEventListener('click',e=>{ const b=e.target.closest('[data-set]'); if(b){ set=b.dataset.set; go(); } });
+$('lvl').addEventListener('click',e=>{ const b=e.target.closest('[data-lvl]'); if(b){ lvl=b.dataset.lvl; go(); } });
 
 /* ══ EXPLORE: each transformation, its two marked halves on the card ══ */
 function explore(){
+  if(!pool().length){ $('explore').innerHTML=emptyNote(); return; }
   const is=pool(), label=(SETS.find(s=>s[0]===set)||[])[1];
   $('explore').innerHTML=`<p class="lead">Each card is one transformation. Tap it to see how the answer is built, and the two halves that earn a mark each.</p>
     <p class="count">${is.length} transformations in ${esc(label)}</p>
@@ -340,6 +352,7 @@ function state(i,L){ let held=false; try{ if(window.IntuityRing){ if(IntuityRing
   const r=L[i.id]; if(!r||!r.seen) return 'new'; if(!held&&r.right>=2&&/rr$/.test(r.trail||'')) return 'master'; return 'tried'; }
 const STATE_NAME={master:'mastered',tried:'tried',fix:'to fix',new:'new'};
 function gate(){
+  if(!pool().length){ $('practice').innerHTML=emptyNote(); return; }
   const L=LOGT(), P=pool(), st=new Map(P.map(i=>[i,state(i,L)])), c={master:0,tried:0,fix:0,new:0};
   st.forEach(v=>c[v]++); const label=(SETS.find(x=>x[0]===set)||[])[1]||'';
   const pc=k=>P.length?(100*c[k]/P.length).toFixed(2):0;
@@ -407,10 +420,11 @@ function results(){
    Corrections come at once, as on the Board; the measure is the round. */
 let B=null; const ROUND=6;
 const HEART='<svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.6-9.3C.9 8.3 3 4.5 6.7 4.5c2.1 0 3.6 1.1 5.3 3 1.7-1.9 3.2-3 5.3-3 3.7 0 5.8 3.8 4.3 7.2C19.5 16.4 12 21 12 21z"/></svg>';
-const bestKey=()=>'intuity.master4.best.'+set;
+const bestKey=()=>'intuity.master4.best.'+set+(lvl==='B1'?'.warm':'');
 const getBest=()=>{ try{ return +(localStorage.getItem(bestKey())||0); }catch(e){ return 0; } };
 const setBest=n=>{ try{ localStorage.setItem(bestKey(),String(n)); }catch(e){} };
 function buildStart(){
+  if(!pool().length){ $('game').innerHTML=emptyNote(); return; }
   const best=getBest(), n=Math.min(ROUND,pool().length), played=(()=>{ try{ return localStorage.getItem(bestKey())!==null; }catch(e){ return false; } })();
   $('game').innerHTML=`<div class="lab"><div class="ring"><span>${n}</span></div>
     <p class="lead">${n} transformations to build. <b>Three hearts</b> for the whole round. ${played?`Your best here: <b>${best} of ${n}</b>.`:'Your first round sets the best to beat.'}</p>
@@ -433,7 +447,7 @@ function buildDraw(msg){
       <span class="hearts">${[0,1,2].map(k=>HEART.replace('<svg',`<svg class="${k<B.hearts?'':'gone'}"`)).join('')}</span></div>
     <div class="lab"><p class="orig" style="text-align:center">${esc(i.s)}</p>
       <div class="ring" id="ring"><span>${esc(i.k)}</span></div>
-      <p class="sent" style="text-align:center">${esc(i.b)} <span class="built" id="built">${done||shown?answerHTML(i.a[0]):B.picked.map(t=>`<span>${esc(t.w)}</span>`).join(' ')||'&nbsp;'}</span> ${esc(i.e)}</p>
+      <p class="sent" style="text-align:center">${second(i,`<span class="built" id="built">${done||shown?answerHTML(i.a[0]):B.picked.map(t=>`<span>${esc(t.w)}</span>`).join(' ')||'&nbsp;'}</span>`)}</p>
       <div class="tiles">${B.tiles.map(t=>`<button class="tile-btn" type="button" data-k="${t.k}"${B.picked.includes(t)||done||shown?' disabled':''}>${esc(t.w)}</button>`).join('')}</div>
       <p class="lab-msg" aria-live="polite">${msg||(done?(B.miss?'Built, after a mistake.':'Built first time.'):shown?(B.over?'Out of hearts — here it is.':'Here it is.'):`${B.picked.length} of ${B.need} words`)}</p>
       ${done||shown?`<p class="gloss" style="text-align:center">${esc(i.why)}</p>`:''}
@@ -473,7 +487,7 @@ function roundEnd(){
     <p class="kick" style="justify-content:center"><i></i>${esc(head)}</p>
     <div class="big">${first} of ${n}</div><p class="lead">built first time${B.top>=2?` · best streak ${B.top}`:''}${firstRound?` · your best to beat is now ${first}`:!isBest&&best?` · your best is ${best}`:''}</p>
     ${isBest&&first>0?'<p class="newbest">New best for this tab</p>':''}
-    ${missed.length?`<ul class="missed">${missed.map(i=>`<li>${esc(i.b)} ${answerHTML(i.a[0])} ${esc(i.e)}</li>`).join('')}</ul>`:''}
+    ${missed.length?`<ul class="missed">${missed.map(i=>`<li>${second(i,answerHTML(i.a[0]))}</li>`).join('')}</ul>`:''}
     ${unreached.length?`<p class="map-tip">${unreached.length} not reached — they'll be in the next round.</p>`:''}
     ${missed.length?'<p class="ring-line">Every one you missed is in the Ring, so it comes back first.</p>':''}
     <div class="quick"><button class="btn" type="button" id="bAgain">Play another round</button></div></div>`;

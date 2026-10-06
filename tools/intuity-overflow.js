@@ -6,7 +6,7 @@
    shell stylesheet, WITHOUT defer:
 
      <link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=7">
-     <script src="/data/grammar-rules/intuity-overflow.js?v=2"></script>
+     <script src="/tools/intuity-overflow.js?v=2"></script>
 
    Why <head> and why no defer: the CSS below is injected the moment this
    file runs, before the browser paints anything, so a long row is born as

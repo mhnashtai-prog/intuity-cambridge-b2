@@ -9,7 +9,7 @@
    ═══════════════════════════════════════════════════════════════════════ */
 (function () {
 'use strict';
-
+   
 var CFG       = window.VOCAB || {};
 var DATA_URL  = '/data/similar-words/' + CFG.data + '.json';
 var SCORE_KEY = CFG.scoreKey;

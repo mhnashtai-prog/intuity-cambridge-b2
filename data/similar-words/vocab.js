@@ -106,7 +106,7 @@ function buildTabs() {
   wrap.innerHTML = tests.map(function (_, i) {
     var s = scores['test' + i];
     return '<button class="vtab' + (i === currentTest ? ' active' : '') +
-      '" type="button" data-i="' + i + '">' + (i + 1) +
+   '" type="button" data-i="' + i + '">Set ' + (i + 1) +
       (s ? ' <span class="pct">' + s.percentage + '%</span>' : '') + '</button>';
   }).join('');
   wrap.querySelectorAll('.vtab').forEach(function (b) {

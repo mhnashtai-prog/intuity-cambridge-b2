@@ -46,6 +46,16 @@
    (seven tabs wrap to two lines on a phone, so the height is never assumed) */
 main.wf{padding-top:calc(var(--wf-head,170px) + 1rem)}
 .lead{color:var(--soft);font-size:.95rem;line-height:1.5;margin:0 0 1rem;text-align:center}
+/* HOW MUCH THERE IS. Every topic tab carries its count, the top line turns
+   the topic into exam-sized sets, and says how much the whole Part holds —
+   the same three facts master-part4 shows. */
+.vtab .pct,#kind small{font-family:var(--f-mono,ui-monospace,monospace);font-size:.82em;opacity:.6;
+  margin-left:.3rem;font-variant-numeric:tabular-nums;font-weight:500}
+.vtab.none{opacity:.38}
+.view-row{margin:0 0 .35rem !important}
+.topline{font-family:var(--f-mono,ui-monospace,monospace);font-size:.6rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--mute);text-align:center;margin:0 0 1.1rem}
+.topline b{color:var(--ink);font-weight:600}
 .count{color:var(--mute);font-size:.85rem;text-align:center;margin:-.4rem 0 1rem}
 .hidden{display:none !important}
 
@@ -195,9 +205,21 @@ main.wf{padding-top:calc(var(--wf-head,170px) + 1rem)}
 .fam .k i{flex:none;width:1.1rem;height:.4rem;background:var(--caramel);display:block}
 .fam b{color:#14110E;font-weight:800}
 .fam span{color:var(--mute)}
+/* ── FLAT AND SQUARE: every card on the page is a sheet of paper, like the
+   rest of INTUITY. Buttons, words and fields stay pills. ── */
+.q,.lab,.map-card,.ring-line,.sc,.rule,.found .row{border-radius:0 !important}
+.field input{border-radius:999px !important}
+/* ── STOP: a running round has a close in its corner that ends it and goes
+   back to the start screen. ── */
+.has-stop{position:relative;padding-right:2.8rem !important}
+.stop{position:absolute;top:.6rem;right:.6rem;width:1.75rem;height:1.75rem;padding:0;border:none;
+  border-radius:50%;background:rgba(20,17,14,.09);color:#14110E;font-size:.85rem;line-height:1;
+  display:grid;place-items:center;cursor:pointer;z-index:2}
+.stop:hover{background:rgba(20,17,14,.16)}
+.stop:active{transform:scale(.94)}
 .card{border-radius:0}
 </style>
-    <link rel="stylesheet" href="/tools/intuity-pills.css?v=6">
+    <link rel="stylesheet" href="/tools/intuity-pills.css?v=7">
    <script src="/tools/intuity-overflow.js?v=2"></script>
 </head>
 <body>
@@ -214,12 +236,15 @@ main.wf{padding-top:calc(var(--wf-head,170px) + 1rem)}
   <div class="mode-selector" id="modes">
     <button class="mode-btn" data-mode="explore" type="button">Explore</button>
     <button class="mode-btn" data-mode="practice" type="button">Practice</button>
+    <!-- Exam is the Cambridge-format page; the same four modes sit there. -->
+    <a class="mode-btn" href="/skills/use-of-english/multiple-choice/multiple-choice.html">Exam</a>
     <button class="mode-btn" data-mode="game" type="button">Game</button>
   </div>
   <div class="set-tabs" id="sets"></div>
 </header>
 
 <main class="wf" id="wf">
+  <p class="topline" id="topline"></p>
   <section id="explore"></section>
   <section id="practice" class="hidden"></section>
   <section id="game" class="hidden"></section>
@@ -249,8 +274,12 @@ const parts=s=>{ const k=s.indexOf('___'); return {pre:s.slice(0,k),post:s.slice
 const filled=(s,w)=>{ const p=parts(s); return esc(p.pre)+'<b>'+esc(w)+'</b>'+esc(p.post); };
 
 /* ══ NAVIGATION ══ */
+const countIn=k=>D.items.filter(i=>k==='mix'||i.tab===k).length;
 function drawNav(){
-  $('sets').innerHTML=SETS.map(([k,l])=>`<button class="vtab${k===set?' active':''}" type="button" data-set="${k}">${l}</button>`).join('');
+  $('sets').innerHTML=SETS.map(([k,l])=>{ const n=countIn(k);
+    return `<button class="vtab${k===set?' active':''}${n?'':' none'}" type="button" data-set="${k}">${l}<span class="pct">${n}</span></button>`; }).join('');
+  { const n=pool().length, label=(SETS.find(x=>x[0]===set)||[])[1]||'', all=D.items.length, g=Math.ceil(n/8);
+    $('topline').innerHTML=`${esc(set==='mix'?'All topics':label)} · <b>${n}</b> questions · <b>${g}</b> ${g===1?'set':'sets'} of 8 · ${all} in Part 1`; }
   document.querySelectorAll('#modes .mode-btn').forEach(b=>{ const on=b.dataset.mode===mode; b.classList.toggle('active',on); on?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'); });
   ['explore','practice','game'].forEach(v=>$(v).classList.toggle('hidden',v!==mode));
   history.replaceState(null,'',location.pathname+'?'+new URLSearchParams({mode,set}));
@@ -281,15 +310,15 @@ function openCard(html){ closeCard(); const s=document.createElement('div'); s.c
 function closeCard(){ const s=$('scrim'); if(s) s.remove(); }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeCard(); });
 
-/* ══ PRACTICE: ten questions, mistakes first, the answer and the reason straight after ══ */
+/* ══ PRACTICE: eight questions — one exam set — mistakes first, the answer and the reason straight after ══ */
 let S=null;
 function gate(){
   const n=pool().length, d=pool().filter(i=>due(i.id)).length;
-  $('practice').innerHTML=`<div class="q result"><p class="lead">Ten questions from ${n} items, four options each, as in the exam.${d?` <b>${d}</b> ${d===1?'is a mistake':'are mistakes'} from last time, so ${d===1?'it comes':'they come'} first.`:''}</p>
+  $('practice').innerHTML=`<div class="q result"><p class="lead">Eight questions — one exam set — from ${n}, four options each, as in the exam.${d?` <b>${d}</b> ${d===1?'is a mistake':'are mistakes'} from last time, so ${d===1?'it comes':'they come'} first.`:''}</p>
     <button class="btn" type="button" id="pStart">Start</button></div>`;
   $('pStart').onclick=start;
 }
-function start(){ const all=shuffle(pool()); all.sort((a,b)=>due(b.id)-due(a.id)); S={items:all.slice(0,10),i:0,res:[],fixed:0,half:0}; showQ(); }
+function start(){ const all=shuffle(pool()); all.sort((a,b)=>due(b.id)-due(a.id)); S={items:all.slice(0,8),i:0,res:[],fixed:0,half:0}; showQ(); }
 function showQ(){
   const i=S.items[S.i]; if(!i) return results(); const p=parts(i.s);
   const dots=S.items.map((x,k)=>`<i class="${S.res[k]===true?'ok':S.res[k]===false?'no':k===S.i?'now':''}"></i>`).join('');
@@ -315,7 +344,7 @@ function results(){
   const bits=[]; if(S.fixed) bits.push(`<b>${S.fixed}</b> ${S.fixed===1?'mistake':'mistakes'} fixed for good`); if(S.half) bits.push(`<b>${S.half}</b> right today — ${S.half===1?'it comes':'they come'} back tomorrow to make sure`);
   $('practice').innerHTML=`<div class="q result"><p class="kick" style="justify-content:center"><i></i>Practice</p><div class="big">${r} of ${S.items.length}</div>
     <p class="lead">right</p><p class="ring-line">${bits.length?bits.join(' · ')+'. ':''}${waiting?`Still to fix here: <b>${waiting}</b>.`:'Nothing left to fix in this set.'}</p>
-    <button class="btn" type="button" id="again">Ten more</button></div>`;
+    <button class="btn" type="button" id="again">Eight more</button></div>`;
   $('again').onclick=start;
 }
 
@@ -373,6 +402,45 @@ document.addEventListener('visibilitychange',()=>{ if(document.hidden&&T&&tick){
 fetch('/data/use-of-english/multiple-choice/master-part1.json',{cache:'no-cache'}).then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); }).then(d=>{
   D=d; if(!SETS.some(s=>s[0]===set)) set='mix'; if(!['explore','practice','game'].includes(mode)) mode='explore'; go();
 }).catch(()=>{ $('explore').innerHTML='<p class="lead">The items didn’t load. Check your connection and reload.</p>'; });
+})();
+</script>
+<script>
+/* STOP. Once a panel has shown a Start button, any later screen without one
+   is a round in progress (or its result): it gets a ✕ that ends it and
+   redraws the start screen. Rounds that begin at once, with no Start, are
+   left alone — closing them would only restart them. */
+(function(){
+  var START='#pStart,#cStart,#bGo,#gStart,[data-q]';
+  ['practice','game'].forEach(function(id){
+    var p=document.getElementById(id); if(!p) return;
+    var busy=false;
+    function mark(){
+      if(busy) return; busy=true;
+      if(p.querySelector(START)) p.dataset.hasStart='1';
+      else if(p.dataset.hasStart && !p.querySelector('.stop')){
+        var card=p.querySelector('.q,.lab')||p;
+        card.classList.add('has-stop');
+        var b=document.createElement('button');
+        b.type='button'; b.className='stop'; b.setAttribute('aria-label','Stop and go back');
+        b.title='Stop and go back'; b.textContent='\u2715';
+        b.onclick=function(){
+          /* the page's code is private; its active topic tab redraws the
+             start screen through the same go() */
+          var t=document.querySelector('#sets .vtab.active, #sets [data-set].active');
+          if(t) t.click(); else location.reload();
+        };
+        card.appendChild(b);
+      }
+      busy=false;
+    }
+    new MutationObserver(mark).observe(p,{childList:true});
+    mark();
+  });
+  document.addEventListener('keydown',function(e){
+    if(e.key!=='Escape') return;
+    var b=document.querySelector('#practice .stop,#game .stop');
+    if(b && b.offsetParent && !document.querySelector('.card[role=dialog]')) b.click();
+  });
 })();
 </script>
 </body>

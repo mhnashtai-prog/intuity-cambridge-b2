@@ -39,7 +39,19 @@
 }
 .wf *{box-sizing:border-box}
 .wf button{font:inherit}
-.view-row{display:flex;justify-content:center;margin:0}
+.view-row{display:flex;justify-content:center;margin:0 0 .35rem}
+/* HOW MUCH THERE IS. Each topic tab carries its number of sentences at the
+   chosen level, each level its total — Exam level and Warm-up add up to the
+   whole bank — and the top line turns the topic into exam-sized sets of 6. */
+.vtab .pct,#lvl small{font-family:var(--f-mono,ui-monospace,monospace);font-size:.82em;opacity:.6;
+  margin-left:.3rem;font-variant-numeric:tabular-nums;font-weight:500}
+.vtab.none{opacity:.38}
+.topline{font-family:var(--f-mono,ui-monospace,monospace);font-size:.6rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--mute);text-align:center;margin:0 0 1.1rem}
+.topline b{color:var(--ink);font-weight:600}
+/* the Practice map, in exam-sized sets of 6 */
+.map .six{display:inline-flex;gap:3px;padding:2px;border-radius:4px}
+.map{gap:6px 8px !important}
 /* the shell's header is fixed; the content starts below it, at its measured height
    (seven tabs wrap to two lines on a phone, so the height is never assumed) */
 main.wf{padding-top:calc(var(--wf-head,170px) + 1rem)}
@@ -238,15 +250,17 @@ main.wf{padding-top:calc(var(--wf-head,170px) + 1rem)}
     <a class="mode-btn" href="/skills/use-of-english/word-transformation/word-transformation.html">Exam</a>
     <button class="mode-btn" data-mode="game" type="button">Game</button>
   </div>
-  <div class="set-tabs" id="sets"></div>
-  <!-- part 3: which level. Exam level is what B2 First sets; the warm-up is the easier
-       material, kept for students who need a step before the exam -->
+  <!-- Which level, then which topic — the order the exam page uses (mode →
+       material → test). Each level carries how many sentences it holds, so
+       the two add up to the whole bank. -->
   <div class="view-row"><div class="seg" id="lvl" role="group" aria-label="Level">
     <button type="button" data-lvl="B2">Exam level</button><button type="button" data-lvl="B1">Warm-up</button>
   </div></div>
+  <div class="set-tabs" id="sets"></div>
 </header>
 
 <main class="wf" id="wf">
+  <p class="topline" id="topline"></p>
   <section id="explore"></section>
   <section id="practice" class="hidden"></section>
   <section id="game" class="hidden"></section>
@@ -300,8 +314,17 @@ function answerHTML(ans){ const [h1,h2]=halves(ans); return `<span class="half1"
 function second(i,inner){ const e=String(i.e||''); return `${esc(i.b)} ${inner}${/^[,.;:!?]/.test(e)?'':' '}${esc(e)}`.trim(); }
 
 /* ══ NAVIGATION ══ */
+const countIn=(k,lv)=>D.items.filter(i=>(k==='mix'||i.tab===k)&&(i.level||'B2')===lv).length;
+const setsOf6=n=>Math.ceil(n/6);
 function drawNav(){
-  $('sets').innerHTML=SETS.map(([k,l])=>`<button class="vtab${k===set?' active':''}" type="button" data-set="${k}">${l}</button>`).join('');
+  $('sets').innerHTML=SETS.map(([k,l])=>{ const n=countIn(k,lvl);
+    return `<button class="vtab${k===set?' active':''}${n?'':' none'}" type="button" data-set="${k}">${l}<span class="pct">${n}</span></button>`; }).join('');
+  document.querySelectorAll('#lvl button').forEach(b=>{ const n=countIn('mix',b.dataset.lvl);
+    b.innerHTML=`${b.dataset.lvl==='B1'?'Warm-up':'Exam level'}<small>${n}</small>`; });
+  const n=pool().length, label=(SETS.find(s=>s[0]===set)||[])[1]||'', all=D.items.length;
+  $('topline').innerHTML=n
+    ? `${esc(set==='mix'?'All topics':label)} · <b>${n}</b> sentences · <b>${setsOf6(n)}</b> ${setsOf6(n)===1?'set':'sets'} of 6 · ${all} in Part 4`
+    : `${esc(label)} · no ${lvl==='B1'?'warm-up':'exam-level'} sentences · ${all} in Part 4`;
   document.querySelectorAll('#modes .mode-btn').forEach(b=>{ const on=b.dataset.mode===mode; b.classList.toggle('active',on); on?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'); });
   ['explore','practice','game'].forEach(v=>$(v).classList.toggle('hidden',v!==mode));
   document.querySelectorAll('#lvl button').forEach(b=>{ const on=b.dataset.lvl===lvl; b.classList.toggle('on',on); b.setAttribute('aria-selected',on); });
@@ -338,7 +361,7 @@ function openCard(html){ closeCard(); const s=document.createElement('div'); s.c
 function closeCard(){ const s=$('scrim'); if(s) s.remove(); }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeCard(); });
 
-/* ══ PRACTICE: the map of the whole tab, then ten — or any one — at a time ══
+/* ══ PRACTICE: the map of the whole tab, then six — or any one — at a time ══
    Every transformation is a square, coloured by where the learner stands
    with it, so the whole bank is visible, the progress is measurable and any
    item can be chosen. The states come from what the app already records:
@@ -364,16 +387,16 @@ function gate(){
     <p class="map-head"><b>${c.master}</b> mastered · <b>${c.fix}</b> to fix · <b>${c.tried}</b> tried · <b>${c.new}</b> new<span> — ${P.length} in ${esc(label)}</span></p>
     <div class="bar" aria-hidden="true"><i class="master" style="width:${pc('master')}%"></i><i class="tried" style="width:${pc('tried')}%"></i><i class="fix" style="width:${pc('fix')}%"></i></div>
     <div class="quick">
-      <button class="btn" type="button" data-q="new"${c.new?'':' disabled'}>${Math.min(10,c.new)||10} new</button>
-      <button class="btn quiet" type="button" data-q="fix"${c.fix?'':' disabled'}>${Math.min(10,c.fix)||10} to fix</button>
-      <button class="btn quiet" type="button" data-q="mix">10 mixed</button></div>
-    <div class="map" role="group" aria-label="Every transformation in ${esc(label)}">${P.map(i=>`<button class="sq ${st.get(i)}" type="button" data-id="${esc(i.id)}" title="${esc(i.k)} · ${STATE_NAME[st.get(i)]}" aria-label="${esc(i.k)}, ${STATE_NAME[st.get(i)]}"></button>`).join('')}</div>
+      <button class="btn" type="button" data-q="new"${c.new?'':' disabled'}>${Math.min(6,c.new)||6} new</button>
+      <button class="btn quiet" type="button" data-q="fix"${c.fix?'':' disabled'}>${Math.min(6,c.fix)||6} to fix</button>
+      <button class="btn quiet" type="button" data-q="mix">6 mixed</button></div>
+    <div class="map" role="group" aria-label="Every transformation in ${esc(label)}">${Array.from({length:setsOf6(P.length)},(_,g)=>`<span class="six" title="Set ${g+1}">${P.slice(g*6,g*6+6).map(i=>`<button class="sq ${st.get(i)}" type="button" data-id="${esc(i.id)}" title="${esc(i.k)} · ${STATE_NAME[st.get(i)]}" aria-label="${esc(i.k)}, ${STATE_NAME[st.get(i)]}"></button>`).join('')}</span>`).join('')}</div>
     <p class="map-legend"><span><i class="sq master"></i>Mastered</span><span><i class="sq tried"></i>Tried</span><span><i class="sq fix"></i>To fix</span><span><i class="sq new"></i>New</span></p>
-    <p class="map-tip">Tap any square to answer that one, or let the buttons choose ten.</p></div>`;
+    <p class="map-tip">Each group is a set of 6. Tap any square to answer that one, or let the buttons choose six.</p></div>`;
   $('practice').querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{
     const q=b.dataset.q, all=shuffle(P);
     const pick=q==='new'?all.filter(i=>st.get(i)==='new'):q==='fix'?all.filter(i=>st.get(i)==='fix'):all.sort((x,y)=>due(y.id)-due(x.id));
-    start(pick.slice(0,10)); });
+    start(pick.slice(0,6)); });
   $('practice').querySelectorAll('.sq[data-id]').forEach(b=>b.onclick=()=>start([D.items.find(i=>i.id===b.dataset.id)],true));
 }
 function start(items,single){ S={items,i:0,res:[],marks:0,fixed:0,half:0,single:!!single}; showQ(); }
@@ -387,7 +410,7 @@ function showQ(){
     <div class="field" style="margin-top:.9rem"><input id="ans" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Two to five words" aria-label="Your answer"><button class="btn" type="button" id="chk">Check</button></div>
     <div class="fb" id="fb" aria-live="polite"></div><div class="next-row hidden" id="nextRow"><button class="btn quiet" type="button" id="toMap">Back to the map</button><button class="btn" type="button" id="next">${S.single?'Another one':S.i+1<S.items.length?'Next':'See your result'}</button></div></div>`;
   const inp=$('ans'); $('chk').onclick=()=>answer(inp.value); inp.addEventListener('keydown',e=>{ if(e.key==='Enter') answer(inp.value); }); setTimeout(()=>inp.focus(),80);
-  $('next').onclick=()=>{ if(S.single){ start(shuffle(pool()).sort((x,y)=>due(y.id)-due(x.id)).slice(0,10)); return; } S.i++; showQ(); };
+  $('next').onclick=()=>{ if(S.single){ start(shuffle(pool()).sort((x,y)=>due(y.id)-due(x.id)).slice(0,6)); return; } S.i++; showQ(); };
   $('toMap').onclick=gate;
 }
 function answer(v){
@@ -410,7 +433,7 @@ function results(){
   $('practice').innerHTML=`<div class="q result"><p class="kick" style="justify-content:center"><i></i>Practice</p><div class="big">${S.marks} of ${max}</div>
     <p class="lead">marks, two for each transformation</p><p class="ring-line">${bits.length?bits.join(' · ')+'. ':''}${waiting?`Still to fix here: <b>${waiting}</b>.`:'Nothing left to fix in this set.'}</p>
     <div class="quick"><button class="btn quiet" type="button" id="toMap">See the map</button><button class="btn" type="button" id="again">Ten more</button></div></div>`;
-  $('again').onclick=()=>start(shuffle(pool()).sort((x,y)=>due(y.id)-due(x.id)).slice(0,10)); $('toMap').onclick=gate;
+  $('again').onclick=()=>start(shuffle(pool()).sort((x,y)=>due(y.id)-due(x.id)).slice(0,6)); $('toMap').onclick=gate;
 }
 
 /* ══ GAME · BUILD IT, IN ROUNDS OF SIX ══

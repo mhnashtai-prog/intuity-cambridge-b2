@@ -70,7 +70,8 @@ Promise.all((CFG.datasets || []).map(function (d) {
     .catch(function () { return null; });
 })).then(function (list) {
   BANKS = list;
-  var first = BANKS.findIndex(function (b) { return b; });
+  var want = parseInt(new URLSearchParams(location.search).get('bank'), 10);
+  var first = BANKS[want] ? want : BANKS.findIndex(function (b) { return b; });
   if (first < 0) throw new Error('nothing available yet');
   paintBanks();
   loadBank(first);
@@ -110,23 +111,64 @@ var T = function () { return TESTS[si]; };
    (header links, in the page), which bank or density (set-tabs), which
    test (the dots), how much of it (the view toggle). */
 function paintBanks() {
-  $('setTabs').innerHTML = (CFG.datasets || []).map(function (d, i) {
-    var ready = !!BANKS[i];
-    return '<button class="vtab' + (i === bi ? ' active' : '') + '" type="button" data-i="' + i + '"'
-      + (ready ? '' : ' disabled aria-disabled="true" title="Not written yet"') + '>'
-      + esc(d.name) + (ready ? ' <span class="pct">' + BANKS[i].tests.length + '</span>' : '')
-      + '</button>';
-  }).join('');
-  $('setTabs').querySelectorAll('.vtab').forEach(function (b) {
-    b.onclick = function () { if (!b.disabled && +b.dataset.i !== bi) loadBank(+b.dataset.i); };
-  });
+  /* THE SHARED HEADER (when the page gives CFG.seg). The material is one
+     toggle — Texts and the sentence banks, the same four options on both
+     pages; an option that belongs to the other page is a link to it. Each
+     carries how many tests it holds. */
+  if (CFG.seg && $('bankSeg')) {
+    $('bankSeg').innerHTML = CFG.seg.map(function (o) {
+      /* A density not written yet stays in the row, disabled: the ladder
+         8 · 12 · 15 · 20 is part of what the toggle teaches. */
+      if (o.soon) return '<button type="button" role="tab" aria-selected="false" disabled title="Coming soon">' + esc(o.label) + '</button>';
+      if (o.href) return '<button type="button" role="tab" aria-selected="false" data-href="' + esc(o.href) + '">'
+        + esc(o.label) + (o.n ? '<small>' + o.n + '</small>' : '') + '</button>';
+      if (!BANKS[o.bank]) return '<button type="button" role="tab" aria-selected="false" disabled title="Coming soon">' + esc(o.label) + '</button>';
+      return '<button type="button" role="tab" aria-selected="' + (o.bank === bi) + '" data-bank="' + o.bank + '">'
+        + esc(o.label) + '<small>' + BANKS[o.bank].tests.length + '</small></button>';
+    }).join('');
+    $('bankSeg').querySelectorAll('button').forEach(function (b) {
+      b.onclick = function () {
+        if (b.disabled) return;
+        if (b.dataset.href) { location.href = b.dataset.href; return; }
+        var i = +b.dataset.bank; if (i !== bi) loadBank(i);
+      };
+    });
+  } else {
+    $('setTabs').innerHTML = (CFG.datasets || []).map(function (d, i) {
+      var ready = !!BANKS[i];
+      return '<button class="vtab' + (i === bi ? ' active' : '') + '" type="button" data-i="' + i + '"'
+        + (ready ? '' : ' disabled aria-disabled="true" title="Not written yet"') + '>'
+        + esc(d.name) + (ready ? ' <span class="pct">' + BANKS[i].tests.length + '</span>' : '')
+        + '</button>';
+    }).join('');
+    $('setTabs').querySelectorAll('.vtab').forEach(function (b) {
+      b.onclick = function () { if (!b.disabled && +b.dataset.i !== bi) loadBank(+b.dataset.i); };
+    });
+  }
   paintTests(); syncHeader();
 }
 
-/* The tests as dots between the arrows. The dots ARE the label — which test
-   you are on and how many there are, read at a glance, where "Test 1 of 10"
-   needed reading. */
+function bestOf(i) {
+  try { var all = JSON.parse(localStorage.getItem(CFG.scoreKey) || '{}'); return (all[bi] || {})[i]; }
+  catch (e) { return undefined; }
+}
+
 function paintTests() {
+  /* THE SHARED HEADER: the tests as named tabs in the header's scroller —
+     intuity-overflow.js gives the row its grey pill and arrows. A finished
+     test carries its score; a perfect one, a star. */
+  if (CFG.seg) {
+    $('setTabs').innerHTML = TESTS.map(function (t, i) {
+      var p = bestOf(i), on = i === si;
+      return '<button class="vtab' + (on ? ' active' : '') + '" type="button" role="tab" aria-selected="' + on
+        + '" data-i="' + i + '">' + (TEXTS ? 'Text ' : 'Test ') + (i + 1)
+        + (p == null ? '' : '<span class="pct">' + (p === 100 ? '\u2605' : p + '%') + '</span>') + '</button>';
+    }).join('');
+    $('setTabs').querySelectorAll('.vtab').forEach(function (b) {
+      b.onclick = function () { if (+b.dataset.i !== si) loadTest(+b.dataset.i); };
+    });
+    return;
+  }
   if (!TESTS.length) { $('tdots').innerHTML = ''; return; }
   $('tdots').innerHTML = TESTS.map(function (t, i) {
     return '<button class="tdot' + (i === si ? ' cur' : '') + '" type="button" data-i="' + i
@@ -243,6 +285,7 @@ function render() {
    unit you are not on, so it moves you there first, then opens it. */
 function paintDots() {
   var qs = questions();
+  if (CFG.seg) $('qdots').style.display = view === 'one' ? '' : 'none';
   var here = view === 'one' && TEXTS ? gapsIn(T().text[qi]) : null;
   $('qdots').innerHTML = qs.map(function (q, i) {
     var k = keyOf(q, i), a = answers[k], c = 'qdot';
@@ -280,6 +323,11 @@ function paintBar() {
   /* The same wording the other three parts now use: the button says how
      many are left, so "why can't I submit" never has to be asked. */
   var left = questions().length - answered();
+  if ($('testInfo')) {
+    var nq = questions().length;
+    $('testInfo').textContent = (TEXTS ? 'Text ' : 'Test ') + (si + 1) + ' · ' + nq
+      + (TEXTS ? ' gaps' : ' sentences') + ' · ' + answered() + '/' + nq + ' done';
+  }
   $('btnSubmit').disabled = !all || marked;
   $('btnSubmit').textContent = marked ? 'Marked'
     : (left > 0 ? 'Submit \u2014 ' + left + ' to go' : 'Submit');
@@ -392,6 +440,7 @@ function submit() {
       }).join('')
     : '';
   saveScore(pct);
+  if (CFG.seg) paintTests();
   sfx(pct === 100 ? 'fanfare' : 'bowlLow');
   $('ov').classList.add('show');
 }
@@ -417,8 +466,8 @@ $('btnRepeat').onclick = function () {
   else delete answers[qi];
   marked = false; render();
 };
-$('prevSet').onclick = function () { loadTest(si - 1); };
-$('nextSet').onclick = function () { loadTest(si + 1); };
+if ($('prevSet')) $('prevSet').onclick = function () { loadTest(si - 1); };
+if ($('nextSet')) $('nextSet').onclick = function () { loadTest(si + 1); };
 $('ovClose').onclick = function () { $('ov').classList.remove('show'); };
 $('ovAgain').onclick = function () {
   $('ov').classList.remove('show'); answers = {}; marked = false; qi = 0; render();

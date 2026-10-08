@@ -522,8 +522,11 @@ function submit(timeUp){
   const t=tally();
   const hist=store.get(HIST,[]); const prev=hist.filter(h=>h.test===TEST_ID);
   const pb=prev.length?Math.max(...prev.map(h=>(h.r||0)+(h.u||0))):null;
-  hist.push({test:TEST_ID,date:new Date().toISOString().slice(0,10),rr:t.rr,ur:t.ur,r:t.r||0,u:t.u||0,mins:Math.round((S.end-S.start)/60000)});
-  store.set(HIST,hist); S.pb=pb!=null&&(t.r||0)+(t.u||0)>pb; store.set(KEY,S);
+  /* a paper handed in blank (or left until the clock ran out untouched) is not
+     an attempt: it would only add a false "below B1" to the history */
+  if(Object.values(S.a).some(v=>v!=null&&v!=='')){
+    hist.push({test:TEST_ID,date:new Date().toISOString().slice(0,10),rr:t.rr,ur:t.ur,r:t.r||0,u:t.u||0,mins:Math.round((S.end-S.start)/60000)});
+    store.set(HIST,hist); } S.pb=pb!=null&&(t.r||0)+(t.u||0)>pb; store.set(KEY,S);
   /* the paper feeds practice: Part 4 items share ids with Master Part 4, so a
      miss here is "to fix" there tomorrow; every answer is logged for the report */
   try{ PARTS.forEach(p=>p.qs.forEach(q=>{ const ok=markQ(p,q)===p.info.per;
@@ -564,7 +567,9 @@ function results(animate){
   $('rev').onclick=()=>{ reviewing=true; $('bar').classList.remove('hidden'); $('finish').textContent='Scores'; show(1); };
   $('again').onclick=()=>{ S=null; store.set(KEY,null); gate(); };
   const fill=()=>{ document.querySelectorAll('.prow .tr i').forEach(i=>i.style.width=i.dataset.w+'%');
-    $('pR').style.left=pos(t.r)+'%'; $('pU').style.left=pos(t.u)+'%'; };
+    $('pR').style.left=pos(t.r)+'%'; $('pU').style.left=pos(t.u)+'%';
+    /* two scores in the same place share one label instead of printing over each other */
+    if(Math.abs(pos(t.r)-pos(t.u))<6){ $('pR').querySelector('b').textContent='R · U'; $('pU').querySelector('b').textContent=''; } };
   const count=(el,disc,box,to,delay,done)=>{
     const end=to||122, p=v=>disc.style.setProperty('--p',pos(v));
     if(!animate||reduce){ el.textContent=label(to); p(end); box.classList.add('shown'); done&&done(); return; }

@@ -175,6 +175,8 @@
   .item .go{display:none;}
 
   .item[data-sub] .idx{font-size:1.6rem;}
+  /* the Master room is the playful one: its rings are orange, the exam's stay sage */
+  .item.fun .idx{--ring:#DD8E58;}
 
   .item.soon{cursor:default;}
   .item.soon .idx{box-shadow:none;}
@@ -263,20 +265,13 @@ const SKILLS = {
     {name:"Phrase Bank", url:"skills/similar-words/phrase-bank.html"},
     {name:"The Ultimate Challenge", url:"skills/challenge/challenge.html?section=vocabulary"}
   ],
-  /* each Part has its exam ring; a Part's learning ring sits beside it and
-     shares its number, so both Part 3 rings read 03 and Part 4 stays 04 */
+  /* Use of English opens on two doors, never on nine rings. EXAM is the
+     quiet room: one ring per paper part, then the full tests. MASTER is the
+     noisy one: explore, practise, play. A child picks a room first, so the
+     games are never one tap away from the exam she meant to sit. */
   english:[
-    {name:"Part 1 \u00b7 Multiple Choice Cloze", part:1, url:"skills/use-of-english/multiple-choice/multiple-choice.html"},
-    /* the Master rings go live one by one as each page ships — a ring that opens a
-       missing page loses a student's trust. Switch each on by removing its comment. */
-    {name:"Master \u00b7 Part 1", part:1, url:"skills/use-of-english/multiple-choice/master-part1.html"},
-    {name:"Part 2 \u00b7 Open Cloze", part:2, url:"skills/use-of-english/gap-fill/gap-fill.html"},
-    {name:"Master \u00b7 Part 2", part:2, url:"skills/use-of-english/gap-fill/master-part2.html"},
-    {name:"Part 3 \u00b7 Word Formation", part:3, url:"skills/use-of-english/word-formation/word-formation.html"},
-    {name:"Master \u00b7 Part 3", part:3, url:"skills/use-of-english/word-formation/word-families.html"},
-    {name:"Part 4 \u00b7 Key Word Transformation", part:4, url:"skills/use-of-english/word-transformation/word-transformation.html"},
-    {name:"Master \u00b7 Part 4", part:4, url:"skills/use-of-english/word-transformation/master-part4.html"},
-    {name:"Full tests", url:"skills/full-test/full-test.html"}
+    {name:"Exam practice", sub:"uoe-exam"},
+    {name:"Master pages", sub:"uoe-master", fun:true}
   ],
   reading:[
     {name:"Part 5 \u00b7 Multiple Choice", url:"skills/reading/multiple-choice-menu/reading-part5.html"},
@@ -307,6 +302,21 @@ const SKILLS = {
 };
   
 const SUB = {
+  /* area: the panel a sub belongs to, so a student coming back from one of
+     its pages (?openModal=english) lands in the same room she left */
+  "uoe-exam":{ title:"Exam practice", area:"english", items:[
+    {name:"Part 1 \u00b7 Multiple Choice Cloze", part:1, url:"skills/use-of-english/multiple-choice/multiple-choice.html"},
+    {name:"Part 2 \u00b7 Open Cloze", part:2, url:"skills/use-of-english/gap-fill/gap-fill.html"},
+    {name:"Part 3 \u00b7 Word Formation", part:3, url:"skills/use-of-english/word-formation/word-formation.html"},
+    {name:"Part 4 \u00b7 Key Word Transformation", part:4, url:"skills/use-of-english/word-transformation/word-transformation.html"},
+    {name:"Full tests", part:5, url:"skills/full-test/full-test.html"}
+  ]},
+  "uoe-master":{ title:"Master pages", area:"english", fun:true, items:[
+    {name:"Master \u00b7 Part 1", part:1, url:"skills/use-of-english/multiple-choice/master-part1.html"},
+    {name:"Master \u00b7 Part 2", part:2, url:"skills/use-of-english/gap-fill/master-part2.html"},
+    {name:"Master \u00b7 Part 3", part:3, url:"skills/use-of-english/word-formation/word-families.html"},
+    {name:"Master \u00b7 Part 4", part:4, url:"skills/use-of-english/word-transformation/master-part4.html"}
+  ]},
   essays:{ title:"Essays", items:[
     {name:"Browse questions", url:"skills/writing/essays/essay-question.html"},
     {name:"Structures", url:"skills/writing/essays/essay-model.html"},
@@ -636,6 +646,7 @@ function buildMap(){
   let lastFocus = null;
 let panelStack = [];
 let currentKey = null;
+let currentSub = null, currentFun = false;
 
 function itemHTML(o, n){
     const num = o.noNum ? '0' : String(o.part || n+1).padStart(2,'0');
@@ -645,10 +656,10 @@ function itemHTML(o, n){
     return '<div class="item soon">'+idx+'<span class="lbl">'+o.name+'</span>'+
            '<span class="tag">Soon</span></div>';
   if(o.sub)
-    return '<button class="item" type="button" data-sub="'+o.sub+'">'+idx+
+    return '<button class="item'+(o.fun?' fun':'')+'" type="button" data-sub="'+o.sub+'">'+idx+
            '<span class="lbl">'+o.name+'</span>'+
            '<span class="go" aria-hidden="true">&rsaquo;</span></button>';
-  return '<button class="item" type="button" data-url="'+o.url+'">'+idx+
+  return '<button class="item'+(o.fun?' fun':'')+'" type="button" data-url="'+o.url+'">'+idx+
          '<span class="lbl">'+o.name+'</span><span class="go">&rarr;</span></button>';
 }
 
@@ -660,7 +671,7 @@ function paintPanel(title, list, accent, back){
       ? '<button class="backlink" id="panelBack" type="button">&larr; '+back+'</button>'
       : '<div class="kick"><i></i>Cambridge B2 First</div>')+
     '<h2>'+title+'</h2>'+
-    '<div class="items">'+list.map(itemHTML).join('')+'</div>';
+    '<div class="items">'+list.map((o,n)=>itemHTML(currentFun?Object.assign({fun:true},o):o,n)).join('')+'</div>';
 
   $('panelWrap').classList.add('open');
   $('panelX').onclick = closePanel;
@@ -670,6 +681,7 @@ function paintPanel(title, list, accent, back){
 $('panel').querySelectorAll('.item[data-url]').forEach(el => {
   el.onclick = () => {
     if(currentKey) sessionStorage.setItem('intuitySubmenu', currentKey);
+    try{ sessionStorage.setItem('intuitySubPanel', currentSub||''); }catch(e){}
     location.href = el.dataset.url;
   };
 });
@@ -689,15 +701,17 @@ function openPanel(key, i){
   const area = AREAS[i];
   lastFocus = document.activeElement;
   panelStack = [];
-  currentKey = key;
+  currentKey = key; currentSub = null; currentFun = false;
   history.pushState({panel:key}, '', location.pathname);
   paintPanel(area.name, list, accentFor(area.tone.bg), null);
 }
 
 function openSub(subKey, accent, parentTitle){
   const s = SUB[subKey]; if(!s) return;
-  const back = () => paintPanel(parentTitle, SKILLS.writing, accent, null);
+  const parentList = SKILLS[s.area || currentKey || 'writing'] || SKILLS.writing;
+  const back = () => { currentSub = null; currentFun = false; paintPanel(parentTitle, parentList, accent, null); };
   panelStack.push(back);
+  currentSub = subKey; currentFun = !!s.fun;
   paintPanel(s.title, s.items, accent, parentTitle);
 }
 
@@ -779,7 +793,11 @@ function accentFor(bg){
       /* Writing's links carry &submenu=essays and the like — a second level
          the panel already knows how to draw but was never told to open.
          Deferred a frame so it lands on top of the panel just painted. */
-      const wantSub = q.get('submenu');
+      let wantSub = q.get('submenu');
+      /* no submenu in the link (every Use of English page says just
+         ?openModal=english): reopen the room the student left from */
+      if(!wantSub){ try{ const last = sessionStorage.getItem('intuitySubPanel');
+        if(last && SUB[last] && SUB[last].area === wantPanel) wantSub = last; }catch(e){} }
       if(wantSub && typeof SUB === 'object' && SUB[wantSub]){
         requestAnimationFrame(() => {
           openSub(wantSub, accentFor(AREAS[idx].tone.bg), AREAS[idx].name);

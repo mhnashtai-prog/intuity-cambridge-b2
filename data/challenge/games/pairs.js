@@ -43,7 +43,7 @@
         /* open cloze is one word only; in Game that is a reminder, not a lost life */
         if (oc && /\s/.test(v)){ const fb = document.getElementById('fb'); if (fb) fb.innerHTML = '<b>One word only</b> — in Part 2 every gap takes exactly one word.'; inp.select(); return; }
         if (ctx.nudge && (r.alsoRight || []).map(K.norm).includes(v) && ctx.nudge(r.alsoNote)){ K.shake(inp); inp.select(); return; }
-        const ok = r.answer.map(K.norm).includes(v), again = ctx.answer(ok, inp.value.trim());
+        const ok = K.same(v, r.answer), again = ctx.answer(ok, inp.value.trim());
         if (ok){ const s = document.createElement('span'); s.className = 'gk-good'; s.textContent = inp.value.trim(); inp.replaceWith(s); }
         else K.shake(inp);
         if (!again){ host.dataset.locked = '1'; if (!ok){ inp.disabled = true; } btn.disabled = true; } else if (!ok) inp.select();

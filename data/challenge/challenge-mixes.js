@@ -87,7 +87,7 @@
     const groups = [];
     for (let k = 0; k < n; k++){
       const part = items.slice(k * size, (k + 1) * size); if (!part.length) continue;
-      groups.push({ id: topicId + '-mix-' + (k + 1), label: 'Mix ' + (k + 1),
+      groups.push({ id: topicId + '-mix-' + (k + 1), label: 'Set ' + (k + 1),
                     color: COLORS[k % COLORS.length], desc: (d.topic || t.label) + ' \u00b7 ' + part.length + ' sentences',
                     items: part });
     }
@@ -295,4 +295,50 @@
   }
 
   window.ChallengeMixes = { load, dress, RULES, loadVocab, dressVocab, VOCAB };
+})();
+
+/* ═══ DEFUSE'S MODE ROW, FROM THE TOPIC'S OWN PAGE ══════════════════════════
+   Defuse is one document for every topic, so its row was written for tenses
+   and rewritten for the topic only after the sentences loaded: a student who
+   tapped Board early landed on the tenses Board, and a topic's Game never
+   appeared at all. Now the links are put right the moment the page opens,
+   and the row is then copied from the topic's own page, exactly as the Board
+   does, so Explore · Practice · Quiz · Game · Defuse · Board read the same
+   on every page of a topic. */
+(function(){
+  if (!/tenses-(defuse|forge)/.test(location.pathname)) return;
+  var id = new URLSearchParams(location.search).get('topic');
+  var RULES = { passive:'passive-voice-rules', tenses:'tenses-rules', conditionals:'conditionals-rules',
+    'past-modals':'past-modals-rules', comparatives:'comparatives-rules', reported:'reported-speech-rules',
+    linking:'linking-words-rules', inversion:'inversion-rules', gerunds:'gerunds-infinitives-rules',
+    misc:'miscellaneous-rules' };
+  if (!id || !RULES[id]) return;
+  var here = /tenses-forge/.test(location.pathname) ? 'Forge' : 'Defuse';
+  var page = '/skills/grammar-rules/' + RULES[id];
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function quick(){
+    document.querySelectorAll('.mode-selector a.mode-btn').forEach(function(a){
+      var h = a.getAttribute('href') || '';
+      if (/tenses-rules/.test(h)) a.setAttribute('href', h.replace('tenses-rules', RULES[id]));
+      else if (/challenge\.html\?board=1/.test(h)) a.setAttribute('href', '/skills/challenge/challenge.html?board=1&topic=' + encodeURIComponent(id));
+    });
+  }
+  function full(){
+    fetch(page + '.html', { cache:'no-store' }).then(function(r){ return r.text(); }).then(function(html){
+      var doc = new DOMParser().parseFromString(html, 'text/html');
+      var src = doc.querySelector('.mode-selector'), row = document.querySelector('.mode-selector');
+      if (!src || !row) return;
+      var out = [];
+      Array.prototype.forEach.call(src.children, function(el){
+        var label = el.textContent.trim(), m = el.dataset && el.dataset.mode, href = el.getAttribute && el.getAttribute('href');
+        if (!label || el.classList.contains('mode-soon')) return;
+        if (label.toLowerCase() === here.toLowerCase()) { out.push('<span class="mode-btn active" aria-current="page">' + esc(here) + '</span>'); return; }
+        var go = m ? page + '?mode=' + m : href ? (function(u){ return u.pathname + u.search; })(new URL(href, location.origin + page)) : '';
+        if (go) out.push('<a class="mode-btn" href="' + esc(go) + '">' + esc(label) + '</a>');
+      });
+      if (out.length) row.innerHTML = out.join('');
+    }).catch(function(){});
+  }
+  function go(){ quick(); full(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
 })();

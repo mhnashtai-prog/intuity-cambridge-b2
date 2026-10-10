@@ -27,6 +27,29 @@
     const s = document.createElement('style'); s.id = id; s.textContent = css; document.head.appendChild(s);
   };
   K.norm = s => String(s).toLowerCase().replace(/[’']/g, "'").replace(/[.!?,]/g, '').replace(/\s+/g, ' ').trim();
+  /* ONE ANSWER, ANY SPELLING OF ITS CONTRACTIONS. Typed answers were marked
+     by exact match, so "need not have taken" failed where the key said
+     "needn't", and "I'd finished" failed against "I had finished" — and a
+     fifteen-year-old types the contracted form. Every unambiguous
+     contraction is expanded on both sides before comparing. 'd and 's are
+     NOT collapsed: 'd is had OR would, the very distinction Part 4 tests, so
+     "I'd" counts only where the key itself has "had" or "would" there. */
+  const base = s => String(s).toLowerCase().replace(/[’‘`]/g, "'").replace(/[.!?,;:]/g, '').replace(/\s+/g, ' ').trim();
+  const expand = s => s.replace(/\bwon't\b/g, 'will not').replace(/\bcan't\b/g, 'can not').replace(/\bcannot\b/g, 'can not')
+    .replace(/\bshan't\b/g, 'shall not').replace(/n't\b/g, ' not').replace(/'ve\b/g, ' have').replace(/'ll\b/g, ' will')
+    .replace(/'re\b/g, ' are').replace(/\bi'm\b/g, 'i am').replace(/\s+/g, ' ').trim();
+  const AMBIG = [[/'d\b/g, [' had', ' would']],
+                 [/\b(he|she|it|that|there|who|what|where|here)'s\b/g, ['$1 is', '$1 has']]];
+  const forms = s => {
+    let out = [expand(base(s))];
+    AMBIG.forEach(([re, reps]) => {
+      const next = [];
+      out.forEach(f => { next.push(f); if (f.match(re)) reps.forEach(r => next.push(f.replace(re, r).replace(/\s+/g, ' ').trim())); });
+      out = next;
+    });
+    return out;
+  };
+  K.same = (given, answers) => { const g = forms(given); return [].concat(answers).some(a => forms(a).some(x => g.indexOf(x) >= 0)); };
   K.shake = el => { if (!el) return; el.classList.remove('gk-shake'); void el.offsetWidth; el.classList.add('gk-shake'); };
 
   /* a tile played in steps: miss() charges a life for EVERY wrong move and

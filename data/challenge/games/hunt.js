@@ -109,12 +109,14 @@
 .ht-w.ht-clue{text-decoration:underline dotted;text-decoration-thickness:2px;text-underline-offset:.3em;text-decoration-color:var(--caramel,#C2956E)}
 .ht-w.ht-fine{background:rgba(74,107,92,.12)}
 .ht-board .ht-w.ht-hit.ht-err{text-decoration:line-through;text-decoration-thickness:2px}
-.ht-tip{position:relative;margin:-.35rem 0 .8rem;padding:.75rem .8rem .8rem;border-radius:14px;background:var(--ring-core,#201E1C);color:var(--ring-ink,#E5D1B8)}
-.ht-tip::before{content:'';position:absolute;top:-7px;left:calc(var(--arrow,1.4rem) - 7px);border:7px solid transparent;border-top:0;border-bottom-color:var(--ring-core,#201E1C)}
-.ht-tip-h{display:block;font-family:var(--f-display,system-ui);font-size:.82rem;margin:0 0 .55rem;color:var(--ring-ink,#E5D1B8)}
-.ht-tip-h b{color:#fff}
+.ht-tip{position:relative;margin:-.35rem 0 .8rem;padding:.75rem .8rem .8rem;border-radius:14px;background:#EFEAE2;border:1px solid var(--rule,#D8CFC2);color:var(--ink,#2B2129)}
+.ht-tip::before{content:'';position:absolute;top:-8px;left:calc(var(--arrow,1.4rem) - 8px);border:8px solid transparent;border-top:0;border-bottom-color:var(--rule,#D8CFC2)}
+.ht-tip::after{content:'';position:absolute;top:-7px;left:calc(var(--arrow,1.4rem) - 7px);border:7px solid transparent;border-top:0;border-bottom-color:#EFEAE2}
+.ht-tip-h{display:block;font-family:var(--f-display,system-ui);font-size:.82rem;margin:0 0 .55rem;color:var(--dim,#5C4E52)}
+.ht-tip-h b{color:var(--ink,#2B2129)}
 .ht-opts{display:flex;flex-wrap:wrap;gap:.45rem}
-.ht-opt{font:inherit;font-family:var(--f-display,system-ui);font-weight:700;font-size:1rem;padding:.5rem .95rem;border:none;border-radius:999px;background:var(--sheet,#FEFCF9);color:var(--ink,#201E1C);cursor:pointer}
+.ht-opt{font:inherit;font-family:var(--f-display,system-ui);font-weight:700;font-size:1rem;padding:.5rem .95rem;border:1px solid var(--rule,#D8CFC2);border-radius:999px;background:var(--sheet,#FEFCF9);color:var(--ink,#2B2129);cursor:pointer;box-shadow:0 1px 0 rgba(43,33,41,.06)}
+.ht-opt:hover:not(:disabled){background:#F6F1E8}
 .ht-opt:focus-visible{outline:3px solid var(--caramel,#C2956E);outline-offset:2px}
 .ht-opt.ht-no{text-decoration:line-through;opacity:.45;cursor:default}
 .ht-board .ht-tip .ht-opt{cursor:pointer}

@@ -173,7 +173,7 @@
       const go = () => {
         if (host.dataset.locked || !inp) return; const v = K.norm(inp.value); if (!v) return;
         const struck = [...hit].sort((x, y) => x - y), struckText = struck.map(i => words[i]).join(' ');
-        const fixOk = r.answer.map(K.norm).includes(v);
+        const fixOk = K.same(v, r.answer);
         const ok = fixOk && foundIt(struck);
         const again = ctx.answer(ok, (r.wrong ? '[' + struckText + '] → ' : '') + inp.value.trim());
         if (ok){

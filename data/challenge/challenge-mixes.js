@@ -272,6 +272,11 @@
                       color: COLORS[groups.length % COLORS.length], desc: t.desc, items: part });
       }
     });
+    /* every sentence gets the id the Board gives it (v-<fingerprint>-choose,
+       the same formula as challenge.html), so a sentence missed in Defuse
+       is the one the vocabulary Board brings back first */
+    const fp = s => { let h = 5381; s = String(s); for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36); };
+    groups.forEach(g => g.items.forEach(it => { if (!it.id) it.id = 'v-' + fp([it.cue, it.answer, it.after].join('|')) + '-choose'; }));
     /* the page's current verb rides along as ?verb=take — open on that tab */
     try { const u = new URL(location.href), verb = u.searchParams.get('verb');
       if (verb && !u.searchParams.get('set')){ const g = groups.find(x => x.id === id + '-' + verb);

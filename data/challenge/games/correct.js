@@ -15,7 +15,7 @@
       <button class="cg-btn" type="button" id="cgCheck">Check</button></div>`;
     const inp=host.querySelector('#cgIn'), go=()=>{
       if(host.dataset.locked) return; const v=norm(inp.value); if(!v) return;
-      const ok=r.answer.map(norm).includes(v), again=ctx.answer(ok,inp.value.trim());
+      const ok=(window.GameKit&&GameKit.same?GameKit.same(v,r.answer):r.answer.map(norm).includes(v)), again=ctx.answer(ok,inp.value.trim());
       if(!ok&&!ctx.exam){ inp.classList.add('cg-shake'); setTimeout(()=>inp.classList.remove('cg-shake'),450); }
       if(!again){ host.dataset.locked='1'; inp.disabled=true; host.querySelector('#cgCheck').disabled=true; } else inp.select();
     };

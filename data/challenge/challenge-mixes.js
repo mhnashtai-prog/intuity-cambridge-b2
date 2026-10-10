@@ -47,7 +47,9 @@
     } else return null;
     const g = splitGap(line || ''); if (!g) return null;
     const cue = lead ? (lead.replace(/\s+$/, '') + ' \u2192 ' + g.before).trim() : g.before;
-    return { cue, after: g.after, answer: r.answer, options: r.options.slice(),
+    /* id: the round's own, so Defuse and Forge write to the Ring under the
+       same name the Board and the Challenge use for this sentence */
+    return { id: r.id || '', cue, after: g.after, answer: r.answer, options: r.options.slice(),
              note: r.note || '', tense: r.tag || '' };
   }
 
@@ -60,7 +62,7 @@
     c.options.forEach(o => { if (o === c.answer) return;
       o.trim().split(/\s+/).forEach(w => { const k = w.toLowerCase();
         if (!inAns.has(k) && !extra.some(x => x.toLowerCase() === k)) extra.push(w); }); });
-    return { cue: c.cue, after: c.after, answer, bank: answer.concat(extra.slice(0, 5)),
+    return { id: c.id, cue: c.cue, after: c.after, answer, bank: answer.concat(extra.slice(0, 5)),
              note: c.note, tense: c.tense };
   }
 

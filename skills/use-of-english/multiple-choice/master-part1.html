@@ -218,6 +218,13 @@ main.wf{padding-top:calc(var(--wf-head,170px) + 1rem)}
 .stop:hover{background:rgba(20,17,14,.16)}
 .stop:active{transform:scale(.94)}
 .card{border-radius:0}
+
+.next-row.auto{display:block;width:100%;height:2px;margin-top:1rem;border-radius:2px;
+  background:linear-gradient(var(--caramel,#B98B5E),var(--caramel,#B98B5E)) left/100% 100% no-repeat,var(--rule,#D8CFC2);
+  animation:goBar var(--ms,1100ms) linear forwards}
+.next-row.auto > *{display:none}
+@keyframes goBar{to{background-size:0% 100%,auto}}
+@media (prefers-reduced-motion:reduce){.next-row.auto{animation:none}}
 </style>
     <link rel="stylesheet" href="/tools/intuity-pills.css?v=7">
    <script src="/tools/intuity-overflow.js?v=2"></script>
@@ -329,6 +336,23 @@ function showQ(){
   $('practice').querySelectorAll('.opt').forEach(b=>b.onclick=()=>answer(b));
   $('next').onclick=()=>{ S.i++; showQ(); };
 }
+/* NO "NEXT" BUTTON. After an answer the page moves on by itself: about a
+   second after a right answer, longer after a wrong one so the answer and
+   its reason are read. A thin line shows it is about to go; any tap or
+   Enter skips the wait. The button is still there, hidden, so the flow
+   behind it (last question → result) is exactly the one it always was. */
+let goT=null, goOff=null;
+function autoNext(ms){
+  const row=$('nextRow'), nb=$('next'); if(!row||!nb) return;
+  if(goOff) goOff(); clearTimeout(goT);
+  row.classList.remove('hidden'); row.classList.add('auto'); row.style.setProperty('--ms',ms+'ms');
+  const done=()=>{ clearTimeout(goT); if(goOff) goOff(); if(nb.isConnected) nb.click(); };
+  const tap=e=>{ if(!nb.isConnected){ goOff&&goOff(); return; } if(e.target.closest&&e.target.closest('a,header,.mode-btn,.vtab,.seg,button.tab')) return; done(); };
+  const key=e=>{ if(!nb.isConnected){ goOff&&goOff(); return; } if(e.key==='Enter'||e.key===' '){ e.preventDefault(); done(); } };
+  const arm=setTimeout(()=>{ document.addEventListener('pointerdown',tap,true); document.addEventListener('keydown',key,true); },300);
+  goOff=()=>{ clearTimeout(arm); document.removeEventListener('pointerdown',tap,true); document.removeEventListener('keydown',key,true); goOff=null; };
+  goT=setTimeout(done,ms);
+}
 function answer(btn){
   const i=S.items[S.i]; if(S.res[S.i]!==undefined) return; const right=btn.dataset.o===i.a;
   S.res[S.i]=right; const was=(()=>{ try{ return IntuityRing.has(i.id); }catch(e){ return false; } })();
@@ -336,7 +360,7 @@ function answer(btn){
   $('practice').querySelectorAll('.opt').forEach(b=>{ b.disabled=true; if(b.dataset.o===i.a) b.classList.add('ok'); }); if(!right) btn.classList.add('no');
   $('blank').textContent=i.a;
   $('fb').innerHTML=(right?'<b class="ok">Right.</b> ':`<b class="no">The answer: ${esc(i.a)}.</b> `)+esc(i.why);
-  $('nextRow').classList.remove('hidden'); $('next').focus();
+  autoNext(right?1100:3200);
 }
 function results(){
   const r=S.res.filter(Boolean).length, waiting=(()=>{ try{ return pool().filter(i=>IntuityRing.has(i.id)).length; }catch(e){ return 0; } })();

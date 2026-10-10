@@ -337,7 +337,7 @@ body.board-page .board-toggle .viewtog{margin:0}
 <!-- what happened (the report reads it) and what to bring back (the Ring) -->
 <script src="/tools/intuity-log.js?v=1"></script>
 <script src="/tools/intuity-ring.js?v=1"></script>
-<script src="/data/challenge/challenge-mixes.js?v=7"></script>
+<script src="/data/challenge/challenge-mixes.js?v=8"></script>
 <script>
 (function(){
 'use strict';
@@ -367,10 +367,19 @@ const NOTE={game:'Game · fourteen tiles, fourteen games — Defuse, Swing, Knoc
 const CAMBRIDGE={choose:'',opencloze:'Part 2',wordform:'Part 3',transform:'Part 4'};
 
 /* ══ STATE ══ */
-let mode=P.get('mode')==='game'?'game':'exam',     /* Exam by default; Game is one tap away */ TOPICS=null, topic=null, pool=[], plan=[];
+/* THE BOARD OPENS IN GAME, THE ULTIMATE IN THE CHALLENGE. Both used to open
+   in exam mode, so the Board a student reached from a topic page was, tile
+   for tile, the Ultimate Challenge: same rounds, same formats, same
+   fourteen cells. The Board is where a topic is practised; the Challenge is
+   where it is measured. An explicit ?mode= in a shared link still wins. */
+const OPEN_AS_BOARD=P.get('board')==='1'&&!!P.get('topic');
+let mode=P.get('mode')==='game'?'game':P.get('mode')==='exam'?'exam':(OPEN_AS_BOARD?'game':'exam'), TOPICS=null, topic=null, pool=[], plan=[];
 let lives=3, score=0, playing=false, t0=0, tick=null, tries=0, log=[], vocabItems=[];
 /* practice: lives ran out, the run carries on without points. ring: what this
    run did to the learner's mistakes, for the result card */
+/* ownUltimate: this topic has its own Ultimate rounds (ultimate-<topic>.json).
+   When it has not, the Ultimate plays the Board's rounds — and now says so. */
+let ownUltimate=false;
 let practice=false, practiceAt=0, practiceRight=0, ringRun={came:0,fixed:0,half:0};
 /* games where the learner TYPES the answer — the only ones a letter can help */
 const TYPED={pairs:1,flip:1,hunt:1,gap:1,opencloze:1,wordform:1,transform:1,correct:1};
@@ -439,6 +448,7 @@ async function choose(id){
   $('pick').textContent='Loading '+t.label+'…';
   try{
     if(t.vocab){
+      ownUltimate=false;
       let items=[];
       for(const vid of t.vocab){
         try{
@@ -457,8 +467,8 @@ async function choose(id){
       /* THE ULTIMATE CHALLENGE plays its own, harder rounds (/data/challenge/ultimate-<topic>.json),
          which the Board and Defuse never use — so nothing here has been seen in a
          Board set. A topic without an Ultimate file yet plays its usual rounds. */
-      let d=null;
-      if(!BOARD){ try{ const u=await fetch(BASE+t.file.replace(/^challenge-/,'ultimate-'),{cache:'no-store'}); if(u.ok){ const x=await u.json(); if((x.rounds||[]).length) d=x; } }catch(e){} }
+      let d=null; ownUltimate=false;
+      if(!BOARD){ try{ const u=await fetch(BASE+t.file.replace(/^challenge-/,'ultimate-'),{cache:'no-store'}); if(u.ok){ const x=await u.json(); if((x.rounds||[]).length){ d=x; ownUltimate=true; } } }catch(e){} }
       if(!d) d=await (await fetch(BASE+t.file,{cache:'no-store'})).json();
       let rounds=(d.rounds||[]).slice();
       for(const im of d.ultimate?[]:(d.imports||[])){
@@ -523,7 +533,11 @@ function draw(){
   Object.keys(G).forEach(k=>{ if(G[k].accepts){ const rs=all.filter(G[k].accepts); if(rs.length) by[k]=rs; } });
 
   const kind=k=>G[k].kind||'exam', skill=k=>G[k].skill||'receptive';
-  const due=r=>(mode==='game'&&r.id&&window.IntuityRing&&IntuityRing.isDue(r.id))?1:0;
+  /* Waiting mistakes come first on the BOARD only. The Ultimate is the
+     culmination, not a revision queue: opening it on "5 to fix from last
+     time" turned the final test into homework. It still records every
+     answer in the Ring, so a slip here comes back on the Board. */
+  const due=r=>(BOARD&&mode==='game'&&r.id&&window.IntuityRing&&IntuityRing.isDue(r.id))?1:0;
   const dueIn=k=>by[k].reduce((n,r)=>n+due(r),0);
   const have=Object.keys(by).filter(k=>G[k]);
   const fill=(types,n)=>{ if(!types.length||n<=0) return []; const s=shuffle(types).slice(0,n); while(s.length<n) s.push(types[(Math.random()*types.length)|0]); return s; };
@@ -665,9 +679,11 @@ function reset(){ stop(); doneSet=new Set(); triesAt={}; revealed=false; lives=3
   practice=false; practiceAt=0; practiceRight=0; ringRun={came:0,fixed:0,half:0};
   const waiting=dueCount();
   $('clock').textContent='0:00'; $('answered').textContent='0 / '+N; $('hint').hidden=false;
-  $('hint').textContent='Tap any tile to begin'+(waiting?' · '+waiting+' to fix from last time':''); $('again').hidden=true; }
+  $('hint').textContent='Tap any tile to begin'+(waiting?' · '+waiting+' to fix from last time':'')+sharedNote(); $('again').hidden=true; }
+/* the honest line: when the Ultimate has no rounds of its own for this topic */
+function sharedNote(){ return (!BOARD&&topic&&!ownUltimate)?' · These are the Board’s questions — the Ultimate set for '+topic.label+' is on its way':''; }
 /* mistakes waiting in this topic (Game only: the Exam doesn't serve them first) */
-function dueCount(){ if(mode!=='game'||!window.IntuityRing) return 0; try{ return IntuityRing.count(pool.map(r=>r.id).filter(Boolean)); }catch(e){ return 0; } }
+function dueCount(){ if(!BOARD||mode!=='game'||!window.IntuityRing) return 0; try{ return IntuityRing.count(pool.map(r=>r.id).filter(Boolean)); }catch(e){ return 0; } }
 /* ONE place writes every result down: the log for the report, the Ring for
    what comes back. Called once per tile — its first answer decides it. */
 function remember(r,ok){
@@ -700,7 +716,7 @@ function paint(){
   $('score').textContent=score; $('answered').textContent=doneSet.size+' / '+N;
   if(practice) $('lives').innerHTML='<span class="practice">Practice</span>'; else
   $('lives').innerHTML=[0,1,2].map(i=>`<svg viewBox="0 0 24 24" class="${i<lives?'':'gone'}"><path d="M12 21s-7.5-4.6-9.6-9.3C.9 8.3 3 4.5 6.7 4.5c2.1 0 3.6 1.2 4.3 2.4.7-1.2 2.2-2.4 4.3-2.4 3.7 0 5.8 3.8 4.3 7.2C19.5 16.4 12 21 12 21z"/></svg>`).join('');
-  if(playing) $('hint').textContent=allDone()?'All done':(doneSet.size?'Pick any tile, in any order · tap a finished one to look again':'Pick any tile, in any order');
+  if(playing) $('hint').textContent=(allDone()?'All done':(doneSet.size?'Pick any tile, in any order · tap a finished one to look again':'Pick any tile, in any order'))+sharedNote();
 }
 function begin(){ reset(); plan=draw(); playing=true;
   try{ if(window.IntuityRing) ringRun.came=plan.filter(r=>r.id&&IntuityRing.isDue(r.id)).length; }catch(e){}
@@ -938,6 +954,7 @@ function finish(won){
     const grade=pct>=90?'Exam-ready':pct>=75?'Nearly there':pct>=60?'Getting there':'Not yet — keep practising';
     openCard(`<div class="kick">${esc(topic.label)} · Challenge</div><h2 id="fTitle">Your result</h2>
       <div class="big">${pct}%</div><div class="grade">${grade} · ${right} of ${N} right · ${t}</div>
+      ${(!BOARD&&!ownUltimate)?'<p class="ring-line">These questions are also on the Board, so part of this score may be memory. The real test is a question you have not seen.</p>':''}
       <ul class="review">${log.slice().sort((a,b)=>a.i-b.i).map(x=>`<li><div class="rh"><span>Cell ${String(x.i+1).padStart(2,'0')} · ${esc(x.g.title)}${x.r.tag&&x.r.tag!==x.g.title?' · '+esc(x.r.tag):''}</span><span class="${x.ok?'ok':'no'}">${x.ok?'Right':'Wrong'}</span></div>
         ${x.ok?'':`Your answer: ${esc(x.given)}<br>`}<b>${esc(x.g.solution(x.r))}</b>${x.r.note?' — '+esc(x.r.note):''}</li>`).join('')}</ul>
       ${ringLine()}<div class="cta"><button class="btn fill" type="button" id="rAgain">Try again</button></div>`);

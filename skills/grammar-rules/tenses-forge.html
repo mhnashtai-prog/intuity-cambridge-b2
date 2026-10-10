@@ -554,7 +554,9 @@ body.playing .arena{gap:1.4rem;padding-top:calc(env(safe-area-inset-top,0px) + 1
 
 <div class="loading" id="loading">Loading…</div>
 
-<script src="/data/challenge/challenge-mixes.js?v=4"></script>
+<script src="/tools/intuity-log.js?v=1"></script>
+<script src="/tools/intuity-ring.js?v=1"></script>
+<script src="/data/challenge/challenge-mixes.js?v=8"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    WORD FORGE — build the tense from tiles.
@@ -617,6 +619,8 @@ const TOPIC = new URLSearchParams(location.search).get('topic');
 /* ?vocab=<id>: a vocabulary set's own Forge rounds (see challenge-mixes.js) */
 const VOCAB_ID = new URLSearchParams(location.search).get('vocab');
 const DATA_URL = new URLSearchParams(location.search).get('data') || '../../data/grammar-rules/tense-mix-forge-data.json';
+/* filed under the topic actually played — see the same note in Defuse */
+const LOG_TOPIC = VOCAB_ID || TOPIC || 'tenses';
 
 const WORK_MAX = 1000, PLAYER_MAX = 1000;
 const BASE_DMG = 78, BASE_PLAYER_DMG = 95;
@@ -681,7 +685,8 @@ let correctCount = {}, dueAt = {};
 let freshQueue = [];
 
 /* ── MEMORY — one key SHARED with Defuse ── */
-const MEM_KEY = 'intuity-tenses-mem';
+/* the SAME per-topic key Defuse uses, so the two games still share one memory */
+const MEM_KEY = LOG_TOPIC === 'tenses' ? 'intuity-tenses-mem' : 'intuity-' + LOG_TOPIC + '-mem';
 const BEST_KEY = 'intuity-forge-best';
 function loadMem(){ try{ return JSON.parse(safeGet(MEM_KEY,'{}')||'{}'); }catch(e){ return {}; } }
 function saveMem(m){ safeSet(MEM_KEY, JSON.stringify(m)); }
@@ -753,7 +758,7 @@ function itemsOf(g){
                  : String(it.answer||'').trim().split(/\s+/).filter(Boolean);
     const bnk = Array.isArray(it.bank) ? it.bank.slice() : [];
     return { cue: it.cue||'', after: it.after||'', mark: it.mark||[], answer, bank:bnk,
-             note: it.note||'', tense: it.tense || it.rule || '', group: g.id, color: g.color, idx };
+             note: it.note||'', tense: it.tense || it.rule || '', group: g.id, color: g.color, idx, rid: it.id || '' };
   }).filter(it => it.answer.length && it.bank.length >= it.answer.length && bankSatisfies(it.bank, it.answer));
 }
 function refillQueueWeighted(items){
@@ -1086,7 +1091,8 @@ function submitAnswer(){
   const ok = given.length === want.length && given.every((w,i) => w === want[i]);
 
   noteResult(item, ok);
-  try{ if (window.INTUITY) INTUITY.log('tenses', item.group+':'+item.idx, ok, {game:'forge'}); }catch(e){}
+  try{ if (window.INTUITY) INTUITY.log(LOG_TOPIC, item.rid || (item.group+':'+item.idx), ok, {game:'forge'}); }catch(e){}
+  try{ if (window.IntuityRing && item.rid){ if (ok) IntuityRing.right(item.rid); else IntuityRing.miss(item.rid, {topic:LOG_TOPIC}); } }catch(e){}
 
   /* show the right answer in place, marking which slots the learner had */
   const row = $('slotRow'); row.innerHTML = '';
@@ -1303,7 +1309,7 @@ function finish(outcome, reason){
   if (!running || groupIdx < 0 || !GROUPS[groupIdx]) return;
   running = false; cancelAnimationFrame(rafId); cancelAutoCheck();
   document.body.classList.remove('playing');
-  try{ if (window.INTUITY) INTUITY.session('tenses','forge',{hits,misses,best:bestCombo,score,outcome}); }catch(e){}
+  try{ if (window.INTUITY) INTUITY.session(LOG_TOPIC,'forge',{hits,misses,best:bestCombo,score,outcome}); }catch(e){}
 
   if (outcome === 'win'){ banner('Work finished','#4A6B5C'); sfxVictory(); }
   else { banner('The forge went cold','#A23B2C'); sfxDefeat(); }

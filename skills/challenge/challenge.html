@@ -255,6 +255,10 @@ body.board-page .board-toggle .viewtog{margin:0}
 .cup .rim{fill:none;stroke:var(--caramel);stroke-width:5}
 @media(prefers-reduced-motion:reduce){ .glitter{display:none} .mk.tick.pop{animation:none} }
 @media(prefers-reduced-motion:reduce){ .scrim,.focus,.cell,.num,.mk{transition:none} .dial-b .pend-hang{animation:none} }
+.focus .cta .auto{display:block;width:100%;height:2px;background:var(--rule,#D8CFC2);position:relative;overflow:hidden;border-radius:2px}
+.focus .cta .auto::after{content:'';position:absolute;inset:0;background:var(--caramel,#B98B5E);transform-origin:left;animation:autoBar var(--ms,1100ms) linear forwards}
+@keyframes autoBar{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@media (prefers-reduced-motion:reduce){.focus .cta .auto::after{animation:none;opacity:.5}}
 </style>
   <link rel="stylesheet" href="/tools/intuity-pills.css?v=8">
   <script src="/tools/intuity-overflow.js?v=2"></script>
@@ -729,7 +733,7 @@ function lookAgain(i){
 let cur=null, settled=false;
 function openCard(html){ $('focus').innerHTML='<button class="x" type="button" aria-label="Close" id="fx">✕</button>'+html;
   const s=$('scrim'); s.hidden=false; requestAnimationFrame(()=>s.classList.add('on')); $('fx').onclick=closeCard; }
-function closeCard(){ const s=$('scrim'); s.classList.remove('on'); setTimeout(()=>{ s.hidden=true; paint();
+function closeCard(){ clearTimeout(autoT); if(autoOff) autoOff(); const s=$('scrim'); s.classList.remove('on'); setTimeout(()=>{ s.hidden=true; paint();
   if(owed){ const o=owed; owed=null; requestAnimationFrame(()=>burst(o.i,o.first)); } },250); }
 function openCell(i){
   const r=plan[i], g=G[r.game]; cur={i,r,g}; settled=false; tries=triesAt[i]||0;
@@ -766,14 +770,14 @@ function answer(ok,given){
     const tag=cur.r.tag?' · '+esc(cur.r.tag):'';
     fb.innerHTML=ok?'<b>Right'+tag+'.</b> '+esc(cur.r.note||'')
                    :'<b>Not this time'+tag+'.</b> The answer: <b>'+esc(sol)+'</b>. '+esc(cur.r.note||'');
-    const last=doneSet.size>=N; showNext(last?()=>finish(true):()=>{ closeCard(); }, last?'See your result':undefined); return false;
+    const last=doneSet.size>=N; showNext(last?()=>finish(true):()=>{ closeCard(); }, last?'See your result':undefined, ok?1100:3200); return false;
   }
   if(ok){
     celebrate(cur.i, !tries);
     settled=true; const pts=practice?0:tries?50:100; score+=pts; if(practice) practiceRight++; log.push({i:cur.i,r:cur.r,g:cur.g,ok:true,given}); doneSet.add(cur.i);
     if(!tries) remember(cur.r,true);
     fb.innerHTML='<b>Right'+(pts?' · +'+pts:'')+(cur.r.tag?' · '+esc(cur.r.tag):'')+'.</b> '+esc(cur.r.note||'');
-    const last=doneSet.size>=N; showNext(last?()=>finish(true):()=>{ closeCard(); }, last?'See your result':undefined); return false;
+    const last=doneSet.size>=N; showNext(last?()=>finish(true):()=>{ closeCard(); }, last?'See your result':undefined, tries?1800:1100); return false;
   }
   if(!tries) remember(cur.r,false);                   /* the tile's first slip is what's remembered */
   tries++; triesAt[cur.i]=tries;
@@ -795,7 +799,7 @@ function answer(ok,given){
   if(lives<=0){ settled=true; practice=true; practiceAt=doneSet.size; log.push({i:cur.i,r:cur.r,g:cur.g,ok:false,given}); doneSet.add(cur.i); paint();
     fb.innerHTML='<b>No lives left'+(cur.r.tag?' · '+esc(cur.r.tag):'')+'.</b> '+esc(cur.r.note||'')+
       '<br><br>The rest of the run is practice: no more points, but every tile still counts towards fixing your mistakes.';
-    const last=doneSet.size>=N; showNext(last?()=>finish(true):()=>{ closeCard(); }, last?'See your result':'Carry on'); return false; }
+    const last=doneSet.size>=N; showNext(last?()=>finish(true):()=>{ closeCard(); }, last?'See your result':'Carry on', 5000); return false; }
   fb.innerHTML='Not quite — <b>'+lives+'</b> '+(lives===1?'life':'lives')+' left. Try again.'; return true;
 }
 /* ══ CELEBRATION (Game only) ══
@@ -821,7 +825,26 @@ function burst(i,first){
     g.appendChild(e); }
   document.body.appendChild(g); setTimeout(()=>g.remove(),1100);
 }
-function showNext(fn,label){ $('next').hidden=false; const b=$('nextBtn'); if(label) b.textContent=label; b.onclick=fn; setTimeout(()=>b.focus(),60); }
+/* NO "CONTINUE" BUTTON. A student who has just answered knows what comes
+   next; asking for one more tap per tile was a tax on every question. The
+   card now closes by itself — quickly after a right answer, slower after a
+   wrong one, so the answer and its reason are actually read — and a thin
+   line runs down to show it is about to go. Any tap or Enter skips the
+   wait. (Choosing the next tile on the track stays the student's move:
+   that IS the game.) */
+let autoT=null, autoOff=null;
+function showNext(fn,label,ms){
+  clearTimeout(autoT); if(autoOff) autoOff();
+  ms=ms||1100;
+  const n=$('next'); n.hidden=false; n.innerHTML='<span class="auto" style="--ms:'+ms+'ms" aria-hidden="true"></span>';
+  const done=()=>{ clearTimeout(autoT); if(autoOff) autoOff(); fn(); };
+  const tap=e=>{ if(e.target.closest&&e.target.closest('#fx')) return; done(); };
+  const key=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); done(); } };
+  /* the listeners wait a moment, so the tap that answered doesn't also skip */
+  const arm=setTimeout(()=>{ document.addEventListener('pointerdown',tap,true); document.addEventListener('keydown',key,true); },300);
+  autoOff=()=>{ clearTimeout(arm); document.removeEventListener('pointerdown',tap,true); document.removeEventListener('keydown',key,true); autoOff=null; };
+  autoT=setTimeout(done,ms);
+}
 
 /* ══ 3 · THE RESULT ══ */
 function ladder(){

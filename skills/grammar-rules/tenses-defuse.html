@@ -588,7 +588,11 @@ body.playing .close-fixed{z-index:30;top:calc(var(--card-top) + .6rem);
 
 <div class="loading" id="loading">Loading…</div>
 
-<script src="/data/challenge/challenge-mixes.js?v=7"></script>
+<!-- what happened (the report reads it) and what to bring back (the Ring),
+     exactly as the Board and the Challenge load them -->
+<script src="/tools/intuity-log.js?v=1"></script>
+<script src="/tools/intuity-ring.js?v=1"></script>
+<script src="/data/challenge/challenge-mixes.js?v=8"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    BOMB DEFUSAL — one sentence, one ticking clock, four answers.
@@ -674,6 +678,10 @@ const TOPIC = new URLSearchParams(location.search).get('topic');
 /* ?vocab=<id> does the same for a vocabulary set (see challenge-mixes.js) */
 const VOCAB_ID = new URLSearchParams(location.search).get('vocab');
 const DATA_URL = new URLSearchParams(location.search).get('data') || '../../data/grammar-rules/tense-mix-data.json';
+/* Every record this page writes is filed under the topic actually being
+   played. It used to say 'tenses' whatever the topic, so a passive or an
+   inversion mistake reached the report as a tense mistake. */
+const LOG_TOPIC = VOCAB_ID || TOPIC || 'tenses';
 
 const WIRE_N = 4;
 const KEYS = ['1','2','3','4'];
@@ -754,7 +762,18 @@ function multiplierFor(n){
    One key SHARED with Forge: an item missed while building it is exactly the
    one Defuse should serve first, and vice versa. The two games are a system,
    not two apps. */
-const MEM_KEY = 'intuity-tenses-mem';
+/* Per topic now. Tenses keeps its original key, so the history Forge and
+   Defuse already share is untouched; another topic's entries are copied
+   over from the old shared key the first time that topic opens. */
+const MEM_KEY = LOG_TOPIC === 'tenses' ? 'intuity-tenses-mem' : 'intuity-' + LOG_TOPIC + '-mem';
+(function migrateMem(){
+  if (MEM_KEY === 'intuity-tenses-mem' || safeGet(MEM_KEY, null) !== null) return;
+  try{
+    const old = JSON.parse(safeGet('intuity-tenses-mem','{}')||'{}'), mine = {};
+    Object.keys(old).forEach(k => { if (k.indexOf(LOG_TOPIC + '-') === 0) mine[k] = old[k]; });
+    safeSet(MEM_KEY, JSON.stringify(mine));
+  }catch(e){}
+})();
 const BEST_KEY = 'intuity-defuse-best';
 function loadMem(){ try{ return JSON.parse(safeGet(MEM_KEY,'{}')||'{}'); }catch(e){ return {}; } }
 function saveMem(m){ safeSet(MEM_KEY, JSON.stringify(m)); }
@@ -819,7 +838,10 @@ function itemsOf(g){
     answer: it.answer,
     options: it.options && it.options.length===WIRE_N ? it.options : null,
     note: it.note||'', tense: it.tense || it.rule || '',
-    group: g.id, color: g.color, idx
+    group: g.id, color: g.color, idx,
+    /* the round's own id, shared with the Board and the Challenge, so the
+       Ring knows a sentence missed here is the one it already holds */
+    rid: it.id || ''
   })).filter(it => it.options && it.options.includes(it.answer));
 }
 /* long-term history biases the ORDER of the fresh queue: anything the learner
@@ -1056,7 +1078,11 @@ function resolveWire(chosen){
   const correctEl = wireEls[wires.indexOf(item.answer)];
 
   noteResult(item, ok);
-  try{ if (window.INTUITY) INTUITY.log('tenses', item.group+':'+item.idx, ok, {game:'defuse'}); }catch(e){}
+  const logId = item.rid || (item.group+':'+item.idx);
+  try{ if (window.INTUITY) INTUITY.log(LOG_TOPIC, logId, ok, {game:'defuse'}); }catch(e){}
+  /* the Ring: a miss here comes back first on the Board; a right answer
+     only counts towards fixing it, on the Ring's own two-day rule */
+  try{ if (window.IntuityRing && item.rid){ if (ok) IntuityRing.right(item.rid); else IntuityRing.miss(item.rid, {topic:LOG_TOPIC}); } }catch(e){}
 
   const threat = applyThreat();
   $('sentence').innerHTML = sentenceHTML(item).replace(/<span class="slot">\?<\/span>/, '<mark>'+esc(item.answer)+'</mark>');
@@ -1207,7 +1233,12 @@ function scale(acc){
   }
   return 190;
 }
-const grade = s => s>=180?['A','Excellent']:s>=173?['B','Very good']:s>=160?['C','Pass']:['D','Try again'];
+/* NOT Cambridge's grades. A 140-190 number with A/B/C beside it reads as a
+   Cambridge English Scale result, and a ninety-second round cannot award
+   one — the Challenge page refuses to for the same reason. These are its
+   words, at its thresholds (90% / 75% / 60%). The number stays internal,
+   for the best-per-set record. [css class, words, tab badge] */
+const grade = s => s>=185?['a','Exam-ready','\u2605']:s>=176?['b','Nearly there','\u2713']:s>=160?['c','Getting there','\u2713']:['d','Not yet \u2014 keep practising',''];
 
 function finish(outcome, reason){
   /* FIX #2: guard against a stale/orphaned call — e.g. the player exited to
@@ -1216,7 +1247,7 @@ function finish(outcome, reason){
   if (!running || groupIdx < 0 || !GROUPS[groupIdx]) return;
   running = false; cancelAnimationFrame(rafId);
   document.body.classList.remove('playing');
-  try{ if (window.INTUITY) INTUITY.session('tenses','defuse',{hits,misses,best:bestStreak,score,outcome}); }catch(e){}
+  try{ if (window.INTUITY) INTUITY.session(LOG_TOPIC,'defuse',{hits,misses,best:bestStreak,score,outcome}); }catch(e){}
 
   if (outcome === 'win'){ banner('Building secured','#4A6B5C'); sfxVictory(); }
   else { banner('Bomb detonated','#A23B2C'); sfxDefeat(); }
@@ -1229,6 +1260,7 @@ function finish(outcome, reason){
   const gradedOnCoverage = reason === 'timeout';
   const sc = scale(gradedOnCoverage ? acc * coverageOf(total) : acc);
   const [letter,word] = grade(sc);
+  const shown = Math.round((gradedOnCoverage ? acc * coverageOf(total) : acc) * 100);
 
   $('ovOutcome').className = 'outcome ' + (outcome==='win'?'win':'loss');
   $('ovOutcome').textContent = outcome==='win' ? 'Building secured' : 'Bomb detonated';
@@ -1238,8 +1270,8 @@ function finish(outcome, reason){
     $('ovScore').innerHTML = Math.round(acc*100) + '<span class="gr">%</span>';
     $('ovSet').textContent = 'Practice · ' + GROUPS[groupIdx].label;
   } else {
-    $('ovScore').className = 'score g-'+letter.toLowerCase();
-    $('ovScore').innerHTML = sc + '<span class="gr">'+letter+'</span>';
+    $('ovScore').className = 'score g-'+letter;
+    $('ovScore').innerHTML = shown + '<span class="gr">%</span>';
     $('ovSet').textContent = word + ' · ' + GROUPS[groupIdx].label;
     saveBest(GROUPS[groupIdx].id, sc);
   }
@@ -1323,7 +1355,7 @@ function buildTabs(){
     btn.className = 'vtab' + (i===groupIdx?' active':'') + (due?' has-due':'') + (cleared?' cleared':'');
     btn.style.setProperty('--vc', g.color);
     btn.innerHTML = esc(g.label) + '<span class="due"></span>' +
-      (best[g.id] ? '<span class="best">' + grade(best[g.id])[0] + '</span>' : '');
+      (best[g.id] && grade(best[g.id])[2] ? '<span class="best">' + grade(best[g.id])[2] + '</span>' : '');
     btn.title = g.desc || '';
     btn.onclick = () => { if (i===groupIdx) return; switchGroup(i); };
     wrap.appendChild(btn);

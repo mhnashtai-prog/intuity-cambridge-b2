@@ -140,9 +140,10 @@
     'expressions':      { label:'Descriptive Words', url:'/skills/similar-words/data/master-practice.json', home:'collective-expressions-master.html', kind:'topics',
                           topics:[['adjectives','Adjectives'],['adverbs','Adverbs'],['collective-nouns','Collective nouns'],['descriptive-verbs','Verbs']] },
     /* Phrasal Verbs 1. Defuse plays the verb groups (one tab per verb, as on
-       the page); Forge plays the key word transformations. */
+       the page); Forge (tenses-forge?vocab=phrasal-verbs) still plays the key
+       word transformations, but the row now ends on the Board, as the page's does. */
     'phrasal-verbs':    { label:'Phrasal Verbs', url:'/data/grammar-rules/phrasal-verbs-data.json', kind:'phrasal',
-                          home:'/skills/grammar-rules/phrasal-verbs-quiz.html', games:['defuse','forge'],
+                          home:'/skills/grammar-rules/phrasal-verbs-quiz.html',
                           nav:[['learn','Learn','?mode=learn'],['quiz','Quiz','?mode=quiz'],['gap','Practice','?mode=gap'],['match','Match','?mode=match']] }
   };
   const MAX_MIX = 25;
@@ -288,10 +289,14 @@
     const row = document.querySelector('.mode-selector'); if (!row) return;
     const nav = v.nav || [[v.id, v.label, v.home]];
     const link = page => page.charAt(0) === '?' ? homeUrl + page : page.charAt(0) === '/' ? page : VPAGE + page;
-    const games = { defuse:['Defuse','/skills/grammar-rules/tenses-defuse'], forge:['Forge','/skills/grammar-rules/tenses-forge'] };
+    /* every vocabulary page's row ends Defuse · Board; the Board knows two sets by another name */
+    const boardId = { expressions:'descriptive', collective:'descriptive' }[v.id] || v.id;
+    const games = { defuse:['Defuse','/skills/grammar-rules/tenses-defuse.html?vocab=' + encodeURIComponent(v.id)],
+                    forge:['Forge','/skills/grammar-rules/tenses-forge.html?vocab=' + encodeURIComponent(v.id)],
+                    board:['Board','/skills/challenge/challenge.html?board=1&section=vocabulary&topic=' + encodeURIComponent(boardId)] };
     row.innerHTML = nav.map(([, label, page]) => `<a class="mode-btn" href="${link(page)}">${label}</a>`).join('')
-      + (v.games || ['defuse']).map(g => g === here ? `<span class="mode-btn active">${games[g][0]}</span>`
-          : `<a class="mode-btn" href="${games[g][1]}?vocab=${encodeURIComponent(v.id)}">${games[g][0]}</a>`).join('');
+      + (v.games || ['defuse','board']).map(g => g === here ? `<span class="mode-btn active" aria-current="page">${games[g][0]}</span>`
+          : `<a class="mode-btn" href="${games[g][1].replace(/&/g,'&amp;')}">${games[g][0]}</a>`).join('');
   }
 
   window.ChallengeMixes = { load, dress, RULES, loadVocab, dressVocab, VOCAB };

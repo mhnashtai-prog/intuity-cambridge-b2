@@ -240,6 +240,18 @@ main.wf{padding-top:calc(var(--wf-head,170px) + 1rem)}
 .missed li{font-size:.92rem;line-height:1.5;margin:.35rem 0;color:var(--soft)}
 .dots.snap{animation:snap .45s cubic-bezier(.22,1,.36,1)}
 .sq{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+
+.next-row.auto{display:block;width:100%;height:2px;margin-top:1rem;border-radius:2px;
+  background:linear-gradient(var(--caramel,#B98B5E),var(--caramel,#B98B5E)) left/100% 100% no-repeat,var(--rule,#D8CFC2);
+  animation:goBar var(--ms,1100ms) linear forwards}
+.next-row.auto > *{display:none}
+@keyframes goBar{to{background-size:0% 100%,auto}}
+@media (prefers-reduced-motion:reduce){.next-row.auto{animation:none}}
+
+.btn.auto-go{background-image:linear-gradient(rgba(255,255,255,.28),rgba(255,255,255,.28));background-repeat:no-repeat;
+  background-size:0% 100%;animation:goFill var(--ms,1800ms) linear forwards}
+@keyframes goFill{to{background-size:100% 100%}}
+@media (prefers-reduced-motion:reduce){.btn.auto-go{animation:none}}
 </style>
   <link rel="stylesheet" href="/tools/intuity-pills.css?v=7">
   <script src="/tools/intuity-overflow.js?v=2"></script>
@@ -422,6 +434,23 @@ function showQ(){
   $('next').onclick=()=>{ if(S.single){ start(shuffle(pool()).sort((x,y)=>due(y.id)-due(x.id)).slice(0,6)); return; } S.i++; showQ(); };
   $('toMap').onclick=gate;
 }
+/* NO "NEXT" BUTTON. After an answer the page moves on by itself: about a
+   second after a right answer, longer after a wrong one so the answer and
+   its reason are read. A thin line shows it is about to go; any tap or
+   Enter skips the wait. The button is still there, hidden, so the flow
+   behind it (last question → result) is exactly the one it always was. */
+let goT=null, goOff=null;
+function autoNext(ms){
+  const row=$('nextRow'), nb=$('next'); if(!row||!nb) return;
+  if(goOff) goOff(); clearTimeout(goT);
+  row.classList.remove('hidden'); row.classList.add('auto'); row.style.setProperty('--ms',ms+'ms');
+  const done=()=>{ clearTimeout(goT); if(goOff) goOff(); if(nb.isConnected) nb.click(); };
+  const tap=e=>{ if(!nb.isConnected){ goOff&&goOff(); return; } if(e.target.closest&&e.target.closest('a,header,.mode-btn,.vtab,.seg,button.tab')) return; done(); };
+  const key=e=>{ if(!nb.isConnected){ goOff&&goOff(); return; } if(e.key==='Enter'||e.key===' '){ e.preventDefault(); done(); } };
+  const arm=setTimeout(()=>{ document.addEventListener('pointerdown',tap,true); document.addEventListener('keydown',key,true); },300);
+  goOff=()=>{ clearTimeout(arm); document.removeEventListener('pointerdown',tap,true); document.removeEventListener('keydown',key,true); goOff=null; };
+  goT=setTimeout(done,ms);
+}
 function answer(v){
   const i=S.items[S.i], fb=$('fb'); if(S.res[S.i]!==undefined) return; const t=norm(v); if(!t) return;
   const n=wc(t);
@@ -434,7 +463,9 @@ function answer(v){
   const bl=$('blank'); bl.textContent=String(v).trim(); bl.classList.toggle('miss',m<2);
   fb.innerHTML=(m===2?'<b class="ok">Two marks.</b> ':m===1?'<b class="no">One mark</b> — half of it is right. ':'<b class="no">No marks.</b> ')
     +`The answer: ${answerHTML(i.a[0])}. ${esc(i.why)}`+(i.a.length>1?`<br><span class="also">Also right: ${i.a.slice(1).map(a=>esc(halves(a).join(' '))).join(' · ')}</span>`:'');
-  $('nextRow').classList.remove('hidden'); $('next').focus();
+  /* one sentence picked from the map keeps its choice (Another one / Back
+     to the map); a set of six moves on by itself */
+  if(S.single){ $('nextRow').classList.remove('hidden'); $('next').focus(); } else autoNext(m===2?1300:4500);
 }
 function results(){
   const max=S.items.length*2, waiting=(()=>{ try{ return pool().filter(i=>IntuityRing.has(i.id)).length; }catch(e){ return 0; } })();
@@ -476,6 +507,23 @@ function buildDeal(){
   buildDraw();
 }
 function circles(){ return B.items.map((x,k)=>`<i class="${B.res[k]||(k===B.k&&!B.over?'now':'')}"></i>`).join(''); }
+/* THE GAME'S "NEXT WORD" GOES BY ITSELF. When a word is finished the button
+   fills like a fuse and fires on its own; tapping it goes at once. Tapping
+   anything else (See the family, a word to build on) is the student choosing
+   to stay, so the fuse stops and the button waits for them. */
+let acT=null, acOff=null;
+function autoClick(id,ms){
+  const b=$(id); if(!b||b.dataset.auto) return; b.dataset.auto='1';
+  if(acOff) acOff(); clearTimeout(acT);
+  b.classList.add('auto-go'); b.style.setProperty('--ms',ms+'ms');
+  const stop=()=>{ clearTimeout(acT); if(acOff) acOff(); b.classList.remove('auto-go'); };
+  const go=()=>{ stop(); if(b.isConnected) b.click(); };
+  const tap=e=>{ if(!b.isConnected){ stop(); return; } const t=e.target.closest&&e.target.closest('button,a,header,input'); if(t&&t!==b) stop(); else if(!t) go(); };
+  const key=e=>{ if(!b.isConnected){ stop(); return; } if(e.key==='Enter'){ e.preventDefault(); go(); } };
+  const arm=setTimeout(()=>{ document.addEventListener('pointerdown',tap,true); document.addEventListener('keydown',key,true); },300);
+  acOff=()=>{ clearTimeout(arm); document.removeEventListener('pointerdown',tap,true); document.removeEventListener('keydown',key,true); acOff=null; };
+  acT=setTimeout(go,ms);
+}
 function buildDraw(msg){
   const i=B.i, done=B.state==='done', shown=B.state==='shown', last=B.k+1>=B.items.length||B.over;
   $('game').innerHTML=`<div class="round-head"><div class="dots" aria-label="Transformation ${B.k+1} of ${B.items.length}">${circles()}</div>
@@ -493,6 +541,7 @@ function buildDraw(msg){
   $('bUndo').onclick=()=>{ B.picked.pop(); buildDraw(); };
   if($('bNext')) $('bNext').onclick=()=>{ if(last) return roundEnd(); B.k++; buildDeal(); };
   if($('bShow')) $('bShow').onclick=()=>{ if(!B.miss) remember(i,false); B.res[B.k]='no'; B.state='shown'; B.streak=0; buildDraw(); };
+  if(done||shown) autoClick('bNext', done?1500:4000);
 }
 function buildTap(t){
   B.picked.push(t);

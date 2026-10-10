@@ -213,6 +213,18 @@ main.wf{padding-top:calc(var(--wf-head,170px) + 1rem)}
 .stop:hover{background:rgba(20,17,14,.16)}
 .stop:active{transform:scale(.94)}
 .card{border-radius:0}
+
+.next-row.auto{display:block;width:100%;height:2px;margin-top:1rem;border-radius:2px;
+  background:linear-gradient(var(--caramel,#B98B5E),var(--caramel,#B98B5E)) left/100% 100% no-repeat,var(--rule,#D8CFC2);
+  animation:goBar var(--ms,1100ms) linear forwards}
+.next-row.auto > *{display:none}
+@keyframes goBar{to{background-size:0% 100%,auto}}
+@media (prefers-reduced-motion:reduce){.next-row.auto{animation:none}}
+
+.btn.auto-go{background-image:linear-gradient(rgba(255,255,255,.28),rgba(255,255,255,.28));background-repeat:no-repeat;
+  background-size:0% 100%;animation:goFill var(--ms,1800ms) linear forwards}
+@keyframes goFill{to{background-size:100% 100%}}
+@media (prefers-reduced-motion:reduce){.btn.auto-go{animation:none}}
 </style>
     <link rel="stylesheet" href="/tools/intuity-pills.css?v=7">
    <script src="/tools/intuity-overflow.js?v=2"></script>
@@ -340,6 +352,23 @@ function showQ(){
   const inp=$('ans'); if(inp){ $('chk').onclick=()=>answer(inp.value); inp.addEventListener('keydown',e=>{ if(e.key==='Enter') answer(inp.value); }); setTimeout(()=>inp.focus(),80); }
   $('next').onclick=()=>{ S.i++; showQ(); };
 }
+/* NO "NEXT" BUTTON. After an answer the page moves on by itself: about a
+   second after a right answer, longer after a wrong one so the answer and
+   its reason are read. A thin line shows it is about to go; any tap or
+   Enter skips the wait. The button is still there, hidden, so the flow
+   behind it (last question → result) is exactly the one it always was. */
+let goT=null, goOff=null;
+function autoNext(ms){
+  const row=$('nextRow'), nb=$('next'); if(!row||!nb) return;
+  if(goOff) goOff(); clearTimeout(goT);
+  row.classList.remove('hidden'); row.classList.add('auto'); row.style.setProperty('--ms',ms+'ms');
+  const done=()=>{ clearTimeout(goT); if(goOff) goOff(); if(nb.isConnected) nb.click(); };
+  const tap=e=>{ if(!nb.isConnected){ goOff&&goOff(); return; } if(e.target.closest&&e.target.closest('a,header,.mode-btn,.vtab,.seg,button.tab')) return; done(); };
+  const key=e=>{ if(!nb.isConnected){ goOff&&goOff(); return; } if(e.key==='Enter'||e.key===' '){ e.preventDefault(); done(); } };
+  const arm=setTimeout(()=>{ document.addEventListener('pointerdown',tap,true); document.addEventListener('keydown',key,true); },300);
+  goOff=()=>{ clearTimeout(arm); document.removeEventListener('pointerdown',tap,true); document.removeEventListener('keydown',key,true); goOff=null; };
+  goT=setTimeout(done,ms);
+}
 function answer(v,btn){
   const i=S.items[S.i], fb=$('fb'); if(S.res[S.i]!==undefined||!String(v).trim()) return;
   if(!btn&&/\s/.test(norm(v))){ fb.innerHTML='<b class="no">One word only</b> — every Part 2 gap takes exactly one word.'; $('ans').select(); return; }
@@ -355,7 +384,7 @@ function answer(v,btn){
   $('blank').textContent=cap(i.s,right&&!btn?String(v).trim().toLowerCase():i.a);
   const also=answers(i).filter(a=>norm(a)!==norm(right?v:i.a));
   fb.innerHTML=(right?'<b class="ok">Right.</b> ':`<b class="no">The answer: ${esc(i.a)}.</b> `)+esc(i.why)+(also.length?`<br><span class="also">Also right: ${also.map(esc).join(', ')}</span>`:'');
-  $('nextRow').classList.remove('hidden'); $('next').focus();
+  autoNext(S.res[S.i]?1100:3200);
 }
 function results(){
   const r=S.res.filter(Boolean).length, waiting=(()=>{ try{ return pool().filter(i=>IntuityRing.has(i.id)).length; }catch(e){ return 0; } })();
@@ -387,6 +416,23 @@ function ringDeal(){
   Object.assign(G,{w,cards:shuffle(targets.concat(wrong)),hit:new Set(),miss:new Set(),hearts:3});
   ringDraw();
 }
+/* THE GAME'S "NEXT WORD" GOES BY ITSELF. When a word is finished the button
+   fills like a fuse and fires on its own; tapping it goes at once. Tapping
+   anything else (See the family, a word to build on) is the student choosing
+   to stay, so the fuse stops and the button waits for them. */
+let acT=null, acOff=null;
+function autoClick(id,ms){
+  const b=$(id); if(!b||b.dataset.auto) return; b.dataset.auto='1';
+  if(acOff) acOff(); clearTimeout(acT);
+  b.classList.add('auto-go'); b.style.setProperty('--ms',ms+'ms');
+  const stop=()=>{ clearTimeout(acT); if(acOff) acOff(); b.classList.remove('auto-go'); };
+  const go=()=>{ stop(); if(b.isConnected) b.click(); };
+  const tap=e=>{ if(!b.isConnected){ stop(); return; } const t=e.target.closest&&e.target.closest('button,a,header,input'); if(t&&t!==b) stop(); else if(!t) go(); };
+  const key=e=>{ if(!b.isConnected){ stop(); return; } if(e.key==='Enter'){ e.preventDefault(); go(); } };
+  const arm=setTimeout(()=>{ document.addEventListener('pointerdown',tap,true); document.addEventListener('keydown',key,true); },300);
+  acOff=()=>{ clearTimeout(arm); document.removeEventListener('pointerdown',tap,true); document.removeEventListener('keydown',key,true); acOff=null; };
+  acT=setTimeout(go,ms);
+}
 function ringDraw(msg){
   const tg=G.cards.filter(i=>fits(i,G.w)), found=tg.filter(i=>G.hit.has(i)).length, done=found===tg.length, dead=G.hearts<=0;
   $('game').innerHTML=`<div class="lab-head"><span>Tap every gap that <b>${esc(G.w)}</b> fills</span><span class="hearts">${[0,1,2].map(i=>HEART.replace('<svg',`<svg class="${i<G.hearts?'':'gone'}"`)).join('')}</span></div>
@@ -400,6 +446,7 @@ function ringDraw(msg){
   $('game').querySelectorAll('.sc').forEach(b=>b.onclick=()=>ringTap(G.cards[+b.dataset.k]));
   $('ringLook').onclick=()=>openWord(G.w);
   $('ringNext').onclick=()=>{ G.at++; ringDeal(); };          /* skipping is not a mistake */
+  if(done||dead) autoClick('ringNext', done?1800:3600);
 }
 function ringTap(i){
   if(fits(i,G.w)){ G.hit.add(i); remember(i,true); ringDraw(); const r=$('ring'); r.classList.add('snap'); }

@@ -256,6 +256,8 @@ body.board-page .board-toggle .viewtog{margin:0}
 @media(prefers-reduced-motion:reduce){ .glitter{display:none} .mk.tick.pop{animation:none} }
 @media(prefers-reduced-motion:reduce){ .scrim,.focus,.cell,.num,.mk{transition:none} .dial-b .pend-hang{animation:none} }
 </style>
+  <link rel="stylesheet" href="/tools/intuity-pills.css?v=8">
+  <script src="/tools/intuity-overflow.js?v=2"></script>
 </head>
 <body>
 
@@ -269,6 +271,8 @@ body.board-page .board-toggle .viewtog{margin:0}
     <button class="mode-btn active" type="button" data-mode="game" aria-current="page">Game</button>
     <button class="mode-btn" type="button" data-mode="exam">Challenge</button>
   </nav>
+  <!-- Board only: Set 1 · Set 2 … · Mix. Filled once the topic loads. -->
+  <div class="set-tabs hidden" id="boardSets" role="tablist" aria-label="Sets" hidden></div>
   <div class="set-tabs" id="topicTabs" role="tablist" aria-label="Topic"></div>
 </header>
 
@@ -327,7 +331,7 @@ body.board-page .board-toggle .viewtog{margin:0}
 <!-- what happened (the report reads it) and what to bring back (the Ring) -->
 <script src="/tools/intuity-log.js?v=1"></script>
 <script src="/tools/intuity-ring.js?v=1"></script>
-<script src="/data/challenge/challenge-mixes.js?v=5"></script>
+<script src="/data/challenge/challenge-mixes.js?v=6"></script>
 <script>
 (function(){
 'use strict';
@@ -380,7 +384,7 @@ function drawModes(){
     $('mScore').hidden=mode==='exam'; $('mLives').hidden=mode==='exam'; $('mDone').hidden=mode!=='exam'; }
 }
 function wireModes(){ document.querySelectorAll('#modeRow [data-mode], #topicTabs [data-mode]').forEach(b=>b.onclick=()=>{
-  if(b.dataset.mode===mode) return; mode=b.dataset.mode; drawModes(); if(topic){ reset(); paint(); } }); }
+  if(b.dataset.mode===mode) return; mode=b.dataset.mode; drawModes(); if(topic){ if(BOARD&&SETS.length) usePool(); reset(); paint(); } }); }
 wireModes();
 function drawTopics(){
   if(BOARD) return;                                   /* a Board has one topic and no tabs */
@@ -452,6 +456,7 @@ async function choose(id){
       pool=rounds.filter(r=>G[r.game]); topic={id,label:d.topic||t.label,focus:t.focus||''};
     }
     if(!pool.length) throw new Error('no rounds');
+    if(BOARD) makeSets();
   }catch(e){ $('pick').textContent='That topic didn’t load — pick it again'; return; }
   $('gate').hidden=true; $('trackCard').hidden=false; drawTopics(); drawModes();
   reset(); drawBoard(); scrollTo(0,0);
@@ -537,7 +542,16 @@ function draw(){
      rounds) fills the gap from its own mode's formats: never a game in the
      Exam, never a bare exam format in Game */
   const own=have.filter(k=>mode==='exam'?exOK(k):kind(k)==='game');
-  if(slots.length<N) slots=slots.concat(fill(own.length?own:have,N-slots.length));
+  /* fill by what each format can still give: a Board set holds about twenty
+     rounds, so a format may have only one or two of them — handing it more
+     cells would bring the same sentence back in one run */
+  if(slots.length<N){
+    const cnt={}; slots.forEach(k=>cnt[k]=(cnt[k]||0)+1);
+    const pl=own.length?own:have; let grew=true;
+    while(slots.length<N&&grew){ grew=false;
+      for(const k of shuffle(pl)){ if(slots.length>=N) break; if((cnt[k]||0)<by[k].length){ slots.push(k); cnt[k]=(cnt[k]||0)+1; grew=true; } } }
+    if(slots.length<N) slots=slots.concat(fill(pl,N-slots.length));
+  }
   let seq=null;
   for(let t=0;t<600&&!seq;t++){
     const c=shuffle(slots), count={}; c.forEach(x=>count[x]=(count[x]||0)+1);
@@ -553,8 +567,14 @@ function draw(){
      rounds, so the game with the fewest to choose from picks first */
   const used=new Set(), out=new Array(seq.length);
   seq.map((k,i)=>i).sort((a,b)=>by[seq[a]].length-by[seq[b]].length).forEach(i=>{ const k=seq[i];
-    let r; while((r=left[k].pop())&&used.has(r)); if(!r) r=shuffle(by[k]).find(x=>!used.has(x))||by[k][0];
-    used.add(r); out[i]=Object.assign({},r,{game:k,src:r.game}); });
+    let g=k, r; while((r=left[k].pop())&&used.has(r)); if(!r) r=shuffle(by[k]).find(x=>!used.has(x));
+    /* nothing new left for this format (two games can share the same
+       sentences): play a sentence nobody has seen yet in another format of
+       the same mode, rather than repeat one */
+    if(!r){ const alt=shuffle(own.length?own:have).find(kk=>by[kk].some(x=>!used.has(x)));
+      if(alt){ g=alt; r=shuffle(by[alt]).find(x=>!used.has(x)); } }
+    if(!r) r=by[k][0];
+    used.add(r); out[i]=Object.assign({},r,{game:g,src:r.game}); });
   return out;
 }
 /* ══ THE TRACK — the sketch as one band, cut into cells ══
@@ -829,11 +849,59 @@ function ringLine(){
   const head=bits.length?bits.join(' · ')+'. ':'';
   return `<p class="ring-line">${head}${waiting?`Still to fix in ${esc(topic.label)}: <b>${waiting}</b>.`:'Nothing left to fix in '+esc(topic.label)+'.'}</p>`;
 }
+/* ══ BOARD SETS ══════════════════════════════════════════════════════════
+   Students asked for Set 1, Set 2, Set 3: somewhere to finish and move on.
+   A topic's rounds are dealt into sets of about twenty, round-robin by game
+   type in file order, so every set has the same mix of formats and Set 2 is
+   always the same sentences on every device. A run on a set draws its
+   fourteen cells from that set only; Mix plays the whole topic, as the
+   Board always did. A finished set earns a tick, a clean run (or 100% in
+   the Challenge) a star, kept on this device. */
+let FULL=[], SETS=[], SETK=0;
+const SKEY=()=>'intuity.board.sets.'+(topic&&topic.id);
+const sDone=()=>{ try{ return JSON.parse(localStorage.getItem(SKEY())||'{}')||{}; }catch(e){ return {}; } };
+function makeSets(){
+  FULL=pool.slice(); SETS=[];
+  const K=Math.max(2,Math.min(8,Math.round(FULL.length/20)));
+  for(let k=0;k<K;k++) SETS.push([]);
+  const by={}; FULL.forEach(r=>(by[r.game]=by[r.game]||[]).push(r));
+  let j=0; Object.keys(by).sort().forEach(g=>by[g].forEach(r=>{ SETS[j%K].push(r); j++; }));
+  const d=sDone(); const next=SETS.findIndex((s,i)=>!d[i+1]);
+  SETK=next<0?1:next+1;                       /* open on the first set not yet finished */
+  usePool(); drawSets();
+}
+function usePool(){
+  if(!SETK){ pool=FULL; return; }
+  const p=SETS[SETK-1].slice();
+  /* the Challenge plays only the Cambridge formats, and a set of twenty
+     holds seven or eight of them: it borrows exam rounds from the next sets,
+     in order, so fourteen cells are fourteen different questions */
+  if(mode==='exam'){
+    const isEx=r=>G[r.game]&&(G[r.game].kind||'exam')==='exam'&&(r.game in CAMBRIDGE);
+    let n=p.filter(isEx).length;
+    for(let j=1;j<SETS.length&&n<20;j++) SETS[(SETK-1+j)%SETS.length].forEach(r=>{ if(n<20&&isEx(r)){ p.push(r); n++; } });
+  }
+  pool=p;
+}
+function drawSets(){
+  const el=$('boardSets'); if(!el||!SETS.length) return; el.hidden=false; el.classList.remove('hidden');
+  const d=sDone();
+  el.innerHTML=SETS.map((s,i)=>`<button type="button" role="tab" class="vtab${SETK===i+1?' active':''}" aria-selected="${SETK===i+1}" data-k="${i+1}">Set ${i+1}${d[i+1]?`<span class="pct">${d[i+1]==='cup'?'★':'✓'}</span>`:''}</button>`).join('')
+    +`<button type="button" role="tab" class="vtab${SETK===0?' active':''}" aria-selected="${SETK===0}" data-k="0" title="Every round in the topic, at random">Mix</button>`;
+  el.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{ const k=+b.dataset.k; if(k===SETK) return; SETK=k; usePool(); drawSets(); reset(); paint(); });
+}
+function markSet(v){
+  if(!BOARD||!SETK) return;
+  const d=sDone(); if(d[SETK]!=='cup') d[SETK]=v;
+  try{ localStorage.setItem(SKEY(),JSON.stringify(d)); }catch(e){}
+  drawSets();
+}
 function finish(won){
   playing=false; stop(); cur=null; revealed=true; paint(); $('hint').hidden=true; $('again').hidden=false;
   const t=$('clock').textContent;
   if(mode==='exam'){
     const right=log.filter(x=>x.ok).length, pct=Math.round(right/N*100);
+    markSet(pct===100?'cup':'done');
     /* not Cambridge's grade names: those come from a full exam on the Cambridge
        English Scale, and fourteen cells can't award them. A learner told
        "Grade A" by an exam tool believes it. These say how close you are. */
@@ -845,6 +913,7 @@ function finish(won){
       ${ringLine()}<div class="cta"><button class="btn fill" type="button" id="rAgain">Try again</button></div>`);
   }else{
     const clean=won&&log.length===N&&log.every(x=>x.ok)&&!Object.values(triesAt).some(v=>v>0);
+    if(won) markSet(clean?'cup':'done');
     owed=null; sfx(clean?'fanfare':won?'bowlLow':'');
     const CUP=`<svg class="cup" viewBox="0 0 92 92" aria-hidden="true"><circle cx="46" cy="46" r="43" fill="var(--ring-core)"/><circle class="rim" cx="46" cy="46" r="40"/>
       <path d="M31 27h30v9c0 9-6.5 16-15 16s-15-7-15-16z M31 31h-7c0 8 4 12 9 12 M61 31h7c0 8-4 12-9 12 M46 52v9 M36 66h20" fill="none" stroke="#E9C98F" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -903,7 +972,7 @@ async function boardHeader(t){
       if(/^(forge|board)$/i.test(label)&&!m||/challenge\.html/.test(href||'')){          /* Forge's place — or a Board link — is ours */
         if(!placed){ out.push('<span class="mode-btn active" aria-current="page">Board</span>'); placed=true; } return; }
       if(el.classList.contains('mode-soon')) return;
-      const go=m?(m==='explore'?url:url+'?mode='+m):href?new URL(href,location.origin+url).pathname+new URL(href,location.origin+url).search:url;
+      const go=m?(url+'?mode='+m):href?new URL(href,location.origin+url).pathname+new URL(href,location.origin+url).search:url;
       if(go) out.push(`<a class="mode-btn" href="${esc(go)}">${esc(m==='board'?'Trail':label)}</a>`);
     });
     if(!placed) out.push('<span class="mode-btn active" aria-current="page">Board</span>');

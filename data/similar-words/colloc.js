@@ -139,6 +139,7 @@ function shuffle(a) {
   return a;
 }
 
+var GENERIC = ['very','really','extremely','so','quite','rather','pretty','fairly','seriously','incredibly','terribly','awfully','highly','totally','completely','absolutely','hugely','enormously','particularly','especially'];
 function buildItems() {
   var ns = nodesIn(PATS[pat]);
   var pool = [];
@@ -150,8 +151,17 @@ function buildItems() {
     n.collocates.forEach(function (c) {
       var opts = [c.w];
       n.avoid.forEach(function (a) { if (opts.indexOf(a.w) < 0) opts.push(a.w); });
+      /* A WRONG OPTION MUST BE WRONG. The fillers used to come from every
+         collocate in the pattern — including this word's OWN other partners
+         (deeply / gravely / increasingly concerned), so a right answer could
+         be marked wrong. They now skip this word's partners, and the
+         all-purpose intensifiers that fit almost any adjective ("very
+         important", "extremely concerned"). The curated `avoid` words, which
+         are known to be wrong, still come first. */
+      var own = n.collocates.map(function (x) { return x.w.toLowerCase(); });
       shuffle(pool.slice()).forEach(function (w) {
-        if (opts.length < 4 && opts.indexOf(w) < 0) opts.push(w);
+        var lw = w.toLowerCase();
+        if (opts.length < 4 && opts.indexOf(w) < 0 && own.indexOf(lw) < 0 && GENERIC.indexOf(lw) < 0) opts.push(w);
       });
       items.push({
         node: n.node,
@@ -231,6 +241,12 @@ function paintPick(idx) {
   q.querySelectorAll('.pick').forEach(function (b) {
     b.classList.toggle('picked', +b.dataset.o === picks[idx]);
   });
+  /* THE CHOICE GOES INTO THE SENTENCE. Only the dots used to change, so a
+     student had nothing to read back before pressing Check — and reading the
+     whole phrase ("a hugely important match") is the check. Tapping the pick
+     again empties the gap. */
+  var gap = $('gap' + idx);
+  if (gap) gap.textContent = picks[idx] === undefined ? '' : items[idx].options[picks[idx]];
 }
 
 function updateTally() {
@@ -346,6 +362,18 @@ document.querySelectorAll('.mode-btn[data-mode]').forEach(function (b) {
 });
 
 $('clearBtn').onclick = function () { show(); };
+
+/* ?mode=practice opens Practice. The Board links back here by mode, and
+   without this every link from it landed on Browse. */
+(function () {
+  var want = new URLSearchParams(location.search).get('mode');
+  if (!want || want === mode || !document.querySelector('.mode-btn[data-mode="' + want + '"]')) return;
+  mode = want;
+  document.querySelectorAll('.mode-btn[data-mode]').forEach(function (x) {
+    x.classList.toggle('active', x.dataset.mode === mode);
+  });
+  $('stripLabel').textContent = mode === 'browse' ? 'The partners that go with each word' : 'Choose the partner that fits';
+})();
 
 load();
 })();

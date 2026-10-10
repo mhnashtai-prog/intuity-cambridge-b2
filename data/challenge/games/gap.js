@@ -14,7 +14,7 @@
     const inp=host.querySelector('#cgIn'), go=()=>{
       if(host.dataset.locked) return; const v=norm(inp.value); if(!v) return;
       if(ctx.nudge&&(r.alsoRight||[]).map(norm).includes(v)&&ctx.nudge(r.alsoNote)){ inp.select(); return; }
-      const ok=r.answer.map(norm).includes(v);
+      const ok=(window.GameKit&&GameKit.same?GameKit.same(v,r.answer):r.answer.map(norm).includes(v));
       const again=ctx.answer(ok,inp.value.trim());
       if(ok&&!ctx.exam) host.querySelector('#cgBlank').textContent=r.answer[0];
       if(!ok&&!ctx.exam){ inp.classList.add('cg-shake'); setTimeout(()=>inp.classList.remove('cg-shake'),450); }

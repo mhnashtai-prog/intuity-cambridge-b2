@@ -83,6 +83,15 @@
 
     'body[data-ground="dark"] .be2{color:var(--ink,#fff)}';
 
+  /* The mark is drawn in Space Grotesk. A page that doesn't load it would
+     draw the mark in a fallback face, so fetch it here when it's missing. */
+  if (!document.querySelector('link[href*="Space+Grotesk"],link[href*="Space Grotesk"]')) {
+    var font = document.createElement('link');
+    font.rel = 'stylesheet';
+    font.href = 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&display=block';
+    (document.head || document.documentElement).appendChild(font);
+  }
+
   var style = document.createElement('style');
   style.id = 'be2-brand';
   style.textContent = css;

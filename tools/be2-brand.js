@@ -40,9 +40,9 @@
   ].join(',');
 
   var MARK_HTML =
-    '<span class="big top" aria-hidden="true">B<b class="e">e</b>2</span>' +
-    '<span class="big bot" aria-hidden="true">B<b class="e">e</b>2</span>' +
-    '<span class="band" aria-hidden="true"><i>FIRST</i></span>';
+    '<span class="be2-big be2-top" aria-hidden="true">B<b class="be2-e">e</b>2</span>' +
+    '<span class="be2-big be2-bot" aria-hidden="true">B<b class="be2-e">e</b>2</span>' +
+    '<span class="be2-band" aria-hidden="true"><i>FIRST</i></span>';
 
   /* ── CSS: the mark (same geometry as intuity-shell.css §14, so pages that
         already load the shell look identical), the inline size, and the
@@ -55,16 +55,18 @@
       "font-family:'Space Grotesk',system-ui,sans-serif;font-weight:700;" +
       'font-size:2.1rem;line-height:.98;letter-spacing:-.03em;' +
       'text-transform:none;text-indent:0;padding-right:.02em;color:#000}' +
-    '.be2 .big{display:block;margin:0;font:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;' +
+    '.be2 :is(.big,.be2-big){display:block;margin:0;font:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;' +
       'filter:drop-shadow(0 .04em .05em rgba(43,33,41,.24));' +
       'transform-origin:50% var(--pivot);transform:scaleY(var(--tall))}' +
-    '.be2 .e{display:inline-block;font-weight:700;transform-origin:50% .836em;transform:scaleY(var(--e))}' +
-    '.be2 .big.top{clip-path:inset(0 0 calc(100% - (var(--pivot) + (var(--mid) - var(--gap) / 2 - var(--pivot)) / var(--tall))) 0)}' +
-    '.be2 .big.bot{position:absolute;left:0;top:0;' +
+    '.be2 :is(.e,.be2-e){display:inline-block;font-weight:700;transform-origin:50% .836em;transform:scaleY(var(--e))}' +
+    '.be2 :is(.big.top,.be2-big.be2-top){clip-path:inset(0 0 calc(100% - (var(--pivot) + (var(--mid) - var(--gap) / 2 - var(--pivot)) / var(--tall))) 0)}' +
+    '.be2 :is(.big.bot,.be2-big.be2-bot){position:absolute;left:0;top:0;' +
       'clip-path:inset(calc(var(--pivot) + (var(--mid) + var(--gap) / 2 - var(--pivot)) / var(--tall)) 0 0 0)}' +
-    '.be2 .band{position:absolute;left:0;right:0;top:calc(var(--mid) - var(--gap) / 2);height:var(--gap);' +
+    '.be2 .be2-band{background:none;border:0;border-radius:0;padding:0;margin:0;width:auto;box-shadow:none}' +
+    '.be2 .be2-big,.be2 .be2-e{background:none;border:0;padding:0;box-shadow:none}' +
+    '.be2 :is(.band,.be2-band){position:absolute;left:0;right:0;top:calc(var(--mid) - var(--gap) / 2);height:var(--gap);' +
       'display:flex;align-items:center;justify-content:center}' +
-    '.be2 .band i{font-style:normal;font-weight:700;font-size:.28em;letter-spacing:.28em;text-indent:.28em;' +
+    '.be2 :is(.band,.be2-band) i{font-style:normal;font-weight:700;font-size:.28em;letter-spacing:.28em;text-indent:.28em;' +
       'line-height:1;color:#5E7A70;-webkit-text-stroke:.06em #5E7A70;paint-order:stroke fill;position:relative;top:0}' +
 
     /* Inline: lives inside someone else's header, so it takes the host's
@@ -72,14 +74,14 @@
        which the FIRST band is still legible. */
     '.be2.be2-inline{display:inline-block;vertical-align:middle;margin:0;' +
       'font-size:max(1.35em,1.25rem);color:inherit}' +
-    '.be2.be2-inline .big{color:inherit}' +
+    '.be2.be2-inline :is(.big,.be2-big){color:inherit}' +
     /* Old hosts painted the name with gradient-clipped text. That would
        erase the mark, so the host gives it up. */
     '.be2-host{background:none!important;-webkit-text-fill-color:currentColor!important;' +
       'text-transform:none!important;letter-spacing:normal!important;opacity:1!important}' +
     '.be2-host.be2-on-dark{color:#F4EFE6!important}' +
     '.be2-host:not(.be2-on-dark){color:#000!important}' +
-    '.be2-on-dark .be2 .big{filter:none}' +
+    '.be2-on-dark .be2 :is(.big,.be2-big){filter:none}' +
 
     'body[data-ground="dark"] .be2{color:var(--ink,#fff)}' +
 

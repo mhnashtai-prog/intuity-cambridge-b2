@@ -83,6 +83,17 @@
 
     'body[data-ground="dark"] .be2{color:var(--ink,#fff)}' +
 
+    /* Centre the mark on the PAGE, not on the space left between a long
+       back link and a short right corner ("← Sentence Structure" vs an
+       empty spacer pushed it right). Equal outer columns do that. */
+    /* Class set by run() only on a header-top laid out as flex, and kept at
+       low specificity so a page that hides its header (embedded games)
+       still wins. */
+    '.header-top.be2-centre{display:grid;' +
+      'grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}' +
+    '.header-top.be2-centre>:first-child{justify-self:start}' +
+    '.header-top.be2-centre>:last-child{justify-self:end}' +
+
     /* A compact header (mark beside the page name, a hairline between):
          <div class="brand be2-row"><span data-be2></span>
            <span class="be2-text">…the page's own title lines…</span></div> */
@@ -174,6 +185,13 @@
         swapText(el);
       }
     }
+    var tops = document.querySelectorAll('.header-top');
+    for (var j = 0; j < tops.length; j++) {
+      var ht = tops[j];
+      if (ht.children.length === 3 && ht.querySelector(':scope > .header-title > .be2') &&
+          getComputedStyle(ht).display === 'flex') ht.classList.add('be2-centre');
+    }
+
     document.documentElement.classList.add('be2-ready');
   }
 

@@ -81,7 +81,19 @@
     '.be2-host:not(.be2-on-dark){color:#000!important}' +
     '.be2-on-dark .be2 .big{filter:none}' +
 
-    'body[data-ground="dark"] .be2{color:var(--ink,#fff)}';
+    'body[data-ground="dark"] .be2{color:var(--ink,#fff)}' +
+
+    /* A compact header (mark beside the page name, a hairline between):
+         <div class="brand be2-row"><span data-be2></span>
+           <span class="be2-text">…the page's own title lines…</span></div> */
+    '.be2-row{flex-direction:row!important;align-items:center!important;gap:.7rem!important}' +
+    '.be2-row>[data-be2]{display:flex;align-items:center;padding-right:.7rem;' +
+      'border-right:1px solid var(--rule,rgba(20,17,14,.14))}' +
+    '.be2-row>[data-be2].be2-on-dark{border-right-color:rgba(244,239,230,.2)}' +
+    '.be2-row>[data-be2] .be2{font-size:1.3rem}' +
+    '@media(max-width:420px){.be2-row{gap:.5rem!important}.be2-row>[data-be2]{padding-right:.5rem}' +
+      '.be2-row>[data-be2] .be2{font-size:1.1rem}}' +
+    '.be2-row>.be2-text{display:flex;flex-direction:column;gap:1px}';
 
   /* The mark is drawn in Space Grotesk. A page that doesn't load it would
      draw the mark in a fallback face, so fetch it here when it's missing. */
@@ -129,6 +141,18 @@
   function run() {
     if (OLD_NAME.test(document.title)) document.title = document.title.replace(OLD_NAME, NEW_NAME);
     OLD_NAME.lastIndex = 0;
+
+    /* An explicit placeholder, for headers that never carried the old name:
+         <span data-be2></span>   → compact mark
+       Put it where the mark should sit; the page's own text stays. */
+    var marks = document.querySelectorAll('[data-be2]');
+    for (var k = 0; k < marks.length; k++) {
+      var h = marks[k];
+      if (h.querySelector('.be2')) continue;
+      h.classList.add('be2-host');
+      if (onDark(h)) h.classList.add('be2-on-dark');
+      h.appendChild(makeMark(true));
+    }
 
     var slots = document.querySelectorAll(BRAND_SLOTS);
     for (var i = 0; i < slots.length; i++) {

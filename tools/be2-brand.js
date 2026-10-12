@@ -52,7 +52,7 @@
 
     '.be2{--mid:.591em;--pivot:.486em;--gap:.36em;--tall:1.2;--e:1.3;' +
       'position:relative;display:block;width:max-content;margin:.1em auto .4em;' +
-      "font-family:'Space Grotesk',system-ui,sans-serif;font-weight:700;" +
+      "font-family:'Space Grotesk', system-ui, sans-serif;font-weight:700;" +
       'font-size:2.1rem;line-height:.98;letter-spacing:-.03em;' +
       'text-transform:none;text-indent:0;padding-right:.02em;color:#000}' +
     '.be2 :is(.big,.be2-big){display:block;margin:0;font:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;' +
@@ -115,6 +115,15 @@
     font.rel = 'stylesheet';
     font.href = 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&display=block';
     (document.head || document.documentElement).appendChild(font);
+  }
+
+  /* The shared system rules (hit areas, mode row, end card) live in their own
+     stylesheet so they can be read and changed without touching this file. */
+  if (!document.querySelector('link[href*="/tools/be2-system.css"]')) {
+    var sys = document.createElement('link');
+    sys.rel = 'stylesheet';
+    sys.href = '/tools/be2-system.css?v=1';
+    (document.head || document.documentElement).appendChild(sys);
   }
 
   var style = document.createElement('style');
@@ -194,8 +203,41 @@
           getComputedStyle(ht).display === 'flex') ht.classList.add('be2-centre');
     }
 
+    tagHits();
     document.documentElement.classList.add('be2-ready');
   }
+
+  /* ── Hit areas: every control smaller than 44px on a touch screen gets an
+     invisible larger target, drawn on whichever pseudo-element is free. ── */
+  var HIT = 'button,a[href],[role=button],[onclick],input[type=checkbox],input[type=radio],select,label[for]';
+  function tagHits() {
+    if (!window.matchMedia || !matchMedia('(pointer: coarse)').matches) return;
+    var els = document.querySelectorAll(HIT);
+    for (var i = 0; i < els.length; i++) {
+      var e = els[i];
+      if (e.classList.contains('be2-hit') || e.classList.contains('be2-nohit')) continue;
+      var r = e.getBoundingClientRect();
+      if (!r.width || !r.height || (r.width >= 44 && r.height >= 44)) continue;
+      var cs = getComputedStyle(e);
+      var before = getComputedStyle(e, '::before').content, after = getComputedStyle(e, '::after').content;
+      var freeB = !before || before === 'none' || before === 'normal';
+      var freeA = !after || after === 'none' || after === 'normal';
+      if (!freeB && !freeA) continue;               /* both in use: leave it alone */
+      e.classList.add('be2-hit', freeB ? 'be2-hit-b' : 'be2-hit-a');
+      if (cs.position === 'static') e.classList.add('be2-pos');
+      e.style.setProperty('--be2-hy', -Math.max(0, Math.ceil((44 - r.height) / 2)) + 'px');
+      e.style.setProperty('--be2-hx', -Math.max(0, Math.min(8, Math.ceil((44 - r.width) / 2))) + 'px');
+    }
+  }
+  /* Pages build most of their controls after loading data, so look again
+     whenever the page adds content (at most once per animation frame). */
+  var pending = false;
+  try {
+    new MutationObserver(function () {
+      if (pending) return; pending = true;
+      requestAnimationFrame(function () { pending = false; tagHits(); });
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  } catch (e) {}
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
   else run();

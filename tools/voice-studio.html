@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Be2FIRST — Voice Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@400..600&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+/* ═══ VOICE STUDIO ═══
+   A teacher's tool, not a student page (not linked from the app). Turns
+   audio/speaking/LINES.csv into correctly named MP3s with ElevenLabs, in the
+   teacher's own browser, and hands back one zip. The API key never leaves
+   this browser except to go to api.elevenlabs.io. */
+:root{--paper:#F3F1EC;--card:#FAF8F5;--ink:#14110E;--quiet:#5C5852;--faint:#8A8378;--rule:rgba(20,17,14,.12);
+  --caramel:#A9774A;--sage:#527065;--bad:#B3261E}
+*{box-sizing:border-box}
+html,body{background:var(--paper);margin:0}
+body{color:var(--ink);font-family:'Geist',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:46rem;margin:0 auto;padding:28px 16px 64px}
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+h1{font:700 1.9rem/1 'Space Grotesk',system-ui,sans-serif;letter-spacing:-.03em;margin:0}
+.kick{font:500 11px/1 'Geist Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--caramel)}
+.lede{color:var(--quiet);line-height:1.5;margin:6px 0 22px}
+section{background:var(--card);border:1px solid var(--rule);border-radius:14px;padding:18px 18px 16px;margin-bottom:14px}
+section.off{opacity:.45;pointer-events:none}
+h2{display:flex;align-items:center;gap:10px;font-size:1.05rem;margin:0 0 10px}
+h2 .n{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;
+  background:var(--ink);color:var(--card);font:600 13px/1 'Geist Mono',monospace}
+h2 .ok{margin-left:auto;font:500 12px/1 'Geist Mono',monospace;color:var(--sage)}
+p.hint{font-size:.88rem;color:var(--quiet);line-height:1.5;margin:0 0 12px}
+input[type=password],input[type=text],select{font:inherit;font-size:.95rem;width:100%;min-height:42px;padding:8px 12px;
+  border:1px solid var(--rule);border-radius:10px;background:#fff;color:var(--ink)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row > *{flex:1}
+button{font:600 .95rem/1 'Geist',system-ui,sans-serif;min-height:44px;padding:0 18px;border-radius:999px;cursor:pointer;
+  border:1.5px solid var(--ink);background:transparent;color:var(--ink)}
+button.dark{background:var(--ink);color:var(--card)}
+button:disabled{opacity:.4;cursor:default}
+.vgrid{display:grid;grid-template-columns:minmax(9rem,max-content) 1fr auto;gap:8px 12px;align-items:center}
+.vgrid .who b{display:block}.vgrid .who small{color:var(--faint);font-size:.78rem}
+.play{min-height:36px;padding:0 12px;font-size:.85rem}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.chip{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border:1px solid var(--rule);border-radius:999px;
+  font-size:.88rem;cursor:pointer;background:#fff;user-select:none}
+.chip input{accent-color:var(--ink)}
+.sum{font:500 13px/1.5 'Geist Mono',monospace;color:var(--quiet);background:#F1ECE3;border-radius:10px;padding:10px 12px}
+.sum b{color:var(--ink)}
+.bar{height:10px;border-radius:999px;background:#E9E4DA;overflow:hidden;margin:12px 0 8px}
+.bar i{display:block;height:100%;width:0;background:var(--sage);transition:width .2s}
+.log{font:12px/1.5 'Geist Mono',monospace;color:var(--quiet);max-height:9rem;overflow:auto;white-space:pre-wrap;margin-top:8px}
+.log .bad{color:var(--bad)}
+@media(max-width:560px){.vgrid{grid-template-columns:1fr auto}.vgrid .who{grid-column:1/-1}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><span class="kick">Be2FIRST · teacher tool</span></header>
+  <h1>Voice Studio</h1>
+  <p class="lede">Turns the Speaking recording list into correctly named MP3s with your ElevenLabs voices, and gives you one zip to send back. Nothing here is seen by students.</p>
+
+  <section id="s1">
+    <h2><span class="n">1</span>Your ElevenLabs key<span class="ok" id="ok1"></span></h2>
+    <p class="hint">Find it in ElevenLabs under your profile → <b>API keys</b>. It stays in this browser tab and is sent only to ElevenLabs.</p>
+    <div class="row"><input type="password" id="key" placeholder="sk_…" autocomplete="off" spellcheck="false"><button class="dark" id="connect" type="button" style="flex:none">Connect</button></div>
+  </section>
+
+  <section id="s2" class="off">
+    <h2><span class="n">2</span>Choose a voice for each speaker<span class="ok" id="ok2"></span></h2>
+    <p class="hint">From your ElevenLabs voices. ▶ plays the voice's own sample. Pick distinct voices so students can tell the speakers apart.</p>
+    <div class="vgrid" id="vgrid"></div>
+  </section>
+
+  <section id="s3" class="off">
+    <h2><span class="n">3</span>Choose what to record<span class="ok" id="ok3"></span></h2>
+    <p class="hint">Start small, for example the examiner lines, and check how they sound in the app before recording everything. Lines already in the app are skipped.</p>
+    <div class="chips" id="parts"></div>
+    <div class="chips" id="roles"></div>
+    <div class="sum" id="sum">Loading the recording list…</div>
+  </section>
+
+  <section id="s4" class="off">
+    <h2><span class="n">4</span>Record and download<span class="ok" id="ok4"></span></h2>
+    <div class="row" style="flex-wrap:nowrap">
+      <button class="dark" id="go" type="button">Record</button>
+      <button id="pause" type="button" disabled>Pause</button>
+      <button id="dl" type="button" disabled>Download zip</button>
+    </div>
+    <div class="bar"><i id="barI"></i></div>
+    <div class="sum" id="prog">Ready.</div>
+    <div class="log" id="log"></div>
+  </section>
+</div>
+
+<script>
+(function () {
+  var API = 'https://api.elevenlabs.io/v1';
+  var MODEL = 'eleven_multilingual_v2', FORMAT = 'mp3_44100_64';
+  var $ = function (id) { return document.getElementById(id); };
+  var KEY = '', VOICES = [], LINES = [], DONE = {}, CHOICE = {}, files = {}, running = false, paused = false;
+
+  function store(k, v) { try { sessionStorage.setItem('be2vs.' + k, JSON.stringify(v)); } catch (e) {} }
+  function load(k, d) { try { var r = sessionStorage.getItem('be2vs.' + k); return r ? JSON.parse(r) : d; } catch (e) { return d; } }
+  function log(t, bad) { var el = $('log'); el.innerHTML += (bad ? '<span class="bad">' : '') + t.replace(/</g, '&lt;') + (bad ? '</span>' : '') + '\n'; el.scrollTop = el.scrollHeight; }
+
+  /* ── the recording list ── */
+  function parseCSV(t) {
+    var rows = [], row = [], f = '', q = false;
+    for (var i = 0; i < t.length; i++) {
+      var c = t[i];
+      if (q) { if (c === '"') { if (t[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+      else if (c === '"') q = true;
+      else if (c === ',') { row.push(f); f = ''; }
+      else if (c === '\n' || c === '\r') { if (c === '\r' && t[i + 1] === '\n') i++; row.push(f); rows.push(row); row = []; f = ''; }
+      else f += c;
+    }
+    if (f || row.length) { row.push(f); rows.push(row); }
+    var h = rows.shift();
+    return rows.filter(function (r) { return r.length === h.length; }).map(function (r) { var o = {}; h.forEach(function (k, i) { o[k] = r[i]; }); return o; });
+  }
+  Promise.all([
+    fetch('/audio/speaking/LINES.csv', { cache: 'no-cache' }).then(function (r) { return r.text(); }),
+    fetch('/audio/speaking/manifest.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : { lines: {} }; }).catch(function () { return { lines: {} }; })
+  ]).then(function (res) {
+    LINES = parseCSV(res[0]);
+    Object.values(res[1].lines || {}).forEach(function (f) { DONE[f] = 1; });
+    buildFilters(); summary();
+  });
+
+  var SPEAKERS = function () { var s = {}; LINES.forEach(function (l) { s[l.voice] = (s[l.voice] || 0) + 1; }); return s; };
+
+  function buildFilters() {
+    var parts = {}, roles = {};
+    LINES.forEach(function (l) { parts[l.part] = 1; roles[l.role] = 1; });
+    $('parts').innerHTML = Object.keys(parts).sort().map(function (p) { return '<label class="chip"><input type="checkbox" data-part="' + p + '"' + (p === '1' ? ' checked' : '') + '>Part ' + p + '</label>'; }).join('');
+    $('roles').innerHTML = Object.keys(roles).sort().map(function (r) { return '<label class="chip"><input type="checkbox" data-role="' + r + '"' + (r === 'examiner' ? ' checked' : '') + '>' + r.charAt(0).toUpperCase() + r.slice(1) + ' lines</label>'; }).join('');
+    ['parts', 'roles'].forEach(function (id) { $(id).addEventListener('change', summary); });
+  }
+  function picked() {
+    var P = {}, R = {};
+    document.querySelectorAll('[data-part]').forEach(function (c) { if (c.checked) P[c.dataset.part] = 1; });
+    document.querySelectorAll('[data-role]').forEach(function (c) { if (c.checked) R[c.dataset.role] = 1; });
+    return LINES.filter(function (l) { return P[l.part] && R[l.role] && !DONE[l.file] && !files[l.file]; });
+  }
+  function summary() {
+    var L = picked(), ch = L.reduce(function (a, l) { return a + l.text.length; }, 0);
+    var all = LINES.length, have = Object.keys(DONE).length;
+    $('sum').innerHTML = '<b>' + L.length + '</b> lines · <b>' + ch.toLocaleString() + '</b> characters from your ElevenLabs allowance' +
+      '<br>Whole list: ' + all.toLocaleString() + ' lines, ' + have + ' already in the app.';
+    $('go').disabled = !L.length || !ready();
+  }
+
+  /* ── 1 · key ── */
+  $('key').value = load('key', '');
+  $('connect').onclick = function () {
+    KEY = $('key').value.trim(); if (!KEY) return;
+    $('ok1').textContent = 'connecting…';
+    fetch(API + '/voices', { headers: { 'xi-api-key': KEY } })
+      .then(function (r) { if (!r.ok) throw new Error(r.status === 401 ? 'That key was not accepted.' : 'ElevenLabs answered ' + r.status); return r.json(); })
+      .then(function (d) {
+        VOICES = (d.voices || []).map(function (v) { return { id: v.voice_id, name: v.name, preview: v.preview_url, labels: v.labels || {} }; })
+          .sort(function (a, b) { return a.name.localeCompare(b.name); });
+        store('key', KEY); $('ok1').textContent = '✓ ' + VOICES.length + ' voices';
+        $('s2').classList.remove('off'); buildVoices();
+      })
+      .catch(function (e) { $('ok1').textContent = ''; alert(e.message); });
+  };
+
+  /* ── 2 · voices ── */
+  function buildVoices() {
+    CHOICE = load('choice', {});
+    var S = SPEAKERS();
+    $('vgrid').innerHTML = Object.keys(S).sort(function (a, b) { return a.indexOf('Examiner') === 0 ? -1 : b.indexOf('Examiner') === 0 ? 1 : a.localeCompare(b); }).map(function (sp, i) {
+      var name = sp.split(' · ')[0], hint = sp.split(' · ')[1] || '';
+      var opts = '<option value="">Choose a voice…</option>' + VOICES.map(function (v) {
+        var tag = [v.labels.gender, v.labels.accent].filter(Boolean).join(', ');
+        return '<option value="' + v.id + '"' + (CHOICE[sp] === v.id ? ' selected' : '') + '>' + v.name + (tag ? ' — ' + tag : '') + '</option>'; }).join('');
+      return '<div class="who"><b>' + name + '</b><small>' + hint + ' · ' + S[sp] + ' lines</small></div>' +
+        '<select data-sp="' + sp + '">' + opts + '</select><button class="play" type="button" data-play="' + sp + '">▶</button>';
+    }).join('');
+    $('vgrid').onchange = function (e) { var s = e.target.closest('select'); if (!s) return; CHOICE[s.dataset.sp] = s.value; store('choice', CHOICE); checkVoices(); };
+    $('vgrid').onclick = function (e) {
+      var b = e.target.closest('[data-play]'); if (!b) return;
+      var v = VOICES.find(function (x) { return x.id === CHOICE[b.dataset.play]; });
+      if (v && v.preview) new Audio(v.preview).play();
+    };
+    checkVoices();
+  }
+  function ready() { var S = SPEAKERS(); return Object.keys(S).every(function (sp) { return CHOICE[sp]; }); }
+  function checkVoices() {
+    var ok = ready();
+    $('ok2').textContent = ok ? '✓ all speakers' : '';
+    ['s3', 's4'].forEach(function (id) { $(id).classList.toggle('off', !ok); });
+    summary();
+  }
+
+  /* ── 4 · record ── */
+  function tts(l) {
+    return fetch(API + '/text-to-speech/' + CHOICE[l.voice] + '?output_format=' + FORMAT, {
+      method: 'POST', headers: { 'xi-api-key': KEY, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
+      body: JSON.stringify({ text: l.text, model_id: MODEL, voice_settings: { stability: 0.5, similarity_boost: 0.75 } })
+    }).then(function (r) {
+      if (r.status === 429) { var e = new Error('busy'); e.retry = true; throw e; }
+      if (!r.ok) return r.text().then(function (t) { throw new Error(r.status + ' ' + t.slice(0, 160)); });
+      return r.blob();
+    });
+  }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  $('go').onclick = async function () {
+    if (running) return;
+    var Q = picked(), total = Q.length, done = 0, fail = 0;
+    if (!total) return;
+    var ch = Q.reduce(function (a, l) { return a + l.text.length; }, 0);
+    if (!confirm('Record ' + total + ' lines? This uses about ' + ch.toLocaleString() + ' characters of your ElevenLabs allowance.')) return;
+    running = true; paused = false; $('go').disabled = true; $('pause').disabled = false;
+    async function worker() {
+      while (Q.length && running) {
+        while (paused) await sleep(300);
+        var l = Q.shift(), tries = 0;
+        while (true) {
+          try { files[l.file] = await tts(l); break; }
+          catch (e) {
+            if (e.retry && tries++ < 6) { await sleep(1500 * tries); continue; }
+            fail++; log('✗ ' + l.file + ' — ' + e.message, true); break;
+          }
+        }
+        done++;
+        $('barI').style.width = (done / total * 100) + '%';
+        $('prog').innerHTML = '<b>' + done + '</b> / ' + total + ' lines' + (fail ? ' · <b>' + fail + '</b> failed' : '') + ' · ' + Object.keys(files).length + ' files ready';
+        $('dl').disabled = !Object.keys(files).length;
+      }
+    }
+    await Promise.all([worker(), worker(), worker()]);   /* three at a time, inside ElevenLabs' usual limits */
+    running = false; $('pause').disabled = true; $('pause').textContent = 'Pause';
+    $('ok4').textContent = fail ? fail + ' failed — press Record again to retry them' : '✓ done';
+    log('Finished: ' + (done - fail) + ' recorded' + (fail ? ', ' + fail + ' failed' : '') + '.');
+    summary();
+  };
+  $('pause').onclick = function () { paused = !paused; this.textContent = paused ? 'Resume' : 'Pause'; };
+
+  $('dl').onclick = async function () {
+    var zip = new JSZip(), dir = zip.folder('speaking');
+    Object.keys(files).forEach(function (f) { dir.file(f, files[f]); });
+    $('dl').disabled = true; $('dl').textContent = 'Zipping…';
+    var blob = await zip.generateAsync({ type: 'blob' });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = 'be2first-voices-' + new Date().toISOString().slice(0, 10) + '-' + Object.keys(files).length + '.zip';
+    document.body.appendChild(a); a.click(); a.remove();
+    $('dl').disabled = false; $('dl').textContent = 'Download zip';
+    log('Zip saved: ' + Object.keys(files).length + ' files. Attach it in the chat with Claude.');
+  };
+})();
+</script>
+</body>
+</html>

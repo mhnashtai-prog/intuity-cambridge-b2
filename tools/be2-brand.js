@@ -62,8 +62,10 @@
     '.be2 :is(.big.top,.be2-big.be2-top){clip-path:inset(0 0 calc(100% - (var(--pivot) + (var(--mid) - var(--gap) / 2 - var(--pivot)) / var(--tall))) 0)}' +
     '.be2 :is(.big.bot,.be2-big.be2-bot){position:absolute;left:0;top:0;' +
       'clip-path:inset(calc(var(--pivot) + (var(--mid) + var(--gap) / 2 - var(--pivot)) / var(--tall)) 0 0 0)}' +
-    '.be2 .be2-band{background:none;border:0;border-radius:0;padding:0;margin:0;width:auto;box-shadow:none}' +
+    '.be2 .be2-band{background:none;border:0;border-radius:0;padding:0;margin:0;width:auto;box-shadow:none;' +
+      'font-size:inherit;letter-spacing:normal;line-height:inherit;text-transform:none}' +
     '.be2 .be2-big,.be2 .be2-e{background:none;border:0;padding:0;box-shadow:none}' +
+    '.be2 .be2-e{font-size:inherit;font-family:inherit;letter-spacing:inherit;text-transform:none;color:inherit}' +
     '.be2 :is(.band,.be2-band){position:absolute;left:0;right:0;top:calc(var(--mid) - var(--gap) / 2);height:var(--gap);' +
       'display:flex;align-items:center;justify-content:center}' +
     '.be2 :is(.band,.be2-band) i{font-style:normal;font-weight:700;font-size:.28em;letter-spacing:.28em;text-indent:.28em;' +
@@ -72,7 +74,10 @@
     /* Inline: lives inside someone else's header, so it takes the host's
        ink (a dark bar keeps it visible) and never drops below a size at
        which the FIRST band is still legible. */
-    '.be2.be2-inline{display:inline-block;vertical-align:middle;margin:0;' +
+    /* .be2.be2-inline beats a host page's "span" or "b" rules (e.g. .title span),
+       which would otherwise space the letters out and shrink the band. */
+    '.be2.be2-inline{display:inline-block;vertical-align:middle;margin:0;letter-spacing:-.03em;line-height:.98;' +
+      "font-family:'Space Grotesk',system-ui,sans-serif;font-weight:700;text-transform:none;" +
       'font-size:max(1.35em,1.25rem);color:inherit}' +
     '.be2.be2-inline :is(.big,.be2-big){color:inherit}' +
     /* Old hosts painted the name with gradient-clipped text. That would

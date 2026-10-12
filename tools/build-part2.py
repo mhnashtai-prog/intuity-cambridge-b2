@@ -41,9 +41,9 @@ BANK = ["I feel that in many ways", "the two pictures are similar", "They both s
  "It's likely that", "It's possible that", "is likely", "are likely to", "certainly", "probably", "could be", "might",
  "must", "seems to be", "seem to be", "look as if", "I'd say", "I believe", "not only", "but also"]
 
-def marks_for(t):
+def marks_for(t, bank=None):
     out, taken = [], []
-    for p in sorted(BANK, key=len, reverse=True):
+    for p in sorted(bank or BANK, key=len, reverse=True):
         i = t.find(p)
         if i < 0 or any(a < i + len(p) and i < b for a, b in taken): continue
         taken.append((i, i + len(p))); out.append(p)
@@ -192,6 +192,57 @@ task("travel", "Travel", "Compare the two photographs and say what might make th
  "The traveller in the second picture is definitely lost.",
  "Both pictures also show beautiful places.")
 
+# ── the examiner's set-up line and the partner's question ──
+# In the exam the examiner names the photos' theme ("They show…") before the
+# task, and after the minute asks the OTHER candidate a short question about
+# the same photos (about 30 seconds). Both added from the FCE model interviews.
+FOLLOW = {
+ "work": ("They show people working in different places.", "Which of these places would you prefer to work in?", (
+   ("That's a difficult one, but I'd rather work [[in the café]].", "I imagine [[an office meeting like that]] would make me [[quite nervous]], and a café is [[much more relaxed than an office]].", "I suppose I might [[get distracted by the noise]], but at least I could [[choose my own hours and take a break whenever I wanted]]."),
+   ("To be honest, I'd prefer [[the office]].", "I think working with [[a team]] is [[more motivating than working alone]], and you can always [[ask someone for help]].", "In a café, on the other hand, I imagine I'd [[spend the whole morning people-watching instead of working]]!"),
+   ("I'd definitely choose [[the café]].", "I suppose [[the office]] is [[more professional]], but for me the atmosphere in [[a café]] is [[far more creative]].", "Mind you, [[the noise and the music]] could be a problem if I [[had to concentrate on something difficult]].")) ),
+ "social": ("They show people in busy places.", "Which of these places would you rather be in?", (
+   ("I'd rather be [[in the library with my friends]].", "I imagine [[a crowded street at night]] would be [[exciting for a while]], but [[it would soon get tiring]].", "Studying together is [[much more relaxing than being in a crowd of strangers]], and you [[get help when you're stuck]]."),
+   ("Personally, I'd choose [[the city at night]].", "I love [[the lights and the energy]], and I suppose it feels [[more alive than a quiet library]].", "I'd probably [[go with a group of friends]], though, so I wouldn't [[feel lonely or lost in the crowd]]."),
+   ("That's a difficult one.", "I'd say [[the library]], because I'd feel [[more comfortable with people I know]].", "I imagine [[the street]] would be [[far too noisy and busy]] for me, especially [[after a long day at school]].")) ),
+ "entertainment": ("They show people spending their free time in different ways.", "Which of these would you rather do on a Saturday evening?", (
+   ("I'd rather [[go to the cinema]].", "I imagine [[the big screen and the sound]] make [[a film far more exciting than at home]].", "Board games are fun, but I suppose they [[can go on for hours, and someone always gets annoyed when they lose]]!"),
+   ("To be honest, I'd prefer [[a board game at home]].", "It's [[much cheaper than the cinema]], and you can [[actually talk to each other]].", "I suppose it depends on [[who you're with]], though — with [[the wrong people]], it could be [[a very long evening]]."),
+   ("I'd definitely choose [[the cinema]].", "I think going out is [[more of an occasion than staying in]], especially at the weekend.", "I imagine [[my family]] would rather [[stay at home]], but I'd [[try to persuade them to come with me]].")) ),
+ "shopping": ("They show people shopping in different places.", "Where do you prefer to go shopping?", (
+   ("I prefer [[the local market]].", "I imagine [[the food]] is [[fresher than in a supermarket]], and [[the stallholders]] are [[much friendlier]].", "I suppose [[a mall]] is [[more convenient]] when the weather's bad, though, because [[everything is indoors and you can stay dry]]."),
+   ("To be honest, I'd rather go to [[a shopping mall]].", "Everything is [[in one place]], so it's [[much quicker than walking round a market]].", "I imagine [[markets]] are [[more fun for tourists who want to see local life]]."),
+   ("That depends on [[what I'm buying]].", "For [[clothes]] I'd choose [[the mall]], but for [[fruit and vegetables]] I'd say [[the market]] is [[far better]].", "I suppose I like [[a bit of both]], as long as [[it isn't too crowded]].")) ),
+ "outdoor": ("They show people spending time outdoors.", "Which of these places would you prefer to visit?", (
+   ("I'd rather go to [[the beach]].", "I imagine [[watching the sunset there]] would be [[really peaceful]], and it's [[much less tiring than climbing a mountain]]!", "I suppose I'm [[not very sporty]], so [[a long walk up a mountain]] wouldn't be [[my idea of a holiday]]."),
+   ("Personally, I'd prefer [[the mountains]].", "I think [[hiking]] is [[more of an adventure than lying on a beach]], and the views must be [[amazing]].", "I imagine I'd [[feel really proud when I reached the top]], and I'd [[sleep really well]] afterwards!"),
+   ("That's a difficult one, because [[I love both]].", "I suppose [[the beach]] is [[more relaxing]], but [[the mountains]] would be [[more memorable]].", "I'd probably choose [[the hike]], as long as [[the weather was good and I had the right shoes]].")) ),
+ "learning": ("They show people learning in different situations.", "Where do you find it easier to learn?", (
+   ("I find it easier to learn [[at home]].", "It's [[much quieter than a classroom]], and I imagine I can [[ask my parents]] if I'm stuck.", "I suppose I [[concentrate better]] on my own, because [[nobody is chatting next to me]]."),
+   ("To be honest, I learn better [[with other students]].", "I think explaining things to [[each other]] makes them [[clearer than reading alone]].", "I imagine I'd [[get bored]] studying at home all day, and I'd [[probably end up on my phone]]."),
+   ("Well, I'd say it depends on [[the subject]].", "For [[maths]] I'd rather [[study with friends]], but for [[reading]] I'd say home is [[far better]].", "I suppose everyone [[learns in a different way]], so [[it's good to have both options]].")) ),
+ "sports": ("They show people doing different kinds of exercise.", "Would you rather play a team sport or train on your own?", (
+   ("I'd rather play [[a team sport]].", "I imagine training [[alone in a gym]] would be [[much more boring than playing with friends]].", "I suppose I need [[other people]] to [[motivate me]], and [[winning together]] feels [[much better than winning alone]]."),
+   ("Personally, I'd prefer [[training on my own]].", "I can [[go whenever I want]], which is [[more flexible than fixed team practices]].", "I imagine [[a team]] would also [[put more pressure on me]], because [[everyone expects you to play well]]."),
+   ("That's a difficult one, to be honest.", "I suppose [[team sports]] are [[more fun]], but [[the gym]] is [[better for getting fit quickly]].", "I'd probably choose [[a team]], because [[I like the social side and making new friends]].")) ),
+ "travel": ("They show people on different kinds of trips.", "Which kind of trip would you enjoy more?", (
+   ("I'd enjoy [[the city trip]] more.", "I imagine [[the museums and the food]] would be [[far more interesting than walking for hours]].", "I suppose I'm [[a city person]] — I'd rather [[explore streets and cafés than sleep in a tent]]."),
+   ("To be honest, I'd prefer [[the nature trip]].", "I think [[being in the mountains]] is [[much more relaxing than a crowded city]].", "I imagine it would also be [[cheaper]], and [[far better for switching off from your phone]]."),
+   ("It depends on [[who I'm with]].", "With [[my family]] I'd choose [[the city]], but with [[friends]] I'd say [[an adventure]] would be [[more fun]].", "I suppose [[trying different things]] is the best part of travelling, so [[I'd happily do both]].")) ),
+}
+FBANK = ["That's a difficult one", "To be honest", "Personally", "I'd rather", "I'd prefer", "I'd definitely choose",
+         "I'd choose", "I'd say", "I imagine", "I suppose", "It depends on", "That depends on", "Mind you", "though",
+         "much more", "far more", "much less", "more", "than", "far better", "as long as", "I'd probably"]
+FWHY = ["Choose, give one reason with a comparison, then add a second thought.",
+        "Same shape: choose, compare, then look at the other side.",
+        "Same shape again: 'It depends on…' is a good way in when you like both."]
+for tk in T:
+    theme, fq, alts = FOLLOW[tk["id"]]
+    tk["theme"] = theme
+    tk["followUp"] = fq
+    for i, (x, a, r) in enumerate(alts):
+        tk["alts"][i]["follow"] = {"why": FWHY[i], "segs": [{"m": "x", "t": x}, {"m": "a", "t": a}, {"m": "r", "t": r}]}
+
 # ── build ──
 def secs(t): return round(len([w for w in t.split() if re.search(r'[A-Za-z0-9]', w)])/2.5)
 clean = lambda t: re.sub(r'\[\[(.*?)\]\]', r'\1', t)
@@ -199,6 +250,15 @@ blank = lambda t: re.sub(r'\[\[(.*?)\]\]', '___', t)
 bad = 0
 for tk in T:
     for i, alt in enumerate(tk["alts"]):
+        fb = alt.get("follow")
+        if fb:
+            fb["frame"] = "\n".join(blank(s["t"]) for s in fb["segs"])
+            for s in fb["segs"]:
+                s["t"] = clean(s["t"]); s["marks"] = marks_for(s["t"], FBANK)
+            fs = sum(secs(s["t"]) for s in fb["segs"])
+            fok = 15 <= fs <= 30
+            print(f"{'  ' if fok else '!!'} {tk['id']:14} {['Default','Alt 1','Alt 2'][i]:8} follow-up {fs}s")
+            bad += not fok
         blk = alt["turn"]
         blk["frame"] = "\n".join(blank(s["t"]) for s in blk["segs"])
         for s in blk["segs"]:
@@ -215,10 +275,14 @@ D = {
  "note": ("Eight photo pairs. The minute in three chunks — Similarities, Differences, Speculating — on the school frame. "
           "Default, Alternative 1 and Alternative 2 keep the frame and rotate the key expressions. Built by build-part2.py."),
  "tip": "One sentence of similarities, one of differences — then spend the rest of the minute speculating to answer the question.",
- "modes": {"turn": {"label": "1 minute", "limit": 60, "band": [50, 60], "order": ["sim", "dif", "spe"]}},
+ "modes": {"turn": {"label": "1 minute", "limit": 60, "band": [50, 60], "order": ["sim", "dif", "spe"]},
+           "follow": {"label": "Your partner's question", "limit": 30, "band": [15, 30], "order": ["x", "a", "r"]}},
  "moves": {
   "sim": {"name": "Similarities", "hint": "one or two sentences: what the pictures share", "ask": "Start with the similarities."},
   "dif": {"name": "Differences", "hint": "one sentence with 'while', 'whereas' or 'by contrast'", "ask": "Now the difference — in one sentence."},
+  "x": {"name": "Choose", "hint": "say which one, straight away", "ask": "Start by choosing."},
+  "a": {"name": "Compare", "hint": "one reason, with a comparison: 'much more … than'", "ask": "Now give a reason — compare the two."},
+  "r": {"name": "Add", "hint": "a second thought: 'I suppose…', 'I imagine…'", "ask": "Now add one more thought."},
   "spe": {"name": "Speculating", "hint": "answer the question for each picture — guess, don't describe", "ask": "Now speculate: answer the question for each picture."}
  },
  "voices": [{"id": "default", "tab": "Default", "fem": True}, {"id": "alt1", "tab": "Alternative 1", "fem": False},

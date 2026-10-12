@@ -753,6 +753,34 @@ for tk in T:
             print(f"{'  ' if ok else '!!'} {tk['id']:7} {V[i]['tab']:14} {part:8} {len(turns)} turns {tot:3}s  prompts {sorted(covered)}  build-ons {builds}")
             bad += not ok
 
+# ── the examiner's set-up, as in the exam ──
+# A scenario ("I'd like you to imagine that…"), the discussion question as the
+# examiner says it, and the decision question spoken in full. Added after
+# comparing with the FCE model interviews, where all three are always said.
+SETUP = {
+ "tech":   ("I'd like you to imagine that a school is planning a talk about how teenagers use technology. Here are some ways they use it, and a question for you to discuss.",
+            "Now, talk to each other about how useful these things are for teenagers.",
+            "Thank you. Now you have about a minute to decide which one is the most useful for teenagers."),
+ "school": ("I'd like you to imagine that some students are getting ready for important exams. Here are some ideas that might help them, and a question for you to discuss.",
+            "Now, talk to each other about how helpful these ideas might be when preparing for exams.",
+            "Thank you. Now you have about a minute to decide which one would be the most helpful."),
+ "money":  ("I'd like you to imagine that some teenagers want to earn money during the summer holidays. Here are some ideas they are thinking about, and a question for you to discuss.",
+            "Now, talk to each other about how good these ideas are for teenagers who want to earn money.",
+            "Thank you. Now you have about a minute to decide which would be the best way for a teenager to earn money."),
+ "health": ("I'd like you to imagine that a school wants to help its students to be healthier. Here are some ideas it is considering, and a question for you to discuss.",
+            "Now, talk to each other about how effective these ideas would be in helping students to be healthier.",
+            "Thank you. Now you have about a minute to decide which one the school should do first."),
+ "future": ("I'd like you to imagine that your town is running a campaign to get young people to help the environment. Here are some things they could do, and a question for you to discuss.",
+            "Now, talk to each other about how much difference young people can make by doing these things.",
+            "Thank you. Now you have about a minute to decide which one would make the biggest difference."),
+ "people": ("I'd like you to imagine that a magazine is writing about how teenagers spend time with their families. Here are some ideas, and a question for you to discuss.",
+            "Now, talk to each other about how enjoyable these ways of spending time together are for teenagers.",
+            "Thank you. Now you have about a minute to decide which one would bring a family closer together."),
+}
+for t in T:
+    sc, talk, dec = SETUP[t["id"]]
+    t["scenario"], t["talkLine"], t["decideLine"] = sc, talk, dec
+
 DATA = {
  "version": 3, "part": 3,
  "title": "Speaking Part 3 — talk it through, then decide",
@@ -761,6 +789,8 @@ DATA = {
           "Three pairs, as in Part 4. Built by build-part3.py."),
  "tip": "Catch what your partner said, add your view, develop it — then throw it back. Keep the ball moving.",
  "script": {"intro": "Now, I'd like you to talk about something together for about two minutes. Here are some ideas and a question for you to discuss. First you have some time to look at the task.",
+            "open": "Now, I'd like you to talk about something together for about two minutes.",
+            "look": "First you have some time to look at the task.",
             "discuss": "Now, talk to each other about this.",
             "decide": "Thank you. Now you have about a minute to decide."},
  "modes": {

@@ -51,8 +51,10 @@ def voice_of(voices, alt_id, who='a'):
 def walk(o, part, V, where='', alt=None, b=False):
     if isinstance(o, dict):
         here = o.get('question') if isinstance(o.get('question'), str) else (o.get('id') or where)
-        for k in ('question', 'followUp', 'handover'):
+        for k in ('question', 'followUp', 'handover', 'scenario', 'talkLine', 'decideLine'):
             if isinstance(o.get(k), str): add(o[k], 'examiner', part, 'Examiner · male', here)
+        if isinstance(o.get('theme'), str):     # Part 2: said as "Here are your photographs. They show…"
+            add('Here are your photographs. ' + o['theme'], 'examiner', part, 'Examiner · male', here)
         if isinstance(o.get('segs'), list):
             who_b = b or o.get('who') == 'b'
             vid = V[alt]['id'] if alt is not None and alt < len(V) else (V[0]['id'] if V else 'default')

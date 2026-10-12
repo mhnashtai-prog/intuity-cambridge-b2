@@ -65,7 +65,7 @@ button:disabled{opacity:.4;cursor:default}
   <section id="s1">
     <h2><span class="n">1</span>Your ElevenLabs key<span class="ok" id="ok1"></span></h2>
     <p class="hint">Find it in ElevenLabs under your profile → <b>API keys</b>. It stays in this browser tab and is sent only to ElevenLabs.</p>
-    <div class="row"><input type="password" id="key" placeholder="sk_…" autocomplete="off" spellcheck="false"><button class="dark" id="connect" type="button" style="flex:none">Connect</button></div>
+    <div class="row"><input type="password" id="key" name="be2vs-key" autocomplete="new-password" placeholder="sk_…" spellcheck="false"><button class="dark" id="connect" type="button" style="flex:none">Connect</button></div>
   </section>
 
   <section id="s2" class="off">
@@ -162,11 +162,20 @@ button:disabled{opacity:.4;cursor:default}
     KEY = $('key').value.trim(); if (!KEY) return;
     $('ok1').textContent = 'connecting…';
     fetch(API + '/voices', { headers: { 'xi-api-key': KEY } })
-      .then(function (r) { if (!r.ok) throw new Error(r.status === 401 ? 'That key was not accepted.' : 'ElevenLabs answered ' + r.status); return r.json(); })
+      .then(function (r) {
+        if (r.ok) return r.json();
+        return r.json().catch(function () { return {}; }).then(function (b) {
+          var d = b.detail || {}, why = (typeof d === 'string' ? d : (d.message || d.status || '')) + '';
+          /* a key without "Voices: read" can still record: carry on, voices by ID only */
+          if (/permission/i.test(why)) { $('ok1').textContent = '✓ key works (voices by ID)'; return { voices: [] }; }
+          throw new Error((r.status === 401 ? 'That key was not accepted.' : 'ElevenLabs answered ' + r.status + '.') +
+            (why ? '\n\nElevenLabs says: ' + why : '') + '\n\nKey length: ' + KEY.length + ' characters (a full key is about 50).');
+        });
+      })
       .then(function (d) {
         VOICES = (d.voices || []).map(function (v) { return { id: v.voice_id, name: v.name, preview: v.preview_url, labels: v.labels || {} }; })
           .sort(function (a, b) { return a.name.localeCompare(b.name); });
-        addExtra(); store('key', KEY); $('ok1').textContent = '✓ ' + VOICES.length + ' voices';
+        addExtra(); store('key', KEY); if (VOICES.length) $('ok1').textContent = '✓ ' + VOICES.length + ' voices';
         $('s2').classList.remove('off'); buildVoices();
       })
       .catch(function (e) { $('ok1').textContent = ''; alert(e.message); });

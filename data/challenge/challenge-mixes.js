@@ -107,7 +107,7 @@
   /* the header: subtitle, the rules links, and Defuse ↔ Forge carrying ?topic= */
   function dress(topic, here){
     const sub = document.querySelector('.app-subtitle'); if (sub) sub.textContent = 'B2 First ' + topic.label;
-    document.title = 'INTUITY \u2014 ' + topic.label + ' \u00b7 ' + (here === 'defuse' ? 'Defuse' : 'Forge');
+    document.title = 'Be2FIRST \u2014 ' + topic.label + ' \u00b7 ' + (here === 'defuse' ? 'Defuse' : 'Forge');
     document.querySelectorAll('.mode-selector a.mode-btn').forEach(a => {
       const h = a.getAttribute('href') || '';
       if (/tenses-rules/.test(h) && topic.rules) a.setAttribute('href', h.replace('tenses-rules', topic.rules));
@@ -288,7 +288,7 @@
   function dressVocab(v, here){
     here = here || 'defuse';
     const sub = document.querySelector('.app-subtitle'); if (sub) sub.textContent = v.label.length > 16 ? v.label : v.label + ' \u00b7 B2 First';
-    document.title = 'INTUITY \u2014 ' + v.label + ' \u00b7 ' + (here === 'forge' ? 'Forge' : 'Defuse');
+    document.title = 'Be2FIRST \u2014 ' + v.label + ' \u00b7 ' + (here === 'forge' ? 'Forge' : 'Defuse');
     const lv = document.querySelector('.header-spacer b'); if (lv) lv.textContent = 'B2';
     const back = document.querySelector('.back-link');
     const homeUrl = v.home.charAt(0) === '/' ? v.home : VPAGE + v.home;

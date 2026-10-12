@@ -472,9 +472,58 @@
              style + '" />';
     }
 
+    /* ─────────── warm-up: think first, then see ───────────
+       Before a student's FIRST attempt at a set, two items from a different
+       set are shown with the gap closed. The student says the answer in their
+       head and taps the gap to see it, with the rule that decides it. That is
+       elicitation — guess, then notice — at the point where students actually
+       start, rather than in Explore, which most of them skip. The items come
+       from another set, so nothing in the ten below is given away. */
+    function warmupHtml() {
+      if (isChecked || quizScores['test' + currentTest] || allTests.length < 2) return '';
+      const from = allTests[(currentTest + 1) % allTests.length];
+      const picks = (from.sentences || []).filter(function (it) { return parseSentence(it) && it.answer; }).slice(0, 2);
+      if (!picks.length) return '';
+      let h = '<div class="warmup"><div class="wu-kick">Warm-up · think first</div>' +
+              '<div class="wu-sub">Say the missing words in your head, then tap the gap to check.</div>';
+      picks.forEach(function (item, k) {
+        const p = parseSentence(item);
+        const gap = '<button type="button" class="wu-gap" data-k="' + k + '" aria-label="Show the answer">?</button>';
+        h += '<div class="wu-item">' + escapeHtml(p.pre) + gap +
+             (p.blanks === 2 ? escapeHtml(p.mid) + gap : '') +
+             (p.hint ? ' <span class="verb-hint">[' + escapeHtml(p.hint) + ']</span>' : '') +
+             escapeHtml(p.post) +
+             '<div class="wu-reveal" data-k="' + k + '" hidden><b>' + escapeHtml(item.answer) + '</b>' +
+             ruleNoteHtml(item) + '</div></div>';
+      });
+      return h + '<div class="wu-go">Now write the ' + allTests[currentTest].sentences.length + ' below.</div></div>';
+    }
+    document.addEventListener('click', function (e) {
+      const g = e.target.closest && e.target.closest('.wu-gap');
+      if (!g) return;
+      const r = document.querySelector('.wu-reveal[data-k="' + g.dataset.k + '"]');
+      if (r) r.hidden = false;
+      document.querySelectorAll('.wu-gap[data-k="' + g.dataset.k + '"]').forEach(function (b) { b.classList.add('shown'); b.textContent = '✓'; });
+    });
+    (function () {
+      const st = document.createElement('style');
+      st.textContent =
+        '.warmup{margin:0 0 1.4rem;padding:1rem 1.1rem;background:var(--card,#FAF8F5);border:1px solid var(--rule,rgba(20,17,14,.12));border-radius:6px}' +
+        '.wu-kick{font:600 .6875rem/1 var(--f-mono,ui-monospace,monospace);letter-spacing:.14em;text-transform:uppercase;color:var(--caramel,#A9774A)}' +
+        '.wu-sub{font-size:.85rem;color:var(--quiet,#5C5852);margin:.45rem 0 .8rem}' +
+        '.wu-item{font-family:var(--f-serif,"Newsreader",Georgia,serif);font-size:1.05rem;line-height:1.7;padding:.45rem 0;border-top:1px solid var(--rule,rgba(20,17,14,.08))}' +
+        '.wu-gap{display:inline-flex;align-items:center;justify-content:center;min-width:3.2rem;height:1.9rem;margin:0 .25rem;vertical-align:baseline;' +
+          'border:1.5px dashed var(--caramel,#A9774A);border-radius:4px;background:transparent;color:var(--caramel,#A9774A);font:600 .95rem/1 var(--f-body,system-ui);cursor:pointer}' +
+        '.wu-gap.shown{border-style:solid;background:var(--caramel,#A9774A);color:#fff}' +
+        '.wu-reveal{font-family:var(--f-body,system-ui);font-size:.9rem;line-height:1.45;margin-top:.35rem;padding-left:.6rem;border-left:2px solid var(--caramel,#A9774A)}' +
+        '.wu-reveal b{font-weight:700;margin-right:.4rem}' +
+        '.wu-go{font-size:.85rem;color:var(--quiet,#5C5852);margin-top:.7rem}';
+      document.head.appendChild(st);
+    })();
+
     function renderTest() {
       const test = allTests[currentTest];
-      let html = '<div class="sentences">';
+      let html = warmupHtml() + '<div class="sentences">';
 
       test.sentences.forEach(function (item, idx) {
         const parsed = parseSentence(item);
@@ -594,7 +643,14 @@
       let correct = 0;
 
       test.sentences.forEach(function (item, idx) {
-        if (isAnswerCorrect(item, userAnswers[idx])) correct++;
+        const ok = isAnswerCorrect(item, userAnswers[idx]);
+        if (ok) correct++;
+        try {
+          if (window.Be2 && Be2.answer) Be2.answer(window.QUIZ_DATA || 'grammar', {
+            id: (item.id || ('t' + currentTest + '-' + idx)), prompt: item.text, answer: item.answer,
+            given: userAnswers[idx] || '', correct: ok, rule: item.rule || '',
+            href: (EMBEDDED ? document.referrer || location.pathname : location.pathname) });
+        } catch (e) {}
       });
 
       isChecked = true;

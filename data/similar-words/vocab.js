@@ -86,6 +86,7 @@ function loadData() {
       var per = d.setsPerTest || PER_TEST;
       for (var i = 0; i < sets.length; i += per) tests.push(sets.slice(i, i + per));
       loadScores();
+      loadMeanings();
       buildTabs();
       setView(view);          /* paints the toggle before the first render */
       loadTest(0);
@@ -95,6 +96,48 @@ function loadData() {
         esc(err.message) + '</div>';
     });
 }
+
+/* ═══ MEET THE WORDS ════════════════════════════════════════════════════
+   Teach before testing. Each set opens with the meaning of every word in the
+   sense the sentences use, so the gaps test a choice the student has been
+   given the means to make, not a guess. The panel stays open until the
+   student scores 75% or more on that test; after that it folds away (still
+   one tap from open) — the scaffold comes down once it has done its job.
+   Meanings live beside the data: meanings-<data>.json, keyed set → word. */
+var MEANINGS = null;
+function loadMeanings() {
+  fetch('/data/similar-words/meanings-' + CFG.data + '.json')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (m) { if (m) { MEANINGS = m; render(); } })
+    .catch(function () {});
+}
+function meetHTML(set) {
+  var m = MEANINGS && MEANINGS[String(set.setNumber)];
+  if (!m) return '';
+  var s = scores['test' + currentTest];
+  var mastered = s && s.percentage >= 75;
+  var rows = set.words.map(function (w) {
+    return m[w] ? '<div class="meet-row"><b>' + esc(w) + '</b><span>' + esc(m[w]) + '</span></div>' : '';
+  }).join('');
+  return '<details class="meet"' + (mastered || isChecked ? '' : ' open') + '>' +
+    '<summary>Meet the words</summary><div class="meet-list">' + rows + '</div></details>';
+}
+(function () {
+  var st = document.createElement('style');
+  st.textContent =
+    '.meet{margin:.2rem 0 .9rem;border-top:1px solid var(--rule,rgba(20,17,14,.12));padding-top:.55rem}' +
+    '.meet summary{cursor:pointer;list-style:none;font:500 .6875rem/1 var(--f-mono,ui-monospace,monospace);' +
+      'letter-spacing:.12em;text-transform:uppercase;color:var(--faint,#8A8378);padding:.35rem 0}' +
+    '.meet summary::-webkit-details-marker{display:none}' +
+    '.meet summary::after{content:" +";}' + '.meet[open] summary::after{content:" −";}' +
+    '.meet-list{display:grid;gap:.4rem;margin-top:.35rem}' +
+    '.meet-row{display:grid;grid-template-columns:minmax(5.5rem,max-content) 1fr;gap:.75rem;align-items:baseline;' +
+      'font-size:.9rem;line-height:1.35}' +
+    '.meet-row b{font-weight:600;color:var(--ink,#14110E)}' +
+    '.meet-row span{color:var(--quiet,#5C5852)}' +
+    '@media(max-width:420px){.meet-row{grid-template-columns:1fr;gap:.05rem}}';
+  document.head.appendChild(st);
+})();
 
 /* ═══ SET TABS ══════════════════════════════════════════════════════════
    Twenty-three of them for Similar Words, which is a lot of chips — but
@@ -170,6 +213,7 @@ function cardHTML(set, si) {
   return '<div class="poster">' +
     '<div class="poster-kick"><i></i>' + esc(kick) + '</div>' + head +
     '<div class="pool">' + pool + '</div>' +
+    meetHTML(set) +
     '<div class="lines">' + lines + '</div>' +
   '</div>';
 }
@@ -403,6 +447,12 @@ function checkAnswers() {
       var got  = (answers[si] || {})[li];
       var ok   = got === want;
       if (ok) correct++;
+      try {
+        if (window.Be2 && Be2.answer) Be2.answer(CFG.data, {
+          id: 's' + set.setNumber + '-' + li, prompt: s.text, answer: want, given: got || '', correct: ok,
+          meaning: MEANINGS && MEANINGS[String(set.setNumber)] ? MEANINGS[String(set.setNumber)][want] : '',
+          href: location.pathname });
+      } catch (e) {}
       var slot = cards[si].querySelector('.slot[data-l="' + li + '"]');
       slot.textContent = got || '';
       slot.classList.remove('filled', 'armed');

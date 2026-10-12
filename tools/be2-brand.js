@@ -126,6 +126,13 @@
     (document.head || document.documentElement).appendChild(sys);
   }
 
+  /* Progress: the streak and the review deck every activity reports to. */
+  if (!window.Be2 && !document.querySelector('script[src*="/tools/be2-progress.js"]')) {
+    var prog = document.createElement('script');
+    prog.src = '/tools/be2-progress.js?v=1';
+    (document.head || document.documentElement).appendChild(prog);
+  }
+
   var style = document.createElement('style');
   style.id = 'be2-brand';
   style.textContent = css;

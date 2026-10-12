@@ -92,8 +92,8 @@ async function loadQuizData() {
     `;
 
     const [learnResponse, testResponse] = await Promise.all([
-      fetch('data/adjective-test.json'),
-      fetch('data/adjective-mixed.json')
+      fetch('data/report-adjective-test.json'),
+      fetch('data/report-adjective-mixed.json')
     ]);
 
     if (!learnResponse.ok || !testResponse.ok) {

@@ -2,7 +2,7 @@
    Be2FIRST — RECORD YOURSELF, THEN COMPARE  ·  v1
    One line on any Speaking page that has the model-answer card:
 
-       <script src="/tools/be2-recorder.js?v=1" defer></script>
+       <script src="/tools/be2-recorder.js?v=20261012" defer></script>
 
    Adds a bar under the timeline: record your own answer, hear it back, then
    hear the model straight after. Hearing yourself next to the model is the

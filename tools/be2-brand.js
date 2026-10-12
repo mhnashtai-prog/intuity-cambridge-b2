@@ -4,7 +4,7 @@
 
    ONE LINE PER PAGE, in <head>, WITHOUT defer:
 
-     <script src="/tools/be2-brand.js?v=1"></script>
+     <script src="/tools/be2-brand.js?v=20261012"></script>
 
    Why <head>: the CSS below is injected before the first paint, so the old
    name is hidden from frame one and the mark appears in its place — no
@@ -122,14 +122,14 @@
   if (!document.querySelector('link[href*="/tools/be2-system.css"]')) {
     var sys = document.createElement('link');
     sys.rel = 'stylesheet';
-    sys.href = '/tools/be2-system.css?v=1';
+    sys.href = '/tools/be2-system.css?v=20261012';
     (document.head || document.documentElement).appendChild(sys);
   }
 
   /* Progress: the streak and the review deck every activity reports to. */
   if (!window.Be2 && !document.querySelector('script[src*="/tools/be2-progress.js"]')) {
     var prog = document.createElement('script');
-    prog.src = '/tools/be2-progress.js?v=1';
+    prog.src = '/tools/be2-progress.js?v=20261012';
     (document.head || document.documentElement).appendChild(prog);
   }
 

@@ -5,7 +5,7 @@
    ONE FILE, ONE LINE PER PAGE. Put this in <head>, directly after the
    shell stylesheet, WITHOUT defer:
 
-     <link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=7">
+     <link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=20261012">
      <script src="/tools/intuity-overflow.js?v=2"></script>
 
    Why <head> and why no defer: the CSS below is injected the moment this

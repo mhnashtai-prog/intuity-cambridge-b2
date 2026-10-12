@@ -2,7 +2,7 @@
    Be2FIRST — RECORDED VOICES WHERE THEY EXIST  ·  v1
    One line on any page that speaks through the browser's voice:
 
-       <script src="/tools/be2-voice.js?v=1"></script>     (in <head>)
+       <script src="/tools/be2-voice.js?v=20261012"></script>     (in <head>)
 
    The Speaking pages read every line with speechSynthesis. This file sits
    in front of it: when a line has a recorded MP3 (from ElevenLabs or a real

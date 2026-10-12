@@ -166,13 +166,14 @@ button:disabled{opacity:.4;cursor:default}
       .then(function (d) {
         VOICES = (d.voices || []).map(function (v) { return { id: v.voice_id, name: v.name, preview: v.preview_url, labels: v.labels || {} }; })
           .sort(function (a, b) { return a.name.localeCompare(b.name); });
-        store('key', KEY); $('ok1').textContent = '✓ ' + VOICES.length + ' voices';
+        addExtra(); store('key', KEY); $('ok1').textContent = '✓ ' + VOICES.length + ' voices';
         $('s2').classList.remove('off'); buildVoices();
       })
       .catch(function (e) { $('ok1').textContent = ''; alert(e.message); });
   };
 
   /* ── 2 · voices ── */
+  function addExtra() { load('extra', []).forEach(function (x) { if (!VOICES.some(function (v) { return v.id === x.id; })) VOICES.push(x); }); }
   function buildVoices() {
     CHOICE = load('choice', {});
     var S = SPEAKERS();
@@ -180,11 +181,19 @@ button:disabled{opacity:.4;cursor:default}
       var name = sp.split(' · ')[0], hint = sp.split(' · ')[1] || '';
       var opts = '<option value="">Choose a voice…</option>' + VOICES.map(function (v) {
         var tag = [v.labels.gender, v.labels.accent].filter(Boolean).join(', ');
-        return '<option value="' + v.id + '"' + (CHOICE[sp] === v.id ? ' selected' : '') + '>' + v.name + (tag ? ' — ' + tag : '') + '</option>'; }).join('');
+        return '<option value="' + v.id + '"' + (CHOICE[sp] === v.id ? ' selected' : '') + '>' + v.name + (tag ? ' — ' + tag : '') + '</option>'; }).join('') +
+        '<option value="__id">Paste a voice ID from the Voice Library…</option>';
       return '<div class="who"><b>' + name + '</b><small>' + hint + ' · ' + S[sp] + ' lines</small></div>' +
         '<select data-sp="' + sp + '">' + opts + '</select><button class="play" type="button" data-play="' + sp + '">▶</button>';
     }).join('');
-    $('vgrid').onchange = function (e) { var s = e.target.closest('select'); if (!s) return; CHOICE[s.dataset.sp] = s.value; store('choice', CHOICE); checkVoices(); };
+    $('vgrid').onchange = function (e) { var s = e.target.closest('select'); if (!s) return;
+      if (s.value === '__id') {
+        var id = (prompt('Paste the voice ID. In the ElevenLabs Voice Library it is the part after voiceId= in the address bar.') || '').trim().replace(/^.*voiceId=/, '').replace(/[^A-Za-z0-9].*$/, '');
+        if (!id) { s.value = CHOICE[s.dataset.sp] || ''; return; }
+        var extra = load('extra', []); if (!extra.some(function (x) { return x.id === id; })) { extra.push({ id: id, name: 'Voice ' + id, labels: {} }); store('extra', extra); }
+        CHOICE[s.dataset.sp] = id; store('choice', CHOICE); addExtra(); buildVoices(); return;
+      }
+      CHOICE[s.dataset.sp] = s.value; store('choice', CHOICE); checkVoices(); };
     $('vgrid').onclick = function (e) {
       var b = e.target.closest('[data-play]'); if (!b) return;
       var v = VOICES.find(function (x) { return x.id === CHOICE[b.dataset.play]; });

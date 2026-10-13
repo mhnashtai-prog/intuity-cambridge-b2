@@ -19,13 +19,13 @@
   var S = window.speechSynthesis;
   if (!S || S.__be2) return;
 
-  var MAP = null, current = null;
+  var MAP = null, VER = {}, current = null;
   function norm(t) {
     return String(t || '').toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
   }
   fetch('/audio/speaking/manifest.json', { cache: 'no-cache' })
     .then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (m) { MAP = (m && m.lines) || {}; })
+    .then(function (m) { MAP = (m && m.lines) || {}; VER = (m && m.v) || {}; })
     .catch(function () { MAP = {}; });
 
   var speak = S.speak.bind(S), cancel = S.cancel.bind(S);
@@ -33,7 +33,7 @@
   S.speak = function (u) {
     var file = MAP && u && MAP[norm(u.text)];
     if (!file) return speak(u);
-    var a = new Audio('/audio/speaking/' + file);
+    var a = new Audio('/audio/speaking/' + file + (VER[file] ? '?v=' + VER[file] : ''));
     current = a;
     a.playbackRate = 1;
     a.onplay = function () { if (u.onstart) try { u.onstart({}); } catch (e) {} };

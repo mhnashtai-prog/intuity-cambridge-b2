@@ -257,7 +257,7 @@ button:disabled{opacity:.4;cursor:default}
         while (true) {
           try { files[l.file] = await tts(l); break; }
           catch (e) {
-            if (e.retry && tries++ < 6) { await sleep(1500 * tries); continue; }
+            if (e.retry && tries++ < 8) { await sleep(2500 * tries); continue; }
             fail++; log('✗ ' + l.file + ' — ' + e.message, true); break;
           }
         }
@@ -267,7 +267,11 @@ button:disabled{opacity:.4;cursor:default}
         $('dl').disabled = !Object.keys(files).length;
       }
     }
-    await Promise.all([worker(), worker(), worker()]);   /* three at a time, inside ElevenLabs' usual limits */
+    /* three at a time — but one at a time when a pasted Voice Library voice is in use, because ElevenLabs
+       adds such a voice to the account on first use and refuses parallel requests while it does (409) */
+    var extra = load('extra', []).map(function (x) { return x.id; });
+    var lib = Q.some(function (l) { return extra.indexOf(CHOICE[l.voice]) >= 0; });
+    await Promise.all(lib ? [worker()] : [worker(), worker(), worker()]);
     running = false; $('pause').disabled = true; $('pause').textContent = 'Pause';
     $('ok4').textContent = fail ? fail + ' failed — press Record again to retry them' : '✓ done';
     log('Finished: ' + (done - fail) + ' recorded' + (fail ? ', ' + fail + ' failed' : '') + '.');

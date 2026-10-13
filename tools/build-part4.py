@@ -19,12 +19,12 @@ BANK = [
  "Honestly?", "Honestly", "To be honest", "It depends", "It's not that simple", "That's a hard one", "Definitely", "Probably", "Absolutely",
  "Not really", "I'm not so sure", "Good question",
  # view
- "I think", "I'd say", "In my opinion", "I believe", "I really don't think", "I'm convinced that", "For me,", "Personally,",
+ "I think", "I'd say", "In my opinion", "I believe", "I really don't think", "I'm convinced that", "For me,", "Personally,", "In my view", "The way I see it", "I really think", "My own view is that",
  # generalise
  "Generally speaking", "On the whole", "In general", "Most people", "A lot of people", "Many people", "By and large",
  "For most people", "People tend to", "tend to", "It's usually", "Nowadays", "These days",
  # reason / result
- "because", "The problem is that", "The main reason is", "That's why", "As a result", "which means", "so", "The thing is",
+ "because", "The problem is that", "The main reason is", "The reason is that", "This is because", "That's why", "As a result", "which means", "so", "The thing is",
  # example
  "For example", "For instance", "Take", "In my house", "Last year", "Last summer", "At my school", "Where I live",
  # concede
@@ -870,6 +870,27 @@ chapter("people", "People & society", [
    "A view about childhood, a general reason, a local example, and an honest concession.")),
 ])
 
+# ═══════════════════════════ plain teenage B2 (Oct 2026) — see tools/part4-plain.py
+import importlib.util, os
+_sp = importlib.util.spec_from_file_location("p4plain", os.path.join(os.path.dirname(os.path.abspath(__file__)), "part4-plain.py"))
+P4 = importlib.util.module_from_spec(_sp); _sp.loader.exec_module(P4)
+_n = 0
+for ch in CH:
+    for c in ch["cards"]:
+        for i, alt in enumerate(c["alts"]):
+            for part in ("turn", "partner"):
+                for s in alt[part]["segs"]:
+                    if part == "turn" and s["m"] == "a": s["t"] = P4.opener(_n, s["t"]); _n += 1
+                    for a_, b_ in P4.SWAPS: s["t"] = re.sub(a_, b_, s["t"])
+                    s["t"] = P4.OV.get(f"{c['id']}/{i}/{part}/{s['m']}", s["t"])
+def plain_bad(where, segs):
+    txt = " ".join(s["t"] for s in segs); n = 0
+    for b in P4.BANNED:
+        if b in txt: print("BANNED", repr(b), where); n += 1
+    for sent in re.split(r"(?<=[.!?])\s+", txt):
+        if len(sent.split()) > 20: print("LONG", len(sent.split()), where, "|", sent); n += 1
+    return n
+
 # ═══════════════════════════ build + checks
 def secs(t): return round(len([w for w in t.split() if re.search(r'[A-Za-z0-9]', w)])/2.5)
 bad = 0
@@ -878,7 +899,7 @@ for ch in CH:
     for c in ch["cards"]:
         assert len(c["alts"]) == 3
         for i, alt in enumerate(c["alts"]):
-            for part, lo, hi in (("turn", 20, 30), ("partner", 5, 12)):
+            for part, lo, hi in (("turn", 18, 26), ("partner", 5, 12)):
                 blk = alt[part]
                 for s in blk["segs"]:
                     s["marks"] = marks_for(s["t"])[0]
@@ -886,11 +907,12 @@ for ch in CH:
                 blk["frame"] = " ".join(frame_of(s["t"]) for s in blk["segs"])
                 ms = [s["m"] for s in blk["segs"]]; tot = sum(secs(s["t"]) for s in blk["segs"])
                 ok = lo <= tot <= hi
+                if plain_bad(f"{c['id']}/{i}/{part}", blk["segs"]): ok = False
                 if part == "turn": ok = ok and ms[0] in ("x", "a") and "a" in ms and "g" in ms
                 if not ok: print(f"!! {ch['id']:7} {c['id']:12} {V[i]['tab']:14} {part:8} {''.join(ms):6} {tot}s"); bad += 1
 
 D = {
- "version": 3, "part": 4,
+ "version": 4, "part": 4,
  "title": "Speaking Part 4 — a view, developed",
  "note": ("Six chapters of five questions. Each card: Candidate A reacts, gives a view and develops it — always widening it "
           "out to people in general — then the examiner turns to Candidate B, who refers to A by name and adds one point. "
@@ -902,9 +924,9 @@ D = {
  },
  "moves": {
   "x": {"name": "React", "hint": "take a position before you defend it", "ask": "Now put a reaction in front."},
-  "a": {"name": "View", "hint": "say what you think, in one sentence", "ask": "Start with your view."},
+  "a": {"name": "View", "hint": "your opinion phrase, then what you think: 'In my view…', 'The way I see it…'", "ask": "Start with your view."},
   "g": {"name": "Generalise", "hint": "about people, not only about you — the Part 4 move", "ask": "Now widen it out to people in general."},
-  "r": {"name": "Reason", "hint": "why — or what follows from it", "ask": "Now say why, or what follows."},
+  "r": {"name": "Justify", "hint": "why: 'because…', 'The reason is that…', 'That's why…'", "ask": "Now justify it: say why."},
   "e": {"name": "Example", "hint": "one real case that proves it", "ask": "Now prove it with one real example."},
   "c": {"name": "Concede", "hint": "the other side, before you finish", "ask": "Now admit the other side."},
   "n": {"name": "Refer", "hint": "your partner, by name", "ask": "Refer to your partner by name."},
@@ -914,18 +936,18 @@ D = {
  "chapters": CH,
  "phraseBank": [
   {"heading": "Reacting", "note": "Take a position before you defend it.",
-   "phrases": ["Honestly? Yes…", "Definitely.", "Probably, yes.", "Not really, no.", "It depends on…", "It's not that simple.", "That's a hard one.", "I'm not so sure."]},
-  {"heading": "Giving your view", "note": "One clear sentence.",
-   "phrases": ["I think…", "I'd say…", "In my opinion,…", "I believe…", "For me,…", "I really don't think…"]},
+   "phrases": ["Honestly, yes…", "Definitely.", "Probably, yes.", "Not really, no.", "It depends on…", "It's not that simple.", "That's a hard one.", "I'm not so sure."]},
+  {"heading": "Giving your view", "note": "One clear sentence that starts with your opinion phrase.",
+   "phrases": ["In my view,…", "The way I see it,…", "I really think…", "My own view is that…", "I think…", "In my opinion,…", "I'd say…", "I believe…"]},
   {"heading": "Generalising — the Part 4 move", "note": "Part 1 asks about you. Part 4 asks about people.",
    "phrases": ["Generally speaking, people…", "On the whole,…", "In general,…", "Most people…", "A lot of people…", "People tend to…", "These days,…", "Nowadays,…"]},
-  {"heading": "Reasons and results", "note": "Why — or what follows from it.",
-   "phrases": ["The problem is that…", "The thing is,…", "As a result,…", "That's why…", "…, which means…", "So…"]},
+  {"heading": "Justifying your view", "note": "Every view needs a reason the examiner can hear.",
+   "phrases": ["…, because…", "That's because…", "The reason is that…", "The problem is that…", "As a result,…", "That's why…"]},
   {"heading": "Examples", "note": "One real case.", "phrases": ["For example,…", "For instance,…", "In my house,…", "At my school,…", "Last year,…", "Where I live,…"]},
   {"heading": "Conceding", "note": "Admit the other side — then you sound fair, not stubborn.",
-   "phrases": ["Having said that,…", "Mind you,…", "On the other hand,…", "Still,…", "To be fair,…", "Of course,…"]},
+   "phrases": ["Having said that,…", "On the other hand,…", "Still,…", "But…", "Of course,…"]},
   {"heading": "Joining in (Candidate B)", "note": "Your partner's name first, then one thing of your own.",
-   "phrases": ["I agree with Beatriz about…", "I partly agree with Rodrigo. But…", "I see what Leonor means, but…", "I'm not sure I agree with…", "I'd go along with… on that.", "I'd add that…", "For me, though,…"]}
+   "phrases": ["I agree with Beatriz about…", "I partly agree with Rodrigo. But…", "I see what Leonor means, but…", "I'm not sure I agree with…", "I'd add that…", "For me, though,…"]}
  ]
 }
 json.dump(D, open(sys.argv[1] if len(sys.argv) > 1 else "part4-views.json", "w"), ensure_ascii=False, indent=1)

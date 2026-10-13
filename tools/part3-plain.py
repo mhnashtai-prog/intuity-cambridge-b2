@@ -88,3 +88,34 @@ OV = {
 }
 BANNED = ["reckon", "Hmm", "—", "building on", "following on from", "I mean,", "knock-on", "easy targets", "fall out",
           "show off", "think twice", "adds up", "dozens", "the long term", "raises awareness", "fast fashion"]
+
+# Second pass (13 Oct, afternoon): sentences left starting with a small letter after the
+# dash removal, and the last colloquial phrases ('The thing is', 'a close second',
+# 'Are we decided?', 'end up', 'stuff', 'holds everything together', 'on an empty stomach').
+_NEW = {
+ "tech/0/discuss/8": {"d": "If you study on a screen and then scroll in bed, your eyes never rest."},
+ "tech/0/discuss/9": {"d": "It's great to make things on your phone, but not every minute of the day."},
+ "tech/0/decide/4": {"v": "It's important too,", "d": "but learning online helps more people in more ways.", "t": "So, do we agree?"},
+ "tech/1/discuss/1": {"d": "A lot of people share things without checking them."},
+ "tech/1/discuss/9": {"v": "I'd say finding information and communicating need the same skill.", "d": "You need to think before you believe something, or before you send it."},
+ "tech/2/discuss/2": {"d": "We spend so much time sitting and looking at screens."},
+ "tech/2/discuss/7": {"v": "I think it also makes us lazy.", "d": "We don't try to think for ourselves any more. We just ask the internet."},
+ "tech/2/discuss/8": {"d": "It uses technology to make something new, not just to find answers."},
+ "school/1/discuss/8": {"v": "I'd say you have to turn them off.", "d": "If not, you do a quiz at midnight instead of sleeping."},
+ "school/1/discuss/9": {"v": "So maybe a timetable is the most important thing.", "d": "It tells you when to use the apps and when to stop."},
+ "school/2/discuss/8": {"d": "There's no one else to distract you, and you can't pretend you understand."},
+ "money/1/discuss/7": {"i": "That sounds nice."},
+ "money/2/discuss/9": {"v": "So I'd say it depends on what you want.", "d": "Some people want safety and flexibility, and others want real experience, like in a café."},
+ "health/0/decide/4": {"t": "Do we agree?"},
+ "health/2/discuss/2": {"d": "When you ban something, teenagers want it even more!"},
+ "health/2/discuss/9": {"d": "because you can't do PE well when you're hungry!"},
+ "future/0/decide/4": {"t": "Do we agree?"},
+ "future/1/discuss/3": {"v": "for me, the problem is that not everyone does it properly.", "d": "So a lot of it goes to the wrong place anyway."},
+ "future/1/discuss/8": {"d": "It shows you where all the rubbish goes."},
+ "future/2/discuss/2": {"d": "Our parents buy the food and cook the meals, so we usually eat what they make."},
+ "people/2/decide/0": {"d": "because the memories from a trip last for years."},
+ "people/2/decide/4": {"t": "Do we agree?"},
+}
+for _k, _v in _NEW.items(): OV.setdefault(_k, {}).update(_v)
+BANNED += ["The thing is", "close second", "re we decided", "That's lucky", "work things out", "end up", "ends up", "stuff",
+           "holds everything", "empty stomach", "shared adventures"]

@@ -28,12 +28,22 @@
     .then(function (m) { MAP = (m && m.lines) || {}; VER = (m && m.v) || {}; })
     .catch(function () { MAP = {}; });
 
-  var speak = S.speak.bind(S), cancel = S.cancel.bind(S);
+  var speak = S.speak.bind(S), cancel = S.cancel.bind(S), CACHE = {};
+  function url(file) { return '/audio/speaking/' + file + (VER[file] ? '?v=' + VER[file] : ''); }
+  /* Pages call Be2Voice.preload([...texts]) when playback starts: the next lines are already
+     downloaded when their turn comes, so there is no gap between one line and the next. */
+  window.Be2Voice = { preload: function (texts) {
+    if (!MAP) return;
+    (texts || []).forEach(function (t) {
+      var f = MAP[norm(t)]; if (!f || CACHE[f]) return;
+      var a = new Audio(); a.preload = 'auto'; a.src = url(f); CACHE[f] = a;
+    });
+  } };
 
   S.speak = function (u) {
     var file = MAP && u && MAP[norm(u.text)];
     if (!file) return speak(u);
-    var a = new Audio('/audio/speaking/' + file + (VER[file] ? '?v=' + VER[file] : ''));
+    var a = CACHE[file] || new Audio(url(file)); delete CACHE[file];
     current = a;
     a.playbackRate = 1;
     a.onplay = function () { if (u.onstart) try { u.onstart({}); } catch (e) {} };

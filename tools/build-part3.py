@@ -681,7 +681,7 @@ FN = {1: ("Move on", "start a point, or move the discussion to a new prompt"),
       7: ("Build on", "take your partner's idea further"),
       8: ("Decide", "negotiate and reach a decision")}
 MOVE  = r"^(Shall we (start with|talk about)|Why don't we begin|Let's (start|move on|think about)|Moving on|Another idea|Should we look at|What about|How about|OK, (being|how))"
-BUILD = r"(building on|to add to that|following on from that|connects to|links to|a bit like|same with|brings us back|is similar)"
+BUILD = r"(building on|to add to|following on from that|connects to|links to|a bit like|same with|brings us back|is similar)"
 DIS   = r"(^Maybe, but|I'm not so sure|I see your point, but|I see what you mean|That's true, but|^But\b|^Yes, but|^I know,|OK, but|not everyone)"
 AGR   = r"^(I agree|Absolutely|Exactly|You're right|That's true|Definitely|Yes\b)"
 def fn_of(seg, part, prompts):
@@ -729,6 +729,33 @@ def apply_edits(tid, ai, part, turns):
             for s in turns[k]["segs"]:
                 if s["m"] in ch: s["t"] = ch[s["m"]]
 
+# ═══════════════════════════ plain teenage B2 (Oct 2026)
+# Same rule as Parts 1 and 2: no slang a Portuguese 15-year-old wouldn't use, no dashes or
+# 'Hmm' (they read like a script and make recorded voices overact), no sentence over 20
+# words. Global swaps first, then hand-split turns in tools/part3-plain.py (OV).
+import importlib.util, os
+_sp = importlib.util.spec_from_file_location("p3plain", os.path.join(os.path.dirname(os.path.abspath(__file__)), "part3-plain.py"))
+P3 = importlib.util.module_from_spec(_sp); _sp.loader.exec_module(P3)
+SWAPS = [(r"What do you reckon\?", "What's your opinion?"), (r"\bI reckon\b", "I think"),
+         (r"\bbuilding on your point\b", "to add to your point"), (r"\bbuilding on that\b", "to add to that"),
+         (r"\bfollowing on from that\b", "to add to that"), (r"^Hmm, (\w)", lambda m: m.group(1).upper()), (r"^Hmm\. ", ""),
+         (r" — and ", ", and "), (r" — ", ". ")]
+def plain_turns(tid, ai, part, turns):
+    for k, tn in enumerate(turns):
+        ov = P3.OV.get(f"{tid}/{ai}/{part}/{k}", {})
+        for s in tn["segs"]:
+            if s["m"] in ov: s["t"] = ov[s["m"]]; continue
+            for a, b in SWAPS: s["t"] = re.sub(a, b, s["t"])
+            s["t"] = re.sub(r"\. (\w)", lambda m: ". " + m.group(1).upper(), s["t"])
+            s["t"] = re.sub(r"\.,", ",", s["t"]).replace(" —", ".").replace("—", ",")
+def plain_bad(tid, ai, part, k, tn):
+    txt = " ".join(s["t"] for s in tn["segs"]); n = 0
+    for b in P3.BANNED:
+        if b in txt: print("BANNED", repr(b), tid, ai, part, k); n += 1
+    for sent in re.split(r"(?<=[.!?])\s+", txt):
+        if len(sent.split()) > 20: print("LONG", len(sent.split()), f"{tid}/{ai}/{part}/{k}", "|", " || ".join(s["m"]+": "+s["t"] for s in tn["segs"])); n += 1
+    return n
+
 # ═══════════════════════════ build + checks
 def secs(t): return round(len([w for w in t.split() if re.search(r'[A-Za-z0-9]', w)])/2.5)
 bad = 0
@@ -737,12 +764,12 @@ for tk in T:
     for i, alt in enumerate(tk["alts"]):
         for part, lo, hi in (("discuss", 100, 125), ("decide", 45, 65)):
             turns = alt[part]; tot = 0; covered = set()
-            apply_edits(tk["id"], i, part, turns)
+            apply_edits(tk["id"], i, part, turns); plain_turns(tk["id"], i, part, turns)
             builds = sum(1 for tn in turns for s in tn["segs"] if re.search(BUILD, s["t"])) if part == "discuss" else 0
             for n, tn in enumerate(turns):
                 for s in tn["segs"]:
                     s["marks"] = spans_of(s["t"])[0]; s["f"] = fn_of(s, part, tk["prompts"])
-                tn["frame"] = " ".join(frame_of(s["t"]) for s in tn["segs"])
+                tn["frame"] = " ".join(frame_of(s["t"]) for s in tn["segs"]); bad += plain_bad(tk["id"], i, part, n, tn)
                 if n > 0: tn["wrong"] = wrongs()
                 tot += sum(secs(s["t"]) for s in tn["segs"]) + (0.7 if n else 0)
                 if tn["p"] >= 0: covered.add(tn["p"])
@@ -782,7 +809,7 @@ for t in T:
     t["scenario"], t["talkLine"], t["decideLine"] = sc, talk, dec
 
 DATA = {
- "version": 3, "part": 3,
+ "version": 4, "part": 3,
  "title": "Speaking Part 3 — talk it through, then decide",
  "note": ("Six tasks, one per Part 4 chapter. Each turn runs the school loop — catch it, give an opinion, justify it, ask your "
           "partner — and every phrase is tagged with one of the school's eight functions (f 1–8). Two minutes to discuss, one to decide. "
@@ -812,17 +839,17 @@ DATA = {
   {"heading": "1 · Initiate / move the discussion", "note": "Start a point — or move on to a new prompt.",
    "phrases": ["Shall we start with…?", "Why don't we begin with…?", "Let's start with…", "What about…?", "Let's move on to…", "Moving on to…", "Another idea is…"]},
   {"heading": "2 · Give an opinion", "note": "",
-   "phrases": ["I think…", "In my opinion,…", "For me,…", "I'd say…", "I reckon…", "I believe…"]},
+   "phrases": ["I think…", "In my opinion,…", "For me,…", "I'd say…", "I believe…"]},
   {"heading": "3 · Justify / develop an opinion", "note": "A reason or an example keeps your view alive.",
-   "phrases": ["…, because…", "The thing is,…", "I mean,…", "For example,…", "…, especially…", "…, which means…"]},
+   "phrases": ["…, because…", "The thing is,…", "For example,…", "…, especially…", "…, which means…"]},
   {"heading": "4 · Ask for your partner's opinion", "note": "End your turn with a question — the examiner is listening for it.",
-   "phrases": ["What do you think?", "Do you agree?", "What's your view?", "Don't you think?", "How about you?", "Would you agree?", "What do you reckon?"]},
+   "phrases": ["What do you think?", "Do you agree?", "What's your view?", "Don't you think?", "How about you?", "Would you agree?", "What's your opinion?"]},
   {"heading": "5 · React to your partner", "note": "Show you heard them before you answer.",
    "phrases": ["That's a good point.", "Good idea.", "That sounds fun.", "That's so true.", "Really?", "Same here."]},
   {"heading": "6 · Agree / disagree politely", "note": "Say how far you agree.",
    "phrases": ["I agree.", "Absolutely.", "Exactly.", "You're right.", "That's true, but…", "I see your point, but…", "Maybe, but…", "I'm not so sure."]},
   {"heading": "7 · Build on your partner's idea", "note": "The move that turns two turns into one conversation.",
-   "phrases": ["Exactly — and building on that,…", "Yes, and to add to that,…", "Right, and following on from that,…", "That links to what you said about…", "That connects to…", "It's the same with…"]},
+   "phrases": ["Exactly, and to add to that,…", "Yes, and also…", "Good point, and to add to your point,…", "That links to what you said about…", "That connects to…", "It's the same with…"]},
   {"heading": "8 · Negotiate / reach a decision", "note": "The decision isn't marked — the negotiating is.",
    "phrases": ["So, which one shall we choose?", "I think we should go for…", "Shall we agree on…?", "You've convinced me.", "OK, let's go for… then.", "So we agree that…"]}
  ]

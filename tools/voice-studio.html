@@ -100,7 +100,7 @@ button:disabled{opacity:.4;cursor:default}
   var API = 'https://api.elevenlabs.io/v1';
   var MODEL = 'eleven_multilingual_v2', FORMAT = 'mp3_44100_64';
   var $ = function (id) { return document.getElementById(id); };
-  var KEY = '', VOICES = [], LINES = [], DONE = {}, CHOICE = {}, files = {}, running = false, paused = false;
+  var stopped = false, KEY = '', VOICES = [], LINES = [], DONE = {}, CHOICE = {}, files = {}, running = false, paused = false;
 
   function store(k, v) { try { sessionStorage.setItem('be2vs.' + k, JSON.stringify(v)); } catch (e) {} }
   function load(k, d) { try { var r = sessionStorage.getItem('be2vs.' + k); return r ? JSON.parse(r) : d; } catch (e) { return d; } }
@@ -225,7 +225,15 @@ button:disabled{opacity:.4;cursor:default}
       body: JSON.stringify({ text: l.text, model_id: MODEL, voice_settings: { stability: 0.5, similarity_boost: 0.75 } })
     }).then(function (r) {
       if (r.status === 429) { var e = new Error('busy'); e.retry = true; throw e; }
-      if (!r.ok) return r.text().then(function (t) { throw new Error(r.status + ' ' + t.slice(0, 160)); });
+      if (!r.ok) return r.text().then(function (t) {
+        if (r.status === 401 && !stopped) {           /* a key problem fails every line: stop at the first one */
+          stopped = true; running = false;
+          alert(/text_to_speech/.test(t)
+            ? 'Your API key is missing the "Text to Speech" permission.\n\nIn ElevenLabs: Developers → API Keys → ⋯ next to the key → Edit, set Text to Speech to "Access", save, then press Record again.\n\nNo credits were used.'
+            : 'ElevenLabs did not accept the key (401). No credits were used.\n\n' + t.slice(0, 200));
+        }
+        throw new Error(r.status + ' ' + t.slice(0, 160));
+      });
       return r.blob();
     });
   }
@@ -237,7 +245,7 @@ button:disabled{opacity:.4;cursor:default}
     if (!total) return;
     var ch = Q.reduce(function (a, l) { return a + l.text.length; }, 0);
     if (!confirm('Record ' + total + ' lines? This uses about ' + ch.toLocaleString() + ' characters of your ElevenLabs allowance.')) return;
-    running = true; paused = false; $('go').disabled = true; $('pause').disabled = false;
+    running = true; paused = false; stopped = false; $('go').disabled = true; $('pause').disabled = false;
     async function worker() {
       while (Q.length && running) {
         while (paused) await sleep(300);

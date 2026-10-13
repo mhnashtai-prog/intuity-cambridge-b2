@@ -96,6 +96,12 @@ button:disabled{opacity:.4;cursor:default}
     <div class="sum" id="prog">Ready.</div>
     <div class="log" id="log"></div>
   </section>
+  <section id="s5">
+    <h2><span class="n">5</span>Lost a zip? Get recordings back from ElevenLabs<span class="ok" id="ok5"></span></h2>
+    <p class="hint">ElevenLabs keeps every recording you made in its <b>History</b>. This collects the ones the app is still missing, without paying for them again. Your key needs <b>History: Read</b> permission. Then press <b>Download zip</b> above.</p>
+    <div class="row" style="flex-wrap:nowrap"><button class="dark" id="recover" type="button">Find my recordings</button></div>
+    <div class="sum" id="recProg" style="margin-top:12px">Connect your key first (step 1).</div>
+  </section>
 </div>
 
 <script>
@@ -296,6 +302,51 @@ button:disabled{opacity:.4;cursor:default}
     document.body.appendChild(a); a.click(); a.remove();
     $('dl').disabled = false; $('dl').textContent = 'Download zip';
     log('Zip saved: ' + Object.keys(files).length + ' files. Attach it in the chat with Claude.');
+  };
+
+  /* ── 5 · recover from history: match each missing line to the newest history item with the same text ── */
+  $('recover').onclick = async function () {
+    if (!KEY) { alert('Connect your key in step 1 first.'); return; }
+    var want = {}; LINES.forEach(function (l) { if (!DONE[l.file] && !files[l.file]) (want[l.text] = want[l.text] || []).push(l); });
+    var found = {}, after = null, pages = 0, seen = 0;
+    $('recover').disabled = true; $('recProg').textContent = 'Reading your ElevenLabs history…';
+    try {
+      while (pages < 60) {
+        var r = await fetch(API + '/history?page_size=1000' + (after ? '&start_after_history_item_id=' + after : ''), { headers: { 'xi-api-key': KEY } });
+        if (!r.ok) { var t = await r.text(); throw new Error(r.status === 401 && /history/.test(t) ? 'Your key needs the "History: Read" permission. In ElevenLabs: Developers → API Keys → ⋯ → Edit.' : 'ElevenLabs answered ' + r.status + ': ' + t.slice(0, 160)); }
+        var d = await r.json(); pages++;
+        (d.history || []).forEach(function (h) {
+          seen++;
+          var ls = want[h.text]; if (!ls) return;
+          ls.forEach(function (l) {
+            var cur = found[l.file], pref = CHOICE[l.voice] === h.voice_id;
+            if (!cur || (pref && !cur.pref) || (pref === cur.pref && h.date_unix > cur.date)) found[l.file] = { id: h.history_item_id, pref: pref, date: h.date_unix };
+          });
+        });
+        $('recProg').textContent = 'Read ' + seen + ' history items · ' + Object.keys(found).length + ' missing lines found…';
+        if (!d.has_more) break; after = d.last_history_item_id;
+      }
+      var Q = Object.keys(found), done = 0, fail = 0;
+      async function w() {
+        while (Q.length) {
+          var f = Q.shift(), tries = 0;
+          while (true) {
+            try {
+              var a = await fetch(API + '/history/' + found[f].id + '/audio', { headers: { 'xi-api-key': KEY } });
+              if (a.status === 429) { if (tries++ < 6) { await sleep(1500 * tries); continue; } }
+              if (!a.ok) throw new Error(a.status);
+              files[f] = await a.blob(); break;
+            } catch (e) { fail++; log('✗ ' + f + ' — could not download from history (' + e.message + ')', true); break; }
+          }
+          done++; $('recProg').textContent = 'Downloading ' + done + ' / ' + Object.keys(found).length + (fail ? ' · ' + fail + ' failed' : '');
+        }
+      }
+      await Promise.all([w(), w(), w()]);
+      $('dl').disabled = !Object.keys(files).length;
+      $('recProg').innerHTML = '<b>' + (done - fail) + '</b> recordings recovered at no cost. Now press <b>Download zip</b> in step 4.';
+      $('ok5').textContent = '✓ ' + (done - fail) + ' recovered'; summary();
+    } catch (e) { $('recProg').textContent = e.message; }
+    $('recover').disabled = false;
   };
 })();
 </script>

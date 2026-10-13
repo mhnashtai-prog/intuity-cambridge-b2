@@ -1052,6 +1052,31 @@ D = {
  ]
 }
 
+# ── Oct 2026: plain teenage B2 (tools/part1-plain.py) replaces every answer's text,
+#    frame and marks; the 'wrong' examples stay with their move.
+import importlib.util, os
+_spec = importlib.util.spec_from_file_location("plain", os.path.join(os.path.dirname(os.path.abspath(__file__)), "part1-plain.py"))
+PL = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(PL)
+for ch in D["chapters"]:
+    for c in ch["cards"]:
+        for i, a in enumerate(c.get("alts", [])):
+            frame, why, segs = PL.NEW[f"{c['id']}/{i}"]
+            old = {s["m"]: s for s in a["segs"]}
+            assert [m for m, *_ in segs] == [s["m"] for s in a["segs"]], (c["id"], i)
+            a["frame"] = frame
+            if why: a["why"] = why
+            a["segs"] = [dict(S(m, t, marks), **({"wrong": old[m]["wrong"]} if "wrong" in old[m] else {})) for m, t, marks in segs]
+            for s_ in a["segs"]:
+                for w in s_.get("wrong", []):
+                    fx = PL.WRONG_FIX.get((f"{c['id']}/{i}", s_["m"], w["t"]))
+                    if fx: w["t"], w["why"] = fx
+D["phraseBank"] = PL.PHRASE_BANK
+D["version"] = 4
+D["note"] = ("Chapters of five questions; each question has three answers at B2 — Default, Alternative 1, Alternative 2 — "
+             "that differ in angle and shape, not level. Plain teenage English: short sentences, no idioms, the expansion kept. "
+             "Each answer is stored once in speaking order, with a 'frame': the answer reduced to its reusable skeleton. "
+             "Answers land at 13–19 s (2.5 words/s); the builder checks.")
+
 def secs(t): return round(len([w for w in t.split() if re.search(r'[A-Za-z0-9]', w)])/2.5)
 bad = 0
 for ch in D["chapters"]:
@@ -1061,13 +1086,17 @@ for ch in D["chapters"]:
         assert len(c["alts"]) == 3
         for i, a in enumerate(c["alts"]):
             ms = [s["m"] for s in a["segs"]]; tot = sum(secs(s["t"]) for s in a["segs"])
-            ok = 15 <= tot <= 20 and "a" in ms and len(ms) < 5 and len(set(ms)) == len(ms) and ("x" not in ms or ms[0] == "x")
+            ok = 13 <= tot <= 19 and "a" in ms and len(ms) < 5 and len(set(ms)) == len(ms) and ("x" not in ms or ms[0] == "x")
             ok = ok and "___" in a["frame"]
             for s in a["segs"]:
                 for m in s.get("marks", []):
                     if m not in s["t"]: print("MARK", c["id"], i, m); ok = False
                 if s["m"] != "a" and len(s.get("wrong", [])) < 2: print("WRONG", c["id"], i, s["m"]); ok = False
                 if re.search(r"\bhere\b.*\bhere\b", s["t"]): print("HERE x2", c["id"], i); ok = False
+                for b in PL.BANNED:
+                    if b in s["t"] + " ": print("BANNED", repr(b), c["id"], i); ok = False
+                for sent in re.split(r"(?<=[.!?])\s+", s["t"]):
+                    if len(sent.split()) > 20: print("LONG", len(sent.split()), c["id"], i); ok = False
             print(f"{'  ' if ok else '!!'} {ch['id']:6} {c['id']:8} {D['voices'][i]['tab']:14} {''.join(ms):5} {tot}s")
             bad += not ok
 json.dump(D, open("/mnt/user-data/outputs/part1-answers.json", "w"), ensure_ascii=False, indent=1)

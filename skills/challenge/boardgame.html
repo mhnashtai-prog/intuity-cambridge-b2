@@ -31,8 +31,9 @@
    THREE WAYS TO PLAY
      Solo        — you are O, your mistakes are X. Three in a row wins;
                    three crosses in a row loses.
-     Two players — O and X take turns on one device; a wrong answer hands
-                   the cell to the other side. First line wins.
+     Two players — O and X take turns on one device; a wrong answer knocks
+                   the ring, which comes back as a different game, still
+                   open, for the other side to try. First line wins.
      Both sides  — the same, one player taking both turns.
 
    The rounds are the topic's Board rounds (data/challenge/challenge-*.json),
@@ -378,6 +379,11 @@ body.look-rings .nc-cell.fell .nc-dial{animation:ncKnock .6s cubic-bezier(.4,0,.
 body.look-rings .nc-dial{transition:box-shadow .2s,transform .2s}
 @media(prefers-reduced-motion:reduce){ body.look-rings .nc-cell.fell .nc-dial{animation:none;transform:translateY(1.2cqw) rotate(4deg)} }
 
+/* a missed ring in a two-sided game comes back as a new game, still open (15 Oct) */
+.nc-cell.fresh .nc-dial{animation:ncFresh .55s cubic-bezier(.3,1.4,.5,1)}
+@keyframes ncFresh{0%{transform:scale(.6) rotate(-12deg);opacity:0}100%{transform:none;opacity:1}}
+@media(prefers-reduced-motion:reduce){ .nc-cell.fresh .nc-dial{animation:none} }
+
 /* the winning stroke */
 .nc-line{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5}
 .nc-line line{stroke-width:7;stroke-linecap:round;stroke-dasharray:420;stroke-dashoffset:420;animation:ncStroke .6s cubic-bezier(.6,0,.2,1) forwards}
@@ -613,7 +619,9 @@ function deal(){
 function drawBoard(){
   const b=$('board'); b.classList.remove('done');
   b.querySelectorAll('.nc-cell,.nc-line').forEach(x=>x.remove());
-  cells.forEach((c,i)=>{
+  cells.forEach((c,i)=>b.appendChild(makeCell(c,i)));
+}
+function makeCell(c,i){
     const g=G[c.k]||{}, tier=TIER[c.k]||1;
     const el=document.createElement('button'); el.type='button'; el.className='nc-cell'; el.dataset.i=i;
     el.style.left=(i%3)*33.333+'%'; el.style.top=Math.floor(i/3)*33.333+'%';
@@ -622,8 +630,15 @@ function drawBoard(){
       <span class="nc-string"></span><div class="nc-dial">${RINGS?`<span class="nc-fmt">${esc(g.title||c.k)}</span>`:''}<span class="nc-dots">${'<i></i>'.repeat(tier)}</span></div></div>
       ${RINGS?'':`<span class="nc-fmt">${esc(g.title||c.k)}</span>`}`;
     el.onclick=()=>openCell(i);
-    b.appendChild(el);
-  });
+    return el;
+}
+/* TWO-SIDED MISS: the ring is knocked, then comes back as a different game,
+   open for the other side. Nobody is handed a cell for someone else's slip. */
+function reroll(i){
+  const c=cells[i], old=document.querySelector(`.nc-cell[data-i="${i}"]`);
+  const others=Object.keys(by).filter(k=>k!==c.k);
+  c.k=others.length?shuffle(others)[0]:c.k; c.r=pickRound(c.k); c.mark=null; c.fell=false;
+  const el=makeCell(c,i); el.classList.add('fresh'); old.replaceWith(el);
 }
 function paintStatus(){
   const N=NAMES[mode], mk=m=>m==='O'?'<svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" stroke-width="2.6"/></svg>'
@@ -636,7 +651,7 @@ function paintStatus(){
   $('how').innerHTML=mode==='solo'
     ?(RINGS?'Pick any ring. <b>Right</b>: your nought is stamped in it. <b>Wrong</b>: the ring is knocked askew and a cross lands.':'Pick any ring. <b>Right</b>: the pendulum stops and your nought is stamped. <b>Wrong</b>: the string snaps and a cross lands.')
       +' Three noughts in a row wins — three crosses in a row loses. The more dots, the harder the ring and the more it is worth.'
-    :'Take turns. <b>Answer right</b> and the ring is yours. <b>Answer wrong</b> and '+(RINGS?'it is knocked':'the string snaps')+' — the ring goes to the other side. First to three in a row wins. The centre is the hardest ring, and the most useful.';
+    :'Take turns. <b>Answer right</b> and the ring is yours. <b>Answer wrong</b> and '+(RINGS?'it is knocked':'the string snaps')+' — it comes back as a different game, still open for the other side. First to three in a row wins.';
   $('tally').textContent=mode==='solo'?'':`${NAMES[mode].O} ${tally.O} · ${NAMES[mode].X} ${tally.X} · Draws ${tally.D}`;
 }
 function drawModes(){ document.body.classList.toggle('duel',mode!=='solo'); document.querySelectorAll('.nc-mode').forEach(b=>{ b.setAttribute('aria-pressed',b.dataset.m===mode); b.onclick=()=>{ if(b.dataset.m===mode) return; mode=b.dataset.m; tally={O:0,X:0,D:0}; drawModes(); deal(); }; }); }
@@ -667,7 +682,7 @@ function answer(ok,given){
   const tag=c.r.tag?' · '+esc(c.r.tag):'';
   const other=turn==='O'?'X':'O';
   $('fb').innerHTML=ok?`<b>Right${tag}.</b> ${esc(c.r.note||'')}`
-    :`<b>Not this time${tag}.</b> The answer: <b>${esc(sol)}</b>. ${esc(c.r.note||'')}${mode==='solo'?'':` <br>The ring goes to ${esc(NAMES[mode][other])}.`}`;
+    :`<b>Not this time${tag}.</b> The answer: <b>${esc(sol)}</b>. ${esc(c.r.note||'')}${mode==='solo'?'':` <br>The ring turns into a new game — ${esc(NAMES[mode][other])} to play.`}`;
   sfx(ok?'correct':'wrong');
   showNext(()=>closeCard(), ok?1200:3400);
   return false;
@@ -699,7 +714,13 @@ function stopSwing(hang){
 function play(i,ok){
   busy=true;
   const c=cells[i], el=document.querySelector(`.nc-cell[data-i="${i}"]`), hang=el.querySelector('.nc-hang'), dial=el.querySelector('.nc-dial');
-  const mark=mode==='solo'?(ok?'O':'X'):(ok?turn:(turn==='O'?'X':'O'));
+  if(!ok&&mode!=='solo'){
+    el.disabled=true; stopSwing(hang);
+    setTimeout(()=>{ el.classList.add('fell'); sfx('crash'); },380);
+    setTimeout(()=>{ reroll(i); turn=turn==='O'?'X':'O'; busy=false; paintStatus(); },1300);
+    return;
+  }
+  const mark=mode==='solo'?(ok?'O':'X'):turn;
   c.mark=mark; c.fell=!ok; el.disabled=true;
   stopSwing(hang);
   if(ok){ el.classList.add(mark.toLowerCase()); dial.insertAdjacentHTML('beforeend',MARK[mark]); if(mode==='solo') score+=PTS[TIER[c.k]]; sparkle(dial,false); }

@@ -400,7 +400,11 @@ function drawModes(){
     $('mScore').hidden=mode==='exam'; $('mLives').hidden=mode==='exam'; $('mDone').hidden=mode!=='exam'; }
 }
 function wireModes(){ document.querySelectorAll('#modeRow [data-mode], #topicTabs [data-mode]').forEach(b=>b.onclick=()=>{
-  if(b.dataset.mode===mode) return; mode=b.dataset.mode; drawModes(); if(topic){ if(BOARD&&SETS.length) usePool(); reset(); paint(); } }); }
+  if(b.dataset.mode===mode) return; mode=b.dataset.mode; drawModes();
+  /* THE BOARD'S CHALLENGE NEVER REPEATS ITS GAME. Game plays the Board's rounds;
+     Challenge loads the topic's Ultimate rounds, which no Game, Board set or
+     Defuse ever shows. So switching mode on a Board reloads the topic. */
+  if(topic){ if(BOARD){ choose(topic.id); return; } reset(); paint(); } }); }
 wireModes();
 function drawTopics(){
   if(BOARD) return;                                   /* a Board has one topic and no tabs */
@@ -456,7 +460,7 @@ async function choose(id){
          in sentences the pages, the Boards and Defuse never show. Mixed plays
          every vocabulary topic's Ultimate file together. A topic without one
          falls back to the Board's sentences, and the hint says so. */
-      if(!BOARD){
+      if(!BOARD||mode==='exam'){
         const ids=t.id==='mixed'?SEC().topics.filter(x=>x.id!=='mixed').map(x=>x.id):[t.id], ur=[];
         for(const uid of ids){ try{ const u=await fetch(BASE+'ultimate-'+uid+'.json',{cache:'no-store'}); if(u.ok){ const x=await u.json(); (x.rounds||[]).forEach(r=>ur.push(r)); } }catch(e){} }
         const own=ur.filter(r=>G[r.game]);
@@ -483,7 +487,7 @@ async function choose(id){
          which the Board and Defuse never use — so nothing here has been seen in a
          Board set. A topic without an Ultimate file yet plays its usual rounds. */
       let d=null; ownUltimate=false;
-      if(!BOARD){ try{ const u=await fetch(BASE+t.file.replace(/^challenge-/,'ultimate-'),{cache:'no-store'}); if(u.ok){ const x=await u.json(); if((x.rounds||[]).length){ d=x; ownUltimate=true; } } }catch(e){} }
+      if(!BOARD||mode==='exam'){ try{ const u=await fetch(BASE+t.file.replace(/^challenge-/,'ultimate-'),{cache:'no-store'}); if(u.ok){ const x=await u.json(); if((x.rounds||[]).length){ d=x; ownUltimate=true; } } }catch(e){} }
       if(!d) d=await (await fetch(BASE+t.file,{cache:'no-store'})).json();
       let rounds=(d.rounds||[]).slice();
       for(const im of d.ultimate?[]:(d.imports||[])){
@@ -919,7 +923,7 @@ function ringLine(){
    Board always did. A finished set earns a tick, a clean run (or 100% in
    the Challenge) a star, kept on this device. */
 let FULL=[], SETS=[], SETK=0;
-const SKEY=()=>'intuity.board.sets.'+(topic&&topic.id);
+const SKEY=()=>'intuity.board.sets.'+(topic&&topic.id)+(mode==='exam'?'.exam':'');
 const sDone=()=>{ try{ return JSON.parse(localStorage.getItem(SKEY())||'{}')||{}; }catch(e){ return {}; } };
 function makeSets(){
   FULL=pool.slice(); SETS=[];
@@ -969,7 +973,7 @@ function finish(won){
     const grade=pct>=90?'Exam-ready':pct>=75?'Nearly there':pct>=60?'Getting there':'Not yet — keep practising';
     openCard(`<div class="kick">${esc(topic.label)} · Challenge</div><h2 id="fTitle">Your result</h2>
       <div class="big">${pct}%</div><div class="grade">${grade} · ${right} of ${N} right · ${t}</div>
-      ${(!BOARD&&!ownUltimate)?'<p class="ring-line">These questions are also on the Board, so part of this score may be memory. The real test is a question you have not seen.</p>':''}
+      ${!ownUltimate?'<p class="ring-line">These questions are also on the Board, so part of this score may be memory. The real test is a question you have not seen.</p>':''}
       <ul class="review">${log.slice().sort((a,b)=>a.i-b.i).map(x=>`<li><div class="rh"><span>Cell ${String(x.i+1).padStart(2,'0')} · ${esc(x.g.title)}${x.r.tag&&x.r.tag!==x.g.title?' · '+esc(x.r.tag):''}</span><span class="${x.ok?'ok':'no'}">${x.ok?'Right':'Wrong'}</span></div>
         ${x.ok?'':`Your answer: ${esc(x.given)}<br>`}<b>${esc(x.g.solution(x.r))}</b>${x.r.note?' — '+esc(x.r.note):''}</li>`).join('')}</ul>
       ${ringLine()}<div class="cta"><button class="btn fill" type="button" id="rAgain">Try again</button></div>`);

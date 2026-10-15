@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Be2FIRST — Noughts &amp; Crosses</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@400..600&family=Space+Grotesk:wght@700&family=Anton&family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400..500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=20261012">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   NOUGHTS & CROSSES · the Game's own board (prototype, 15 Oct 2026)
+
+   The Challenge is a track: fourteen cells in a line, a measure. This is a
+   GAME, so it is a grid and a choice. Nine pendulums hang in a noughts-and-
+   crosses frame; each ring holds one of the nine Game formats, so every
+   board plays every format once.
+
+   WHERE A FORMAT SITS IS WHAT IT IS WORTH. The centre lies on four winning
+   lines, a corner on three, an edge on two — so the hardest formats hang in
+   the centre and the corners, the gentlest on the edges. A brave player
+   goes for the middle; a careful one builds from the sides. The dots in an
+   unplayed ring say which.
+
+   RIGHT: the pendulum stops and the mark is stamped in its ring.
+   WRONG: the string snaps, the ring falls, and the OTHER mark lands on it.
+   So a still ring was earned and a fallen one was given away — the board
+   tells the story of the game at a glance.
+
+   THREE WAYS TO PLAY
+     Solo        — you are O, your mistakes are X. Three in a row wins;
+                   three crosses in a row loses.
+     Two players — O and X take turns on one device; a wrong answer hands
+                   the cell to the other side. First line wins.
+     Both sides  — the same, one player taking both turns.
+
+   The rounds are the topic's Board rounds (data/challenge/challenge-*.json),
+   never the Ultimate ones, so nothing here leaks into the Challenge. Every
+   game module is the shared one in data/challenge/games/, unchanged; this
+   page only runs the rules. One attempt per ring: a cross has to mean
+   something.
+   ═══════════════════════════════════════════════════════════════════════ */
+/* ── the Board's focus card, games and tokens, copied from skills/challenge/challenge.html ── */
+.wrap,.scrim{
+  /* ── STAGE 4 · THE QUIET SYSTEM ─────────────────────────────────────────
+     Every colour on this page and in its games is one of these roles, taken
+     from the home page that inspired the app. Six neutrals, four colours:
+     sage is the ring, caramel the app's own accent, and one right and one
+     wrong — dark sage and clay, the only pair from the palette that stays
+     apart for colour-blind eyes AND passes contrast on paper. On the black
+     track tiles a tick uses the light ring sage, or it would vanish.
+     Two radii: anything tapped on one line is a pill; anything that holds
+     content — a card, a field, a pile, a choice of several lines — has one
+     soft corner.
+     SCOPE: these roles are set on the page's content (.wrap, .scrim), not on
+     :root. The shared stylesheet uses some of the same names with its own
+     meaning — there --paper is the BODY TEXT colour — and the header must
+     look exactly as it does on every other page. So nothing here reaches the
+     header, and the light surface has a name of its own: --sheet. */
+  --ink:#2B2129; --sheet:#FEFCF9; --stage:#FAF7F2; --soft:#5C4E52; --mute:#8B7B78; --rule:#D9C0A4;
+  --sage:#8AA79C; --caramel:#C2956E; --caramel-ink:#8A6440;
+  --right:#4A6B5C; --wrong:#B4653A;
+  --right-soft:rgba(74,107,92,.12); --wrong-soft:rgba(180,101,58,.13); --sage-soft:rgba(138,167,156,.16);
+  --r-box:16px; --r-tap:999px;
+  /* the old names, kept so nothing that reads them breaks — now pointing at the roles */
+  --accent:var(--caramel); --accent-ink:var(--caramel-ink); --good:var(--right); --bad:var(--wrong);
+  --dim:var(--soft); --faint:var(--mute); --sentence:var(--soft); --card:var(--sheet);
+}
+[hidden]{display:none!important}
+.header{position:sticky;top:0;z-index:20;background:var(--bg,var(--screen,#F3F1ED))}
+.wrap{max-width:45.6rem;margin:0 auto;padding:1rem var(--gutter,1rem) 3rem}
+.card{background:var(--card,#FAF8F5);border:1px solid var(--rule);border-radius:var(--r-box);box-shadow:0 12px 28px -18px rgba(35,44,49,.35);padding:1.5rem 1.4rem 1.5rem}
+.kick{display:flex;align-items:center;gap:9px;font-family:var(--f-mono);font-size:0.6875rem;letter-spacing:.24em;text-transform:uppercase;color:var(--accent-ink)}
+.kick::before{content:'';display:block;width:26px;height:10px;flex:none;background:var(--caramel)}
+.title{font-family:var(--f-display);font-weight:800;font-size:clamp(1.3rem,4.4vw,1.9rem);letter-spacing:.34em;text-transform:uppercase;line-height:1.1;color:var(--ink);
+  margin:.6rem 0 .8rem;padding-bottom:.7rem;border-bottom:3px double var(--ink)}
+.lead{font-size:.95rem;line-height:1.55;color:var(--dim);margin:0 0 1.2rem;max-width:34rem}
+.lab{display:block;font-family:var(--f-display);font-size:.84rem;letter-spacing:0;color:var(--faint);margin:1.4rem 0 .6rem}
+.btn{font-family:var(--f-display);font-size:.92rem;font-weight:600;letter-spacing:0;padding:.75rem 1.5rem;border-radius:var(--r-tap);cursor:pointer;
+  border:1.5px solid var(--ink);background:none;color:var(--ink)}
+.btn.fill{background:var(--ink);color:var(--sheet)}
+.btn:disabled{opacity:.35;cursor:default}
+.cta{display:flex;justify-content:center;gap:.6rem;flex-wrap:wrap;margin-top:1.2rem}
+
+/* ── 1 · THE GATE — as on Conditionals Decide: a pendulum and one instruction ── */
+.gate{text-align:center;padding-top:3.2rem}
+.gate .gate-mark{width:104px;height:104px;margin:0 auto 1.4rem}
+.gate .gate-mark .pend-dial span{font-size:1.6rem}
+.gate .kick{justify-content:center}
+.gate .title{display:inline-block;margin-left:auto;margin-right:auto}
+.pick{font-family:var(--f-display);font-size:.92rem;letter-spacing:0;color:var(--ink);margin:.6rem auto .4rem;padding:.8rem 0;
+  border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);max-width:26rem}
+.mode-note{font-size:.9rem;line-height:1.5;color:var(--sentence);margin:.8rem auto 1rem;max-width:30rem}
+/* the header's two tiers */
+/* the row is the topic page's own, so it keeps that page's spacing */
+.header .mode-selector button.mode-btn{background:none;border:none;cursor:pointer}
+/* ten topics on one line: the tier set a touch tighter than on a five-tab page */
+.header .set-tabs{box-sizing:border-box;width:auto;max-width:100%;margin-left:auto!important;margin-right:auto!important}
+/* inside the overflow frame the tabs scroll in their track: auto margins would size a grid item to its content and push the page sideways */
+.header .ovf > .set-tabs{margin-left:0!important;margin-right:0!important}
+@media(min-width:561px){ .header .set-tabs{flex-wrap:nowrap;justify-content:center;gap:0} .header .set-tabs .vtab{font-size:0.6875rem;letter-spacing:.08em;padding-left:.5rem;padding-right:.5rem;white-space:nowrap} }
+.header .set-tabs .vtab:disabled{opacity:.38;cursor:default}
+@media(max-width:560px){ .header .set-tabs{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;scrollbar-width:none}
+  .header .set-tabs::-webkit-scrollbar{display:none} .header .set-tabs .vtab{white-space:nowrap;flex:none} }
+/* ── 2 · THE TRACK ── */
+.meters{display:flex;align-items:center;gap:1.3rem;flex-wrap:wrap;font-family:var(--f-display);font-size:.82rem;letter-spacing:0;color:var(--faint)}
+.meters b{font-family:var(--f-display);font-size:1.05rem;font-weight:900;letter-spacing:0;color:var(--ink);font-variant-numeric:tabular-nums;margin-left:.3rem}
+.lives{display:flex;gap:4px;margin-left:.35rem}
+.lives svg{width:15px;height:15px;fill:var(--bad);transition:fill .3s,transform .3s}
+.lives svg.gone{fill:var(--rule);transform:scale(.8)}
+/* practice: the hearts give way to one quiet word — a state, not a failure */
+.lives .practice{font-family:var(--f-display);font-size:.8rem;font-weight:600;letter-spacing:0;text-transform:none;color:var(--soft,#5C4E52)}
+.hint{text-align:center;font-family:var(--f-display);font-size:.86rem;letter-spacing:0;color:var(--faint);margin:.6rem 0 0}
+/* ── THE TRACK · 1930s minimal ──────────────────────────────────────
+   The sketch: the track IS the tiles — one band, cut into cells by straight
+   cross-lines. Drawn in the Deco manner: a double-rule border (a heavy line
+   and a hairline), cream paper, near-black ink, ochre for the cells won.
+   Flat fills, square cuts, no shadow, no pulse: every cell — including the
+   first and last — is drawn and treated exactly the same. */
+:root{ --deco-ink:#2B2129; --deco-paper:#F6F1E6; --deco-ochre:#C2956E; --deco-red:#B4653A;
+  /* the pendulum ring, unrolled: its sage rim, its dark core, its cream numerals */
+  --ring-sage:#8AA79C; --ring-core:#201E1C; --ring-ink:#E5D1B8;
+  /* an answered tile: its own token, so its colour can change without
+     touching anything else (it was the decorative ochre) */
+  --tile-done:var(--deco-ochre); --tile-done-ink:var(--deco-paper);
+  /* the Board's marks: a tile keeps its black and wears a tick or a cross */
+  --mark-right:#8AA79C; --mark-wrong:#B4653A; --mark-answered:var(--ring-ink); }   /* on the black tiles: light sage, clay */
+/* GAME mode: the black tiles stay, the rim turns caramel — on the track
+   and on every game's rings, which read the same token */
+body.mode-game{ --ring-sage:#C2956E; --mark-sweep:#C2956E; }   /* --mark-sweep: the pendulums' rim */
+.board{margin:1.1rem 0 .2rem}
+.board svg{display:block;width:100%;height:auto;max-height:62vh;overflow:visible}
+/* the ring in index.html, unrolled — the same three layers, the same proportions:
+   a raised bezel shaded #FFFFFF → #E4DDD1 at 145° (white light top-left, soft
+   shadow bottom-right), the sage band #8AA79C, and the dark core. */
+.bezel{fill:none;stroke:url(#bezelShade);stroke-width:var(--bw-a);stroke-linejoin:round;filter:url(#raise)}
+.sage{fill:none;stroke:var(--ring-sage);stroke-width:var(--bw-b);stroke-linejoin:round}
+.cap-bezel{stroke:url(#bezelShade)}
+.cap-sage{stroke:var(--ring-sage)}
+.cell{fill:none;stroke:var(--ring-core);stroke-width:var(--bw);stroke-linejoin:miter;cursor:default;transition:stroke .35s}
+.cell.done{stroke:var(--ring-core)}              /* answered: the tile stays black, as on the Board */
+.num.done{opacity:.5}
+.cell.open{stroke:var(--ring-ink);cursor:pointer}
+.cut{stroke:var(--ring-sage);stroke-width:1.8}
+
+.num{font-family:'Anton', Impact, var(--f-display), sans-serif;font-weight:400;font-size:23.4px;letter-spacing:.02em;fill:var(--ring-ink);text-anchor:middle;dominant-baseline:central;pointer-events:none;transition:fill .35s}
+.num.done{fill:var(--ring-ink)}
+.num.open{fill:var(--ring-core)}
+/* each cell is the whole path, dashed — so the browser's own focus box would
+   frame the entire track. The focus mark is the cell's own colour instead. */
+.cell:focus,.cell:focus-visible{outline:none}
+.cell.open:focus-visible{stroke:var(--ink)}
+.legend{display:flex;justify-content:center;gap:1.4rem;flex-wrap:wrap;margin-top:1rem;font-family:var(--f-display);font-size:.8rem;letter-spacing:0;color:var(--faint)}
+.legend i{display:inline-block;width:10px;height:10px;margin-right:.45rem;vertical-align:-1px;border:2px solid var(--ring-sage);background:var(--ring-core)}
+.legend i.o{background:var(--ring-ink)} .legend i.d{background:var(--tile-done)}
+
+/* ── THE FOCUS CARD ── */
+.scrim{position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;padding:1rem;
+  background:rgba(20,17,14,.34);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);opacity:0;transition:opacity .25s}
+.scrim.on{opacity:1}
+.focus{position:relative;width:min(var(--w-focus,35rem),100%);max-height:90vh;overflow-y:auto;background:var(--card,#FAF8F5);border-radius:var(--r-box);
+  box-shadow:0 24px 60px -18px rgba(20,17,14,.38),0 6px 16px rgba(20,17,14,.14);padding:1.6rem 1.5rem 1.4rem;
+  transform:translateY(24px) scale(.97);transition:transform .45s cubic-bezier(.2,1.3,.4,1)}
+.scrim.on .focus{transform:none}
+.focus .x{position:absolute;top:.8rem;right:.9rem;border:none;background:none;font-size:1rem;color:var(--faint);cursor:pointer;padding:.4rem}
+.focus h2{font-family:'Anton', Impact, var(--f-display), sans-serif;font-weight:400;font-size:clamp(1.6rem,6vw,2.1rem);line-height:1.02;color:var(--ink);margin:.45rem 0 .2rem}
+.focus h2::after{content:'';display:block;width:40px;height:3px;background:var(--ink);margin:.65rem 0 0}
+.feedback{min-height:1.4em;margin:.9rem 0 0;font-size:.92rem;line-height:1.5;color:var(--sentence)}
+.feedback b{color:var(--ink)}
+.focus .cta{justify-content:flex-start;margin-top:.9rem}
+
+/* ── the games' shared parts (cg-*) ── */
+.cg-prompt{font-size:.98rem;line-height:1.55;color:var(--sentence);margin:1rem 0 .9rem}
+body.board-page .board-toggle{display:flex;justify-content:center;padding:.2rem 0 .9rem;border-bottom:1px solid var(--rule,#D8CFC2);margin-bottom:.4rem}
+body.board-page .board-toggle .viewtog{margin:0}
+.aim{font-size:.86rem;line-height:1.5;color:var(--dim);margin:.6rem 0 0;padding-left:.7rem;border-left:3px solid var(--caramel)}   /* not .focus: that is the card */
+.cg-line{font-family:var(--f-display);font-weight:700;font-size:1.12rem;line-height:1.5;color:var(--ink);margin:.9rem 0 1rem}
+.cg-blank{display:inline-block;min-width:5.5em;border-bottom:2px solid var(--ink);text-align:center;color:var(--accent-ink)}
+.cg-opts{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
+.cg-opt{display:flex;align-items:center;gap:.8rem;text-align:left;padding:.8rem .2rem;border:none;border-bottom:1px solid var(--rule);background:none;
+  font:inherit;font-size:.98rem;color:var(--ink);cursor:pointer;transition:background .2s}
+.cg-l{flex:none;width:24px;height:24px;border-radius:50%;background:rgba(20,17,14,.07);display:grid;place-items:center;font-family:var(--f-mono);font-size:0.6875rem;color:var(--faint)}
+.cg-opt.cg-ok{background:var(--right-soft);color:var(--right)} .cg-opt.cg-ok .cg-l{background:var(--good);color:var(--sheet)}
+.cg-opt.cg-no{background:var(--wrong-soft);color:var(--wrong)} .cg-opt.cg-no .cg-l{background:var(--bad);color:var(--sheet)}
+.cg-opt.cg-picked{background:var(--tile-bg)} .cg-opt.cg-picked .cg-l{background:var(--ink);color:var(--sheet)}
+.cg-opt:disabled{cursor:default}
+.cg-field{display:flex;gap:.5rem}
+.cg-field input{flex:1;min-width:0;font:inherit;font-size:1rem;padding:.7rem .95rem;border:1px solid var(--rule);background:var(--sheet);color:var(--ink);border-radius:var(--r-box)}
+.cg-field input:focus{outline:2px solid var(--accent);outline-offset:1px}
+.cg-btn{font-family:var(--f-display);font-size:.9rem;font-weight:600;letter-spacing:0;border-radius:var(--r-tap);padding:.7rem 1.25rem;border:1.5px solid var(--ink);background:var(--ink);color:var(--sheet);cursor:pointer}
+.cg-btn.cg-ghost{background:none;color:var(--ink)}
+.cg-btn:disabled{opacity:.35;cursor:default}
+.cg-row{display:flex;gap:.5rem;margin-top:.8rem}
+.cg-chips{display:flex;flex-wrap:wrap;gap:.4rem;min-height:2.5rem}
+.cg-chip{font:inherit;font-size:.94rem;padding:.45rem .75rem;border-radius:999px;border:1px solid var(--rule);background:var(--sheet);color:var(--ink);cursor:pointer}
+.cg-chip.cg-used{visibility:hidden}
+.cg-built{min-height:2.7rem;padding:.5rem 0;margin:0 0 .7rem;border-bottom:2px solid var(--ink);display:flex;flex-wrap:wrap;gap:.35rem}
+.cg-built .cg-chip{background:var(--tile-bg);border-color:transparent;cursor:default}
+.cg-bins{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:.8rem}
+.cg-bin{border:1px dashed var(--rule);border-radius:var(--r-box);padding:.55rem;min-height:5.2rem}
+.cg-bin h4{font-family:var(--f-display);font-size:.8rem;font-weight:400;letter-spacing:0;color:var(--faint);margin:0 0 .4rem}
+.cg-bin .cg-chip{font-size:.84rem;padding:.32rem .6rem;margin:0 .25rem .3rem 0}
+.cg-bin.cg-ready{border-color:var(--accent);cursor:pointer}
+.cg-chip.cg-sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent) inset}
+.cg-chip.cg-ok{background:var(--right-soft);border-color:transparent} .cg-chip.cg-no{background:var(--wrong-soft);border-color:transparent}
+.cg-key{margin:.2rem 0 .1rem} .cg-key span{display:inline-block;font-family:var(--f-mono);font-weight:700;font-size:.8rem;letter-spacing:.2em;padding:.35rem .8rem;border:1.5px solid var(--ink);border-radius:var(--r-tap)}
+.cg-match{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.4rem}
+.cg-match>div{display:flex;flex-direction:column;gap:.4rem}
+.cg-m{position:relative;border-radius:var(--r-box);text-align:left;font:inherit;font-size:.9rem;line-height:1.35;padding:.6rem .7rem .6rem 2rem;border:1px solid var(--rule);background:var(--sheet);color:var(--ink);cursor:pointer}
+.cg-m::before{content:attr(data-n);position:absolute;left:.55rem;top:50%;transform:translateY(-50%);width:1rem;height:1rem;border-radius:50%;
+  font-family:var(--f-mono);font-size:0.6875rem;line-height:1rem;text-align:center;background:var(--tile-bg);color:var(--faint)}
+.cg-m[data-n]::before{background:var(--ink);color:var(--sheet)}
+.cg-m.cg-sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent) inset}
+.cg-m.cg-ok{background:var(--right-soft);border-color:transparent} .cg-m.cg-no{background:var(--wrong-soft);border-color:transparent}
+.cg-shake{animation:cgShake .42s cubic-bezier(.2,.9,.3,1)}
+@keyframes cgShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}45%{transform:translateX(7px)}70%{transform:translateX(-3px)}}
+/* the pendulum game: the Speaking gate's dials, sized for a focus card */
+:root{ --mark-sweep:#708A81; --mark-rest:#4A433D; --mark-core:#201E1C; --mark-ink:#E5D1B8; --mark-pct:100%; }
+.cg-dials{display:grid;grid-template-columns:repeat(2,auto);justify-content:center;gap:1.5rem 2.4rem;margin:1.6rem 0 1rem;--dial:clamp(92px,26vw,118px)}
+.dial-b{display:flex;flex-direction:column;align-items:center;border:none;background:none;padding:0;cursor:pointer;font:inherit;color:inherit}
+.dial-b .pend-hang{display:block;width:var(--dial);height:var(--dial);transform-origin:50% -10px;animation:pendCalm 5.2s cubic-bezier(.37,0,.63,1) infinite}
+.dial-b .pend-hang::before{top:-10px;height:10px} .dial-b .pend-hang::after{top:-13px;width:6px;height:6px}
+@keyframes pendCalm{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+.dial-b .pend-dial span{font-size:calc(var(--dial) * .12);font-weight:700;line-height:1.12;max-width:62%;text-align:center}
+.dial-b.cg-ok .pend-dial{--mark-sweep:var(--good)} .dial-b.cg-no .pend-dial{--mark-sweep:var(--bad)} .dial-b.cg-picked .pend-dial{--mark-sweep:var(--ink)}
+.dial-b.cg-no{opacity:.5;cursor:default}
+.cg-done .dial-b .pend-hang{animation:none;transform:rotate(0)}
+.cg-done .dial-b:not(.cg-ok):not(.cg-picked){opacity:.35}
+.cg-sent{border-top:1px solid var(--rule);padding-top:.6rem}
+.cg-lab{display:block;font-family:var(--f-display);font-size:.78rem;letter-spacing:0;color:var(--faint);margin:0 0 .15rem}
+.cg-act{font-size:.95rem;color:var(--dim);margin:0 0 .5rem}
+.cg-sent .cg-line{margin:.1rem 0 0}
+
+/* ── 3 · THE RESULT ── */
+.big{font-family:'Anton', Impact, var(--f-display), sans-serif;font-size:3.2rem;line-height:1;color:var(--ink);margin:.8rem 0 .2rem}
+/* game controls are tapped, not read: no text selection, no long-press menu
+   (on Android a press-and-hold on the legend opened Translate · Copy and a
+   search for "WRONG"). The sentences themselves stay selectable. */
+.board,.board *,.legend,.meters,.lives,.btn,.cg-btn,.cg-opt,.cg-chip,.cg-m,.cg-bin,.dial-b,.mode-btn,.viewbtn,
+.cg-wire,.pg-peg,.pg-row,.sg-pile,.sg-card,.ht-w,.ko-card,.fc-card,.gk-ring{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.look{font-size:.95rem;margin:.2rem 0 0} .look.ok b{color:var(--right)} .look.no b{color:var(--wrong)}
+.partno{font-size:.82rem;color:var(--soft,#5C4E52);margin:.15rem 0 .7rem}
+.grade{font-family:var(--f-display);font-size:.92rem;letter-spacing:0;color:var(--accent-ink)}
+/* what the run did to the learner's mistakes: plain sentence case, dark sage for the numbers */
+.ring-line{font-size:.92rem;line-height:1.55;color:var(--soft,#5C4E52);margin:.9rem 0 .2rem;padding:.75rem .9rem;border-radius:var(--r-box);background:rgba(74,107,92,.07)}
+.ring-line b{color:var(--right)}
+.review{margin:1rem 0 0;border-top:1px solid var(--rule)}
+.review li{list-style:none;padding:.65rem 0;border-bottom:1px solid var(--rule);font-size:.88rem;line-height:1.45;color:var(--sentence)}
+.review .rh{display:flex;justify-content:space-between;gap:.6rem;font-family:var(--f-display);font-size:.78rem;letter-spacing:0;color:var(--faint);margin-bottom:.2rem}
+.review .ok{color:var(--good)} .review .no{color:var(--bad)}
+.review b{color:var(--ink)}
+.mk{fill:none;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;opacity:0;transition:opacity .25s}
+.mk.on{opacity:1}
+.mk.tick{stroke:var(--mark-right);stroke-width:3.4}
+.mk.cross{stroke:var(--mark-wrong);stroke-width:3.4}
+.mk.dot{fill:var(--mark-answered);stroke:none}
+.legend svg{width:12px;height:12px;margin-right:.4rem;vertical-align:-2px;overflow:visible}
+.mute{border:none;background:none;cursor:pointer;font-size:.9rem;line-height:1;padding:0 .35rem 0 0;vertical-align:-1px}
+.mute.off{opacity:.32;filter:grayscale(1)}
+/* GLITTER: a small burst from a tile's new tick — Game only, never over a card */
+.glitter{position:fixed;left:0;top:0;width:0;height:0;pointer-events:none;z-index:40}
+.glitter i{position:absolute;left:0;top:0;width:var(--s);height:var(--s);margin:calc(var(--s) / -2) 0 0 calc(var(--s) / -2);background:var(--c);
+  border-radius:var(--r);opacity:0;animation:glit var(--d) cubic-bezier(.15,.7,.3,1) var(--w) forwards}
+@keyframes glit{0%{opacity:0;transform:translate(0,0) rotate(0) scale(.4)}15%{opacity:1}
+  100%{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--rot)) scale(1)}}
+.mk.tick.pop{transform-box:fill-box;transform-origin:center;animation:tickPop .45s cubic-bezier(.3,1.6,.5,1)}
+@keyframes tickPop{0%{transform:scale(.2)}100%{transform:scale(1)}}
+.cup{display:block;width:92px;height:92px;margin:.6rem 0 .2rem}
+.cup .rim{fill:none;stroke:var(--caramel);stroke-width:5}
+@media(prefers-reduced-motion:reduce){ .glitter{display:none} .mk.tick.pop{animation:none} }
+@media(prefers-reduced-motion:reduce){ .scrim,.focus,.cell,.num,.mk{transition:none} .dial-b .pend-hang{animation:none} }
+.focus .cta .auto{display:block;width:100%;height:2px;background:var(--rule,#D8CFC2);position:relative;overflow:hidden;border-radius:2px}
+.focus .cta .auto::after{content:'';position:absolute;inset:0;background:var(--caramel,#B98B5E);transform-origin:left;animation:autoBar var(--ms,1100ms) linear forwards}
+@keyframes autoBar{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@media (prefers-reduced-motion:reduce){.focus .cta .auto::after{animation:none;opacity:.5}}
+
+
+/* ══ THIS PAGE ══ */
+body{background:var(--stage,#FAF7F2)}
+.nc-wrap{max-width:34rem}
+.nc-modes{display:flex;justify-content:center;gap:.4rem;margin:.2rem 0 1rem;flex-wrap:wrap}
+.nc-mode{font:600 .74rem var(--f-display,Geist,sans-serif);letter-spacing:.06em;text-transform:uppercase;
+  padding:.55rem 1rem;border-radius:999px;border:1px solid var(--rule);background:var(--sheet);color:var(--soft);cursor:pointer}
+.nc-mode[aria-pressed="true"]{background:var(--ink);color:var(--sheet);border-color:var(--ink)}
+
+.nc-status{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin:0 .2rem .8rem;
+  font:500 .72rem 'Geist Mono',ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.nc-side{display:flex;align-items:center;gap:.45rem;padding:.35rem .7rem;border-radius:999px;transition:background .25s,color .25s}
+.nc-side b{font:700 1rem Geist,sans-serif;color:var(--ink);letter-spacing:0}
+.nc-side.on{background:var(--ink);color:var(--sheet)}
+.nc-side.on b{color:var(--sheet)}
+.nc-side svg{width:16px;height:16px;flex:none}
+.nc-mid{text-align:center;flex:1}
+.nc-mid b{display:block;font:700 1.25rem Geist,sans-serif;color:var(--ink);letter-spacing:0}
+
+/* the frame: a sheet with the four strokes of a noughts-and-crosses grid */
+.nc-board{position:relative;aspect-ratio:1;container-type:inline-size;background:var(--sheet);
+  border:1px solid var(--rule);border-radius:var(--r-box);box-shadow:0 18px 40px -26px rgba(35,44,49,.45);overflow:hidden}
+.nc-grid{position:absolute;inset:0;pointer-events:none}
+.nc-grid i{position:absolute;background:var(--rule);border-radius:2px}
+.nc-grid i:nth-child(1),.nc-grid i:nth-child(2){top:5%;bottom:5%;width:2px}
+.nc-grid i:nth-child(1){left:calc(33.33% - 1px)} .nc-grid i:nth-child(2){left:calc(66.66% - 1px)}
+.nc-grid i:nth-child(3),.nc-grid i:nth-child(4){left:5%;right:5%;height:2px}
+.nc-grid i:nth-child(3){top:calc(33.33% - 1px)} .nc-grid i:nth-child(4){top:calc(66.66% - 1px)}
+
+.nc-cell{position:absolute;width:33.33%;height:33.33%;border:none;background:none;padding:0;cursor:pointer;
+  font:inherit;color:inherit;-webkit-tap-highlight-color:transparent}
+.nc-cell:focus-visible{outline:2px solid var(--caramel);outline-offset:-6px;border-radius:14px}
+.nc-cell[disabled]{cursor:default}
+/* the pivot: a pin in the top of the cell */
+.nc-pin{position:absolute;left:50%;top:3.2cqw;width:1.6cqw;height:1.6cqw;margin-left:-.8cqw;border-radius:50%;background:var(--mute)}
+/* the pendulum: string + ring, swinging from the pin */
+.nc-hang{position:absolute;left:50%;top:4cqw;width:18cqw;margin-left:-9cqw;height:24cqw;transform-origin:50% 0;
+  animation:ncSwing var(--sp,2.8s) ease-in-out infinite;animation-delay:var(--dl,0s)}
+@keyframes ncSwing{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(7deg)}}
+.nc-string{position:absolute;left:50%;top:0;width:1px;height:6cqw;background:linear-gradient(180deg,var(--mute),var(--rule));
+  transform-origin:50% 0;transition:transform .12s ease-in,opacity .2s}
+.nc-dial{position:absolute;left:0;top:6cqw;width:18cqw;height:18cqw;border-radius:50%;
+  background:linear-gradient(145deg,#FFFFFF,#E4DDD1);
+  box-shadow:-.75cqw -.75cqw 1.7cqw rgba(255,255,255,.9),.95cqw .95cqw 2.4cqw rgba(43,33,41,.16);
+  display:flex;align-items:center;justify-content:center;transition:box-shadow .2s}
+.nc-dial::before{content:'';position:absolute;inset:5.49%;border-radius:50%;background:var(--sage);transition:background .35s}
+.nc-dial::after{content:'';position:absolute;inset:14.78%;border-radius:50%;background:#201E1C}
+.nc-dots{position:relative;z-index:2;display:flex;gap:1cqw}
+.nc-dots i{width:1.5cqw;height:1.5cqw;border-radius:50%;background:#E5D1B8}
+.nc-mark{position:absolute;inset:0;z-index:3;width:100%;height:100%;overflow:visible}
+.nc-mark path,.nc-mark circle{fill:none;stroke-width:5.5;stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:100;
+  animation:ncDraw .45s cubic-bezier(.5,0,.2,1) forwards}
+.nc-mark .l2{animation-delay:.18s}
+@keyframes ncDraw{to{stroke-dashoffset:0}}
+.nc-fmt{position:absolute;left:0;right:0;bottom:2.4cqw;text-align:center;
+  font:500 clamp(9px,2.35cqw,12px) 'Geist Mono',ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);
+  transition:opacity .3s}
+@media(hover:hover){ .nc-cell:not([disabled]):hover .nc-dial{box-shadow:-.75cqw -.75cqw 1.7cqw rgba(255,255,255,.95),1.4cqw 1.4cqw 3cqw rgba(43,33,41,.22)} }
+
+/* owned: the swing stops, the rim takes the owner's colour */
+.nc-cell.o .nc-dial::before{background:var(--caramel)}
+.nc-cell.x .nc-dial::before{background:var(--wrong)}
+/* two players: X is a side, not a mistake — dark sage, so the two teams never look alike */
+body.duel .nc-cell.x .nc-dial::before{background:var(--right)}
+.nc-cell.o .nc-mark *{stroke:#F6EFE3} .nc-cell.x .nc-mark *{stroke:#F6EFE3}
+.nc-cell.o .nc-fmt,.nc-cell.x .nc-fmt{opacity:.35}
+.nc-cell.o .nc-dots,.nc-cell.x .nc-dots{display:none}
+/* given away: the string snaps and the ring falls to the floor of the cell */
+.nc-cell.fell .nc-string{transform:scaleY(0);opacity:0}
+.nc-cell.fell .nc-dial{animation:ncFall .7s cubic-bezier(.45,0,.6,1) forwards}
+@keyframes ncFall{0%{transform:none}55%{transform:translateY(5.6cqw) rotate(14deg)}72%{transform:translateY(4.4cqw) rotate(10deg)}
+  86%{transform:translateY(5.6cqw) rotate(13deg)}100%{transform:translateY(5.6cqw) rotate(12deg)}}
+.nc-cell.fell .nc-fmt{opacity:0}
+
+/* the winning stroke */
+.nc-line{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5}
+.nc-line line{stroke-width:7;stroke-linecap:round;stroke-dasharray:420;stroke-dashoffset:420;animation:ncStroke .6s cubic-bezier(.6,0,.2,1) forwards}
+@keyframes ncStroke{to{stroke-dashoffset:0}}
+.nc-board.done .nc-cell:not(.win){opacity:.45;transition:opacity .5s}
+
+.nc-how{margin:1rem .3rem 0;font-size:.86rem;line-height:1.5;color:var(--soft);text-align:center}
+.nc-how b{color:var(--ink)}
+.nc-foot{display:flex;justify-content:center;gap:.6rem;margin-top:1rem}
+.nc-tally{margin-top:.8rem;text-align:center;font:500 .7rem 'Geist Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+
+/* fireworks */
+#fx{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:9500}
+
+/* the result card */
+.nc-res{text-align:center}
+.nc-res .big{font:700 3.4rem Geist,sans-serif;color:var(--ink);margin:.2rem 0}
+.nc-res .cta{justify-content:center}
+.nc-turn{display:inline-flex;align-items:center;gap:.35rem;font:600 .7rem 'Geist Mono',monospace;letter-spacing:.1em;
+  text-transform:uppercase;padding:.25rem .6rem;border-radius:999px;background:var(--ink);color:var(--sheet);margin-left:.4rem;vertical-align:middle}
+
+@media(prefers-reduced-motion:reduce){ .nc-hang{animation:none} .nc-cell.fell .nc-dial{animation:none;transform:translateY(5.6cqw) rotate(12deg)} }
+</style>
+<link rel="stylesheet" href="/tools/intuity-pills.css?v=20261012">
+<script src="/tools/intuity-overflow.js?v=3"></script>
+<script src="/tools/be2-brand.js?v=20261012c"></script>
+</head>
+<body class="mode-game">
+<header class="header">
+  <div class="header-top">
+    <a class="back-link" id="back" href="/index.html?openModal=grammar" target="_top">← Grammar</a>
+    <div class="header-title"><div class="be2" role="img" aria-label="Be2FIRST"><span class="big top" aria-hidden="true">B<b class="e">e</b>2</span><span class="big bot" aria-hidden="true">B<b class="e">e</b>2</span><span class="band" aria-hidden="true"><i>FIRST</i></span></div><div class="app-subtitle" id="sub">Noughts &amp; Crosses</div></div>
+    <span class="header-spacer"><button class="mute" id="mute" type="button" aria-label="Sound on" aria-pressed="true">&#128266;</button> Level <b>B2</b></span>
+  </div>
+</header>
+
+<main class="wrap nc-wrap">
+  <div class="nc-modes" role="group" aria-label="How to play">
+    <button class="nc-mode" type="button" data-m="solo">Solo</button>
+    <button class="nc-mode" type="button" data-m="duo">Two players</button>
+    <button class="nc-mode" type="button" data-m="self">Both sides</button>
+  </div>
+  <div class="nc-status" id="status" aria-live="polite"></div>
+  <div class="nc-board" id="board" aria-label="The board">
+    <div class="nc-grid" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  </div>
+  <p class="nc-how" id="how"></p>
+  <div class="nc-foot"><button class="btn" type="button" id="newBoard">New board</button></div>
+  <p class="nc-tally" id="tally"></p>
+</main>
+
+<div class="scrim" id="scrim" hidden><div class="focus" id="focus" role="dialog" aria-modal="true" aria-labelledby="fTitle"></div></div>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<script src="/skills/grammar-rules/intuity-sound.js"></script>
+<script src="/data/challenge/games/choose.js?v=2"></script>
+<script src="/data/challenge/games/pendulum.js?v=3"></script>
+<script src="/data/challenge/games/gap.js?v=4"></script>
+<script src="/data/challenge/games/order.js?v=3"></script>
+<script src="/data/challenge/games/odd.js?v=3"></script>
+<script src="/data/challenge/games/sort.js?v=2"></script>
+<script src="/data/challenge/games/transform.js?v=3"></script>
+<script src="/data/challenge/games/correct.js?v=2"></script>
+<script src="/data/challenge/games/match.js?v=1"></script>
+<script src="/data/challenge/games/wordform.js?v=1"></script>
+<script src="/data/challenge/games/opencloze.js?v=2"></script>
+<script src="/data/challenge/games/game-kit.js?v=4"></script>
+<script src="/data/challenge/games/defuse.js?v=4"></script>
+<script src="/data/challenge/games/forge.js?v=3"></script>
+<script src="/data/challenge/games/knockout.js?v=2"></script>
+<script src="/data/challenge/games/sortgame.js?v=3"></script>
+<script src="/data/challenge/games/pegs.js?v=3"></script>
+<script src="/data/challenge/games/pairs.js?v=7"></script>
+<script src="/data/challenge/games/flip.js?v=3"></script>
+<script src="/data/challenge/games/hunt.js?v=7"></script>
+<script src="/tools/intuity-log.js?v=1"></script>
+<script src="/tools/intuity-ring.js?v=1"></script>
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const P=new URLSearchParams(location.search);
+const G=window.ChallengeGames||{};
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const shuffle=a=>{ a=a.slice(); for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; } return a; };
+const sfx=n=>{ try{ if(window.SFX&&SFX.isOn()&&SFX[n]) SFX[n](); }catch(e){} };
+const calm=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ══ THE NINE FORMATS, BY WHAT THEY ASK ══
+   Hard: produce under constraint · Middle: produce or pair · Gentle: recognise.
+   Centre takes one hard; corners the other two hard and two middle; edges
+   the last middle and the three gentle. Each board plays all nine. */
+const HARD=['hunt','flip','forge'], MID=['pairs','pegs','defuse'], EASY=['pendulum','knockout','sortgame'];
+const TIER={hunt:3,flip:3,forge:3,pairs:2,pegs:2,defuse:2,pendulum:1,knockout:1,sortgame:1};
+const PTS={1:100,2:150,3:200};
+const CENTRE=4, CORNERS=[0,2,6,8], EDGES=[1,3,5,7];
+const LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+const RULES_PAGE={passive:'passive-voice-rules',tenses:'tenses-rules',conditionals:'conditionals-rules','past-modals':'past-modals-rules',
+  comparatives:'comparatives-rules',reported:'reported-speech-rules',linking:'linking-words-rules',inversion:'inversion-rules',
+  gerunds:'gerunds-infinitives-rules',misc:'miscellaneous-rules'};
+
+let topic=null, by={}, mode=['solo','duo','self'].includes(P.get('mode'))?P.get('mode'):'solo';
+let cells=[], turn='O', score=0, over=false, busy=false, used=new Set();
+let tally={O:0,X:0,D:0};
+const NAMES={solo:{O:'You',X:'Mistakes'},duo:{O:'Team O',X:'Team X'},self:{O:'You as O',X:'You as X'}};
+
+/* ══ SOUND ══ */
+function paintMute(){ const m=$('mute'); if(!m||!window.SFX) return; const on=SFX.isOn(); m.classList.toggle('off',!on); m.setAttribute('aria-pressed',on); m.setAttribute('aria-label',on?'Sound on':'Sound off'); }
+$('mute').onclick=()=>{ if(window.SFX){ SFX.toggle(); paintMute(); } }; paintMute();
+
+/* ══ LOAD THE TOPIC ══ */
+async function load(){
+  const id=P.get('topic')||'conditionals';
+  const T=await (await fetch('/data/challenge/challenge-topics.json',{cache:'no-store'})).json();
+  const t=T.sections.flatMap(s=>s.topics).find(x=>x.id===id&&x.file);
+  if(!t){ $('how').textContent='This board plays the grammar topics for now.'; return; }
+  const d=await (await fetch('/data/challenge/'+t.file,{cache:'no-store'})).json();
+  let rounds=(d.rounds||[]).slice();
+  for(const im of d.imports||[]){ try{ const x=await (await fetch(im.file,{cache:'no-store'})).json(); (x.rounds||[]).forEach(r=>rounds.push(Object.assign({game:im.game},r))); }catch(e){} }
+  topic={id,label:d.topic||t.label,focus:t.focus||''};
+  Object.keys(TIER).forEach(k=>{ const g=G[k]; if(!g) return; const rs=rounds.filter(r=>g.accepts?g.accepts(r):r.game===k); if(rs.length) by[k]=rs; });
+  $('sub').textContent='Noughts & Crosses';
+  document.title='Be2FIRST — '+topic.label+' · Noughts & Crosses';
+  if(RULES_PAGE[id]){ $('back').href='/skills/grammar-rules/'+RULES_PAGE[id]; $('back').textContent='← '+topic.label; }
+  drawModes(); deal();
+}
+
+/* ══ DEAL A BOARD ══ */
+function pickRound(k){
+  const due=r=>{ try{ return r.id&&window.IntuityRing&&IntuityRing.isDue(r.id)?1:0; }catch(e){ return 0; } };
+  let rs=shuffle((by[k]||[]).filter(r=>!used.has(r)));
+  if(!rs.length){ (by[k]||[]).forEach(r=>used.delete(r)); rs=shuffle(by[k]||[]); }
+  if(mode!=='duo') rs.sort((a,b)=>due(b)-due(a));        /* your waiting mistakes first */
+  const r=rs[0]; if(r) used.add(r); return r;
+}
+function deal(){
+  over=false; busy=false; score=0; turn='O';
+  const have=k=>!!by[k];
+  const h=shuffle(HARD.filter(have)), m=shuffle(MID.filter(have)), e=shuffle(EASY.filter(have));
+  const spare=shuffle(Object.keys(by));
+  const take=list=>list.length?list.shift():spare[(Math.random()*spare.length)|0];
+  const fmt=Array(9);
+  fmt[CENTRE]=take(h);
+  const cor=shuffle([take(h),take(h),take(m),take(m)]); CORNERS.forEach((c,k)=>fmt[c]=cor[k]);
+  const edg=shuffle([take(m),take(e),take(e),take(e)]); EDGES.forEach((c,k)=>fmt[c]=edg[k]);
+  cells=fmt.map(k=>({k,r:pickRound(k),mark:null,fell:false}));
+  drawBoard(); paintStatus();
+}
+function drawBoard(){
+  const b=$('board'); b.classList.remove('done');
+  b.querySelectorAll('.nc-cell,.nc-line').forEach(x=>x.remove());
+  cells.forEach((c,i)=>{
+    const g=G[c.k]||{}, tier=TIER[c.k]||1;
+    const el=document.createElement('button'); el.type='button'; el.className='nc-cell'; el.dataset.i=i;
+    el.style.left=(i%3)*33.333+'%'; el.style.top=Math.floor(i/3)*33.333+'%';
+    el.setAttribute('aria-label',`${['Top','Middle','Bottom'][Math.floor(i/3)]} ${['left','centre','right'][i%3]}: ${g.title||c.k}, worth ${PTS[tier]}`);
+    el.innerHTML=`<span class="nc-pin"></span><div class="nc-hang" style="--dl:${(-Math.random()*2.8).toFixed(2)}s;--sp:${(2.5+Math.random()*.7).toFixed(2)}s">
+      <span class="nc-string"></span><div class="nc-dial"><span class="nc-dots">${'<i></i>'.repeat(tier)}</span></div></div>
+      <span class="nc-fmt">${esc(g.title||c.k)}</span>`;
+    el.onclick=()=>openCell(i);
+    b.appendChild(el);
+  });
+}
+function paintStatus(){
+  const N=NAMES[mode], mk=m=>m==='O'?'<svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" stroke-width="2.6"/></svg>'
+    :'<svg viewBox="0 0 20 20"><path d="M4.5 4.5l11 11M15.5 4.5l-11 11" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>';
+  const n=m=>cells.filter(c=>c.mark===m).length;
+  const live=m=>mode!=='solo'&&!over&&turn===m?' on':'';
+  $('status').innerHTML=`<span class="nc-side${live('O')}">${mk('O')}${esc(N.O)} <b>${n('O')}</b></span>`+
+    (mode==='solo'?`<span class="nc-mid">Score<b>${score}</b></span>`:`<span class="nc-mid">${over?'Game over':esc(N[turn])+' to play'}</span>`)+
+    `<span class="nc-side${live('X')}">${mk('X')}${esc(N.X)} <b>${n('X')}</b></span>`;
+  $('how').innerHTML=mode==='solo'
+    ?'Pick any ring. <b>Right</b>: the pendulum stops and your nought is stamped. <b>Wrong</b>: the string snaps and a cross lands. Three noughts in a row wins — three crosses in a row loses. The more dots, the harder the ring and the more it is worth.'
+    :'Take turns. <b>Answer right</b> and the ring is yours. <b>Answer wrong</b> and the string snaps — the ring goes to the other side. First to three in a row wins. The centre is the hardest ring, and the most useful.';
+  $('tally').textContent=mode==='solo'?'':`${NAMES[mode].O} ${tally.O} · ${NAMES[mode].X} ${tally.X} · Draws ${tally.D}`;
+}
+function drawModes(){ document.body.classList.toggle('duel',mode!=='solo'); document.querySelectorAll('.nc-mode').forEach(b=>{ b.setAttribute('aria-pressed',b.dataset.m===mode); b.onclick=()=>{ if(b.dataset.m===mode) return; mode=b.dataset.m; tally={O:0,X:0,D:0}; drawModes(); deal(); }; }); }
+$('newBoard').onclick=()=>{ closeCard(true); deal(); };
+
+/* ══ THE FOCUS CARD ══ */
+let cur=null, settled=false, autoT=null, autoOff=null;
+function openCard(html){ $('focus').innerHTML='<button class="x" type="button" aria-label="Close" id="fxBtn">✕</button>'+html;
+  const s=$('scrim'); s.hidden=false; requestAnimationFrame(()=>s.classList.add('on')); $('fxBtn').onclick=()=>closeCard(); }
+function closeCard(silent){ clearTimeout(autoT); if(autoOff) autoOff(); const s=$('scrim'); s.classList.remove('on');
+  const done=cur&&settled&&!silent?cur:null; cur=null;
+  setTimeout(()=>{ s.hidden=true; if(done) play(done.i,done.ok); },250); }
+const POS=['top left','top','top right','left','centre','right','bottom left','bottom','bottom right'];
+function openCell(i){
+  const c=cells[i]; if(over||busy||c.mark||!c.r) return;
+  const g=G[c.k]; cur={i,ok:false}; settled=false;
+  const who=mode==='solo'?'':`<span class="nc-turn">${esc(NAMES[mode][turn])}</span>`;
+  openCard(`<div class="kick">${esc(topic.label)} · ${POS[i]} · ${PTS[TIER[c.k]]} ${who}</div><h2 id="fTitle">${esc(g.title)}</h2>
+    ${topic.focus?`<p class="aim">${esc(topic.focus)}</p>`:''}<div id="host"></div><p class="feedback" id="fb" aria-live="polite"></p><div class="cta" id="next" hidden></div>`);
+  g.render($('host'), c.r, {exam:false, esc, shuffle, answer, nudge});
+}
+function nudge(note){ if(settled) return false; $('fb').innerHTML='<b>That’s correct English</b> — but not the one we’re after. '+esc(note||''); return true; }
+/* ONE ATTEMPT. A cross has to mean something: the first answer settles the ring. */
+function answer(ok,given){
+  if(settled) return false; settled=true; cur.ok=!!ok;
+  const c=cells[cur.i]; let sol=''; try{ sol=String(G[c.k].solution(c.r)||''); }catch(e){}
+  if(mode!=='duo') remember(c.r,!!ok);
+  const tag=c.r.tag?' · '+esc(c.r.tag):'';
+  const other=turn==='O'?'X':'O';
+  $('fb').innerHTML=ok?`<b>Right${tag}.</b> ${esc(c.r.note||'')}`
+    :`<b>Not this time${tag}.</b> The answer: <b>${esc(sol)}</b>. ${esc(c.r.note||'')}${mode==='solo'?'':` <br>The ring goes to ${esc(NAMES[mode][other])}.`}`;
+  sfx(ok?'correct':'wrong');
+  showNext(()=>closeCard(), ok?1200:3400);
+  return false;
+}
+function remember(r,ok){
+  if(!r||!r.id) return;
+  try{ if(window.IntuityRing){ ok?IntuityRing.right(r.id):IntuityRing.miss(r.id,{topic:topic.id,part:r.part}); } }catch(e){}
+  try{ if(window.INTUITY) INTUITY.log(topic.id, r.id, ok, {game:'noughts-'+mode}); }catch(e){}
+}
+function showNext(fn,ms){
+  clearTimeout(autoT); if(autoOff) autoOff();
+  const n=$('next'); n.hidden=false; n.innerHTML='<span class="auto" style="--ms:'+ms+'ms" aria-hidden="true"></span>';
+  const done=()=>{ clearTimeout(autoT); if(autoOff) autoOff(); fn(); };
+  const tap=e=>{ if(e.target.closest&&e.target.closest('#fxBtn')) return; done(); };
+  const key=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); done(); } };
+  const arm=setTimeout(()=>{ document.addEventListener('pointerdown',tap,true); document.addEventListener('keydown',key,true); },300);
+  autoOff=()=>{ clearTimeout(arm); document.removeEventListener('pointerdown',tap,true); document.removeEventListener('keydown',key,true); autoOff=null; };
+  autoT=setTimeout(done,ms);
+}
+
+/* ══ ON THE BOARD ══ */
+const MARK={O:'<svg class="nc-mark" viewBox="0 0 100 100"><circle cx="50" cy="50" r="17" pathLength="100" transform="rotate(-90 50 50)"/></svg>',
+            X:'<svg class="nc-mark" viewBox="0 0 100 100"><path d="M37 37L63 63" pathLength="100"/><path class="l2" d="M63 37L37 63" pathLength="100"/></svg>'};
+function stopSwing(hang){
+  /* freeze where it is, then settle to rest — no jump */
+  const now=getComputedStyle(hang).transform; hang.style.transform=now==='none'?'':now; hang.style.animation='none';
+  void hang.offsetWidth; hang.style.transition='transform .55s cubic-bezier(.3,1.4,.5,1)'; hang.style.transform='rotate(0deg)';
+}
+function play(i,ok){
+  busy=true;
+  const c=cells[i], el=document.querySelector(`.nc-cell[data-i="${i}"]`), hang=el.querySelector('.nc-hang'), dial=el.querySelector('.nc-dial');
+  const mark=mode==='solo'?(ok?'O':'X'):(ok?turn:(turn==='O'?'X':'O'));
+  c.mark=mark; c.fell=!ok; el.disabled=true;
+  stopSwing(hang);
+  if(ok){ el.classList.add(mark.toLowerCase()); dial.insertAdjacentHTML('beforeend',MARK[mark]); if(mode==='solo') score+=PTS[TIER[c.k]]; sparkle(dial,false); }
+  else{ setTimeout(()=>{ el.classList.add('fell'); sfx('crash'); },380);
+        setTimeout(()=>{ el.classList.add(mark.toLowerCase()); dial.insertAdjacentHTML('beforeend',MARK[mark]); },900); }
+  setTimeout(()=>{
+    const line=LINES.find(L=>L.every(k=>cells[k].mark===mark));
+    if(mode!=='solo') turn=turn==='O'?'X':'O';
+    if(line) return win(line,mark);
+    if(cells.every(x=>x.mark)) return draw();
+    busy=false; paintStatus();
+  }, ok?650:1300);
+  paintStatus();
+}
+function win(line,mark){
+  over=true; paintStatus();
+  const b=$('board'); b.classList.add('done');
+  line.forEach(k=>document.querySelector(`.nc-cell[data-i="${k}"]`).classList.add('win'));
+  const P=k=>[(k%3)*100+50, Math.floor(k/3)*100+(cells[k].fell?67:50)];
+  const [a,z]=[P(line[0]),P(line[2])], dx=z[0]-a[0], dy=z[1]-a[1], L=Math.hypot(dx,dy), ex=dx/L*30, ey=dy/L*30;
+  const lost=mode==='solo'&&mark==='X';
+  b.insertAdjacentHTML('beforeend',`<svg class="nc-line" viewBox="0 0 300 300" aria-hidden="true"><line x1="${a[0]-ex}" y1="${a[1]-ey}" x2="${z[0]+ex}" y2="${z[1]+ey}" stroke="${mark==='O'?'var(--caramel)':mode==='solo'?'var(--wrong)':'var(--right)'}"/></svg>`);
+  if(mode==='solo'&&!lost) score+=500;
+  if(mode!=='solo') tally[mark]++;
+  paintStatus();
+  setTimeout(()=>{
+    if(lost){ sfx('bowlLow'); result('The crosses won.','Three mistakes in a row. Every one of them is in your Ring, so they come back first next time.'); }
+    else{ sfx('fanfare'); fireworks();
+      if(mode==='solo') result('Three in a row.',`Three noughts in a line: <b>+500</b>. ${cells.filter(c=>c.mark==='X').length?'':'And not a single cross. '}`);
+      else result(`${esc(NAMES[mode][mark])} wins.`,`Three in a row for ${mark}.`); }
+  },700);
+}
+function draw(){
+  over=true; if(mode!=='solo') tally.D++; paintStatus(); $('board').classList.add('done'); sfx('bowlLow');
+  result('A draw.', mode==='solo'?'Nine rings and no line either way. The crossed ones are in your Ring and come back first.':'Nine rings, no line. Play again — swap who starts.');
+}
+function result(head,line){
+  setTimeout(()=>{
+    openCard(`<div class="nc-res"><div class="kick">${esc(topic.label)} · Noughts &amp; Crosses</div><h2 id="fTitle">${head}</h2>
+      ${mode==='solo'?`<div class="big">${score}</div>`:''}<p class="cg-prompt">${line}</p>
+      <div class="cta"><button class="btn fill" type="button" id="again">New board</button><button class="btn" type="button" id="look">See the board</button></div></div>`);
+    $('again').onclick=()=>{ closeCard(true); deal(); };
+    $('look').onclick=()=>closeCard(true);
+  }, mode==='solo'&&!/crosses/.test(head)?1500:600);
+}
+
+/* ══ CELEBRATION ══ */
+function sparkle(el,big){
+  if(calm) return; const r=el.getBoundingClientRect(); burstAt(r.left+r.width/2, r.top+r.height/2, big?60:18, big?1:.45);
+}
+const cv=$('fx'), cx=cv.getContext('2d'); let parts=[], raf=0;
+function size(){ cv.width=innerWidth*devicePixelRatio; cv.height=innerHeight*devicePixelRatio; cx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0); }
+addEventListener('resize',size); size();
+const COLS=['#C2956E','#E9C98F','#8AA79C','#F6F1E6','#DD8E58','#4A6B5C'];
+function burstAt(x,y,n,pow){
+  for(let k=0;k<n;k++){ const a=Math.random()*Math.PI*2, v=(2+Math.random()*5)*pow*2;
+    parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v-1.5*pow,life:1,decay:.012+Math.random()*.012,s:1.5+Math.random()*2.5*pow+1,c:COLS[(Math.random()*COLS.length)|0],tw:Math.random()<.3}); }
+  if(!raf) raf=requestAnimationFrame(step);
+}
+function step(){
+  cx.clearRect(0,0,innerWidth,innerHeight);
+  parts=parts.filter(p=>p.life>0);
+  parts.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; p.vy+=.09; p.vx*=.985; p.life-=p.decay;
+    cx.globalAlpha=Math.max(0,p.tw?p.life*(.5+.5*Math.sin(p.life*40)):p.life); cx.fillStyle=p.c;
+    cx.beginPath(); cx.arc(p.x,p.y,p.s,0,Math.PI*2); cx.fill(); });
+  cx.globalAlpha=1;
+  raf=parts.length?requestAnimationFrame(step):0;
+}
+function fireworks(){
+  if(calm) return;
+  const r=$('board').getBoundingClientRect();
+  for(let k=0;k<7;k++) setTimeout(()=>{ burstAt(r.left+r.width*(.15+Math.random()*.7), r.top+r.height*(.1+Math.random()*.6), 70, 1); sfx(k%2?'pop':'rise'); }, k*260);
+}
+
+if(P.get('test')) window.NC_TEST={answer:ok=>answer(ok,'test'),cells:()=>cells};   /* for automated checks only */
+load().catch(()=>{ $('how').textContent='The board didn’t load — reload to try again.'; });
+})();
+</script>
+</body>
+</html>

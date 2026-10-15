@@ -496,7 +496,8 @@ const SECTION=P.get('section')==='vocabulary'?'vocabulary':'grammar';
    The pendulum styles above stay in the file but are no longer used. */
 const RINGS=true; document.body.classList.add('look-rings');
 let topic=null, by={}, mode=['solo','duo','self'].includes(P.get('mode'))?P.get('mode'):'solo';
-let cells=[], turn='O', score=0, over=false, busy=false, used=new Set();
+let cells=[], turn='O', score=0, over=false, busy=false, used=new Set(), strikes=0;
+const STRIKES=3;   /* Solo: three mistakes end the board */
 let tally={O:0,X:0,D:0};
 const NAMES={solo:{O:'You',X:'Mistakes'},duo:{O:'Team O',X:'Team X'},self:{O:'You as O',X:'You as X'}};
 
@@ -600,7 +601,7 @@ function pickRound(k){
   const r=rs[0]; if(r) used.add(r); return r;
 }
 function deal(){
-  over=false; busy=false; score=0; turn='O';
+  over=false; busy=false; score=0; turn='O'; strikes=0;
   const have=k=>!!by[k];
   const h=shuffle(HARD.filter(have)), m=shuffle(MID.filter(have)), e=shuffle(EASY.filter(have));
   /* a topic without some formats (vocabulary has no Flip, Forge or Swing)
@@ -636,8 +637,10 @@ function makeCell(c,i){
    open for the other side. Nobody is handed a cell for someone else's slip. */
 function reroll(i){
   const c=cells[i], old=document.querySelector(`.nc-cell[data-i="${i}"]`);
-  const others=Object.keys(by).filter(k=>k!==c.k);
-  c.k=others.length?shuffle(others)[0]:c.k; c.r=pickRound(c.k); c.mark=null; c.fell=false;
+  /* a different game of the SAME difficulty, so the centre stays the hard
+     ring and an edge stays gentle; any other game only if there is none */
+  const others=Object.keys(by).filter(k=>k!==c.k), same=others.filter(k=>TIER[k]===TIER[c.k]);
+  c.k=same.length?shuffle(same)[0]:others.length?shuffle(others)[0]:c.k; c.r=pickRound(c.k); c.mark=null; c.fell=false;
   const el=makeCell(c,i); el.classList.add('fresh'); old.replaceWith(el);
 }
 function paintStatus(){
@@ -647,10 +650,9 @@ function paintStatus(){
   const live=m=>mode!=='solo'&&!over&&turn===m?' on':'';
   $('status').innerHTML=`<span class="nc-side${live('O')}">${mk('O')}${esc(N.O)} <b>${n('O')}</b></span>`+
     (mode==='solo'?`<span class="nc-mid">Score<b>${score}</b></span>`:`<span class="nc-mid">${over?'Game over':esc(N[turn])+' to play'}</span>`)+
-    `<span class="nc-side${live('X')}">${mk('X')}${esc(N.X)} <b>${n('X')}</b></span>`;
+    `<span class="nc-side${live('X')}">${mk('X')}${esc(N.X)} <b>${mode==='solo'?strikes+'/'+STRIKES:n('X')}</b></span>`;
   $('how').innerHTML=mode==='solo'
-    ?(RINGS?'Pick any ring. <b>Right</b>: your nought is stamped in it. <b>Wrong</b>: the ring is knocked askew and a cross lands.':'Pick any ring. <b>Right</b>: the pendulum stops and your nought is stamped. <b>Wrong</b>: the string snaps and a cross lands.')
-      +' Three noughts in a row wins — three crosses in a row loses. The more dots, the harder the ring and the more it is worth.'
+    ?'Pick any ring. <b>Right</b>: your nought is stamped in it. <b>Wrong</b>: the ring is knocked and comes back as a different game, still open. Three noughts in a row wins — three mistakes end the board. The more dots, the harder the ring and the more it is worth.'
     :'Take turns. <b>Answer right</b> and the ring is yours. <b>Answer wrong</b> and '+(RINGS?'it is knocked':'the string snaps')+' — it comes back as a different game, still open for the other side. First to three in a row wins.';
   $('tally').textContent=mode==='solo'?'':`${NAMES[mode].O} ${tally.O} · ${NAMES[mode].X} ${tally.X} · Draws ${tally.D}`;
 }
@@ -682,7 +684,7 @@ function answer(ok,given){
   const tag=c.r.tag?' · '+esc(c.r.tag):'';
   const other=turn==='O'?'X':'O';
   $('fb').innerHTML=ok?`<b>Right${tag}.</b> ${esc(c.r.note||'')}`
-    :`<b>Not this time${tag}.</b> The answer: <b>${esc(sol)}</b>. ${esc(c.r.note||'')}${mode==='solo'?'':` <br>The ring turns into a new game — ${esc(NAMES[mode][other])} to play.`}`;
+    :`<b>Not this time${tag}.</b> The answer: <b>${esc(sol)}</b>. ${esc(c.r.note||'')}${mode==='solo'?` <br>The ring turns into a new game. Mistakes: <b>${strikes+1}</b> of ${STRIKES}.`:` <br>The ring turns into a new game — ${esc(NAMES[mode][other])} to play.`}`;
   sfx(ok?'correct':'wrong');
   showNext(()=>closeCard(), ok?1200:3400);
   return false;
@@ -714,13 +716,21 @@ function stopSwing(hang){
 function play(i,ok){
   busy=true;
   const c=cells[i], el=document.querySelector(`.nc-cell[data-i="${i}"]`), hang=el.querySelector('.nc-hang'), dial=el.querySelector('.nc-dial');
-  if(!ok&&mode!=='solo'){
+  /* EVERY MISS, IN EVERY MODE: nobody takes the ring. It is knocked, then
+     comes back as a different game, still open. Two players: the turn
+     passes. Solo: it counts as a mistake, and three end the board. */
+  if(!ok){
     el.disabled=true; stopSwing(hang);
+    if(mode==='solo') strikes++;
+    paintStatus();
     setTimeout(()=>{ el.classList.add('fell'); sfx('crash'); },380);
-    setTimeout(()=>{ reroll(i); turn=turn==='O'?'X':'O'; busy=false; paintStatus(); },1300);
+    setTimeout(()=>{ reroll(i);
+      if(mode!=='solo') turn=turn==='O'?'X':'O';
+      if(mode==='solo'&&strikes>=STRIKES) return lose();
+      busy=false; paintStatus(); },1300);
     return;
   }
-  const mark=mode==='solo'?(ok?'O':'X'):turn;
+  const mark=mode==='solo'?'O':turn;
   c.mark=mark; c.fell=!ok; el.disabled=true;
   stopSwing(hang);
   if(ok){ el.classList.add(mark.toLowerCase()); dial.insertAdjacentHTML('beforeend',MARK[mark]); if(mode==='solo') score+=PTS[TIER[c.k]]; sparkle(dial,false); }
@@ -752,6 +762,10 @@ function win(line,mark){
       if(mode==='solo') result('Three in a row.',`Three noughts in a line: <b>+500</b>. ${cells.filter(c=>c.mark==='X').length?'':'And not a single cross. '}`);
       else result(`${esc(NAMES[mode][mark])} wins.`,`Three in a row for ${mark}.`); }
   },700);
+}
+function lose(){
+  over=true; paintStatus(); $('board').classList.add('done'); sfx('bowlLow');
+  result('Three mistakes.',`The board is over, with <b>${cells.filter(c=>c.mark==='O').length}</b> ${cells.filter(c=>c.mark==='O').length===1?'nought':'noughts'} and no line. Every mistake is in your Ring, so those sentences come back first next time.`);
 }
 function draw(){
   over=true; if(mode!=='solo') tally.D++; paintStatus(); $('board').classList.add('done'); sfx('bowlLow');

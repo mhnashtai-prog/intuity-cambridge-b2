@@ -383,6 +383,8 @@ body.duel .nc-cell.x .nc-dial::before{background:var(--right)}
     <div class="header-title"><div class="be2" role="img" aria-label="Be2FIRST"><span class="big top" aria-hidden="true">B<b class="e">e</b>2</span><span class="big bot" aria-hidden="true">B<b class="e">e</b>2</span><span class="band" aria-hidden="true"><i>FIRST</i></span></div><div class="app-subtitle" id="sub">Noughts &amp; Crosses</div></div>
     <span class="header-spacer"><button class="mute" id="mute" type="button" aria-label="Sound on" aria-pressed="true">&#128266;</button> Level <b>B2</b></span>
   </div>
+  <!-- the topic page's own mode row, copied in on load with Game lit -->
+  <nav class="mode-selector" id="modeRow" aria-label="Topic modes"></nav>
 </header>
 
 <main class="wrap nc-wrap">
@@ -469,10 +471,31 @@ async function load(){
   for(const im of d.imports||[]){ try{ const x=await (await fetch(im.file,{cache:'no-store'})).json(); (x.rounds||[]).forEach(r=>rounds.push(Object.assign({game:im.game},r))); }catch(e){} }
   topic={id,label:d.topic||t.label,focus:t.focus||''};
   Object.keys(TIER).forEach(k=>{ const g=G[k]; if(!g) return; const rs=rounds.filter(r=>g.accepts?g.accepts(r):r.game===k); if(rs.length) by[k]=rs; });
-  $('sub').textContent='Noughts & Crosses';
+  $('sub').textContent='B2 First '+topic.label;
   document.title='Be2FIRST — '+topic.label+' · Noughts & Crosses';
   if(RULES_PAGE[id]){ $('back').href='/skills/grammar-rules/'+RULES_PAGE[id]; $('back').textContent='← '+topic.label; }
-  drawModes(); deal();
+  drawModes(); deal(); topicRow(id);
+}
+/* THE TOPIC'S OWN ROW. Read from the topic page itself, as the Board and
+   Defuse do, so Explore · Practice · Quiz · Game · Defuse · Board read the
+   same here and a page that gains a mode never falls out of step. */
+async function topicRow(id){
+  const page=RULES_PAGE[id]; if(!page) return;
+  const url='/skills/grammar-rules/'+page;
+  try{
+    const doc=new DOMParser().parseFromString(await (await fetch(url+'.html',{cache:'no-store'})).text(),'text/html');
+    const row=doc.querySelector('.mode-selector'); if(!row) return;
+    const out=[];
+    [...row.children].forEach(el=>{
+      const label=[...el.childNodes].filter(n=>!(n.classList&&n.classList.contains('mode-badge'))).map(n=>n.textContent).join('').trim();
+      const m=el.dataset&&el.dataset.mode, href=el.getAttribute&&(el.getAttribute('href')||el.getAttribute('data-href'));
+      if(!label||el.classList.contains('mode-soon')) return;
+      if(/boardgame\.html/.test(href||'')){ out.push('<span class="mode-btn active" aria-current="page">'+esc(label)+'</span>'); return; }
+      const go=m?url+'?mode='+m:href?(u=>u.pathname+u.search)(new URL(href,location.origin+url)):'';
+      if(go) out.push('<a class="mode-btn" href="'+esc(go)+'">'+esc(label)+'</a>');
+    });
+    $('modeRow').innerHTML=out.join('');
+  }catch(e){}
 }
 
 /* ══ DEAL A BOARD ══ */

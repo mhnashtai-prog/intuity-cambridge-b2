@@ -356,6 +356,25 @@ body.duel .nc-cell.x .nc-dial::before{background:var(--right)}
   .nc-board{width:min(100%, max(340px, calc(100svh - 330px)));margin:0 auto}
   .nc-modes{margin-bottom:.6rem} .nc-status{max-width:min(100%, max(340px, calc(100svh - 330px)));margin:0 auto .6rem}
 }
+/* ══ THE RINGS LOOK (?look=rings) — an experiment, 15 Oct ══
+   No pins, no strings, no swing: nine still rings at twice the size, with
+   the format's name inside the core in the cream of the Board's numbers.
+   The same game and the same rules; only the board is quieter. A wrong
+   answer knocks the ring askew instead of dropping it from a string. */
+body.look-rings .nc-pin, body.look-rings .nc-string{display:none}
+body.look-rings .nc-hang{animation:none;top:50%;left:50%;width:26cqw;height:26cqw;margin:-13cqw 0 0 -13cqw}
+body.look-rings .nc-dial{top:0;width:26cqw;height:26cqw;flex-direction:column;
+  box-shadow:-1.2cqw -1.2cqw 2.7cqw rgba(255,255,255,.9),1.5cqw 1.5cqw 3.8cqw rgba(43,33,41,.16)}
+body.look-rings .nc-fmt{position:relative;z-index:2;bottom:auto;left:auto;right:auto;order:-1;margin-bottom:1.3cqw;
+  font:600 clamp(9px,2.65cqw,13px) Geist,var(--f-display),sans-serif;letter-spacing:.03em;color:#E5D1B8}
+body.look-rings .nc-dots i{width:1.2cqw;height:1.2cqw;opacity:.8}
+body.look-rings .nc-cell.o .nc-fmt, body.look-rings .nc-cell.x .nc-fmt{display:none}
+body.look-rings .nc-cell.fell .nc-dial{animation:ncKnock .6s cubic-bezier(.4,0,.5,1) forwards}
+@keyframes ncKnock{0%{transform:none}40%{transform:translateY(1.6cqw) rotate(-9deg)}70%{transform:translateY(.8cqw) rotate(6deg)}100%{transform:translateY(1.2cqw) rotate(4deg)}}
+@media(hover:hover){ body.look-rings .nc-cell:not([disabled]):hover .nc-dial{transform:translateY(-.6cqw)} }
+body.look-rings .nc-dial{transition:box-shadow .2s,transform .2s}
+@media(prefers-reduced-motion:reduce){ body.look-rings .nc-cell.fell .nc-dial{animation:none;transform:translateY(1.2cqw) rotate(4deg)} }
+
 /* the winning stroke */
 .nc-line{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5}
 .nc-line line{stroke-width:7;stroke-linecap:round;stroke-dasharray:420;stroke-dashoffset:420;animation:ncStroke .6s cubic-bezier(.6,0,.2,1) forwards}
@@ -458,6 +477,7 @@ const RULES_PAGE={passive:'passive-voice-rules',tenses:'tenses-rules',conditiona
   comparatives:'comparatives-rules',reported:'reported-speech-rules',linking:'linking-words-rules',inversion:'inversion-rules',
   gerunds:'gerunds-infinitives-rules',misc:'miscellaneous-rules'};
 
+const RINGS=P.get('look')==='rings'; document.body.classList.toggle('look-rings',RINGS);
 let topic=null, by={}, mode=['solo','duo','self'].includes(P.get('mode'))?P.get('mode'):'solo';
 let cells=[], turn='O', score=0, over=false, busy=false, used=new Set();
 let tally={O:0,X:0,D:0};
@@ -478,7 +498,7 @@ async function load(){
   for(const im of d.imports||[]){ try{ const x=await (await fetch(im.file,{cache:'no-store'})).json(); (x.rounds||[]).forEach(r=>rounds.push(Object.assign({game:im.game},r))); }catch(e){} }
   topic={id,label:d.topic||t.label,focus:t.focus||''};
   Object.keys(TIER).forEach(k=>{ const g=G[k]; if(!g) return; const rs=rounds.filter(r=>g.accepts?g.accepts(r):r.game===k); if(rs.length) by[k]=rs; });
-  $('sub').textContent='B2 First '+topic.label;
+  $('sub').textContent=topic.label;
   document.title='Be2FIRST — '+topic.label+' · Noughts & Crosses';
   if(RULES_PAGE[id]){ $('back').href='/skills/grammar-rules/'+RULES_PAGE[id]; $('back').textContent='← '+topic.label; }
   drawModes(); deal(); topicRow(id);
@@ -535,8 +555,8 @@ function drawBoard(){
     el.style.left=(i%3)*33.333+'%'; el.style.top=Math.floor(i/3)*33.333+'%';
     el.setAttribute('aria-label',`${['Top','Middle','Bottom'][Math.floor(i/3)]} ${['left','centre','right'][i%3]}: ${g.title||c.k}, worth ${PTS[tier]}`);
     el.innerHTML=`<span class="nc-pin"></span><div class="nc-hang" style="--dl:${(-Math.random()*5).toFixed(2)}s;--sp:${(4.6+Math.random()*.8).toFixed(2)}s">
-      <span class="nc-string"></span><div class="nc-dial"><span class="nc-dots">${'<i></i>'.repeat(tier)}</span></div></div>
-      <span class="nc-fmt">${esc(g.title||c.k)}</span>`;
+      <span class="nc-string"></span><div class="nc-dial">${RINGS?`<span class="nc-fmt">${esc(g.title||c.k)}</span>`:''}<span class="nc-dots">${'<i></i>'.repeat(tier)}</span></div></div>
+      ${RINGS?'':`<span class="nc-fmt">${esc(g.title||c.k)}</span>`}`;
     el.onclick=()=>openCell(i);
     b.appendChild(el);
   });
@@ -550,8 +570,9 @@ function paintStatus(){
     (mode==='solo'?`<span class="nc-mid">Score<b>${score}</b></span>`:`<span class="nc-mid">${over?'Game over':esc(N[turn])+' to play'}</span>`)+
     `<span class="nc-side${live('X')}">${mk('X')}${esc(N.X)} <b>${n('X')}</b></span>`;
   $('how').innerHTML=mode==='solo'
-    ?'Pick any ring. <b>Right</b>: the pendulum stops and your nought is stamped. <b>Wrong</b>: the string snaps and a cross lands. Three noughts in a row wins — three crosses in a row loses. The more dots, the harder the ring and the more it is worth.'
-    :'Take turns. <b>Answer right</b> and the ring is yours. <b>Answer wrong</b> and the string snaps — the ring goes to the other side. First to three in a row wins. The centre is the hardest ring, and the most useful.';
+    ?(RINGS?'Pick any ring. <b>Right</b>: your nought is stamped in it. <b>Wrong</b>: the ring is knocked askew and a cross lands.':'Pick any ring. <b>Right</b>: the pendulum stops and your nought is stamped. <b>Wrong</b>: the string snaps and a cross lands.')
+      +' Three noughts in a row wins — three crosses in a row loses. The more dots, the harder the ring and the more it is worth.'
+    :'Take turns. <b>Answer right</b> and the ring is yours. <b>Answer wrong</b> and '+(RINGS?'it is knocked':'the string snaps')+' — the ring goes to the other side. First to three in a row wins. The centre is the hardest ring, and the most useful.';
   $('tally').textContent=mode==='solo'?'':`${NAMES[mode].O} ${tally.O} · ${NAMES[mode].X} ${tally.X} · Draws ${tally.D}`;
 }
 function drawModes(){ document.body.classList.toggle('duel',mode!=='solo'); document.querySelectorAll('.nc-mode').forEach(b=>{ b.setAttribute('aria-pressed',b.dataset.m===mode); b.onclick=()=>{ if(b.dataset.m===mode) return; mode=b.dataset.m; tally={O:0,X:0,D:0}; drawModes(); deal(); }; }); }
@@ -633,7 +654,7 @@ function win(line,mark){
   over=true; paintStatus();
   const b=$('board'); b.classList.add('done');
   line.forEach(k=>document.querySelector(`.nc-cell[data-i="${k}"]`).classList.add('win'));
-  const P=k=>[(k%3)*100+50, Math.floor(k/3)*100+(cells[k].fell?67:50)];
+  const P=k=>[(k%3)*100+50, Math.floor(k/3)*100+(RINGS?(cells[k].fell?54:50):(cells[k].fell?67:50))];
   const [a,z]=[P(line[0]),P(line[2])], dx=z[0]-a[0], dy=z[1]-a[1], L=Math.hypot(dx,dy), ex=dx/L*30, ey=dy/L*30;
   const lost=mode==='solo'&&mark==='X';
   b.insertAdjacentHTML('beforeend',`<svg class="nc-line" viewBox="0 0 300 300" aria-hidden="true"><line x1="${a[0]-ex}" y1="${a[1]-ey}" x2="${z[0]+ex}" y2="${z[1]+ey}" stroke="${mark==='O'?'var(--caramel)':mode==='solo'?'var(--wrong)':'var(--right)'}"/></svg>`);

@@ -454,6 +454,7 @@ body.look-rings .nc-dial{transition:box-shadow .2s,transform .2s}
 <script src="/data/challenge/games/hunt.js?v=7"></script>
 <script src="/tools/intuity-log.js?v=1"></script>
 <script src="/tools/intuity-ring.js?v=1"></script>
+<script src="/data/challenge/challenge-mixes.js?v=20261015"></script>
 <script>
 (function(){
 const $=id=>document.getElementById(id);
@@ -473,9 +474,14 @@ const TIER={hunt:3,flip:3,forge:3,pairs:2,pegs:2,defuse:2,pendulum:1,knockout:1,
 const PTS={1:100,2:150,3:200};
 const CENTRE=4, CORNERS=[0,2,6,8], EDGES=[1,3,5,7];
 const LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-const RULES_PAGE={passive:'passive-voice-rules',tenses:'tenses-rules',conditionals:'conditionals-rules','past-modals':'past-modals-rules',
-  comparatives:'comparatives-rules',reported:'reported-speech-rules',linking:'linking-words-rules',inversion:'inversion-rules',
-  gerunds:'gerunds-infinitives-rules',misc:'miscellaneous-rules'};
+/* each topic's own page: the back link and the mode row come from there */
+const TOPIC_PAGE={passive:'grammar-rules/passive-voice-rules',tenses:'grammar-rules/tenses-rules',conditionals:'grammar-rules/conditionals-rules',
+  'past-modals':'grammar-rules/past-modals-rules',comparatives:'grammar-rules/comparatives-rules',reported:'grammar-rules/reported-speech-rules',
+  linking:'grammar-rules/linking-words-rules',inversion:'grammar-rules/inversion-rules',gerunds:'grammar-rules/gerunds-infinitives-rules',
+  misc:'grammar-rules/miscellaneous-rules',
+  'similar-words':'similar-words/vocabulary','topic-vocabulary':'similar-words/topic-vocabulary',collocations:'similar-words/collocations',
+  descriptive:'similar-words/collective-expressions-master',academic:'similar-words/academic-vocabulary','phrasal-verbs':'grammar-rules/phrasal-verbs-quiz'};
+const SECTION=P.get('section')==='vocabulary'?'vocabulary':'grammar';
 
 const RINGS=P.get('look')==='rings'; document.body.classList.toggle('look-rings',RINGS);
 let topic=null, by={}, mode=['solo','duo','self'].includes(P.get('mode'))?P.get('mode'):'solo';
@@ -491,24 +497,35 @@ $('mute').onclick=()=>{ if(window.SFX){ SFX.toggle(); paintMute(); } }; paintMut
 async function load(){
   const id=P.get('topic')||'conditionals';
   const T=await (await fetch('/data/challenge/challenge-topics.json',{cache:'no-store'})).json();
-  const t=T.sections.flatMap(s=>s.topics).find(x=>x.id===id&&x.file);
-  if(!t){ $('how').textContent='This board plays the grammar topics for now.'; return; }
-  const d=await (await fetch('/data/challenge/'+t.file,{cache:'no-store'})).json();
-  let rounds=(d.rounds||[]).slice();
-  for(const im of d.imports||[]){ try{ const x=await (await fetch(im.file,{cache:'no-store'})).json(); (x.rounds||[]).forEach(r=>rounds.push(Object.assign({game:im.game},r))); }catch(e){} }
-  topic={id,label:d.topic||t.label,focus:t.focus||''};
+  const t=T.sections.flatMap(s=>s.topics).find(x=>x.id===id&&(x.file||x.vocab));
+  if(!t){ $('how').textContent='This topic has no board yet.'; return; }
+  let rounds=[];
+  if(t.vocab){
+    /* VOCABULARY: the same sentences the vocabulary Board plays, built the same
+       way, so a word missed here comes back first there and in Defuse */
+    let items=[];
+    for(const v of t.vocab){ try{ const m=await ChallengeMixes.loadVocab(v); m.groups.forEach(g=>g.items.forEach(it=>items.push(it))); }catch(e){} }
+    rounds=vocabRounds(items).map(r=>Object.assign(r,{part:t.part||'UoE1'}));
+    topic={id,label:t.label,focus:t.focus||''};
+  }else{
+    const d=await (await fetch('/data/challenge/'+t.file,{cache:'no-store'})).json();
+    rounds=(d.rounds||[]).slice();
+    for(const im of d.imports||[]){ try{ const x=await (await fetch(im.file,{cache:'no-store'})).json(); (x.rounds||[]).forEach(r=>rounds.push(Object.assign({game:im.game},r))); }catch(e){} }
+    topic={id,label:d.topic||t.label,focus:t.focus||''};
+  }
   Object.keys(TIER).forEach(k=>{ const g=G[k]; if(!g) return; const rs=rounds.filter(r=>g.accepts?g.accepts(r):r.game===k); if(rs.length) by[k]=rs; });
   $('sub').textContent=topic.label;
   document.title='Be2FIRST — '+topic.label+' · Noughts & Crosses';
-  if(RULES_PAGE[id]){ $('back').href='/skills/grammar-rules/'+RULES_PAGE[id]; $('back').textContent='← '+topic.label; }
+  if(TOPIC_PAGE[id]){ $('back').href='/skills/'+TOPIC_PAGE[id]+'.html'; $('back').textContent='← '+topic.label; }
+  else $('back').href='/index.html?openModal='+SECTION;
   drawModes(); deal(); topicRow(id);
 }
 /* THE TOPIC'S OWN ROW. Read from the topic page itself, as the Board and
    Defuse do, so Explore · Practice · Quiz · Game · Defuse · Board read the
    same here and a page that gains a mode never falls out of step. */
 async function topicRow(id){
-  const page=RULES_PAGE[id]; if(!page) return;
-  const url='/skills/grammar-rules/'+page;
+  const page=TOPIC_PAGE[id]; if(!page) return;
+  const url='/skills/'+page;
   try{
     const doc=new DOMParser().parseFromString(await (await fetch(url+'.html',{cache:'no-store'})).text(),'text/html');
     const row=doc.querySelector('.mode-selector'); if(!row) return;
@@ -518,11 +535,49 @@ async function topicRow(id){
       const m=el.dataset&&el.dataset.mode, href=el.getAttribute&&(el.getAttribute('href')||el.getAttribute('data-href'));
       if(!label||el.classList.contains('mode-soon')) return;
       if(/boardgame\.html/.test(href||'')){ out.push('<span class="mode-btn active" aria-current="page">'+esc(label)+'</span>'); return; }
-      const go=m?url+'?mode='+m:href?(u=>u.pathname+u.search)(new URL(href,location.origin+url)):'';
+      const go=href?(u=>u.pathname+u.search)(new URL(href,location.origin+url)):m?url+'?mode='+m:url;
       if(go) out.push('<a class="mode-btn" href="'+esc(go)+'">'+esc(label)+'</a>');
     });
     $('modeRow').innerHTML=out.join('');
   }catch(e){}
+}
+
+/* ══ VOCABULARY ROUNDS — ported from the Board (challenge.html) so the ids match ══ */
+const fp=s=>{ let h=5381; s=String(s); for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))>>>0; return h.toString(36); };
+const vid=(it,g)=>'v-'+fp([it.cue,it.answer,it.after].join('|'))+'-'+g;
+function vocabRounds(items){
+  items=items.filter(it=>it&&it.answer&&Array.isArray(it.options)&&it.options.length>=2);
+  const full=(it,w)=>[it.cue,w,it.after].filter(Boolean).join(' ').replace(/\s+/g,' ').trim();
+  const wrongOf=it=>shuffle(it.options.filter(o=>o!==it.answer))[0];
+  const out=[];
+  items.forEach(it=>{
+    const tag=it.tense||'', note=it.note||'', line=(it.cue+' ___ '+it.after).trim();
+    out.push({id:vid(it,'choose'),game:'choose',prompt:line,options:it.options,answer:it.answer,note,tag});
+    out.push({id:vid(it,'gap'),game:'gap',prompt:line+'  ('+it.answer.charAt(0)+'…)',answer:[it.answer],note,tag});
+    const bad=wrongOf(it), art=w=>String(w).match(/^(a|an|the)\s+(.+)$/i), ba=art(bad), aa=art(it.answer);
+    out.push({id:vid(it,'correct'),game:'correct',sentence:full(it,bad),answer:aa?[it.answer,aa[2]]:[it.answer],wrong:ba?[bad,ba[2]]:bad,note,tag,
+      pick:{span:bad,fix:it.answer,others:it.options.filter(o=>o!==it.answer&&o!==bad)}});
+  });
+  const sh=shuffle(items);
+  for(let i=0;i+3<sh.length;i+=4){
+    const g=sh.slice(i,i+4), bad=g[0], odd=full(bad,wrongOf(bad));
+    out.push({id:vid(bad,'odd'),game:'odd',options:[odd].concat(g.slice(1).map(x=>full(x,x.answer))),answer:odd,note:'Correct version: '+full(bad,bad.answer),tag:bad.tense||''});
+  }
+  /* Match (Pegs): four different words, each with its own sentence */
+  const mh=shuffle(items);
+  for(let i=0;i+3<mh.length&&i<160;i+=4){
+    const g=mh.slice(i,i+4); if(new Set(g.map(x=>x.answer)).size<4) continue;
+    out.push({game:'match',prompt:'Match each word to its sentence.',pairs:g.map(x=>[x.answer,(x.cue+' ___ '+x.after).trim()]),note:'',tag:''});
+  }
+  /* Sort: two sets with three different words each */
+  const bySet={}; items.forEach(it=>{ const t=it.tense; if(!t||/^none$/i.test(t)) return; (bySet[t]=bySet[t]||new Map()).set(it.answer,it); });
+  const sets=shuffle(Object.keys(bySet).filter(t=>bySet[t].size>=3));
+  for(let i=0;i+1<sets.length&&i<12;i+=2){
+    const A=sets[i], B=sets[i+1], wa=shuffle([...bySet[A].keys()]).slice(0,3), wb=shuffle([...bySet[B].keys()]).filter(w=>!wa.includes(w)).slice(0,3);
+    if(wb.length<3) continue;
+    out.push({game:'sort',prompt:'Sort the words into their sets.',bins:[A,B],items:wa.map(w=>[w,0]).concat(wb.map(w=>[w,1])),note:'',tag:''});
+  }
+  return out;
 }
 
 /* ══ DEAL A BOARD ══ */
@@ -537,8 +592,12 @@ function deal(){
   over=false; busy=false; score=0; turn='O';
   const have=k=>!!by[k];
   const h=shuffle(HARD.filter(have)), m=shuffle(MID.filter(have)), e=shuffle(EASY.filter(have));
-  const spare=shuffle(Object.keys(by));
-  const take=list=>list.length?list.shift():spare[(Math.random()*spare.length)|0];
+  /* a topic without some formats (vocabulary has no Flip, Forge or Swing)
+     fills the gap from the formats it has, spread as evenly as possible */
+  const count={}, all=Object.keys(by);
+  const take=list=>{ let k=list.length?list.shift():null;
+    if(!k){ k=shuffle(all).sort((a,b)=>(count[a]||0)-(count[b]||0)||TIER[b]-TIER[a])[0]; }
+    count[k]=(count[k]||0)+1; return k; };
   const fmt=Array(9);
   fmt[CENTRE]=take(h);
   const cor=shuffle([take(h),take(h),take(m),take(m)]); CORNERS.forEach((c,k)=>fmt[c]=cor[k]);

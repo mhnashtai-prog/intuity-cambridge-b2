@@ -112,7 +112,8 @@
       const h = a.getAttribute('href') || '';
       if (/tenses-rules/.test(h) && topic.rules) a.setAttribute('href', h.replace('tenses-rules', topic.rules));
       else if (/tenses-(defuse|forge)/.test(h)) a.setAttribute('href', h.split('?')[0] + '?topic=' + encodeURIComponent(topic.id));
-      else if (/challenge\.html\?board=1/.test(h)) a.setAttribute('href', '/skills/challenge/challenge.html?board=1&topic=' + encodeURIComponent(topic.id) + (/mode=game/.test(h) ? '&mode=game' : ''));   /* Game · Board */
+      else if (/boardgame\.html/.test(h)) a.setAttribute('href', '/skills/challenge/boardgame.html?topic=' + encodeURIComponent(topic.id));   /* Game */
+      else if (/challenge\.html\?board=1/.test(h)) a.setAttribute('href', '/skills/challenge/challenge.html?board=1&topic=' + encodeURIComponent(topic.id));   /* Board */
     });
   }
 
@@ -296,10 +297,10 @@
     const row = document.querySelector('.mode-selector'); if (!row) return;
     const nav = v.nav || [[v.id, v.label, v.home]];
     const link = page => page.charAt(0) === '?' ? homeUrl + page : page.charAt(0) === '/' ? page : VPAGE + page;
-    /* every vocabulary page's row ends Game · Defuse · Board (Game is the Board's
-       practice run; the Board itself is the Challenge); the Board knows two sets by another name */
+    /* every vocabulary page's row ends Game · Defuse · Board (Game is Noughts &
+       Crosses; the Board is the Challenge); the Board knows two sets by another name */
     const boardId = { expressions:'descriptive', collective:'descriptive' }[v.id] || v.id;
-    const games = { game:['Game','/skills/challenge/challenge.html?board=1&section=vocabulary&mode=game&topic=' + encodeURIComponent(boardId)],
+    const games = { game:['Game','/skills/challenge/boardgame.html?section=vocabulary&topic=' + encodeURIComponent(boardId)],
                     defuse:['Defuse','/skills/grammar-rules/tenses-defuse.html?vocab=' + encodeURIComponent(v.id)],
                     forge:['Forge','/skills/grammar-rules/tenses-forge.html?vocab=' + encodeURIComponent(v.id)],
                     board:['Board','/skills/challenge/challenge.html?board=1&section=vocabulary&topic=' + encodeURIComponent(boardId)] };
@@ -334,7 +335,8 @@
     document.querySelectorAll('.mode-selector a.mode-btn').forEach(function(a){
       var h = a.getAttribute('href') || '';
       if (/tenses-rules/.test(h)) a.setAttribute('href', h.replace('tenses-rules', RULES[id]));
-      else if (/challenge\.html\?board=1/.test(h)) a.setAttribute('href', '/skills/challenge/challenge.html?board=1&topic=' + encodeURIComponent(id) + (/mode=game/.test(h) ? '&mode=game' : ''));
+      else if (/boardgame\.html/.test(h)) a.setAttribute('href', '/skills/challenge/boardgame.html?topic=' + encodeURIComponent(id));
+      else if (/challenge\.html\?board=1/.test(h)) a.setAttribute('href', '/skills/challenge/challenge.html?board=1&topic=' + encodeURIComponent(id));
     });
   }
   function full(){

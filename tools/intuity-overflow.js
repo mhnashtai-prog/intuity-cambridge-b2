@@ -299,3 +299,45 @@
 
   window.IntuityOverflow = { refresh: scan, audit: audit, rows: ROWS };
 })();
+
+/* ═══ MODE ROWS THAT ARE A LITTLE TOO WIDE ═══════════════════════════════
+   A topic's row now carries Game beside Board, so seven modes on a phone
+   (Explore · Practice · Quiz · Decide · Game · Defuse · Board) can run a few
+   letters past the edge, and the last one — Board — was the one cut off.
+   A mode row never scrolls (see above), so instead it tightens, one step at
+   a time and only as far as needed: the side padding, then the tracking,
+   then count badges (Quiz 12, Defuse 90s) go, and last the type, never
+   below 85%. A row that fits is untouched. be2-system.css already tightens
+   rows on phones with !important, so these steps use it too. */
+(function () {
+  var MIN = 0.85;
+  function set(el, k, v) { if (v === '') el.style.removeProperty(k); else el.style.setProperty(k, v, 'important'); }
+  function over(row) { return row.scrollWidth > row.clientWidth + 1; }
+  function fit(row) {
+    var kids = [].slice.call(row.children), badges = [].slice.call(row.querySelectorAll('.mode-badge'));
+    kids.forEach(function (b) { set(b, 'padding-left', ''); set(b, 'padding-right', ''); set(b, 'letter-spacing', ''); set(b, 'font-size', ''); });
+    badges.forEach(function (x) { x.style.display = ''; });
+    if (!over(row)) return;
+    var pad = parseFloat(getComputedStyle(kids[0] || row).paddingLeft) || 6;
+    for (var p = pad - 0.5; p >= 3 && over(row); p -= 0.5) kids.forEach(function (b) { set(b, 'padding-left', p + 'px'); set(b, 'padding-right', p + 'px'); });
+    if (!over(row)) return;
+    kids.forEach(function (b) { set(b, 'letter-spacing', '0'); });
+    if (!over(row)) return;
+    badges.forEach(function (x) { x.style.display = 'none'; });
+    if (!over(row)) return;
+    var base = parseFloat(getComputedStyle(kids[0] || row).fontSize) || 11;
+    for (var k = 0.98; k >= MIN && over(row); k -= 0.02) kids.forEach(function (b) { set(b, 'font-size', (base * k).toFixed(2) + 'px'); });
+  }
+  function all() { [].forEach.call(document.querySelectorAll('.mode-selector'), fit); }
+  var t; function soon() { clearTimeout(t); t = setTimeout(all, 60); }
+  function start() {
+    all();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(all);
+    addEventListener('resize', soon); addEventListener('orientationchange', soon);
+    /* rows rebuilt by a page's own script (Defuse, the Board) after a fetch */
+    [].forEach.call(document.querySelectorAll('.mode-selector'), function (r) {
+      new MutationObserver(soon).observe(r, { childList: true });
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();

@@ -263,7 +263,7 @@ body.board-page .board-toggle .viewtog{margin:0}
 @media (prefers-reduced-motion:reduce){.focus .cta .auto::after{animation:none;opacity:.5}}
 </style>
   <link rel="stylesheet" href="/tools/intuity-pills.css?v=20261012">
-  <script src="/tools/intuity-overflow.js?v=2"></script>
+  <script src="/tools/intuity-overflow.js?v=3"></script>
 <script src="/tools/be2-brand.js?v=20261012c"></script>
 </head>
 <body>
@@ -368,13 +368,12 @@ const NOTE={game:'Game · fourteen tiles, fourteen games — Defuse, Swing, Knoc
 const CAMBRIDGE={choose:'',opencloze:'Part 2',wordform:'Part 3',transform:'Part 4'};
 
 /* ══ STATE ══ */
-/* THE BOARD OPENS IN GAME, THE ULTIMATE IN THE CHALLENGE. Both used to open
-   in exam mode, so the Board a student reached from a topic page was, tile
-   for tile, the Ultimate Challenge: same rounds, same formats, same
-   fourteen cells. The Board is where a topic is practised; the Challenge is
-   where it is measured. An explicit ?mode= in a shared link still wins. */
-const OPEN_AS_BOARD=P.get('board')==='1'&&!!P.get('topic');
-let mode=P.get('mode')==='game'?'game':P.get('mode')==='exam'?'exam':(OPEN_AS_BOARD?'game':'exam'), TOPICS=null, topic=null, pool=[], plan=[];
+/* GAME AND BOARD ARE TWO BUTTONS ON EVERY TOPIC'S ROW. Game (?mode=game) is
+   the practice run: fourteen tiles, every game format, the topic's Board
+   rounds. Board is the Challenge: Cambridge formats only, on the topic's
+   Ultimate rounds, which the Game, Defuse and the topic pages never show.
+   There is no switch between them on the page; the row is the switch. */
+let mode=P.get('mode')==='game'?'game':'exam', TOPICS=null, topic=null, pool=[], plan=[];
 let lives=3, score=0, playing=false, t0=0, tick=null, tries=0, log=[], vocabItems=[];
 /* practice: lives ran out, the run carries on without points. ring: what this
    run did to the learner's mistakes, for the result card */
@@ -1017,16 +1016,16 @@ const RULES_PAGE={passive:'grammar-rules/passive-voice-rules',tenses:'grammar-ru
 if(BOARD){
   document.body.classList.add('board-page');
   document.querySelectorAll('h1.title').forEach(x=>x.textContent='The Board');
-  const tabs=$('topicTabs'); tabs.removeAttribute('role'); tabs.className='board-toggle';
-  tabs.innerHTML='<div class="viewtog" role="group" aria-label="How to play"><button class="viewbtn" type="button" data-mode="game">Game</button><button class="viewbtn" type="button" data-mode="exam">Challenge</button></div>';
-  $('modeRow').setAttribute('aria-label','Topic modes'); $('modeRow').innerHTML='<span class="mode-btn active" aria-current="page">Board</span>';
-  wireModes();
+  if(mode==='game') document.querySelectorAll('h1.title').forEach(x=>x.textContent='The Game');
+  const tabs=$('topicTabs'); tabs.removeAttribute('role'); tabs.innerHTML=''; tabs.hidden=true;
+  $('modeRow').setAttribute('aria-label','Topic modes'); $('modeRow').innerHTML=`<span class="mode-btn active" aria-current="page">${mode==='game'?'Game':'Board'}</span>`;
 }
 async function boardHeader(t){
   const page=RULES_PAGE[t.id]; if(!page) return;
   const url='/skills/'+page;
-  document.querySelector('.app-subtitle').textContent=t.label+' · Board';
-  document.title='Be2FIRST — '+t.label+' · Board';
+  const HERE=mode==='game'?'Game':'Board';
+  document.querySelector('.app-subtitle').textContent=t.label+' · '+HERE;
+  document.title='Be2FIRST — '+t.label+' · '+HERE;
   try{
     const html=await (await fetch(url+'.html',{cache:'no-store'})).text();
     const doc=new DOMParser().parseFromString(html,'text/html');
@@ -1040,13 +1039,15 @@ async function boardHeader(t){
       /* the label without its count badge; a button may leave by data-href */
       const label=[...el.childNodes].filter(n=>!(n.classList&&n.classList.contains('mode-badge'))).map(n=>n.textContent).join('').trim(),
             m=el.dataset&&el.dataset.mode, href=el.getAttribute&&(el.getAttribute('href')||el.getAttribute('data-href'));
-      if(/^(forge|board)$/i.test(label)&&!m||/challenge\.html/.test(href||'')){          /* Forge's place — or a Board link — is ours */
-        if(!placed){ out.push('<span class="mode-btn active" aria-current="page">Board</span>'); placed=true; } return; }
+      if(/^(forge|board)$/i.test(label)&&!m||/challenge\.html/.test(href||'')){          /* Forge's place, a Game or a Board link: ours */
+        const isGame=/mode=game/.test(href||'')||/^game$/i.test(label), mine=isGame===(mode==='game');
+        if(mine){ if(!placed){ out.push(`<span class="mode-btn active" aria-current="page">${HERE}</span>`); placed=true; } return; }
+        out.push(`<a class="mode-btn" href="${esc('/skills/challenge/challenge.html?board=1'+(SECTION==='vocabulary'?'&section=vocabulary':'')+'&topic='+encodeURIComponent(t.id)+(isGame?'&mode=game':''))}">${isGame?'Game':'Board'}</a>`); return; }
       if(el.classList.contains('mode-soon')) return;
       const go=m?(url+'?mode='+m):href?new URL(href,location.origin+url).pathname+new URL(href,location.origin+url).search:url;
       if(go) out.push(`<a class="mode-btn" href="${esc(go)}">${esc(label)}</a>`);
     });
-    if(!placed) out.push('<span class="mode-btn active" aria-current="page">Board</span>');
+    if(!placed) out.push(`<span class="mode-btn active" aria-current="page">${HERE}</span>`);
     $('modeRow').innerHTML=out.join('');
   }catch(e){}
 }

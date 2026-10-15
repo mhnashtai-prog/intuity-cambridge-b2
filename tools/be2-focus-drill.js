@@ -6,8 +6,8 @@
 
    TAP A PILL → drill that move only:
      1 the line(s) of the model answer that do it, then
-     2 the phrase bank's other ways to say it,
-   each heard and then said aloud — listen, your turn, next. A phrase that
+     2 the phrase bank's other ways to say it, READ only (no browser voice),
+   each then said aloud — listen, your turn, next. A phrase that
    ends in "…" is a frame: the student finishes it about this task.
    Tap the same pill again (or "Back to the whole answer") to return.
 
@@ -111,16 +111,18 @@
     var n = 0, html = '<p class="fd-hint">' + esc(it.name) + (it.hint ? ' — ' + esc(it.hint) : '') + '</p>' +
       '<div class="fd-row fd-top">' + (list.length ? '<button class="fd-go" type="button" id="fdGo">▶ Drill these</button>' : '<span></span>') +
       '<button class="fd-back" type="button" id="fdBack">Back to the whole answer</button></div>' +
-      '<div class="fd-say" id="fdSay">' + (list.length ? 'press play: listen, then say each one aloud' : '') + '</div>';
+      '<div class="fd-say" id="fdSay">' + (list.length ? 'press play: listen to the answer, then read each phrase aloud' : '') + '</div>';
     if (m.length) html += '<p class="fd-k">In this answer</p><ul class="fd-list">' + m.map(function (t) { return '<li class="fd-item model" data-i="' + (n++) + '"><span class="fd-n">' + n + '</span><span>' + esc(t) + '</span></li>'; }).join('') + '</ul>';
-    if (p.length) html += '<p class="fd-k">Other ways to say it' + (p.some(function (x) { return /…/.test(x); }) ? ' — finish the … about this task' : '') + '</p><ul class="fd-list">' + p.map(function (t) { return '<li class="fd-item" data-i="' + (n++) + '"><span class="fd-n">' + n + '</span><span>' + esc(t) + '</span></li>'; }).join('') + '</ul>';
+    if (p.length) html += '<p class="fd-k">Read and say' + (p.some(function (x) { return /…/.test(x); }) ? ' — finish the … about this task' : '') + '</p><ul class="fd-list">' + p.map(function (t) { return '<li class="fd-item" data-i="' + (n++) + '"><span class="fd-n">' + n + '</span><span>' + esc(t) + '</span></li>'; }).join('') + '</ul>';
     if (!list.length) html += '<p class="fd-none">This answer doesn’t use this move. Try another answer or topic.</p>';
     $('body').innerHTML = html;
     dress();
     $('fdBack').onclick = close;
     if ($('fdGo')) $('fdGo').onclick = function () { run ? stopRun() : go(idx >= list.length ? 0 : idx); };
     Array.prototype.forEach.call($('body').querySelectorAll('.fd-item'), function (li) {
-      li.onclick = function () { var i = +li.dataset.i; hushAll(); mark(i); sayIt(list[i].t, function () { lab('your turn — say it', true); }); };
+      li.onclick = function () { var i = +li.dataset.i; hushAll(); mark(i);
+        if (list[i].model) sayIt(list[i].t, function () { lab('your turn — say it', true); });
+        else lab(/…/.test(list[i].t) ? 'read it aloud — and finish it about this task' : 'read it aloud', true); };
     });
     /* bring the pills and the controls just under the sticky header */
     try { var h = document.querySelector('.header'), off = h ? h.getBoundingClientRect().height : 0;
@@ -140,13 +142,13 @@
   function go(i) {
     run = true; idx = i; if ($('fdGo')) $('fdGo').textContent = '■ Stop';
     if (idx >= list.length) { run = false; if ($('fdGo')) $('fdGo').textContent = '▶ Again'; lab('done — now use them in your own answer', true); mark(-1); return; }
-    mark(idx); lab('listen', false);
-    sayIt(list[idx].t, function () {
-      if (!run) return;
-      var span = Math.max(2200, list[idx].t.split(/\s+/).length * 480) + (/…/.test(list[idx].t) ? 1800 : 0);
-      lab(/…/.test(list[idx].t) ? 'your turn — finish it about this task' : 'your turn — say it', true);
-      tmr = setTimeout(function () { if (!run) return; go(idx + 1); }, span);
-    });
+    mark(idx);
+    var it = list[idx], frame = /…/.test(it.t), span = Math.max(2400, it.t.split(/\s+/).length * 520) + (frame ? 2200 : 0);
+    function turn(msg) { lab(msg, true); tmr = setTimeout(function () { if (!run) return; go(idx + 1); }, span); }
+    /* the answer's own lines are heard in the recorded voice; the phrase bank
+       is read, not heard — no browser voice */
+    if (it.model) { lab('listen', false); sayIt(it.t, function () { if (!run) return; turn('your turn — say it'); }); }
+    else turn(frame ? 'read it aloud — and finish it about this task' : 'read it aloud');
   }
   function close() { hushAll(); focus = null; document.body.classList.remove('fd-focus'); try { window.practice(); } catch (e) {} }
 

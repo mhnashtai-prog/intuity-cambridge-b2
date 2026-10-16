@@ -68,8 +68,9 @@
         var c = JSON.parse(JSON.stringify(it));
         return opts.strip ? opts.strip(c) : c;
       });
-      var set = { id: 'set' + (m + 1), title: 'Set ' + (m + 1), mix: true,
-                  descriptor: 'Mixed — every type', theme: 'Mixed — every type' };
+      /* No descriptor: the strip keeps the task instruction ("Rewrite using
+         the key word"), which matters more than saying it is mixed. */
+      var set = { id: 'set' + (m + 1), title: 'Set ' + (m + 1), mix: true };
       set[key] = items;
       out.push(set);
     }

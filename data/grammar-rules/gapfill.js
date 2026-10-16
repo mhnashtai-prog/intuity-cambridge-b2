@@ -258,7 +258,7 @@
       if (window.MixSets) return Promise.resolve(window.MixSets);
       return new Promise(function (ok) {
         const s = document.createElement('script');
-        s.src = '/tools/mix-sets.js?v=1';
+        s.src = '/tools/mix-sets.js?v=2';
         s.onload = function () { ok(window.MixSets || null); };
         s.onerror = function () { ok(null); };
         document.head.appendChild(s);

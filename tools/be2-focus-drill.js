@@ -189,3 +189,39 @@
   }
   fit(); addEventListener('resize', fit); if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
 })();
+
+/* ═══ ONE JOB PER MODE (16 Oct, after the classroom test) ═══════════════
+   Students asked why "Record your answer" sat in every mode. It doesn't
+   belong there: Explore is for listening, Practice for drilling one move,
+   Quiz for building the answer back. Only Talk — speaking freely against
+   the clock — needs the recorder. So each mode now shows only its tools:
+     recorder ............ Talk only
+     Answer A · B · C .... Explore and Practice (Quiz and Talk use the one
+                           already chosen; Talk has no model answer to pick)
+     Phrase bank ......... Explore only (in Practice the pills drill it)
+   The page marks its mode on <body> as sg-explore / sg-practice / … */
+(function () {
+  if (!document.getElementById('stages')) return;
+  var css = 'body:not(.sg-talk) .be2rec{display:none!important}' +
+    'body.sg-quiz #alts,body.sg-talk #alts{display:none!important}' +
+    'body:not(.sg-explore) #bankBtn{display:none!important}';
+  var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+  var last = null;
+  function mark() {
+    var s = window.stage || 'explore'; if (s === last) return; last = s;
+    ['explore', 'practice', 'quiz', 'talk'].forEach(function (k) { document.body.classList.toggle('sg-' + k, k === s); });
+  }
+  /* Default / Alternative 1 / Alternative 2 are three different model
+     answers, so they are named as answers */
+  var NAMES = { 'default': 'Answer A', 'alternative 1': 'Answer B', 'alternative 2': 'Answer C' };
+  function rename() {
+    var a = document.getElementById('alts'); if (!a) return;
+    Array.prototype.forEach.call(a.querySelectorAll('button'), function (b) {
+      var n = NAMES[b.textContent.trim().toLowerCase()]; if (n) b.textContent = n;
+    });
+  }
+  mark(); rename();
+  document.addEventListener('click', function () { setTimeout(function () { mark(); rename(); }, 0); }, true);
+  var al = document.getElementById('alts'); if (al) new MutationObserver(rename).observe(al, { childList: true, subtree: true });
+  setInterval(mark, 400);
+})();

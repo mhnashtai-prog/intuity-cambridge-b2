@@ -21,6 +21,7 @@
     })();
 
     let allTests = [];
+    let BASE_TESTS = 0;   /* the topic's own sets; mixes come after */
     let currentTest = 0;
     let userAnswers = {};
     let isChecked = false;
@@ -251,6 +252,19 @@
         m.replace(/-(data|rules|complete)\.json$/, '-gapfill.json'));
     }
 
+    /* Set 1, Set 2, Set 3 — blind mixes built from this topic's own sets
+       (see /tools/mix-sets.js). Loaded here so no shell page has to list it. */
+    function loadMixSets() {
+      if (window.MixSets) return Promise.resolve(window.MixSets);
+      return new Promise(function (ok) {
+        const s = document.createElement('script');
+        s.src = '/tools/mix-sets.js?v=1';
+        s.onload = function () { ok(window.MixSets || null); };
+        s.onerror = function () { ok(null); };
+        document.head.appendChild(s);
+      });
+    }
+
     async function loadData() {
       try {
         const tried = [];
@@ -272,6 +286,14 @@
         indexRules(data || {});
         allTests = tests;
         if (!allTests.length) throw new Error('No tests found — checked ' + tried.join(' and '));
+        BASE_TESTS = allTests.length;
+        /* Blind: no highlighted cue, as in Defuse — spotting which structure
+           the sentence needs is the whole point of a mix. */
+        const MX = await loadMixSets();
+        if (MX) allTests = allTests.concat(MX.build(allTests, 'sentences', {
+          seed: DATA_URL,
+          strip: function (it) { it.highlightVerb = ''; delete it.keywords; return it; }
+        }));
 
         renderTestSelector();
         loadTest(0);
@@ -481,7 +503,13 @@
        from another set, so nothing in the ten below is given away. */
     function warmupHtml() {
       if (isChecked || quizScores['test' + currentTest] || allTests.length < 2) return '';
-      const from = allTests[(currentTest + 1) % allTests.length];
+      /* A mix is the test of choosing; a warm-up would choose for them. */
+      if (allTests[currentTest].mix) return '';
+      /* From the next set, except the last of the topic's own sets, which
+         borrows from the one before it: "Mixed conditionals" was being warmed
+         up with zero-conditional sentences from the start of the list. */
+      const base = BASE_TESTS || allTests.length;
+      const from = allTests[currentTest + 1 < base ? currentTest + 1 : Math.max(0, currentTest - 1)];
       const picks = (from.sentences || []).filter(function (it) { return parseSentence(it) && it.answer; }).slice(0, 2);
       if (!picks.length) return '';
       let h = '<div class="warmup"><div class="wu-kick">Warm-up · think first</div>' +

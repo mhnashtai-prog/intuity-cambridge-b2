@@ -113,6 +113,17 @@ function saveScores() {
   try { localStorage.setItem(SCORE_KEY, JSON.stringify(testScores)); } catch (e) {}
 }
 
+function mixSets() {
+  if (window.MixSets) return Promise.resolve(window.MixSets);
+  return new Promise(function (ok) {
+    var s = document.createElement('script');
+    s.src = '/tools/mix-sets.js?v=1';
+    s.onload = function () { ok(window.MixSets || null); };
+    s.onerror = function () { ok(null); };
+    document.head.appendChild(s);
+  });
+}
+
 function loadData() {
   fetch(DATA_URL, { cache:'no-store' })
     .then(function (res) {
@@ -131,9 +142,13 @@ function loadData() {
             : (s.examples || (s.transformations || []).map(fromTransformation))
         };
       });
-      loadScores();
-      renderTestSelector();
-      loadTest(0);
+      return mixSets().then(function (MX) {
+        /* Set 1, Set 2, Set 3: every type interleaved, as in Defuse. */
+        if (MX) allTests = allTests.concat(MX.build(allTests, 'items', { seed: DATA_URL }));
+        loadScores();
+        renderTestSelector();
+        loadTest(0);
+      });
     })
     .catch(function (err) {
       $('contentContainer').innerHTML =

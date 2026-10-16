@@ -495,7 +495,12 @@ async function choose(id){
       pool=rounds.filter(r=>G[r.game]); topic={id,label:d.topic||t.label,focus:t.focus||''};
     }
     if(!pool.length) throw new Error('no rounds');
-    if(BOARD) makeSets();
+    /* THE BOARD'S CHALLENGE PLAYS THE WHOLE TOPIC. Split into sets of about
+       twenty, a student who restarts after one mistake (the classroom rule:
+       fourteen ticks in a row) met the same sentences again at once. The
+       Game keeps its sets; the Challenge deals from everything. */
+    if(BOARD&&mode!=='exam') makeSets();
+    else if(BOARD){ SETS=[]; SETK=0; FULL=pool.slice(); const el=$('boardSets'); if(el){ el.hidden=true; el.classList.add('hidden'); el.innerHTML=''; } }
   }catch(e){ $('pick').textContent='That topic didn’t load — pick it again'; return; }
   $('gate').hidden=true; $('trackCard').hidden=false; drawTopics(); drawModes();
   reset(); drawBoard(); scrollTo(0,0);
@@ -605,7 +610,14 @@ function draw(){
      rounds are moved to the end, where pop() takes them first. The EXAM
      keeps a fair random sample — a measure weighted to your mistakes would
      understate you, and one weighted away from them would flatter you. */
-  const left={}; Object.keys(by).forEach(k=>{ left[k]=shuffle(by[k]); left[k].sort((a,b)=>due(a)-due(b)); });
+  /* FRESH SENTENCES FIRST (Challenge). Every sentence a student has met in
+     this topic's Challenge is remembered on this device; a new run deals the
+     ones they haven't seen, and only when the whole topic has been played
+     does the memory start again. pop() takes from the end, so unseen go last. */
+  const seen=mode==='exam'?seenGet():{};
+  if(mode==='exam'){ const ids=pool.map(r=>r.id).filter(Boolean); if(ids.length&&ids.every(id=>seen[id])){ seenClear(); Object.keys(seen).forEach(k=>delete seen[k]); } }
+  const fresh=r=>r&&r.id&&!seen[r.id]?1:0;
+  const left={}; Object.keys(by).forEach(k=>{ left[k]=shuffle(by[k]); left[k].sort((a,b)=>mode==='exam'?fresh(a)-fresh(b):due(a)-due(b)); });
   /* one sentence, one cell: Defuse, Forge and Choose can play the same
      rounds, so the game with the fewest to choose from picks first */
   const used=new Set(), out=new Array(seq.length);
@@ -704,6 +716,10 @@ function sharedNote(){ return (!BOARD&&topic&&!ownUltimate)?' · These are the B
 function dueCount(){ if(!BOARD||mode!=='game'||!window.IntuityRing) return 0; try{ return IntuityRing.count(pool.map(r=>r.id).filter(Boolean)); }catch(e){ return 0; } }
 /* ONE place writes every result down: the log for the report, the Ring for
    what comes back. Called once per tile — its first answer decides it. */
+const SEENKEY=()=>'intuity.challenge.seen.'+(topic&&topic.id)+(BOARD?'.board':'');
+function seenGet(){ try{ return JSON.parse(localStorage.getItem(SEENKEY())||'{}')||{}; }catch(e){ return {}; } }
+function seenAdd(r){ if(!r||!r.id) return; try{ const s=seenGet(); s[r.id]=1; localStorage.setItem(SEENKEY(),JSON.stringify(s)); }catch(e){} }
+function seenClear(){ try{ localStorage.removeItem(SEENKEY()); }catch(e){} }
 function remember(r,ok){
   if(!r||!r.id) return;
   try{ if(window.IntuityRing){ const was=IntuityRing.has(r.id);
@@ -806,7 +822,7 @@ function answer(ok,given){
   if(settled) return false;
   const fb=$('fb');
   if(mode==='exam'){                                   /* one attempt — and the answer straight after */
-    settled=true; log.push({i:cur.i,r:cur.r,g:cur.g,ok,given}); doneSet.add(cur.i); remember(cur.r,ok); paint();
+    settled=true; log.push({i:cur.i,r:cur.r,g:cur.g,ok,given}); doneSet.add(cur.i); remember(cur.r,ok); seenAdd(cur.r); paint();
     let sol=''; try{ sol=String(cur.g.solution(cur.r)||''); }catch(e){}
     const tag=cur.r.tag?' · '+esc(cur.r.tag):'';
     fb.innerHTML=ok?'<b>Right'+tag+'.</b> '+esc(cur.r.note||'')
@@ -1067,6 +1083,7 @@ document.querySelector('.header').addEventListener('click', e => {
   b.setAttribute('href','/index.html?openModal='+SECTION);
 })();
 
+if(P.get('test')) window.CH_TEST={draw:()=>draw(), seen:r=>seenAdd(r), pool:()=>pool.length};   /* automated checks only */
 /* ══ LOAD ══ */
 drawModes();
 fetch(BASE+'challenge-topics.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{

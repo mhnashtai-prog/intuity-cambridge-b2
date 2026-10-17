@@ -58,6 +58,7 @@ body{min-height:100dvh}
 .pz-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.42em}
 .pz-face.oct{gap:.3em}
 /* an ellipse is short at the top: its tick sits beside the answer instead */
+.comb[data-shape="lad"] .pz-tick{top:auto;bottom:16%;left:auto;right:7%;margin-left:0}
 .comb[data-shape="ell"] .pz-tick{top:auto;bottom:21%;left:auto;right:15%;margin-left:0}
 .comb .link{position:absolute;background:var(--ring-sage);border-radius:2px;opacity:.85}
 .pz-word{font-family:var(--f-display);font-weight:600;color:var(--ring-ink);
@@ -293,7 +294,7 @@ const shown = p => p === 'Ø' ? 'Ø' : p;
    half a cell so the rows nest. ?shape=oct gives low octagons in a
    straight grid (0.6 as tall as wide, ~17% less height on a phone).
    A short last row is centred either way. */
-const SHAPE = ({ oct: 'oct', flat: 'flat', ellipse: 'ell' })[new URLSearchParams(location.search).get('shape')] || 'hex';
+const SHAPE = ({ oct: 'oct', flat: 'flat', ellipse: 'ell', ladder: 'lad' })[new URLSearchParams(location.search).get('shape')] || 'hex';
 function columns(){
   const W = document.documentElement.clientWidth;
   return W >= 1000 ? 9 : W >= 700 ? 6 : 3;
@@ -302,6 +303,25 @@ function layout(n){
   const C = columns(), rows = Math.ceil(n / C), gap = C === 3 ? 8 : 10;
   const avail = $('comb').parentElement.clientWidth - 32;
   const pos = [];
+  /* THE LADDER (?shape=ladder): thirteen wide tiles woven like the paper
+     mock-up — a spine of five down the middle (1, 4, 7, 10, 13) and a
+     pair either side between each two (2 3, 5 6, 8 9, 11 12). Rows sit
+     0.62 of a tile apart, so the pairs step into the spine's gaps. */
+  if (SHAPE === 'lad') {
+    const W = Math.min(avail, 560), g = C === 3 ? 6 : 8;
+    const ws = Math.round(W * .36), wd = Math.round((W - ws) / 2 - g), h = C === 3 ? 58 : 66, dy = Math.round(h * .62);
+    const sx = (W - ws) / 2;
+    let level = 0, k = 0;
+    while (k < Math.min(n, 13)) {
+      if (level % 2 === 0) { pos.push({ x: sx, y: level * dy, w: ws }); k++; }
+      else {
+        pos.push({ x: 0, y: level * dy, w: wd }); k++;
+        if (k < n) { pos.push({ x: W - wd, y: level * dy, w: wd }); k++; }
+      }
+      level++;
+    }
+    return { w: ws, h, big: C !== 3, pos, width: W, height: (level - 1) * dy + h };
+  }
   /* flat-topped hexagons in a straight grid, joined by short sage lines —
      the layout of the paper board (?shape=flat) */
   if (SHAPE === 'flat') {
@@ -350,15 +370,15 @@ function fits(str, fs){
 
 function draw(){
   const comb = $('comb'), L = layout(CELLS.length);
-  const rim = SHAPE === 'oct' || SHAPE === 'ell' ? Math.max(4.5, L.w * .045) : SHAPE === 'flat' ? Math.max(5, L.w * .05) : Math.max(5, L.h * .05);
+  const rim = SHAPE === 'lad' ? 5 : SHAPE === 'oct' || SHAPE === 'ell' ? Math.max(4.5, L.w * .045) : SHAPE === 'flat' ? Math.max(5, L.w * .05) : Math.max(5, L.h * .05);
   comb.style.width = L.width + 'px'; comb.style.height = (L.height + 10) + 'px';
   comb.dataset.shape = SHAPE;
   const room = SHAPE === 'oct' ? L.w - 2 * rim - 14 : SHAPE === 'ell' ? L.w - 2 * rim - 20 : SHAPE === 'flat' ? L.w * .74 : L.w * .76, maxW = L.big ? 17 : 15;
   const slotFs = L.big ? 12 : 11;
   const cut = L.h * .3, cutIn = Math.max(0, cut - rim * .414);
   const FLAT = 'clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)';
-  const clipRim = SHAPE === 'oct' ? `clip-path:${octagon(0, 0, L.w, L.h, cut)}` : SHAPE === 'flat' ? FLAT : SHAPE === 'ell' ? 'clip-path:none;border-radius:50%' : '';
-  const clipCore = SHAPE === 'oct' ? `clip-path:${octagon(rim, rim, L.w - 2 * rim, L.h - 2 * rim, cutIn)}`
+  const clipRim = SHAPE === 'lad' ? 'clip-path:none;border-radius:7px' : SHAPE === 'oct' ? `clip-path:${octagon(0, 0, L.w, L.h, cut)}` : SHAPE === 'flat' ? FLAT : SHAPE === 'ell' ? 'clip-path:none;border-radius:50%' : '';
+  const clipCore = SHAPE === 'lad' ? `clip-path:none;border-radius:3px;inset:${rim}px` : SHAPE === 'oct' ? `clip-path:${octagon(rim, rim, L.w - 2 * rim, L.h - 2 * rim, cutIn)}`
                  : SHAPE === 'flat' ? `${FLAT};inset:${rim}px ${rim * 1.15}px` : SHAPE === 'ell' ? `clip-path:none;border-radius:50%;inset:${rim}px` : `inset:${rim}px ${rim * .87}px`;
   comb.innerHTML = '';
   /* the paper board's links: a short sage line to the right-hand
@@ -378,11 +398,12 @@ function draw(){
     const el = document.createElement('div');
     el.className = 'cell' + (c.done ? ' done' : '') + (c.late ? ' late' : '') + (c.revealed ? ' revealed' : '') + (i === SEL ? ' sel' : '') +
       (!c.done && c.lastWrong && norm(c.typed) === c.lastWrong ? ' wrong' : '');
-    el.style.cssText = `left:${p.x}px;top:${p.y}px;width:${L.w}px;height:${L.h}px`;
-    let fs = maxW; while (fs > 9 && fits(c.it.w, fs) > room) fs -= .5;
+    const cw = p.w || L.w, cr = SHAPE === 'lad' ? cw - 2 * rim - 18 : room;   /* the ladder's tiles differ in width */
+    el.style.cssText = `left:${p.x}px;top:${p.y}px;width:${cw}px;height:${L.h}px`;
+    let fs = maxW; while (fs > 9 && fits(c.it.w, fs) > cr) fs -= .5;
     el.innerHTML =
       `<div class="pz-hex pz-rim" style="${clipRim}"></div><div class="pz-hex pz-core" style="${clipCore}"></div>
-       <div class="pz-face${SHAPE === 'oct' || SHAPE === 'ell' ? ' oct' : ''}"><span class="pz-word" style="font-size:${fs}px">${esc(c.it.w)}</span>
+       <div class="pz-face${SHAPE === 'oct' || SHAPE === 'ell' || SHAPE === 'lad' ? ' oct' : ''}"><span class="pz-word" style="font-size:${fs}px">${esc(c.it.w)}</span>
        <input class="pz-slot" style="--k:${(slotFs / 16).toFixed(3)};--n:${(c.done ? shown(c.it.p) : c.typed || '').length}" type="text" maxlength="12" placeholder="•••"
          aria-label="Preposition after ${esc(c.it.w)}" autocomplete="off" autocapitalize="off"
          autocorrect="off" spellcheck="false" enterkeyhint="next"
@@ -426,7 +447,7 @@ function setURL(){
 }
 function loadSet(k){
   SET = k; SEL = -1; MISS = 0; MISSED = [];
-  CELLS = shuffle(SETS[MODE][k]).map(x => ({ it: x.it, kind: x.kind, done: false, late: false, tries: 0, typed: '' }));
+  CELLS = shuffle(SETS[MODE][k]).slice(0, SHAPE === 'lad' ? 13 : undefined).map(x => ({ it: x.it, kind: x.kind, done: false, late: false, tries: 0, typed: '' }));
   $('setName').textContent = LABEL[MODE] + ' · Set ' + (k + 1);
   $('nAll').textContent = CELLS.length;
   closeCard(); T0 = 0;

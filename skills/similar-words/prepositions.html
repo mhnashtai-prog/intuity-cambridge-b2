@@ -57,6 +57,8 @@ body{min-height:100dvh}
 .pz-core{background:var(--ring-core)}
 .pz-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.42em}
 .pz-face.oct{gap:.3em}
+/* an ellipse is short at the top: its tick sits beside the answer instead */
+.comb[data-shape="ell"] .pz-tick{top:auto;bottom:21%;left:auto;right:15%;margin-left:0}
 .comb .link{position:absolute;background:var(--ring-sage);border-radius:2px;opacity:.85}
 .pz-word{font-family:var(--f-display);font-weight:600;color:var(--ring-ink);
   white-space:nowrap;line-height:1;letter-spacing:.005em}
@@ -291,7 +293,7 @@ const shown = p => p === 'Ø' ? 'Ø' : p;
    half a cell so the rows nest. ?shape=oct gives low octagons in a
    straight grid (0.6 as tall as wide, ~17% less height on a phone).
    A short last row is centred either way. */
-const SHAPE = ({ oct: 'oct', flat: 'flat' })[new URLSearchParams(location.search).get('shape')] || 'hex';
+const SHAPE = ({ oct: 'oct', flat: 'flat', ellipse: 'ell' })[new URLSearchParams(location.search).get('shape')] || 'hex';
 function columns(){
   const W = document.documentElement.clientWidth;
   return W >= 1000 ? 9 : W >= 700 ? 6 : 3;
@@ -312,9 +314,10 @@ function layout(n){
     }
     return { w, h, big: w > 118, pos, width: C * pitch - gx, height: rows * dy - gy, C, gx, gy };
   }
-  if (SHAPE === 'oct') {
+  if (SHAPE === 'oct' || SHAPE === 'ell') {
+    /* low octagons, or ellipses (?shape=ellipse), in a straight grid */
     const pitch = Math.min(C === 3 ? 130 : 140, (avail + gap) / C);
-    const w = pitch - gap, h = Math.round(w * .6), dy = h + gap;
+    const w = pitch - gap, h = Math.round(w * (SHAPE === 'ell' ? .64 : .6)), dy = h + gap;
     for (let k = 0; k < n; k++) {
       const row = Math.floor(k / C), col = k % C, inRow = Math.min(C, n - row * C);
       pos.push({ x: col * pitch + (C - inRow) * pitch / 2, y: row * dy });
@@ -347,15 +350,16 @@ function fits(str, fs){
 
 function draw(){
   const comb = $('comb'), L = layout(CELLS.length);
-  const rim = SHAPE === 'oct' ? Math.max(4.5, L.w * .045) : SHAPE === 'flat' ? Math.max(5, L.w * .05) : Math.max(5, L.h * .05);
+  const rim = SHAPE === 'oct' || SHAPE === 'ell' ? Math.max(4.5, L.w * .045) : SHAPE === 'flat' ? Math.max(5, L.w * .05) : Math.max(5, L.h * .05);
   comb.style.width = L.width + 'px'; comb.style.height = (L.height + 10) + 'px';
-  const room = SHAPE === 'oct' ? L.w - 2 * rim - 14 : SHAPE === 'flat' ? L.w * .74 : L.w * .76, maxW = L.big ? 17 : 15;
+  comb.dataset.shape = SHAPE;
+  const room = SHAPE === 'oct' ? L.w - 2 * rim - 14 : SHAPE === 'ell' ? L.w - 2 * rim - 20 : SHAPE === 'flat' ? L.w * .74 : L.w * .76, maxW = L.big ? 17 : 15;
   const slotFs = L.big ? 12 : 11;
   const cut = L.h * .3, cutIn = Math.max(0, cut - rim * .414);
   const FLAT = 'clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)';
-  const clipRim = SHAPE === 'oct' ? `clip-path:${octagon(0, 0, L.w, L.h, cut)}` : SHAPE === 'flat' ? FLAT : '';
+  const clipRim = SHAPE === 'oct' ? `clip-path:${octagon(0, 0, L.w, L.h, cut)}` : SHAPE === 'flat' ? FLAT : SHAPE === 'ell' ? 'clip-path:none;border-radius:50%' : '';
   const clipCore = SHAPE === 'oct' ? `clip-path:${octagon(rim, rim, L.w - 2 * rim, L.h - 2 * rim, cutIn)}`
-                 : SHAPE === 'flat' ? `${FLAT};inset:${rim}px ${rim * 1.15}px` : `inset:${rim}px ${rim * .87}px`;
+                 : SHAPE === 'flat' ? `${FLAT};inset:${rim}px ${rim * 1.15}px` : SHAPE === 'ell' ? `clip-path:none;border-radius:50%;inset:${rim}px` : `inset:${rim}px ${rim * .87}px`;
   comb.innerHTML = '';
   /* the paper board's links: a short sage line to the right-hand
      neighbour and to the cell below */
@@ -378,7 +382,7 @@ function draw(){
     let fs = maxW; while (fs > 9 && fits(c.it.w, fs) > room) fs -= .5;
     el.innerHTML =
       `<div class="pz-hex pz-rim" style="${clipRim}"></div><div class="pz-hex pz-core" style="${clipCore}"></div>
-       <div class="pz-face${SHAPE === 'oct' ? ' oct' : ''}"><span class="pz-word" style="font-size:${fs}px">${esc(c.it.w)}</span>
+       <div class="pz-face${SHAPE === 'oct' || SHAPE === 'ell' ? ' oct' : ''}"><span class="pz-word" style="font-size:${fs}px">${esc(c.it.w)}</span>
        <input class="pz-slot" style="--k:${(slotFs / 16).toFixed(3)};--n:${(c.done ? shown(c.it.p) : c.typed || '').length}" type="text" maxlength="12" placeholder="•••"
          aria-label="Preposition after ${esc(c.it.w)}" autocomplete="off" autocapitalize="off"
          autocorrect="off" spellcheck="false" enterkeyhint="next"

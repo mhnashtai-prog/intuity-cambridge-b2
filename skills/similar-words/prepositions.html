@@ -57,6 +57,7 @@ body{min-height:100dvh}
 .pz-core{background:var(--ring-core)}
 .pz-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.42em}
 .pz-face.oct{gap:.3em}
+.comb .link{position:absolute;background:var(--ring-sage);border-radius:2px;opacity:.85}
 .pz-word{font-family:var(--f-display);font-weight:600;color:var(--ring-ink);
   white-space:nowrap;line-height:1;letter-spacing:.005em}
 
@@ -290,7 +291,7 @@ const shown = p => p === 'Ø' ? 'Ø' : p;
    half a cell so the rows nest. ?shape=oct gives low octagons in a
    straight grid (0.6 as tall as wide, ~17% less height on a phone).
    A short last row is centred either way. */
-const SHAPE = new URLSearchParams(location.search).get('shape') === 'oct' ? 'oct' : 'hex';
+const SHAPE = ({ oct: 'oct', flat: 'flat' })[new URLSearchParams(location.search).get('shape')] || 'hex';
 function columns(){
   const W = document.documentElement.clientWidth;
   return W >= 1000 ? 9 : W >= 700 ? 6 : 3;
@@ -299,6 +300,18 @@ function layout(n){
   const C = columns(), rows = Math.ceil(n / C), gap = C === 3 ? 8 : 10;
   const avail = $('comb').parentElement.clientWidth - 32;
   const pos = [];
+  /* flat-topped hexagons in a straight grid, joined by short sage lines —
+     the layout of the paper board (?shape=flat) */
+  if (SHAPE === 'flat') {
+    const gx = C === 3 ? 18 : 22, gy = C === 3 ? 14 : 16;
+    const pitch = Math.min(C === 3 ? 122 : 140, (avail + gx) / C);
+    const w = pitch - gx, h = Math.round(w * R3 / 2), dy = h + gy;
+    for (let k = 0; k < n; k++) {
+      const row = Math.floor(k / C), col = k % C, inRow = Math.min(C, n - row * C);
+      pos.push({ x: col * pitch + (C - inRow) * pitch / 2, y: row * dy, row, col });
+    }
+    return { w, h, big: w > 118, pos, width: C * pitch - gx, height: rows * dy - gy, C, gx, gy };
+  }
   if (SHAPE === 'oct') {
     const pitch = Math.min(C === 3 ? 130 : 140, (avail + gap) / C);
     const w = pitch - gap, h = Math.round(w * .6), dy = h + gap;
@@ -323,6 +336,8 @@ function octagon(x0, y0, W, H, c){
   return `polygon(${[[x0+c,y0],[x1-c,y0],[x1,y0+c],[x1,y1-c],[x1-c,y1],[x0+c,y1],[x0,y1-c],[x0,y0+c]].map(p=>p[0].toFixed(1)+'px '+p[1].toFixed(1)+'px').join(',')})`;
 }
 
+const cellEl = i => $('comb').querySelectorAll('.cell')[i];
+
 let MEASURE = null;
 function fits(str, fs){
   MEASURE = MEASURE || document.createElement('canvas').getContext('2d');
@@ -332,14 +347,28 @@ function fits(str, fs){
 
 function draw(){
   const comb = $('comb'), L = layout(CELLS.length);
-  const rim = SHAPE === 'oct' ? Math.max(4.5, L.w * .045) : Math.max(5, L.h * .05);
+  const rim = SHAPE === 'oct' ? Math.max(4.5, L.w * .045) : SHAPE === 'flat' ? Math.max(5, L.w * .05) : Math.max(5, L.h * .05);
   comb.style.width = L.width + 'px'; comb.style.height = (L.height + 10) + 'px';
-  const room = SHAPE === 'oct' ? L.w - 2 * rim - 14 : L.w * .76, maxW = L.big ? 17 : 15;
+  const room = SHAPE === 'oct' ? L.w - 2 * rim - 14 : SHAPE === 'flat' ? L.w * .74 : L.w * .76, maxW = L.big ? 17 : 15;
   const slotFs = L.big ? 12 : 11;
   const cut = L.h * .3, cutIn = Math.max(0, cut - rim * .414);
-  const clipRim = SHAPE === 'oct' ? `clip-path:${octagon(0, 0, L.w, L.h, cut)}` : '';
-  const clipCore = SHAPE === 'oct' ? `clip-path:${octagon(rim, rim, L.w - 2 * rim, L.h - 2 * rim, cutIn)}` : `inset:${rim}px ${rim * .87}px`;
+  const FLAT = 'clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)';
+  const clipRim = SHAPE === 'oct' ? `clip-path:${octagon(0, 0, L.w, L.h, cut)}` : SHAPE === 'flat' ? FLAT : '';
+  const clipCore = SHAPE === 'oct' ? `clip-path:${octagon(rim, rim, L.w - 2 * rim, L.h - 2 * rim, cutIn)}`
+                 : SHAPE === 'flat' ? `${FLAT};inset:${rim}px ${rim * 1.15}px` : `inset:${rim}px ${rim * .87}px`;
   comb.innerHTML = '';
+  /* the paper board's links: a short sage line to the right-hand
+     neighbour and to the cell below */
+  if (SHAPE === 'flat') {
+    const t = Math.max(3, rim * .7);
+    L.pos.forEach((p, i) => {
+      const right = L.pos[i + 1], below = L.pos.find(q => q.row === p.row + 1 && Math.abs(q.x - p.x) < 2);
+      if (right && right.row === p.row) comb.insertAdjacentHTML('beforeend',
+        `<i class="link" style="left:${p.x + L.w - 2}px;top:${p.y + L.h / 2 - t / 2}px;width:${right.x - p.x - L.w + 4}px;height:${t}px"></i>`);
+      if (below) comb.insertAdjacentHTML('beforeend',
+        `<i class="link" style="left:${p.x + L.w / 2 - t / 2}px;top:${p.y + L.h - 2}px;width:${t}px;height:${below.y - p.y - L.h + 4}px"></i>`);
+    });
+  }
   CELLS.forEach((c, i) => {
     const p = L.pos[i];
     const el = document.createElement('div');
@@ -439,10 +468,10 @@ function select(i){
   if (prev >= 0 && prev !== i && CELLS[prev] && !CELLS[prev].done && (CELLS[prev].typed || '').trim()) check(prev, CELLS[prev].typed, false);
   if (CELLS[i].done) return;
   SEL = i; draw();
-  const inp = $('comb').children[i].querySelector('.pz-slot');
+  const inp = cellEl(i).querySelector('.pz-slot');
   inp.focus({ preventScroll: true });
   const len = inp.value.length; try { inp.setSelectionRange(len, len); } catch(e){}
-  const r = $('comb').children[i].getBoundingClientRect();
+  const r = cellEl(i).getBoundingClientRect();
   const top = document.querySelector('.header').getBoundingClientRect().bottom;
   const bottom = (window.visualViewport ? window.visualViewport.height : window.innerHeight);
   if (r.top < top + 8 || r.bottom > bottom - 8) window.scrollBy({ top: r.top - (top + bottom - r.height) / 2, behavior: 'smooth' });
@@ -454,7 +483,7 @@ function check(i, value, advance){
   const v = norm(value); if (!v) return;
   if (v === c.lastWrong) return;          /* the same wrong answer counts once */
   const ok = (ACCEPT[c.kind + ':' + c.it.w] || new Set([c.it.p])).has(v);
-  const el = $('comb').children[i], inp = el && el.querySelector('.pz-slot');
+  const el = cellEl(i), inp = el && el.querySelector('.pz-slot');
   if (ok) {
     c.done = true; c.it = Object.assign({}, c.it, { p: v }); c.late = c.tries > 0; c.fresh = true;
     sfx(c.late ? 'pop' : 'jingle');
@@ -476,11 +505,11 @@ function settle(i, won, advance){
   if (won) burst(i, !CELLS[i].late);
   if (next < 0) return setTimeout(finish, 700);
   if (advance !== false) setTimeout(() => select(next), 260);
-  else if (SEL >= 0) { const f = $('comb').children[SEL]; const fi = f && f.querySelector('.pz-slot'); if (fi) fi.focus({ preventScroll: true }); }
+  else if (SEL >= 0) { const f = cellEl(SEL); const fi = f && f.querySelector('.pz-slot'); if (fi) fi.focus({ preventScroll: true }); }
 }
 const sfx = name => { try { if (window.SFX && SFX.isOn() && SFX[name]) SFX[name](); } catch(e){} };
 function burst(i, first){
-  const slot = $('comb').children[i] && $('comb').children[i].querySelector('.pz-slot'); if (!slot) return;
+  const slot = cellEl(i) && cellEl(i).querySelector('.pz-slot'); if (!slot) return;
   slot.classList.remove('pop'); void slot.offsetWidth; slot.classList.add('pop');
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const b = slot.getBoundingClientRect(), g = document.createElement('div'); g.className = 'glitter';
@@ -561,7 +590,7 @@ if (new URLSearchParams(location.search).get('test')) window.PREP_TEST = {
   cells: () => CELLS.map(c => ({ w: c.it.w, p: c.it.p, done: c.done })),
   sel: () => SEL,
   select: i => select(i),
-  type: v => { const i = SEL; const inp = $('comb').children[i].querySelector('.pz-slot'); inp.value = v; check(i, inp.value, true); }
+  type: v => { const i = SEL; const inp = cellEl(i).querySelector('.pz-slot'); inp.value = v; check(i, inp.value, true); }
 };
 })();
 </script>

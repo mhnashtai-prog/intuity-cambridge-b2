@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="/tools/intuity-pills.css?v=20261012">
   <script src="/tools/be2-brand.js?v=20261012c"></script>
 <style>
-/* ═══ PREPOSITIONS — the honeycomb ═══════════════════════════════════════
+/* ═══ PREPOSITIONS — the octagon grid (honeycomb: ?shape=hex) ═══════════════════════════════════════
    Twenty-seven hexagonal cells in the house style of the Board and the
    Game rings: a black core, a sage rim, cream lettering. Under each word
    sits a compact pill of dots — the space to fill.
@@ -54,6 +54,7 @@ body{min-height:100dvh}
 .pz-rim{background:var(--ring-sage);transition:background .25s ease}
 .pz-core{background:var(--ring-core)}
 .pz-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.42em}
+.pz-face.oct{gap:.3em}
 .pz-word{font-family:var(--f-display);font-weight:600;color:var(--ring-ink);
   white-space:nowrap;line-height:1;letter-spacing:.005em}
 
@@ -156,8 +157,12 @@ function norm(v){
 const shown = p => p === 'Ø' ? 'Ø' : p;
 
 /* ── geometry ─────────────────────────────────────────────────────────
-   Pointy-top hexagons, width w = √3·r. Every second row is pushed half a
-   cell right so the rows nest; a short last row is centred. */
+   Default: low octagons in a straight grid — a cut-corner tile about 0.6
+   as tall as it is wide, so 27 cells take far less of a phone's height
+   than a honeycomb. ?shape=hex keeps the honeycomb (pointy-top hexagons,
+   every second row pushed half a cell so the rows nest) for comparison.
+   A short last row is centred either way. */
+const SHAPE = new URLSearchParams(location.search).get('shape') === 'hex' ? 'hex' : 'oct';
 function columns(){
   const W = document.documentElement.clientWidth;
   return W >= 1000 ? 9 : W >= 700 ? 6 : 3;
@@ -165,16 +170,29 @@ function columns(){
 function layout(n){
   const C = columns(), rows = Math.ceil(n / C), gap = C === 3 ? 8 : 10;
   const avail = $('comb').parentElement.clientWidth - 32;
+  const pos = [];
+  if (SHAPE === 'oct') {
+    const pitch = Math.min(C === 3 ? 130 : 140, (avail + gap) / C);
+    const w = pitch - gap, h = Math.round(w * .6), dy = h + gap;
+    for (let k = 0; k < n; k++) {
+      const row = Math.floor(k / C), col = k % C, inRow = Math.min(C, n - row * C);
+      pos.push({ x: col * pitch + (C - inRow) * pitch / 2, y: row * dy });
+    }
+    return { w, h, big: w > 118, pos, width: C * pitch - gap, height: rows * dy - gap };
+  }
   const pitch = Math.min(C === 3 ? 124 : 132, avail / (C + .5));
   const w = pitch - gap, r = w / R3, dy = 1.5 * r + gap * R3 / 2;
-  const pos = [];
   for (let k = 0; k < n; k++) {
-    const row = Math.floor(k / C), col = k % C;
-    const inRow = Math.min(C, n - row * C);
-    const centre = (C - inRow) * pitch / 2;
-    pos.push({ x: col * pitch + (row % 2 ? pitch / 2 : 0) + centre, y: row * dy });
+    const row = Math.floor(k / C), col = k % C, inRow = Math.min(C, n - row * C);
+    pos.push({ x: col * pitch + (row % 2 ? pitch / 2 : 0) + (C - inRow) * pitch / 2, y: row * dy });
   }
-  return { w, r, pos, width: C * pitch - gap + pitch / 2, height: 2 * r + (rows - 1) * dy };
+  return { w, h: 2 * r, big: r > 62, pos, width: C * pitch - gap + pitch / 2, height: 2 * r + (rows - 1) * dy };
+}
+/* An octagon in px: corners cut by c; the core is the same shape inset by
+   the rim t, its cut shortened so the rim reads even all the way round. */
+function octagon(x0, y0, W, H, c){
+  const x1 = x0 + W, y1 = y0 + H;
+  return `polygon(${[[x0+c,y0],[x1-c,y0],[x1,y0+c],[x1,y1-c],[x1-c,y1],[x0+c,y1],[x0,y1-c],[x0,y0+c]].map(p=>p[0].toFixed(1)+'px '+p[1].toFixed(1)+'px').join(',')})`;
 }
 
 let MEASURE = null;
@@ -186,20 +204,23 @@ function fits(str, fs){
 
 function draw(){
   const comb = $('comb'), L = layout(CELLS.length);
-  const rim = Math.max(5, L.r * .1);
+  const rim = SHAPE === 'oct' ? Math.max(4.5, L.w * .045) : Math.max(5, L.h * .05);
   comb.style.width = L.width + 'px'; comb.style.height = (L.height + 10) + 'px';
-  const room = L.w * .76, maxW = L.r > 62 ? 17 : 15;
-  const slotFs = L.r > 62 ? 14 : 12.5;
+  const room = SHAPE === 'oct' ? L.w - 2 * rim - 14 : L.w * .76, maxW = L.big ? 17 : 15;
+  const slotFs = L.big ? 14 : 12.5;
+  const cut = L.h * .3, cutIn = Math.max(0, cut - rim * .414);
+  const clipRim = SHAPE === 'oct' ? `clip-path:${octagon(0, 0, L.w, L.h, cut)}` : '';
+  const clipCore = SHAPE === 'oct' ? `clip-path:${octagon(rim, rim, L.w - 2 * rim, L.h - 2 * rim, cutIn)}` : `inset:${rim}px ${rim * .87}px`;
   comb.innerHTML = '';
   CELLS.forEach((c, i) => {
     const p = L.pos[i];
     const el = document.createElement('div');
     el.className = 'cell' + (c.done ? ' done' : '') + (c.late ? ' late' : '') + (i === SEL ? ' sel' : '');
-    el.style.cssText = `left:${p.x}px;top:${p.y}px;width:${L.w}px;height:${2 * L.r}px`;
+    el.style.cssText = `left:${p.x}px;top:${p.y}px;width:${L.w}px;height:${L.h}px`;
     let fs = maxW; while (fs > 9 && fits(c.it.w, fs) > room) fs -= .5;
     el.innerHTML =
-      `<div class="pz-hex pz-rim"></div><div class="pz-hex pz-core" style="inset:${rim}px ${rim * .87}px"></div>
-       <div class="pz-face"><span class="pz-word" style="font-size:${fs}px">${esc(c.it.w)}</span>
+      `<div class="pz-hex pz-rim" style="${clipRim}"></div><div class="pz-hex pz-core" style="${clipCore}"></div>
+       <div class="pz-face${SHAPE === 'oct' ? ' oct' : ''}"><span class="pz-word" style="font-size:${fs}px">${esc(c.it.w)}</span>
        <input class="pz-slot" style="font-size:${slotFs}px" type="text" maxlength="12" placeholder="•••"
          aria-label="Preposition after ${esc(c.it.w)}" autocomplete="off" autocapitalize="off"
          autocorrect="off" spellcheck="false" enterkeyhint="next"

@@ -115,6 +115,8 @@ body{min-height:100dvh}
 .mute{border:none;background:none;cursor:pointer;font-size:.9rem;line-height:1;padding:0 .35rem 0 0;vertical-align:-1px}
 .mute.off{opacity:.32;filter:grayscale(1)}
 .vtab .mark{margin-left:.2em;color:var(--caramel)}
+/* six tabs on one line on a phone: the numbers alone */
+@media (max-width:480px){ #sets .sl{display:none} #sets .vtab{padding-left:.75rem;padding-right:.75rem} }
 
 /* ── the result: the Board's card ─────────────────────────────────────── */
 .scrim{position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;padding:1rem;
@@ -147,6 +149,25 @@ body{min-height:100dvh}
   background:color-mix(in srgb,var(--ink) 7%,var(--card));color:var(--ink)}
 .cta button.fill{background:var(--ring-core);color:var(--ring-ink)}
 @media (prefers-reduced-motion:reduce){ .glitter{display:none} .pz-slot.pop{animation:none} .pz-tick.pop{animation:none} .scrim,.focus{transition:none} }
+/* ── explore: every list, grouped by preposition, with its sentence ─── */
+#explore{padding-top:.4rem}
+.ex-index{display:flex;flex-wrap:wrap;gap:.35rem;justify-content:center;max-width:var(--w-read);margin:.6rem auto 1.4rem}
+.ex-index a{font-family:var(--f-mono);font-size:.8125rem;font-weight:500;padding:.38rem .75rem;border-radius:999px;
+  background:var(--ring-core);color:var(--ring-ink);text-decoration:none}
+@media(hover:hover){ .ex-index a:hover{background:var(--caramel-ink);color:#FEFCF9} }
+.ex-group{max-width:var(--w-sheet);margin:0 auto 1.8rem;scroll-margin-top:11rem}
+.ex-group h3{display:flex;align-items:baseline;gap:.7rem;margin:0 0 .6rem;
+  font-family:'Anton', Impact, var(--f-display), sans-serif;font-weight:400;font-size:1.7rem;line-height:1;color:var(--ink)}
+.ex-group h3 small{font-family:var(--f-mono);font-size:.6875rem;letter-spacing:var(--track-label);text-transform:uppercase;color:var(--faint)}
+.ex-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(15.5rem,1fr));gap:.5rem}
+.ex-row{background:var(--card);padding:.65rem .8rem .7rem;box-shadow:0 1px 2px rgba(35,44,49,.06),0 8px 20px -16px rgba(35,44,49,.3)}
+.ex-head{display:flex;align-items:baseline;gap:.4rem;flex-wrap:wrap}
+.ex-head b{font-family:var(--f-display);font-weight:600;color:var(--ink)}
+.ex-p{font-family:var(--f-mono);font-weight:600;color:#4A6B5C}
+.ex-alt{font-size:.8rem;color:var(--faint)}
+.ex-k{margin-left:auto;font-family:var(--f-mono);font-size:.625rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.ex-s{font-size:.9rem;line-height:1.45;color:var(--paper);margin-top:.25rem}
+.ex-s mark{background:none;color:#4A6B5C;font-weight:600}
 @media (prefers-reduced-motion:reduce){ .cell{transition:none} .cell.shake{animation:none} }
 </style>
 </head>
@@ -160,16 +181,28 @@ body{min-height:100dvh}
     </div>
     <span class="header-spacer"><button class="mute" id="mute" type="button" aria-label="Sound on" aria-pressed="true">&#128266;</button> Level <b>B2</b></span>
   </div>
+  <!-- The INTUITY mode row. Explore has no sets; the three topics have
+       three sets of 27 each; Mixed, the default, has six. -->
+  <div class="mode-selector" id="modes">
+    <button class="mode-btn tab" type="button" data-mode="explore">Explore</button>
+    <button class="mode-btn tab" type="button" data-mode="verbs">Verbs</button>
+    <button class="mode-btn tab" type="button" data-mode="adjectives">Adjectives</button>
+    <button class="mode-btn tab" type="button" data-mode="nouns">Nouns</button>
+    <button class="mode-btn tab" type="button" data-mode="mixed">Mixed</button>
+  </div>
   <div class="set-tabs" id="sets" role="tablist" aria-label="Set"></div>
 </header>
 
 <main class="wrap">
+ <section id="play">
   <div class="strip" aria-live="polite">
     <span id="setName"></span>
     <span><b id="nDone">0</b>/<span id="nAll">27</span> · <span class="miss"><b id="nMiss">0</b> mistakes</span></span>
   </div>
   <p class="how">Tap a cell and type the preposition. No preposition? Type <b>0</b>.</p>
   <div class="comb" id="comb" role="group" aria-label="Words"></div>
+ </section>
+ <section id="explore" hidden></section>
 </main>
 <div class="scrim" id="scrim" hidden><div class="focus" id="focus" role="dialog" aria-modal="true" aria-labelledby="fTitle"></div></div>
 <!-- one sound engine and one mute for every INTUITY page -->
@@ -179,9 +212,10 @@ body{min-height:100dvh}
 (function(){
 const $ = id => document.getElementById(id);
 const R3 = Math.sqrt(3);
-const KEY = 'be2.prepositions.v4';
+const KEY = 'be2.prepositions.v5';
 const NONE = ['0', 'ø', '-', '–', '—', 'none', 'no', 'nothing', 'x', 'zero', 'no preposition'];
-let DATA = null, SET = 0, CELLS = [], SEL = -1, MISS = 0, MISSED = [], ACCEPT = {}, T0 = 0, PENDING = null;
+let DATA = null, MODE = 'mixed', SET = 0, SETS = {}, CELLS = [], SEL = -1, MISS = 0, MISSED = [], ACCEPT = {}, T0 = 0, PENDING = null;
+const LABEL = { verbs: 'Verbs', adjectives: 'Adjectives', nouns: 'Nouns', mixed: 'Mixed' };
 
 const store = {
   get(){ try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e){ return {}; } },
@@ -194,13 +228,48 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':
    a word accepts every preposition the data gives it anywhere in its own
    kind (verb, adjective, noun) — "lack" the verb takes none, "lack" the
    noun takes "of", and the two never mix. */
+function allItems(){
+  const out = [];
+  DATA.topics.forEach(t => t.sets.forEach(s => s.items.forEach(it => out.push({ it, kind: t.kind }))));
+  (DATA.extra ? DATA.extra.items : []).forEach(it => out.push({ it, kind: DATA.extra.kind }));
+  return out;
+}
 function buildAccept(){
   ACCEPT = {};
-  DATA.sets.forEach(s => s.items.forEach(it => {
-    const k = s.kind + ':' + it.w;
+  allItems().forEach(({ it, kind }) => {
+    const k = kind + ':' + it.w;
     (ACCEPT[k] = ACCEPT[k] || new Set()).add(it.p);
     (it.alt || []).forEach(a => ACCEPT[k].add(a));
-  }));
+  });
+}
+/* The sets of every mode. A topic keeps the three sets in the data; Mixed
+   deals six sets of 27 — nine verbs, nine adjectives, nine nouns — the
+   same six on every visit (a fixed seed), the verbs that are only in
+   Mixed dealt first, and never the same word twice in a set. */
+function buildSets(){
+  SETS = {};
+  DATA.topics.forEach(t => { SETS[t.id] = t.sets.map(s => s.items.map(it => ({ it, kind: t.kind }))); });
+  let a = 0x5eed1;
+  const rand = () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const mix = arr => { arr = arr.slice(); for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+  const of = id => DATA.topics.find(t => t.id === id);
+  const pool = {
+    verb: (DATA.extra ? mix(DATA.extra.items) : []).concat(mix(of('verbs').sets.flatMap(s => s.items))),
+    adjective: mix(of('adjectives').sets.flatMap(s => s.items)),
+    noun: mix(of('nouns').sets.flatMap(s => s.items))
+  };
+  SETS.mixed = [];
+  for (let m = 0; m < 6; m++) {
+    const set = [], words = new Set();
+    ['verb', 'adjective', 'noun'].forEach(kind => {
+      let got = 0;
+      for (let k = 0; k < pool[kind].length && got < 9; k++) {
+        const it = pool[kind][k]; if (words.has(it.w)) continue;
+        set.push({ it, kind }); words.add(it.w); pool[kind].splice(k, 1); k--; got++;
+      }
+    });
+    SETS.mixed.push(set);
+  }
 }
 function norm(v){
   const t = String(v || '').toLowerCase().replace(/[.,!?]/g, '').trim().replace(/\s+/g, ' ');
@@ -297,21 +366,59 @@ function draw(){
 }
 
 /* ── play ─────────────────────────────────────────────────────────────── */
+function setMode(m, k){
+  MODE = LABEL[m] || m === 'explore' ? m : 'mixed';
+  $('modes').querySelectorAll('.mode-btn').forEach(b => {
+    const on = b.dataset.mode === MODE; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on);
+  });
+  const ex = MODE === 'explore';
+  $('play').hidden = ex; $('explore').hidden = !ex; $('sets').classList.toggle('hidden', ex);   /* the shell's own class: .set-tabs is display:flex */
+  closeCard();
+  if (ex) { SEL = -1; renderExplore(); setURL(); return; }
+  loadSet(k >= 0 && k < SETS[MODE].length ? k : 0);
+}
+function setURL(){
+  try { const u = new URL(location.href); u.searchParams.set('mode', MODE);
+    if (MODE === 'explore') u.searchParams.delete('set'); else u.searchParams.set('set', SET + 1);
+    history.replaceState(null, '', u); } catch(e){}
+}
 function loadSet(k){
   SET = k; SEL = -1; MISS = 0; MISSED = [];
-  const s = DATA.sets[k];
-  CELLS = shuffle(s.items).map(it => ({ it, kind: s.kind, done: false, late: false, tries: 0, typed: '' }));
-  $('setName').textContent = 'Set ' + (k + 1) + ' · ' + s.title;
+  CELLS = shuffle(SETS[MODE][k]).map(x => ({ it: x.it, kind: x.kind, done: false, late: false, tries: 0, typed: '' }));
+  $('setName').textContent = LABEL[MODE] + ' · Set ' + (k + 1);
   $('nAll').textContent = CELLS.length;
   closeCard(); T0 = 0;
-  tabs(); count(); draw();
-  try { const u = new URL(location.href); u.searchParams.set('set', k + 1); history.replaceState(null, '', u); } catch(e){}
+  tabs(); count(); draw(); setURL();
 }
 function tabs(){
-  const best = store.get();   /* {k: {best, mark: 'cup' | 'done'}} — the Board's ★ and ✓ */
-  $('sets').innerHTML = DATA.sets.map((s, i) => { const b = best[i] || {};
-    return `<button class="vtab${i === SET ? ' active' : ''}" role="tab" aria-selected="${i === SET}" data-k="${i}" title="${esc(s.title)}${b.best != null ? ' · best ' + b.best + '/' + s.items.length : ''}">${i + 1}${b.mark ? `<span class="mark">${b.mark === 'cup' ? '★' : '✓'}</span>` : ''}</button>`; }).join('');
+  const best = store.get();   /* {"mode:k": {best, mark: 'cup' | 'done'}} — the Board's ★ and ✓ */
+  $('sets').innerHTML = SETS[MODE].map((s, i) => { const b = best[MODE + ':' + i] || {};
+    return `<button class="vtab${i === SET ? ' active' : ''}" role="tab" aria-selected="${i === SET}" data-k="${i}" title="${b.best != null ? 'Best ' + b.best + '/' + s.length : ''}"><span class="sl">Set </span>${i + 1}${b.mark ? `<span class="mark">${b.mark === 'cup' ? '★' : '✓'}</span>` : ''}</button>`; }).join('');
   $('sets').querySelectorAll('button').forEach(b => b.onclick = () => loadSet(+b.dataset.k));
+}
+
+/* ── Explore: every list, grouped by the preposition it takes ───────── */
+let EXPLORED = false;
+function renderExplore(){
+  if (EXPLORED) return; EXPLORED = true;
+  const groups = {};
+  allItems().forEach(x => (groups[x.it.p] = groups[x.it.p] || []).push(x));
+  const keys = Object.keys(groups).sort((a, b) => a === 'Ø' ? 1 : b === 'Ø' ? -1 : a.localeCompare(b));
+  const id = p => 'ex-' + (p === 'Ø' ? 'none' : p);
+  const kindName = { verb: 'verb', adjective: 'adj', noun: 'noun' };
+  /* the sentence with its answer filled in; for Ø the gap simply closes */
+  const sent = it => { const [a, b] = it.s.split('___');
+    return it.p === 'Ø' ? esc(a.replace(/\s+$/, '')) + esc(b) : esc(a) + '<mark>' + esc(it.p) + '</mark>' + esc(b); };
+  $('explore').innerHTML =
+    `<p class="how">Every word on this page, grouped by its preposition. <b>Ø</b> means no preposition at all.</p>
+     <nav class="ex-index" aria-label="Prepositions">${keys.map(p => `<a href="#${id(p)}">${p === 'Ø' ? 'Ø none' : esc(p)}</a>`).join('')}</nav>` +
+    keys.map(p => {
+      const rows = groups[p].sort((x, y) => x.it.w.localeCompare(y.it.w));
+      return `<section class="ex-group" id="${id(p)}"><h3>${p === 'Ø' ? 'No preposition' : esc(p)} <small>${rows.length} words</small></h3><div class="ex-list">` +
+        rows.map(({ it, kind }) => `<div class="ex-row"><div class="ex-head"><b>${esc(it.w)}</b><span class="ex-p">${esc(it.p)}</span>` +
+          `${(it.alt || []).length ? `<span class="ex-alt">also ${it.alt.map(esc).join(', ')}</span>` : ''}<span class="ex-k">${kindName[kind]}</span></div>` +
+          `<div class="ex-s">${sent(it)}</div></div>`).join('') + '</div></section>';
+    }).join('');
 }
 function count(){
   $('nDone').textContent = CELLS.filter(c => c.done).length;
@@ -394,16 +501,16 @@ function finish(){
   const n = CELLS.length, right = n - MISSED.length, pct = Math.round(right / n * 100);
   const secs = T0 ? Math.round((Date.now() - T0) / 1000) : 0, t = Math.floor(secs / 60) + ':' + String(secs % 60).padStart(2, '0');
   const clean = right === n;
-  const all = store.get(), prev = all[SET] || {};
-  all[SET] = { best: Math.max(prev.best || 0, right), mark: prev.mark === 'cup' || clean ? 'cup' : 'done' };
+  const all = store.get(), key = MODE + ':' + SET, prev = all[key] || {};
+  all[key] = { best: Math.max(prev.best || 0, right), mark: prev.mark === 'cup' || clean ? 'cup' : 'done' };
   store.put(all);
   sfx(clean ? 'fanfare' : 'bowlLow');
   /* the Board's words, not Cambridge's grade names */
   const grade = pct >= 90 ? 'Exam-ready' : pct >= 75 ? 'Nearly there' : pct >= 60 ? 'Getting there' : 'Not yet — keep practising';
   const CUP = `<svg class="cup" viewBox="0 0 92 92" aria-hidden="true"><circle cx="46" cy="46" r="43" fill="var(--ring-core)"/><circle class="rim" cx="46" cy="46" r="40"/>
     <path d="M31 27h30v9c0 9-6.5 16-15 16s-15-7-15-16z M31 31h-7c0 8 4 12 9 12 M61 31h7c0 8-4 12-9 12 M46 52v9 M36 66h20" fill="none" stroke="#E9C98F" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  const more = SET + 1 < DATA.sets.length;
-  openCard(`<div class="kick">Prepositions · Set ${SET + 1} · ${esc(DATA.sets[SET].title)}</div>${clean ? CUP : ''}
+  const more = SET + 1 < SETS[MODE].length;
+  openCard(`<div class="kick">Prepositions · ${LABEL[MODE]} · Set ${SET + 1}</div>${clean ? CUP : ''}
     <h2 id="fTitle">${clean ? 'The cup.' : 'Your result'}</h2>
     <div class="big">${pct}%</div>
     <div class="grade">${grade} · ${right} of ${n} first time · ${t}</div>
@@ -431,10 +538,13 @@ window.addEventListener('resize', () => {
 fetch('/data/similar-words/prepositions.json', { cache: 'no-store' })
   .then(r => r.json())
   .then(d => {
-    DATA = d; buildAccept();
-    const want = parseInt(new URLSearchParams(location.search).get('set'), 10);
-    const start = want >= 1 && want <= d.sets.length ? want - 1 : 0;
-    (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(() => loadSet(start));
+    DATA = d; buildAccept(); buildSets();
+    $('modes').querySelectorAll('.mode-btn').forEach(b => b.onclick = () => setMode(b.dataset.mode, 0));
+    /* Mixed is the default: interleaved, the way the exam asks */
+    const q = new URLSearchParams(location.search), want = q.get('mode');
+    const mode = want === 'explore' || LABEL[want] ? want : 'mixed';
+    const k = (parseInt(q.get('set'), 10) || 1) - 1;
+    (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(() => setMode(mode, k));
   })
   .catch(() => { $('comb').textContent = 'The words did not load. Please refresh.'; });
 

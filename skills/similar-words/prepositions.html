@@ -65,15 +65,22 @@ body{min-height:100dvh}
    it reads as a mark under the word, not a field. */
 /* The field is 16px inside (an iPhone zooms the whole page into any
    smaller input) and scaled down by --k to its drawn size; the negative
-   margins hand back the room the scaling frees. */
+   margins hand back the room the scaling frees. It grows with what is
+   typed (--n letters), so "against" or "between" shows whole. */
 .pz-slot{display:block;box-sizing:border-box;border:none;outline:none;
   font-size:16px!important;transform:scale(var(--k,.72));
-  margin:calc((var(--k,.72) - 1) * .65em) calc((var(--k,.72) - 1) * 1.65em);
-  height:1.3em;width:3.3em;padding:0 .3em;border-radius:999px;
+  margin:calc((var(--k,.72) - 1) * .65em) 0;
+  height:1.3em;width:calc(max(3.3em, (var(--n, 0) + 1.5) * .64em));padding:0 .3em;border-radius:999px;
+  transition:background .2s,box-shadow .2s,color .2s,width .15s ease;
   font:600 1em/1 var(--f-mono);letter-spacing:.04em;text-align:center;
   color:var(--ring-ink);background:rgba(229,209,184,.13);
-  caret-color:var(--caramel);-webkit-appearance:none;appearance:none;
-  transition:background .2s,box-shadow .2s,color .2s}
+  caret-color:var(--caramel);-webkit-appearance:none;appearance:none}
+/* the green tick of a right answer, at the top of the cell */
+.pz-tick{position:absolute;left:50%;top:10%;width:var(--t,16px);height:var(--t,16px);margin-left:calc(var(--t,16px) / -2);
+  overflow:visible;pointer-events:none}
+.pz-tick path{fill:none;stroke:#8FC79A;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.pz-tick.pop{animation:tickPop .45s cubic-bezier(.3,1.6,.5,1)}
+@keyframes tickPop{0%{transform:scale(.2);opacity:0}60%{opacity:1}100%{transform:scale(1)}}
 .pz-slot::placeholder{color:rgba(229,209,184,.5);letter-spacing:.08em}
 .pz-slot[readonly]{cursor:pointer}
 
@@ -139,7 +146,7 @@ body{min-height:100dvh}
   text-transform:uppercase;border:none;border-radius:var(--r-tab);padding:.75rem 1.25rem;cursor:pointer;
   background:color-mix(in srgb,var(--ink) 7%,var(--card));color:var(--ink)}
 .cta button.fill{background:var(--ring-core);color:var(--ring-ink)}
-@media (prefers-reduced-motion:reduce){ .glitter{display:none} .pz-slot.pop{animation:none} .scrim,.focus{transition:none} }
+@media (prefers-reduced-motion:reduce){ .glitter{display:none} .pz-slot.pop{animation:none} .pz-tick.pop{animation:none} .scrim,.focus{transition:none} }
 @media (prefers-reduced-motion:reduce){ .cell{transition:none} .cell.shake{animation:none} }
 </style>
 </head>
@@ -166,7 +173,7 @@ body{min-height:100dvh}
 </main>
 <div class="scrim" id="scrim" hidden><div class="focus" id="focus" role="dialog" aria-modal="true" aria-labelledby="fTitle"></div></div>
 <!-- one sound engine and one mute for every INTUITY page -->
-<script src="/skills/grammar-rules/intuity-sound.js"></script>
+<script src="/skills/grammar-rules/intuity-sound.js?v=2"></script>
 
 <script>
 (function(){
@@ -174,7 +181,7 @@ const $ = id => document.getElementById(id);
 const R3 = Math.sqrt(3);
 const KEY = 'be2.prepositions.v4';
 const NONE = ['0', 'ø', '-', '–', '—', 'none', 'no', 'nothing', 'x', 'zero', 'no preposition'];
-let DATA = null, SET = 0, CELLS = [], SEL = -1, MISS = 0, MISSED = [], ACCEPT = {}, T0 = 0;
+let DATA = null, SET = 0, CELLS = [], SEL = -1, MISS = 0, MISSED = [], ACCEPT = {}, T0 = 0, PENDING = null;
 
 const store = {
   get(){ try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e){ return {}; } },
@@ -259,20 +266,32 @@ function draw(){
   CELLS.forEach((c, i) => {
     const p = L.pos[i];
     const el = document.createElement('div');
-    el.className = 'cell' + (c.done ? ' done' : '') + (c.late ? ' late' : '') + (i === SEL ? ' sel' : '');
+    el.className = 'cell' + (c.done ? ' done' : '') + (c.late ? ' late' : '') + (i === SEL ? ' sel' : '') +
+      (!c.done && c.lastWrong && norm(c.typed) === c.lastWrong ? ' wrong' : '');
     el.style.cssText = `left:${p.x}px;top:${p.y}px;width:${L.w}px;height:${L.h}px`;
     let fs = maxW; while (fs > 9 && fits(c.it.w, fs) > room) fs -= .5;
     el.innerHTML =
       `<div class="pz-hex pz-rim" style="${clipRim}"></div><div class="pz-hex pz-core" style="${clipCore}"></div>
        <div class="pz-face${SHAPE === 'oct' ? ' oct' : ''}"><span class="pz-word" style="font-size:${fs}px">${esc(c.it.w)}</span>
-       <input class="pz-slot" style="--k:${(slotFs / 16).toFixed(3)}" type="text" maxlength="12" placeholder="•••"
+       <input class="pz-slot" style="--k:${(slotFs / 16).toFixed(3)};--n:${(c.done ? shown(c.it.p) : c.typed || '').length}" type="text" maxlength="12" placeholder="•••"
          aria-label="Preposition after ${esc(c.it.w)}" autocomplete="off" autocapitalize="off"
          autocorrect="off" spellcheck="false" enterkeyhint="next"
-         ${c.done || i !== SEL ? 'readonly' : ''} value="${c.done ? esc(shown(c.it.p)) : esc(c.typed || '')}"></div>`;
-    el.addEventListener('click', () => { if (!c.done && i !== SEL) select(i); });
+         ${c.done || i !== SEL ? 'readonly' : ''} value="${c.done ? esc(shown(c.it.p)) : esc(c.typed || '')}"></div>
+       ${c.done && !c.revealed ? `<svg class="pz-tick${c.fresh ? ' pop' : ''}" style="--t:${Math.round(L.w * .15)}px" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9"/></svg>` : ''}`;
+    c.fresh = false;
+    /* A tap on another cell is the student moving on: pointerdown notes it
+       so the blur below leaves the checking to select(), which checks the
+       cell being left and then opens this one. */
+    el.addEventListener('pointerdown', () => { PENDING = i; });
+    el.addEventListener('click', () => { PENDING = null; if (!c.done && i !== SEL) select(i); });
     const inp = el.querySelector('.pz-slot');
-    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); check(i, inp); } });
-    inp.addEventListener('input', () => { c.typed = inp.value; el.classList.remove('wrong'); });
+    /* Enter, Tab, or simply leaving the cell all check the answer: a
+       student who types and taps the next cell has answered. */
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) { e.preventDefault(); check(i, inp.value, true); } });
+    inp.addEventListener('input', () => { c.typed = inp.value; inp.style.setProperty('--n', inp.value.length); el.classList.remove('wrong'); });
+    inp.addEventListener('blur', () => setTimeout(() => {
+      if (PENDING == null && SEL === i && inp.isConnected && document.activeElement !== inp) check(i, inp.value, false);
+    }, 0));
     comb.appendChild(el);
   });
 }
@@ -300,6 +319,9 @@ function count(){
 }
 function select(i){
   if (!T0) T0 = Date.now();
+  const prev = SEL;
+  if (prev >= 0 && prev !== i && CELLS[prev] && !CELLS[prev].done && (CELLS[prev].typed || '').trim()) check(prev, CELLS[prev].typed, false);
+  if (CELLS[i].done) return;
   SEL = i; draw();
   const inp = $('comb').children[i].querySelector('.pz-slot');
   inp.focus({ preventScroll: true });
@@ -309,31 +331,36 @@ function select(i){
   const bottom = (window.visualViewport ? window.visualViewport.height : window.innerHeight);
   if (r.top < top + 8 || r.bottom > bottom - 8) window.scrollBy({ top: r.top - (top + bottom - r.height) / 2, behavior: 'smooth' });
 }
-function check(i, inp){
+/* advance: move on to the next open cell (Enter, Tab) — or stay put,
+   because the student has already chosen where to go (tapped elsewhere). */
+function check(i, value, advance){
   const c = CELLS[i]; if (!c || c.done) return;
-  const v = norm(inp.value); if (!v) return;
+  const v = norm(value); if (!v) return;
+  if (v === c.lastWrong) return;          /* the same wrong answer counts once */
   const ok = (ACCEPT[c.kind + ':' + c.it.w] || new Set([c.it.p])).has(v);
-  const el = $('comb').children[i];
+  const el = $('comb').children[i], inp = el && el.querySelector('.pz-slot');
   if (ok) {
-    c.done = true; c.it = Object.assign({}, c.it, { p: v }); c.late = c.tries > 0;
-    sfx(c.late ? 'pop' : 'correct');
-    settle(i, true);
+    c.done = true; c.it = Object.assign({}, c.it, { p: v }); c.late = c.tries > 0; c.fresh = true;
+    sfx(c.late ? 'pop' : 'jingle');
+    settle(i, true, advance);
   } else {
-    c.tries++; MISS++; sfx('wrong');
+    c.tries++; MISS++; c.lastWrong = v; sfx('wrong');
     if (!MISSED.includes(c)) MISSED.push(c);
     count();
-    el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake', 'wrong');
-    if (c.tries >= 3) { c.done = true; c.late = true; inp.value = shown(c.it.p); setTimeout(() => settle(i), 650); }
-    else { inp.select(); }
+    if (el) { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake', 'wrong'); }
+    if (c.tries >= 3) { c.done = true; c.late = true; c.revealed = true; if (inp) inp.value = shown(c.it.p); setTimeout(() => settle(i, false, advance), 650); }
+    else if (advance && inp) inp.select();
   }
 }
-function settle(i, won){
+function settle(i, won, advance){
   count();
   const next = nextOpen(i);
-  SEL = -1; draw();
+  if (advance !== false || SEL === i) SEL = -1;
+  draw();
   if (won) burst(i, !CELLS[i].late);
   if (next < 0) return setTimeout(finish, 700);
-  setTimeout(() => select(next), 260);
+  if (advance !== false) setTimeout(() => select(next), 260);
+  else if (SEL >= 0) { const f = $('comb').children[SEL]; const fi = f && f.querySelector('.pz-slot'); if (fi) fi.focus({ preventScroll: true }); }
 }
 const sfx = name => { try { if (window.SFX && SFX.isOn() && SFX[name]) SFX[name](); } catch(e){} };
 function burst(i, first){
@@ -415,7 +442,7 @@ if (new URLSearchParams(location.search).get('test')) window.PREP_TEST = {
   cells: () => CELLS.map(c => ({ w: c.it.w, p: c.it.p, done: c.done })),
   sel: () => SEL,
   select: i => select(i),
-  type: v => { const i = SEL; const inp = $('comb').children[i].querySelector('.pz-slot'); inp.value = v; check(i, inp); }
+  type: v => { const i = SEL; const inp = $('comb').children[i].querySelector('.pz-slot'); inp.value = v; check(i, inp.value, true); }
 };
 })();
 </script>

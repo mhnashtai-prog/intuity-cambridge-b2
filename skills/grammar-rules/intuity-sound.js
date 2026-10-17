@@ -100,6 +100,16 @@
       note(784, 0.16, 'triangle', 0.16, 0.07);
     },
 
+    /* A little jingle: three bright notes up a major triad and a soft
+       high sparkle on top — quicker and lighter than the bowl, for a game
+       answered many times a minute (Prepositions). */
+    jingle: function () {
+      note(1047, 0.12, 'sine', 0.10);
+      note(1319, 0.12, 'sine', 0.09, 0.065);
+      note(1568, 0.24, 'sine', 0.09, 0.13);
+      note(2093, 0.20, 'triangle', 0.035, 0.17);
+    },
+
     /* Same bowl, lower and longer, for a finished board. */
     bowlLow: function () {
       bowl(352, 2.10, 0.17);

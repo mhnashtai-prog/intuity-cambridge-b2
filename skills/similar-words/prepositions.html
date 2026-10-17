@@ -302,7 +302,8 @@ const shown = p => p === 'Ø' ? 'Ø' : p;
    half a cell so the rows nest. ?shape=oct gives low octagons in a
    straight grid (0.6 as tall as wide, ~17% less height on a phone).
    A short last row is centred either way. */
-const SHAPE = ({ hex: 'hex', oct: 'oct', flat: 'flat', ellipse: 'ell' })[new URLSearchParams(location.search).get('shape')] || 'lad';   /* the ladder is the design; the others stay for comparison */
+const SHAPE = ({ hex: 'hex', oct: 'oct', flat: 'flat', ellipse: 'ell', horseshoe: 'shoe' })[new URLSearchParams(location.search).get('shape')] || 'lad';
+const RECT = SHAPE === 'lad' || SHAPE === 'shoe';   /* the shapes drawn as the Board's flat tiles */   /* the ladder is the design; the others stay for comparison */
 function columns(){
   const W = document.documentElement.clientWidth;
   return W >= 1000 ? 9 : W >= 700 ? 6 : 3;
@@ -315,6 +316,28 @@ function layout(n){
      equal rows, every edge in line — with cells taken out so the rest
      alternate: the middle one alone, then the two sides, then the middle
      again. Thirteen tiles, read 1 → 13 down the page. */
+  /* THE HORSESHOE (?shape=horseshoe): fourteen upright tiles round an
+     arch — 1 at the foot of the left leg, over the top, 14 at the foot of
+     the right. Each tile is placed as soon as it clears the one before by
+     the 2px join, walking down from the crown, and the right side mirrors
+     the left. */
+  if (SHAPE === 'shoe') {
+    const W = Math.min(avail, C === 3 ? 380 : 640), g = 2;
+    const w = C === 3 ? Math.min(104, Math.floor((W - 4) / 3.4)) : 150, h = C === 3 ? 50 : 62;
+    const cx = W / 2, R = W / 2 - w / 2, cy = h / 2 + R;
+    const clear = (a, b) => Math.abs(a.x - b.x) >= w + g || Math.abs(a.y - b.y) >= h + g;
+    const dx = (w + g) / 2, left = [{ x: cx - dx, y: cy - Math.sqrt(R * R - dx * dx) }];
+    let a = Math.acos(-dx / R), y = cy;
+    while (left.length < 7) {
+      let p;
+      if (a < Math.PI) { a += .002; p = { x: cx + R * Math.cos(Math.min(a, Math.PI)), y: cy - R * Math.sin(Math.min(a, Math.PI)) }; }
+      else { y += .5; p = { x: cx - R, y }; }
+      if (clear(p, left[left.length - 1])) left.push(p);
+    }
+    const order = left.slice().reverse().concat(left.map(p => ({ x: 2 * cx - p.x, y: p.y })));
+    order.slice(0, n).forEach(p => pos.push({ x: p.x - w / 2, y: p.y - h / 2, w }));
+    return { w, h, big: C !== 3, pos, width: W, height: Math.max(...order.map(p => p.y)) + h / 2 };
+  }
   if (SHAPE === 'lad' && C === 9) {
     /* wide screens: the same grid on its side — nine columns, the middle
        tile alone, then the top and bottom pair, then the middle again */
@@ -392,15 +415,15 @@ function fits(str, fs){
 
 function draw(){
   const comb = $('comb'), L = layout(CELLS.length);
-  const rim = SHAPE === 'lad' ? 5 : SHAPE === 'oct' || SHAPE === 'ell' ? Math.max(4.5, L.w * .045) : SHAPE === 'flat' ? Math.max(5, L.w * .05) : Math.max(5, L.h * .05);
+  const rim = RECT ? 5 : SHAPE === 'oct' || SHAPE === 'ell' ? Math.max(4.5, L.w * .045) : SHAPE === 'flat' ? Math.max(5, L.w * .05) : Math.max(5, L.h * .05);
   comb.style.width = L.width + 'px'; comb.style.height = (L.height + 10) + 'px';
-  comb.dataset.shape = SHAPE;
+  comb.dataset.shape = RECT ? 'lad' : SHAPE;
   const room = SHAPE === 'oct' ? L.w - 2 * rim - 14 : SHAPE === 'ell' ? L.w - 2 * rim - 20 : SHAPE === 'flat' ? L.w * .74 : L.w * .76, maxW = L.big ? 17 : 15;
   const slotFs = L.big ? 12 : 11;
   const cut = L.h * .3, cutIn = Math.max(0, cut - rim * .414);
   const FLAT = 'clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)';
-  const clipRim = SHAPE === 'lad' ? 'clip-path:none;border-radius:7px' : SHAPE === 'oct' ? `clip-path:${octagon(0, 0, L.w, L.h, cut)}` : SHAPE === 'flat' ? FLAT : SHAPE === 'ell' ? 'clip-path:none;border-radius:50%' : '';
-  const clipCore = SHAPE === 'lad' ? `clip-path:none;border-radius:3px;inset:${rim}px` : SHAPE === 'oct' ? `clip-path:${octagon(rim, rim, L.w - 2 * rim, L.h - 2 * rim, cutIn)}`
+  const clipRim = RECT ? 'clip-path:none;border-radius:7px' : SHAPE === 'oct' ? `clip-path:${octagon(0, 0, L.w, L.h, cut)}` : SHAPE === 'flat' ? FLAT : SHAPE === 'ell' ? 'clip-path:none;border-radius:50%' : '';
+  const clipCore = RECT ? `clip-path:none;border-radius:3px;inset:${rim}px` : SHAPE === 'oct' ? `clip-path:${octagon(rim, rim, L.w - 2 * rim, L.h - 2 * rim, cutIn)}`
                  : SHAPE === 'flat' ? `${FLAT};inset:${rim}px ${rim * 1.15}px` : SHAPE === 'ell' ? `clip-path:none;border-radius:50%;inset:${rim}px` : `inset:${rim}px ${rim * .87}px`;
   comb.innerHTML = '';
   /* the paper board's links: a short sage line to the right-hand
@@ -420,12 +443,12 @@ function draw(){
     const el = document.createElement('div');
     el.className = 'cell' + (c.done ? ' done' : '') + (c.late ? ' late' : '') + (c.revealed ? ' revealed' : '') + (i === SEL ? ' sel' : '') +
       (!c.done && c.lastWrong && norm(c.typed) === c.lastWrong ? ' wrong' : '');
-    const cw = p.w || L.w, cr = SHAPE === 'lad' ? cw - 2 * rim - 18 : room;   /* the ladder's tiles differ in width */
+    const cw = p.w || L.w, cr = RECT ? cw - 2 * rim - 18 : room;   /* the ladder's tiles differ in width */
     el.style.cssText = `left:${p.x}px;top:${p.y}px;width:${cw}px;height:${L.h}px`;
     let fs = maxW; while (fs > 9 && fits(c.it.w, fs) > cr) fs -= .5;
     el.innerHTML =
       `<div class="pz-hex pz-rim" style="${clipRim}"></div><div class="pz-hex pz-core" style="${clipCore}"></div>
-       <div class="pz-face${SHAPE === 'oct' || SHAPE === 'ell' || SHAPE === 'lad' ? ' oct' : ''}"><span class="pz-word" style="font-size:${fs}px">${esc(c.it.w)}</span>
+       <div class="pz-face${SHAPE === 'oct' || SHAPE === 'ell' || RECT ? ' oct' : ''}"><span class="pz-word" style="font-size:${fs}px">${esc(c.it.w)}</span>
        <input class="pz-slot" style="--k:${(slotFs / 16).toFixed(3)};--n:${(c.done ? shown(c.it.p) : c.typed || '').length}" type="text" maxlength="12" placeholder="•••"
          aria-label="Preposition after ${esc(c.it.w)}" autocomplete="off" autocapitalize="off"
          autocorrect="off" spellcheck="false" enterkeyhint="next"
@@ -469,7 +492,9 @@ function setURL(){
 }
 function loadSet(k){
   SET = k; SEL = -1; MISS = 0; MISSED = [];
-  CELLS = shuffle(SETS[MODE][k]).map(x => ({ it: x.it, kind: x.kind, done: false, late: false, tries: 0, typed: '' }));
+  /* mock-up only: the horseshoe has fourteen places, the sets thirteen */
+  const deal = SHAPE === 'shoe' ? SETS[MODE][k].concat((SETS[MODE][k + 1] || SETS[MODE][0]).slice(0, 1)) : SETS[MODE][k];
+  CELLS = shuffle(deal).map(x => ({ it: x.it, kind: x.kind, done: false, late: false, tries: 0, typed: '' }));
   $('setName').textContent = LABEL[MODE] + ' · Set ' + (k + 1);
   $('nAll').textContent = CELLS.length;
   closeCard(); T0 = 0;

@@ -197,6 +197,28 @@ body{min-height:100dvh}
 .ex-s{font-size:.9rem;line-height:1.45;color:var(--paper);margin-top:.25rem}
 .ex-s mark{background:none;color:#4A6B5C;font-weight:600}
 @media (prefers-reduced-motion:reduce){ .cell{transition:none} .cell.shake{animation:none} }
+
+/* ── the header, compact ─────────────────────────────────────────────
+   The set tabs sit close under the modes and stand on a hairline, as a
+   tab bar does: the active tab's underline rests on it. */
+#sets{margin-top:0;border-bottom:1px solid rgba(43,33,41,.12);max-width:min(var(--w-read),100%);padding-bottom:0}
+#sets .vtab{padding-top:.3rem;padding-bottom:.4rem}
+
+/* ── the hub: the space inside the horseshoe ─────────────────────────
+   The set's name, the score and the one-line instruction move into the
+   arch, which frees the lines above it for the cells. */
+.arch-hub{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;pointer-events:none;gap:.55rem}
+.arch-hub .strip{flex-direction:column;align-items:center;gap:.35rem;margin:0;padding:0;max-width:none}
+.arch-hub .score{display:flex;flex-direction:column;align-items:center;gap:.3rem}
+.arch-hub .sep{display:none}
+.arch-hub .tally{font-family:var(--f-display);font-size:2.1rem;font-weight:600;letter-spacing:-.01em;
+  text-transform:none;color:var(--faint);line-height:1}
+.arch-hub .tally b{color:var(--ink)}
+.arch-hub .how{margin:0;padding:.55rem 0 0;border-top:1px solid rgba(43,33,41,.14);font-size:.78rem;line-height:1.4;max-width:12em}
+.arch-hub.big .tally{font-size:2.8rem}
+.arch-hub.big .how{font-size:.875rem;max-width:16em}
+#play.in-arch #comb{margin-top:1rem}
 </style>
 </head>
 <body>
@@ -225,9 +247,9 @@ body{min-height:100dvh}
  <section id="play">
   <div class="strip" aria-live="polite">
     <span id="setName"></span>
-    <span><b id="nDone">0</b>/<span id="nAll">12</span> · <span class="miss"><b id="nMiss">0</b> mistakes</span></span>
+    <span class="score"><span class="tally"><b id="nDone">0</b>/<span id="nAll">12</span></span><span class="sep"> · </span><span class="miss"><b id="nMiss">0</b> mistakes</span></span>
   </div>
-  <p class="how">Tap a cell and type the preposition. No preposition? Type <b>0</b>.</p>
+  <p class="how">Tap a cell, type the preposition. None? Type <b>0</b>.</p>
   <div class="comb" id="comb" role="group" aria-label="Words"></div>
  </section>
  <section id="explore" hidden></section>
@@ -427,9 +449,18 @@ function layout(n){
 const SIDE = 6, CUT = 1.8;   /* the Board's cut: a sage hairline between cells */
    /* twelve cells: six up the left, six down the right */
 function arch(n, C, avail){
+  /* the legs take whatever height the screen has left below the tabs,
+     between the snug minimum and a comfortable maximum */
+  const big = C !== 3, top = $('comb').getBoundingClientRect().top + scrollY;
+  const room = innerHeight - top - 18, lo = big ? 56 : 54, hi = big ? 66 : 74;
+  let best = archAt(n, C, avail, lo);
+  for (let h = lo + 2; h <= hi; h += 2) { const L = archAt(n, C, avail, h); if (L.height > room) break; best = L; }
+  return best;
+}
+function archAt(n, C, avail, hNeed){
   const big = C !== 3, W = Math.min(avail, big ? 660 : 380);
   const T = big ? 124 : Math.min(106, Math.round(W * .29));       /* the band */
-  const rim = 5, hNeed = big ? 56 : 54, wNeed = T + (big ? 10 : 6);
+  const rim = 5, wNeed = T + (big ? 10 : 6);
   const Rx = (W - T) / 2 - 1, Ry = Rx * (big ? .82 : 1.1), cx = W / 2, cy = T / 2 + Ry + 1, lean = .035;
   /* the left half of the centre line, from the crown down to the foot */
   const P = [];
@@ -484,7 +515,11 @@ function arch(n, C, avail){
     return { x, y, w, h, rimD: d(c.rim), coreD: d(c.core), ax: ax - x, ay: ay - y };
   });
   const height = Math.ceil(Math.max(...order.flatMap(c => c.rim.map(p => p[1]))));
-  return { arch: true, w: T, h: hNeed, big, pos, width: W, height, room: T - 2 * rim - 14, faceH: hNeed - 2 * rim };
+  /* the hole: from just under the crown's inner edge to the feet, as wide
+     as the legs allow at their narrowest */
+  const inner = Rx - half - lean * (end - S[600]) - 6;
+  const hub = { x: cx - inner, y: cy - Ry + half + 14, w: 2 * inner, h: height - (cy - Ry + half + 14) - 8 };
+  return { arch: true, w: T, h: hNeed, big, pos, width: W, height, hub, room: T - 2 * rim - 14, faceH: 54 - 2 * rim };
 }
 
 /* An octagon in px: corners cut by c; the core is the same shape inset by
@@ -515,7 +550,16 @@ function draw(){
   const clipRim = RECT ? 'clip-path:none;border-radius:7px' : SHAPE === 'oct' ? `clip-path:${octagon(0, 0, L.w, L.h, cut)}` : SHAPE === 'flat' ? FLAT : SHAPE === 'ell' ? 'clip-path:none;border-radius:50%' : '';
   const clipCore = RECT ? `clip-path:none;border-radius:3px;inset:${rim}px` : SHAPE === 'oct' ? `clip-path:${octagon(rim, rim, L.w - 2 * rim, L.h - 2 * rim, cutIn)}`
                  : SHAPE === 'flat' ? `${FLAT};inset:${rim}px ${rim * 1.15}px` : SHAPE === 'ell' ? `clip-path:none;border-radius:50%;inset:${rim}px` : `inset:${rim}px ${rim * .87}px`;
+  const strip = document.querySelector('#play .strip'), how = document.querySelector('#play .how');
   comb.innerHTML = '';
+  comb.before(strip, how);   /* back above the cells unless the arch takes them */
+  $('play').classList.toggle('in-arch', !!L.arch);
+  if (L.arch) {
+    const hub = document.createElement('div'); hub.className = 'arch-hub' + (L.big ? ' big' : '');
+    hub.style.cssText = `left:${L.hub.x}px;top:${L.hub.y}px;width:${L.hub.w}px;height:${L.hub.h}px`;
+    hub.append(strip, how);
+    comb.appendChild(hub);
+  }
   /* the paper board's links: a short sage line to the right-hand
      neighbour and to the cell below */
   if (SHAPE === 'flat') {

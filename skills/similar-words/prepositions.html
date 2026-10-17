@@ -66,6 +66,8 @@ body{min-height:100dvh}
 .cell.done .pz-kind{opacity:0;transition:opacity .3s}   /* answered: the label has done its job */
 .comb[data-shape="lad"] .pz-tick{top:auto;bottom:16%;left:auto;right:7%;margin-left:0}
 .comb[data-shape="ell"] .pz-tick{top:auto;bottom:21%;left:auto;right:15%;margin-left:0}
+.comb[data-shape="arch"]{filter:drop-shadow(-3px -3px 5px rgba(255,255,255,.8)) drop-shadow(5px 6px 8px rgba(43,33,41,.2))}
+.comb[data-shape="arch"] .cell:not(:hover):not(.sel){filter:none}   /* one shadow for the whole band, so none falls across a shared divider */
 .comb[data-shape="arch"] .cell{pointer-events:none}   /* the boxes overlap on the curve: only the drawn piece takes a tap */
 .comb[data-shape="arch"] .pz-arch,.comb[data-shape="arch"] .pz-face{pointer-events:auto}
 .comb[data-shape="arch"] .pz-kind{text-align:left;letter-spacing:.1em}
@@ -208,7 +210,7 @@ body{min-height:100dvh}
     <span class="header-spacer"><button class="mute" id="mute" type="button" aria-label="Sound on" aria-pressed="true">&#128266;</button> Level <b>B2</b></span>
   </div>
   <!-- The INTUITY mode row. Explore has no sets; the three topics have
-       six sets of 13 each; Mixed, the default, has six too. -->
+       sets of 12 (Verbs 9, Adjectives 7, Nouns 7); Mixed, the default, has six. -->
   <div class="mode-selector" id="modes">
     <button class="mode-btn tab" type="button" data-mode="explore">Explore</button>
     <button class="mode-btn tab" type="button" data-mode="verbs">Verbs</button>
@@ -223,7 +225,7 @@ body{min-height:100dvh}
  <section id="play">
   <div class="strip" aria-live="polite">
     <span id="setName"></span>
-    <span><b id="nDone">0</b>/<span id="nAll">13</span> · <span class="miss"><b id="nMiss">0</b> mistakes</span></span>
+    <span><b id="nDone">0</b>/<span id="nAll">12</span> · <span class="miss"><b id="nMiss">0</b> mistakes</span></span>
   </div>
   <p class="how">Tap a cell and type the preposition. No preposition? Type <b>0</b>.</p>
   <div class="comb" id="comb" role="group" aria-label="Words"></div>
@@ -238,7 +240,7 @@ body{min-height:100dvh}
 (function(){
 const $ = id => document.getElementById(id);
 const R3 = Math.sqrt(3);
-const KEY = 'be2.prepositions.v6';
+const KEY = 'be2.prepositions.v7';   /* v7: sets of twelve */
 const NONE = ['0', 'ø', '-', '–', '—', 'none', 'no', 'nothing', 'x', 'zero', 'no preposition'];
 let DATA = null, MODE = 'mixed', SET = 0, SETS = {}, CELLS = [], SEL = -1, MISS = 0, MISSED = [], ACCEPT = {}, T0 = 0, PENDING = null;
 const LABEL = { verbs: 'Verbs', adjectives: 'Adjectives', nouns: 'Nouns', mixed: 'Mixed' };
@@ -268,10 +270,10 @@ function buildAccept(){
     (it.alt || []).forEach(a => ACCEPT[k].add(a));
   });
 }
-/* The sets of every mode. A topic keeps the six sets of 13 in the data;
-   Mixed deals six sets of 13 — five verbs, four adjectives, four nouns — the
-   same six on every visit (a fixed seed), the verbs that are only in
-   Mixed dealt first, and never the same word twice in a set. */
+/* The sets of every mode. A topic keeps its sets of 12 from the data
+   (Verbs 9, Adjectives 7, Nouns 7); Mixed deals six sets of 12 — four
+   verbs, four adjectives, four nouns — the same six on every visit (a
+   fixed seed), and never the same word twice in a set. */
 function buildSets(){
   SETS = {};
   DATA.topics.forEach(t => { SETS[t.id] = t.sets.map(s => s.items.map(it => ({ it, kind: t.kind }))); });
@@ -285,7 +287,7 @@ function buildSets(){
     adjective: extra('adjective').concat(mix(of('adjectives').sets.flatMap(s => s.items))),
     noun: extra('noun').concat(mix(of('nouns').sets.flatMap(s => s.items)))
   };
-  const PER = { verb: 5, adjective: 4, noun: 4 };   /* thirteen a set */
+  const PER = { verb: 4, adjective: 4, noun: 4 };   /* twelve a set, one for each cell of the horseshoe */
   SETS.mixed = [];
   for (let m = 0; m < 6; m++) {
     const set = [], words = new Set();
@@ -310,7 +312,7 @@ const shown = p => p === 'Ø' ? 'Ø' : p;
    half a cell so the rows nest. ?shape=oct gives low octagons in a
    straight grid (0.6 as tall as wide, ~17% less height on a phone).
    A short last row is centred either way. */
-const SHAPE = ({ hex: 'hex', oct: 'oct', flat: 'flat', ellipse: 'ell', horseshoe: 'arch', tiles: 'shoe' })[new URLSearchParams(location.search).get('shape')] || 'lad';
+const SHAPE = ({ hex: 'hex', oct: 'oct', flat: 'flat', ellipse: 'ell', ladder: 'lad', tiles: 'shoe' })[new URLSearchParams(location.search).get('shape')] || 'arch';   /* the horseshoe is the design */
 const RECT = SHAPE === 'lad' || SHAPE === 'shoe';   /* the shapes drawn as the Board's flat tiles */   /* the ladder is the design; the others stay for comparison */
 function columns(){
   const W = document.documentElement.clientWidth;
@@ -415,14 +417,19 @@ function layout(n){
    cell is measured along it. The words stay upright, so a cell on a leg
    needs only the height of a word and its pill, while one at the crown,
    where the band runs sideways, needs the width of a word: the cells
-   lengthen smoothly towards the top. The joins are parallel lines 2px
-   apart, so they read the same on the outer edge as on the inner. The
+   lengthen smoothly towards the top. It is the Board's grid
+   bent into an omega: the thick sage rim runs only round the outside and
+   the inside of the band, and neighbours are parted by the Board's cut,
+   a sage hairline of 1.8px, half of it belonging to each cell (the halves overlap by a hair so no seam of
+   page shows between them), so the band reads as a grid, not a row of
+   separate tiles. The
    feet flare outwards over their last few pixels. */
-const SIDE = 6;   /* twelve cells: six up the left, six down the right */
+const SIDE = 6, CUT = 1.8;   /* the Board's cut: a sage hairline between cells */
+   /* twelve cells: six up the left, six down the right */
 function arch(n, C, avail){
   const big = C !== 3, W = Math.min(avail, big ? 660 : 380);
   const T = big ? 124 : Math.min(106, Math.round(W * .29));       /* the band */
-  const rim = 5, g = 2, hNeed = big ? 56 : 54, wNeed = T + (big ? 10 : 6);
+  const rim = 5, hNeed = big ? 56 : 54, wNeed = T + (big ? 10 : 6);
   const Rx = (W - T) / 2 - 1, Ry = Rx * (big ? .82 : 1.1), cx = W / 2, cy = T / 2 + Ry + 1, lean = .035;
   /* the left half of the centre line, from the crown down to the foot */
   const P = [];
@@ -466,7 +473,7 @@ function arch(n, C, avail){
     return [X / (3 * A), Y / (3 * A)];
   };
   const left = [];
-  for (let k = 0; k < SIDE; k++) left.push({ rim: piece(cuts[k], cuts[k + 1], g / 2, 0), core: piece(cuts[k], cuts[k + 1], g / 2 + rim, rim) });
+  for (let k = 0; k < SIDE; k++) left.push({ rim: piece(cuts[k], cuts[k + 1], -.4, 0), core: piece(cuts[k], cuts[k + 1], CUT / 2, rim) });
   const mirror = q => q.map(p => [2 * cx - p[0], p[1]]).reverse();
   const order = left.slice().reverse().concat(left.map(c => ({ rim: mirror(c.rim), core: mirror(c.core) })));
   const pos = order.slice(0, n).map(c => {
@@ -584,7 +591,7 @@ function setURL(){
 function loadSet(k){
   SET = k; SEL = -1; MISS = 0; MISSED = [];
   /* mock-up only: the horseshoe has fourteen places, the sets thirteen */
-  const deal = SHAPE === 'arch' ? SETS[MODE][k].slice(0, 2 * SIDE) : SHAPE === 'shoe' ? SETS[MODE][k].concat((SETS[MODE][k + 1] || SETS[MODE][0]).slice(0, 1)) : SETS[MODE][k];
+  const deal = SHAPE === 'shoe' ? SETS[MODE][k].concat((SETS[MODE][k + 1] || SETS[MODE][0]).slice(0, 1)) : SETS[MODE][k];
   CELLS = shuffle(deal).map(x => ({ it: x.it, kind: x.kind, done: false, late: false, tries: 0, typed: '' }));
   $('setName').textContent = LABEL[MODE] + ' · Set ' + (k + 1);
   $('nAll').textContent = CELLS.length;

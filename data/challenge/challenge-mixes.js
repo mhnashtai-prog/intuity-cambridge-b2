@@ -112,7 +112,7 @@
       const h = a.getAttribute('href') || '';
       if (/tenses-rules/.test(h) && topic.rules) a.setAttribute('href', h.replace('tenses-rules', topic.rules));
       else if (/tenses-(defuse|forge)/.test(h)) a.setAttribute('href', h.split('?')[0] + '?topic=' + encodeURIComponent(topic.id));
-      else if (/boardgame\.html/.test(h)) a.setAttribute('href', '/skills/challenge/boardgame.html?topic=' + encodeURIComponent(topic.id));   /* Game */
+      else if (/\/boardgame(\.html)?(\?|#|$)/.test(h)) a.setAttribute('href', '/skills/challenge/boardgame.html?topic=' + encodeURIComponent(topic.id));   /* Game */
       else if (/challenge\.html\?board=1/.test(h)) a.setAttribute('href', '/skills/challenge/challenge.html?board=1&topic=' + encodeURIComponent(topic.id));   /* Board */
     });
   }
@@ -335,7 +335,7 @@
     document.querySelectorAll('.mode-selector a.mode-btn').forEach(function(a){
       var h = a.getAttribute('href') || '';
       if (/tenses-rules/.test(h)) a.setAttribute('href', h.replace('tenses-rules', RULES[id]));
-      else if (/boardgame\.html/.test(h)) a.setAttribute('href', '/skills/challenge/boardgame.html?topic=' + encodeURIComponent(id));
+      else if (/\/boardgame(\.html)?(\?|#|$)/.test(h)) a.setAttribute('href', '/skills/challenge/boardgame.html?topic=' + encodeURIComponent(id));
       else if (/challenge\.html\?board=1/.test(h)) a.setAttribute('href', '/skills/challenge/challenge.html?board=1&topic=' + encodeURIComponent(id));
     });
   }

@@ -70,9 +70,15 @@ body{background:#ECE9E3}
 
 @media(max-width:860px){
   .stage{grid-template-columns:1fr;gap:.9rem}
+  .photo{max-height:30vh}
+  .ask{font-size:17px}
+  .centre{gap:.55rem}
+  .spot{padding:.75rem .9rem}
+  .spot .say{font-size:16px}
   .centre{order:-1}
   .col{display:grid;grid-template-columns:1fr 1fr;gap:.55rem}
   .card{padding:.6rem .7rem}.ph{font-size:14px}.ex{font-size:12px}
+  .col .ck{letter-spacing:.08em;font-size:10px;white-space:nowrap}
   .spot{min-height:6.4rem}
 }
 @media (prefers-reduced-motion:reduce){ .spot .w,.fly{transition:none} .spot .w.pw.on{animation:none} .speaking .wave i{animation:none;height:10px} }
@@ -184,7 +190,57 @@ body{background:#ECE9E3}
     });
   }
 
+  /* ONE TRACK. A phone only lets a page start sound from a tap, so the
+     lines are one recording (full.mp3), started by the tap, and everything
+     — words, phrases, flights — follows that one clock. */
+  let A = null;
+  function listenTrack(){
+    const me = ++run, F = T.full, ids = D.lines.map(l => l.id);
+    cards.forEach(c => c.classList.remove('in','now')); $('watch').textContent = '↻ Listen again';
+    if(!A){ A = new Audio('/audio/drills/' + ID + '/' + F.file); A.preload = 'auto';
+      A.addEventListener('playing', () => voiceOn(true)); A.addEventListener('pause', () => voiceOn(false)); A.addEventListener('ended', () => voiceOn(false)); }
+    A.pause(); A.currentTime = 0;
+    let cur = -1, k = -1, flown = -1;
+    const kOf = i => D.lines.slice(0, i + 1).filter(l => l.card).length - 1;
+    const enter = i => {
+      const line = D.lines[i], els = stage(line, kOf(i)), t = T.lines[line.id] || {};
+      const t0 = F.starts[line.id];
+      const ph = first => els.forEach(e => { if(e.classList.contains('pw')) e.classList.add('on'); });
+      /* words follow the track: each frame shows what has been said by now */
+      const pre = els.findIndex(e => e.classList.contains('pw'));
+      return { line, els, t0, phrase: t0 + (t.phrase || 0), end: t0 + (t.length || 3), pre };
+    };
+    let L = null;
+    const tick = () => {
+      if(me !== run) return;
+      const now = A.currentTime;
+      let i = -1; ids.forEach((id, n) => { if(now >= F.starts[id] - .05) i = n; });
+      /* the previous card flies once its line is over */
+      if(L && L.line.card && now >= L.end && flown < kOf(cur)){ flown = kOf(cur); flyTo(flown); }
+      if(i !== cur && i >= 0){ cur = i; L = enter(i); if(L.line.card) now_(-1); }
+      if(L){
+        const n = L.els.length, pre = L.pre < 0 ? n : L.pre;
+        L.els.forEach((e, j) => {
+          let at;
+          if(L.pre < 0) at = L.t0 + (j / n) * (L.end - L.t0) * .9;
+          else if(j < pre) at = L.t0 + (j / Math.max(1, pre)) * Math.max(0, L.phrase - L.t0 - .05);
+          else if(e.classList.contains('pw')) at = L.phrase;
+          else { const last = L.els.length - 1, firstAfter = L.els.findIndex((x, m) => m > pre && !x.classList.contains('pw'));
+                 const span = Math.max(.4, (L.end - L.phrase) * .92 - .35), r = j - firstAfter, tot = Math.max(1, last - firstAfter + 1);
+                 at = L.phrase + .35 + (r / tot) * span; }
+          if(now >= at) e.classList.add('on');
+        });
+      }
+      if(!A.ended) requestAnimationFrame(tick);
+      else { if(L) L.els.forEach(e => e.classList.add('on')); now_(-1); }
+    };
+    const go = A.play(); if(go && go.catch) go.catch(() => {});
+    requestAnimationFrame(tick);
+  }
+  function now_(k){ now(k); }
+
   async function listen(){
+    if(T && T.full){ listenTrack(); return; }
     const me = ++run; if('speechSynthesis' in window) speechSynthesis.cancel();
     cards.forEach(c => c.classList.remove('in','now')); $('watch').textContent = '↻ Listen again';
     let k = -1;

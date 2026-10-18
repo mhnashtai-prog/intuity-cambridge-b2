@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Be2FIRST — Drill Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@400..600&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+/* ═══ DRILL STUDIO ═══
+   A teacher's tool, like Voice Studio. Records a drill's lines in one
+   ElevenLabs voice, asks ElevenLabs for the timing of every character, and
+   works out the second each line's phrase begins, so the drill's cards can
+   arrive exactly as the phrase is spoken. Hands back one zip:
+     drills/<id>/<line>.mp3 … and drills/<id>/timings.json
+   The API key stays in this tab and goes only to api.elevenlabs.io. */
+:root{--paper:#F3F1EC;--card:#FAF8F5;--ink:#14110E;--quiet:#5C5852;--faint:#8A8378;--rule:rgba(20,17,14,.12);--caramel:#A9774A;--sage:#527065;--bad:#B3261E}
+*{box-sizing:border-box}html,body{background:var(--paper);margin:0}
+body{color:var(--ink);font-family:'Geist',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:46rem;margin:0 auto;padding:28px 16px 64px}
+h1{font:700 1.9rem/1 'Space Grotesk',system-ui,sans-serif;letter-spacing:-.03em;margin:6px 0 0}
+.kick{font:500 11px/1 'Geist Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--caramel)}
+.lede{color:var(--quiet);line-height:1.5;margin:6px 0 22px}
+section{background:var(--card);border:1px solid var(--rule);border-radius:14px;padding:18px 18px 16px;margin-bottom:14px}
+section.off{opacity:.45;pointer-events:none}
+h2{display:flex;align-items:center;gap:10px;font-size:1.05rem;margin:0 0 10px}
+h2 .n{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--ink);color:var(--card);font:600 13px/1 'Geist Mono',monospace}
+h2 .ok{margin-left:auto;font:500 12px/1 'Geist Mono',monospace;color:var(--sage)}
+p.hint{font-size:.88rem;color:var(--quiet);line-height:1.5;margin:0 0 12px}
+input,select{font:inherit;font-size:.95rem;width:100%;min-height:42px;padding:8px 12px;border:1px solid var(--rule);border-radius:10px;background:#fff;color:var(--ink)}
+.row{display:flex;gap:10px;align-items:center}.row > *{flex:1}
+button{font:600 .95rem/1 'Geist',system-ui,sans-serif;min-height:44px;padding:0 18px;border-radius:999px;cursor:pointer;border:1.5px solid var(--ink);background:transparent;color:var(--ink);flex:none}
+button.dark{background:var(--ink);color:var(--card)}button:disabled{opacity:.4;cursor:default}
+.lines{font-size:.9rem;line-height:1.45;margin:10px 0 0;padding-left:1.2rem;color:var(--quiet)}
+.lines i{font-style:normal;font-weight:700;color:var(--ink)}
+.lines li.done::marker{content:'✓  ';color:var(--sage)}
+.sum{font:500 13px/1.5 'Geist Mono',monospace;color:var(--quiet);background:#F1ECE3;border-radius:10px;padding:10px 12px;margin-top:10px}
+.sum b{color:var(--ink)}
+audio{width:100%;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="kick">Be2FIRST · teacher tool</span>
+  <h1>Drill Studio</h1>
+  <p class="lede">Records a drill's lines in your presenter's voice, with the exact moment each phrase is spoken, and gives you one zip to send back. Nothing here is seen by students.</p>
+
+  <section>
+    <h2><span class="n">1</span>Your ElevenLabs key<span class="ok" id="ok1"></span></h2>
+    <p class="hint">The same key as Voice Studio. It stays in this browser tab and is sent only to ElevenLabs.</p>
+    <div class="row"><input type="password" id="key" autocomplete="new-password" placeholder="sk_…" spellcheck="false"><button class="dark" id="connect" type="button">Connect</button></div>
+  </section>
+
+  <section id="s2" class="off">
+    <h2><span class="n">2</span>The drill and the presenter's voice<span class="ok" id="ok2"></span></h2>
+    <div class="row" style="margin-bottom:10px"><select id="drill"></select></div>
+    <div class="row"><select id="voice"></select><button id="hear" type="button">▶</button></div>
+    <ol class="lines" id="lines"></ol>
+    <div class="sum" id="sum"></div>
+  </section>
+
+  <section id="s3" class="off">
+    <h2><span class="n">3</span>Record and download<span class="ok" id="ok3"></span></h2>
+    <p class="hint">Record once, listen to a line below, and only then download. Pressing Record again re-records everything (and uses the characters again).</p>
+    <div class="row"><button class="dark" id="go" type="button">Record</button><button id="dl" type="button" disabled>Download zip</button></div>
+    <div class="sum" id="prog">Ready.</div>
+    <audio id="player" controls hidden></audio>
+  </section>
+</div>
+<script>
+(function(){
+  const API = 'https://api.elevenlabs.io/v1', MODEL = 'eleven_multilingual_v2', FORMAT = 'mp3_44100_128';
+  const $ = id => document.getElementById(id);
+  const strip = h => String(h).replace(/<[^>]+>/g,'');
+  let KEY = '', VOICES = [], D = null, files = {}, timings = {};
+  const store = (k,v) => { try{ sessionStorage.setItem('be2ds.'+k, JSON.stringify(v)); }catch(e){} };
+  const load = (k,d) => { try{ const r = sessionStorage.getItem('be2ds.'+k); return r ? JSON.parse(r) : d; }catch(e){ return d; } };
+
+  fetch('/data/drills/index.json',{cache:'no-cache'}).then(r=>r.json()).then(ix=>{
+    $('drill').innerHTML = ix.drills.map(id=>'<option value="'+id+'">'+id+'</option>').join('');
+    $('drill').onchange = loadDrill; loadDrill();
+  });
+  function loadDrill(){
+    files = {}; timings = {}; $('dl').disabled = true;
+    fetch('/data/drills/'+$('drill').value+'.json',{cache:'no-cache'}).then(r=>r.json()).then(d=>{
+      D = d;
+      $('lines').innerHTML = d.lines.map(l=>'<li data-id="'+l.id+'">'+l.text+'</li>').join('');
+      const ch = d.lines.reduce((a,l)=>a+strip(l.text).length,0);
+      $('sum').innerHTML = '<b>'+d.lines.length+'</b> lines · <b>'+ch+'</b> characters from your allowance · presenter: <b>'+(d.presenter||'—')+'</b>';
+    });
+  }
+
+  $('key').value = load('key','');
+  $('connect').onclick = () => {
+    KEY = $('key').value.trim(); if(!KEY) return; $('ok1').textContent = 'connecting…';
+    fetch(API+'/voices',{headers:{'xi-api-key':KEY}}).then(r=>{
+      if(r.ok) return r.json();
+      return r.text().then(t=>{ if(/permission/i.test(t)) return {voices:[]}; throw new Error(r.status===401?'That key was not accepted.':'ElevenLabs answered '+r.status); });
+    }).then(d=>{
+      VOICES = (d.voices||[]).map(v=>({id:v.voice_id,name:v.name,preview:v.preview_url,labels:v.labels||{}})).sort((a,b)=>a.name.localeCompare(b.name));
+      store('key',KEY); $('ok1').textContent = '✓ connected';
+      const pick = load('voice','');
+      $('voice').innerHTML = '<option value="">Choose the presenter\'s voice…</option>' +
+        VOICES.map(v=>'<option value="'+v.id+'"'+(v.id===pick?' selected':'')+'>'+v.name+([v.labels.gender,v.labels.accent].filter(Boolean).length?' — '+[v.labels.gender,v.labels.accent].filter(Boolean).join(', '):'')+'</option>').join('') +
+        '<option value="__id">Paste a voice ID from the Voice Library…</option>';
+      $('s2').classList.remove('off'); voiceSet();
+    }).catch(e=>{ $('ok1').textContent=''; alert(e.message); });
+  };
+  function voiceSet(){ const v = $('voice').value; $('s3').classList.toggle('off', !v || v==='__id'); $('ok2').textContent = v && v!=='__id' ? '✓' : ''; }
+  $('voice').onchange = () => {
+    if($('voice').value === '__id'){
+      const id = (prompt('Paste the voice ID (the part after voiceId= in the Voice Library address).')||'').trim().replace(/^.*voiceId=/,'').replace(/[^A-Za-z0-9].*$/,'');
+      if(id){ $('voice').insertAdjacentHTML('beforeend','<option value="'+id+'">Voice '+id+'</option>'); $('voice').value = id; } else $('voice').value = '';
+    }
+    store('voice',$('voice').value); voiceSet();
+  };
+  $('hear').onclick = () => { const v = VOICES.find(x=>x.id===$('voice').value); if(v&&v.preview) new Audio(v.preview).play(); };
+
+  /* one line, with the time of every character; the phrase is the first <i>…</i> */
+  async function record(line){
+    const text = strip(line.text);
+    const r = await fetch(API+'/text-to-speech/'+$('voice').value+'/with-timestamps?output_format='+FORMAT,{
+      method:'POST', headers:{'xi-api-key':KEY,'Content-Type':'application/json'},
+      body:JSON.stringify({text, model_id:MODEL, voice_settings:{stability:.45, similarity_boost:.75, style:.25}})
+    });
+    if(!r.ok){ const t = await r.text(); throw new Error(r.status+' '+t.slice(0,160)); }
+    const j = await r.json();
+    const bin = atob(j.audio_base64), buf = new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) buf[i] = bin.charCodeAt(i);
+    const al = j.alignment || j.normalized_alignment || {};
+    const starts = al.character_start_times_seconds || [], ends = al.character_end_times_seconds || [];
+    const at = line.text.indexOf('<i>') >= 0 ? strip(line.text.split('<i>')[0]).length : 0;
+    return { blob: new Blob([buf],{type:'audio/mpeg'}), phrase: +(starts[at] || 0).toFixed(2), length: +(ends[ends.length-1] || 0).toFixed(2) };
+  }
+  $('go').onclick = async () => {
+    const ch = D.lines.reduce((a,l)=>a+strip(l.text).length,0);
+    if(!confirm('Record '+D.lines.length+' lines? About '+ch+' characters of your allowance.')) return;
+    $('go').disabled = true; files = {}; timings = {}; let done = 0;
+    for(const l of D.lines){
+      $('prog').innerHTML = 'Recording <b>'+(done+1)+'</b> / '+D.lines.length+'…';
+      for(let tries=0;;tries++){
+        try{ const r = await record(l); files[l.id] = r.blob; timings[l.id] = {phrase:r.phrase, length:r.length}; break; }
+        catch(e){ if(/^4(29|09)/.test(e.message) && tries<6){ await new Promise(s=>setTimeout(s,2500*(tries+1))); continue; }
+          $('prog').innerHTML = '✗ '+l.id+': '+e.message; $('go').disabled = false; return; }
+      }
+      done++; const li = document.querySelector('[data-id="'+l.id+'"]'); if(li) li.classList.add('done');
+    }
+    $('prog').innerHTML = '<b>'+done+'</b> lines recorded. Tap a line above to hear it, then download.';
+    $('ok3').textContent = '✓ recorded'; $('dl').disabled = false; $('go').disabled = false;
+    document.querySelectorAll('[data-id]').forEach(li => li.onclick = () => { const p = $('player'); p.hidden = false; p.src = URL.createObjectURL(files[li.dataset.id]); p.play(); });
+  };
+  $('dl').onclick = async () => {
+    const zip = new JSZip(), dir = zip.folder('drills').folder(D.id);
+    Object.keys(files).forEach(id => dir.file(id+'.mp3', files[id]));
+    dir.file('timings.json', JSON.stringify({ drill:D.id, voice:$('voice').value, made:new Date().toISOString().slice(0,10), lines:timings }, null, 1));
+    const blob = await zip.generateAsync({type:'blob'}), a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'be2first-drill-'+D.id+'.zip'; document.body.appendChild(a); a.click(); a.remove();
+    $('prog').innerHTML = 'Zip saved. Attach it in the chat with Claude.';
+  };
+})();
+</script>
+</body>
+</html>

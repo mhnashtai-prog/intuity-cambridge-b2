@@ -162,4 +162,18 @@ if (window.ResizeObserver) {
   new ResizeObserver(sync).observe(newTop);
   new ResizeObserver(sync).observe(newFoot);
 }
+
+/* A filter row that slides (phones) keeps its chosen tab in view: pages
+   build their rows after loading, so watch them and centre the active one
+   inside its own row, never scrolling the page. */
+function centreActive(row) {
+  if (row.scrollWidth <= row.clientWidth + 2) return;
+  var on = row.querySelector('.active, .on, [aria-selected="true"]');
+  if (on) row.scrollLeft = on.offsetLeft - (row.clientWidth - on.offsetWidth) / 2;
+}
+Array.prototype.forEach.call(document.querySelectorAll('.wr-filters'), function (row) {
+  centreActive(row);
+  if (window.MutationObserver) new MutationObserver(function () { centreActive(row); })
+    .observe(row, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'aria-selected'] });
+});
 })();

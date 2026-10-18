@@ -98,12 +98,13 @@ function loadData() {
 }
 
 /* ═══ MEET THE WORDS ════════════════════════════════════════════════════
-   Teach before testing. Each set opens with the meaning of every word in the
-   sense the sentences use, so the gaps test a choice the student has been
-   given the means to make, not a guess. The panel stays open until the
-   student scores 75% or more on that test; after that it folds away (still
-   one tap from open) — the scaffold comes down once it has done its job.
-   Meanings live beside the data: meanings-<data>.json, keyed set → word. */
+   The meaning of every word in the sense the sentences use. It used to sit
+   open between the words and the sentences, which pushed the sentences down
+   out of sight of the words. Now the gap-fill stays classic, and a very
+   small "Meanings" pill at the end of the words opens the list as a
+   floating card over the sentences, for whoever wants it; a tap anywhere
+   else, or Esc, puts it away. Meanings live beside the data:
+   meanings-<data>.json, keyed set → word. */
 var MEANINGS = null;
 function loadMeanings() {
   fetch('/data/similar-words/meanings-' + CFG.data + '.json')
@@ -114,23 +115,41 @@ function loadMeanings() {
 function meetHTML(set) {
   var m = MEANINGS && MEANINGS[String(set.setNumber)];
   if (!m) return '';
-  var s = scores['test' + currentTest];
-  var mastered = s && s.percentage >= 75;
   var rows = set.words.map(function (w) {
     return m[w] ? '<div class="meet-row"><b>' + esc(w) + '</b><span>' + esc(m[w]) + '</span></div>' : '';
   }).join('');
-  return '<details class="meet"' + (mastered || isChecked ? '' : ' open') + '>' +
-    '<summary>Meet the words</summary><div class="meet-list">' + rows + '</div></details>';
+  return '<button class="meet-pill" type="button" aria-expanded="false">Meanings</button>' +
+    '<div class="meet-pop" role="dialog" aria-label="Meanings" hidden>' + rows + '</div>';
 }
+function closeMeet(except) {
+  document.querySelectorAll('.meet-pop').forEach(function (p) {
+    if (p === except) return;
+    p.hidden = true;
+    var b = p.previousElementSibling; if (b) b.setAttribute('aria-expanded', 'false');
+  });
+}
+document.addEventListener('click', function (e) {
+  var pill = e.target.closest && e.target.closest('.meet-pill');
+  if (pill) {
+    var pop = pill.nextElementSibling, open = pop.hidden;
+    closeMeet(pop); pop.hidden = !open; pill.setAttribute('aria-expanded', String(open));
+    return;
+  }
+  if (!(e.target.closest && e.target.closest('.meet-pop'))) closeMeet();
+});
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMeet(); });
 (function () {
   var st = document.createElement('style');
   st.textContent =
-    '.meet{margin:.2rem 0 .9rem;border-top:1px solid var(--rule,rgba(20,17,14,.12));padding-top:.55rem}' +
-    '.meet summary{cursor:pointer;list-style:none;font:500 .6875rem/1 var(--f-mono,ui-monospace,monospace);' +
-      'letter-spacing:.12em;text-transform:uppercase;color:var(--faint,#8A8378);padding:.35rem 0}' +
-    '.meet summary::-webkit-details-marker{display:none}' +
-    '.meet summary::after{content:" +";}' + '.meet[open] summary::after{content:" −";}' +
-    '.meet-list{display:grid;gap:.4rem;margin-top:.35rem}' +
+    '.pool{position:relative}' +
+    '.meet-pill{align-self:center;margin-left:auto;border:0;cursor:pointer;border-radius:999px;' +
+      'padding:.28rem .62rem;background:transparent;box-shadow:inset 0 0 0 1px rgba(20,17,14,.18);' +
+      'font:500 .625rem/1 var(--f-mono,ui-monospace,monospace);letter-spacing:.12em;text-transform:uppercase;color:var(--faint,#8A8378)}' +
+    '.meet-pill[aria-expanded="true"]{background:#14110E;color:#F6F3EE;box-shadow:none}' +
+    '.meet-pop{position:absolute;left:0;right:0;top:calc(100% - .5rem);z-index:30;display:grid;gap:.45rem;' +
+      'padding:.85rem 1rem .95rem;background:var(--poster,#FAF8F5);border:1px solid rgba(20,17,14,.1);border-radius:10px;' +
+      'box-shadow:0 14px 34px rgba(20,17,14,.18)}' +
+    '.meet-pop[hidden]{display:none}' +
     '.meet-row{display:grid;grid-template-columns:minmax(5.5rem,max-content) 1fr;gap:.75rem;align-items:baseline;' +
       'font-size:.9rem;line-height:1.35}' +
     '.meet-row b{font-weight:600;color:var(--ink,#14110E)}' +
@@ -212,8 +231,7 @@ function cardHTML(set, si) {
   }).join('');
   return '<div class="poster">' +
     '<div class="poster-kick"><i></i>' + esc(kick) + '</div>' + head +
-    '<div class="pool">' + pool + '</div>' +
-    meetHTML(set) +
+    '<div class="pool">' + pool + meetHTML(set) + '</div>' +
     '<div class="lines">' + lines + '</div>' +
   '</div>';
 }

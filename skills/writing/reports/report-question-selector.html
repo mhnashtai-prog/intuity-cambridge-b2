@@ -69,7 +69,27 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 @keyframes hintFade{0%{opacity:1}80%{opacity:1}100%{opacity:0}}
 
 .loading-msg{font-family:'Geist', sans-serif;font-size:0.85rem;font-weight:700;color:rgba(0,0,0,0.25);letter-spacing:0.12em;text-transform:uppercase}
+.stage #parade{width:100%;align-self:flex-start}
+.stage{padding-top:.4rem}
+/* the parade's columns: the type in Anton, the question, what to cover */
+.pa .kp-list{display:flex;flex-direction:column;gap:.55rem;margin-top:.6rem}
+.pa .kp-item{display:flex;align-items:flex-start;gap:.55rem;font-size:clamp(14px,3.9vw,16px);font-weight:500;line-height:1.4;color:var(--pa-body)}
+.pa .kp-arrow{flex-shrink:0;width:16px;height:16px;margin-top:.1rem;color:var(--caramel,#B0865C);opacity:.8}
+.pa-sub{display:block;margin-top:14px;font:600 .625rem/1 var(--f-mono,'Geist Mono',monospace);letter-spacing:.18em;text-transform:uppercase;color:var(--pa-faint)}
+.pa-note{display:block;margin-top:12px;font-size:13px;font-style:italic;color:var(--pa-body)}
+.pa-open{display:block;margin-top:12px;padding:10px 12px;background:rgba(20,17,14,.05);font-size:14px;line-height:1.45}
+.pa-open b{display:block;font:600 .625rem/1.4 var(--f-mono,'Geist Mono',monospace);letter-spacing:.16em;text-transform:uppercase;color:var(--pa-faint);margin-bottom:4px}
+.pa-lock{display:flex;align-items:center;gap:8px;margin-top:10px;font:600 11px/1.3 var(--f-mono,'Geist Mono',monospace);letter-spacing:.06em;text-transform:uppercase;color:var(--pa-ink)}
+.pa-lock i{font-style:normal;color:var(--pa-faint)}
+/* on a phone the filters are one line that slides, not several that wrap */
+@media(max-width:700px){
+  .wr-filters.filter-bar{flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;scrollbar-width:none;max-width:100%;
+    padding:0 1rem;-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent)}
+  .wr-filters.filter-bar::-webkit-scrollbar{display:none}
+}
 </style>
+<link rel="stylesheet" href="/tools/parade.css?v=3">
+<script src="/tools/parade.js?v=2"></script>
 <script src="/tools/be2-brand.js?v=20261012c"></script>
 </head>
 <body data-writing="reports" data-stage="question">
@@ -85,7 +105,6 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 
   <div class="stage" id="stage">
     <div class="loading-msg" id="loadingMsg">Loading…</div>
-    <div class="swipe-hint" id="swipeHint">swipe to browse</div>
   </div>
 
   <div class="foot">
@@ -144,6 +163,7 @@ function buildFilterBar(){
   const bar = document.getElementById('filterBar');
   bar.innerHTML = FILTERS.map(f=>{
     const count = f==='all' ? allQs.length : allQs.filter(q=>(Q_TO_TYPE[q.id]||'')===f).length;
+    if(!count&&f!=='all') return '';
     const label = f==='all' ? `All (${count})` : `${TYPE_LABEL[f]} (${count})`;
     return `<button class="ftab ${f===activeFilter?'active':''}" onclick="applyFilter('${f}')">${label}</button>`;
   }).join('');
@@ -158,84 +178,28 @@ function applyFilter(f){
 }
 
 // ══════════════════════════════════════════
-// BUILD CARD
+// THE PARADE: the questions as columns (tools/parade.js); the centre one
+// is the chosen question, and its pill opens the plan for it
 // ══════════════════════════════════════════
-function buildCard(q, idx, total){
-  const type  = Q_TO_TYPE[q.id] || 'report';
-  const typeLabel = TYPE_LABEL[type] || 'Report';
-  const points = q.keyPoints || [];
-
-  const el = document.createElement('div');
-  el.className = 'poster';
-
-  el.innerHTML = `
-    <div class="poster-kick"><i></i><span>${String(idx+1).padStart(2,'0')} · Write a formal report · ${typeLabel}</span></div>
-    <div class="poster-scroll">
-      <h3 class="poster-head">${q.question}</h3>
-      <hr class="poster-rule">
-      <div class="poster-sub">Your report should cover</div>
-      <div class="kp-list">
-        ${points.map(p=>`
-          <div class="kp-item">
-            <svg class="kp-arrow" width="16" height="16" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span>${p}</span>
-          </div>`).join('')}
-      </div>
-    </div>
-    <div class="poster-foot">
-      <button class="poster-nav-btn" id="btnPrev" onclick="go(-1)" ${idx===0?'disabled':''}><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 3L5 7L9 11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-      <span class="poster-counter">${idx+1} / ${total}</span>
-      <button class="poster-nav-btn" id="btnNext" onclick="go(1)" ${idx===total-1?'disabled':''}><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-    </div>
-  `;
-  return el;
-}
-
-// ══════════════════════════════════════════
-// SHOW CARD
-// ══════════════════════════════════════════
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+const ARROW='<svg class="kp-arrow" width="16" height="16" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const pts=a=>'<span class="kp-list">'+(a||[]).map(p=>'<span class="kp-item">'+ARROW+'<span>'+p+'</span></span>').join('')+'</span>';
 function showCard(idx){
   current = Math.max(0, Math.min(idx, filteredQs.length-1));
-  const stage = document.getElementById('stage');
-
-  // Remove old poster if any
-  const old = stage.querySelector('.poster');
-  if(old) old.remove();
-
-  const q = filteredQs[current];
-  if(!q) return;
-
-  const card = buildCard(q, current, filteredQs.length);
-  stage.appendChild(card);
-
-  // Save to session for other pages
+  if(!document.getElementById('parade')) document.getElementById('stage').insertAdjacentHTML('beforeend','<section id="parade" aria-label="Choose a question"></section>');
+  Parade.mount(document.getElementById('parade'),{ label:'<b>Reports</b> · Choose a question to plan', aria:'Report questions',
+    items:filteredQs.map((q,i)=>({ kicker:String(i+1).padStart(2,'0')+' · Write a formal report', title:TYPE_LABEL[Q_TO_TYPE[q.id]]||'Report',
+      html:'<span class="pa-lead">'+q.question+'</span><span class="pa-sub">Your report should cover</span>'+pts(q.keyPoints),
+      meta:'<b>140–190</b> words' })),
+    action:'Plan it', start:current, onCentre:i=>choose(i), onOpen:i=>{ choose(i); navTo('plan'); } });
+  choose(current);
+}
+function choose(i){
+  current=i; const q=filteredQs[i]; if(!q) return;
   sessionStorage.setItem('currentReportQuestion', JSON.stringify({
-    id: q.id,
-    mainQuestion: q.question,
-    context: q.context||'',
-    writingPoints: q.keyPoints||[]
+    id: q.id, mainQuestion: q.question, context: q.context||'', writingPoints: q.keyPoints||[]
   }));
 }
-
-function go(dir){
-  const next = current + dir;
-  if(next < 0 || next >= filteredQs.length) return;
-  showCard(next);
-}
-
-// ══════════════════════════════════════════
-// SWIPE & KEYBOARD
-// ══════════════════════════════════════════
-document.addEventListener('touchstart',e=>{touchStartX=e.touches[0].clientX;},{passive:true});
-document.addEventListener('touchend',e=>{
-  const dx=e.changedTouches[0].clientX-touchStartX;
-  if(dx < -55) go(1);
-  if(dx >  55) go(-1);
-},{passive:true});
-document.addEventListener('keydown',e=>{
-  if(e.key==='ArrowRight') go(1);
-  if(e.key==='ArrowLeft')  go(-1);
-});
 
 // ══════════════════════════════════════════
 // NAVIGATION

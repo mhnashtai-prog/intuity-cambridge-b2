@@ -58,8 +58,24 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 
 .swipe-hint{position:absolute;bottom:1.2rem;left:50%;transform:translateX(-50%);font-size:0.6875rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(0,0,0,0.18);pointer-events:none;animation:hintFade 3.5s ease 1.5s forwards;white-space:nowrap}
 @keyframes hintFade{0%{opacity:1}80%{opacity:1}100%{opacity:0}}
+.stage #parade{width:100%;align-self:flex-start}
+.stage{padding-top:.4rem}
+/* on a phone the essay types are one line that slides, not five that
+   wrap: the strip below is what needs the height */
+@media(max-width:700px){
+  .wr-filters.filter-bar{flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;scrollbar-width:none;max-width:100%;
+    padding:0 1rem;-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent)}
+  .wr-filters.filter-bar::-webkit-scrollbar{display:none}
+}
+/* the parade's columns, for an essay question: the type in Anton, the
+   question, then what the essay should cover */
+.pa .kp-list{margin-top:.6rem}
+.pa .kp-item{font-size:clamp(14px,3.9vw,16px)}
+.pa-sub{display:block;margin-top:14px;font:600 .625rem/1 var(--f-mono);letter-spacing:.18em;text-transform:uppercase;color:var(--pa-faint)}
 .loading-msg{font-family:'Geist', sans-serif;font-size:0.85rem;font-weight:700;color:rgba(0,0,0,0.25);letter-spacing:0.12em;text-transform:uppercase}
 </style>
+<link rel="stylesheet" href="/tools/parade.css?v=3">
+<script src="/tools/parade.js?v=2"></script>
 <script src="/tools/be2-brand.js?v=20261012c"></script>
 </head>
 <body data-writing="essays" data-stage="question">
@@ -72,7 +88,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
   <div class="filter-bar" id="filterBar"></div>
   <div class="stage" id="stage">
     <div class="loading-msg" id="loadingMsg">Loading…</div>
-    <div class="swipe-hint">swipe to browse</div>
+    <section id="parade" aria-label="Choose a question"></section>
   </div>
   <div class="foot">
     <div class="nav-pill">
@@ -91,6 +107,7 @@ let allQs=[],filteredQs=[],current=0,activeFilter='all',touchStartX=0;
 function buildFilterBar(){
   document.getElementById('filterBar').innerHTML=FILTERS.map(f=>{
     const count=f==='all'?allQs.length:allQs.filter(q=>(q.essayType||q.type||'')===f).length;
+    if(!count) return '';   /* an empty type is not a choice */
     const label=f==='all'?`All (${count})`:`${TYPE_LABEL[f]||f} (${count})`;
     return `<button class="ftab ${f===activeFilter?'active':''}" onclick="applyFilter('${f}')">${label}</button>`;
   }).join('');
@@ -103,36 +120,34 @@ function applyFilter(f){
   if(filteredQs.length)showCard(0);
 }
 
-function buildCard(q,idx,total){
-  const typeLabel=TYPE_LABEL[q.essayType||q.type||'']||'Essay';
-  const points=q.writingPoints||[];
-  const el=document.createElement('div');
-  el.className='poster';
-  el.innerHTML=`
-    <div class="poster-kick"><i></i><span>${String(idx+1).padStart(2,'0')} · Write a formal essay · ${typeLabel}</span></div>
-    <div class="poster-scroll">
-      <h3 class="poster-head">${q.mainQuestion}</h3>
-      <hr class="poster-rule">
-      <div class="poster-sub">Your essay should cover</div>
-      <div class="kp-list">${points.map(p=>`<div class="kp-item"><svg class="kp-arrow" width="16" height="16" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${p}</span></div>`).join('')}</div>
-    </div>
-    <div class="poster-foot">
-      <button class="poster-nav-btn" onclick="go(-1)" ${idx===0?'disabled':''}><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 3L5 7L9 11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-      <span class="poster-counter">${idx+1} / ${total}</span>
-      <button class="poster-nav-btn" onclick="go(1)" ${idx===total-1?'disabled':''}><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-    </div>`;
-  return el;
-}
-
+/* ══ THE PARADE ══════════════════════════════════════════════════════
+   The questions stand side by side as columns (tools/parade.js): the next
+   one peeks in from the edge, a hairline between them. Whichever is in the
+   centre is the chosen question — Plan, Model and Sample below follow it —
+   and its pill, "Plan it", opens the plan for it. */
+const ARROW='<svg class="kp-arrow" width="16" height="16" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function showCard(idx){
   current=Math.max(0,Math.min(idx,filteredQs.length-1));
-  const stage=document.getElementById('stage');
-  const old=stage.querySelector('.poster');
-  if(old)old.remove();
-  const q=filteredQs[current];
-  if(!q)return;
-  stage.appendChild(buildCard(q,current,filteredQs.length));
-  /* write all sessionStorage keys the chain needs */
+  Parade.mount(document.getElementById('parade'),{
+    label:'<b>Essays</b> · Choose a question to plan', aria:'Essay questions',
+    items:filteredQs.map((q,i)=>({
+      kicker:String(i+1).padStart(2,'0')+' · Write a formal essay',
+      title:TYPE_LABEL[q.essayType||q.type||'']||'Essay',
+      html:'<span class="pa-lead">'+q.mainQuestion+'</span>'+
+        '<span class="pa-sub">Your essay should cover</span>'+
+        '<span class="kp-list">'+(q.writingPoints||[]).map(p=>'<span class="kp-item">'+ARROW+'<span>'+p+'</span></span>').join('')+'</span>',
+      meta:'<b>140–190</b> words'
+    })),
+    action:'Plan it', hint:'Swipe to see more.', start:current,
+    onCentre:i=>choose(i),
+    onOpen:i=>{ choose(i); navTo('plan'); }
+  });
+  choose(current);
+}
+/* the centre question is the chosen one: write every key the chain reads */
+function choose(i){
+  current=i; const q=filteredQs[i]; if(!q) return;
   sessionStorage.setItem('currentQuestion',JSON.stringify({
     id:        q.id,
     questionId:q.id,   /* canonical key used by essay-sample.html */
@@ -144,23 +159,6 @@ function showCard(idx){
   sessionStorage.setItem('currentEssayId',      q.id);
   sessionStorage.setItem('currentEssayQuestion', q.mainQuestion);
 }
-
-function go(dir){
-  const n=current+dir;
-  if(n<0||n>=filteredQs.length)return;
-  showCard(n);
-}
-
-document.addEventListener('touchstart',e=>{touchStartX=e.touches[0].clientX;},{passive:true});
-document.addEventListener('touchend',e=>{
-  const dx=e.changedTouches[0].clientX-touchStartX;
-  if(dx<-55)go(1);
-  if(dx>55)go(-1);
-},{passive:true});
-document.addEventListener('keydown',e=>{
-  if(e.key==='ArrowRight')go(1);
-  if(e.key==='ArrowLeft')go(-1);
-});
 
 function navTo(dest){
   if(dest==='question')return;

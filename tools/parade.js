@@ -37,17 +37,20 @@
           '<span class="pa-go" aria-hidden="true">' + esc(it.action || o.action || 'Expand it') + ' <i>→</i></span></span>' +
           '</button>';
       }).join('') + '</div>' +
+      /* dots while they fit a phone; past ten, a counter */
+      (items.length > 10 ? '<p class="pa-count" aria-live="polite"><b></b> / ' + items.length + '</p>' :
       '<div class="pa-dots" role="tablist">' + items.map(function (it, i) {
         return '<button class="pa-dot" type="button" role="tab" data-i="' + i + '" aria-label="' + esc(it.title) + '"></button>';
-      }).join('') + '</div>' +
+      }).join('') + '</div>') +
       '<p class="pa-hint">' + esc(o.hint || 'Swipe to see more.') + '</p>';
 
-    var track = root.querySelector('.pa-track'), dots = root.querySelector('.pa-dots');
+    var track = root.querySelector('.pa-track'), dots = root.querySelector('.pa-dots') || { children: [] }, count = root.querySelector('.pa-count b');
     function cols() { return track.children; }
     function setCentre(i) {
       var was = si; si = i;
       Array.prototype.forEach.call(cols(), function (c, k) { c.classList.toggle('on', k === i); c.tabIndex = k === i ? 0 : -1; c.setAttribute('aria-selected', String(k === i)); });
       Array.prototype.forEach.call(dots.children, function (d, k) { d.classList.toggle('on', k === i); d.setAttribute('aria-selected', String(k === i)); });
+      if (count) count.textContent = i + 1;
       if (was !== i && o.onCentre) o.onCentre(i);
     }
     function goTo(i, instant) {
@@ -69,10 +72,14 @@
         if (bi !== si) setCentre(bi);
       });
     }, { passive: true });
-    root.addEventListener('keydown', function (e) {
+    /* mounting again on the same element (a filter changed) replaces the
+       keys, never stacks them */
+    if (root._paKeys) root.removeEventListener('keydown', root._paKeys);
+    root._paKeys = function (e) {
       if (e.key === 'ArrowRight' && si < items.length - 1) { e.preventDefault(); goTo(si + 1); }
       else if (e.key === 'ArrowLeft' && si > 0) { e.preventDefault(); goTo(si - 1); }
-    });
+    };
+    root.addEventListener('keydown', root._paKeys);
     setCentre(si);
     requestAnimationFrame(function () { goTo(si, true); });
     return {

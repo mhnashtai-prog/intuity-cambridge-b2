@@ -171,6 +171,19 @@ function centreActive(row) {
   var on = row.querySelector('.active, .on, [aria-selected="true"]');
   if (on) row.scrollLeft = on.offsetLeft - (row.clientWidth - on.offsetWidth) / 2;
 }
+/* Sample pages: the Full / Paragraphs switch joins the X-ray row, which
+   saves a whole line and pulls the text up. A toolbar left with nothing
+   in it folds away. */
+if (B.getAttribute('data-stage') === 'sample') {
+  var vt = document.querySelector('.card-toolbar .view-toggle'), xr = document.querySelector('.xray-row');
+  if (vt && xr) {
+    xr.appendChild(vt);
+    xr.classList.add('has-view');
+    var tb = document.querySelector('.card-toolbar');
+    if (tb && !tb.querySelector('button')) tb.style.display = 'none';
+  }
+}
+
 Array.prototype.forEach.call(document.querySelectorAll('.wr-filters'), function (row) {
   centreActive(row);
   if (window.MutationObserver) new MutationObserver(function () { centreActive(row); })

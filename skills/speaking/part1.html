@@ -140,6 +140,12 @@ button.mv{cursor:pointer}
 .frame .why-shape{font-size:.88rem;line-height:1.55;color:var(--dim);margin:.8rem 0 0;padding-left:.8rem;border-left:2px solid var(--rule)}
 
 /* deck navigation */
+.pa-q{display:block;font-size:clamp(15px,4.1vw,17px);line-height:1.45}
+/* the parade replaces the topic row; in the cinema the arrows still step */
+#topics{display:none}
+.cine-top{margin:.4rem 0 .2rem}
+body.parade .cine-top,body.parade .stage-row,body.parade #card,body.parade .deck-nav{display:none}
+body:not(.parade) #parade{display:none}
 .deck-nav{display:flex;align-items:center;justify-content:space-between;margin-top:.8rem}
 .arrow{font-size:1.1rem;line-height:1;color:var(--sentence);background:none;border:none;
   padding:.6rem .8rem;cursor:pointer;min-height:44px;min-width:44px;border-radius:var(--r-chip,4px)}
@@ -202,6 +208,8 @@ button.mv{cursor:pointer}
 }
 </style>
 <script src="/tools/be2-brand.js?v=20261012c"></script>
+<link rel="stylesheet" href="/tools/parade.css?v=2">
+<script src="/tools/parade.js?v=1"></script>
 <script src="/tools/be2-voice.js?v=20261013b"></script>
 <script src="/tools/intuity-overflow.js?v=3"></script>
 <script src="/tools/be2-focus-drill.js?v=20261016c" defer></script>
@@ -230,6 +238,10 @@ button.mv{cursor:pointer}
 </header>
 
 <main class="wrap">
+  <!-- THE PARADE: the topics as columns. A tap opens the page below as
+       the cinema; "All topics" (or the phone's back) returns here. -->
+  <section id="parade" aria-label="Choose a topic"></section>
+  <div class="cine-top"><button class="pa-back" id="toParade" type="button">← All topics</button></div>
   <div class="stage-row">
     <div class="seg" id="stages" role="tablist" aria-label="Stage">
       <button type="button" role="tab" data-s="explore" aria-selected="true">Explore</button>
@@ -570,6 +582,51 @@ function bank(){
 }
 function shutBank(){ $('sheet').classList.remove('open'); $('bankBtn').focus(); }
 
+/* ═══ PARADE ⇄ CINEMA ═════════════════════════════════════════════════
+   The strip (tools/parade.js) is where a student chooses; the card below
+   is the cinema. Opening pushes a history step, so the phone's back
+   button returns to the strip, as the "All topics" pill does. */
+var PA=null;
+function listHTML(qs,max){
+  var s='<span class="pa-list">'+qs.slice(0,max).map(function(q){ return '<span class="pa-li">'+esc(q)+'</span>'; }).join('');
+  if(qs.length>max) s+='<span class="pa-li more">+ '+(qs.length-max)+' more</span>';
+  return s+'</span>';
+}
+function showParade(){
+  stop(); document.body.classList.add('parade');
+  if(!PA) PA=Parade.mount($('parade'),{ label:'<b>Part 1</b> · Choose a topic to expand', aria:'Topics',
+    items:paradeItems(), start:paradeAt(), onOpen:function(k){ openCinema(k,true); } });
+  else PA.goTo(paradeAt(),true);
+  scrollTo(0,0);
+}
+function openCinema(k,push){
+  document.body.classList.remove('parade');
+  paradeOpen(k);
+  if(push){ try{ history.pushState({cine:1},'','?topic='+encodeURIComponent(paradeKey())); }catch(e){} }
+  scrollTo(0,0);
+}
+$('toParade').addEventListener('click',function(){
+  if(history.state&&history.state.cine&&history.length>1) history.back();
+  else { try{ history.replaceState(null,'',location.pathname); }catch(e){} showParade(); }
+});
+addEventListener('popstate',function(e){
+  if(e.state&&e.state.cine){ paradeFind(new URLSearchParams(location.search).get('topic')); document.body.classList.remove('parade'); draw(); scrollTo(0,0); }
+  else showParade();
+});
+
+/* Part 1: a column for each topic that is ready, its first questions */
+var PCH=[];
+function paradeItems(){
+  PCH=[]; return D.chapters.filter(function(ch,i){ if(ready(ch)){ PCH.push(i); return true; } return false; }).map(function(ch){
+    return { kicker:ch.cards.length+' questions', title:ch.tab,
+      html:listHTML(ch.cards.map(function(c){ return c.question; }),3),
+      meta:'<b>15–20</b> seconds an answer' }; });
+}
+function paradeAt(){ var k=PCH.indexOf(ci); return k<0?0:k; }
+function paradeOpen(k){ var c=PCH[k]; if(c!==ci) go(c,0,0); else draw(); }
+function paradeKey(){ return chapter().id; }
+function paradeFind(id){ D.chapters.forEach(function(c,i){ if(c.id===id&&ready(c)){ ci=i; qi=0; } }); chapters(); }
+
 /* ═══ ROUTING ══════════════════════════════════════════════════════════ */
 function draw(){
   head();
@@ -617,6 +674,7 @@ document.addEventListener('click',function(e){
   if(t.dataset.again){ quiz(); return; }
 });
 document.addEventListener('keydown',function(e){
+  if(document.body.classList.contains('parade')) return;   /* the strip has its own keys */
   if($('sheet').classList.contains('open')){ if(e.key==='Escape') shutBank(); return; }
   if(/INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
   if(e.key==='ArrowRight'){ e.preventDefault(); step(1); }
@@ -644,7 +702,10 @@ fetch('data/part1-answers.json?v=20261013').then(function(r){ if(!r.ok) throw ne
   cover=pref('cover')==='1'; xray=pref('xray')==='1'; $('card').classList.toggle('xray',xray);
   var ws=p.get('stage')||pref('stage'); stage=['explore','practice','quiz','talk'].indexOf(ws)>-1?ws:'explore';
   Array.prototype.forEach.call($('stages').children,function(b){ b.setAttribute('aria-selected',String(b.dataset.s===stage)); });
-  chapters(); draw();
+  chapters();
+  /* a link to one topic (?topic=…) opens its cinema; otherwise the strip */
+  if(p.get('topic')){ try{ history.replaceState({cine:1},''); }catch(e){} draw(); }
+  else showParade();
 }).catch(function(e){
   $('q').textContent='The questions didn\'t load.';
   $('body').innerHTML='<p class="dr-ctx">'+esc(e.message)+'. Check that data/part1-answers.json is the v3 file, then reload.</p>';

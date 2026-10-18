@@ -171,6 +171,27 @@ function centreActive(row) {
   var on = row.querySelector('.active, .on, [aria-selected="true"]');
   if (on) row.scrollLeft = on.offsetLeft - (row.clientWidth - on.offsetWidth) / 2;
 }
+/* Plan pages: the plan says WHAT to say, the Model says HOW. Where a plan
+   section leads with a language stem ("The documentary explores …",
+   "This report is based on"), the overview hides the stem and leads with
+   the student's first idea; the stem waits in the section's card, where
+   stem and ideas meet. Essays already lead with claims, and Email's
+   headings are the task's own content, so only Reviews and Reports. */
+if (B.getAttribute('data-stage') === 'plan' && /^(reviews|reports)$/.test(B.getAttribute('data-writing') || '')) {
+  var ELL = /(\u2026|\.\.\.)\s*$/;
+  var mark = function () {
+    Array.prototype.forEach.call(document.querySelectorAll('.keysview .key'), function (k) {
+      var idea = k.querySelector('.k-note-idea');
+      if (idea && ELL.test(idea.textContent) && k.querySelector('.k-suptext')) k.classList.add('stemmed');
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.keysview .ksig'), function (g) {
+      if (g.querySelectorAll('.ks-note').length > 1) g.classList.add('stemmed');
+    });
+  };
+  mark();
+  if (window.MutationObserver) new MutationObserver(mark).observe(B, { childList: true, subtree: true });
+}
+
 /* Sample pages: the Full / Paragraphs switch joins the X-ray row, which
    saves a whole line and pulls the text up. A toolbar left with nothing
    in it folds away. */

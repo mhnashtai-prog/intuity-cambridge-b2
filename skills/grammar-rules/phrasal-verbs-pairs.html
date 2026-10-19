@@ -464,6 +464,32 @@ let VERB_LIST = [], PART_LIST = [];
    this page with ?verb=<group id>. Without one we take the whole pool, so
    opening the file directly still works. */
 const WANT = new URLSearchParams(location.search).get('verb');
+let RAW = null;
+/* The deck for one family (or the whole mix), and the closed sets behind
+   the game, built from it so they cannot fall out of step. A family smaller
+   than a board falls back to the whole pool. */
+function buildPool(want){
+  const from = gs => { POOL = []; gs.forEach(g => (g.items||[]).forEach(it => {
+    if (!it.particle || !it.meaning) return;
+    POOL.push({ verb:String(it.verb || g.id).toLowerCase(),
+                particle:String(it.particle).toLowerCase(),
+                meaning:it.meaning, example:it.example || '' });
+  })); };
+  const all = RAW.groups || [];
+  from(all.filter(g => !want || g.id === want));
+  if (POOL.length < SIZE && want) from(all);
+  VERB_LIST = [...new Set(POOL.map(p => p.verb))].sort();
+  PART_LIST = [...new Set(POOL.map(p => p.particle))].sort();
+}
+/* THE HOST'S CHANNEL: a tap on the verb band arrives as a message once this
+   frame is running, so re-deal from the new family here. */
+window.addEventListener('message', e => {
+  if (e.source !== window.parent) return;
+  const msg = e.data;
+  if (!msg || msg.type !== 'intuity:set-verb' || !RAW) return;
+  buildPool(msg.verb || null);
+  start();
+});
   
   function fitBoard(){
   const stage = document.querySelector('.stage');
@@ -488,32 +514,11 @@ async function boot(){
     const res = await fetch(DATA);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const d = await res.json();
-    (d.groups||[]).filter(g => !WANT || g.id === WANT)
-      .forEach(g => (g.items||[]).forEach(it => {
-      if (!it.particle || !it.meaning) return;
-      POOL.push({
-        verb: String(it.verb || g.id).toLowerCase(),
-        particle: String(it.particle).toLowerCase(),
-        meaning: it.meaning,
-        example: it.example || ''
-      });
-    }));
-    /* A family can be smaller than a board — fall back to the whole pool
-       rather than showing an error the child cannot act on. */
-    if (POOL.length < SIZE && WANT){
-      POOL = [];
-      (d.groups||[]).forEach(g => (g.items||[]).forEach(it => {
-        if (!it.particle || !it.meaning) return;
-        POOL.push({ verb:String(it.verb || g.id).toLowerCase(),
-                    particle:String(it.particle).toLowerCase(),
-                    meaning:it.meaning, example:it.example || '' });
-      }));
-    }
+    RAW = d;
+    buildPool(WANT);
     if (POOL.length < SIZE) throw new Error('not enough phrases');
     /* The closed sets behind the game: 21 verbs, 37 particles. Built from
        the data rather than typed out, so they cannot fall out of step. */
-    VERB_LIST = [...new Set(POOL.map(p => p.verb))].sort();
-    PART_LIST = [...new Set(POOL.map(p => p.particle))].sort();
     start();
   }catch(e){
     $('board').innerHTML = '<p class="load">Could not load <b>' + esc(DATA) + '</b>.<br>' +

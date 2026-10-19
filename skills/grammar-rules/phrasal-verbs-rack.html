@@ -397,6 +397,31 @@ const DATA_URL = '../../data/grammar-rules/phrasal-verbs-data.json';
    this page with ?verb=<group id>. Without one we take the whole pool, so
    opening the file directly still works. */
 const WANT = new URLSearchParams(location.search).get('verb');
+let RAW = null;
+/* The deck for one family (or the whole mix). A family smaller than a rack
+   falls back to the whole pool rather than an error the child cannot act on. */
+function buildPool(want){
+  const from = gs => { POOL = []; gs.forEach(g => (g.items || []).forEach(it => {
+    if (it.particle && it.meaning)
+      POOL.push({ verb:(it.verb || g.label || g.id).toUpperCase(),
+                  particle: it.particle.toLowerCase(), meaning: it.meaning });
+  })); };
+  const all = RAW.groups || [];
+  from(all.filter(g => !want || g.id === want));
+  if (POOL.length < SIZE && want) from(all);
+}
+/* THE HOST'S CHANNEL. Once this frame is running, a tap on the verb band
+   arrives as a message, not a reload — so it must re-deal from the new
+   family here, or the rack keeps showing the mix under LOOK. */
+window.addEventListener('message', e => {
+  if (e.source !== window.parent) return;
+  const msg = e.data;
+  if (!msg || msg.type !== 'intuity:set-verb' || !RAW) return;
+  buildPool(msg.verb || null);
+  clearTimeout(autoDealTimer);
+  history = []; at = -1;
+  start();
+});
 
 /* Nine, not sixteen. On a phone a sixteen-card rack is four columns of
    72px cards whose verbs sit at about 10px — the board fits, but nothing on
@@ -463,23 +488,8 @@ async function boot(){
     const res = await fetch(DATA_URL);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const d = await res.json();
-    (d.groups || []).filter(g => !WANT || g.id === WANT)
-      .forEach(g => (g.items || []).forEach(it => {
-      if (it.particle && it.meaning)
-        POOL.push({ verb:(it.verb || g.label || g.id).toUpperCase(),
-                    particle: it.particle.toLowerCase(),
-                    meaning: it.meaning });
-    }));
-    /* A family can be smaller than a round — fall back to the whole pool
-       rather than showing an error the child cannot act on. */
-    if (POOL.length < SIZE && WANT){
-      POOL = [];
-      (d.groups || []).forEach(g => (g.items || []).forEach(it => {
-        if (it.particle && it.meaning)
-          POOL.push({ verb:(it.verb || g.label || g.id).toUpperCase(),
-                      particle: it.particle.toLowerCase(), meaning: it.meaning });
-      }));
-    }
+    RAW = d;
+    buildPool(WANT);
     if (POOL.length < SIZE) throw new Error('not enough phrases');
     $('loading').remove();
     fitRack();

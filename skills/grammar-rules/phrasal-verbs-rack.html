@@ -491,13 +491,21 @@ async function boot(){
 }
 
 function start(){
-  const seen = new Set(), picked = [];
-  for (const p of shuffle(POOL)){
+  /* Variety first (one card per verb), then fill with other phrases — but
+     never the same phrase twice. A mix has only seven verbs, and filling the
+     last two slots at random once put two GET off cards on one rack. */
+  const key = p => p.verb + ' ' + p.particle;
+  const verbs = new Set(), phrases = new Set(), picked = [], pool = shuffle(POOL);
+  for (const p of pool){
     if (picked.length === SIZE) break;
-    if (seen.has(p.verb)) continue;
-    seen.add(p.verb); picked.push(p);
+    if (verbs.has(p.verb)) continue;
+    verbs.add(p.verb); phrases.add(key(p)); picked.push(p);
   }
-  while (picked.length < SIZE) picked.push(shuffle(POOL)[0]);
+  for (const p of pool){
+    if (picked.length === SIZE) break;
+    if (phrases.has(key(p))) continue;
+    phrases.add(key(p)); picked.push(p);
+  }
 
   history = history.slice(0, at + 1);
   history.push(picked);
@@ -573,6 +581,9 @@ function wobble(){
 
 function choose(i){
   if (locked || target === null) return;
+  /* The same words on another card are the same answer. */
+  if (i !== target && cards[i].state === 'up' && cards[i].verb === cards[target].verb &&
+      cards[i].particle === cards[target].particle) i = target;
   const c = cards[i];
   if (c.state !== 'up') return;
   locked = true;

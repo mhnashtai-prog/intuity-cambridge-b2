@@ -226,6 +226,7 @@ body.board-page .board-toggle .viewtog{margin:0}
    search for "WRONG"). The sentences themselves stay selectable. */
 .board,.board *,.legend,.meters,.lives,.btn,.cg-btn,.cg-opt,.cg-chip,.cg-m,.cg-bin,.dial-b,.mode-btn,.viewbtn,
 .cg-wire,.pg-peg,.pg-row,.sg-pile,.sg-card,.ht-w,.ko-card,.fc-card,.gk-ring{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.kwt-why{display:block;margin-bottom:.45rem;color:var(--wrong)} .kwt-why b{color:inherit}
 .look{font-size:.95rem;margin:.2rem 0 0} .look.ok b{color:var(--right)} .look.no b{color:var(--wrong)}
 .partno{font-size:.82rem;color:var(--soft,#5C4E52);margin:.15rem 0 .7rem}
 .grade{font-family:var(--f-display);font-size:.92rem;letter-spacing:0;color:var(--accent-ink)}
@@ -770,6 +771,24 @@ function tap(i){
    changed: the first answer is the one that counted. */
 function qText(r){ const t=r.prompt||r.sentence||r.passive||r.line||(r.words?'Put the words in order.':'');
   return esc(String(t)).replace('___','<span class="cg-blank">&nbsp;</span>'); }
+/* WHY A KEY WORD TRANSFORMATION MISSED. Part 4 has two rules a learner can
+   break with perfectly good English: the key word must appear UNCHANGED,
+   and the answer is 2–5 words, the key word included (a contraction counts
+   as two: weren't = were not). Saying which rule was broken turns a
+   puzzling "Missed" into the lesson itself. Empty when neither applies. */
+function kwtWhy(r,given){
+  if(!r||r.game!=='transform'||!r.keyword||!given||given==='(shown)') return '';
+  const kw=String(r.keyword).toLowerCase().trim(), g=String(given).toLowerCase().replace(/[’]/g,"'");
+  const why=[];
+  const has=new RegExp('(^|[^a-z])'+kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'([^a-z]|$)').test(g);
+  if(!has) why.push('use <b>'+esc(String(r.keyword).toUpperCase())+'</b> exactly as given, without changing it');
+  const words=g.split(/\s+/).filter(Boolean).reduce((n,w)=>n+(/n't$/.test(w)?2:/^[a-z]+'(s|re|ve|ll|d|m)$/.test(w)?2:1),0);
+  if(words>5) why.push('keep to 2–5 words — yours has '+words);
+  return why.length?'<span class="kwt-why">The rules: '+why.join(', and ')+'.</span> ':'';
+}
+/* the tag and the note often begin alike; say it once */
+function tagNote(r){ const t=r.tag||'', n=r.note||'';
+  return (t&&!n.toLowerCase().startsWith(t.toLowerCase())?' · '+esc(t):'')+'. '+esc(n); }
 function lookAgain(i){
   const e=log.slice().reverse().find(x=>x.i===i); if(!e) return;
   const r=e.r, g=e.g, missed=(triesAt[i]||0)>0;
@@ -780,7 +799,7 @@ function lookAgain(i){
   openCard(`<div class="kick">Tile ${String(i+1).padStart(2,'0')} · Look again</div><h2 id="fTitle">${esc(g.title)}</h2>
     <p class="cg-line">${qText(r)}</p>
     <p class="look ${e.ok?'ok':'no'}"><b>${head}</b>${!e.ok&&e.given&&e.given!=='(shown)'?` · you wrote <i>${esc(e.given)}</i>`:''}</p>
-    <p class="feedback">The answer: <b>${esc(sol)}</b>${r.tag?' · '+esc(r.tag):''}. ${esc(r.note||'')}</p>
+    <p class="feedback">${e.ok?'':kwtWhy(r,e.given)}The answer: <b>${esc(sol)}</b>${tagNote(r)}</p>
     ${waiting?'<p class="ring-line">Still to fix — it will come back first next time.</p>':''}
     <div class="cta"><button class="btn fill" type="button" id="lookClose">Back to the track</button></div>`);
   $('lookClose').onclick=closeCard;
@@ -826,7 +845,7 @@ function answer(ok,given){
     let sol=''; try{ sol=String(cur.g.solution(cur.r)||''); }catch(e){}
     const tag=cur.r.tag?' · '+esc(cur.r.tag):'';
     fb.innerHTML=ok?'<b>Right'+tag+'.</b> '+esc(cur.r.note||'')
-                   :'<b>Not this time'+tag+'.</b> The answer: <b>'+esc(sol)+'</b>. '+esc(cur.r.note||'');
+                   :'<b>Not this time'+tag+'.</b> '+kwtWhy(cur.r,given)+'The answer: <b>'+esc(sol)+'</b>. '+esc(cur.r.note||'');
     const last=doneSet.size>=N; showNext(last?()=>finish(true):()=>{ closeCard(); }, last?'See your result':undefined, ok?1100:3200); return false;
   }
   if(ok){
@@ -846,7 +865,7 @@ function answer(ok,given){
      Never in the Challenge, which stays a clean measure. A hinted answer is
      never "fixed": the mistake was remembered at the first slip, and a
      right answer after a slip doesn't promote it, so it comes back tomorrow. */
-  if(practice){ paint(); fb.innerHTML='Not quite — try again.'+ladder(); 
+  if(practice){ paint(); fb.innerHTML=kwtWhy(cur.r,given)+'Not quite — try again.'+ladder(); 
     const sm=$('showMe'); if(sm) sm.onclick=showMe; return true; }
   lives--; paint();
   /* NO DEAD END. Running out of lives used to end the run — and on a Board,
@@ -857,7 +876,7 @@ function answer(ok,given){
     fb.innerHTML='<b>No lives left'+(cur.r.tag?' · '+esc(cur.r.tag):'')+'.</b> '+esc(cur.r.note||'')+
       '<br><br>The rest of the run is practice: no more points, but every tile still counts towards fixing your mistakes.';
     const last=doneSet.size>=N; showNext(last?()=>finish(true):()=>{ closeCard(); }, last?'See your result':'Carry on', 5000); return false; }
-  fb.innerHTML='Not quite — <b>'+lives+'</b> '+(lives===1?'life':'lives')+' left. Try again.'; return true;
+  fb.innerHTML=kwtWhy(cur.r,given)+'Not quite — <b>'+lives+'</b> '+(lives===1?'life':'lives')+' left. Try again.'; return true;
 }
 /* ══ CELEBRATION (Game only) ══
    A right answer is heard at once, in the card: the struck bowl the other

@@ -25,13 +25,26 @@
 .pg-row.pg-seated .gk-ring{background:var(--ring-sage,#8AA79C);color:var(--sheet,#FEFCF9)}
 .pg-row.pg-seated .pg-slot{border-bottom-color:transparent;color:var(--right,#4A6B5C);font-weight:700}
 .pg-row.pg-no{box-shadow:0 0 0 2px var(--wrong,#B4653A)}
-.pg-tray{display:flex;flex-wrap:wrap;gap:.45rem;padding:.8rem;border-radius:var(--r-box,16px);background:rgba(20,17,14,.04)}
+.pg-tray{display:flex;flex-wrap:wrap;gap:.45rem;padding:.8rem;border-radius:var(--r-box,16px);background:#EEEAE3;
+  position:sticky;bottom:.4rem;z-index:2;box-shadow:0 -10px 18px -14px rgba(20,17,14,.45)}
 .pg-peg{font:inherit;font-size:.92rem;font-weight:700;line-height:1.3;text-align:left;padding:.5rem .75rem .5rem .6rem;border:none;border-radius:999px 6px 6px 999px;
   background:var(--tile-bg,#E7E0D4);color:var(--tile-ink,#232C31);cursor:pointer;display:flex;align-items:center;gap:.5rem;transition:transform .12s,box-shadow .12s}
 .pg-peg::before{content:'';width:.65rem;height:.65rem;border-radius:50%;background:var(--ring-core,#201E1C);box-shadow:0 0 0 2px var(--ring-sage,#8AA79C);flex:none}
 .pg-peg.pg-up{transform:translateY(-4px);box-shadow:0 8px 16px -8px rgba(20,17,14,.6),0 0 0 2px var(--accent-ink,#8A6440)}
 .pg-empty{font-size:.85rem;color:var(--faint);padding:.2rem .2rem}
-@media(max-width:560px){.pg-row{grid-template-columns:1fr auto;}.pg-slot{grid-column:1 / -1}}`);
+/* PHONES (a teacher's note: "too much space in the middle — scrolling up and down
+   loses the track of thoughts"). A row is the sentence and its socket, nothing
+   else: the answer line appears only once a peg is seated, and the tray of pegs
+   stays pinned at the foot of the screen, so rows and pegs are always in view. */
+@media(max-width:560px){
+  .pg-rows{gap:.35rem;margin:.2rem 0 .7rem}
+  .pg-row{grid-template-columns:1fr auto;gap:.5rem;padding:.5rem .6rem}
+  .pg-left{font-size:.92rem;line-height:1.32}
+  .pg-row:not(.pg-seated) .pg-slot{display:none}
+  .pg-row.pg-seated .pg-slot{grid-column:1 / -1;min-height:0;padding-top:.1rem;border-bottom:0;font-size:.9rem}
+  .pg-tray{padding:.6rem;gap:.35rem}
+  .pg-peg{font-size:.88rem;padding:.42rem .65rem .42rem .55rem}
+}`);
 
   (window.ChallengeGames = window.ChallengeGames || {}).pegs = {
     title:'Pegs', kind:'game', skill:'receptive',

@@ -218,6 +218,7 @@ body{min-height:100dvh}
 .arch-hub .how{margin:0;padding:.55rem 0 0;border-top:1px solid rgba(43,33,41,.14);font-size:.78rem;line-height:1.4;max-width:12em}
 .arch-hub.big .tally{font-size:2.8rem}
 .arch-hub.big .how{font-size:.875rem;max-width:16em}
+.how.nudge{color:var(--caramel-ink,#8A6440)}
 #play.in-arch #comb{margin-top:1rem}
 </style>
 </head>
@@ -698,6 +699,15 @@ function check(i, value, advance){
   if (v === c.lastWrong) return;          /* the same wrong answer counts once */
   const ok = (ACCEPT[c.kind + ':' + c.it.w] || new Set([c.it.p])).has(v);
   const el = cellEl(i), inp = el && el.querySelector('.pz-slot');
+  /* Right for the same word as another part of speech ("a lack of" when
+     the cell is the verb "lack"): not a mistake, just a nudge. */
+  const other = ok ? null : ['verb', 'adjective', 'noun'].find(k => k !== c.kind && ACCEPT[k + ':' + c.it.w] && ACCEPT[k + ':' + c.it.w].has(v));
+  if (other) {
+    const art = other === 'noun' ? (/^[aeiou]/.test(c.it.w) ? 'an ' : 'a ') : '';
+    nudge(`<b>${esc(art + c.it.w)} ${esc(shown(v))}</b> is the ${other}. Here <b>${esc(c.it.w)}</b> is a ${c.kind}. Try again.`);
+    if (inp) inp.select();
+    return;
+  }
   if (ok) {
     c.done = true; c.it = Object.assign({}, c.it, { p: v }); c.late = c.tries > 0; c.fresh = true;
     sfx(c.late ? 'pop' : 'jingle');
@@ -710,6 +720,13 @@ function check(i, value, advance){
     if (c.tries >= 3) { c.done = true; c.late = true; c.revealed = true; if (inp) inp.value = shown(c.it.p); setTimeout(() => settle(i, false, advance), 650); }
     else if (advance && inp) inp.select();
   }
+}
+let NUDGE_T = 0;
+function nudge(html){
+  const h = document.querySelector('.how'); if (!h) return;
+  if (!h.dataset.base) h.dataset.base = h.innerHTML;
+  h.innerHTML = html; h.classList.add('nudge');
+  clearTimeout(NUDGE_T); NUDGE_T = setTimeout(() => { h.innerHTML = h.dataset.base; h.classList.remove('nudge'); }, 4500);
 }
 function settle(i, won, advance){
   count();

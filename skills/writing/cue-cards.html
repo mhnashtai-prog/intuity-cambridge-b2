@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#F3F1EC">
+<title>Be2FIRST — Cue Cards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@400..600&family=Space+Grotesk:wght@700&family=Anton&family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400..500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=20261018">
+<style>
+/* ═══ CUE CARDS · the writing card generator ═══
+   Pick a task, deal a card: one complete route through the text, one phrase
+   per step, nothing to search for. The first card is the SAFE card (the ★
+   go-to phrases), for the student who needs one sure path. "Deal again"
+   shuffles in the other checked phrases, and ↻ on any step swaps just that
+   one, for the student who wants more. Essays and reviews get a support
+   move after each point, R E R R C C, so the writer chooses how to support
+   it. Data: /data/writing/cue-generator.json, built from the Writing
+   Portfolio's structure pages (proofread) and the Body newspaper page. */
+:root{--paper:#F3F1EC;--card:#FAF8F5;--ink:#14110E;--quiet:#5C5852;--faint:#8A8378;--rule:rgba(20,17,14,.12);
+  --caramel:#A9774A;--sage:#527065}
+html,body{background:var(--paper)}
+body{margin:0;color:var(--ink);font-family:'Geist',system-ui,sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh}
+.wrap{max-width:38rem;margin:0 auto;padding:calc(var(--cc-head,96px) + 12px) 16px 90px}
+.kick{font:500 11px/1 'Geist Mono',ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--caramel);display:flex;align-items:center;gap:8px}
+.kick i{width:14px;height:3px;background:var(--caramel)}
+h1{font-family:'Anton',Impact,sans-serif;font-weight:400;text-transform:uppercase;font-size:2.4rem;line-height:.95;margin:10px 0 6px}
+.lede{color:var(--quiet);line-height:1.5;margin:0 0 16px;font-size:.95rem}
+.grp-h{font:600 10.5px/1 'Geist Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:14px 0 8px}
+.types{display:flex;flex-wrap:wrap;gap:6px}
+.type{font:600 13.5px/1.1 'Geist',sans-serif;padding:9px 13px;border-radius:999px;border:1.5px solid var(--rule);background:var(--card);color:var(--ink);cursor:pointer}
+.type[aria-pressed="true"]{background:var(--ink);color:var(--card);border-color:var(--ink)}
+/* the card */
+.card{margin-top:18px;background:var(--card);border-radius:16px;box-shadow:0 1px 0 rgba(20,17,14,.06),0 18px 34px -24px rgba(20,17,14,.55);padding:18px 16px 14px;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;left:0;right:0;top:0;height:4px;background:var(--ink)}
+.ch{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:4px}
+.ch h2{font-family:'Anton',Impact,sans-serif;font-weight:400;font-size:1.55rem;line-height:1;margin:0}
+.ch span{font:500 10.5px/1.3 'Geist Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);text-align:right}
+.task{font-size:.82rem;color:var(--quiet);margin:0 0 6px}
+.mode{font:600 10.5px/1 'Geist Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--sage);margin-bottom:6px}
+.para{display:grid;grid-template-columns:5.6rem 1fr;gap:0 10px;padding:11px 0;border-top:1px solid var(--rule)}
+.pn{font-family:'Anton',Impact,sans-serif;font-size:1.02rem;line-height:1.05;color:var(--ink);padding-top:2px}
+.step{display:grid;grid-template-columns:22px 1fr 30px;gap:0 8px;align-items:start;margin:0 0 9px}
+.step:last-child{margin-bottom:0}
+.n{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--ink);font:600 10.5px/17px 'Geist Mono',monospace;text-align:center;margin-top:1px}
+.lab{display:block;font:500 10px/1.2 'Geist Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:2px}
+.lab b{color:var(--caramel);font-weight:600}
+.t{font-family:'Newsreader',Georgia,serif;font-size:1.06rem;line-height:1.38;font-weight:600}
+.t .gap{color:var(--caramel);font-weight:700}
+.t .br{font-weight:400;font-style:italic;color:var(--quiet)}
+.h{display:inline-block;font:500 10.5px/1.2 'Geist Mono',monospace;color:var(--caramel);background:#F1E6D6;border-radius:6px;padding:2px 6px;margin:3px 0 0}
+.swap{width:30px;height:30px;border-radius:50%;border:1.5px solid var(--rule);background:transparent;color:var(--quiet);font-size:15px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.swap:active{transform:rotate(-90deg)}
+.step.flash .t{animation:fl .5s ease}
+@keyframes fl{from{background:#F1E6D6}to{background:transparent}}
+.sup .t{font-weight:500}
+.bar{position:fixed;left:0;right:0;bottom:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));background:linear-gradient(to top,var(--paper) 70%,rgba(243,241,236,0));display:flex;justify-content:center;gap:10px;z-index:5}
+.bar[hidden]{display:none}
+.bar .in{display:flex;gap:10px;width:100%;max-width:38rem}
+.btn{flex:1;min-height:50px;border-radius:999px;font:600 15px/1 'Geist',system-ui,sans-serif;cursor:pointer;border:1.5px solid var(--ink);background:var(--card);color:var(--ink)}
+.btn.dark{background:var(--ink);color:var(--card)}
+.btn:active{transform:scale(.97)}
+.tip{margin:14px 2px 0;font-size:.85rem;line-height:1.5;color:var(--quiet)}
+.tip b{color:var(--ink)}
+.err{color:#B4653A;text-align:center;padding:30px 0}
+@media(max-width:400px){.para{grid-template-columns:1fr}.pn{margin-bottom:6px}h1{font-size:2.1rem}}
+@media(prefers-reduced-motion:reduce){.step.flash .t{animation:none}.swap:active{transform:none}}
+@media print{.header,.bar,.types,.grp-h,.lede,.kick,h1,.tip,.swap{display:none!important}.wrap{padding:0}.card{box-shadow:none}}
+</style>
+<script src="/tools/be2-brand.js?v=20261012c"></script>
+</head>
+<body>
+<header class="header">
+  <div class="header-top">
+    <a class="back-link" href="/index.html" target="_top">← Home</a>
+    <div class="header-title">
+      <div class="app-title">INTUITY</div>
+      <div class="app-subtitle">Cue Cards</div>
+    </div>
+    <span class="header-spacer">Writing</span>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="kick"><i></i>Writing · cue-card generator</div>
+  <h1>Deal a card</h1>
+  <p class="lede">Choose a task. You get one complete route: a phrase for every step, from the first line to the last. Follow it from top to bottom.</p>
+  <div id="types"><p class="err">Loading…</p></div>
+  <div id="stage"></div>
+  <p class="tip" id="tip" hidden><b>First card = the safe card</b> (the go-to phrases). <b>Deal again</b> for different phrases, or tap <b>↻</b> to change one step.</p>
+</main>
+<div class="bar" id="bar" hidden><div class="in"><button class="btn" type="button" id="safe">Safe card</button><button class="btn dark" type="button" id="deal">Deal again</button></div></div>
+
+<script>
+(function () {
+  var D = null, cur = null, card = null, typesEl = document.getElementById('types'), stage = document.getElementById('stage');
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function fmt(t) {
+    return esc(t).replace(/\[([^\]]+)\]/g, '<span class="br">[$1]</span>').replace(/…/g, '<span class="gap">…</span>');
+  }
+  function rnd(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function rndOther(a, now) { if (a.length < 2) return a[0]; var x; do { x = rnd(a); } while (x === now); return x; }
+  function goOf(a) { for (var i = 0; i < a.length; i++) if (a[i].go) return a[i]; return a[0]; }
+
+  /* a card is a list of chosen phrases, one per step; support steps also hold their move */
+  function deal(t, safe) {
+    var out = [];
+    t.paras.forEach(function (p, pi) {
+      p.steps.forEach(function (s, si) {
+        if (s.support) {
+          var mv = safe ? D.moves[(pi + si) % D.moves.length] : rnd(D.moves);
+          out.push({ pi: pi, si: si, move: mv, pick: safe ? goOf(mv.items) : rnd(mv.items) });
+        } else {
+          /* two steps with the same list (an email's two body points) never repeat a phrase */
+          var prev = out.filter(function (o) { return !o.move && t.paras[o.pi].steps[o.si].items === s.items; }).map(function (o) { return o.pick; });
+          var pool = s.items.filter(function (x) { return prev.indexOf(x) < 0; }); if (!pool.length) pool = s.items;
+          out.push({ pi: pi, si: si, pick: safe ? (prev.indexOf(goOf(pool)) < 0 ? goOf(pool) : pool[0]) : rnd(pool) });
+        }
+      });
+    });
+    return { safe: safe, picks: out };
+  }
+
+  function paint(flashIdx) {
+    var t = cur, n = 0, html = '';
+    t.paras.forEach(function (p, pi) {
+      var steps = '';
+      p.steps.forEach(function (s, si) {
+        var k = card.picks.findIndex(function (o) { return o.pi === pi && o.si === si; }), o = card.picks[k]; n++;
+        var lab = o.move ? '<span class="lab">Support · <b>' + esc(o.move.cap) + ' · ' + esc(o.move.move) + '</b></span>' : '<span class="lab">' + esc(s.label) + '</span>';
+        var tail = o.move && o.pick.t.indexOf('…') < 0 ? ' <span class="gap">…</span>' : '';
+        steps += '<div class="step' + (o.move ? ' sup' : '') + (k === flashIdx ? ' flash' : '') + '"><span class="n">' + n + '</span><div>' + lab +
+          '<div class="t">' + fmt(o.pick.t) + tail + '</div>' + (o.pick.h ? '<span class="h">' + esc(o.pick.h) + '</span>' : '') + '</div>' +
+          '<button class="swap" type="button" data-k="' + k + '" aria-label="Change this step">↻</button></div>';
+      });
+      html += '<section class="para"><div class="pn">' + esc(p.name) + '</div><div>' + steps + '</div></section>';
+    });
+    stage.innerHTML = '<article class="card"><div class="ch"><h2>' + esc(t.name) + '</h2><span>' + esc(t.group) + '<br>' + n + ' steps</span></div>' +
+      '<p class="task">' + esc(t.task) + '</p><div class="mode">' + (card.safe ? '★ Safe card · the go-to phrases' : 'Your own mix') + '</div>' + html + '</article>';
+    stage.querySelectorAll('.swap').forEach(function (b) {
+      b.onclick = function () {
+        var k = +b.dataset.k, o = card.picks[k], s = cur.paras[o.pi].steps[o.si];
+        if (o.move) {
+          if (Math.random() < .5) { o.move = rndOther(D.moves, o.move); o.pick = rnd(o.move.items); } else { o.pick = rndOther(o.move.items, o.pick); }
+        } else { o.pick = rndOther(s.items, o.pick); }
+        card.safe = false; paint(k);
+      };
+    });
+    document.getElementById('tip').hidden = false; document.getElementById('bar').hidden = false;
+  }
+
+  function choose(id) {
+    cur = D.types.filter(function (t) { return t.id === id; })[0]; if (!cur) return;
+    typesEl.querySelectorAll('.type').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.id === id); });
+    card = deal(cur, true); paint(-1);
+    try { localStorage.setItem('be2.cue.type', id); } catch (e) {}
+    try { history.replaceState(null, '', '#' + id); } catch (e) {}
+    stage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  document.getElementById('deal').onclick = function () { if (cur) { card = deal(cur, false); paint(-1); } };
+  document.getElementById('safe').onclick = function () { if (cur) { card = deal(cur, true); paint(-1); } };
+
+  function fit() { var h = document.querySelector('.header'); if (h) document.documentElement.style.setProperty('--cc-head', h.offsetHeight + 'px'); }
+  fit(); window.addEventListener('resize', fit); setTimeout(fit, 300);
+
+  fetch('/data/writing/cue-generator.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
+    D = d; var groups = {};
+    d.types.forEach(function (t) { (groups[t.group] = groups[t.group] || []).push(t); });
+    typesEl.innerHTML = Object.keys(groups).map(function (g) {
+      return '<div class="grp-h">' + esc(g) + '</div><div class="types">' + groups[g].map(function (t) {
+        return '<button class="type" type="button" aria-pressed="false" data-id="' + t.id + '">' + esc(t.name) + '</button>'; }).join('') + '</div>';
+    }).join('');
+    typesEl.querySelectorAll('.type').forEach(function (b) { b.onclick = function () { choose(b.dataset.id); }; });
+    var want = (location.hash || '').slice(1);
+    if (want && d.types.some(function (t) { return t.id === want; })) choose(want);
+  }).catch(function () { typesEl.innerHTML = '<p class="err">The cards could not be loaded. Check your connection and try again.</p>'; });
+})();
+</script>
+</body>
+</html>

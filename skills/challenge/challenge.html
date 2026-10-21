@@ -618,7 +618,18 @@ function draw(){
   const seen=mode==='exam'?seenGet():{};
   if(mode==='exam'){ const ids=pool.map(r=>r.id).filter(Boolean); if(ids.length&&ids.every(id=>seen[id])){ seenClear(); Object.keys(seen).forEach(k=>delete seen[k]); } }
   const fresh=r=>r&&r.id&&!seen[r.id]?1:0;
-  const left={}; Object.keys(by).forEach(k=>{ left[k]=shuffle(by[k]); left[k].sort((a,b)=>mode==='exam'?fresh(a)-fresh(b):due(a)-due(b)); });
+  /* THE HARDEST PARTS FIRST (the teacher's decision, Oct 2026: "the entire
+     topic is tested … but the most challenging parts of the topic are
+     selected"). Unseen sentences (Challenge) or due mistakes (Game) still
+     come first, so the whole topic is covered in turn; among those, the
+     topic's hardest areas are dealt before the rest. */
+  /* a lean, not a rule: a hard sentence gets a head start in a random draw,
+     so about two cells in three come from the hard areas and every run
+     still meets some of the rest */
+  const isHard=r=>!!(r&&topic&&HARD[topic.id]&&HARD[topic.id].indexOf(r.tag)>=0);
+  const lean=new Map(); pool.forEach(r=>lean.set(r,Math.random()+(isHard(r)?.4:0)));
+  const key=r=>(mode==='exam'?fresh(r):due(r))*10+(lean.get(r)||0);
+  const left={}; Object.keys(by).forEach(k=>{ left[k]=shuffle(by[k]); left[k].sort((a,b)=>key(a)-key(b)); });
   /* one sentence, one cell: Defuse, Forge and Choose can play the same
      rounds, so the game with the fewest to choose from picks first */
   const used=new Set(), out=new Array(seq.length);
@@ -948,6 +959,24 @@ function ringLine(){
   const head=bits.length?bits.join(' · ')+'. ':'';
   return `<p class="ring-line">${head}${waiting?`Still to fix in ${esc(topic.label)}: <b>${waiting}</b>.`:'Nothing left to fix in '+esc(topic.label)+'.'}</p>`;
 }
+/* ══ THE HARDEST AREAS OF EACH TOPIC ══
+   Taken from each topic's Game focus ("B2 at its hardest") and the Cambridge
+   formats themselves: key word transformation and error correction. Rounds
+   with these tags are dealt first among the sentences a student hasn't met
+   (see draw). A topic without an entry is dealt evenly, as before. */
+const KWT_EC=['Key word transformation','Error correction'];
+const HARD={
+  passive:['Causative','Reporting','Modal','Modals','Participles','Mixed tenses','Present perfect','Past perfect','Continuous'].concat(KWT_EC),
+  tenses:['Present perfect continuous','Past perfect','Past perfect continuous','Future continuous','Future perfect','Future perfect continuous','Perfect or perfect continuous','Present perfect or past?','Present/past perfect','State verbs'].concat(KWT_EC),
+  conditionals:['Third','Mixed','Inverted','Condition'].concat(KWT_EC),
+  'past-modals':['Deduction','Criticism','Necessity','Unreal past','Present vs past'].concat(KWT_EC),
+  comparatives:['Modifiers','The more…, the more…','As … as','Continuing change','Irregular'].concat(KWT_EC),
+  reported:['Reporting verbs','Questions','Say and tell','Commands','Questions and commands','Reported question'].concat(KWT_EC),
+  linking:['Contrast','Purpose','Result','Register','Grammar'].concat(KWT_EC),
+  inversion:['Not only','Hardly … when','No sooner … than','Not until','Only when','So … that','Conditionals'].concat(KWT_EC),
+  gerunds:['Change of meaning','Preposition + -ing','Let and make','Fixed phrases','be used to + -ing','Verb + object + to'].concat(KWT_EC),
+  misc:['Cleft','Quantifiers','Relatives','Relative or so/such … that','So and such','Negation'].concat(KWT_EC)
+};
 /* ══ BOARD SETS ══════════════════════════════════════════════════════════
    Students asked for Set 1, Set 2, Set 3: somewhere to finish and move on.
    A topic's rounds are dealt into sets of about twenty, round-robin by game

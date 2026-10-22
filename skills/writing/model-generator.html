@@ -173,7 +173,26 @@ textarea.wr::placeholder{color:rgba(20,17,14,.32);font-style:italic}
 .wc .fill{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:#B0865C;transition:width .2s}
 .wc .fill.in{background:#3A6B50}.wc .fill.over{background:#A23B2C}
 .wc .mk{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink2)}
-@media (prefers-reduced-motion:reduce){ .cin,.scrim,.lt{transition:none} }
+.tmode{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:12.5px;color:var(--body2)}
+.tbtn{flex:none;text-transform:none!important;letter-spacing:normal!important;font:600 12.5px 'Geist',sans-serif!important;padding:6px 12px!important;border-radius:999px;background:var(--fill2)!important;color:var(--ink2)!important;white-space:nowrap}
+.tbtn.go{background:var(--ink2)!important;color:#F6F3EE!important}
+.tbtn.on{background:#14110E!important;color:#F6F3EE!important}
+.unit{padding:4px 0 10px;border-bottom:1px solid var(--rule2)}
+.unit:last-child{border-bottom:0}
+.ul{display:flex;align-items:center;gap:10px;margin-top:12px}
+.ul .pl{margin:0;flex:1}
+.clk{font:600 15px 'Geist Mono',monospace;letter-spacing:.02em;color:var(--ink2);min-width:3.2em;text-align:right}
+.clk.late{color:#A23B2C}.clk.ok{color:#1F7A4A;font-size:13px}
+.unit.ph-idle .mv{padding:6px 0 0}
+.unit.ph-study textarea.wr{color:var(--body2)}
+.fuse{position:relative;height:4px;margin:8px 0 2px;border-radius:2px;background:rgba(20,17,14,.1)}
+.fuse i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:linear-gradient(90deg,#B0865C,#E3A21A);transition:width .25s linear}
+.fuse.study i{background:#5C5852}
+.fuse b{position:absolute;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:#FFD27A;box-shadow:0 0 0 3px rgba(227,162,26,.35),0 0 10px 2px rgba(227,162,26,.8);animation:spark .5s ease-in-out infinite alternate;transition:left .25s linear}
+@keyframes spark{to{transform:scale(1.35);box-shadow:0 0 0 5px rgba(227,162,26,.2),0 0 14px 4px rgba(227,162,26,.6)}}
+.fizz{margin:6px 0 0;font-size:13px;color:#A23B2C}
+.times{margin:12px 2px 0;font:600 11.5px/1.6 'Geist Mono',monospace;letter-spacing:.04em;color:var(--ink2)}
+@media (prefers-reduced-motion:reduce){ .cin,.scrim,.lt{transition:none} .fuse b{animation:none} }
 @media print{
   body *{visibility:hidden} .cin,.cin *{visibility:visible}
   .cin{position:absolute;inset:0;box-shadow:none} .cnav,.cact,.bars,.chips,.wc{display:none}
@@ -421,7 +440,7 @@ function openModel(i){
   try{ history.pushState({gen:1},''); }catch(e){}
   paint(); setTimeout(()=>{ try{ $('cClose').focus({preventScroll:true}); }catch(e){} },60);
 }
-function closeModel(){ if(OPEN&&OPEN.draft) saveDraft(OPEN.draft,true); document.body.classList.remove('cin-open'); $('cin').setAttribute('aria-hidden','true'); OPEN=null; }
+function closeModel(){ clearInterval(TICK); if(OPEN&&OPEN.draft) saveDraft(OPEN.draft,true); document.body.classList.remove('cin-open'); $('cin').setAttribute('aria-hidden','true'); OPEN=null; }
 $('cClose').onclick=()=>{ try{ history.back(); }catch(e){ closeModel(); } };
 $('scrim').onclick=$('cClose').onclick;
 addEventListener('popstate',()=>{ if(OPEN) closeModel(); });
@@ -496,28 +515,68 @@ function points(){
   const fq=fromQuestion(); if(TYPE!=='articles'&&fq&&SUBJ!==fq&&SUBJ.indexOf(fq)!==0) return [];
   return (q.writingPoints||q.keyPoints||q.points||[]).map(x=>typeof x==='string'?x:(x.text||x.point||'')).filter(Boolean).slice(0,4);
 }
+/* TIMED — five paragraphs (intro, the three body moves, conclusion), each
+   with its own clock: tap Start, study it at Full for 40 seconds, then the
+   expressions shrink to Starters and a 3-minute fuse burns while the
+   student finishes it from memory. The fuse fizzles, never explodes. */
+const STUDY=40, FUSE=180;
+let TIMED=false; try{ TIMED=localStorage.getItem('intuity.gen.timed')==='1'; }catch(e){}
+let TICK=0;
+function units(m){ const out=[], mid=m.secs.length>2?1:-1;
+  m.secs.forEach((S,si)=>{ if(si===mid) S.lines.forEach((L,li)=>out.push({si,lines:[li],label:S.word+' · '+(li+1)}));
+    else out.push({si,lines:S.lines.map((L,li)=>li),label:S.word}); });
+  return out; }
+const mmss=t=>{ const a=Math.abs(Math.round(t)); return (t<0?'+':'')+Math.floor(a/60)+':'+String(a%60).padStart(2,'0'); };
+
+function lineBlock(m,d,si,li,lvl,ro){
+  const S=m.secs[si], L=S.lines[li], k=si+'-'+li, sv=(d.t[k]||'').trim();
+  const pre=lvl==='full'?given(L):lvl==='starters'?plain(starter(L)).replace(/\s*…\s*$/,' '):'';
+  const untouched=!sv||sv===given(L).trim()||sv===plain(L.h[L.i].html).trim()||sv===plain(starter(L)).replace(/\s*…\s*$/,'').trim();
+  const val=untouched?pre:d.t[k];   /* only what the student typed survives a change of support */
+  /* the line above shows only what the box does not already hold */
+  const full=plain(L.h[L.i].html).trim();
+  const lab=lvl==='starters'?'Complete the expression from memory'
+    :(given(L).trim()===full?'@':'e.g. … '+plain(L.h[L.i].html.replace(SGRX,'')).trim().replace(/\.$/,''));   /* @ = a frame: status only */
+  return (lvl==='moves'||!lab?'':`<div class="kx" id="kx-${k}"${lab==='@'?' data-frame="1"':''}><span class="no">○</span><span>${lab==='@'?'keep the expression':esc(lab)}</span></div>`)+
+    `<textarea class="wr" spellcheck="false" autocorrect="off" autocapitalize="sentences" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" data-k="${k}"${ro?' readonly':''} aria-label="${esc(S.word)}, sentence ${li+1}" placeholder="${lvl==='moves'?esc(S.sub||'Write your sentence'):'Start with the expression above, finish it your way'}">${esc(val)}</textarea>`;
+}
+
 function paintWrite(){
   const m=OPEN, d=loadDraft(), pts=points();
-  const pre=L=>SUPPORT==='full'?given(L):SUPPORT==='starters'?plain(starter(L)).replace(/\s*…\s*$/,' '):'';
+  clearInterval(TICK);
+  $('supp').style.visibility=TIMED?'hidden':'';
+  const T=m.timer||(m.timer={u:{}});
+  let body;
+  if(!TIMED){
+    body=m.secs.map((S,si)=>`<div class="pl">${String(si+1).padStart(2,'0')} · ${esc(S.word)}</div>`+
+      S.lines.map((L,li)=>lineBlock(m,d,si,li,SUPPORT,false)).join('')).join('');
+  } else {
+    body=units(m).map((U,ui)=>{ const st=T.u[ui]||{ph:'idle'};
+      const head=`<div class="ul"><span class="pl">${String(ui+1).padStart(2,'0')} · ${esc(U.label)}</span>`+
+        (st.ph==='idle'?`<button type="button" class="tbtn go" data-start="${ui}">Start ▸</button>`
+        :st.ph==='study'?`<span class="clk" id="clk-${ui}">0:${String(STUDY).padStart(2,'0')}</span><button type="button" class="tbtn" data-ready="${ui}">Ready ›</button>`
+        :st.ph==='write'?`<span class="clk" id="clk-${ui}">3:00</span><button type="button" class="tbtn go" data-done="${ui}">Done ✓</button>`
+        :`<span class="clk ok">✓ ${mmss(st.used)}</span><button type="button" class="tbtn" data-again="${ui}">Again</button>`)+`</div>`;
+      const fuse=st.ph==='study'?`<div class="fuse study"><i id="fz-${ui}"></i></div>`:st.ph==='write'?`<div class="fuse"><i id="fz-${ui}"></i><b id="sp-${ui}"></b></div><p class="fizz" id="fx-${ui}" hidden>Time’s up. Keep going, or tap Done.</p>`:'';
+      const first=U.lines.length>1||U.lines[0]===0||m.secs.length<3||U.si!==1;   /* a section's guide shows once */
+      const lines=st.ph==='idle'?(first?`<p class="mv">${esc(m.secs[U.si].sub||'')}</p>`:'')
+        :U.lines.map(li=>lineBlock(m,d,U.si,li,st.ph==='study'?'full':'starters',st.ph==='study')).join('');
+      return `<div class="unit ph-${st.ph}">`+head+fuse+lines+`</div>`; }).join('');
+    const doneU=units(m).map((U,ui)=>T.u[ui]).filter(x=>x&&x.ph==='done');
+    if(doneU.length===units(m).length) body+=`<p class="times">Your times · ${units(m).map((U,ui)=>'¶'+(ui+1)+' '+mmss(T.u[ui].used)).join(' · ')} · total ${mmss(doneU.reduce((a,x)=>a+x.used,0))}</p>`;
+  }
   $('cMain').innerHTML=
+    `<div class="tmode"><button type="button" class="tbtn${TIMED?' on':''}" id="tToggle" aria-pressed="${TIMED}">⏱ Timed</button><span>${TIMED?'Study 40 s · then 3 min per paragraph':'Turn on to race the clock, paragraph by paragraph'}</span></div>`+
     (pts.length?`<div class="chips"><span class="lab">COVER</span>${pts.map((p,i)=>`<button type="button" class="chip${d.c.includes(i)?' on':''}" data-i="${i}" aria-pressed="${d.c.includes(i)}">${d.c.includes(i)?'✓ ':''}${esc(p)}</button>`).join('')}</div>`:'')+
-    `<div class="paper">`+m.secs.map((S,si)=>`<div class="pl">${String(si+1).padStart(2,'0')} · ${esc(S.word)}</div>`+
-      S.lines.map((L,li)=>{ const k=si+'-'+li, sv=(d.t[k]||'').trim();
-        const untouched=!sv||sv===given(L).trim()||sv===plain(L.h[L.i].html).trim()||sv===plain(starter(L)).replace(/\s*…\s*$/,'').trim();
-        const val=untouched?pre(L):d.t[k];   /* only what the student typed survives a change of support */
-        /* the line above shows only what the box does not already hold */
-        const full=plain(L.h[L.i].html).trim();
-        const lab=SUPPORT==='starters'?'Complete the expression from memory'
-          :(given(L).trim()===full?'@':'e.g. … '+plain(L.h[L.i].html.replace(SGRX,'')).trim().replace(/\.$/,''));   /* @ = a frame: status only; else just the example content */
-        return (SUPPORT==='moves'||!lab?'':`<div class="kx" id="kx-${k}"${lab==='@'?' data-frame="1"':''}><span class="no">○</span><span>${lab==='@'?'keep the expression':esc(lab)}</span></div>`)+
-          `<textarea class="wr" spellcheck="false" autocorrect="off" autocapitalize="sentences" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" data-k="${k}" aria-label="${esc(S.word)}, sentence ${li+1}" placeholder="${SUPPORT==='moves'?esc(S.sub||'Write your sentence'):'Start with the expression above, finish it your way'}">${esc(val)}</textarea>`; }).join('')).join('')+`</div>`+
+    `<div class="paper">`+body+`</div>`+
     `<div class="wc"><div class="row"><span id="wcN">0 WORDS</span><span>TARGET 140–190</span></div>
       <div class="bar"><i class="fill" id="wcF"></i><i class="mk" style="left:${140/220*100}%"></i><i class="mk" style="left:${190/220*100}%"></i></div></div>`+
-    `<p class="tip">${SUPPORT==='moves'?'Every word is yours this time: follow the moves, no key expressions given.':SUPPORT==='starters'?'Finish each expression from memory, then add your own details. The line above shows the full expression.':'Keep the key expressions and fill every … with your own ideas about your subject. A caramel sentence is an example, not something to copy. ✓ means you kept the expression.'}</p>`;
+    `<p class="tip">${TIMED?'Tap Start on a paragraph. Read the expressions while the clock runs, then finish the paragraph from memory before the fuse burns out.':SUPPORT==='moves'?'Every word is yours this time: follow the moves, no key expressions given.':SUPPORT==='starters'?'Finish each expression from memory, then add your own details.':'Keep the key expressions and fill every … with your own ideas about your subject. A caramel sentence is an example, not something to copy. ✓ means you kept the expression.'}</p>`;
   const tas=[...$('cMain').querySelectorAll('textarea.wr')];
   const fit=t=>{ t.style.height='auto'; t.style.height=Math.max(60,t.scrollHeight)+'px'; };
   const update=()=>{
-    let n=0; tas.forEach(t=>{ n+=(t.value.match(/[A-Za-zÀ-ÿ0-9’'-]+/g)||[]).length;
+    let n=0; Object.keys(d.t).forEach(k=>{ n+=((d.t[k]||'').match(/[A-Za-zÀ-ÿ0-9’'-]+/g)||[]).length; });
+    tas.forEach(t=>{ if(!(t.dataset.k in d.t)) n+=(t.value.match(/[A-Za-zÀ-ÿ0-9’'-]+/g)||[]).length;
       const kx=$('kx-'+t.dataset.k); if(kx){ const [si,li]=t.dataset.k.split('-').map(Number), f=fixedPart(m.secs[si].lines[li]);
         const ok=f?norm(t.value).indexOf(norm(f))>=0:t.value.trim().length>0; const mk=kx.firstChild; mk.className=ok?'ok':'no'; mk.textContent=ok?'✓':'○';
         if(kx.dataset.frame) kx.lastChild.textContent=ok?'expression kept':'keep the expression'; } });
@@ -527,9 +586,31 @@ function paintWrite(){
   tas.forEach(t=>{ fit(t); t.addEventListener('input',()=>{ d.t[t.dataset.k]=t.value; saveDraft(d); fit(t); update(); }); });
   $('cMain').querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ const i=+c.dataset.i, at=d.c.indexOf(i);
     if(at<0) d.c.push(i); else d.c.splice(at,1); saveDraft(d,true); paintWrite(); });
+  $('tToggle').onclick=()=>{ TIMED=!TIMED; try{ localStorage.setItem('intuity.gen.timed',TIMED?'1':'0'); }catch(e){} paintWrite(); };
+  /* the clocks */
+  const now=()=>Date.now()/1000;
+  const go=(ui,ph)=>{ T.u[ui]=Object.assign(T.u[ui]||{},{ph,t0:now()}); paintWrite();
+    if(ph==='write'){ const f=$('cMain').querySelector('.unit.ph-write textarea.wr'); if(f){ f.focus({preventScroll:false}); f.setSelectionRange(f.value.length,f.value.length); } } };
+  $('cMain').querySelectorAll('[data-start]').forEach(b=>b.onclick=()=>{
+    Object.keys(T.u).forEach(k=>{ const x=T.u[k]; if(x.ph==='study'||x.ph==='write'){ x.ph='done'; x.used=now()-x.t0+(x.ph==='write'?0:0); } });
+    go(+b.dataset.start,'study'); });
+  $('cMain').querySelectorAll('[data-ready]').forEach(b=>b.onclick=()=>go(+b.dataset.ready,'write'));
+  $('cMain').querySelectorAll('[data-done]').forEach(b=>b.onclick=()=>{ const x=T.u[+b.dataset.done]; x.used=now()-x.t0; x.ph='done'; paintWrite(); });
+  $('cMain').querySelectorAll('[data-again]').forEach(b=>b.onclick=()=>{ T.u[+b.dataset.again]={ph:'idle'}; paintWrite(); });
+  const live=Object.keys(T.u).find(k=>T.u[k].ph==='study'||T.u[k].ph==='write');
+  if(TIMED&&live!==undefined){
+    const ui=+live, x=T.u[ui];
+    const tick=()=>{ const el=now()-x.t0, clk=$('clk-'+ui), fz=$('fz-'+ui); if(!clk){ clearInterval(TICK); return; }
+      if(x.ph==='study'){ const left=STUDY-el; clk.textContent=mmss(Math.max(0,left)); if(fz) fz.style.width=Math.max(0,left/STUDY*100)+'%';
+        if(left<=0){ clearInterval(TICK); try{ if(window.SFX&&SFX.isOn()&&SFX.pop) SFX.pop(); }catch(e){} go(ui,'write'); } }
+      else { const left=FUSE-el; clk.textContent=mmss(left); clk.classList.toggle('late',left<0);
+        if(fz) fz.style.width=Math.max(0,left/FUSE*100)+'%'; const sp=$('sp-'+ui); if(sp) sp.style.left=Math.max(0,left/FUSE*100)+'%';
+        if(left<=0){ const fx=$('fx-'+ui); if(fx&&fx.hidden){ fx.hidden=false; try{ if(window.SFX&&SFX.isOn()&&SFX.wrong) SFX.wrong(); }catch(e){} } } } };
+    tick(); TICK=setInterval(tick,250);
+  }
   update();
   $('cAct').innerHTML=`<button class="btn" type="button" id="aBack">← Model</button><button class="btn" type="button" id="aCopy">Copy</button><button class="btn" type="button" id="aPrint">Print</button>`;
-  $('aBack').onclick=()=>{ MODE='card'; paint(); };
+  $('aBack').onclick=()=>{ clearInterval(TICK); MODE='card'; paint(); };
   $('aPrint').onclick=()=>window.print();
   $('aCopy').onclick=()=>{
     const txt=m.secs.map((S,si)=>S.lines.map((L,li)=>(d.t[si+'-'+li]||'').trim()).filter(Boolean).join(' ')).filter(Boolean).join('\n\n');

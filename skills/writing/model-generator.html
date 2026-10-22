@@ -82,11 +82,11 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
   PARADE: the subject's generated models side by side (tools/parade.js),
   the same strip as the Question pages. Six per subject, seeded, so the
   gallery is the same on every visit and a teacher can say "open RS-3".
-  CINEMA: the chosen model, one section at a time — the generator fetches
-  the next section only when the student asks for it. Every line rolls
-  (‹ ›, a swipe or a tap) through the key expressions that fit its move;
-  the line left showing is the one the student keeps. After the last
-  section, the whole skeleton — print it, copy it, or start again.
+  CARD: the chosen model whole, every key expression on one card; each
+  line rolls (‹ ›) and the line left showing is the one kept. SUPPORT
+  (Full · Starters · Moves) fades the scaffolding.
+  WRITE: the card becomes the draft — ruled lines under each expression,
+  the question's points to cover, a 140–190 word bar; kept on the device.
 
   DATA — the same files the five Model pages read, nothing new:
     Essay    essays/data/essay-cards-models.json
@@ -150,10 +150,34 @@ body.cin-open .cin{opacity:1;visibility:visible;transition:opacity .26s ease,vis
 .cact{flex:none;display:flex;justify-content:center;gap:8px;padding:10px 14px calc(14px + env(safe-area-inset-bottom));box-shadow:0 -1px 0 var(--rule2);background:var(--card)}
 .btn{text-transform:none!important;letter-spacing:normal!important;font-family:'Geist',sans-serif!important;display:inline-flex;align-items:center;gap:6px;padding:10px 16px;border-radius:999px;font-size:14px;font-weight:600;background:var(--fill2)!important}
 .btn.go{background:var(--ink2)!important;color:#F6F3EE!important}
+.seg.s3{grid-template-columns:repeat(3,minmax(0,1fr));max-width:270px}
+.mv{font-size:14px;color:var(--body2);padding:8px 0 10px;line-height:1.45}
+.mv i{font-style:normal;font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.08em;color:var(--faint2)}
+/* WRITE — the skeleton becomes the draft, on paper */
+.chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:12px 0 0}
+.chips .lab{font:600 10px 'Geist Mono',monospace;letter-spacing:.16em;color:var(--faint2);margin-right:2px}
+.chip{font:500 12.5px 'Geist',sans-serif!important;padding:6px 11px!important;border-radius:999px;background:var(--fill2)!important;color:var(--body2)!important}
+.chip.on{background:#E3EFE6!important;color:#1F5A3B!important}
+.paper{margin-top:12px;background:#fff;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.1);padding:6px 16px 14px}
+.pl{font:600 10px 'Geist Mono',monospace;letter-spacing:.16em;color:var(--faint2);margin:14px 0 2px;text-transform:uppercase}
+.kx{display:flex;gap:6px;align-items:baseline;font:600 12.5px/1.35 'Geist',sans-serif;color:#8E6238;margin:8px 0 0}
+.kx .ok{color:#1F7A4A;font-weight:700;flex:none}
+.kx .no{color:var(--faint2);flex:none}
+textarea.wr{display:block;width:100%;box-sizing:border-box;border:0;resize:none;overflow:hidden;font:400 17px/30px 'Newsreader',Georgia,serif;color:var(--ink2);
+  background:repeating-linear-gradient(transparent 0 29px,rgba(20,17,14,.13) 29px 30px);padding:0;min-height:60px;outline:none}
+textarea.wr:focus{background:repeating-linear-gradient(transparent 0 29px,rgba(176,134,92,.55) 29px 30px)}
+textarea.wr::placeholder{color:rgba(20,17,14,.32);font-style:italic}
+.wc{margin:12px 2px 0}
+.wc .row{display:flex;justify-content:space-between;font:600 11px 'Geist Mono',monospace;letter-spacing:.08em;color:var(--body2)}
+.wc .bar{position:relative;height:6px;margin-top:6px;border-radius:3px;background:rgba(20,17,14,.1)}
+.wc .fill{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:#B0865C;transition:width .2s}
+.wc .fill.in{background:#3A6B50}.wc .fill.over{background:#A23B2C}
+.wc .mk{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink2)}
 @media (prefers-reduced-motion:reduce){ .cin,.scrim,.lt{transition:none} }
 @media print{
   body *{visibility:hidden} .cin,.cin *{visibility:visible}
-  .cin{position:absolute;inset:0;box-shadow:none} .cnav,.cact,.bars{display:none}
+  .cin{position:absolute;inset:0;box-shadow:none} .cnav,.cact,.bars,.chips,.wc{display:none}
+  .paper{box-shadow:none;padding:0} textarea.wr{min-height:90px;height:auto!important}
   html,body{position:static;overflow:visible} .cbody{overflow:visible}
 }
 </style>
@@ -184,7 +208,11 @@ body.cin-open .cin{opacity:1;visibility:visible;transition:opacity .26s ease,vis
     <button class="cclose" id="cClose" type="button" aria-label="Close">
       <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
-    <span></span>
+    <div class="seg s3" id="supp" role="radiogroup" aria-label="Support">
+      <button type="button" role="radio" data-v="full">Full</button>
+      <button type="button" role="radio" data-v="starters">Starters</button>
+      <button type="button" role="radio" data-v="moves">Moves</button>
+    </div>
     <span></span>
   </div>
   <div class="cbody" id="cbody"><div class="ccol">
@@ -388,34 +416,117 @@ function gallery(){
 
 /* ══ CINEMA ══ */
 function openModel(i){
-  OPEN=MODELS[i]; OPEN.tag=ABBR(OPEN.rec.label)+'-'+(i+1);
+  OPEN=MODELS[i]; OPEN.tag=ABBR(OPEN.rec.label)+'-'+(i+1); MODE='card';
   document.body.classList.add('cin-open'); $('cin').setAttribute('aria-hidden','false');
   try{ history.pushState({gen:1},''); }catch(e){}
   paint(); setTimeout(()=>{ try{ $('cClose').focus({preventScroll:true}); }catch(e){} },60);
 }
-function closeModel(){ document.body.classList.remove('cin-open'); $('cin').setAttribute('aria-hidden','true'); OPEN=null; }
+function closeModel(){ if(OPEN&&OPEN.draft) saveDraft(OPEN.draft,true); document.body.classList.remove('cin-open'); $('cin').setAttribute('aria-hidden','true'); OPEN=null; }
 $('cClose').onclick=()=>{ try{ history.back(); }catch(e){ closeModel(); } };
 $('scrim').onclick=$('cClose').onclick;
 addEventListener('popstate',()=>{ if(OPEN) closeModel(); });
 addEventListener('keydown',e=>{ if(e.key==='Escape'&&OPEN) $('cClose').onclick(); });
-/* THE CARD: the whole model at once — every section, every key expression.
-   Each line rolls on its own (‹ ›); the line left showing is the one kept. */
+/* SUPPORT — scaffolding that fades: Full shows each key expression whole,
+   Starters only its opening words, Moves only what the section must do.
+   The student's choice is remembered on this device. */
+let SUPPORT='full', MODE='card';
+try{ SUPPORT=localStorage.getItem('intuity.gen.support')||'full'; }catch(e){}
+document.querySelectorAll('#supp button').forEach(b=>b.onclick=()=>{ if(b.dataset.v===SUPPORT) return; SUPPORT=b.dataset.v;
+  try{ localStorage.setItem('intuity.gen.support',SUPPORT); }catch(e){} paint(); });
+function starter(L){
+  const h=L.h[L.i].html, m=h.match(/^<span class="sg">([^<]*)<\/span>/);
+  if(m) return `<span class="sg">${m[1]}</span> <span class="gp">…</span>`;
+  /* the words before the first gap, at most six; else the first four */
+  const t=plain(h), cut=t.split(/…|\.\.\.|\[/)[0].trim().split(/\s+/).filter(Boolean);
+  const w=(cut.length>=2?cut.slice(0,6):t.replace(/…/g,' ').split(/\s+/).filter(Boolean).slice(0,4)).join(' ').replace(/[,.;:]$/,'');
+  return esc(w)+' <span class="gp">…</span>';
+}
+const lineHTML=L=>SUPPORT==='starters'?starter(L):L.h[L.i].html;
+/* the fixed words of an expression, to tell whether the draft kept them */
+const SGRX=/^<span class="sg">([^<]*)<\/span>/;
+const hasGap=h=>/class="gp"|class="bl"/.test(h);
+/* what the draft starts from: a frame with gaps is given whole; a line made of
+   key expression + example content gives only the key expression */
+function given(L){ let h=L.h[L.i].html; h=h.replace(/^<span class="sg">[^<]*<\/span> · /,'');   /* an article's move label is not text */
+  const m=h.match(SGRX);
+  if(hasGap(h)) return plain(h);
+  return m? plain(m[1]).replace(/[,]?$/,m[1].trim().endsWith(',')?',':'')+' ' : plain(h); }
+function fixedPart(L){
+  const m0=L.h[L.i].html.match(SGRX); if(m0&&!hasGap(L.h[L.i].html)) return plain(m0[1]).trim().replace(/[,.;:]+$/,'');
+  const segs=plain(L.h[L.i].html.replace(/^<span class="sg">[^<]*<\/span> · /,'')).split(/…|\.\.\.|\[[^\]]*\]/).map(x=>x.trim().replace(/[,.;:]+$/,'')).filter(x=>x.length>7);
+  return segs.sort((a,b)=>b.length-a.length)[0]||'';
+}
+const norm=t=>String(t||'').toLowerCase().replace(/[’']/g,"'").replace(/\s+/g,' ');
+
 function paint(){
   const m=OPEN;
-  $('cKick').textContent=m.tag+' · '+TAG[TYPE]+' model';
+  document.querySelectorAll('#supp button').forEach(b=>{ const on=b.dataset.v===SUPPORT; b.classList.toggle('on',on); b.setAttribute('aria-checked',String(on)); });
+  $('cKick').textContent=m.tag+' · '+TAG[TYPE]+' model'+(MODE==='write'?' · your draft':'');
   $('cTitle').textContent=m.rec.label;
+  if(MODE==='write') return paintWrite();
   $('cMain').innerHTML=m.secs.map((S,si)=>
     `<div class="wsec"><div class="secw"><b>${String(si+1).padStart(2,'0')}</b>${esc(S.word)}</div>`+
-    S.lines.map((L,li)=>`<div class="ln" data-si="${si}" data-li="${li}">
+    (SUPPORT==='moves'
+      ? `<div class="mv">${esc(S.sub||'')}<br><i>${S.lines.length} ${S.lines.length>1?'sentences':'sentence'}</i></div>`
+      : S.lines.map((L,li)=>`<div class="ln" data-si="${si}" data-li="${li}">
       <button class="rl" type="button" data-d="-1" aria-label="Previous version"${L.i===0?' disabled':''}>‹</button>
-      <div class="lt" id="lt-${si}-${li}">${L.h[L.i].html}</div>
-      <button class="rl" type="button" data-d="1" aria-label="Another version">›</button></div>`).join('')+`</div>`).join('')+
-    `<p class="tip">Roll any line with ‹ › until you like it. Fill every <span class="gp">…</span> and <span class="bl">[blank]</span> with your own ideas.</p>`;
+      <div class="lt" id="lt-${si}-${li}">${lineHTML(L)}</div>
+      <button class="rl" type="button" data-d="1" aria-label="Another version">›</button></div>`).join(''))+`</div>`).join('')+
+    `<p class="tip">${SUPPORT==='moves'?'No key expressions this time: you know the moves. Write it in your own words.':'Roll any line with ‹ › until you like it. Then write your own review on it.'}</p>`;
   $('cMain').querySelectorAll('.rl').forEach(b=>{ const r=b.closest('.ln'); b.onclick=()=>roll(+r.dataset.si,+r.dataset.li,+b.dataset.d); });
-  $('cAct').innerHTML=`<button class="btn" type="button" id="aCopy">Copy</button><button class="btn" type="button" id="aPrint">Print</button>`;
+  $('cAct').innerHTML=`<button class="btn" type="button" id="aPrint">Print</button><button class="btn go" type="button" id="aWrite">Write it →</button>`;
+  $('aPrint').onclick=()=>window.print();
+  $('aWrite').onclick=()=>{ MODE='write'; paint(); $('cbody').scrollTop=0; };
+}
+
+/* WRITE — the skeleton becomes the draft. Each key expression heads a ruled
+   line where the student writes the whole sentence; the expression is
+   pre-written at Full, started at Starters, left out at Moves. The draft is
+   kept on this device, per model. */
+const DKEY=()=>'intuity.gen.draft.'+TYPE+'.'+SUBJ+'.'+OPEN.n;
+function loadDraft(){ if(OPEN.draft) return OPEN.draft; let d=null; try{ d=JSON.parse(localStorage.getItem(DKEY())||'null'); }catch(e){}
+  return (OPEN.draft=d&&d.t?d:{t:{},c:[]}); }
+let saveT=0;
+function saveDraft(d,now){ clearTimeout(saveT); const w=()=>{ try{ localStorage.setItem(DKEY(),JSON.stringify(d)); }catch(e){} }; if(now) w(); else saveT=setTimeout(w,250); }
+/* the question's own points to cover, when the student came from a question on this subject */
+function points(){
+  const read=k=>{ try{ return JSON.parse(sessionStorage.getItem(k)||'null'); }catch(e){ return null; } };
+  const key={essays:'currentQuestion',reviews:'currentReviewQuestion',reports:'currentReportQuestion',emails:'currentEmailQuestion',articles:'currentArticleQuestion'}[TYPE];
+  const q=read(key); if(!q) return [];
+  const fq=fromQuestion(); if(TYPE!=='articles'&&fq&&SUBJ!==fq&&SUBJ.indexOf(fq)!==0) return [];
+  return (q.writingPoints||q.keyPoints||q.points||[]).map(x=>typeof x==='string'?x:(x.text||x.point||'')).filter(Boolean).slice(0,4);
+}
+function paintWrite(){
+  const m=OPEN, d=loadDraft(), pts=points();
+  const pre=L=>SUPPORT==='full'?given(L):SUPPORT==='starters'?plain(starter(L)).replace(/\s*…\s*$/,' '):'';
+  $('cMain').innerHTML=
+    (pts.length?`<div class="chips"><span class="lab">COVER</span>${pts.map((p,i)=>`<button type="button" class="chip${d.c.includes(i)?' on':''}" data-i="${i}" aria-pressed="${d.c.includes(i)}">${d.c.includes(i)?'✓ ':''}${esc(p)}</button>`).join('')}</div>`:'')+
+    `<div class="paper">`+m.secs.map((S,si)=>`<div class="pl">${String(si+1).padStart(2,'0')} · ${esc(S.word)}</div>`+
+      S.lines.map((L,li)=>{ const k=si+'-'+li, val=(k in d.t)?d.t[k]:pre(L);
+        return (SUPPORT==='moves'?'':`<div class="kx" id="kx-${k}"><span class="no">○</span><span>${plain(lineHTML(L))}</span></div>`)+
+          `<textarea class="wr" data-k="${k}" aria-label="${esc(S.word)}, sentence ${li+1}" placeholder="${SUPPORT==='moves'?esc(S.sub||'Write your sentence'):'Write your sentence'}">${esc(val)}</textarea>`; }).join('')).join('')+`</div>`+
+    `<div class="wc"><div class="row"><span id="wcN">0 WORDS</span><span>TARGET 140–190</span></div>
+      <div class="bar"><i class="fill" id="wcF"></i><i class="mk" style="left:${140/220*100}%"></i><i class="mk" style="left:${190/220*100}%"></i></div></div>`+
+    `<p class="tip">${SUPPORT==='moves'?'Every word is yours this time.':'Replace every … and [blank] with your own details. A key expression gets ✓ while your sentence still uses it.'}</p>`;
+  const tas=[...$('cMain').querySelectorAll('textarea.wr')];
+  const fit=t=>{ t.style.height='auto'; t.style.height=Math.max(60,t.scrollHeight)+'px'; };
+  const update=()=>{
+    let n=0; tas.forEach(t=>{ n+=(t.value.match(/[A-Za-zÀ-ÿ0-9’'-]+/g)||[]).length; d.t[t.dataset.k]=t.value;
+      const kx=$('kx-'+t.dataset.k); if(kx){ const [si,li]=t.dataset.k.split('-').map(Number), f=fixedPart(m.secs[si].lines[li]);
+        const ok=f?norm(t.value).indexOf(norm(f))>=0:t.value.trim().length>0; const mk=kx.firstChild; mk.className=ok?'ok':'no'; mk.textContent=ok?'✓':'○'; } });
+    $('wcN').textContent=n+' WORDS';
+    const F=$('wcF'); F.style.width=Math.min(100,n/220*100)+'%'; F.className='fill'+(n>=140&&n<=190?' in':n>190?' over':'');
+    saveDraft(d);
+  };
+  tas.forEach(t=>{ fit(t); t.addEventListener('input',()=>{ fit(t); update(); }); });
+  $('cMain').querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ const i=+c.dataset.i, at=d.c.indexOf(i);
+    if(at<0) d.c.push(i); else d.c.splice(at,1); saveDraft(d,true); paintWrite(); });
+  update();
+  $('cAct').innerHTML=`<button class="btn" type="button" id="aBack">← Model</button><button class="btn" type="button" id="aCopy">Copy</button><button class="btn" type="button" id="aPrint">Print</button>`;
+  $('aBack').onclick=()=>{ MODE='card'; paint(); };
   $('aPrint').onclick=()=>window.print();
   $('aCopy').onclick=()=>{
-    const txt=m.rec.label+'\n\n'+m.secs.map((S,k)=>String(k+1).padStart(2,'0')+' '+S.word.toUpperCase()+'\n'+S.lines.map(L=>plain(L.h[L.i].html)).join('\n')).join('\n\n');
+    const txt=m.secs.map((S,si)=>S.lines.map((L,li)=>(d.t[si+'-'+li]||'').trim()).filter(Boolean).join(' ')).filter(Boolean).join('\n\n');
     const done=()=>{ $('aCopy').textContent='Copied ✓'; setTimeout(()=>{ if($('aCopy')) $('aCopy').textContent='Copy'; },1600); };
     try{ navigator.clipboard.writeText(txt).then(done,()=>{}); }catch(e){}
   };
@@ -428,7 +539,7 @@ function roll(si,li,d){
   try{ if(window.SFX&&SFX.isOn()&&SFX.pop) SFX.pop(); }catch(e){}
   const el=$('lt-'+si+'-'+li), row=el.closest('.ln');
   el.style.opacity='0';
-  setTimeout(()=>{ el.innerHTML=L.h[L.i].html; el.style.opacity='1'; row.querySelector('[data-d="-1"]').disabled=L.i===0; },90);
+  setTimeout(()=>{ el.innerHTML=lineHTML(L); el.style.opacity='1'; row.querySelector('[data-d="-1"]').disabled=L.i===0; },90);
 }
 init();
 })();

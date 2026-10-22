@@ -212,6 +212,43 @@ if (B.getAttribute('data-stage') === 'sample') {
   }
 }
 
+/* Model pages: a flat iOS pill beside Cards · Phrases opens the Model
+   Generator on the subject the student is looking at. Pages keep that
+   subject in a global TYPE (essays, reviews, reports) or, for emails, in
+   currentRegister + currentType. */
+if (STAGE === 'model' && G.stages.generate) {
+  var css = document.createElement('style');
+  css.textContent =
+    '.wr-gen{display:inline-flex;align-items:center;gap:.35rem;height:30px;padding:0 .9rem 0 .8rem;border-radius:999px;' +
+    'background:rgba(118,118,128,.12);color:#1c1c1e;text-decoration:none;font:600 .8125rem/1 -apple-system,BlinkMacSystemFont,"SF Pro Text","Geist",system-ui,sans-serif;' +
+    'letter-spacing:-.01em;white-space:nowrap;transition:background .15s}' +
+    '.wr-gen:hover{background:rgba(118,118,128,.2)}.wr-gen:active{background:rgba(118,118,128,.28)}' +
+    '.wr-gen i{font-style:normal;color:rgba(60,60,67,.6);font-size:1rem;line-height:1}' +
+    '.mode-row.has-gen{display:flex!important;justify-content:center!important;align-items:center;gap:.6rem;flex-wrap:wrap}' +
+    '.mode-row.has-gen > *{grid-column:auto!important;justify-self:auto!important;margin:0!important;position:static!important}' +
+    '.wr-gen-row{display:flex;justify-content:center;padding:.45rem 1rem .15rem}';
+  document.head.appendChild(css);
+  var gen = el('a', 'wr-gen');
+  gen.href = G.stages.generate;
+  gen.appendChild(document.createTextNode('Model Generator'));
+  gen.appendChild(el('i', null, '\u203A'));
+  gen.addEventListener('click', function () {
+    var sub = '';
+    try { if (typeof TYPE !== 'undefined' && TYPE) sub = String(TYPE); } catch (e) {}
+    try {
+      if (!sub && typeof currentRegister !== 'undefined')
+        sub = currentRegister + (typeof currentType !== 'undefined' && currentType ? '-' + String(currentType).toLowerCase() : '');
+    } catch (e) {}
+    if (sub) gen.href = G.stages.generate + '&subject=' + encodeURIComponent(sub);
+  });
+  var row = document.querySelector('.mode-row');
+  if (row) { row.classList.add('has-gen'); row.appendChild(gen); }
+  else {
+    var wrap = el('div', 'wr-gen-row'); wrap.appendChild(gen);
+    if (newTop.nextSibling) newTop.parentNode.insertBefore(wrap, newTop.nextSibling); else newTop.parentNode.appendChild(wrap);
+  }
+}
+
 Array.prototype.forEach.call(document.querySelectorAll('.wr-filters'), function (row) {
   centreActive(row);
   if (window.MutationObserver) new MutationObserver(function () { centreActive(row); })

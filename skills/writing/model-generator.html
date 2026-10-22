@@ -330,9 +330,32 @@ async function init(){
   try{ data=await Promise.all(SRC[TYPE].map(p=>fetch(p).then(r=>{ if(!r.ok) throw new Error(p); return r.json(); }))); }
   catch(e){ $('loading').textContent='⚠ Could not load the model data'; return; }
   RECIPES=BUILD[TYPE](data).filter(r=>r.sections.length);
-  const want=new URLSearchParams(location.search).get('subject');
-  SUBJ=(RECIPES.find(r=>r.key===want)||RECIPES[0]).key;
+  const want=new URLSearchParams(location.search).get('subject')||fromQuestion();
+  const fuzzy=()=>{ if(!want||want.indexOf('-')<0) return null; const reg=want.split('-')[0], w=want.slice(reg.length+1).replace(/[^a-z]/g,'').slice(0,5);
+    return w?RECIPES.find(r=>r.key.indexOf(reg+'-')===0&&r.key.replace(/[^a-z]/g,'').indexOf(w)>=0):null; };
+  SUBJ=(RECIPES.find(r=>r.key===want)||fuzzy()||RECIPES.find(r=>want&&r.key.indexOf(want)===0)||RECIPES[0]).key;
   subjects(); gallery();
+}
+/* No ?subject=: open on the subject of the question the student chose on the
+   Question page — the same keys and aliases the Model pages read. */
+function fromQuestion(){
+  const read=k=>{ try{ return JSON.parse(sessionStorage.getItem(k)||'null'); }catch(e){ return null; } };
+  const keys=RECIPES.map(r=>r.key), low=x=>String(x||'').toLowerCase();
+  if(TYPE==='essays'){ const q=read('currentQuestion'); return q&&q.essayType; }
+  if(TYPE==='reviews'){ const q=read('currentReviewQuestion'); if(!q) return null;
+    let t=low(q.subject||q.reviewType||q.category);
+    const al={films:'film',series:'film',movie:'film',movies:'film',books:'book',restaurants:'restaurant',places:'restaurant',products:'product',gadget:'product',services:'service',app:'service',apps:'service'};
+    return al[t]||t; }
+  if(TYPE==='reports'){ const q=read('currentReportQuestion'); if(!q) return null;
+    let t=low(q.subject||q.reportType||q.category);
+    const al={facility:'facilities',amenities:'facilities',events:'event',proposals:'proposal',surveys:'survey',questionnaire:'survey',experience:'course',placement:'course',trip:'course'};
+    return al[t]||t; }
+  if(TYPE==='emails'){ const q=read('currentEmailQuestion'); if(!q) return null;
+    const reg=low(q.formality)==='informal'?'informal':'formal';
+    const words=low(q.taskType+' '+q.type).split(/[^a-z]+/).filter(w=>w.length>3);
+    const hit=keys.find(k=>k.indexOf(reg+'-')===0&&words.some(w=>k.indexOf(w.slice(0,5))>=0));
+    return hit||reg; }
+  return null;
 }
 function subjects(){
   const bar=$('subjects');
@@ -411,6 +434,6 @@ init();
 })();
 </script>
 <script src="/skills/grammar-rules/intuity-sound.js"></script>
-<script src="/data/writing/writing-chrome.js?v=6"></script>
+<script src="/data/writing/writing-chrome.js?v=7"></script>
 </body>
 </html>

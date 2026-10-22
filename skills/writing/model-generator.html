@@ -453,7 +453,7 @@ function given(L){ let h=L.h[L.i].html; h=h.replace(/^<span class="sg">[^<]*<\/s
   return m? plain(m[1]).replace(/[,]?$/,m[1].trim().endsWith(',')?',':'')+' ' : plain(h); }
 function fixedPart(L){
   const m0=L.h[L.i].html.match(SGRX); if(m0&&!hasGap(L.h[L.i].html)) return plain(m0[1]).trim().replace(/[,.;:]+$/,'');
-  const segs=plain(L.h[L.i].html.replace(/^<span class="sg">[^<]*<\/span> · /,'')).split(/…|\.\.\.|\[[^\]]*\]/).map(x=>x.trim().replace(/[,.;:]+$/,'')).filter(x=>x.length>7);
+  const segs=plain(L.h[L.i].html.replace(/^<span class="sg">[^<]*<\/span> · /,'')).split(/…|\.\.\.|\[[^\]]*\]/).map(x=>x.trim().replace(/^[,.;:\s]+|[,.;:]+$/g,'')).filter(x=>x.length>7);
   return segs.sort((a,b)=>b.length-a.length)[0]||'';
 }
 const norm=t=>String(t||'').toLowerCase().replace(/[’']/g,"'").replace(/\s+/g,' ');
@@ -503,17 +503,22 @@ function paintWrite(){
     (pts.length?`<div class="chips"><span class="lab">COVER</span>${pts.map((p,i)=>`<button type="button" class="chip${d.c.includes(i)?' on':''}" data-i="${i}" aria-pressed="${d.c.includes(i)}">${d.c.includes(i)?'✓ ':''}${esc(p)}</button>`).join('')}</div>`:'')+
     `<div class="paper">`+m.secs.map((S,si)=>`<div class="pl">${String(si+1).padStart(2,'0')} · ${esc(S.word)}</div>`+
       S.lines.map((L,li)=>{ const k=si+'-'+li, val=(d.t[k]&&d.t[k].trim())?d.t[k]:pre(L);   /* an empty saved line gets its expression back */
-        return (SUPPORT==='moves'?'':`<div class="kx" id="kx-${k}"><span class="no">○</span><span>${plain(lineHTML(L))}</span></div>`)+
+        /* the line above shows only what the box does not already hold */
+        const full=plain(L.h[L.i].html).trim();
+        const lab=SUPPORT==='starters'?'Complete the expression from memory'
+          :(given(L).trim()===full?'@':full);   /* @ = a frame: the line shows its status, not a copy */
+        return (SUPPORT==='moves'||!lab?'':`<div class="kx" id="kx-${k}"${lab==='@'?' data-frame="1"':''}><span class="no">○</span><span>${lab==='@'?'keep the expression':esc(lab)}</span></div>`)+
           `<textarea class="wr" spellcheck="false" autocorrect="off" autocapitalize="sentences" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" data-k="${k}" aria-label="${esc(S.word)}, sentence ${li+1}" placeholder="${SUPPORT==='moves'?esc(S.sub||'Write your sentence'):'Start with the expression above, finish it your way'}">${esc(val)}</textarea>`; }).join('')).join('')+`</div>`+
     `<div class="wc"><div class="row"><span id="wcN">0 WORDS</span><span>TARGET 140–190</span></div>
       <div class="bar"><i class="fill" id="wcF"></i><i class="mk" style="left:${140/220*100}%"></i><i class="mk" style="left:${190/220*100}%"></i></div></div>`+
-    `<p class="tip">${SUPPORT==='moves'?'Every word is yours this time: follow the moves, no key expressions given.':SUPPORT==='starters'?'Finish each expression from memory, then add your own details. The line above shows the full expression.':'Keep the key expression and finish the sentence about your own subject. The caramel line is an example, not something to copy. ✓ means you kept the expression.'}</p>`;
+    `<p class="tip">${SUPPORT==='moves'?'Every word is yours this time: follow the moves, no key expressions given.':SUPPORT==='starters'?'Finish each expression from memory, then add your own details. The line above shows the full expression.':'Keep the key expressions and fill every … with your own ideas about your subject. A caramel sentence is an example, not something to copy. ✓ means you kept the expression.'}</p>`;
   const tas=[...$('cMain').querySelectorAll('textarea.wr')];
   const fit=t=>{ t.style.height='auto'; t.style.height=Math.max(60,t.scrollHeight)+'px'; };
   const update=()=>{
     let n=0; tas.forEach(t=>{ n+=(t.value.match(/[A-Za-zÀ-ÿ0-9’'-]+/g)||[]).length; d.t[t.dataset.k]=t.value;
       const kx=$('kx-'+t.dataset.k); if(kx){ const [si,li]=t.dataset.k.split('-').map(Number), f=fixedPart(m.secs[si].lines[li]);
-        const ok=f?norm(t.value).indexOf(norm(f))>=0:t.value.trim().length>0; const mk=kx.firstChild; mk.className=ok?'ok':'no'; mk.textContent=ok?'✓':'○'; } });
+        const ok=f?norm(t.value).indexOf(norm(f))>=0:t.value.trim().length>0; const mk=kx.firstChild; mk.className=ok?'ok':'no'; mk.textContent=ok?'✓':'○';
+        if(kx.dataset.frame) kx.lastChild.textContent=ok?'expression kept':'keep the expression'; } });
     $('wcN').textContent=n+' WORDS';
     const F=$('wcF'); F.style.width=Math.min(100,n/220*100)+'%'; F.className='fill'+(n>=140&&n<=190?' in':n>190?' over':'');
     saveDraft(d);

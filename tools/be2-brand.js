@@ -30,6 +30,7 @@
 (function () {
   var OLD_NAME = /INTUITY/g;
   var NEW_NAME = 'Be2FIRST';
+  var REBRAND = false;
 
   /* Every class a page has ever used for the name. Add to this list, never
      to the pages. */
@@ -173,9 +174,10 @@
   }
 
   function run() {
+    if (REBRAND) {
     if (OLD_NAME.test(document.title)) document.title = document.title.replace(OLD_NAME, NEW_NAME);
     OLD_NAME.lastIndex = 0;
-
+       
     /* An explicit placeholder, for headers that never carried the old name:
          <span data-be2></span>   → compact mark
        Put it where the mark should sit; the page's own text stays. */
@@ -208,6 +210,7 @@
         swapText(el);
       }
     }
+        }
     var tops = document.querySelectorAll('.header-top');
     for (var j = 0; j < tops.length; j++) {
       var ht = tops[j];

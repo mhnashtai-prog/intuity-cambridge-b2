@@ -13,25 +13,30 @@ var GENRES = {
               stages:{ question:'/skills/writing/essays/essay-question.html',
                        plan:    '/skills/writing/essays/essay-plan.html',
                        model:   '/skills/writing/essays/essay-model.html',
+                       generate:'/skills/writing/model-generator.html?type=essays',
                        sample:  '/skills/writing/essays/essay-sample.html' } },
       reviews:  { label:'Review',  part:'Part 2', back:'/index.html?openModal=writing',
               stages:{ question:'/skills/writing/reviews/review-question-selector.html',
                        plan:    '/skills/writing/reviews/review-plan.html',
                        model:   '/skills/writing/reviews/reviews-cards.html',
+                       generate:'/skills/writing/model-generator.html?type=reviews',
                        sample:  '/skills/writing/reviews/review-sample.html' } },
     reports:  { label:'Report',  part:'Part 2', back:'/index.html?openModal=writing',
               stages:{ question:'/skills/writing/reports/report-question-selector.html',
                        plan:    '/skills/writing/reports/report-plan.html',
                        model:   '/skills/writing/reports/reports-cards.html',
+                       generate:'/skills/writing/model-generator.html?type=reports',
                        sample:  '/skills/writing/reports/report-sample.html' } },
 emails:   { label:'Email',   part:'Part 2', back:'/index.html?openModal=writing',
             stages:{ question:'/skills/writing/emails/email-question.html',
                      plan:    '/skills/writing/emails/email-plan.html',
                      model:   '/skills/writing/emails/email-model.html',
+                       generate:'/skills/writing/model-generator.html?type=emails',
                      sample:  '/skills/writing/emails/email-sample.html' } },
   articles: { label:'Article', part:'Part 2', back:'/index.html?openModal=writing',
               stages:{ question:'/skills/writing/articles/article-question.html',
                        model:   '/skills/writing/articles/article-model.html',
+                       generate:'/skills/writing/model-generator.html?type=articles',
                        sample:  '/skills/writing/articles/article-sample.html' } },
   story:    { label:'Story',   part:'Part 2', back:'/index.html?openModal=writing',
               stages:{ question:'/skills/writing/narrative/narrative-question.html',
@@ -42,8 +47,8 @@ emails:   { label:'Email',   part:'Part 2', back:'/index.html?openModal=writing'
 var G = GENRES[GENRE];
 if (!G) return;
 
-var ORDER = ['question','plan','model','sample'];
-var NAMES = { question:'Question', plan:'Plan', model:'Model', sample:'Sample' };
+var ORDER = ['question','plan','model','generate','sample'];
+var NAMES = { question:'Question', plan:'Plan', model:'Model', generate:'Generate', sample:'Sample' };
 
 function el(tag, cls, text) {
   var n = document.createElement(tag);
@@ -78,7 +83,8 @@ function header() {
       nav.appendChild(cur);
     } else {
       var a = el('a', 'mode-btn', GENRES[k].label);
-      a.href = GENRES[k].stages.question;
+      /* inside the generator, the task tabs stay in the generator */
+      a.href = (STAGE === 'generate' && GENRES[k].stages.generate) || GENRES[k].stages.question;
       nav.appendChild(a);
     }
   });
@@ -102,6 +108,7 @@ function foot() {
   pill.setAttribute('aria-label', 'Stage');
   ORDER.forEach(function (k) {
     var url = G.stages[k];
+    if (k === 'generate' && !url) return;   /* Story has no generator */
     if (k === STAGE || !url) {
       var s = el('span', 'wr-stage' + (k === STAGE ? ' active' : ' off'), NAMES[k]);
       if (k === STAGE) s.setAttribute('aria-current', 'page');

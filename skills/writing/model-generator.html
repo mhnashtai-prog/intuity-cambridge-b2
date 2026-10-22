@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>Model Generator — Be2FIRST</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@400..600&family=Anton&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=20261018">
+<link rel="stylesheet" href="/data/writing/writing.css?v=20261018m">
+<link rel="stylesheet" href="/tools/parade.css?v=2">
+<!--
+  THE MODEL GENERATOR — the fifth stage of every writing task
+  (Question · Plan · Model · Generate · Sample).
+
+  PARADE: the subject's generated models side by side (tools/parade.js),
+  the same strip as the Question pages. Six per subject, seeded, so the
+  gallery is the same on every visit and a teacher can say "open RS-3".
+  CINEMA: the chosen model, one section at a time — the generator fetches
+  the next section only when the student asks for it. Every line rolls
+  (‹ ›, a swipe or a tap) through the key expressions that fit its move;
+  the line left showing is the one the student keeps. After the last
+  section, the whole skeleton — print it, copy it, or start again.
+
+  DATA — the same files the five Model pages read, nothing new:
+    Essay    essays/data/essay-cards-models.json
+    Review   reviews/data/reviews-cards-models.json
+    Report   reports/data/reports-cards-models.json
+    Email    emails/data/emails-structure-formal.json, -informal.json
+    Article  articles/data/article-cards-models.json
+  ?type=essays|reviews|reports|emails|articles picks the task (the Generate
+  pill passes it); &subject=<key> picks the subject.
+-->
+<style>
+:root{--bg:#f0efec;--ink:#111111;--card:#FAF8F5;--caramel:#B0865C;
+  --poster-ink:#14110E;--poster-body:#5C5852;--poster-faint:rgba(20,17,14,.5);--poster-rule:rgba(20,17,14,.2);--poster-fill:rgba(20,17,14,.08);
+  --f-mono:'Geist Mono',ui-monospace,monospace;--f-poster:'Anton',Impact,sans-serif;--ease:cubic-bezier(.2,.9,.3,1)}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(--bg);font-family:'Geist',sans-serif;-webkit-font-smoothing:antialiased;color:var(--poster-ink)}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:none}
+:focus-visible{outline:2px solid var(--caramel);outline-offset:2px}
+.shell{position:fixed;inset:0;display:flex;flex-direction:column}
+.topbar{flex-shrink:0;height:48px}
+.filter-bar{flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:.25rem;padding:.45rem 1.1rem;overflow-x:auto;scrollbar-width:none}
+.filter-bar::-webkit-scrollbar{display:none}
+.ftab{padding:.28rem .65rem;border-radius:2rem;font-family:var(--f-mono);font-size:.6875rem;font-weight:600;color:rgba(0,0,0,.4);white-space:nowrap;letter-spacing:.06em;text-transform:uppercase}
+.ftab:hover{color:rgba(0,0,0,.65)}
+.ftab.active{color:var(--poster-ink);box-shadow:inset 0 -2px 0 var(--caramel);border-radius:0}
+.stage{flex:1;min-height:0;overflow-y:auto;display:flex;align-items:flex-start;justify-content:center;padding:.6rem 0 1rem}
+.loading{margin-top:3rem;font-family:var(--f-mono);font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--poster-faint)}
+.foot{flex-shrink:0;height:52px}
+/* inside a parade column: the model's opening, as lines */
+.pv-l{display:block;padding:7px 0;border-top:1px solid var(--poster-rule);font-size:clamp(15px,4.1vw,17px);line-height:1.4;font-weight:500}
+.pv-l:first-child{border-top:0;padding-top:0}
+.pv-w{display:block;font-family:var(--f-mono);font-size:.6875rem;letter-spacing:.16em;text-transform:uppercase;color:var(--poster-faint);margin-bottom:8px}
+.gp{color:var(--caramel);font-weight:700}
+.bl{background:rgba(176,134,92,.16);padding:0 3px;border-radius:3px;white-space:nowrap}
+.sg{font-weight:700}
+.vw{color:var(--poster-body)}
+
+/* ══ THE CINEMA — one model, lights down ══ */
+.scrim{position:fixed;inset:0;z-index:300;background:rgba(20,17,14,.36);opacity:0;pointer-events:none;transition:opacity .35s}
+body.cin-open .scrim{opacity:1;pointer-events:auto}
+.cin{position:fixed;z-index:310;inset:0;display:flex;flex-direction:column;background:var(--card);opacity:0;visibility:hidden;
+  transition:opacity .2s ease,visibility 0s .2s}
+body.cin-open .cin{opacity:1;visibility:visible;transition:opacity .26s ease,visibility 0s}
+@media (min-width:700px){ .cin{--cw:min(760px,94vw);--ch:min(calc(100vh - 48px),900px);left:calc(50% - var(--cw)/2);right:auto;width:var(--cw);
+  height:var(--ch);top:calc((100vh - var(--ch))/2);bottom:auto;box-shadow:0 30px 60px -30px rgba(20,17,14,.5)} }
+.cnav{flex:none;display:grid;grid-template-columns:44px 1fr 44px;align-items:center;padding:calc(8px + env(safe-area-inset-top)) 12px 8px}
+.cclose{width:32px;height:32px;border-radius:50%;background:var(--poster-fill);display:grid;place-items:center;color:var(--poster-body)}
+.cclose svg{width:12px;height:12px}
+.seg{display:grid;grid-template-columns:1fr 1fr;justify-self:center;width:100%;max-width:230px;height:32px;padding:2px;border-radius:10px;background:var(--poster-fill)}
+.seg button{border-radius:8px;font-size:13px;font-weight:600;color:var(--poster-body)}
+.seg button.on{background:#fff;color:var(--poster-ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.seg button:disabled{opacity:.4;cursor:default}
+.bars{display:flex;gap:6px;padding:0 18px}
+.bars i{flex:1;height:4px;border-radius:2px;background:var(--poster-rule);transition:background .3s}
+.bars i.on{background:var(--poster-ink)}
+.cbody{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:18px 18px 18px}
+.ccol{max-width:42rem;margin:0 auto}
+.kick{display:flex;align-items:center;gap:9px;font-family:var(--f-mono);font-size:.6875rem;font-weight:500;letter-spacing:.22em;text-transform:uppercase;color:var(--poster-faint)}
+.kick::before{content:'';display:block;width:26px;height:10px;flex:none;background:var(--caramel)}
+.title{font-family:var(--f-poster);font-weight:400;letter-spacing:.01em;line-height:1;font-size:clamp(30px,8vw,42px);margin:10px 0 4px}
+.secw{font-family:var(--f-mono);font-size:.75rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--poster-ink);
+  padding:14px 0 10px;border-bottom:1px solid var(--poster-rule);display:flex;gap:10px;align-items:baseline}
+.secw b{font-family:var(--f-poster);font-weight:400;font-size:1.6rem;letter-spacing:0;line-height:1}
+.secsub{font-size:13px;color:var(--poster-body);margin:8px 0 2px}
+.ln{display:flex;align-items:center;gap:4px;padding:12px 0;border-bottom:1px solid var(--poster-rule)}
+.lt{flex:1;font-size:clamp(17px,4.6vw,20px);line-height:1.45;font-weight:500;transition:opacity .12s}
+.rl{width:36px;height:44px;flex:none;display:grid;place-items:center;font-size:22px;font-weight:600;color:var(--caramel);border-radius:8px}
+.rl:hover{background:var(--poster-fill)}
+.rl:disabled{opacity:.25;cursor:default}
+.tip{font-size:13px;color:var(--poster-body);margin-top:12px}
+/* the whole skeleton */
+.wsec{padding:12px 0 10px;border-bottom:1px solid var(--poster-rule)}
+.wsec .secw{border:0;padding:0 0 6px}
+.wl{font-size:16px;line-height:1.5;font-weight:500;padding:3px 0}
+.cact{flex:none;display:flex;justify-content:center;gap:8px;padding:10px 14px calc(14px + env(safe-area-inset-bottom));box-shadow:0 -1px 0 var(--poster-rule);background:var(--card)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:10px 16px;border-radius:999px;font-size:14px;font-weight:600;background:var(--poster-fill)}
+.btn.go{background:var(--poster-ink);color:#F6F3EE}
+.btn:hover{filter:brightness(.97)}
+@media (prefers-reduced-motion:reduce){ .cin,.scrim,.lt{transition:none} }
+@media print{
+  body *{visibility:hidden} .cin,.cin *{visibility:visible}
+  .cin{position:absolute;inset:0;box-shadow:none} .cnav,.cact,.bars{display:none}
+  html,body{position:static;overflow:visible} .cbody{overflow:visible}
+}
+</style>
+</head>
+<body data-stage="generate">
+<script>
+/* the shared header and footer read data-writing: set it from ?type= first */
+(function(){
+  var t=(new URLSearchParams(location.search).get('type')||'').toLowerCase();
+  var ok={essays:1,reviews:1,reports:1,emails:1,articles:1};
+  if(!ok[t]){ try{ t=sessionStorage.getItem('intuity.gen.type')||''; }catch(e){} }
+  if(!ok[t]) t='reviews';
+  document.body.setAttribute('data-writing',t);
+  try{ sessionStorage.setItem('intuity.gen.type',t); }catch(e){}
+})();
+</script>
+<div class="shell">
+  <div class="topbar"></div>
+  <div class="filter-bar" id="subjects" role="tablist" aria-label="Subject"></div>
+  <div class="stage"><div id="parade"><p class="loading" id="loading">Loading…</p></div></div>
+  <div class="foot"></div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<section class="cin" id="cin" role="dialog" aria-modal="true" aria-labelledby="cTitle" aria-hidden="true">
+  <div class="cnav">
+    <button class="cclose" id="cClose" type="button" aria-label="Close">
+      <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <div class="seg" role="tablist" aria-label="View">
+      <button type="button" id="vSec" class="on" role="tab">Section</button>
+      <button type="button" id="vAll" role="tab">Skeleton</button>
+    </div>
+    <span></span>
+  </div>
+  <div class="bars" id="bars"></div>
+  <div class="cbody" id="cbody"><div class="ccol">
+    <div class="kick" id="cKick"></div>
+    <h1 class="title" id="cTitle"></h1>
+    <div id="cMain"></div>
+  </div></div>
+  <div class="cact" id="cAct"></div>
+</section>
+
+<script src="/tools/parade.js?v=2"></script>
+<script>
+(function(){
+'use strict';
+const TYPE=document.body.getAttribute('data-writing');
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+/* the gaps a student fills: "...", "…" and [Placeholders] */
+const fmt=s=>esc(s).replace(/\.\.\.|…/g,'<span class="gp">…</span>').replace(/\[([^\]]+)\]/g,'<span class="bl">[$1]</span>');
+const cap=s=>s?s.charAt(0).toUpperCase()+s.slice(1):s;
+const keyOf=x=>(x&&x.t)?x.t:x;
+/* a line that ends in a word gets its full stop; one ending in a gap or mark keeps it */
+const stop=h=>/[.!?…:,]\s*$|\.\.\.\s*$|<\/span>\s*$/.test(h.replace(/<span class="bl">[^<]*<\/span>\s*$/,'x'))?h:h+'.';
+/* the review hinge follows the subject's name: after a gap it takes a comma, after a full sentence a [Name] */
+const hinged=(bg,hinge)=>/(\.\.\.|…)\s*$/.test(bg)?fmt(bg.replace(/\s*$/,''))+', <span class="vw">'+fmt(hinge)+'</span>':fmt(bg)+' <span class="bl">[Name]</span>, <span class="vw">'+fmt(hinge)+'</span>';
+const comma=s=>/[,.;:]$/.test(s)?s:s+',';
+const plain=h=>h.replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"');
+
+/* seeded for the gallery (same six every visit), Math.random for rolling */
+let _s=0;
+function seeded(seed){ _s=seed|0; return function(){ _s=(_s+0x6D2B79F5)|0; let t=Math.imul(_s^_s>>>15,1|_s);
+  t=(t+Math.imul(t^t>>>7,61|t))^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+let R=Math.random;
+const pick=a=>a&&a.length?a[Math.floor(R()*a.length)]:'…';
+const pickAvoid=(pool,av)=>{ if(!pool||!pool.length) return '…'; const A=(av||[]).map(keyOf);
+  const f=pool.filter(x=>!A.includes(keyOf(x))); return pick(f.length?f:pool); };
+
+/* ══ ENGINES — each subject becomes a recipe: sections of lines, and every
+   line knows how to generate itself again, avoiding what its neighbours
+   already say. A line returns {html, used:[...]} . ══ */
+const SRC={
+  essays:['essays/data/essay-cards-models.json'],
+  reviews:['reviews/data/reviews-cards-models.json'],
+  reports:['reports/data/reports-cards-models.json'],
+  emails:['emails/data/emails-structure-formal.json','emails/data/emails-structure-informal.json'],
+  articles:['articles/data/article-cards-models.json']
+};
+const TAG={essays:'Essay',reviews:'Review',reports:'Report',emails:'Email',articles:'Article'};
+
+function recipesEssays(D){
+  const SH=D.shared;
+  return Object.keys(D.types).map(k=>{
+    const T=D.types[k], A=T.argue;
+    const VIEW=SH.view[T.viewFlavour]||SH.view.generalisation||Object.values(SH.view)[0];
+    const plan=A.bodyPlan||['keyFor','keyFor','keyAgainst'], sp=A.signpostPlan||['first','addition','turn'];
+    const body=[0,1,2].map(i=>av=>{ const s=pickAvoid(SH.signpost[sp[i]]||SH.signpost.addition,av.s), v=pickAvoid(VIEW,av.v), y=pickAvoid(A[plan[i]]||['…'],av.k);
+      return {html:`<span class="sg">${esc(comma(s))}</span> <span class="vw">${esc(v)}</span> ${fmt(y)}`,used:{s,v,k:y}}; });
+    return {key:k,label:T.label||k,sections:[
+      {word:'Introduction',sub:'Background · your aim',lines:[()=>({html:`${fmt(pick(SH.background))} <span class="vw">${esc(pick(T.open.hinge))} <span class="gp">…</span>. ${esc(pick(T.open.aim))}</span>`})]},
+      {word:'Body',sub:'Three points, each signposted',lines:body},
+      {word:'Conclusion',sub:'Sum up · your verdict',lines:[()=>({html:`${esc(pick(T.close.summary))} <span class="vw">${esc(pick(T.close.stance))}</span> ${fmt(pick(T.close.verdict))}`})]}
+    ]};
+  });
+}
+function recipesReviews(D){
+  const SH=D.shared, B=['first','open','standout'], K=['keyOpen','keyMore','keyMore'];
+  return Object.keys(D.types).map(k=>{
+    const T=D.types[k];
+    const feat=[0,1,2].map(i=>av=>{ const s=pickAvoid(SH.signpostFeature[B[i]]||SH.signpostFeature.open||[],av.s), y=pickAvoid(T.argue[K[i]]||['…'],av.k);
+      if((s._join||'self')==='open'){ const v=pickAvoid(SH.view||[],av.v);
+        return {html:stop(`<span class="sg">${esc(keyOf(s))}</span> <span class="vw">${esc(v)}</span> ${fmt(keyOf(y))}`),used:{s,v,k:y}}; }
+      return {html:stop(`<span class="sg">${esc(keyOf(s))}</span> ${fmt(keyOf(y))}`),used:{s,k:y}}; });
+    return {key:k,label:T.label||k,sections:[
+      {word:'Introduction',sub:'Hook · what it is · first impression',lines:[()=>({html:`${hinged(pick(SH.background),pick(T.open.hinge))} <span class="gp">…</span>. ${esc(pick(T.open.aim))}`})]},
+      {word:'Features',sub:'Three features, each signposted',lines:feat},
+      {word:'Recommendation',sub:'Who it is for · final verdict',lines:[()=>({html:`${fmt(pick(T.close.summary))} <span class="vw">${esc(pick(T.close.stance))}</span> ${fmt(pick(T.close.verdict))}`})]}
+    ]};
+  });
+}
+function recipesReports(D){
+  const SH=D.shared, B=['first','open','standout'], K=['keyGen','keyPos','keyNeg'];
+  return Object.keys(D.types).map(k=>{
+    const T=D.types[k];
+    const find=[0,1,2].map(i=>av=>{ const s=pickAvoid(SH.signpostFeature[B[i]]||[],av.s), y=pickAvoid(T.argue[K[i]]||['…'],av.k);
+      return {html:stop(`<span class="sg">${esc(keyOf(s))}</span> ${fmt(keyOf(y))}`),used:{s,k:y}}; });
+    return {key:k,label:T.label||k,sections:[
+      {word:'Aim · Basis',sub:'Why the report · where the facts came from',lines:[
+        ()=>({html:`${fmt(pick(SH.background))} ${fmt(pick(T.open.aim))}`}),
+        ()=>({html:`<span class="vw">${fmt(pick(SH.method||['…']))}</span>`})]},
+      {word:'Findings',sub:'General view · strengths · weaknesses',lines:find},
+      {word:'Recommendation',sub:'What should happen · conclusion',lines:[
+        ()=>({html:`${fmt(pick(T.close.recommend||['…']))} <span class="gp">…</span>`}),
+        ()=>({html:`${fmt(pick(T.close.summary))} <span class="vw">${fmt(pick(T.close.verdict))}</span>`})]}
+    ]};
+  });
+}
+function recipesEmails(list){
+  const out=[];
+  list.forEach(D=>{ ['formal','informal'].forEach(reg=>{ const R0=D[reg]; if(!R0) return;
+    Object.keys(R0).forEach(k=>{ const T=R0[k], S=T.sections||{};
+      const sec=(key,n,fixedFirst)=>{ const s=S[key]; if(!s) return null; const P=s.phrases||[];
+        const lines=[]; for(let i=0;i<n;i++){
+          if(i===0&&fixedFirst) lines.push(()=>({html:fmt(P[0]),used:{k:P[0]}}));
+          else lines.push(av=>{ const pool=fixedFirst?P.slice(1):P; const y=pickAvoid(pool,av.k); return {html:fmt(y),used:{k:y}}; }); }
+        return {word:(s.label||key).split(':')[0],sub:(s.label||'').split(':').slice(1).join(':').trim()||s.purpose||'',lines}; };
+      out.push({key:reg+'-'+k,label:(reg==='formal'?'Formal · ':'Informal · ')+(T.title||k),sections:[sec('opening',2,true),sec('main',3,false),sec('closing',2,false)].filter(Boolean)});
+    }); }); });
+  return out;
+}
+function recipesArticles(D){
+  const SH=D.shared, O=[].concat(...Object.values(SH.opening)), C=[].concat(...Object.values(SH.closing));
+  const fams=Object.keys(SH.development);
+  const dev=[0,1,2].map(()=>av=>{ const fam=pickAvoid(fams,av.s);   /* three different moves */
+    const y=pickAvoid(SH.development[fam],av.k);
+    return {html:`<span class="sg">${esc(cap(fam==='ministory'?'mini-story':fam))}</span> · ${fmt(y)}`,used:{s:fam,k:y}}; });
+  return [{key:'general',label:'Any topic',sections:[
+    {word:'Opening',sub:'Hook the reader',lines:[()=>({html:fmt(pick(O))})]},
+    {word:'Development',sub:'Describe · Compare · Opinion · Mini-story',lines:dev},
+    {word:'Closing',sub:'Sign off with style',lines:[()=>({html:fmt(pick(C))})]}
+  ]}];
+}
+const BUILD={essays:d=>recipesEssays(d[0]),reviews:d=>recipesReviews(d[0]),reports:d=>recipesReports(d[0]),emails:d=>recipesEmails(d),articles:d=>recipesArticles(d[0])};
+
+/* ── a MODEL is one recipe, run: every line keeps its history so ‹ goes back ── */
+const PER=6;
+function avoidFor(model,si,li){
+  const av={s:[],v:[],k:[]};
+  model.secs[si].lines.forEach((L,j)=>{ if(j===li||!L.h.length) return; const u=L.h[L.i].used; if(!u) return;
+    if(u.s) av.s.push(u.s); if(u.v) av.v.push(u.v); if(u.k) av.k.push(u.k); });
+  return av;
+}
+function runRecipe(rec,n){
+  const m={rec,n,secs:rec.sections.map(s=>({word:s.word,sub:s.sub,lines:s.lines.map(()=>({h:[],i:0}))}))};
+  rec.sections.forEach((s,si)=>s.lines.forEach((gen,li)=>{ m.secs[si].lines[li].h.push(gen(avoidFor(m,si,li))); }));
+  return m;
+}
+
+let RECIPES=[], SUBJ=null, MODELS=[], OPEN=null, step=0, view='sec';
+const ABBR=s=>{ const w=s.replace(/^(Formal|Informal) · /,'').split(/[\s/&·-]+/).filter(Boolean); return (w.length>1?w.map(x=>x[0]).join(''):(w[0]||'').slice(0,2)).slice(0,2).toUpperCase(); };
+
+async function init(){
+  let data;
+  try{ data=await Promise.all(SRC[TYPE].map(p=>fetch(p).then(r=>{ if(!r.ok) throw new Error(p); return r.json(); }))); }
+  catch(e){ $('loading').textContent='⚠ Could not load the model data'; return; }
+  RECIPES=BUILD[TYPE](data).filter(r=>r.sections.length);
+  const want=new URLSearchParams(location.search).get('subject');
+  SUBJ=(RECIPES.find(r=>r.key===want)||RECIPES[0]).key;
+  subjects(); gallery();
+}
+function subjects(){
+  const bar=$('subjects');
+  if(RECIPES.length<2){ bar.style.display='none'; return; }
+  bar.innerHTML=RECIPES.map(r=>`<button class="ftab${r.key===SUBJ?' active':''}" role="tab" aria-selected="${r.key===SUBJ}" data-k="${esc(r.key)}">${esc(r.label)}</button>`).join('');
+  bar.querySelectorAll('.ftab').forEach(b=>b.onclick=()=>{ if(b.dataset.k===SUBJ) return; SUBJ=b.dataset.k; subjects(); gallery();
+    try{ history.replaceState(null,'','?type='+TYPE+'&subject='+encodeURIComponent(SUBJ)); }catch(e){} });
+}
+function gallery(){
+  const rec=RECIPES.find(r=>r.key===SUBJ);
+  let seed=20261022; for(const ch of TYPE+SUBJ) seed=(seed*31+ch.charCodeAt(0))|0;
+  R=seeded(seed); MODELS=[]; for(let n=1;n<=PER;n++) MODELS.push(runRecipe(rec,n)); R=Math.random;
+  const tag=ABBR(rec.label)||TYPE.slice(0,2).toUpperCase();
+  Parade.mount($('parade'),{
+    label:'<b>'+TAG[TYPE]+'</b> · Choose a model to generate', aria:'Generated models',
+    items:MODELS.map((m,i)=>({
+      kicker:tag+'-'+(i+1)+' · '+TAG[TYPE]+' model',
+      title:rec.label,
+      html:'<span class="pv-w">'+esc(m.secs[0].word)+'</span>'+m.secs[0].lines.map(L=>'<span class="pv-l">'+L.h[0].html+'</span>').join(''),
+      meta:'<b>'+m.secs.length+'</b> sections'
+    })),
+    action:'Generate it', hint:'Swipe to see more.',
+    onOpen:i=>openModel(i)
+  });
+}
+
+/* ══ CINEMA ══ */
+function openModel(i){
+  OPEN=MODELS[i]; OPEN.tag=ABBR(OPEN.rec.label)+'-'+(i+1); step=0; view='sec';
+  document.body.classList.add('cin-open'); $('cin').setAttribute('aria-hidden','false');
+  try{ history.pushState({gen:1},''); }catch(e){}
+  paint(); setTimeout(()=>{ try{ $('cClose').focus({preventScroll:true}); }catch(e){} },60);
+}
+function closeModel(){ document.body.classList.remove('cin-open'); $('cin').setAttribute('aria-hidden','true'); OPEN=null; }
+$('cClose').onclick=()=>{ try{ history.back(); }catch(e){ closeModel(); } };
+$('scrim').onclick=$('cClose').onclick;
+addEventListener('popstate',()=>{ if(OPEN) closeModel(); });
+addEventListener('keydown',e=>{ if(e.key==='Escape'&&OPEN) $('cClose').onclick(); });
+$('vSec').onclick=()=>{ view='sec'; paint(); };
+$('vAll').onclick=()=>{ if(step<OPEN.secs.length-1) return; view='all'; paint(); };
+
+function paint(){
+  const m=OPEN, last=m.secs.length-1;
+  $('vSec').classList.toggle('on',view==='sec'); $('vAll').classList.toggle('on',view==='all');
+  $('vAll').disabled=step<last;
+  $('bars').innerHTML=m.secs.map((s,k)=>`<i class="${k<=step?'on':''}"></i>`).join('');
+  $('cKick').textContent=m.tag+' · '+TAG[TYPE]+' model';
+  $('cTitle').textContent=m.rec.label;
+  $('cbody').scrollTop=0;
+  if(view==='all') return paintAll();
+  const S=m.secs[step];
+  $('cMain').innerHTML=
+    `<div class="secw"><b>${String(step+1).padStart(2,'0')}</b>${esc(S.word)}</div>`+
+    (S.sub?`<p class="secsub">${esc(S.sub)}</p>`:'')+
+    S.lines.map((L,li)=>`<div class="ln" data-li="${li}">
+      <button class="rl" type="button" data-d="-1" aria-label="Previous version"${L.i===0?' disabled':''}>‹</button>
+      <div class="lt" id="lt-${li}">${L.h[L.i].html}</div>
+      <button class="rl" type="button" data-d="1" aria-label="Another version">›</button></div>`).join('')+
+    `<p class="tip">Roll each line with ‹ › until you like it. The line you leave is the one you keep.</p>`;
+  $('cMain').querySelectorAll('.rl').forEach(b=>b.onclick=()=>roll(+b.closest('.ln').dataset.li,+b.dataset.d));
+  $('cAct').innerHTML=(step>0?`<button class="btn" type="button" id="aPrev">← ${esc(m.secs[step-1].word)}</button>`:'')+
+    (step<last?`<button class="btn go" type="button" id="aNext">Fetch ${esc(m.secs[step+1].word)} →</button>`
+              :`<button class="btn go" type="button" id="aAll">See the skeleton →</button>`);
+  if($('aPrev')) $('aPrev').onclick=()=>{ step--; paint(); };
+  if($('aNext')) $('aNext').onclick=()=>{ step++; paint(); };
+  if($('aAll')) $('aAll').onclick=()=>{ view='all'; paint(); };
+}
+function roll(li,d){
+  const m=OPEN, L=m.secs[step].lines[li];
+  if(d<0){ if(L.i>0) L.i--; }
+  else if(L.i<L.h.length-1) L.i++;
+  else { L.h.push(OPEN.rec.sections[step].lines[li](avoidFor(m,step,li))); L.i=L.h.length-1; }
+  try{ if(window.SFX&&SFX.isOn()&&SFX.pop) SFX.pop(); }catch(e){}
+  const el=$('lt-'+li), row=el.closest('.ln');
+  el.style.opacity='0';
+  setTimeout(()=>{ el.innerHTML=L.h[L.i].html; el.style.opacity='1'; row.querySelector('[data-d="-1"]').disabled=L.i===0; },90);
+}
+function paintAll(){
+  const m=OPEN;
+  $('cMain').innerHTML=m.secs.map((S,k)=>`<div class="wsec"><div class="secw"><b>${String(k+1).padStart(2,'0')}</b>${esc(S.word)}</div>`+
+    S.lines.map(L=>`<div class="wl">${L.h[L.i].html}</div>`).join('')+`</div>`).join('')+
+    `<p class="tip">Fill every <span class="gp">…</span> and <span class="bl">[blank]</span> with your own ideas, then write it out.</p>`;
+  $('cAct').innerHTML=`<button class="btn" type="button" id="aBack">← Sections</button><button class="btn" type="button" id="aCopy">Copy</button><button class="btn" type="button" id="aPrint">Print</button>`;
+  $('aBack').onclick=()=>{ view='sec'; paint(); };
+  $('aPrint').onclick=()=>window.print();
+  $('aCopy').onclick=()=>{
+    const txt=m.rec.label+'\n\n'+m.secs.map((S,k)=>String(k+1).padStart(2,'0')+' '+S.word.toUpperCase()+'\n'+S.lines.map(L=>plain(L.h[L.i].html)).join('\n')).join('\n\n');
+    const done=()=>{ $('aCopy').textContent='Copied ✓'; setTimeout(()=>{ if($('aCopy')) $('aCopy').textContent='Copy'; },1600); };
+    try{ navigator.clipboard.writeText(txt).then(done,()=>{}); }catch(e){}
+  };
+}
+init();
+})();
+</script>
+<script src="/skills/grammar-rules/intuity-sound.js"></script>
+<script src="/data/writing/writing-chrome.js?v=6"></script>
+</body>
+</html>

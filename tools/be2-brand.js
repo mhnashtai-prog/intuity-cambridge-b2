@@ -211,6 +211,24 @@
       }
     }
         }
+
+         if (!REBRAND) {
+      if (/Be2FIRST/.test(document.title)) document.title = document.title.replace(/Be2FIRST/g, 'INTUITY');
+      var marks2 = document.querySelectorAll('.be2');
+      for (var m = 0; m < marks2.length; m++) {
+        var mk = marks2[m];
+        if (mk.tagName === 'DIV') {
+          var back = document.createElement('div');
+          back.className = 'app-title';
+          if (mk.id) back.id = mk.id;
+          back.textContent = 'INTUITY';
+          mk.replaceWith(back);
+        } else {
+          mk.replaceWith(document.createTextNode('INTUITY'));
+        }
+      }
+    }
+     
     var tops = document.querySelectorAll('.header-top');
     for (var j = 0; j < tops.length; j++) {
       var ht = tops[j];

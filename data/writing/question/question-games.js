@@ -72,6 +72,10 @@
 .qg-chips{display:flex;flex-wrap:wrap;gap:.35rem;margin:.5rem 0 0} .qg-chips span{font-size:.82rem;padding:.3rem .6rem;border-radius:999px;background:rgba(138,167,156,.18);color:#3F5C50}
 .cg-bins.qg-3{grid-template-columns:1fr}
 .cg-bins.qg-3 .cg-bin{min-height:3.4rem}
+.qg-guide{list-style:none;margin:-.15rem 0 .45rem;padding:0;font-size:.78rem;line-height:1.4;color:var(--faint)}
+.qg-guide li{position:relative;padding-left:.8rem} .qg-guide li::before{content:'';position:absolute;left:.1rem;top:.55em;width:4px;height:4px;border-radius:50%;background:var(--ring-sage,#8AA79C)}
+.qg-guide b{font-family:var(--f-mono,monospace);font-weight:600;font-size:.7rem;letter-spacing:.06em;color:var(--dim)}
+.cg-bins.qg-3 .cg-bin h4{font-weight:700;color:var(--ink)}
 @media(prefers-reduced-motion:reduce){ .qg-ring .b{transition:none} }`;
   function style(){ if(document.getElementById('qg-css')) return; const s=document.createElement('style'); s.id='qg-css'; s.textContent=css; document.head.appendChild(s); }
   const RR=26, CC=2*Math.PI*RR;
@@ -85,7 +89,11 @@
   /* the three shared games, under the board's names */
   if(G.match) G.qMatch = Object.assign({}, G.match, {title:'Matcher', skill:'receptive'});
   if(G.sort)  G.qSort  = Object.assign({}, G.sort,  {title:'Sorter', skill:'receptive',
-    render(host,r,ctx){ style(); G.sort.render(host,r,ctx); const b=host.querySelector('.cg-bins'); if(b) b.classList.add('qg-3'); }});
+    /* each box says how much that part of THIS task holds — so sorting is also
+       a lesson in shape: how many paragraphs, how many sentences, what they do */
+    render(host,r,ctx){ style(); G.sort.render(host,r,ctx); const b=host.querySelector('.cg-bins'); if(!b) return; b.classList.add('qg-3');
+      if(r.guide) ['intro','body','conclusion'].forEach((pt,k)=>{ const g=r.guide[pt], h=b.querySelector('[data-bin="'+k+'"] h4');
+        if(g&&h) h.insertAdjacentHTML('afterend','<ul class="qg-guide"><li><b>'+ctx.esc(g[0])+'</b></li><li>'+ctx.esc(g[1])+'</li></ul>'); }); }});
   if(G.order) G.qPuzzle = Object.assign({}, G.order, {title:'Puzzle', skill:'productive'});
 
   /* ═══ PHRASE SELECTOR — three gaps, one per part, four phrases each ═══

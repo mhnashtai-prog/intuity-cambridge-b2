@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#F3F1ED">
+<title>Be2FIRST — The Question</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@400..600&family=Space+Grotesk:wght@700&family=Anton&family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400..500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=20261018">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   THE CHALLENGE · stage 1
+
+   One page, three screens:
+     1 THE WIZARD  — Game or Exam, then a topic
+     2 THE TRACK   — fourteen identical cells, 01 to 14, one game per cell
+     3 THE RESULT  — score and time (Game), or percentage and review (Exam)
+
+   The page is only the frame. Every game is a shared script in
+   /data/challenge/games/ that draws one round into the focus card and
+   reports right or wrong; the rules (lives, retries, feedback) belong to the
+   page. Content is one file per topic in /data/challenge/, which may import
+   rounds from a game's own file instead of copying them.
+
+   GAME · learning: one topic, a surprise behind every cell, three lives,
+          retries and feedback straight away.
+   EXAM · knowing: one attempt per cell, no feedback until the end, then a
+          percentage, a grade and a full review.
+   ═══════════════════════════════════════════════════════════════════════ */
+.wrap,.scrim{
+  /* ── STAGE 4 · THE QUIET SYSTEM ─────────────────────────────────────────
+     Every colour on this page and in its games is one of these roles, taken
+     from the home page that inspired the app. Six neutrals, four colours:
+     sage is the ring, caramel the app's own accent, and one right and one
+     wrong — dark sage and clay, the only pair from the palette that stays
+     apart for colour-blind eyes AND passes contrast on paper. On the black
+     track tiles a tick uses the light ring sage, or it would vanish.
+     Two radii: anything tapped on one line is a pill; anything that holds
+     content — a card, a field, a pile, a choice of several lines — has one
+     soft corner.
+     SCOPE: these roles are set on the page's content (.wrap, .scrim), not on
+     :root. The shared stylesheet uses some of the same names with its own
+     meaning — there --paper is the BODY TEXT colour — and the header must
+     look exactly as it does on every other page. So nothing here reaches the
+     header, and the light surface has a name of its own: --sheet. */
+  --ink:#2B2129; --sheet:#FEFCF9; --stage:#FAF7F2; --soft:#5C4E52; --mute:#8B7B78; --rule:#D9C0A4;
+  --sage:#8AA79C; --caramel:#C2956E; --caramel-ink:#8A6440;
+  --right:#4A6B5C; --wrong:#B4653A;
+  --right-soft:rgba(74,107,92,.12); --wrong-soft:rgba(180,101,58,.13); --sage-soft:rgba(138,167,156,.16);
+  --r-box:16px; --r-tap:999px;
+  /* the old names, kept so nothing that reads them breaks — now pointing at the roles */
+  --accent:var(--caramel); --accent-ink:var(--caramel-ink); --good:var(--right); --bad:var(--wrong);
+  --dim:var(--soft); --faint:var(--mute); --sentence:var(--soft); --card:var(--sheet);
+}
+[hidden]{display:none!important}
+.header{position:sticky;top:0;z-index:20;background:var(--bg,var(--screen,#F3F1ED))}
+.wrap{max-width:45.6rem;margin:0 auto;padding:1rem var(--gutter,1rem) 3rem}
+.card{background:var(--card,#FAF8F5);border:1px solid var(--rule);border-radius:var(--r-box);box-shadow:0 12px 28px -18px rgba(35,44,49,.35);padding:1.5rem 1.4rem 1.5rem}
+.kick{display:flex;align-items:center;gap:9px;font-family:var(--f-mono);font-size:0.6875rem;letter-spacing:.24em;text-transform:uppercase;color:var(--accent-ink)}
+.kick::before{content:'';display:block;width:26px;height:10px;flex:none;background:var(--caramel)}
+.title{font-family:var(--f-display);font-weight:800;font-size:clamp(1.3rem,4.4vw,1.9rem);letter-spacing:.34em;text-transform:uppercase;line-height:1.1;color:var(--ink);
+  margin:.6rem 0 .8rem;padding-bottom:.7rem;border-bottom:3px double var(--ink)}
+.lead{font-size:.95rem;line-height:1.55;color:var(--dim);margin:0 0 1.2rem;max-width:34rem}
+.lab{display:block;font-family:var(--f-display);font-size:.84rem;letter-spacing:0;color:var(--faint);margin:1.4rem 0 .6rem}
+.btn{font-family:var(--f-display);font-size:.92rem;font-weight:600;letter-spacing:0;padding:.75rem 1.5rem;border-radius:var(--r-tap);cursor:pointer;
+  border:1.5px solid var(--ink);background:none;color:var(--ink)}
+.btn.fill{background:var(--ink);color:var(--sheet)}
+.btn:disabled{opacity:.35;cursor:default}
+.cta{display:flex;justify-content:center;gap:.6rem;flex-wrap:wrap;margin-top:1.2rem}
+
+/* ── 1 · THE GATE — as on Conditionals Decide: a pendulum and one instruction ── */
+.gate{text-align:center;padding-top:3.2rem}
+.gate .gate-mark{width:104px;height:104px;margin:0 auto 1.4rem}
+.gate .gate-mark .pend-dial span{font-size:1.6rem}
+.gate .kick{justify-content:center}
+.gate .title{display:inline-block;margin-left:auto;margin-right:auto}
+.pick{font-family:var(--f-display);font-size:.92rem;letter-spacing:0;color:var(--ink);margin:.6rem auto .4rem;padding:.8rem 0;
+  border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);max-width:26rem}
+.mode-note{font-size:.9rem;line-height:1.5;color:var(--sentence);margin:.8rem auto 1rem;max-width:30rem}
+/* the header's two tiers */
+/* the row is the topic page's own, so it keeps that page's spacing */
+.header .mode-selector button.mode-btn{background:none;border:none;cursor:pointer}
+/* ten topics on one line: the tier set a touch tighter than on a five-tab page */
+.header .set-tabs{box-sizing:border-box;width:auto;max-width:100%;margin-left:auto!important;margin-right:auto!important}
+/* inside the overflow frame the tabs scroll in their track: auto margins would size a grid item to its content and push the page sideways */
+.header .ovf > .set-tabs{margin-left:0!important;margin-right:0!important}
+@media(min-width:561px){ .header .set-tabs{flex-wrap:nowrap;justify-content:center;gap:0} .header .set-tabs .vtab{font-size:0.6875rem;letter-spacing:.08em;padding-left:.5rem;padding-right:.5rem;white-space:nowrap} }
+.header .set-tabs .vtab:disabled{opacity:.38;cursor:default}
+@media(max-width:560px){ .header .set-tabs{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;scrollbar-width:none}
+  .header .set-tabs::-webkit-scrollbar{display:none} .header .set-tabs .vtab{white-space:nowrap;flex:none} }
+/* ── 2 · THE TRACK ── */
+.meters{display:flex;align-items:center;gap:1.3rem;flex-wrap:wrap;font-family:var(--f-display);font-size:.82rem;letter-spacing:0;color:var(--faint)}
+.meters b{font-family:var(--f-display);font-size:1.05rem;font-weight:900;letter-spacing:0;color:var(--ink);font-variant-numeric:tabular-nums;margin-left:.3rem}
+.lives{display:flex;gap:4px;margin-left:.35rem}
+.lives svg{width:15px;height:15px;fill:var(--bad);transition:fill .3s,transform .3s}
+.lives svg.gone{fill:var(--rule);transform:scale(.8)}
+/* practice: the hearts give way to one quiet word — a state, not a failure */
+.lives .practice{font-family:var(--f-display);font-size:.8rem;font-weight:600;letter-spacing:0;text-transform:none;color:var(--soft,#5C4E52)}
+.hint{text-align:center;font-family:var(--f-display);font-size:.86rem;letter-spacing:0;color:var(--faint);margin:.6rem 0 0}
+/* ── THE TRACK · 1930s minimal ──────────────────────────────────────
+   The sketch: the track IS the tiles — one band, cut into cells by straight
+   cross-lines. Drawn in the Deco manner: a double-rule border (a heavy line
+   and a hairline), cream paper, near-black ink, ochre for the cells won.
+   Flat fills, square cuts, no shadow, no pulse: every cell — including the
+   first and last — is drawn and treated exactly the same. */
+:root{ --deco-ink:#2B2129; --deco-paper:#F6F1E6; --deco-ochre:#C2956E; --deco-red:#B4653A;
+  /* the pendulum ring, unrolled: its sage rim, its dark core, its cream numerals */
+  --ring-sage:#8AA79C; --ring-core:#201E1C; --ring-ink:#E5D1B8;
+  /* an answered tile: its own token, so its colour can change without
+     touching anything else (it was the decorative ochre) */
+  --tile-done:var(--deco-ochre); --tile-done-ink:var(--deco-paper);
+  /* the Board's marks: a tile keeps its black and wears a tick or a cross */
+  --mark-right:#8AA79C; --mark-wrong:#B4653A; --mark-answered:var(--ring-ink); }   /* on the black tiles: light sage, clay */
+/* GAME mode: the black tiles stay, the rim turns caramel — on the track
+   and on every game's rings, which read the same token */
+body.mode-game{ --ring-sage:#C2956E; --mark-sweep:#C2956E; }   /* --mark-sweep: the pendulums' rim */
+.board{margin:1.1rem 0 .2rem}
+.board svg{display:block;width:100%;height:auto;max-height:62vh;overflow:visible}
+/* the ring in index.html, unrolled — the same three layers, the same proportions:
+   a raised bezel shaded #FFFFFF → #E4DDD1 at 145° (white light top-left, soft
+   shadow bottom-right), the sage band #8AA79C, and the dark core. */
+.bezel{fill:none;stroke:url(#bezelShade);stroke-width:var(--bw-a);stroke-linejoin:round;filter:url(#raise)}
+.sage{fill:none;stroke:var(--ring-sage);stroke-width:var(--bw-b);stroke-linejoin:round}
+.cap-bezel{stroke:url(#bezelShade)}
+.cap-sage{stroke:var(--ring-sage)}
+.cell{fill:none;stroke:var(--ring-core);stroke-width:var(--bw);stroke-linejoin:miter;cursor:default;transition:stroke .35s}
+.cell.done{stroke:var(--ring-core)}              /* answered: the tile stays black, as on the Board */
+.num.done{opacity:.5}
+.cell.open{stroke:var(--ring-ink);cursor:pointer}
+.cut{stroke:var(--ring-sage);stroke-width:1.8}
+
+.num{font-family:'Anton', Impact, var(--f-display), sans-serif;font-weight:400;font-size:23.4px;letter-spacing:.02em;fill:var(--ring-ink);text-anchor:middle;dominant-baseline:central;pointer-events:none;transition:fill .35s}
+.num.done{fill:var(--ring-ink)}
+.num.open{fill:var(--ring-core)}
+/* each cell is the whole path, dashed — so the browser's own focus box would
+   frame the entire track. The focus mark is the cell's own colour instead. */
+.cell:focus,.cell:focus-visible{outline:none}
+.cell.open:focus-visible{stroke:var(--ink)}
+.legend{display:flex;justify-content:center;gap:1.4rem;flex-wrap:wrap;margin-top:1rem;font-family:var(--f-display);font-size:.8rem;letter-spacing:0;color:var(--faint)}
+.legend i{display:inline-block;width:10px;height:10px;margin-right:.45rem;vertical-align:-1px;border:2px solid var(--ring-sage);background:var(--ring-core)}
+.legend i.o{background:var(--ring-ink)} .legend i.d{background:var(--tile-done)}
+
+/* ── THE FOCUS CARD ── */
+.scrim{position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;padding:1rem;
+  background:rgba(20,17,14,.34);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);opacity:0;transition:opacity .25s}
+.scrim.on{opacity:1}
+.focus{position:relative;width:min(var(--w-focus,35rem),100%);max-height:90vh;overflow-y:auto;background:var(--card,#FAF8F5);border-radius:var(--r-box);
+  box-shadow:0 24px 60px -18px rgba(20,17,14,.38),0 6px 16px rgba(20,17,14,.14);padding:1.6rem 1.5rem 1.4rem;
+  transform:translateY(24px) scale(.97);transition:transform .45s cubic-bezier(.2,1.3,.4,1)}
+.scrim.on .focus{transform:none}
+.focus .x{position:absolute;top:.8rem;right:.9rem;border:none;background:none;font-size:1rem;color:var(--faint);cursor:pointer;padding:.4rem}
+.focus h2{font-family:'Anton', Impact, var(--f-display), sans-serif;font-weight:400;font-size:clamp(1.6rem,6vw,2.1rem);line-height:1.02;color:var(--ink);margin:.45rem 0 .2rem}
+.focus h2::after{content:'';display:block;width:40px;height:3px;background:var(--ink);margin:.65rem 0 0}
+.feedback{min-height:1.4em;margin:.9rem 0 0;font-size:.92rem;line-height:1.5;color:var(--sentence)}
+.feedback b{color:var(--ink)}
+.focus .cta{justify-content:flex-start;margin-top:.9rem}
+
+/* ── the games' shared parts (cg-*) ── */
+.cg-prompt{font-size:.98rem;line-height:1.55;color:var(--sentence);margin:1rem 0 .9rem}
+body.board-page .board-toggle{display:flex;justify-content:center;padding:.2rem 0 .9rem;border-bottom:1px solid var(--rule,#D8CFC2);margin-bottom:.4rem}
+body.board-page .board-toggle .viewtog{margin:0}
+.aim{font-size:.86rem;line-height:1.5;color:var(--dim);margin:.6rem 0 0;padding-left:.7rem;border-left:3px solid var(--caramel)}   /* not .focus: that is the card */
+.cg-line{font-family:var(--f-display);font-weight:700;font-size:1.12rem;line-height:1.5;color:var(--ink);margin:.9rem 0 1rem}
+.cg-blank{display:inline-block;min-width:5.5em;border-bottom:2px solid var(--ink);text-align:center;color:var(--accent-ink)}
+.cg-opts{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
+.cg-opt{display:flex;align-items:center;gap:.8rem;text-align:left;padding:.8rem .2rem;border:none;border-bottom:1px solid var(--rule);background:none;
+  font:inherit;font-size:.98rem;color:var(--ink);cursor:pointer;transition:background .2s}
+.cg-l{flex:none;width:24px;height:24px;border-radius:50%;background:rgba(20,17,14,.07);display:grid;place-items:center;font-family:var(--f-mono);font-size:0.6875rem;color:var(--faint)}
+.cg-opt.cg-ok{background:var(--right-soft);color:var(--right)} .cg-opt.cg-ok .cg-l{background:var(--good);color:var(--sheet)}
+.cg-opt.cg-no{background:var(--wrong-soft);color:var(--wrong)} .cg-opt.cg-no .cg-l{background:var(--bad);color:var(--sheet)}
+.cg-opt.cg-picked{background:var(--tile-bg)} .cg-opt.cg-picked .cg-l{background:var(--ink);color:var(--sheet)}
+.cg-opt:disabled{cursor:default}
+.cg-field{display:flex;gap:.5rem}
+.cg-field input{flex:1;min-width:0;font:inherit;font-size:1rem;padding:.7rem .95rem;border:1px solid var(--rule);background:var(--sheet);color:var(--ink);border-radius:var(--r-box)}
+.cg-field input:focus{outline:2px solid var(--accent);outline-offset:1px}
+.cg-btn{font-family:var(--f-display);font-size:.9rem;font-weight:600;letter-spacing:0;border-radius:var(--r-tap);padding:.7rem 1.25rem;border:1.5px solid var(--ink);background:var(--ink);color:var(--sheet);cursor:pointer}
+.cg-btn.cg-ghost{background:none;color:var(--ink)}
+.cg-btn:disabled{opacity:.35;cursor:default}
+.cg-row{display:flex;gap:.5rem;margin-top:.8rem}
+.cg-chips{display:flex;flex-wrap:wrap;gap:.4rem;min-height:2.5rem}
+.cg-chip{font:inherit;font-size:.94rem;padding:.45rem .75rem;border-radius:999px;border:1px solid var(--rule);background:var(--sheet);color:var(--ink);cursor:pointer}
+.cg-chip.cg-used{visibility:hidden}
+.cg-built{min-height:2.7rem;padding:.5rem 0;margin:0 0 .7rem;border-bottom:2px solid var(--ink);display:flex;flex-wrap:wrap;gap:.35rem}
+.cg-built .cg-chip{background:var(--tile-bg);border-color:transparent;cursor:default}
+.cg-bins{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:.8rem}
+.cg-bin{border:1px dashed var(--rule);border-radius:var(--r-box);padding:.55rem;min-height:5.2rem}
+.cg-bin h4{font-family:var(--f-display);font-size:.8rem;font-weight:400;letter-spacing:0;color:var(--faint);margin:0 0 .4rem}
+.cg-bin .cg-chip{font-size:.84rem;padding:.32rem .6rem;margin:0 .25rem .3rem 0}
+.cg-bin.cg-ready{border-color:var(--accent);cursor:pointer}
+.cg-chip.cg-sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent) inset}
+.cg-chip.cg-ok{background:var(--right-soft);border-color:transparent} .cg-chip.cg-no{background:var(--wrong-soft);border-color:transparent}
+.cg-key{margin:.2rem 0 .1rem} .cg-key span{display:inline-block;font-family:var(--f-mono);font-weight:700;font-size:.8rem;letter-spacing:.2em;padding:.35rem .8rem;border:1.5px solid var(--ink);border-radius:var(--r-tap)}
+.cg-match{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.4rem}
+.cg-match>div{display:flex;flex-direction:column;gap:.4rem}
+.cg-m{position:relative;border-radius:var(--r-box);text-align:left;font:inherit;font-size:.9rem;line-height:1.35;padding:.6rem .7rem .6rem 2rem;border:1px solid var(--rule);background:var(--sheet);color:var(--ink);cursor:pointer}
+.cg-m::before{content:attr(data-n);position:absolute;left:.55rem;top:50%;transform:translateY(-50%);width:1rem;height:1rem;border-radius:50%;
+  font-family:var(--f-mono);font-size:0.6875rem;line-height:1rem;text-align:center;background:var(--tile-bg);color:var(--faint)}
+.cg-m[data-n]::before{background:var(--ink);color:var(--sheet)}
+.cg-m.cg-sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent) inset}
+.cg-m.cg-ok{background:var(--right-soft);border-color:transparent} .cg-m.cg-no{background:var(--wrong-soft);border-color:transparent}
+.cg-shake{animation:cgShake .42s cubic-bezier(.2,.9,.3,1)}
+@keyframes cgShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}45%{transform:translateX(7px)}70%{transform:translateX(-3px)}}
+/* the pendulum game: the Speaking gate's dials, sized for a focus card */
+:root{ --mark-sweep:#708A81; --mark-rest:#4A433D; --mark-core:#201E1C; --mark-ink:#E5D1B8; --mark-pct:100%; }
+.cg-dials{display:grid;grid-template-columns:repeat(2,auto);justify-content:center;gap:1.5rem 2.4rem;margin:1.6rem 0 1rem;--dial:clamp(92px,26vw,118px)}
+.dial-b{display:flex;flex-direction:column;align-items:center;border:none;background:none;padding:0;cursor:pointer;font:inherit;color:inherit}
+.dial-b .pend-hang{display:block;width:var(--dial);height:var(--dial);transform-origin:50% -10px;animation:pendCalm 5.2s cubic-bezier(.37,0,.63,1) infinite}
+.dial-b .pend-hang::before{top:-10px;height:10px} .dial-b .pend-hang::after{top:-13px;width:6px;height:6px}
+@keyframes pendCalm{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+.dial-b .pend-dial span{font-size:calc(var(--dial) * .12);font-weight:700;line-height:1.12;max-width:62%;text-align:center}
+.dial-b.cg-ok .pend-dial{--mark-sweep:var(--good)} .dial-b.cg-no .pend-dial{--mark-sweep:var(--bad)} .dial-b.cg-picked .pend-dial{--mark-sweep:var(--ink)}
+.dial-b.cg-no{opacity:.5;cursor:default}
+.cg-done .dial-b .pend-hang{animation:none;transform:rotate(0)}
+.cg-done .dial-b:not(.cg-ok):not(.cg-picked){opacity:.35}
+.cg-sent{border-top:1px solid var(--rule);padding-top:.6rem}
+.cg-lab{display:block;font-family:var(--f-display);font-size:.78rem;letter-spacing:0;color:var(--faint);margin:0 0 .15rem}
+.cg-act{font-size:.95rem;color:var(--dim);margin:0 0 .5rem}
+.cg-sent .cg-line{margin:.1rem 0 0}
+
+/* ── 3 · THE RESULT ── */
+.big{font-family:'Anton', Impact, var(--f-display), sans-serif;font-size:3.2rem;line-height:1;color:var(--ink);margin:.8rem 0 .2rem}
+/* game controls are tapped, not read: no text selection, no long-press menu
+   (on Android a press-and-hold on the legend opened Translate · Copy and a
+   search for "WRONG"). The sentences themselves stay selectable. */
+.board,.board *,.legend,.meters,.lives,.btn,.cg-btn,.cg-opt,.cg-chip,.cg-m,.cg-bin,.dial-b,.mode-btn,.viewbtn,
+.cg-wire,.pg-peg,.pg-row,.sg-pile,.sg-card,.ht-w,.ko-card,.fc-card,.gk-ring{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.kwt-why{display:block;margin-bottom:.45rem;color:var(--wrong)} .kwt-why b{color:inherit}
+.look{font-size:.95rem;margin:.2rem 0 0} .look.ok b{color:var(--right)} .look.no b{color:var(--wrong)}
+.partno{font-size:.82rem;color:var(--soft,#5C4E52);margin:.15rem 0 .7rem}
+.grade{font-family:var(--f-display);font-size:.92rem;letter-spacing:0;color:var(--accent-ink)}
+/* what the run did to the learner's mistakes: plain sentence case, dark sage for the numbers */
+.ring-line{font-size:.92rem;line-height:1.55;color:var(--soft,#5C4E52);margin:.9rem 0 .2rem;padding:.75rem .9rem;border-radius:var(--r-box);background:rgba(74,107,92,.07)}
+.ring-line b{color:var(--right)}
+.review{margin:1rem 0 0;border-top:1px solid var(--rule)}
+.review li{list-style:none;padding:.65rem 0;border-bottom:1px solid var(--rule);font-size:.88rem;line-height:1.45;color:var(--sentence)}
+.review .rh{display:flex;justify-content:space-between;gap:.6rem;font-family:var(--f-display);font-size:.78rem;letter-spacing:0;color:var(--faint);margin-bottom:.2rem}
+.review .ok{color:var(--good)} .review .no{color:var(--bad)}
+.review b{color:var(--ink)}
+.mk{fill:none;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;opacity:0;transition:opacity .25s}
+.mk.on{opacity:1}
+.mk.tick{stroke:var(--mark-right);stroke-width:3.4}
+.mk.cross{stroke:var(--mark-wrong);stroke-width:3.4}
+.mk.dot{fill:var(--mark-answered);stroke:none}
+.legend svg{width:12px;height:12px;margin-right:.4rem;vertical-align:-2px;overflow:visible}
+.mute{border:none;background:none;cursor:pointer;font-size:.9rem;line-height:1;padding:0 .35rem 0 0;vertical-align:-1px}
+.mute.off{opacity:.32;filter:grayscale(1)}
+/* GLITTER: a small burst from a tile's new tick — Game only, never over a card */
+.glitter{position:fixed;left:0;top:0;width:0;height:0;pointer-events:none;z-index:40}
+.glitter i{position:absolute;left:0;top:0;width:var(--s);height:var(--s);margin:calc(var(--s) / -2) 0 0 calc(var(--s) / -2);background:var(--c);
+  border-radius:var(--r);opacity:0;animation:glit var(--d) cubic-bezier(.15,.7,.3,1) var(--w) forwards}
+@keyframes glit{0%{opacity:0;transform:translate(0,0) rotate(0) scale(.4)}15%{opacity:1}
+  100%{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--rot)) scale(1)}}
+.mk.tick.pop{transform-box:fill-box;transform-origin:center;animation:tickPop .45s cubic-bezier(.3,1.6,.5,1)}
+@keyframes tickPop{0%{transform:scale(.2)}100%{transform:scale(1)}}
+.cup{display:block;width:92px;height:92px;margin:.6rem 0 .2rem}
+.cup .rim{fill:none;stroke:var(--caramel);stroke-width:5}
+@media(prefers-reduced-motion:reduce){ .glitter{display:none} .mk.tick.pop{animation:none} }
+@media(prefers-reduced-motion:reduce){ .scrim,.focus,.cell,.num,.mk{transition:none} .dial-b .pend-hang{animation:none} }
+.focus .cta .auto{display:block;width:100%;height:2px;background:var(--rule,#D8CFC2);position:relative;overflow:hidden;border-radius:2px}
+.focus .cta .auto::after{content:'';position:absolute;inset:0;background:var(--caramel,#B98B5E);transform-origin:left;animation:autoBar var(--ms,1100ms) linear forwards}
+@keyframes autoBar{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@media (prefers-reduced-motion:reduce){.focus .cta .auto::after{animation:none;opacity:.5}}
+</style>
+  <link rel="stylesheet" href="/tools/intuity-pills.css?v=20261012">
+  <script src="/tools/intuity-overflow.js?v=3"></script>
+<script src="/tools/be2-brand.js?v=20261012c"></script>
+<style>
+/* ═══ THE QUESTION — the writing board ══════════════════════════════════
+   The Board's track, bent into a question mark: ten tiles from the curl to
+   the foot of the stem, and the full stop beneath. Same tokens, same card,
+   same marks, same rules as the Grammar Board; only the shape and the games
+   change. The dot is not a tile: it is the question's full stop, and it
+   holds the run's score once there is one. */
+.qboard{margin:.6rem 0 .2rem}
+.qboard svg{display:block;width:100%;height:auto;max-height:66vh;margin:0 auto;overflow:visible}
+.qdot-n{font-family:'Anton', Impact, var(--f-display), sans-serif;font-size:15px;fill:var(--ring-ink);text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.num.locked{opacity:.42}
+.cell.locked{cursor:pointer}
+.tasks-row{display:flex;justify-content:center;flex-wrap:wrap;gap:.35rem;margin:.9rem 0 0}
+.tasks-row .lab2{width:100%;text-align:center;font-family:var(--f-mono);font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin-bottom:.15rem}
+.tchip{font-family:var(--f-display);font-size:.8rem;font-weight:600;padding:.42rem .8rem;border-radius:999px;border:1px solid var(--rule);background:none;color:var(--dim);cursor:pointer}
+.tchip[aria-pressed="true"]{background:rgba(138,167,156,.22);border-color:#8AA79C;color:var(--ink)}
+.tchip[aria-pressed="true"]::before{content:"✓ ";color:#4A6B5C}
+.tchip:disabled{opacity:.5;cursor:default}
+.miss-list{margin:.6rem 0 0;padding:0;list-style:none;font-size:.9rem;line-height:1.45;color:var(--sentence)}
+.miss-list li{padding:.4rem 0;border-bottom:1px solid var(--rule)}
+.miss-list small{display:block;font-family:var(--f-mono);font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.rule-note{font-size:.84rem;line-height:1.5;color:var(--dim);margin:.6rem auto 0;text-align:center;max-width:26rem}
+</style>
+</head>
+<body class="board-page">
+
+<header class="header">
+  <div class="header-top">
+    <a class="back-link" href="/index.html?openModal=writing" target="_top">← Writing</a>
+<div class="header-title"><div class="be2" role="img" aria-label="Be2FIRST"><span class="big top" aria-hidden="true">B<b class="e">e</b>2</span><span class="big bot" aria-hidden="true">B<b class="e">e</b>2</span><span class="band" aria-hidden="true"><i>FIRST</i></span></div><div class="app-subtitle">The Question</div></div>
+    <span class="header-spacer"><button class="mute" id="mute" type="button" aria-label="Sound on" aria-pressed="true">&#128266;</button> Level <b>B2</b></span>
+  </div>
+  <nav class="mode-selector" id="modeRow" aria-label="Writing practice">
+    <a class="mode-btn" href="/skills/writing/model-generator.html">Generator</a>
+    <a class="mode-btn" href="/skills/writing/games/essay-games-staged.html">Games</a>
+    <span class="mode-btn active" aria-current="page">The Question</span>
+  </nav>
+</header>
+
+<main class="wrap">
+  <article class="card" id="trackCard">
+    <div class="kick">Writing · Revision</div>
+    <h1 class="title">The Question</h1>
+    <div class="meters" id="meters">
+      <span>Score<b id="score">0</b></span>
+      <span>Time<b id="clock">0:00</b></span>
+      <span style="display:flex;align-items:center">Lives<span class="lives" id="lives"></span></span>
+    </div>
+    <div class="qboard" id="board"></div>
+    <p class="hint" id="hint">Tap any tile to begin</p>
+    <div class="legend" id="legend"></div>
+    <div class="tasks-row" id="tasks" role="group" aria-label="Tasks you have studied"></div>
+    <p class="rule-note" id="ruleNote"></p>
+    <div class="cta"><button class="btn" id="again" type="button" hidden>Start again</button></div>
+  </article>
+</main>
+
+<div class="scrim" id="scrim" hidden><div class="focus" id="focus" role="dialog" aria-modal="true" aria-labelledby="fTitle"></div></div>
+
+<script src="/skills/grammar-rules/intuity-sound.js"></script>
+<script src="/data/challenge/games/game-kit.js?v=4"></script>
+<script src="/data/challenge/games/match.js?v=1"></script>
+<script src="/data/challenge/games/sort.js?v=2"></script>
+<script src="/data/challenge/games/order.js?v=3"></script>
+<script src="/data/writing/question/question-games.js?v=1"></script>
+<script src="/tools/intuity-log.js?v=1"></script>
+<script src="/tools/intuity-ring.js?v=1"></script>
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[a[i],a[j]]=[a[j],a[i]];}return a;};
+const pick=a=>a[(Math.random()*a.length)|0];
+const G=window.ChallengeGames, P=new URLSearchParams(location.search);
+const TOPIC='writing-question';
+
+/* ══ THE TEN TILES ══════════════════════════════════════════════════════
+   One game per tile, always the same tile, so a student learns the board
+   (the teacher's plan, 23 Oct 2026). The ORDER runs from noticing to
+   producing: recognise (1–3), rebuild (4–7), recall (8–9), write (10).
+   Every tile mixes the introduction, the body and the conclusion, and the
+   tasks the student has ticked. Production scores double: 200 a tile. */
+const TILES=['qMatch','qSort','qSelect','qSequence','qStory','qPuzzle','qBuilder','qFix','qRecall','qFinale'];
+const N=TILES.length, FINALE=N-1, UNLOCK=6;
+const PRODUCTIVE={qStory:1,qPuzzle:1,qFix:1,qRecall:1,qFinale:1};
+const TASKS=[['essay','Essay'],['review','Review'],['report','Report'],['email','Email'],['article','Article']];
+const PARTS=['intro','body','conclusion'], PART={intro:'Introduction',body:'Body',conclusion:'Conclusion'};
+const TASKL=Object.fromEntries(TASKS);
+
+let BANK=null, plan=[], lives=3, score=0, playing=false, t0=0, tick=null, tries=0, log=[], practice=false;
+let doneSet=new Set(), triesAt={}, cur=null, settled=false;
+
+/* ══ WHICH TASKS ══ Revision, not first teaching: a task the student has
+   not met in its Models pages should not be on the board. The choice is
+   remembered on this device. */
+const TKEY='intuity.question.tasks';
+let chosen=(()=>{ try{ const v=JSON.parse(localStorage.getItem(TKEY)||'null'); if(Array.isArray(v)&&v.length) return v.filter(t=>TASKL[t]); }catch(e){} return TASKS.map(t=>t[0]); })();
+function drawTasks(){
+  const busy=playing&&doneSet.size>0;
+  $('tasks').innerHTML='<span class="lab2">Tasks you have studied</span>'+TASKS.map(([k,l])=>`<button class="tchip" type="button" data-t="${k}" aria-pressed="${chosen.includes(k)}"${busy?' disabled':''}>${l}</button>`).join('');
+  $('tasks').querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{
+    if(playing&&doneSet.size) return;
+    const k=b.dataset.t, on=chosen.includes(k);
+    if(on&&chosen.length===1) return;                 /* at least one task */
+    chosen=on?chosen.filter(x=>x!==k):chosen.concat(k);
+    try{ localStorage.setItem(TKEY,JSON.stringify(chosen)); }catch(e){}
+    reset(); paint(); drawTasks(); });
+  $('ruleNote').textContent=busy?'Finish this run, or start again, to change the tasks.':'Tile 10, the finale, opens once you have played six tiles. Writing tiles score double.';
+}
+
+/* ══ THE RING — what comes back ══ Every phrase, gap and error has its own
+   id. A miss puts it in the Ring; right on two different days takes it out
+   (tools/intuity-ring.js). The draw serves waiting ones first. */
+const rid=id=>'wq-'+id;
+const due=id=>{ try{ return !!(window.IntuityRing&&IntuityRing.isDue(rid(id))); }catch(e){ return false; } };
+function dueCount(){ if(!BANK||!window.IntuityRing) return 0; try{
+  const ids=BANK.phrases.map(p=>p.id).concat(BANK.selectors.map(s=>s.id),BANK.errors.map(e=>e.id)).map(rid);
+  return IntuityRing.count(ids); }catch(e){ return 0; } }
+const inTask=x=>chosen.includes(x.task);
+/* waiting items first, then fresh ones at random */
+const ranked=list=>shuffle(list).sort((a,b)=>due(b.id)-due(a.id));
+
+/* ══ THE DRAW ══ */
+function draw(){
+  const used=new Set(), fams=new Set();
+  const take=(p,keepFam)=>{ used.add(p.id); if(p.fam&&!keepFam) fams.add(p.fam); return p; };
+  const free=p=>!used.has(p.id)&&!(p.fam&&fams.has(p.fam));
+  const ph=BANK.phrases.filter(inTask);
+  /* one phrase for each part, then any; never two look-alikes (fam) together */
+  function phrasesBy(perPart,extra){
+    const out=[]; const localFam=new Set();
+    const ok=p=>!used.has(p.id)&&!out.includes(p)&&!(p.fam&&localFam.has(p.fam));
+    PARTS.forEach(pt=>{ for(let n=0;n<perPart;n++){ const c=ranked(ph.filter(p=>p.part===pt&&ok(p))).sort((a,b)=>out.filter(o=>o.task===a.task).length-out.filter(o=>o.task===b.task).length)[0];
+      if(c){ out.push(c); if(c.fam) localFam.add(c.fam); } } });
+    for(let n=0;n<extra;n++){ const c=ranked(ph.filter(ok))[0]; if(c){ out.push(c); if(c.fam) localFam.add(c.fam); } }
+    out.forEach(p=>used.add(p.id)); return out;
+  }
+  const models=shuffle(BANK.models.filter(inTask));
+  const mPick=()=>{ const m=models.shift()||pick(BANK.models.filter(inTask)); return m; };
+  const tl=m=>m.task==='email'?(m.reg==='formal'?'Formal email':'Informal email'):TASKL[m.task];
+  const R=[];
+  /* 1 · Matcher — four chunks split inside, one from each part and one more */
+  { const ps=shuffle(phrasesBy(1,1)); R.push({game:'qMatch',prompt:'Join each beginning to its ending.',pairs:ps.map(p=>[p.a,p.b]),ids:ps.map(p=>p.id),
+      note:'Learn them whole: '+ps.map(p=>p.rc).join(' · ')+'.',items:ps}); }
+  /* 2 · Sorter — six phrases into the three parts */
+  { const ps=phrasesBy(2,0); R.push({game:'qSort',prompt:'Where does each phrase belong?',bins:PARTS.map(p=>PART[p]),items:ps.map(p=>[p.a+' '+p.b,PARTS.indexOf(p.part)]),ids:ps.map(p=>p.id),
+      note:'Openings set up the topic, the body develops it, the conclusion sums up or recommends.',items2:ps}); }
+  /* 3 · Phrase Selector — one gap per part, from different tasks when it can */
+  { const its=[]; PARTS.forEach(pt=>{ const c=ranked(BANK.selectors.filter(s=>inTask(s)&&s.part===pt)).sort((a,b)=>its.filter(o=>o.task===a.task).length-its.filter(o=>o.task===b.task).length)[0]; if(c) its.push(c); });
+    R.push({game:'qSelect',items:its,ids:its.map(s=>s.id),note:''}); }
+  /* 4 · Sequence — a whole model, by its paragraphs' first sentences */
+  { const m=mPick(); const first=t=>(t.match(/^.*?[.!?](\s|$)/)||[t])[0].trim();
+    R.push({game:'qSequence',title:m.title,taskLabel:tl(m),lines:m.paras.map(p=>({part:p.part,text:first(p.text)})),fixed:m.task!=='email',
+      ids:[m.id+'-seq'],note:m.task!=='email'?'Introduction, body, conclusion — and the linker tells you which body paragraph comes second.':'Introduction first, sign-off last; the body paragraphs could swap.'}); }
+  /* 5 · Storyboard — read the model, bring back three key phrases */
+  { const m=mPick(), gaps=[];
+    const bodies=m.paras.filter(p=>p.part==='body');
+    [m.paras.find(p=>p.part==='intro'),pick(bodies),m.paras.find(p=>p.part==='conclusion')].forEach(p=>{
+      const key=p.keys[0], lo=p.text.toLowerCase().replace(/[’‘]/g,"'"), at=lo.indexOf(key.toLowerCase().replace(/[’‘]/g,"'"));
+      const sents=p.text.match(/[^.!?]+[.!?]+/g)||[p.text]; let s0=0; for(const s of sents){ if(at<s0+s.length) break; s0+=s.length; }
+      const sent=sents.find((s,j)=>{ let st=0; for(let q=0;q<j;q++) st+=sents[q].length; return at>=st&&at<st+s.length; })||p.text;
+      const so=p.text.indexOf(sent), rel=at-so;
+      gaps.push({part:p.part,key:p.text.substr(at,key.length),before:sent.slice(0,rel).trimStart(),after:sent.slice(rel+key.length)}); });
+    R.push({game:'qStory',title:m.title,taskLabel:tl(m),task:m.task,reg:m.reg,paras:m.paras,gaps,ids:[m.id+'-story'],note:'The key phrases: '+gaps.map(g=>g.key).join(' · ')+'.'}); }
+  /* 6 · Puzzle — one sentence with a key phrase, word by word */
+  { const cands=[]; BANK.models.filter(inTask).forEach(m=>m.paras.forEach(p=>(p.text.match(/[^.!?]+[.!?]+/g)||[]).forEach(s=>{ s=s.trim(); const w=s.split(/\s+/);
+      if(w.length>=7&&w.length<=15&&p.keys.some(k=>s.toLowerCase().replace(/[’‘]/g,"'").includes(k.toLowerCase().replace(/[’‘]/g,"'")))&&!/^(Dear|Hi)\b/.test(s)) cands.push({m,p,s,w}); })));
+    const c=pick(cands);
+    R.push({game:'qPuzzle',prompt:'A sentence from the '+PART[c.p.part].toLowerCase()+' of '+(c.m.task==='email'?'an email':c.m.task==='essay'||c.m.task==='article'?'an '+c.m.task:'a '+c.m.task)+'.',words:c.w,ids:[c.m.id+'-puzzle'],note:'Its key phrase: “'+c.p.keys.find(k=>c.s.toLowerCase().replace(/[’‘]/g,"'").includes(k.toLowerCase().replace(/[’‘]/g,"'")))+'”.'}); }
+  /* 7 · Builder — reason, example, result */
+  { const m=mPick(); R.push({game:'qBuilder',title:m.title,taskLabel:tl(m),task:m.task,reg:m.reg,b:m.builder,ids:[m.id+'-build'],
+      note:'Topic sentence, then why (reason), then show it (example), then what follows (result): a body paragraph that develops its point.'}); }
+  /* 8 · Fix It — one broken phrase, two good lines from the other parts */
+  { const e=ranked(BANK.errors.filter(inTask))[0];
+    const others=PARTS.filter(p=>p!==e.part).map(pt=>ranked(ph.filter(p=>p.part===pt&&!used.has(p.id)))[0]).filter(Boolean);
+    const lines=[{task:e.task,part:e.part,text:e.sentence,err:true}].concat(others.map(p=>({task:p.task,part:p.part,reg:p.task==='email'?p.reg:'',text:p.ex})))
+      .sort((a,b)=>PARTS.indexOf(a.part)-PARTS.indexOf(b.part));
+    R.push({game:'qFix',err:e,lines,ids:[e.id],note:e.note}); }
+  /* 9 · Recall — three phrases from memory; the Ring's waiting ones first */
+  { const its=[]; PARTS.forEach(pt=>{ const c=ranked(ph.filter(p=>p.part===pt&&!its.includes(p)))[0]; if(c) its.push(c); });
+    R.push({game:'qRecall',items:its.map(p=>({task:p.task,part:p.part,reg:p.task==='email'?p.reg:'',rc:p.rc})),ids:its.map(p=>p.id),note:'Say them aloud as you type: the sound helps them stick.'}); }
+  /* 10 · Clock & Defuse — a body paragraph to study, then your own */
+  { const m=mPick(), body=m.paras.find(p=>p.part==='body');
+    R.push({game:'qFinale',title:m.title,taskLabel:tl(m),task:m.task,reg:m.reg,para:body.text,keys:body.keys,own:m.own,ids:[m.id+'-finale'],
+      note:'Defused: the expressions are yours now. Use them in your next '+tl(m).toLowerCase()+'.'}); }
+  return R;
+}
+
+/* ══ THE TRACK — the question mark ══
+   One band, cut into ten equal cells, from the end of the curl (01) round
+   the top and down the stem (10). Built as on the Board: a bezel, the sage
+   band, and every cell the same path dashed to its own stretch. */
+const CX=170, CY=160, RAD=108;
+const pt=a=>[CX+RAD*Math.cos(a*Math.PI/180),CY+RAD*Math.sin(a*Math.PI/180)];
+const [sx,sy]=pt(160), [ex,ey]=pt(60);
+const PATH=`M ${sx.toFixed(2)} ${sy.toFixed(2)} A ${RAD} ${RAD} 0 1 1 ${ex.toFixed(2)} ${ey.toFixed(2)} C ${(ex-.866*45).toFixed(2)} ${(ey+.5*45).toFixed(2)} 170 290 170 322 L 170 392`;
+const W=58, DOT={x:170,y:448,r:24};
+function drawBoard(){
+  const ns='http://www.w3.org/2000/svg';
+  const D=W/.7044, SG=D*.0929, BZ=D*.0549;
+  $('board').innerHTML=`<svg viewBox="16 0 308 486" role="group" aria-label="The question mark: ten tiles"
+      style="--bw:${W}px;--bw-a:${W+2*(SG+BZ)}px;--bw-b:${W+2*SG}px">
+    <defs>
+      <linearGradient id="bezelShade" gradientUnits="userSpaceOnUse" x1="40" y1="0" x2="300" y2="470">
+        <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#E4DDD1"/></linearGradient>
+      <filter id="raise" x="-10%" y="-10%" width="120%" height="120%">
+        <feDropShadow dx="-${(D*.0417).toFixed(1)}" dy="-${(D*.0417).toFixed(1)}" stdDeviation="${(D*.0469).toFixed(1)}" flood-color="#FFFFFF" flood-opacity=".9"/>
+        <feDropShadow dx="${(D*.052).toFixed(1)}" dy="${(D*.052).toFixed(1)}" stdDeviation="${(D*.0677).toFixed(1)}" flood-color="#2B2129" flood-opacity=".16"/>
+      </filter>
+    </defs>
+    <path class="bezel" d="${PATH}"/><path class="sage" d="${PATH}"/>
+    <circle cx="${DOT.x}" cy="${DOT.y}" r="${DOT.r+SG+BZ}" fill="url(#bezelShade)" filter="url(#raise)"/>
+    <circle cx="${DOT.x}" cy="${DOT.y}" r="${DOT.r+SG}" fill="var(--ring-sage)"/>
+    <circle cx="${DOT.x}" cy="${DOT.y}" r="${DOT.r}" fill="var(--ring-core)"/>
+    <text class="qdot-n" id="dotN" x="${DOT.x}" y="${DOT.y}"></text>
+    <g id="cells"></g><g id="cuts"></g><g id="nums"></g><g id="marks"></g></svg>`;
+  const svg=$('board').querySelector('svg'), probe=svg.querySelector('.sage'), L=probe.getTotalLength(), unit=L/N;
+  const gc=$('cells'), gk=$('cuts'), gn=$('nums');
+  for(let i=0;i<N;i++){ const a=i*unit, b=a+unit;
+    const c=document.createElementNS(ns,'path'); c.setAttribute('d',PATH); c.setAttribute('class','cell');
+    c.style.strokeDasharray=`${b-a} ${L}`; c.style.strokeDashoffset=String(-a);
+    c.dataset.i=i; c.setAttribute('role','button'); c.setAttribute('aria-label','Tile '+String(i+1).padStart(2,'0'));
+    c.addEventListener('click',()=>tap(i)); c.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); tap(i); } });
+    gc.appendChild(c);
+    const m=probe.getPointAtLength((a+b)/2), t=document.createElementNS(ns,'text');
+    t.setAttribute('x',m.x); t.setAttribute('y',m.y); t.setAttribute('class','num'); t.dataset.i=i; t.textContent=String(i+1).padStart(2,'0'); gn.appendChild(t);
+    { const pa=probe.getPointAtLength(Math.max(0,(a+b)/2-1)), pb=probe.getPointAtLength(Math.min(L,(a+b)/2+1));
+      let tx=pb.x-pa.x, ty=pb.y-pa.y; const tn=Math.hypot(tx,ty)||1; tx/=tn; ty/=tn;
+      let nx=-ty, ny=tx; if(nx<-.01||(Math.abs(nx)<=.01&&ny<0)){ nx=-nx; ny=-ny; }
+      if(ty<0||(Math.abs(ty)<.01&&tx<0)){ tx=-tx; ty=-ty; }
+      const at=(s,u)=>({x:m.x+nx*s+tx*u, y:m.y+ny*s+ty*u}), S=5.6;
+      const T=at(19,7), C=at(19,-8);
+      const g=document.createElementNS(ns,'g'); g.dataset.i=i;
+      g.innerHTML=`<path class="mk tick" d="M${T.x-S} ${T.y+.4}l${S*.72} ${S*.78}l${S*1.3} -${S*1.5}"/>`+
+        `<path class="mk cross" d="M${C.x-S*.72} ${C.y-S*.72}l${S*1.44} ${S*1.44}M${C.x+S*.72} ${C.y-S*.72}l-${S*1.44} ${S*1.44}"/>`;
+      $('marks').appendChild(g); }
+    if(i>0){ const p0=probe.getPointAtLength(Math.max(0,a-.5)), p1=probe.getPointAtLength(Math.min(L,a+.5));
+      const dx=p1.x-p0.x, dy=p1.y-p0.y, n=Math.hypot(dx,dy)||1, nx=-dy/n*(W/2+1.5), ny=dx/n*(W/2+1.5), q=probe.getPointAtLength(a);
+      const k=document.createElementNS(ns,'line'); k.setAttribute('x1',q.x-nx); k.setAttribute('y1',q.y-ny); k.setAttribute('x2',q.x+nx); k.setAttribute('y2',q.y+ny);
+      k.setAttribute('class','cut'); gk.appendChild(k); } }
+  paint();
+}
+
+/* ══ STATE ══ */
+function reset(){ clearInterval(tick); tick=null; doneSet=new Set(); triesAt={}; lives=3; score=0; playing=false; log=[]; cur=null; practice=false;
+  $('clock').textContent='0:00'; $('again').hidden=true; const w=dueCount();
+  $('hint').textContent='Tap any tile to begin'+(w?' · '+w+' phrase'+(w===1?'':'s')+' to fix from last time':''); }
+const locked=i=>i===FINALE&&doneSet.size<UNLOCK;
+function paint(){
+  document.querySelectorAll('.cell,.num').forEach(t=>{ const i=+t.dataset.i, done=doneSet.has(i), open=playing&&cur&&cur.i===i&&!$('scrim').hidden;
+    t.classList.toggle('done',done&&!open); t.classList.toggle('open',open); t.classList.toggle('locked',locked(i)&&!done);
+    if(t.classList.contains('cell')){ t.setAttribute('tabindex','0'); t.style.cursor='pointer'; } });
+  const res={}; log.forEach(x=>{ res[x.i]=x.ok; });
+  document.querySelectorAll('#marks g').forEach(g=>{ const i=+g.dataset.i, ok=res[i], missed=(triesAt[i]||0)>0, show=doneSet.has(i);
+    g.querySelector('.tick').classList.toggle('on',show&&ok===true);
+    g.querySelector('.cross').classList.toggle('on',show&&(ok===false||(ok===true&&missed))); });
+  $('score').textContent=score;
+  const dn=$('dotN'); if(dn) dn.textContent=doneSet.size?doneSet.size+'/'+N:'';
+  $('lives').innerHTML=practice?'<span class="practice">Practice</span>':[0,1,2].map(i=>`<svg viewBox="0 0 24 24" class="${i<lives?'':'gone'}"><path d="M12 21s-7.5-4.6-9.6-9.3C.9 8.3 3 4.5 6.7 4.5c2.1 0 3.6 1.2 4.3 2.4.7-1.2 2.2-2.4 4.3-2.4 3.7 0 5.8 3.8 4.3 7.2C19.5 16.4 12 21 12 21z"/></svg>`).join('');
+  if(playing) $('hint').textContent=doneSet.size>=N?'All done':doneSet.size?'Pick any tile, in any order · tap a finished one to look again':'Pick any tile, in any order';
+}
+function begin(){ reset(); plan=draw(); playing=true; t0=performance.now();
+  tick=setInterval(()=>{ const s=Math.floor((performance.now()-t0)/1000); $('clock').textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); },500);
+  paint(); drawTasks(); }
+function tap(i){
+  if(doneSet.has(i)) return lookAgain(i);
+  if(!playing&&log.length) return;
+  if(locked(i)) return lockedCard();
+  if(!playing) begin();
+  openCell(i); }
+function lockedCard(){ cur=null;
+  openCard(`<div class="kick">Tile 10 · The finale</div><h2 id="fTitle">Clock &amp; Defuse</h2>
+    <p class="cg-prompt">The finale opens once you have played <b>${UNLOCK}</b> tiles${doneSet.size?` — <b>${UNLOCK-doneSet.size}</b> to go`:''}. It is the hardest one: study a paragraph, then write your own before the fuse burns down.</p>
+    <div class="cta"><button class="btn fill" type="button" id="lc">Back to the board</button></div>`); $('lc').onclick=closeCard; }
+
+/* ══ THE FOCUS CARD ══ */
+const TITLE=g=>G[g].title;
+function openCard(html){ $('focus').innerHTML='<button class="x" type="button" aria-label="Close" id="fx">✕</button>'+html;
+  const s=$('scrim'); s.hidden=false; requestAnimationFrame(()=>s.classList.add('on')); $('fx').onclick=closeCard; }
+function closeCard(){ clearTimeout(autoT); if(autoOff) autoOff(); const s=$('scrim'); s.classList.remove('on');
+  setTimeout(()=>{ s.hidden=true; $('focus').innerHTML=''; paint(); if(owed){ const o=owed; owed=null; requestAnimationFrame(()=>burst(o.i,o.first)); } },250); }
+function openCell(i){
+  const r=plan[i], g=G[r.game]; cur={i,r,g}; settled=false; tries=triesAt[i]||0;
+  openCard(`<div class="kick">Tile ${String(i+1).padStart(2,'0')}${PRODUCTIVE[r.game]?' · double points':''}</div><h2 id="fTitle">${esc(g.title)}</h2>
+    <div id="host"></div><p class="feedback" id="fb" aria-live="polite"></p><div class="cta" id="next" hidden></div>`);
+  g.render($('host'), r, {exam:false, esc, shuffle, answer, nudge:()=>false});
+  paint();
+}
+/* a game that knows WHICH items were missed (Recall, Phrase Selector) says so
+   in r._bad; the Ring then keeps only those, and the rest count as right */
+function remember(r,ok){
+  const bad=!ok&&r._bad&&r._bad.length?new Set(r._bad):null;
+  (r.ids||[]).forEach(id=>{ const okI=bad?!bad.has(id):ok; try{ if(window.IntuityRing){ okI?IntuityRing.right(rid(id)):IntuityRing.miss(rid(id),{topic:TOPIC,part:'Writing'}); } }catch(e){}
+    try{ if(window.INTUITY) INTUITY.log(TOPIC, id, okI, {game:r.game}); }catch(e){} });
+}
+function answer(ok,given){
+  if(settled) return false;
+  const fb=$('fb'), mult=PRODUCTIVE[cur.r.game]?2:1;
+  if(ok){
+    celebrate(cur.i,!tries); settled=true;
+    const pts=practice?0:(tries?50:100)*mult; score+=pts;
+    log.push({i:cur.i,r:cur.r,g:cur.g,ok:true,given}); doneSet.add(cur.i); if(!tries) remember(cur.r,true);
+    fb.innerHTML='<b>Right'+(pts?' · +'+pts:'')+'.</b> '+esc(cur.r.note||'');
+    const last=doneSet.size>=N; showNext(last?()=>finish():()=>closeCard(), tries?2600:1800); return false;
+  }
+  if(!tries) remember(cur.r,false);
+  tries++; triesAt[cur.i]=tries;
+  if(practice){ paint(); fb.innerHTML='Not quite — try again.'; return true; }
+  lives--; paint();
+  if(lives<=0){ settled=true; practice=true; log.push({i:cur.i,r:cur.r,g:cur.g,ok:false,given}); doneSet.add(cur.i); paint();
+    let sol=''; try{ sol=String(cur.g.solution(cur.r)||''); }catch(e){}
+    fb.innerHTML='<b>No lives left.</b> The answer: <b>'+esc(sol)+'</b>. '+esc(cur.r.note||'')+'<br><br>The rest of the run is practice: no more points, but every tile still counts towards fixing your mistakes.';
+    const last=doneSet.size>=N; showNext(last?()=>finish():()=>closeCard(), 6000); return false; }
+  fb.innerHTML=(given==='(the fuse burnt out)'?'The fuse burnt out — <b>'+lives+'</b> '+(lives===1?'life':'lives')+' left. It relights for 90 seconds, and your paragraph is kept.':'Not quite — <b>'+lives+'</b> '+(lives===1?'life':'lives')+' left. Try again.'); return true;
+}
+function lookAgain(i){
+  const e=log.slice().reverse().find(x=>x.i===i); if(!e) return;
+  const missed=(triesAt[i]||0)>0; let sol=''; try{ sol=String(e.g.solution(e.r)||''); }catch(x){}
+  cur=null;
+  openCard(`<div class="kick">Tile ${String(i+1).padStart(2,'0')} · Look again</div><h2 id="fTitle">${esc(e.g.title)}</h2>
+    <p class="look ${e.ok?'ok':'no'}"><b>${e.ok&&!missed?'Right first time':e.ok?'Right, after a mistake':'Missed'}</b></p>
+    <p class="feedback">${e.r.game==='qFinale'&&e.ok?'Your paragraph: <i>'+esc(e.given)+'</i>':'The answer: <b>'+esc(sol)+'</b>'}. ${esc(e.r.note||'')}</p>
+    ${missed||!e.ok?'<p class="ring-line">These phrases will come back first next time.</p>':''}
+    <div class="cta"><button class="btn fill" type="button" id="lookClose">Back to the board</button></div>`);
+  $('lookClose').onclick=closeCard;
+}
+/* the card closes itself after an answer; a tap skips the wait */
+let autoT=null, autoOff=null;
+function showNext(fn,ms){
+  clearTimeout(autoT); if(autoOff) autoOff();
+  const n=$('next'); n.hidden=false; n.innerHTML='<span class="auto" style="--ms:'+ms+'ms" aria-hidden="true"></span>';
+  const done=()=>{ clearTimeout(autoT); if(autoOff) autoOff(); fn(); };
+  const tp=e=>{ if(e.target.closest&&(e.target.closest('#fx')||e.target.closest('textarea,input'))) return; done(); };
+  const key=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); done(); } };
+  const arm=setTimeout(()=>{ document.addEventListener('pointerdown',tp,true); document.addEventListener('keydown',key,true); },400);
+  autoOff=()=>{ clearTimeout(arm); document.removeEventListener('pointerdown',tp,true); document.removeEventListener('keydown',key,true); autoOff=null; };
+  autoT=setTimeout(done,ms);
+}
+/* celebration, as on the Board */
+let owed=null;
+const sfx=name=>{ try{ if(window.SFX&&SFX.isOn()&&SFX[name]) SFX[name](); }catch(e){} };
+function celebrate(i,first){ sfx(first?'correct':'pop'); owed={i,first}; }
+function burst(i,first){
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const tk=document.querySelector(`#marks g[data-i="${i}"] .tick`); if(!tk) return;
+  tk.classList.remove('pop'); void tk.getBoundingClientRect(); tk.classList.add('pop');
+  const b=tk.getBoundingClientRect(), g=document.createElement('div'); g.className='glitter';
+  g.style.left=(b.left+b.width/2)+'px'; g.style.top=(b.top+b.height/2)+'px';
+  const cols=['#C2956E','var(--ring-ink)','var(--mark-right)','#F6F1E6','#E9C98F'], n=first?16:9;
+  for(let k=0;k<n;k++){ const a=Math.PI*2*k/n+Math.random()*.5, d=(first?30:20)+Math.random()*(first?26:14), s=2.5+Math.random()*(first?4:3);
+    const e=document.createElement('i');
+    e.style.cssText=`--x:${(Math.cos(a)*d).toFixed(1)}px;--y:${(Math.sin(a)*d-6).toFixed(1)}px;--s:${s.toFixed(1)}px;--c:${cols[k%cols.length]};--r:${k%3?'1px':'50%'};--rot:${Math.round(Math.random()*240-120)}deg;--d:${650+Math.round(Math.random()*250)}ms;--w:${Math.round(Math.random()*70)}ms`;
+    g.appendChild(e); }
+  document.body.appendChild(g); setTimeout(()=>g.remove(),1100);
+}
+
+/* ══ THE RESULT ══ What a teacher wants to see and a student needs to
+   hear: the score, then exactly which phrases are still to learn — the
+   ones that will come back first next time. */
+function finish(){
+  playing=false; clearInterval(tick); cur=null; paint(); $('hint').hidden=false; $('hint').textContent='All done'; $('again').hidden=false; drawTasks();
+  const t=$('clock').textContent, right=log.filter(x=>x.ok&&!(triesAt[x.i]>0)).length;
+  const clean=log.length===N&&log.every(x=>x.ok)&&!Object.values(triesAt).some(v=>v>0);
+  const missed=[]; log.forEach(x=>{ if(x.ok&&!(triesAt[x.i]>0)) return; const r=x.r;
+    if(r.game==='qMatch') r.items.forEach(p=>missed.push([p.task,p.part,p.rc]));
+    else if(r.game==='qSort') r.items2.forEach(p=>missed.push([p.task,p.part,p.rc]));
+    else if(r.game==='qSelect') r.items.filter(s=>!r._bad||r._bad.includes(s.id)).forEach(s=>missed.push([s.task,s.part,s.answer]));
+    else if(r.game==='qRecall') r.items.filter((p,j)=>!r._bad||r._bad.includes(r.ids[j])).forEach(p=>missed.push([p.task,p.part,p.rc]));
+    else if(r.game==='qFix') missed.push([r.err.task,r.err.part,r.err.sentence.replace(r.err.bad,r.err.fix)]);
+    else if(r.game==='qStory') r.gaps.forEach(gp=>missed.push([r.task,gp.part,gp.key])); });
+  try{ if(window.INTUITY&&INTUITY.session) INTUITY.session(TOPIC,'board',{right,of:N,score,time:t,tasks:chosen.join(',')}); }catch(e){}
+  sfx(clean?'fanfare':'bowlLow');
+  openCard(`<div class="kick">${clean?'A clean run':'The Question · complete'}</div><h2 id="fTitle">${clean?'Every tile, first time.':'Finish.'}</h2>
+    <div class="big">${score}</div><p class="cg-prompt">${right} of ${N} tiles right first time, in <b>${t}</b>.</p>
+    ${missed.length?`<p class="ring-line">To learn before next time — these come back first:</p><ul class="miss-list">${missed.slice(0,8).map(([tk,pt,x])=>`<li><small>${PART[pt]} · ${TASKL[tk]}</small>${esc(x)}</li>`).join('')}</ul>`
+      :'<p class="ring-line">Nothing to fix. Come back tomorrow: a phrase right on two different days is learnt for good.</p>'}
+    <div class="cta"><button class="btn fill" type="button" id="rAgain">Play again</button></div>`);
+  $('rAgain').onclick=()=>{ closeCard(); reset(); paint(); drawTasks(); };
+}
+
+/* ══ HEADER ══ */
+function paintMute(){ const m=$('mute'); if(!m||!window.SFX) return; const on=SFX.isOn(); m.classList.toggle('off',!on); m.setAttribute('aria-pressed',on); m.setAttribute('aria-label',on?'Sound on':'Sound off'); }
+if($('mute')) $('mute').onclick=()=>{ if(window.SFX){ SFX.toggle(); paintMute(); } };
+paintMute();
+$('legend').innerHTML='<span><svg viewBox="0 0 12 12"><path d="M2 6.4l2.8 3 5-5.8" fill="none" stroke="var(--mark-right)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Right</span><span><svg viewBox="0 0 12 12"><path d="M2 6.4l2.8 3 5-5.8" fill="none" stroke="var(--mark-right)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" fill="none" stroke="var(--mark-wrong)" stroke-width="2.2" stroke-linecap="round"/></svg>After a mistake</span><span><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" fill="none" stroke="var(--mark-wrong)" stroke-width="2.2" stroke-linecap="round"/></svg>Wrong</span>';
+$('again').onclick=()=>{ reset(); paint(); drawTasks(); };
+$('scrim').addEventListener('click',e=>{ if(e.target.id==='scrim') closeCard(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!$('scrim').hidden) closeCard(); });
+document.querySelector('.header').addEventListener('click',e=>{ const a=e.target.closest('a[href]'); if(!a||e.metaKey||e.ctrlKey||e.shiftKey||e.button) return;
+  const href=a.getAttribute('href'); if(!href||href.startsWith('#')) return; e.preventDefault(); location.replace(a.href); });
+
+if(P.get('test')) window.QB_TEST={draw:()=>draw(), plan:()=>plan, open:i=>tap(i), bank:()=>BANK, force:i=>{ doneSet.add(i); log.push({i,r:plan[i],g:G[plan[i].game],ok:true,given:''}); if(!playing){ playing=true; } paint(); }, state:()=>({lives,score,done:[...doneSet],log:log.map(x=>({i:x.i,ok:x.ok}))})};
+/* ══ LOAD ══ */
+fetch('/data/writing/question/bank.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{ BANK=d; reset(); drawBoard(); drawTasks(); })
+  .catch(()=>{ $('hint').textContent='The board didn’t load — reload to try again'; });
+})();
+</script>
+</body>
+</html>

@@ -161,38 +161,49 @@
   /* ═══ STORYBOARD — read it, it vanishes, bring it back ═══
      The whole model for thirty seconds; then one sentence from each part
      comes back with its key expression missing. The first word is given
-     and the number of words, so it is memory for the chunk, not a guess. */
-  const READ=30;
+     and the number of words, so it is memory for the chunk, not a guess.
+     THREE READS (the teacher, 23 Oct): the text can be brought back twice
+     more, thirty seconds each time, and what was typed is kept. */
+  const READ=30, READS=3;
   G.qStory = {
     title:'Storyboard', kind:'game', skill:'productive',
     solution:r=>r.gaps.map(g=>g.key).join(' · '),
     render(host,r,ctx){ style();
-      if(r._phase==='write') return write();
-      if(r._left==null) r._left=READ;
-      host.innerHTML=`<div class="qg-top">${ringHTML('qgRing')}<div><p class="cg-prompt" style="margin:0">${ctx.esc(r.title)} · ${ctx.esc(r.taskLabel)}. Read it closely: in ${READ} seconds it disappears, and you bring back the bold phrases.</p></div></div>
-        <div class="qg-paper">${r.paras.map(p=>'<p>'+bold(p.text,p.keys)+'</p>').join('')}</div>
-        <div class="cg-row"><button class="cg-btn" type="button" id="qgReady">I’m ready</button></div>`;
-      let last=performance.now();
-      const tick=setInterval(()=>{ if(!host.isConnected){ clearInterval(tick); return; }
-        const now=performance.now(); r._left-=(now-last)/1000; last=now; setRing(host.querySelector('#qgRing'),r._left,READ);
-        if(r._left<=0){ clearInterval(tick); r._phase='write'; write(); } },200);
-      setRing(host.querySelector('#qgRing'),r._left,READ);
-      host.querySelector('#qgReady').onclick=()=>{ clearInterval(tick); r._phase='write'; write(); };
+      if(!r._reads){ r._reads=1; r._left=READ; }
+      if(r._phase==='write') write(); else read();
       function bold(t,keys){ let o=ctx.esc(t); keys.forEach(k=>{ const i=norm2(o).indexOf(norm2(ctx.esc(k))); if(i>=0) o=o.slice(0,i)+'<b>'+o.slice(i,i+k.length)+'</b>'+o.slice(i+k.length); }); return o; }
       function norm2(s){ return s.toLowerCase().replace(/[’‘]/g,"'"); }
+      function read(){
+        r._phase='read';
+        host.innerHTML=`<div class="qg-top">${ringHTML('qgRing')}<div><p class="qg-step" style="margin:0 0 .2rem">Read ${r._reads} of ${READS}</p><p class="cg-prompt" style="margin:0">${ctx.esc(r.title)} · ${ctx.esc(r.taskLabel)}. Read it closely: in ${READ} seconds it disappears, and you bring back the bold phrases.</p></div></div>
+          <div class="qg-paper">${r.paras.map(p=>'<p>'+bold(p.text,p.keys)+'</p>').join('')}</div>
+          <div class="cg-row"><button class="cg-btn" type="button" id="qgReady">I’m ready</button></div>`;
+        let last=performance.now();
+        const tick=setInterval(()=>{ if(!host.isConnected){ clearInterval(tick); return; }
+          const now=performance.now(); r._left-=(now-last)/1000; last=now; setRing(host.querySelector('#qgRing'),r._left,READ);
+          if(r._left<=0){ clearInterval(tick); write(); } },200);
+        setRing(host.querySelector('#qgRing'),r._left,READ);
+        host.querySelector('#qgReady').onclick=()=>{ clearInterval(tick); write(); };
+      }
       function write(){
+        r._phase='write';
+        const left=READS-r._reads, good0=r._good||[];
         host.innerHTML=`<p class="cg-prompt">Bring back the missing phrases. The first word and the number of words are given.</p>
           ${r.gaps.map((g,j)=>{ const w=g.key.split(/\s+/); return `<div class="qg-line">${tag(r.task,g.part,r.reg)}<br>${ctx.esc(g.before)}<span class="qg-gap">${ctx.esc(w[0])} … (${w.length} words)</span>${ctx.esc(g.after)}
             <input class="qg-in" data-j="${j}" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Missing phrase ${j+1}" placeholder="${ctx.esc(w[0])} …"></div>`; }).join('')}
-          <div class="cg-row"><button class="cg-btn" type="button" id="qgCheck">Check</button></div>`;
-        const ins=[...host.querySelectorAll('.qg-in')]; (r._typed||[]).forEach((v,j)=>{ if(ins[j]) ins[j].value=v; });
+          <div class="cg-row"><button class="cg-btn" type="button" id="qgCheck">Check</button>${left>0?`<button class="cg-btn cg-ghost" type="button" id="qgAgain">Read again · ${left} left</button>`:''}</div>`;
+        const ins=[...host.querySelectorAll('.qg-in')];
+        (r._typed||[]).forEach((v,j)=>{ if(ins[j]) ins[j].value=v; });
+        good0.forEach((g,j)=>{ if(g&&ins[j]){ ins[j].classList.add('cg-ok'); ins[j].disabled=true; } });
         ins.forEach(i=>i.addEventListener('input',()=>{ r._typed=ins.map(x=>x.value); }));
+        const again=host.querySelector('#qgAgain');
+        if(again) again.onclick=()=>{ if(host.dataset.locked) return; r._typed=ins.map(x=>x.value); r._reads++; r._left=READ; read(); };
         host.querySelector('#qgCheck').onclick=()=>{
           if(host.dataset.locked||ins.some(i=>!i.value.trim())) return;
-          const good=ins.map((i,j)=>close(i.value,r.gaps[j].key));
+          const good=ins.map((i,j)=>i.disabled||close(i.value,r.gaps[j].key)); r._good=good; r._typed=ins.map(x=>x.value);
           ins.forEach((i,j)=>{ i.classList.toggle('cg-ok',good[j]); i.classList.toggle('cg-no',!good[j]); if(good[j]) i.disabled=true; });
-          const ok=good.every(Boolean), again=ctx.answer(ok, ins.map(i=>i.value.trim()).join(' · '));
-          if(ok||!again){ ins.forEach((i,j)=>{ if(!good[j]) i.value=r.gaps[j].key; }); lockAll(host); }
+          const ok=good.every(Boolean), retry=ctx.answer(ok, ins.map(i=>i.value.trim()).join(' · '));
+          if(ok||!retry){ ins.forEach((i,j)=>{ if(!good[j]) i.value=r.gaps[j].key; }); lockAll(host); }
         };
         setTimeout(()=>{ const f=ins.find(i=>!i.disabled); if(f) f.focus(); },300);
       }

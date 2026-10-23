@@ -330,7 +330,7 @@ body.board-page .board-toggle .viewtog{margin:0}
 <script src="/data/challenge/games/match.js?v=1"></script>
 <script src="/data/challenge/games/sort.js?v=2"></script>
 <script src="/data/challenge/games/order.js?v=3"></script>
-<script src="/data/writing/question/question-games.js?v=4"></script>
+<script src="/data/writing/question/question-games.js?v=6"></script>
 <script src="/tools/intuity-log.js?v=1"></script>
 <script src="/tools/intuity-ring.js?v=1"></script>
 <script>
@@ -449,12 +449,9 @@ function draw(){
   /* 7 · Builder — reason, example, result */
   { const m=mPick(); R.push({game:'qBuilder',title:m.title,taskLabel:tl(m),task:m.task,reg:m.reg,b:m.builder,ids:[m.id+'-build'],
       note:'Topic sentence, then why (reason), then show it (example), then what follows (result): a body paragraph that develops its point.'}); }
-  /* 8 · Fix It — one broken phrase, two good lines from the other parts */
-  { const e=ranked(BANK.errors.filter(inTask))[0];
-    const others=PARTS.filter(p=>p!==e.part).map(pt=>ranked(ph.filter(p=>p.part===pt&&!used.has(p.id)))[0]).filter(Boolean);
-    const lines=[{task:e.task,part:e.part,text:e.sentence,err:true}].concat(others.map(p=>({task:p.task,part:p.part,reg:p.task==='email'?p.reg:'',text:p.ex})))
-      .sort((a,b)=>PARTS.indexOf(a.part)-PARTS.indexOf(b.part));
-    R.push({game:'qFix',err:e,lines,ids:[e.id],note:e.note}); }
+  /* 8 · Fix It — one mistake in each part; waiting ones first, different tasks when it can */
+  { const errs=[]; PARTS.forEach(pt=>{ const c=ranked(BANK.errors.filter(e=>inTask(e)&&e.part===pt)).sort((a,b)=>errs.filter(o=>o.task===a.task).length-errs.filter(o=>o.task===b.task).length)[0]; if(c) errs.push(c); });
+    R.push({game:'qFix',errs,ids:errs.map(e=>e.id),note:errs.map(e=>e.note).join(' ')}); }
   /* 9 · Recall — three phrases from memory; the Ring's waiting ones first */
   { const its=[]; PARTS.forEach(pt=>{ const c=ranked(ph.filter(p=>p.part===pt&&!its.includes(p)))[0]; if(c) its.push(c); });
     R.push({game:'qRecall',items:its.map(p=>({task:p.task,part:p.part,reg:p.task==='email'?p.reg:'',rc:p.rc})),ids:its.map(p=>p.id),note:'Say them aloud as you type: the sound helps them stick.'}); }
@@ -645,7 +642,7 @@ function finish(){
     else if(r.game==='qSort') r.items2.forEach(p=>missed.push([p.task,p.part,p.rc]));
     else if(r.game==='qSelect') r.items.filter(s=>!r._bad||r._bad.includes(s.id)).forEach(s=>missed.push([s.task,s.part,s.answer]));
     else if(r.game==='qRecall') r.items.filter((p,j)=>!r._bad||r._bad.includes(r.ids[j])).forEach(p=>missed.push([p.task,p.part,p.rc]));
-    else if(r.game==='qFix') missed.push([r.err.task,r.err.part,r.err.sentence.replace(r.err.bad,r.err.fix)]);
+    else if(r.game==='qFix') r.errs.filter(e=>!r._bad||r._bad.includes(e.id)).forEach(e=>missed.push([e.task,e.part,e.sentence.replace(e.bad,e.fix)]));
     else if(r.game==='qStory') r.gaps.forEach(gp=>missed.push([r.task,gp.part,gp.key])); });
   try{ if(window.INTUITY&&INTUITY.session) INTUITY.session(TOPIC,'board',{right,of:N,score,time:t,tasks:chosen.join(',')}); }catch(e){}
   sfx(clean?'fanfare':'bowlLow');

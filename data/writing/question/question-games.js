@@ -238,34 +238,36 @@
     }
   };
 
-  /* ═══ FIX IT — three lines, one broken phrase ═══
-     Tap the line with the mistake, then type the corrected words. Two of
-     the three lines are right, so changing everything is not a strategy. */
+  /* ═══ FIX IT — one broken word in every part ═══
+     Three lines — introduction, body, conclusion — and each hides one
+     mistake (the teacher, 23 Oct: "every paragraph gets a word to fix").
+     The student finds it and types the corrected words under the line.
+     Lines already fixed stay fixed after a wrong Check. */
   G.qFix = {
     title:'Fix It', kind:'game', skill:'productive',
-    solution:r=>r.err.sentence.replace(r.err.bad,r.err.fix),
+    solution:r=>r.errs.map(e=>e.sentence.replace(e.bad,e.fix)).join(' · '),
     render(host,r,ctx){ style();
-      let pick=null;
-      host.innerHTML=`<p class="cg-prompt">One of these lines has a broken phrase. Tap that line, then type the corrected words.</p>
-        ${r.lines.map((l,j)=>`<button class="qg-line" type="button" data-j="${j}">${tag(l.task,l.part,l.reg)}<br>${ctx.esc(l.text)}</button>`).join('')}
-        <div class="cg-field" style="margin-top:.4rem"><input id="qgIn" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="The corrected words" aria-label="Your correction">
-        <button class="cg-btn" type="button" id="qgCheck">Check</button></div>`;
-      const inp=host.querySelector('#qgIn');
-      host.querySelectorAll('.qg-line').forEach(b=>b.onclick=()=>{ if(host.dataset.locked) return; pick=+b.dataset.j;
-        host.querySelectorAll('.qg-line').forEach(x=>x.classList.toggle('qg-pick',x===b)); inp.focus(); });
+      host.innerHTML=`<p class="cg-prompt">Each line has one mistake. Type the corrected words under it.</p>
+        ${r.errs.map((e,j)=>`<div class="qg-line">${tag(e.task,e.part)}<br><span class="qg-s" data-j="${j}">${ctx.esc(e.sentence)}</span>
+          <input class="qg-in" data-j="${j}" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="The corrected words" aria-label="Correction for line ${j+1}"></div>`).join('')}
+        <div class="cg-row"><button class="cg-btn" type="button" id="qgCheck">Check</button></div>`;
+      const ins=[...host.querySelectorAll('.qg-in')];
+      const fixedOK=(e,v)=>{ const t=norm(v); return !!t && t.indexOf(norm(e.need||e.fix))>=0 && norm(e.sentence.replace(e.bad,e.fix)).indexOf(t)>=0; };
+      const show=j=>{ const e=r.errs[j], sp=host.querySelector('.qg-s[data-j="'+j+'"]');
+        sp.innerHTML=ctx.esc(e.sentence).replace(ctx.esc(e.bad),'<s style="color:var(--wrong)">'+ctx.esc(e.bad)+'</s> <b style="color:var(--right)">'+ctx.esc(e.fix)+'</b>'); };
       const go=()=>{
-        if(host.dataset.locked) return;
-        if(pick==null){ inp.placeholder='First tap the line with the mistake'; return; }
-        if(!inp.value.trim()) return;
-        const fixed=norm(r.err.sentence.replace(r.err.bad,r.err.fix)), t=norm(inp.value);
-        const ok=r.lines[pick].err && t.indexOf(norm(r.err.fix))>=0 && fixed.indexOf(t)>=0;   /* the fix, and nothing the sentence doesn't say */
-        const again=ctx.answer(ok, (r.lines[pick].err?'':'(a correct line) ')+inp.value.trim());
-        host.querySelectorAll('.qg-line')[pick].classList.add(ok?'cg-ok':'cg-no');
-        if(ok||!again){ host.querySelectorAll('.qg-line').forEach((b,j)=>{ if(r.lines[j].err) b.innerHTML=tag(r.lines[j].task,r.lines[j].part,r.lines[j].reg)+'<br>'+ctx.esc(r.err.sentence).replace(ctx.esc(r.err.bad),'<s style="color:var(--wrong)">'+ctx.esc(r.err.bad)+'</s> <b style="color:var(--right)">'+ctx.esc(r.err.fix)+'</b>'); });
-          lockAll(host); return; }
-        setTimeout(()=>{ host.querySelectorAll('.qg-line').forEach(b=>b.classList.remove('cg-no','qg-pick')); pick=null; inp.select(); },900);
+        if(host.dataset.locked||ins.some(i=>!i.disabled&&!i.value.trim())) return;
+        const good=ins.map((i,j)=>i.disabled||fixedOK(r.errs[j],i.value));
+        ins.forEach((i,j)=>{ i.classList.toggle('cg-ok',good[j]); i.classList.toggle('cg-no',!good[j]); if(good[j]&&!i.disabled){ i.disabled=true; show(j); } });
+        const ok=good.every(Boolean);
+        if(!ok&&r.ids) r._bad=(r._bad||[]).concat(r.ids.filter((id,j)=>!good[j]));
+        const again=ctx.answer(ok, ins.map(i=>i.value.trim()).join(' · '));
+        if(ok||!again){ r.errs.forEach((e,j)=>show(j)); lockAll(host); return; }
+        const f=ins.find(i=>!i.disabled); if(f) f.select();
       };
-      host.querySelector('#qgCheck').onclick=go; inp.addEventListener('keydown',e=>{ if(e.key==='Enter') go(); });
+      host.querySelector('#qgCheck').onclick=go;
+      ins.forEach((i,j)=>i.addEventListener('keydown',e=>{ if(e.key!=='Enter') return; const n=ins.slice(j+1).find(x=>!x.disabled); n?n.focus():go(); }));
+      setTimeout(()=>{ if(ins[0]) ins[0].focus(); },300);
     }
   };
 

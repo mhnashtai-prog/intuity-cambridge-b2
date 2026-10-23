@@ -114,7 +114,9 @@ function foot() {
       if (k === STAGE) s.setAttribute('aria-current', 'page');
       pill.appendChild(s);
     } else {
-      var a = el('a', 'wr-stage', NAMES[k]);
+      /* be2-nohit: the touch-screen hit area would reach above the footer
+         and catch taps meant for the card arrows just over it */
+      var a = el('a', 'wr-stage be2-nohit', NAMES[k]);
       a.href = url;
       pill.appendChild(a);
     }
@@ -225,7 +227,10 @@ if (STAGE === 'model' && G.stages.generate) {
     '.wr-gen:hover{background:rgba(118,118,128,.2)}.wr-gen:active{background:rgba(118,118,128,.28)}' +
     '.wr-gen i{font-style:normal;color:rgba(60,60,67,.6);font-size:1rem;line-height:1}' +
     '.mode-row.has-gen{display:flex!important;justify-content:center!important;align-items:center;gap:.6rem;flex-wrap:wrap}' +
-    '.mode-row.has-gen > *{grid-column:auto!important;justify-self:auto!important;margin:0!important;position:static!important}' +
+    /* relative, not static: a static pill let the touch-screen hit area
+       (be2-system.css, an absolute ::before) escape to the page and swallow
+       taps on Phrases and the arrows — students landed in the Generator */
+    '.mode-row.has-gen > *{grid-column:auto!important;justify-self:auto!important;margin:0!important;position:relative!important;inset:auto!important}' +
     '.wr-gen-row{display:flex;justify-content:center;padding:.45rem 1rem .15rem}';
   document.head.appendChild(css);
   var gen = el('a', 'wr-gen');

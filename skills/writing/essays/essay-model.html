@@ -124,6 +124,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .phint{font-family:'Geist', sans-serif;font-size:0.6875rem;letter-spacing:.06em;text-transform:uppercase;color:#b0a684;margin:-.5rem 0 .7rem}
 .pitem{position:relative;cursor:pointer}
 .pitem.ppair{cursor:pointer}
+.pin-card{display:inline-block;margin-left:.45rem;padding:.05rem .45rem;border-radius:999px;background:rgba(138,167,156,.22);color:#3F5C50;font-family:'Geist Mono',monospace;font-size:.62rem;letter-spacing:.06em;vertical-align:1px;white-space:nowrap}
 .pbloom{display:none;margin-top:.55rem;background:#fff;border-radius:.7rem;box-shadow:0 6px 22px rgba(0,0,0,.14);border-left:4px solid var(--sig,#7a5ea8);padding:.75rem .9rem;animation:bloomIn .22s ease}
 .pitem.open .pbloom{display:block}
 @keyframes bloomIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
@@ -392,6 +393,25 @@ function richSections(){
   });
   return {intro:intro,bodySections:bodySections,concl:[...new Set(concl)]};
 }
+/* WHICH BANK PHRASES ARE IN THE CARDS. The Phrases list is the older, larger
+   bank; the Cards roll a vetted set in slot form. A phrase that the Cards can
+   roll gets a ✓ and comes first, so a student sees what they can practise
+   there — the rest stays as reading. Matching ignores signposts, [topic]
+   placeholders, dots and case: "Firstly, one clear advantage of [topic] is
+   that it..." matches the card "one clear advantage of ...". */
+const CORE_SIGN=/^(firstly|secondly|first and foremost|first of all|to begin with|to start with|moreover|furthermore|in addition|additionally|above all|overall|in conclusion|to sum up|all in all|ultimately|however|nevertheless)\b,?\s*/;
+function coreOf(t){ let s=String(t).toLowerCase().replace(/\[[^\]]*\]/g,' ').replace(/[’‘]/g,"'").replace(/\.\.\.|…/g,' ').replace(/[^a-z' ]+/g,' ').replace(/\s+/g,' ').trim();
+  for(let k=0;k<2;k++) s=s.replace(CORE_SIGN,''); return s; }
+let CARD_CORES=null, CARD_FOR=null;
+function cardCores(){
+  if(CARD_FOR===TYPE&&CARD_CORES) return CARD_CORES;
+  const out=[]; const walk=o=>{ if(typeof o==='string') out.push(coreOf(o)); else if(Array.isArray(o)) o.forEach(walk); else if(o&&typeof o==='object') Object.keys(o).forEach(k=>{ if(!/^(bodyPlan|signpostPlan|label|viewFlavour|hinge)$/.test(k)) walk(o[k]); }); };
+  walk(T); walk(SH.background); walk(SH.view);
+  CARD_CORES=out.filter(c=>c.split(' ').length>=3); CARD_FOR=TYPE; return CARD_CORES;
+}
+function inCards(t){ const c=coreOf(t); if(c.split(' ').length<3) return false; return cardCores().some(k=>c.startsWith(k)||k.startsWith(c)); }
+const CARD_TICK='<span class="pin-card" title="In your Cards — roll it there">✓ Cards</span>';
+const cardsFirst=a=>a.slice().sort((x,y)=>inCards(y)-inCards(x));
 function renderPhrases(){
   const stack=document.getElementById('stack');
   stack.classList.add('has-cards','phrases-on');
@@ -399,31 +419,31 @@ function renderPhrases(){
   if(!R){stack.innerHTML='<div style="padding:2.5rem;text-align:center;color:#999;font-size:.9rem">Loading phrases\u2026</div>';return;}
   const icons={intro:'\uD83D\uDCCC',body:'\uD83D\uDC4D',concl:'\u2B50'};
 
-  const introItems=R.intro.map(p=>{
+  const introItems=R.intro.slice().sort((x,y)=>inCards(y.hook)-inCards(x.hook)).map(p=>{
     const bloom=`<div class="pbloom"><div class="pbloom-tag">Complete introduction</div>`+
       `<div class="pbloom-line"><span class="pbloom-hook">${fmt(String(p.hook))}</span>`+
       (p.thesis?`<div class="pbloom-thesis">${fmt(String(p.thesis))}</div>`:'')+`</div></div>`;
-    return `<div class="pitem ppair" onclick="pbloom(this)"><div class="phook">${fmt(String(p.hook))}</div>`+
+    return `<div class="pitem ppair" onclick="pbloom(this)"><div class="phook">${fmt(String(p.hook))}${inCards(p.hook)?CARD_TICK:''}</div>`+
       (p.thesis?`<div class="pthesis">${fmt(String(p.thesis))}</div>`:'')+bloom+`</div>`;
   }).join('');
   const introCard=`<div class="pcard" data-sec="intro"><div class="prail"><span>${icons.intro}</span></div><div class="pbody"><div class="ptitle">Introduction</div><div class="phint">hook + thesis \u2014 tap to see it whole</div>${introItems}</div></div>`;
 
   const bodyCard=(R.bodySections||[]).map((bs,bi)=>{
-    const items=bs.items.map(t=>{
+    const items=cardsFirst(bs.items).map(t=>{
       const sign=pick(SH.signpost.addition||Object.values(SH.signpost)[0]);
       const vw=pick(VIEW);
       const bloom=`<div class="pbloom"><div class="pbloom-tag">As a body sentence</div>`+
         `<div class="pbloom-line"><span class="sig">${sign}</span> <span class="view">${vw}</span> ${fmt(String(t))}</div></div>`;
-      return `<div class="pitem" onclick="pbloom(this)">${fmt(String(t))}${bloom}</div>`;
+      return `<div class="pitem" onclick="pbloom(this)">${fmt(String(t))}${inCards(t)?CARD_TICK:''}${bloom}</div>`;
     }).join('');
     return `<div class="pcard" data-sec="body"><div class="prail"><span>${bi+1}</span></div><div class="pbody"><div class="ptitle">${bs.label}</div><div class="phint">tap to see it in a sentence</div>${items}</div></div>`;
   }).join('');
 
-  const conclItems=R.concl.map(t=>{
+  const conclItems=cardsFirst(R.concl).map(t=>{
     const vw=pick(VIEW);
     const bloom=`<div class="pbloom"><div class="pbloom-tag">As a closing sentence</div>`+
       `<div class="pbloom-line">${fmt(String(t))}</div></div>`;
-    return `<div class="pitem" onclick="pbloom(this)">${fmt(String(t))}${bloom}</div>`;
+    return `<div class="pitem" onclick="pbloom(this)">${fmt(String(t))}${inCards(t)?CARD_TICK:''}${bloom}</div>`;
   }).join('');
   const conclCard=`<div class="pcard" data-sec="concl"><div class="prail"><span>${icons.concl}</span></div><div class="pbody"><div class="ptitle">Conclusion</div><div class="phint">tap to see it whole</div>${conclItems}</div></div>`;
 

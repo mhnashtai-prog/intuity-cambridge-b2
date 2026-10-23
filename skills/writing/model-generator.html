@@ -72,6 +72,13 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .pa .kp-list{margin-top:.6rem}
 .pa .kp-item{font-size:clamp(14px,3.9vw,16px)}
 .pa-sub{display:block;margin-top:14px;font:600 .625rem/1 var(--f-mono);letter-spacing:.18em;text-transform:uppercase;color:var(--pa-faint)}
+.pm{display:block}
+.pm-w{display:block;margin:10px 0 2px;font:600 .6rem/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--pa-faint)}
+.pm-w:first-child{margin-top:0}
+.pm-p{display:block;font-size:clamp(13.5px,3.6vw,15px);line-height:1.45;font-weight:500}
+.cin .btn,#cAct .btn{white-space:nowrap}
+.pm-more{display:flex;justify-content:center;margin:2px 0 6px}
+.mp{margin:4px 0 0;font-size:clamp(15px,3.9vw,17px);line-height:1.55;font-weight:500}
 .loading-msg{font-family:'Geist', sans-serif;font-size:0.85rem;font-weight:700;color:rgba(0,0,0,0.25);letter-spacing:0.12em;text-transform:uppercase}
 </style>
 <link rel="stylesheet" href="/tools/parade.css?v=3">
@@ -411,31 +418,38 @@ function subjects(){
   bar.querySelectorAll('.ftab').forEach(b=>b.onclick=()=>{ if(b.dataset.k===SUBJ) return; SUBJ=b.dataset.k; subjects(); gallery();
     try{ history.replaceState(null,'','?type='+TYPE+'&subject='+encodeURIComponent(SUBJ)); }catch(e){} });
 }
+/* THE GALLERY IS THE CINEMA (23 Oct 2026, after the first class): every
+   card is a FINISHED model, introduction to conclusion, to read and swipe
+   through. Building a model line by line is the Model page's job; here the
+   student reads whole ones, then writes. "More models" deals six new ones. */
+let DEAL=0;
+const modelHTML=m=>m.secs.map(S=>`<span class="pm-w">${esc(S.word)}</span><span class="pm-p">${S.lines.map(L=>L.h[L.i].html).join(' ')}</span>`).join('');
 function gallery(){
   const rec=RECIPES.find(r=>r.key===SUBJ);
-  let seed=20261022; for(const ch of TYPE+SUBJ) seed=(seed*31+ch.charCodeAt(0))|0;
-  R=seeded(seed); MODELS=[]; for(let n=1;n<=PER;n++) MODELS.push(runRecipe(rec,n)); R=Math.random;
+  let seed=20261022+DEAL*7919; for(const ch of TYPE+SUBJ) seed=(seed*31+ch.charCodeAt(0))|0;
+  R=seeded(seed); MODELS=[]; for(let n=1;n<=PER;n++) MODELS.push(runRecipe(rec,DEAL*PER+n)); R=Math.random;
   const tag=ABBR(rec.label)||TYPE.slice(0,2).toUpperCase();
-  const ARROW='<svg class="kp-arrow" width="16" height="16" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   const PLURAL={essays:'Essays',reviews:'Reviews',reports:'Reports',emails:'Emails',articles:'Articles'};
   Parade.mount($('parade'),{
-    label:'<b>'+PLURAL[TYPE]+'</b> · Choose a model to generate', aria:'Generated models',
+    label:'<b>'+PLURAL[TYPE]+'</b> · Finished models to read', aria:'Finished models',
     items:MODELS.map((m,i)=>({
-      kicker:tag+'-'+(i+1)+' · Generate '+(/^[AE]/.test(TAG[TYPE])?'an ':'a ')+TAG[TYPE].toLowerCase()+' model',
+      kicker:tag+'-'+(DEAL*PER+i+1)+' · '+TAG[TYPE]+' model',
       title:rec.label,
-      html:'<span class="pa-lead">'+m.secs[0].lines[0].h[0].html+'</span>'+
-        '<span class="pa-sub">Your model continues with</span>'+
-        '<span class="kp-list">'+m.secs.slice(1).map(S=>'<span class="kp-item">'+ARROW+'<span><b>'+esc(S.word)+'</b>'+(S.sub?' · '+esc(S.sub):'')+'</span></span>').join('')+'</span>',
-      meta:'<b>'+m.secs.length+'</b> sections'
+      html:'<span class="pm">'+modelHTML(m)+'</span>',
+      meta:'<b>'+m.secs.length+'</b> parts'
     })),
-    action:'Generate it', hint:'Swipe to see more.',
+    action:'Read it', hint:'Swipe for the next model.',
     onOpen:i=>openModel(i)
   });
+  const more=document.createElement('div'); more.className='pm-more';
+  more.innerHTML='<button class="btn" type="button" id="moreModels">More models</button>';
+  $('parade').appendChild(more);
+  $('moreModels').onclick=()=>{ DEAL++; gallery(); };
 }
 
 /* ══ CINEMA ══ */
 function openModel(i){
-  OPEN=MODELS[i]; OPEN.tag=ABBR(OPEN.rec.label)+'-'+(i+1); MODE='card';
+  OPEN=MODELS[i]; OPEN.tag=ABBR(OPEN.rec.label)+'-'+(DEAL*PER+i+1); MODE='card';
   document.body.classList.add('cin-open'); $('cin').setAttribute('aria-hidden','false');
   try{ history.pushState({gen:1},''); }catch(e){}
   paint(); setTimeout(()=>{ try{ $('cClose').focus({preventScroll:true}); }catch(e){} },60);
@@ -487,13 +501,13 @@ function paint(){
     `<div class="wsec"><div class="secw"><b>${String(si+1).padStart(2,'0')}</b>${esc(S.word)}</div>`+
     (SUPPORT==='moves'
       ? `<div class="mv">${esc(S.sub||'')}<br><i>${S.lines.length} ${S.lines.length>1?'sentences':'sentence'}</i></div>`
-      : S.lines.map((L,li)=>`<div class="ln" data-si="${si}" data-li="${li}">
-      <button class="rl" type="button" data-d="-1" aria-label="Previous version"${L.i===0?' disabled':''}>‹</button>
-      <div class="lt" id="lt-${si}-${li}">${lineHTML(L)}</div>
-      <button class="rl" type="button" data-d="1" aria-label="Another version">›</button></div>`).join(''))+`</div>`).join('')+
-    `<p class="tip">${SUPPORT==='moves'?'No key expressions this time: you know the moves. Write it in your own words.':'Roll any line with ‹ › until you like it. Then write your own review on it.'}</p>`;
-  $('cMain').querySelectorAll('.rl').forEach(b=>{ const r=b.closest('.ln'); b.onclick=()=>roll(+r.dataset.si,+r.dataset.li,+b.dataset.d); });
-  $('cAct').innerHTML=`<button class="btn" type="button" id="aPrint">Print</button><button class="btn go" type="button" id="aWrite">Write it →</button>`;
+      : `<p class="mp">${S.lines.map(L=>lineHTML(L)).join(' ')}</p>`)+`</div>`).join('')+
+    `<p class="tip">${SUPPORT==='moves'?'No key expressions this time: you know the moves. Write it in your own words.':'Read it through and notice the key expressions. Then write your own.'}</p>`;
+  const idx=MODELS.indexOf(m);
+  $('cAct').innerHTML=`<button class="btn" type="button" id="aPrint">Print</button>`+
+    (idx>=0&&idx<MODELS.length-1?`<button class="btn" type="button" id="aNext">Next model</button>`:'')+
+    `<button class="btn go" type="button" id="aWrite">Write it →</button>`;
+  if($('aNext')) $('aNext').onclick=()=>{ const j=MODELS.indexOf(OPEN)+1; OPEN=MODELS[j]; OPEN.tag=ABBR(OPEN.rec.label)+'-'+(DEAL*PER+j+1); paint(); $('cbody').scrollTop=0; };
   $('aPrint').onclick=()=>window.print();
   $('aWrite').onclick=()=>{ MODE='write'; paint(); $('cbody').scrollTop=0; };
 }

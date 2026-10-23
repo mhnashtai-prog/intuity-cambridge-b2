@@ -273,7 +273,10 @@
 
   /* ═══ RECALL — three phrases from memory, one per part ═══
      Only the first letter of each word is left. Phrases missed anywhere on
-     the board come back here first, next time. */
+     the board come back here first, next time.
+     THREE PEEKS (the teacher, 23 Oct): "Peek" shows the full phrases for
+     five seconds, three times at most. Typing is paused while they show,
+     so a peek is for remembering, not copying. */
   const letters = s => s.split(/\s+/).map(w=>{ const m=w.match(/^([^A-Za-z]*)([A-Za-z])([A-Za-z'’]*)([^A-Za-z]*)$/); return m?m[1]+m[2]+'_'.repeat(m[3].length)+m[4]:w; }).join(' ');
   G.qRecall = {
     title:'Recall', kind:'game', skill:'productive',
@@ -282,16 +285,32 @@
       host.innerHTML=`<p class="cg-prompt">Only the first letters are left. Type each phrase in full.</p>
         ${r.items.map((x,j)=>`<div class="qg-line">${tag(x.task,x.part,x.reg)}<div class="qg-hint">${ctx.esc(letters(x.rc))}</div>
           <input class="qg-in" data-j="${j}" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Phrase ${j+1}"></div>`).join('')}
-        <div class="cg-row"><button class="cg-btn" type="button" id="qgCheck">Check</button></div>`;
-      const ins=[...host.querySelectorAll('.qg-in')];
+        <div class="cg-row"><button class="cg-btn" type="button" id="qgCheck">Check</button><button class="cg-btn cg-ghost" type="button" id="qgPeek"></button></div>`;
+      const ins=[...host.querySelectorAll('.qg-in')], hints=[...host.querySelectorAll('.qg-hint')], peekB=host.querySelector('#qgPeek');
+      const PEEKS=3, PEEK=5; if(r._peeks==null) r._peeks=PEEKS;
+      let peeking=false;
+      const label=()=>{ peekB.textContent='Peek · '+r._peeks+' left'; peekB.disabled=r._peeks<=0; if(r._peeks<=0) peekB.hidden=true; };
+      label();
+      peekB.onclick=()=>{
+        if(host.dataset.locked||peeking||r._peeks<=0) return;
+        r._peeks--; peeking=true; const was=ins.map(i=>i.disabled);
+        hints.forEach((h,j)=>{ if(!was[j]){ h.textContent=r.items[j].rc; h.style.color='var(--ink)'; } }); ins.forEach(i=>i.disabled=true);
+        host.querySelector('#qgCheck').disabled=true;
+        let left=PEEK; peekB.disabled=true; peekB.textContent='Look · '+left;
+        const t=setInterval(()=>{ left--; if(left>0&&host.isConnected){ peekB.textContent='Look · '+left; return; }
+          clearInterval(t); peeking=false; if(!host.isConnected) return;
+          hints.forEach((h,j)=>{ h.textContent=letters(r.items[j].rc); h.style.color=''; });
+          if(!host.dataset.locked){ ins.forEach((i,j)=>i.disabled=was[j]); host.querySelector('#qgCheck').disabled=false; const f=ins.find(i=>!i.disabled); if(f) f.focus(); }
+          label(); },1000);
+      };
       host.querySelector('#qgCheck').onclick=()=>{
-        if(host.dataset.locked||ins.some(i=>!i.value.trim()&&!i.disabled)) return;
+        if(host.dataset.locked||peeking||ins.some(i=>!i.value.trim()&&!i.disabled)) return;
         const good=ins.map((i,j)=>i.disabled||close(i.value,r.items[j].rc));
         ins.forEach((i,j)=>{ i.classList.toggle('cg-ok',good[j]); i.classList.toggle('cg-no',!good[j]); if(good[j]) i.disabled=true; });
         const ok=good.every(Boolean);
         if(!ok&&r.ids) r._bad=(r._bad||[]).concat(r.ids.filter((id,j)=>!good[j]));   /* only the phrases actually missed go to the Ring */
         const again=ctx.answer(ok, ins.map(i=>i.value.trim()).join(' · '));
-        if(ok||!again){ ins.forEach((i,j)=>{ if(!good[j]) i.value=r.items[j].rc; }); lockAll(host); }
+        if(ok||!again){ ins.forEach((i,j)=>{ if(!good[j]) i.value=r.items[j].rc; }); lockAll(host); peekB.hidden=true; }
       };
       setTimeout(()=>{ if(ins[0]) ins[0].focus(); },300);
     }

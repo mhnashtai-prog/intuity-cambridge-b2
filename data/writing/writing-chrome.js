@@ -62,6 +62,13 @@ function header() {
   var top = el('div', 'header-top');
   var back = el('a', 'back-link', '\u2190 Writing');
   back.href = G.back; back.target = '_top';
+  /* Came here from a portfolio slide of this task? Go back to that slide. */
+  try {
+    var ret = JSON.parse(sessionStorage.getItem('intuity.sheetReturn') || 'null');
+    if (ret && ret.task === GENRE && /^\/skills\/writing\/sheet\.html/.test(ret.url)) {
+      back.href = ret.url; back.textContent = '\u2190 Structure';
+    }
+  } catch (e) {}
   var title = el('div', 'header-title');
   title.appendChild(el('div', 'app-title', 'INTUITY'));
   title.appendChild(el('div', 'app-subtitle', G.label + ' \u00b7 ' + (G.part || '')));

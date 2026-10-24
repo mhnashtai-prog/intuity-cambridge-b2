@@ -446,7 +446,7 @@ function gallery(){
       html:'<span class="pm">'+modelHTML(m)+'</span>',
       meta:'<b>'+m.secs.length+'</b> parts'
     })),
-    action:'Read it', hint:'Swipe for the next model.',
+    action:'Write it', hint:'Read them here · tap one to write your own.',
     onOpen:i=>openModel(i)
   });
   const more=document.createElement('div'); more.className='pm-more';
@@ -457,7 +457,9 @@ function gallery(){
 
 /* ══ CINEMA ══ */
 function openModel(i){
-  OPEN=MODELS[i]; OPEN.tag=ABBR(OPEN.rec.label)+'-'+(DEAL*PER+i+1); MODE='card';
+  /* the card IS the reading; opening it is for writing (24 Oct: "why click
+     if there is nothing new to see?") */
+  OPEN=MODELS[i]; OPEN.tag=ABBR(OPEN.rec.label)+'-'+(DEAL*PER+i+1); MODE='write';
   document.body.classList.add('cin-open'); $('cin').setAttribute('aria-hidden','false');
   try{ history.pushState({gen:1},''); }catch(e){}
   paint(); setTimeout(()=>{ try{ $('cClose').focus({preventScroll:true}); }catch(e){} },60);
@@ -488,13 +490,16 @@ const SGRX=/^<span class="sg">([^<]*)<\/span>/;
 const hasGap=h=>/class="gp"|class="bl"/.test(h);
 /* what the draft starts from: a frame with gaps is given whole; a line made of
    key expression + example content gives only the key expression */
+/* an example sentence (class ex) is never given: the student writes their own */
+const exText=h=>{ const m=h.match(/<span class="ex">([\s\S]*?)<\/span>\s*$/); return m?plain(m[1]).trim():''; };
 function given(L){ let h=L.h[L.i].html; h=h.replace(/^<span class="sg">[^<]*<\/span> · /,'');   /* an article's move label is not text */
+  if(/class="ex"/.test(h)&&!SGRX.test(h)) return plain(h.replace(/\s*<span class="ex">[\s\S]*$/,'')).trim()+' ';
   const m=h.match(SGRX);
   if(hasGap(h)) return plain(h);
   return m? plain(m[1]).replace(/[,]?$/,m[1].trim().endsWith(',')?',':'')+' ' : plain(h); }
 function fixedPart(L){
   const m0=L.h[L.i].html.match(SGRX); if(m0&&!hasGap(L.h[L.i].html)) return plain(m0[1]).trim().replace(/[,.;:]+$/,'');
-  const segs=plain(L.h[L.i].html.replace(/^<span class="sg">[^<]*<\/span> · /,'')).split(/…|\.\.\.|\[[^\]]*\]/).map(x=>x.trim().replace(/^[,.;:\s]+|[,.;:]+$/g,'')).filter(x=>x.length>7);
+  const segs=plain(L.h[L.i].html.replace(/^<span class="sg">[^<]*<\/span> · /,'').replace(/\s*<span class="ex">[\s\S]*$/,'')).split(/…|\.\.\.|\[[^\]]*\]/).map(x=>x.trim().replace(/^[,.;:\s]+|[,.;:]+$/g,'')).filter(x=>x.length>7);
   return segs.sort((a,b)=>b.length-a.length)[0]||'';
 }
 const norm=t=>String(t||'').toLowerCase().replace(/[’']/g,"'").replace(/\s+/g,' ');
@@ -557,8 +562,9 @@ function lineBlock(m,d,si,li,lvl,ro){
   const val=untouched?pre:d.t[k];   /* only what the student typed survives a change of support */
   /* the line above shows only what the box does not already hold */
   const full=plain(L.h[L.i].html).trim();
+  const ex=exText(L.h[L.i].html);
   const lab=lvl==='starters'?'#'
-    :(given(L).trim()===full?'@':'e.g. … '+plain(L.h[L.i].html.replace(SGRX,'')).trim().replace(/\.$/,''));   /* @ = a frame: status only */
+    :(given(L).trim()===full?'@':'e.g. … '+(ex&&!SGRX.test(L.h[L.i].html)?ex:plain(L.h[L.i].html.replace(SGRX,'')).trim()).replace(/\.$/,''));   /* @ = a frame: status only */
   return (lvl==='moves'||!lab?'':`<div class="kx" id="kx-${k}"${lab==='@'?' data-frame="1"':''}${lab==='#'?' data-st="1"':''}><span class="no">○</span><span>${lab==='@'?'keep the expression':lab==='#'?'':esc(lab)}</span></div>`)+
     `<textarea class="wr" spellcheck="false" autocorrect="off" autocapitalize="sentences" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" data-k="${k}"${ro?' readonly':''} aria-label="${esc(S.word)}, sentence ${li+1}" placeholder="${lvl==='moves'?esc(S.sub||'Write your sentence'):'Start with the expression above, finish it your way'}">${esc(val)}</textarea>`;
 }

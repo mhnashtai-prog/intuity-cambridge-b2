@@ -49,6 +49,7 @@ h1{margin:6px 0 2px;font:400 clamp(2rem,6vw,2.8rem)/1 'Anton',Impact,sans-serif;
 .chip{flex:none;font:600 13px/1 'Geist',sans-serif;padding:9px 13px;border-radius:999px;border:1.5px solid var(--rule);background:#FAF8F5;cursor:pointer}
 .chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#FAF8F5}
 .when{margin:0 0 10px;font-size:.86rem;color:var(--quiet)}
+.examnote{display:inline-block;margin:6px 0 4px;font:600 12px/1.3 'Geist',sans-serif;background:#FBE9D7;border-radius:999px;padding:5px 10px}
 .notice{background:#FBE9D7;border-radius:12px;padding:14px 16px;margin:10px 0;font-size:.95rem;line-height:1.45}
 .notice button{margin:8px 8px 0 0}
 
@@ -157,10 +158,6 @@ h1{margin:6px 0 2px;font:400 clamp(2rem,6vw,2.8rem)/1 'Anton',Impact,sans-serif;
 <div class="top">
   <a class="back" id="back" href="/index.html?openModal=writing" target="_top">← Writing</a>
   <span class="sp"></span>
-  <div class="exam" role="group" aria-label="Which exam">
-    <button type="button" data-exam="schools">B2 First for Schools</button>
-    <button type="button" data-exam="standard">B2 First</button>
-  </div>
   <button class="tbtn" id="test" type="button" aria-pressed="false">Test me</button>
   <button class="tbtn" id="copyall" type="button">Copy all</button>
   <button class="tbtn" id="print" type="button">Print</button>
@@ -190,7 +187,7 @@ const MORE={
 };
 const COL={start:'var(--start)',body:'var(--body)',end:'var(--end)'};
 
-let D=null, KEY='essays', T=null, V=null, route=null, picked=false, exam=store.get('exam')||'schools', testing=false;
+let D=null, KEY='essays', T=null, V=null, route=null, picked=false, testing=false;
 const Q={list:[],i:0,cur:null};
 
 /* ── slots ───────────────────────────────────────────────────────────── */
@@ -254,21 +251,11 @@ function phrase(it, vals){
 }
 
 function draw(){
-  const allowed=ORDER.filter(k=>D.tasks[k]&&(D.tasks[k].exam==='both'||D.tasks[k].exam===exam));
+  const allowed=ORDER.filter(k=>D.tasks[k]);
   $('tasks').innerHTML=allowed.map(k=>`<a href="?task=${k}"${k===KEY?' aria-current="page"':''} data-task="${k}">${esc(D.tasks[k].name)}</a>`).join('');
   $('tasks').querySelectorAll('[data-task]').forEach(a=>a.onclick=e=>{e.preventDefault(); go(a.dataset.task);});
-  document.querySelectorAll('.exam button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.exam===exam));
   document.title='INTUITY — '+T.name+' sheet';
 
-  if(T.exam!=='both'&&T.exam!==exam){
-    const other=KEY==='reports'?'story':'reports', otherName=D.tasks[other].name;
-    $('page').innerHTML=`<h1>${esc(T.name)}</h1><div class="notice"><b>${esc(T.name)}s aren't in ${exam==='schools'?'B2 First for Schools':'B2 First'}.</b> `+
-      `${exam==='schools'?'In the Schools exam, Part 2 has a story instead of a report.':'In B2 First, Part 2 has a report instead of a story.'}<br>`+
-      `<button class="tbtn" type="button" id="toOther">Open the ${esc(otherName)} sheet</button><button class="tbtn" type="button" id="switchExam">I'm taking ${exam==='schools'?'B2 First':'B2 First for Schools'}</button></div>`;
-    $('toOther').onclick=()=>go(other);
-    $('switchExam').onclick=()=>setExam(exam==='schools'?'standard':'schools');
-    return;
-  }
 
   const vals=slotValues(), bands=bandsNow(), n=bands.length;
   const reader=(V&&V.reader)||T.reader||'';
@@ -276,7 +263,9 @@ function draw(){
   const qText=q&&q.opening?`“${q.opening}” ${q.prompt||''}`:q?(q.mainQuestion||q.question||(q.questionData&&q.questionData.question)||q.prompt||''):'';
   const total=bands.reduce((s,b)=>s+b.words,0);
 
+  const EXAMNOTE={standard:'In B2 First (not the Schools version), Part 2.',schools:'In B2 First for Schools, Part 2.'};
   let h=`<h1>${esc(T.name)}</h1><p class="line">${esc(T.line)}</p>`+
+    (T.exam!=='both'?`<p class="examnote">${EXAMNOTE[T.exam]}</p>`:'')+
     (T.brief?`<p class="reader">${esc(T.brief)}</p>`:'')+
     `<p class="reader"><b>Who reads it:</b> ${esc(reader)}</p>`;
   if(T.variants) h+=`<div class="chips" role="group" aria-label="Type">${T.variants.map(v=>`<button class="chip" type="button" data-v="${v.id}" aria-pressed="${v===V}">${esc(v.name)}</button>`).join('')}</div>`;
@@ -336,15 +325,13 @@ function fallback(text,done){
 }
 /* Copy all: the bold line of each band, in order — the skeleton to learn */
 $('copyall').onclick=()=>{
-  if(!T||T.exam!=='both'&&T.exam!==exam) return;
+  if(!T) return;
   const vals=slotValues();
   const lines=bandsNow().map((b,k)=>`${k+1}. ${b.job.replace(/\[[^\]]+\]/g,m=>fill(m,vals,false))}\n`+stepsFor(b).map(s=>{ const g=s.items.find(i=>i.go)||s.items[0]; return '   '+fill(g.t,vals,false)+(g.h?' '+g.h:''); }).join('\n'));
   copy(`${T.name} — the skeleton\n\n`+lines.join('\n\n'),'Skeleton copied');
 };
 $('test').onclick=()=>{ testing=!testing; $('test').setAttribute('aria-pressed',testing); $('test').textContent=testing?'Show all':'Test me'; if(T) draw(); if(testing) toast('Say each bold line, then tap it to check'); };
 $('print').onclick=()=>{ document.querySelectorAll('details.support').forEach(d=>d.open=true); window.print(); };
-document.querySelectorAll('.exam button').forEach(b=>b.onclick=()=>setExam(b.dataset.exam));
-function setExam(e){ exam=e; store.set('exam',e); draw(); }
 
 function autoRoute(){
   if(!T.routes||picked) return;

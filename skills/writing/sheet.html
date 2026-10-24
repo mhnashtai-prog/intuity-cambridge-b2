@@ -149,6 +149,20 @@ h1 b{font-weight:700}
 .step6 li button:hover{background:rgba(20,17,14,.05)}
 .step6 li:first-child button{font-weight:700}
 .step6 li small{flex:none;min-width:2.4em;font:600 10px/1.7 'Geist Mono',monospace;color:#9A5A2C;text-transform:uppercase}
+/* the examples: five pills in a footer; one opens a body paragraph over
+   the columns, the same pill (or ✕) closes it */
+.sixwrap{position:relative;--ch:64px}
+.exfoot{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin:14px 0 0;padding-top:12px;border-top:1px solid rgba(20,17,14,.1)}
+.exfoot button{border:none;cursor:pointer;border-radius:999px;padding:5px 12px;font:600 12.5px/1.2 'Geist',sans-serif;background:#EFE7DC;color:#5A3A1E}
+.exfoot button:hover{background:#E6DACB}
+.exfoot button[aria-pressed="true"]{background:#484641;color:#fff}
+.expanel{position:absolute;left:0;right:0;top:calc(var(--ch) + 8px);bottom:0;background:#FBF8F3;border:1px solid rgba(20,17,14,.12);border-radius:12px;
+  padding:14px 44px 14px 18px;overflow:auto;box-shadow:0 8px 24px rgba(0,0,0,.08)}
+.expanel[hidden]{display:none}
+.expanel .q{font:600 10.5px/1.4 'Geist',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#9A5A2C;margin:0 0 6px}
+.expanel p.t{margin:0;font-size:16px;line-height:1.6;color:#232C31}
+.expanel p.t b{background:#F3E7DA;border-radius:3px;padding:0 2px}
+.expanel .ex{position:absolute;top:8px;right:8px;border:none;background:none;font-size:17px;color:rgba(20,17,14,.45);cursor:pointer;padding:4px 8px}
 /* a phone held upright: the card turns sideways — always landscape */
 @media (max-width:760px) and (orientation:portrait){
   .pcard{width:100vh;width:100dvh;height:100vw;max-height:none;border-radius:0;padding:14px 16px;
@@ -159,7 +173,9 @@ h1 b{font-weight:700}
   .pcard{width:100vw;height:100vh;height:100dvh;border-radius:0;padding:14px 16px}
 }
 @media (max-width:760px) and (orientation:portrait), (max-height:520px) and (orientation:landscape){
-  .pcard h2{font-size:24px;margin:5px 0 10px}
+  .pcard h2{font-size:19px;margin:3px 0 7px} .pcard .kick{font-size:9px}
+  .sixwrap{--ch:44px} .exfoot{margin-top:6px;padding-top:6px;gap:4px} .exfoot button{font-size:10.5px;padding:3px 9px}
+  .expanel{padding:10px 36px 10px 12px} .expanel p.t{font-size:12.5px;line-height:1.5}
   .chev{height:44px;padding:0 12px 0 20px;gap:6px}
   .step6:first-child .chev{padding-left:10px}
   .chev b{font-size:20px} .chev span{font-size:10px;letter-spacing:.04em}
@@ -350,14 +366,35 @@ function sixHTML(){
   return sixFor(ID).map(([name,items],i)=>`<section class="step6" style="--sc:${SIXC[i][0]};--si:${SIXC[i][1]}"><div class="chev"><b>${String(i+1).padStart(2,'0')}</b><span>${esc(name)}</span></div><ol>`+
     items.map(([tag,t])=>`<li><button type="button" data-copy="${esc(t)}">${tag?`<small>${tag}</small>`:''}${esc(t)}</button></li>`).join('')+`</ol></section>`).join('');
 }
+/* five body paragraphs from this type's model essays in the portfolio,
+   with the question each one answers; the frames are already in bold */
+function examplesFor(S){
+  const out=[];
+  (S.models||[]).forEach(m=>{
+    const q=(m.plan&&m.plan[0]?m.plan[0]:'').replace(/\*\*/g,'').replace(/^###\s*/,'');
+    m.text.slice(1,-1).forEach(t=>{ if(!/^###/.test(t)&&t.length>60) out.push({q,t}); });
+  });
+  return out.slice(0,5);
+}
 function openPS(){
   if(!$('pcard')){
     document.body.insertAdjacentHTML('beforeend',`<div class="scrim2" id="scrim2"></div><div class="pcard" id="pcard" role="dialog" aria-modal="true" aria-label="Paragraph structure"></div>`);
     $('scrim2').onclick=closePS;
   }
   const S=D.sheets[ID];
-  $('pcard').innerHTML=`<button type="button" class="x" id="psX" aria-label="Close">✕</button><div class="kick"><i></i>Essay · ${esc(S.tab)}</div><h2>Paragraph structure</h2><div class="six">${sixHTML()}</div>`;
+  const EX=examplesFor(S);
+  $('pcard').innerHTML=`<button type="button" class="x" id="psX" aria-label="Close">✕</button><div class="kick"><i></i>Essay · ${esc(S.tab)}</div><h2>Paragraph structure</h2>`+
+    `<div class="sixwrap"><div class="six">${sixHTML()}</div><div class="expanel" id="expanel" hidden><button type="button" class="ex" id="exX" aria-label="Close example">✕</button><p class="q" id="exQ"></p><p class="t" id="exT"></p></div></div>`+
+    (EX.length?`<div class="exfoot" role="group" aria-label="Examples">${EX.map((e,i)=>`<button type="button" data-ex="${i}" aria-pressed="false">Example ${i+1}</button>`).join('')}</div>`:'');
   $('psX').onclick=closePS;
+  const showEx=i=>{
+    const btns=$('pcard').querySelectorAll('[data-ex]'), open=i!=null&&btns[i].getAttribute('aria-pressed')!=='true';
+    btns.forEach((b,j)=>b.setAttribute('aria-pressed',String(open&&j===i)));
+    $('expanel').hidden=!open;
+    if(open){ $('exQ').textContent=EX[i].q; $('exT').innerHTML=fmt(EX[i].t); }
+  };
+  $('pcard').querySelectorAll('[data-ex]').forEach(b=>b.onclick=()=>showEx(+b.dataset.ex));
+  $('exX').onclick=()=>showEx(null);
   $('pcard').querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>copy(b.dataset.copy));
   requestAnimationFrame(()=>{ $('scrim2').classList.add('open'); $('pcard').classList.add('open'); $('psX').focus(); });
 }

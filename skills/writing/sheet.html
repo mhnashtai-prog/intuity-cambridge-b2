@@ -73,6 +73,21 @@ h1 b{font-weight:700}
 .li .aside{color:#666;margin-left:10px;font-size:.9em;white-space:nowrap}
 .col h3{margin:0 0 4px;font-size:17px;font-weight:700}
 
+/* the pills: a door at the point a student asks "and now what?" — one per
+   band at most, outline only, never above or between the phrases */
+.pill{display:inline-flex;align-items:center;gap:6px;border:1.2px solid #B9BCC8;background:#fff;color:#44546A;border-radius:999px;
+  padding:5px 12px;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer;white-space:nowrap;line-height:1.2}
+.pill:hover{border-color:#44546A}
+.pill[aria-pressed="true"]{background:#44546A;border-color:#44546A;color:#fff}
+.pdock{display:flex;justify-content:flex-end;margin:6px 0 2px}
+.band .pabs{position:absolute;right:14px;bottom:10px}
+.hd{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;margin:4px 0 8px}
+.hd h1{margin:0}
+.qline{text-align:center;margin:-2px 0 8px;font-size:14px;color:#44546A}
+.qline q{font-style:italic}
+.qline button{border:none;background:none;color:#4472C4;font-weight:600;cursor:pointer;padding:2px 6px;font-size:13px}
+.slot{background:#FFF1C9;border-radius:4px;padding:0 3px;font-weight:600;color:#4A3800}
+.foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:2px}
 /* model samples: two columns, a blue rule between */
 .models{display:grid;grid-template-columns:1fr 1fr;gap:0 40px;position:relative}
 .models::before{content:'';position:absolute;left:50%;top:0;bottom:0;border-left:1.5px solid var(--rule)}
@@ -87,7 +102,7 @@ h1 b{font-weight:700}
 .mtext p.h{font-weight:700;margin:0 0 2px}
 .mtext p.tight{margin:0}
 .empty{color:#777;text-align:center;padding:40px 0}
-.sign{text-align:right;font-size:18px;color:var(--title);margin:0}
+.sign{text-align:right;font-size:18px;color:var(--title);margin:0 0 0 auto}
 .sign b{font-weight:700}.sign span{font-size:15px}
 .toast{position:fixed;left:50%;bottom:max(20px,env(safe-area-inset-bottom));transform:translate(-50%,16px);opacity:0;background:#1C1C1C;color:#fff;
   font-size:14px;padding:9px 16px;border-radius:999px;pointer-events:none;transition:transform .25s cubic-bezier(.2,1.4,.4,1),opacity .2s}
@@ -110,12 +125,13 @@ h1 b{font-weight:700}
   .model + .model{border-top:1.5px solid var(--rule);padding-top:18px;margin-top:6px}
 }
 @media (min-width:761px){ .col .bmark{display:none} }
+@media (max-width:760px){ .band .pabs{position:static;display:flex;justify-content:flex-end;padding:0 12px 12px} .band .pabs .pill{margin-left:auto} }
 /* a laptop screen: keep the whole slide in view */
 @media (min-width:761px) and (max-height:820px){ .li{font-size:13.5px;line-height:1.32} .band{min-height:0} .med{width:84px;height:84px} .med i{width:74px;height:74px} .med b{font-size:32px} .med::before{height:86px} h1{font-size:1.5rem;margin:2px 0 6px} }
 @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important}}
 @media print{
   @page{size:A4 landscape;margin:7mm}
-  .top,.tabs,.toast{display:none!important}
+  .top,.tabs,.toast,.pill,.pdock,.qline button{display:none!important}
   main{padding:0;max-width:none}
   h1{margin:0 0 6px;font-size:18pt}
   .band{min-height:0;margin-bottom:6px;grid-template-columns:96px 24px 1fr;-webkit-print-color-adjust:exact;print-color-adjust:exact;break-inside:avoid}
@@ -158,12 +174,39 @@ h1 b{font-weight:700}
 'use strict';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const fmt=s=>esc(s).replace(/\*\*([\s\S]+?)\*\*/g,'<b>$1</b>').replace(/\*([^*]+)\*/g,'<i>$1</i>');
-const plain=s=>String(s).replace(/\*\*|\*/g,'');
+const fmt=s=>fillSlots(esc(s),true).replace(/\*\*([\s\S]+?)\*\*/g,'<b>$1</b>').replace(/\*([^*]+)\*/g,'<i>$1</i>');
+function fillSlots(s,html){
+  if(!TRY) return s;
+  return s.replace(/\[([^\]]+)\]/g,(m,k)=>{
+    if(!FILLS.includes(k.toLowerCase())) return m;
+    let t=TRY.topicPhrase||TRY.topicShort||m;
+    if(k.charAt(0)===k.charAt(0).toUpperCase()&&k.charAt(0)!==k.charAt(0).toLowerCase()) t=t.charAt(0).toUpperCase()+t.slice(1);
+    return html?`<span class="slot">${esc(t)}</span>`:t;
+  });
+}
+const plain=s=>fillSlots(String(s).replace(/\*\*|\*/g,''),false);
 const P=new URLSearchParams(location.search);
 const ALIAS={narrative:'story',stories:'story'};
 const store={get(k){try{return localStorage.getItem('intuity.portfolio.'+k)}catch(e){return null}},set(k,v){try{localStorage.setItem('intuity.portfolio.'+k,v)}catch(e){}}};
 let D=null, TASK='essays', ID=null, VIEW=P.get('view')==='model'?'model':'structure';
+/* The four paths the page always had, as pills, in the order a student
+   writes: choose a question → plan → build a model → compare samples. */
+const W='/skills/writing/';
+const PATHS={
+  essays:  {q:W+'essays/essay-question.html', plan:W+'essays/essay-plan.html', gen:W+'model-generator.html?type=essays', samples:W+'essays/essay-sample.html'},
+  emails:  {q:W+'emails/email-question.html', plan:W+'emails/email-plan.html', gen:W+'model-generator.html?type=emails', samples:W+'emails/email-sample.html'},
+  articles:{q:W+'articles/article-question.html', plan:W+'articles/article-model.html', gen:W+'model-generator.html?type=articles', samples:W+'articles/article-sample.html'},
+  reviews: {q:W+'reviews/review-question-selector.html', plan:W+'reviews/review-plan.html', gen:W+'model-generator.html?type=reviews', samples:W+'reviews/review-sample.html'},
+  reports: {q:W+'reports/report-question-selector.html', plan:W+'reports/report-plan.html', gen:W+'model-generator.html?type=reports', samples:W+'reports/report-sample.html'},
+  story:   {q:W+'narrative/narrative-question.html', plan:W+'narrative/narrative-cards.html', samples:W+'narrative/narrative-sample.html'}
+};
+/* "Try it on a question": the [topic] slots take a real question's words,
+   in place. Essays only — they are the slides built on [topic]. Each essay
+   type draws from the questions of its own kind. */
+const QTYPE={fa:'for-against',ps:'problem-solution',ce:'cause-effect',ad:'opinion',op:'opinion',st:'speculation-trends'};
+const FILLS=['topic','problem','issue','trend','area/topic'];
+let QS=null, TRY=null, TRYI=0;
+function pill(label,href){ return href?`<a class="pill" href="${href}">${esc(label)}</a>`:''; }
 
 function lineHTML(s){
   if(s.startsWith('## ')) return `<h3>${fmt(s.slice(3))}</h3>`;
@@ -173,7 +216,7 @@ function lineHTML(s){
   const [main,aside]=t.split(' || ');
   return `<li><button type="button" class="li${sub?' sub':''}" data-copy="${esc(plain(main))}">${fmt(main)}${aside?`<span class="aside">${fmt(aside)}</span>`:''}</button></li>`;
 }
-function colHTML(lines,i,showB){
+function colHTML(lines,i,showB,pl){
   const parts=[]; let open=false;
   lines.forEach(s=>{
     const isLi=!(s.startsWith('## ')||s.startsWith('= ')||s.startsWith('! '));
@@ -182,15 +225,27 @@ function colHTML(lines,i,showB){
     parts.push(lineHTML(s));
   });
   if(open) parts.push('</ul>');
-  return `<div class="col">${showB&&i===1?'<span class="bmark" aria-hidden="true">B</span>':''}${parts.join('')}</div>`;
+  return `<div class="col">${showB&&i===1?'<span class="bmark" aria-hidden="true">B</span>':''}${parts.join('')}${pl?`<div class="pdock">${pl}</div>`:''}</div>`;
+}
+function bandPill(k){
+  const pt=PATHS[TASK]||{};
+  if(k===0) return QTYPE[ID]?`<button type="button" class="pill" id="try" aria-pressed="${!!TRY}">Try it on a question</button>`:'';
+  if(k===1) return pill(TASK==='articles'?'Build a model':'Plan one',pt.plan);
+  if(k===2) return pill('Make your own model',pt.gen);
+  return '';
 }
 function structureHTML(S){
   return S.bands.map((b,k)=>{
     const kk=Math.min(k,2), hasB=k===0&&b.cols.length>1;
+    const pl=bandPill(Math.min(k,2)), n=b.cols.length;
+    /* a pill goes where the band already has room: under the shorter
+       column, or floating in the empty right half of a one-column band */
+    const lens=b.cols.map(c=>c.length), short=lens.lastIndexOf(Math.min(...lens));
     return `<section class="band k${kk}${hasB?' hasB':''}" aria-label="${esc(b.label||('Part '+(k+1)))}">`+
       `<div class="med k${kk}" aria-hidden="true"><i>${k===0?'<b>A</b>':''}</i></div>`+
       `<div class="vlab">${esc(b.label)}</div>`+
-      `<div class="cols" style="--n:${b.cols.length}">${b.cols.map((c,i)=>colHTML(c,i,hasB)).join('')}</div>`+
+      `<div class="cols" style="--n:${n}">${b.cols.map((c,i)=>colHTML(c,i,hasB,n>1&&i===short?pl:'')).join('')}</div>`+
+      (n===1&&pl?`<div class="pabs">${pl}</div>`:'')+
       (hasB?`<div class="med right k0" aria-hidden="true"><i><b>B</b></i></div>`:'')+`</section>`;
   }).join('');
 }
@@ -206,15 +261,27 @@ function draw(){
   const ids=D.tasks[TASK], S=D.sheets[ID];
   $('tabs').innerHTML=ids.length>1?ids.map(id=>`<a href="?task=${TASK}&s=${id}" data-s="${id}"${id===ID?' aria-current="page"':''}>${esc(D.sheets[id].tab)}</a>`).join(''):'';
   $('tabs').hidden=ids.length<2;
-  $('tabs').querySelectorAll('[data-s]').forEach(a=>a.onclick=e=>{ e.preventDefault(); ID=a.dataset.s; store.set(TASK,ID); draw(); window.scrollTo(0,0); });
+  $('tabs').querySelectorAll('[data-s]').forEach(a=>a.onclick=e=>{ e.preventDefault(); ID=a.dataset.s; TRY=null; store.set(TASK,ID); draw(); window.scrollTo(0,0); });
   document.querySelectorAll('.seg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.view===VIEW));
   const [strong,light]=S.title;
-  $('slide').innerHTML=`<h1><b>${esc(strong)}</b> ${VIEW==='model'?'model samples':esc(light)}</h1>`+
+  const pt=PATHS[TASK]||{};
+  $('slide').innerHTML=`<div class="hd"><h1><b>${esc(strong)}</b> ${VIEW==='model'?'model samples':esc(light)}</h1>${pill('Questions',pt.q)}</div>`+
+    (TRY&&VIEW==='structure'?`<p class="qline"><q>${esc(TRY.mainQuestion)}</q> <button type="button" id="tryNext">Another</button><button type="button" id="tryOff" aria-label="Back to [topic]">×</button></p>`:'')+
     (S.draft&&VIEW==='structure'?`<p class="draft">Draft — not in the paper portfolio yet</p>`:'')+
-    (VIEW==='model'?modelHTML(S):structureHTML(S))+`<p class="sign"><b>Majid</b><span>nashtai26</span></p>`;
+    (VIEW==='model'?modelHTML(S):structureHTML(S))+
+    `<div class="foot">${pill('Compare samples',pt.samples)}<p class="sign"><b>Majid</b><span>nashtai26</span></p></div>`;
+  const tb=$('try'); if(tb) tb.onclick=()=>{ if(TRY){ TRY=null; draw(); } else tryOn(0); };
+  if($('tryNext')) $('tryNext').onclick=()=>tryOn(1);
+  if($('tryOff')) $('tryOff').onclick=()=>{ TRY=null; draw(); };
   $('slide').querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>copy(b.dataset.copy));
   document.title='INTUITY — '+S.tab+(VIEW==='model'?' model samples':' structure');
   history.replaceState(null,'',`?task=${TASK}&s=${ID}${VIEW==='model'?'&view=model':''}`);
+}
+function tryOn(step){
+  const go=()=>{ const list=QS.filter(q=>q.essayType===QTYPE[ID]); const pool=list.length?list:QS;
+    TRYI=step?(TRYI+1)%pool.length:Math.floor(Math.random()*pool.length); TRY=pool[TRYI]; draw(); };
+  if(QS) return go();
+  fetch(PATHS.essays.q.replace('essay-question.html','data/essay-questions.json'),{cache:'no-store'}).then(r=>r.json()).then(d=>{ QS=d.questions||[]; go(); }).catch(()=>toast('Questions didn’t load'));
 }
 let tt=null;
 function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(tt); tt=setTimeout(()=>t.classList.remove('show'),1200); }

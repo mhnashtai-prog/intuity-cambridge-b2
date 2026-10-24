@@ -175,6 +175,16 @@
   .item .go{display:none;}
 
   .item[data-sub] .idx{font-size:1.6rem;}
+  .item .idx.glyph{font-size:1.25rem;font-weight:600;}
+
+  .examSwitch{display:inline-flex;border-radius:999px;background:rgba(118,118,128,.13);padding:3px;margin:4px 0 6px;}
+  .examSwitch button{border:none;background:none;padding:7px 12px;border-radius:999px;cursor:pointer;
+    font:600 .75rem/1 'Geist', sans-serif;color:rgba(20,17,14,.62);}
+  .examSwitch button[aria-pressed="true"]{background:#FFFFFF;color:#14110E;box-shadow:0 1px 3px rgba(0,0,0,.12);}
+  .group{margin-top:14px;}
+  .group .items{grid-template-columns:repeat(auto-fill,minmax(92px,1fr));}
+  .gname{font-family:'Geist Mono', monospace;font-weight:600;font-size:0.6875rem;letter-spacing:.14em;
+    text-transform:uppercase;color:rgba(20,17,14,.62);margin:0 0 10px;}
 
   .item.soon{cursor:default;}
   .item.soon .idx{box-shadow:none;}
@@ -195,6 +205,8 @@
     .item[data-sub] .idx{font-size:2.2rem;}
     .item .lbl{font-size:0.6875rem;line-height:1.2;}
     .item{gap:6px;}
+    .group .items{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));}
+    .group .item .idx{--d:80px;}
   }
 
   @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms !important;}}
@@ -323,19 +335,26 @@ const SKILLS = {
     {name:"Part 7 \u00b7 Multiple Matching", url:"skills/reading/multiple-matching-menu/reading-part7.html"},
     {name:"Full tests", url:"skills/full-test/full-test.html?from=reading"}
   ],
+  /* Writing is grouped (Oct 2026): what you write / what helps / check yourself.
+     Numbers read as a sequence that never existed, so each ring carries a glyph.
+     exam:'schools'|'standard' hides a task that version of B2 First doesn't set:
+     the for Schools paper has a story where the standard paper has a report. */
     writing:[
-    {name:"Essays", url:"skills/writing/sheet.html?task=essays"},
-    {name:"Reviews", url:"skills/writing/sheet.html?task=reviews"},
-    {name:"Reports", url:"skills/writing/sheet.html?task=reports"},
-    {name:"Articles", url:"skills/writing/sheet.html?task=articles"},
-    {name:"Emails", url:"skills/writing/sheet.html?task=emails"},
-    {name:"Narrative", url:"skills/writing/narrative/narrative-question.html"},
-    {name:"Model Generator", url:"skills/writing/model-generator.html"},
-    {name:"Challenge", url:"skills/writing/the-question.html"},
-    {name:"Phrase Bank", url:"skills/writing/phrase-bank.html"},
-    {name:"Games", url:"skills/writing/games/essay-games-staged.html"},
-    {name:"Sentence Structure", sub:"sentence"}
-    
+    {group:"Revise a task"},
+    {name:"Essay", glyph:"¶", url:"skills/writing/sheet.html?task=essays"},
+    {name:"Email", glyph:"@", url:"skills/writing/sheet.html?task=emails"},
+    {name:"Article", glyph:"A", url:"skills/writing/sheet.html?task=articles"},
+    {name:"Review", glyph:"★", url:"skills/writing/sheet.html?task=reviews"},
+    {name:"Story", glyph:"✎", exam:"schools", url:"skills/writing/sheet.html?task=story"},
+    {name:"Report", glyph:"≡", exam:"standard", url:"skills/writing/sheet.html?task=reports"},
+    {group:"Practise the language"},
+    {name:"Phrase Bank", glyph:"“", url:"skills/writing/phrase-bank.html"},
+    {name:"Sentence Structure", glyph:"›", sub:"sentence"},
+    {name:"Model Answers", glyph:"◧", url:"skills/writing/model-generator.html"},
+    {name:"Games", glyph:"▶", url:"skills/writing/games/essay-games-staged.html"},
+    {group:"Test yourself"},
+    {name:"Challenge", glyph:"?", url:"skills/writing/the-question.html"},
+    {name:"How it's marked", glyph:"✓", url:"skills/writing/sentence-structure/band-descriptors.html"}
   ],
   speaking:[
     {name:"Practice Hub", noNum:true, url:"skills/speaking/speaking-format.html"},
@@ -680,8 +699,8 @@ let currentKey = null;
 
 function itemHTML(o, n){
     const num = o.noNum ? '0' : String(o.part || n+1).padStart(2,'0');
-  const idx = '<span class="idx"><span>'+
-    (o.sub ? '&rsaquo;' : num)+'</span></span>';
+  const idx = '<span class="idx'+(o.glyph?' glyph':'')+'"><span>'+
+    (o.glyph ? o.glyph : (o.sub ? '&rsaquo;' : num))+'</span></span>';
   if(o.soon)
     return '<div class="item soon">'+idx+'<span class="lbl">'+o.name+'</span>'+
            '<span class="tag">Soon</span></div>';
@@ -693,6 +712,26 @@ function itemHTML(o, n){
          '<span class="lbl">'+o.name+'</span><span class="go">&rarr;</span></button>';
 }
 
+/* A list with {group:…} rows is drawn as labelled rows of rings, plus the
+   exam switch; items marked exam:'schools'|'standard' show only for theirs. */
+function examNow(){ try{ return localStorage.getItem('intuity.exam') || 'schools'; }catch(e){ return 'schools'; } }
+function groupedHTML(list){
+  const exam = examNow();
+  const groups = [];
+  list.forEach(o => {
+    if(o.group){ groups.push({name:o.group, items:[]}); return; }
+    if(o.exam && o.exam !== exam) return;
+    if(!groups.length) groups.push({name:'', items:[]});
+    groups[groups.length-1].items.push(o);
+  });
+  return '<div class="examSwitch" role="group" aria-label="Which exam">'+
+      [['schools','B2 First for Schools'],['standard','B2 First']].map(([k,l]) =>
+        '<button type="button" data-exam="'+k+'" aria-pressed="'+(k===exam)+'">'+l+'</button>').join('')+
+    '</div>'+
+    groups.map(g => '<div class="group">'+(g.name?'<h3 class="gname">'+g.name+'</h3>':'')+
+      '<div class="items">'+g.items.map(itemHTML).join('')+'</div></div>').join('');
+}
+
 function paintPanel(title, list, accent, back){
   $('panel').style.setProperty('--accent', accent);
   $('panel').innerHTML =
@@ -701,7 +740,12 @@ function paintPanel(title, list, accent, back){
       ? '<button class="backlink" id="panelBack" type="button">&larr; '+back+'</button>'
       : '<div class="kick"><i></i>Cambridge B2 First</div>')+
     '<h2>'+title+'</h2>'+
-    '<div class="items">'+list.map(itemHTML).join('')+'</div>';
+    (list.some(o => o.group) ? groupedHTML(list) : '<div class="items">'+list.map(itemHTML).join('')+'</div>');
+
+  $('panel').querySelectorAll('.examSwitch button').forEach(b => {
+    b.onclick = () => { try{ localStorage.setItem('intuity.exam', b.dataset.exam); }catch(e){}
+      paintPanel(title, list, accent, back); };
+  });
 
   $('panelWrap').classList.add('open');
   $('panelX').onclick = closePanel;

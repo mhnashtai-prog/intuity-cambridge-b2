@@ -78,7 +78,11 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .pm-p{display:block;font-size:clamp(13.5px,3.6vw,15px);line-height:1.45;font-weight:500}
 .cin .btn,#cAct .btn{white-space:nowrap}
 .pm-more{display:flex;justify-content:center;margin:2px 0 6px}
-.pm-more .btn{font:600 14px/1 'Geist',sans-serif;padding:11px 20px;border-radius:999px;border:none;background:rgba(118,118,128,.12);color:#14110E;cursor:pointer}
+.mine{max-width:520px;margin:10px auto 0;padding:0 16px}
+.mine-h{font:600 .625rem/1 var(--f-mono);letter-spacing:.18em;text-transform:uppercase;color:var(--pa-faint,#8A8378);margin:10px 0 6px}
+.mine-c{display:block;width:100%;text-align:left;border:none;background:#FCFAF7;border-radius:12px;padding:10px 12px;margin:0 0 6px;cursor:pointer;font:inherit;color:#14110E}
+.mine-c b{display:block;font-size:13px;margin-bottom:2px} .mine-c span{font-size:13px;color:#5C5852;line-height:1.4}
+.pm-more .btn{font:600 14px/1 'Geist',sans-serif;padding:11px 20px!important;border-radius:999px!important;border:none;background:rgba(118,118,128,.12)!important;color:#14110E;cursor:pointer}
 .mp{margin:4px 0 0;font-size:clamp(15px,3.9vw,17px);line-height:1.55;font-weight:500}
 .loading-msg{font-family:'Geist', sans-serif;font-size:0.85rem;font-weight:700;color:rgba(0,0,0,0.25);letter-spacing:0.12em;text-transform:uppercase}
 </style>
@@ -446,20 +450,21 @@ function gallery(){
       html:'<span class="pm">'+modelHTML(m)+'</span>',
       meta:'<b>'+m.secs.length+'</b> parts'
     })),
-    action:'Write it', hint:'Read them here · tap one to write your own.',
+    action:'Make your own', hint:'Read them here · tap one to make your own model from it.',
     onOpen:i=>openModel(i)
   });
   const more=document.createElement('div'); more.className='pm-more';
   more.innerHTML='<button class="btn" type="button" id="moreModels">More models</button>';
   $('parade').appendChild(more);
   $('moreModels').onclick=()=>{ DEAL++; gallery(); };
+  drawMine();
 }
 
 /* ══ CINEMA ══ */
 function openModel(i){
-  /* the card IS the reading; opening it is for writing (24 Oct: "why click
-     if there is nothing new to see?") */
-  OPEN=MODELS[i]; OPEN.tag=ABBR(OPEN.rec.label)+'-'+(DEAL*PER+i+1); MODE='write';
+  /* the card IS the reading; opening it is for MAKING YOUR OWN (24 Oct):
+     swap any line, save it, write from it */
+  OPEN=MODELS[i]; OPEN.tag=ABBR(OPEN.rec.label)+'-'+(DEAL*PER+i+1); MODE='card';
   document.body.classList.add('cin-open'); $('cin').setAttribute('aria-hidden','false');
   try{ history.pushState({gen:1},''); }catch(e){}
   paint(); setTimeout(()=>{ try{ $('cClose').focus({preventScroll:true}); }catch(e){} },60);
@@ -507,22 +512,54 @@ const norm=t=>String(t||'').toLowerCase().replace(/[’']/g,"'").replace(/\s+/g,
 function paint(){
   const m=OPEN;
   document.querySelectorAll('#supp button').forEach(b=>{ const on=b.dataset.v===SUPPORT; b.classList.toggle('on',on); b.setAttribute('aria-checked',String(on)); });
-  $('cKick').textContent=m.tag+' · '+TAG[TYPE]+' model'+(MODE==='write'?' · your draft':'');
+  $('cKick').textContent=(m.saved?m.tag+' · '+TAG[TYPE]:m.tag+' · '+(MODE==='write'?TAG[TYPE]+' model · your draft':'Make your own model'));
   $('cTitle').textContent=m.rec.label;
   if(MODE==='write') return paintWrite();
+  const build=!m.saved;
   $('cMain').innerHTML=m.secs.map((S,si)=>
     `<div class="wsec"><div class="secw"><b>${String(si+1).padStart(2,'0')}</b>${esc(S.word)}</div>`+
     (SUPPORT==='moves'
       ? `<div class="mv">${esc(S.sub||'')}<br><i>${S.lines.length} ${S.lines.length>1?'sentences':'sentence'}</i></div>`
-      : `<p class="mp">${S.lines.map(L=>SUPPORT==='full'?exWrap(lineHTML(L)):lineHTML(L)).join(' ')}</p>`)+`</div>`).join('')+
-    `<p class="tip">${SUPPORT==='moves'?'No key expressions this time: you know the moves. Write it in your own words.':'Read it through and notice the key expressions. Then write your own.'}</p>`;
-  const idx=MODELS.indexOf(m);
-  $('cAct').innerHTML=`<button class="btn" type="button" id="aPrint">Print</button>`+
-    (idx>=0&&idx<MODELS.length-1?`<button class="btn" type="button" id="aNext">Next model</button>`:'')+
+      : build ? S.lines.map((L,li)=>`<div class="ln" data-si="${si}" data-li="${li}">
+          <button class="rl" type="button" data-d="-1" aria-label="Previous version"${L.i===0?' disabled':''}>‹</button>
+          <div class="lt" id="lt-${si}-${li}">${viewHTML(L)}</div>
+          <button class="rl" type="button" data-d="1" aria-label="Another version">›</button></div>`).join('')
+      : `<p class="mp">${S.lines.map(L=>viewHTML(L)).join(' ')}</p>`)+`</div>`).join('')+
+    `<p class="tip">${SUPPORT==='moves'?'No key expressions this time: you know the moves. Write it in your own words.':build?'Make it yours: swap any line with ‹ ›, then save it.':'Your saved model. Write from it, or delete it.'}</p>`;
+  $('cMain').querySelectorAll('.rl').forEach(b=>{ const r=b.closest('.ln'); b.onclick=()=>roll(+r.dataset.si,+r.dataset.li,+b.dataset.d); });
+  $('cAct').innerHTML=(build?`<button class="btn" type="button" id="aSave">Save my model</button>`:`<button class="btn" type="button" id="aDel">Delete</button>`)+
     `<button class="btn go" type="button" id="aWrite">Write it →</button>`;
-  if($('aNext')) $('aNext').onclick=()=>{ const j=MODELS.indexOf(OPEN)+1; OPEN=MODELS[j]; OPEN.tag=ABBR(OPEN.rec.label)+'-'+(DEAL*PER+j+1); paint(); $('cbody').scrollTop=0; };
-  $('aPrint').onclick=()=>window.print();
+  if($('aSave')) $('aSave').onclick=()=>{ saveMine(m); $('aSave').textContent='Saved ✓'; $('aSave').disabled=true; };
+  if($('aDel')) $('aDel').onclick=()=>{ delMine(m.savedId); $('cClose').onclick(); };
   $('aWrite').onclick=()=>{ MODE='write'; paint(); $('cbody').scrollTop=0; };
+}
+/* the key expression dark, its example light — in every view */
+const viewHTML=L=>SUPPORT==='full'?exWrap(lineHTML(L)):lineHTML(L);
+
+/* MY MODELS — what a student made, kept on this device, per subject */
+const MKEY=()=>'intuity.gen.mine.'+TYPE+'.'+SUBJ;
+const mineList=()=>{ try{ return JSON.parse(localStorage.getItem(MKEY())||'[]')||[]; }catch(e){ return []; } };
+function saveMine(m){
+  const list=mineList(), id=Date.now().toString(36);
+  list.unshift({id,label:m.rec.label,secs:m.secs.map(S=>({word:S.word,sub:S.sub,lines:S.lines.map(L=>L.h[L.i].html)}))});
+  try{ localStorage.setItem(MKEY(),JSON.stringify(list.slice(0,12))); }catch(e){}
+  drawMine();
+}
+function delMine(id){ try{ localStorage.setItem(MKEY(),JSON.stringify(mineList().filter(x=>x.id!==id))); }catch(e){} drawMine(); }
+function openMine(k){
+  const x=mineList()[k]; if(!x) return;
+  OPEN={saved:true,savedId:x.id,n:'mine-'+x.id,tag:'My model '+(k+1),rec:{label:x.label},
+    secs:x.secs.map(S=>({word:S.word,sub:S.sub,lines:S.lines.map(h=>({h:[{html:h}],i:0}))}))};
+  MODE='card'; document.body.classList.add('cin-open'); $('cin').setAttribute('aria-hidden','false');
+  try{ history.pushState({gen:1},''); }catch(e){}
+  paint();
+}
+function drawMine(){
+  let box=$('mine'); if(!box){ box=document.createElement('section'); box.id='mine'; box.className='mine'; $('parade').appendChild(box); }
+  const list=mineList();
+  box.innerHTML=list.length?`<p class="mine-h">My models · ${list.length}</p>`+list.map((x,k)=>
+    `<button class="mine-c" type="button" data-k="${k}"><b>My model ${k+1}</b><span>${plain(x.secs[0].lines[0]).slice(0,90)}…</span></button>`).join(''):'';
+  box.querySelectorAll('.mine-c').forEach(b=>b.onclick=()=>openMine(+b.dataset.k));
 }
 
 /* WRITE — the skeleton becomes the draft. Each key expression heads a ruled
@@ -655,9 +692,10 @@ function roll(si,li,d){
   else if(L.i<L.h.length-1) L.i++;
   else { L.h.push(m.rec.sections[si].lines[li](avoidFor(m,si,li))); L.i=L.h.length-1; }
   try{ if(window.SFX&&SFX.isOn()&&SFX.pop) SFX.pop(); }catch(e){}
+  const sv=$('aSave'); if(sv){ sv.textContent='Save my model'; sv.disabled=false; }   /* changed again: save again */
   const el=$('lt-'+si+'-'+li), row=el.closest('.ln');
   el.style.opacity='0';
-  setTimeout(()=>{ el.innerHTML=lineHTML(L); el.style.opacity='1'; row.querySelector('[data-d="-1"]').disabled=L.i===0; },90);
+  setTimeout(()=>{ el.innerHTML=viewHTML(L); el.style.opacity='1'; row.querySelector('[data-d="-1"]').disabled=L.i===0; },90);
 }
 init();
 })();

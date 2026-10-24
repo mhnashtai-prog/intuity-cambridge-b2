@@ -47,7 +47,11 @@ emails:   { label:'Email',   part:'Part 2', back:'/index.html?openModal=writing'
 var G = GENRES[GENRE];
 if (!G) return;
 
-var ORDER = ['question','plan','model','generate','sample'];
+/* Oct 2026: the task journey and the Model Generator are two separate
+   things. The portfolio slide is the only place that leads to both, so the
+   stage bar no longer offers Generate. (stages.generate stays: the
+   generator's own task tabs use it.) */
+var ORDER = ['question','plan','model','sample'];
 var NAMES = { question:'Question', plan:'Plan', model:'Model', generate:'Generate', sample:'Sample' };
 
 function el(tag, cls, text) {
@@ -84,6 +88,8 @@ function header() {
   var nav = el('nav', 'mode-selector');
   nav.setAttribute('aria-label', 'Writing task');
   Object.keys(GENRES).forEach(function (k) {
+    /* inside the generator, only tasks the generator has (no Story) */
+    if (STAGE === 'generate' && !GENRES[k].stages.generate) return;
     if (k === GENRE) {
       var cur = el('span', 'mode-btn active', GENRES[k].label);
       cur.setAttribute('aria-current', 'page');
@@ -151,9 +157,13 @@ if (oldTop && oldTop.parentNode) oldTop.parentNode.replaceChild(newTop, oldTop);
 else shell.insertBefore(newTop, shell.firstChild);
 
 var oldFoot = firstIn(shell, ['.foot', '.bottom-nav', '.control-bar']);
-var newFoot = foot();
-if (oldFoot && oldFoot.parentNode) oldFoot.parentNode.replaceChild(newFoot, oldFoot);
-else shell.appendChild(newFoot);
+/* the generator stands alone: no stage bar into the task journey */
+var newFoot = null;
+if (STAGE !== 'generate') {
+  newFoot = foot();
+  if (oldFoot && oldFoot.parentNode) oldFoot.parentNode.replaceChild(newFoot, oldFoot);
+  else shell.appendChild(newFoot);
+}
 
 (function () {
   var mb = newTop.querySelector('.mute'); if (!mb) return;
@@ -168,7 +178,7 @@ else shell.appendChild(newFoot);
 
 function sync() {
   document.documentElement.style.setProperty('--header-h', newTop.offsetHeight + 'px');
-  document.documentElement.style.setProperty('--foot-h', newFoot.offsetHeight + 'px');
+  document.documentElement.style.setProperty('--foot-h', (newFoot ? newFoot.offsetHeight : 0) + 'px');
 }
 sync();
 addEventListener('resize', sync);
@@ -176,7 +186,7 @@ addEventListener('orientationchange', function () { setTimeout(sync, 120); });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(sync);
 if (window.ResizeObserver) {
   new ResizeObserver(sync).observe(newTop);
-  new ResizeObserver(sync).observe(newFoot);
+  if (newFoot) new ResizeObserver(sync).observe(newFoot);
 }
 
 /* A filter row that slides (phones) keeps its chosen tab in view: pages
@@ -225,7 +235,8 @@ if (B.getAttribute('data-stage') === 'sample') {
    Generator on the subject the student is looking at. Pages keep that
    subject in a global TYPE (essays, reviews, reports) or, for emails, in
    currentRegister + currentType. */
-if (STAGE === 'model' && G.stages.generate) {
+/* Oct 2026: switched off — the journey no longer crosses into the generator. */
+if (false && STAGE === 'model' && G.stages.generate) {
   var css = document.createElement('style');
   css.textContent =
     '.wr-gen{display:inline-flex;align-items:center;gap:.35rem;height:30px;padding:0 .9rem 0 .8rem;border-radius:999px;' +

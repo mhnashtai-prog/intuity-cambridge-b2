@@ -69,8 +69,8 @@ function header() {
   /* Came here from a portfolio slide of this task? Go back to that slide. */
   try {
     var ret = JSON.parse(sessionStorage.getItem('intuity.sheetReturn') || 'null');
-    if (ret && ret.task === GENRE && /^\/skills\/writing\/sheet\.html/.test(ret.url)) {
-      back.href = ret.url; back.textContent = '\u2190 Structure';
+    if (ret && ret.task === GENRE && /^\/skills\/writing\/(sheet|gate)\.html/.test(ret.url)) {
+      back.href = ret.url; back.textContent = '\u2190 ' + (ret.label || 'Structure');
     }
   } catch (e) {}
   var title = el('div', 'header-title');

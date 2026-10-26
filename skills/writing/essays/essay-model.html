@@ -59,6 +59,22 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .ast{color:var(--sig);font-weight:600;font-size:0.7em;vertical-align:0.35em;margin-left:0.05rem}
 .dev{margin-top:0.02rem;line-height:1;font-family:'Geist', sans-serif;font-size:0.72rem;color:rgba(0,0,0,0.22);letter-spacing:0.16em}
 .rline{display:flex;align-items:center;gap:0.3rem}
+/* OPEN › (26 Oct): the "…" under each argument becomes an invitation, as on
+   the Plan page. It opens THIS question's own development for that point —
+   the plan's reason, example, result — so the frame meets the question. */
+.opn{display:inline-flex;align-items:center;gap:.3rem;margin-top:.3rem;border:none;cursor:pointer;background:rgba(0,0,0,0.05);border-radius:999px;padding:.22rem .65rem;
+  font-family:'Geist Mono',monospace;font-size:.62rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:rgba(0,0,0,0.45);transition:background .15s}
+.opn:hover{background:rgba(0,0,0,0.09)}
+.opn i{font-style:normal;display:inline-block;transition:transform .2s}
+.opn[aria-expanded="true"] i{transform:rotate(90deg)}
+.devp{margin:.45rem 0 .1rem;padding:.55rem .8rem .6rem;border-left:2px solid var(--sig);background:rgba(106,67,116,0.04);border-radius:0 .5rem .5rem 0;animation:cardUp .25s ease both}
+.devp[hidden]{display:none}
+.devp .dr{display:flex;gap:.6rem;align-items:baseline;font-size:.86rem;line-height:1.45;color:#2c2c2a}
+.devp .dr+.dr{margin-top:.25rem}
+.devp .dl{flex:none;min-width:5.6rem;font-family:'Geist Mono',monospace;font-size:.6rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:rgba(0,0,0,0.4)}
+.devp .dr.pt{font-weight:600}
+.devp b{font-weight:700}
+@media (max-width:480px){ .devp .dl{min-width:4.6rem} .devp .dr{font-size:.82rem} }
 .rline+.rline{margin-top:0.55rem}
 .rtext{flex:1;min-width:0}
 .nav{display:flex;gap:0.35rem;flex-shrink:0;opacity:1;align-items:center}
@@ -460,7 +476,7 @@ function render(){
   if(view==='phrases'){ renderPhrases(); return; }
   document.getElementById('stack').classList.remove('phrases-on');
   const openLine=lineHTML('open');
-  const argueLines=[0,1,2].map(i=>`<div class="rline"><div class="rtext"><div class="line" id="ln-argue-${i}">${lineHTML('argue',i)}</div><div class="dev">...</div></div>${nav('argue',i)}</div>`).join('');
+  const argueLines=[0,1,2].map(i=>`<div class="rline"><div class="rtext"><div class="line" id="ln-argue-${i}">${lineHTML('argue',i)}</div>${devHTML(i)}</div>${nav('argue',i)}</div>`).join('');
   const closeLine=lineHTML('close');
   const hingeNote=`<div class="card-note"><span class="k">*</span>`+(T.open.hinge||[]).map(h=>`<span class="opt">${h}</span>`).join('')+`</div>`;
   const supportNote=`<div class="card-note"><span class="k">*</span>`+(SH.support||[]).map(s=>`<span class="opt">${s.move}</span>`).join('')+`</div>`;
@@ -478,6 +494,30 @@ function render(){
   if(!taught){ const first=document.querySelector('.nav button'); if(first) first.classList.add('teach'); }
 }
 
+/* the question's own plan (ideas.json — the Plan page's data) */
+let PLANQ=null, PTYPE=null;
+const MV={reason:'Because',example:'Example',result:'Result',contrast:'Contrast',compare:'Compare',reformulate:'In other words'};
+function bodies(){ return ((PLANQ&&PLANQ.skeleton)||[]).filter(s=>!/intro|conclu/i.test(s.title||'')); }
+function devHTML(i){
+  /* only on the question's own essay type — another tab is another essay */
+  const b=PTYPE&&TYPE!==PTYPE?null:bodies()[i];
+  if(!b) return `<div class="dev">...</div>`;
+  const kv=t=>String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])).replace(/«([^»]+)»/g,'<b>$1</b>');
+  const rows=(b.notes||[]).map((n,j)=>j===0&&!n.move?`<div class="dr pt"><span class="dl">Point</span><span>${kv(n.text)}</span></div>`
+    :`<div class="dr"><span class="dl">${MV[n.move]||(n.marker==='\u2713'?'Verdict':'And')}</span><span>${kv(n.text)}</span></div>`).join('');
+  return `<button type="button" class="opn" aria-expanded="false" aria-controls="devp-${i}" onclick="toggleDev(${i},this)">Open <i>›</i></button><div class="devp" id="devp-${i}" hidden>${rows}</div>`;
+}
+function toggleDev(i,b){ const p=document.getElementById('devp-'+i), open=p.hidden; p.hidden=!open; b.setAttribute('aria-expanded',String(open)); b.firstChild.textContent=open?'Close ':'Open '; }
+window.toggleDev=toggleDev;
+function loadPlan(){
+  let id=null; try{ const q=JSON.parse(sessionStorage.getItem('currentQuestion')||'null'); id=q&&q.id; PTYPE=q&&q.essayType?String(q.essayType).toLowerCase().replace(/\s*&\s*|\s+and\s+/g,'-').replace(/\s+/g,'-'):null; }catch(e){}
+  if(!id) return;
+  fetch('/skills/writing/essays/data/ideas.json').then(r=>r.json()).then(d=>{
+    (function find(o){ if(PLANQ||!o||typeof o!=='object') return; if(o.id===id&&o.skeleton){ PLANQ=o; return; } Object.values(o).forEach(find); })(d);
+    if(PLANQ&&view==='cards'&&S) render();
+  }).catch(()=>{});
+}
+
 function switchMode(mode){
   if(mode==='build'){
     try{const saved=sessionStorage.getItem('currentQuestion');if(saved){const q=JSON.parse(saved);sessionStorage.setItem('currentEssayId',q.id||'');sessionStorage.setItem('currentEssayQuestion',q.mainQuestion||'');}}catch(e){}
@@ -488,6 +528,7 @@ function switchMode(mode){
 window.switchMode=switchMode;
 
 init();
+loadPlan();
 </script>
 <script src="/skills/grammar-rules/intuity-sound.js"></script>
 <script src="/data/writing/writing-chrome.js?v=13"></script>

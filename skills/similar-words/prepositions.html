@@ -249,8 +249,11 @@ body{min-height:100dvh}
 .qcard{position:fixed;z-index:801;left:50%;top:50%;width:min(560px,calc(100vw - 1.5rem));background:#F3F1EC;border-radius:4px;box-shadow:0 24px 60px rgba(0,0,0,.3);
   padding:1.4rem 1.5rem 1.1rem;transform:translate(-50%,-48%) scale(.97);opacity:0;pointer-events:none;transition:transform .25s cubic-bezier(.2,1.4,.4,1),opacity .2s}
 .qcard.on{transform:translate(-50%,-50%) scale(1);opacity:1;pointer-events:auto}
-/* a phone: the card sits high, so the keyboard does not cover it */
-@media (max-width:760px){ .qcard{top:calc(env(safe-area-inset-top,0px) + .75rem);transform:translate(-50%,8px) scale(.97)} .qcard.on{transform:translate(-50%,0) scale(1)} }
+/* the card sits in the middle of what is visible: with the keyboard up,
+   the middle of the space above it (set from visualViewport) */
+.qsvg .qc.hit{stroke:#3E5A50}
+.qsvg .qc.miss{stroke:#7A3A1E}
+.qsvg .tried .qw{fill:#E3A27E}
 .qcard .qx{position:absolute;top:.9rem;right:.9rem;width:2.2rem;height:2.2rem;border-radius:50%;border:none;background:rgba(0,0,0,.06);font-size:.95rem;color:rgba(0,0,0,.5);cursor:pointer}
 .qcard .ql{display:flex;align-items:center;gap:.8rem;font-family:var(--f-mono);font-size:.72rem;font-weight:600;letter-spacing:.26em;text-transform:uppercase;color:#6B655C;padding-right:2.6rem}
 .qcard .ql::before{content:'';width:2.2rem;height:.7rem;background:#A9875F;flex:none}
@@ -727,7 +730,7 @@ function paintQ(){
     const rot = 0;
     const done = c.done, kind = MODE === 'mixed' ? { verb: 'verb', adjective: 'adj', noun: 'noun' }[c.kind] : '';
     const y = done ? -6 : (kind ? -3 : 0);
-    return `<g class="${done ? 'done' : ''}" transform="translate(${m.x.toFixed(1)} ${m.y.toFixed(1)}) rotate(${rot.toFixed(1)})"><text class="qw" x="0" y="${y}" style="font-size:${fs}px">${esc(w)}</text>` +
+    return `<g class="${done ? 'done' : c.tries ? 'tried' : ''}" transform="translate(${m.x.toFixed(1)} ${m.y.toFixed(1)}) rotate(${rot.toFixed(1)})"><text class="qw" x="0" y="${y}" style="font-size:${fs}px">${esc(w)}</text>` +
       (done ? `<text class="qp${c.revealed ? ' shown' : c.late ? ' late' : ''}" x="0" y="8">${esc(shown(c.it.p))}</text>`
             : kind ? `<text class="qk" x="0" y="9">${kind}</text>` : '') + `</g>`;
   }).join('');
@@ -752,14 +755,26 @@ function openQ(i){
       aria-label="The preposition after ${esc(c.it.w)}" value="${c.done ? esc(shown(c.it.p)) : esc(c.typed || '')}"${c.done ? ' readonly' : ''}>${esc(after)}</p>
     <p class="qfb" id="qfb">${c.done ? (c.revealed ? 'This one was shown. Say it aloud: <b>' + esc(c.it.w + ' ' + c.it.p) + '</b>.' : 'Done.') : ''}</p>
     <div class="qfoot"><span class="qn"><b id="qnD">${n}</b>/${CELLS.length} · <span id="qnM">${MISS} mistake${MISS === 1 ? '' : 's'}</span></span>
-      <button type="button" class="qgo" id="qgo">${c.done ? 'Next word →' : 'Check →'}</button></div>`;
+      <button type="button" class="qgo" id="qgo">${c.done ? 'Back to the board' : 'Check →'}</button></div>`;
   const inp = $('qin');
   inp.style.setProperty('--n', inp.value.length);
   inp.addEventListener('input', () => { c.typed = inp.value; inp.style.setProperty('--n', inp.value.length); inp.classList.remove('no'); });
   inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('qgo').click(); } });
   $('qx').onclick = closeQ;
-  $('qgo').onclick = () => { if (c.done) { const nx = nextOpen(i); if (nx < 0) { closeQ(); finish(); } else openQ(nx); } else checkQ(i); };
+  $('qgo').onclick = () => { if (c.done) closeQ(); else checkQ(i); };
+  placeQ();
   requestAnimationFrame(() => { $('qscrim').classList.add('on'); $('qcard').classList.add('on'); if (!c.done) inp.focus({ preventScroll: true }); });
+}
+function placeQ(){
+  const c = $('qcard'), v = window.visualViewport; if (!c) return;
+  c.style.top = v ? (v.offsetTop + v.height / 2) + 'px' : '50%';
+}
+if (window.visualViewport) { visualViewport.addEventListener('resize', placeQ); visualViewport.addEventListener('scroll', placeQ); }
+/* after a check the card closes and the board shows what happened */
+function flashQ(i, cls){
+  const t = document.querySelector('#qCells .qc[data-i="' + i + '"]'); if (!t) return;
+  t.classList.remove('hit', 'miss'); void t.getBoundingClientRect(); t.classList.add(cls);
+  setTimeout(() => t.classList.remove(cls), 900);
 }
 function closeQ(){ const c = $('qcard'); if (!c) return; c.classList.remove('on'); $('qscrim').classList.remove('on'); QI = -1; if (document.activeElement) document.activeElement.blur(); paintQ(); }
 function checkQ(i){
@@ -773,24 +788,28 @@ function checkQ(i){
     c.done = true; c.it = Object.assign({}, c.it, { p: v }); c.late = c.tries > 0;
     inp.classList.add('ok'); inp.readOnly = true; sfx(c.late ? 'pop' : 'jingle');
     fb.innerHTML = c.late ? 'Yes — <b>' + esc(c.it.w + ' ' + v) + '</b>.' : 'Yes!';
-    return advanceQ(i);
+    return backQ(i, 'hit', 450);
   }
-  c.tries++; MISS++; c.lastWrong = v; sfx('wrong');
+  c.tries++; MISS++; c.lastWrong = v; c.typed = ''; sfx('wrong');
   if (!MISSED.includes(c)) MISSED.push(c);
   inp.classList.remove('shake'); void inp.offsetWidth; inp.classList.add('shake', 'no');
   $('qnM').textContent = MISS + ' mistake' + (MISS === 1 ? '' : 's');
   if (c.tries >= 3) {
     c.done = true; c.late = true; c.revealed = true; inp.value = shown(c.it.p); inp.readOnly = true; inp.style.setProperty('--n', inp.value.length);
     fb.innerHTML = 'It’s <b>' + esc(c.it.w + ' ' + c.it.p) + '</b>. Say it aloud.';
-    return advanceQ(i, 1500);
+    return backQ(i, 'miss', 1500);
   }
-  fb.textContent = c.tries === 1 ? 'Not that one. Try again.' : 'One more try.';
-  inp.select();
+  fb.textContent = c.tries === 1 ? 'Not that one.' : 'Not that one — one more try.';
+  backQ(i, 'miss', 650);
 }
-function advanceQ(i, wait){
-  count(); paintQ(); $('qnD').textContent = CELLS.filter(x => x.done).length;
-  const nx = nextOpen(i);
-  setTimeout(() => { if (QI !== i) return; if (nx < 0) { closeQ(); setTimeout(finish, 250); } else openQ(nx); }, wait || 750);
+function backQ(i, cls, wait){
+  count(); $('qnD').textContent = CELLS.filter(x => x.done).length;
+  const go = $('qgo'); if (go) go.disabled = true;
+  setTimeout(() => {
+    if (QI !== i) return;
+    closeQ(); flashQ(i, cls);
+    if (nextOpen(i) < 0) setTimeout(finish, 700);
+  }, wait);
 }
 
 /* ── play ─────────────────────────────────────────────────────────────── */

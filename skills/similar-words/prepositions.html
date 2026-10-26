@@ -269,6 +269,10 @@ body{min-height:100dvh}
 .qcard .qfoot{display:flex;justify-content:space-between;align-items:center;gap:.8rem;margin-top:.8rem;padding-top:.9rem;border-top:1.5px solid rgba(20,17,14,.18)}
 .qcard .qn{font-size:1rem;color:#6B655C}
 .qcard .qn b{color:#141210;font-weight:800}
+.qcard .qn{display:flex;align-items:center;gap:.5rem}
+.qcard .qtries{display:inline-flex;gap:5px;margin-right:.35rem}
+.qcard .qtries i{width:11px;height:11px;border-radius:50%;box-shadow:inset 0 0 0 1.5px #A9875F}
+.qcard .qtries i.on{background:#A9875F}
 .qcard .qgo{border:none;cursor:pointer;background:#141210;color:#fff;border-radius:999px;padding:.75rem 1.35rem;font:700 1rem/1 var(--f-display)}
 .qcard .qgo:active{transform:scale(.96)}
 @media (prefers-reduced-motion:reduce){ .qcard,.qscrim{transition:none} .qcard .qin.shake{animation:none} }
@@ -300,7 +304,7 @@ body{min-height:100dvh}
  <section id="play">
   <div class="strip" aria-live="polite">
     <span id="setName"></span>
-    <span class="score"><span class="tally"><b id="nDone">0</b>/<span id="nAll">12</span></span><span class="sep"> · </span><span class="miss"><b id="nMiss">0</b> mistakes</span></span>
+    <span class="score"><span class="tally"><b id="nDone">0</b>/<span id="nAll">12</span></span><span class="sep"> · </span><span class="miss"><b id="nMiss">0</b> mistakes</span><span class="sep qpts"> · </span><span class="qpts">Score <b id="nPts">0</b></span></span>
   </div>
   <p class="how">Tap a word, then type its preposition.</p>
   <div class="comb" id="comb" role="group" aria-label="Words"></div>
@@ -754,7 +758,7 @@ function openQ(i){
     <p class="qs">${esc(before)}<input class="qin${c.done ? ' ok' : ''}" id="qin" type="text" maxlength="12" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go"
       aria-label="The preposition after ${esc(c.it.w)}" value="${c.done ? esc(shown(c.it.p)) : esc(c.typed || '')}"${c.done ? ' readonly' : ''}>${esc(after)}</p>
     <p class="qfb" id="qfb">${c.done ? (c.revealed ? 'This one was shown. Say it aloud: <b>' + esc(c.it.w + ' ' + c.it.p) + '</b>.' : 'Done.') : ''}</p>
-    <div class="qfoot"><span class="qn"><b id="qnD">${n}</b>/${CELLS.length} · <span id="qnM">${MISS} mistake${MISS === 1 ? '' : 's'}</span></span>
+    <div class="qfoot"><span class="qn"><span class="qtries" aria-label="${TRIES - c.tries} tries left">${Array.from({ length: TRIES }, (_, k) => `<i class="${k < TRIES - c.tries && !c.revealed ? 'on' : ''}"></i>`).join('')}</span> Score <b id="qnD">${scoreQ()}</b></span>
       <button type="button" class="qgo" id="qgo">${c.done ? 'Back to the board' : 'Check →'}</button></div>`;
   const inp = $('qin');
   inp.style.setProperty('--n', inp.value.length);
@@ -787,23 +791,24 @@ function checkQ(i){
   if (ok) {
     c.done = true; c.it = Object.assign({}, c.it, { p: v }); c.late = c.tries > 0;
     inp.classList.add('ok'); inp.readOnly = true; sfx(c.late ? 'pop' : 'jingle');
-    fb.innerHTML = c.late ? 'Yes — <b>' + esc(c.it.w + ' ' + v) + '</b>.' : 'Yes!';
+    fb.innerHTML = (c.late ? 'Yes — <b>' + esc(c.it.w + ' ' + v) + '</b>.' : 'Yes!') + ' <b>+' + ptsOf(c) + '</b>';
     return backQ(i, 'hit', 450);
   }
   c.tries++; MISS++; c.lastWrong = v; c.typed = ''; sfx('wrong');
   if (!MISSED.includes(c)) MISSED.push(c);
   inp.classList.remove('shake'); void inp.offsetWidth; inp.classList.add('shake', 'no');
-  $('qnM').textContent = MISS + ' mistake' + (MISS === 1 ? '' : 's');
-  if (c.tries >= 3) {
+  $('qcard').querySelectorAll('.qtries i').forEach((d, k) => d.classList.toggle('on', k < TRIES - c.tries));
+  if (c.tries >= TRIES) {
     c.done = true; c.late = true; c.revealed = true; inp.value = shown(c.it.p); inp.readOnly = true; inp.style.setProperty('--n', inp.value.length);
-    fb.innerHTML = 'It’s <b>' + esc(c.it.w + ' ' + c.it.p) + '</b>. Say it aloud.';
+    fb.innerHTML = 'It’s <b>' + esc(c.it.w + ' ' + c.it.p) + '</b>. Say it aloud. <b>0</b> points.';
     return backQ(i, 'miss', 1500);
   }
-  fb.textContent = c.tries === 1 ? 'Not that one.' : 'Not that one — one more try.';
+  const left = TRIES - c.tries;
+  fb.innerHTML = 'Not that one — <b>' + left + (left === 1 ? ' try' : ' tries') + ' left</b>.';
   backQ(i, 'miss', 650);
 }
 function backQ(i, cls, wait){
-  count(); $('qnD').textContent = CELLS.filter(x => x.done).length;
+  count(); $('qnD').textContent = scoreQ();
   const go = $('qgo'); if (go) go.disabled = true;
   setTimeout(() => {
     if (QI !== i) return;
@@ -869,9 +874,16 @@ function renderExplore(){
           `<div class="ex-s">${sent(it)}</div></div>`).join('') + '</div></section>';
     }).join('');
 }
+/* three tries a word: 3 points first time, 2 on the second try, 1 on the
+   third; an answer the page has to show scores 0 */
+const TRIES = 3;
+const ptsOf = c => c.done && !c.revealed ? TRIES - c.tries : 0;
+const scoreQ = () => CELLS.reduce((a, c) => a + ptsOf(c), 0);
 function count(){
   $('nDone').textContent = CELLS.filter(c => c.done).length;
   $('nMiss').textContent = MISS;
+  if ($('nPts')) $('nPts').textContent = scoreQ();
+  document.querySelectorAll('.qpts').forEach(e => e.hidden = SHAPE !== 'q');
 }
 function select(i){
   if (SHAPE === 'q') return openQ(i);
@@ -964,7 +976,7 @@ function openCard(html){
 }
 function closeCard(){ const sc = $('scrim'); sc.classList.remove('on'); sc.hidden = true; }
 function finish(){
-  const n = CELLS.length, right = n - MISSED.length, pct = Math.round(right / n * 100);
+  const n = CELLS.length, right = n - MISSED.length, pct = SHAPE === 'q' ? Math.round(scoreQ() / (n * TRIES) * 100) : Math.round(right / n * 100);
   const secs = T0 ? Math.round((Date.now() - T0) / 1000) : 0, t = Math.floor(secs / 60) + ':' + String(secs % 60).padStart(2, '0');
   const clean = right === n;
   const all = store.get(), key = MODE + ':' + SET, prev = all[key] || {};
@@ -978,7 +990,7 @@ function finish(){
   const more = SET + 1 < SETS[MODE].length;
   openCard(`<div class="kick">Prepositions · ${LABEL[MODE]} · Set ${SET + 1}</div>${clean ? CUP : ''}
     <h2 id="fTitle">${clean ? 'The cup.' : 'Your result'}</h2>
-    <div class="big">${pct}%</div>
+    <div class="big">${SHAPE === 'q' ? scoreQ() + '<span style="font-size:.5em;color:var(--faint)"> / ' + n * TRIES + '</span>' : pct + '%'}</div>
     <div class="grade">${grade} · ${right} of ${n} first time · ${t}</div>
     ${MISSED.length ? `<p class="review-h">Say these aloud — the word and its preposition together:</p>
       <ul class="review">${MISSED.map(c => `<li><span class="w">${esc(c.it.w)} <b>${esc(shown(c.it.p))}</b></span><span>${c.tries >= 3 ? 'shown' : c.tries + 1 + ' tries'}</span></li>`).join('')}</ul>` : ''}

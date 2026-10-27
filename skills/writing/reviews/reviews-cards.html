@@ -34,7 +34,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .mode-btn:hover{color:rgba(0,0,0,0.7)}
 .mode-btn.active{background:var(--sig);color:#fff}
 
-.stage{flex:1;min-height:0;position:relative;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;align-items:center;padding:1.1rem 1rem 1.4rem}
+.stage{flex:1;min-height:0;position:relative;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;align-items:center;padding:1.1rem 1rem 1.4rem}
 .stage::-webkit-scrollbar{width:3px}
 .stage::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.1);border-radius:2px}
 
@@ -109,9 +109,9 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .pitem .gp{color:rgba(0,0,0,0.5);font-weight:600;letter-spacing:0.16em;padding:0 0.06rem}
 
 @media (max-width:480px){
-  .stage{padding:0.85rem 0.85rem 1.1rem}
+  .stage{padding:0.85rem 0 1.1rem}
   .hint{font-size:0.6875rem;margin-bottom:0.65rem}
-  .stack,.hint{width:94vw}
+  .stack,.hint{width:100%}
   .band{width:2.4rem;padding:0.7rem 0 0.8rem;gap:0.45rem}
   .band-num{font-size:1.3rem}
   .band-word{font-size:0.6875rem;letter-spacing:0.22em}
@@ -146,6 +146,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 }
 </style>
 <script src="/tools/be2-brand.js?v=20261012c"></script>
+<script src="/data/writing/open-card.js?v=1"></script>
 </head>
 <body data-writing="reviews" data-stage="model">
 <div class="shell">
@@ -166,7 +167,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
   </div>
 
   <div class="stage" id="stage">
-    <div class="hint" id="hint">Tap any line to say it another way.</div>
+    <div class="hint" id="hint">Tap Open on any line to see it closer — and choose another wording.</div>
     <div class="stack" id="stack"><div class="state">Loading…</div></div>
   </div>
 
@@ -414,21 +415,20 @@ function bindGestures(){
     if(!row) return;
     const dx=e.clientX-gx, dy=e.clientY-gy;
     const idx = row.dataset.idx!==undefined ? +row.dataset.idx : undefined;
-    if(Math.abs(dx)>=SWIPE_MIN && Math.abs(dy)<=SWIPE_DRIFT){ roll(row.dataset.slot, dx<0?1:-1, idx); return; }
-    if(Math.abs(dx)<=TAP_SLOP && Math.abs(dy)<=TAP_SLOP){ roll(row.dataset.slot, 1, idx); }
+    if(Math.abs(dx)<=TAP_SLOP && Math.abs(dy)<=TAP_SLOP){ openM(row.dataset.slot, idx); }
   });
   stack.addEventListener('keydown',e=>{
     const row=e.target.closest && e.target.closest('.rline');
     if(!row) return;
     const idx = row.dataset.idx!==undefined ? +row.dataset.idx : undefined;
-    if(e.key==='Enter'||e.key===' '||e.key==='ArrowRight'){ e.preventDefault(); roll(row.dataset.slot,1,idx); }
-    else if(e.key==='ArrowLeft'){ e.preventDefault(); roll(row.dataset.slot,-1,idx); }
+    if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openM(row.dataset.slot,idx); }
   });
 }
 
 let demoed=false;
 try{ demoed = sessionStorage.getItem('intuity.roll.demoed')==='1'; }catch(e){}
 function demonstrate(){
+  return;   /* 27 Oct: lines no longer roll on a tap; the Open card does it */
   if(demoed||REDUCED) return;
   demoed=true;
   try{ sessionStorage.setItem('intuity.roll.demoed','1'); }catch(e){}
@@ -513,7 +513,7 @@ function setView(v){
   if(c)c.classList.toggle('active',v==='cards');
   if(p)p.classList.toggle('active',v==='phrases');
   const h=document.getElementById('hint');
-  if(h && v==='cards') h.textContent='Tap any line to say it another way.';
+  if(h && v==='cards') h.textContent='Tap Open on any line to see it closer — and choose another wording.';
   render();
 }
 window.setView=setView;
@@ -521,20 +521,20 @@ window.setView=setView;
 function render(){
   if(view==='phrases'){ renderPhrases(); return; }
   const openLine=lineHTML('open');
-  const featLines=[0,1,2].map(i=>`<div class="rline" id="rl-feat-${i}" data-slot="feat" data-idx="${i}" role="button" tabindex="0" aria-label="Another way of saying this feature"><div class="rtext"><div class="line" id="ln-feat-${i}">${lineHTML('feat',i)}</div><div class="dev">...</div></div>${navBack()}</div>`).join('');
+  const featLines=[0,1,2].map(i=>`<div class="rline" id="rl-feat-${i}" data-slot="feat" data-idx="${i}" role="button" tabindex="0" aria-label="Another way of saying this feature"><div class="rtext"><div class="line" id="ln-feat-${i}">${lineHTML('feat',i)}</div><div class="dev">...</div></div>${OC_pill('feat',i)}</div>`).join('');
   const closeLine=lineHTML('close');
   const hingeNote=`<div class="card-note"><span class="k">*</span>`+(T.open.hinge||[]).map((h,i)=>`<span class="opt" data-hinge="${i}" role="button" tabindex="0" onclick="setHinge(event,${i})">${h}</span>`).join('')+`</div>`;
   const supportNote=`<div class="card-note"><span class="k">*</span>`+(SH.support||[]).map(s=>`<span class="opt">${s.move}</span>`).join('')+`</div>`;
 
   document.getElementById('stack').innerHTML=`
     <div class="card"><div class="band"><span class="band-num">01</span><span class="band-word">Intro</span></div>
-      <div class="content"><div class="rline" id="rl-open" data-slot="open" role="button" tabindex="0" aria-label="Another way of opening"><div class="rtext"><div class="line" id="ln-open">${openLine}</div></div>${navBack()}</div>${hingeNote}</div></div>
+      <div class="content"><div class="rline" id="rl-open" data-slot="open" role="button" tabindex="0" aria-label="Another way of opening"><div class="rtext"><div class="line" id="ln-open">${openLine}</div></div>${OC_pill('open')}</div>${hingeNote}</div></div>
     <div class="flow">&#9662;</div>
     <div class="card"><div class="band"><span class="band-num">02</span><span class="band-word">Features</span></div>
       <div class="content">${featLines}${supportNote}</div></div>
     <div class="flow">&#9662;</div>
     <div class="card"><div class="band"><span class="band-num">03</span><span class="band-word">Recommend</span></div>
-      <div class="content"><div class="rline" id="rl-close" data-slot="close" role="button" tabindex="0" aria-label="Another way of recommending"><div class="rtext"><div class="line" id="ln-close">${closeLine}</div></div>${navBack()}</div></div></div>`;
+      <div class="content"><div class="rline" id="rl-close" data-slot="close" role="button" tabindex="0" aria-label="Another way of recommending"><div class="rtext"><div class="line" id="ln-close">${closeLine}</div></div>${OC_pill('close')}</div></div></div>`;
   document.getElementById('stack').classList.add('has-cards');
   syncHinge();
   demonstrate();
@@ -548,6 +548,18 @@ function switchMode(mode){
 window.switchMode=switchMode;
 
 bindGestures();
+/* OPEN › card for this page (27 Oct) */
+let OC_SAMPLES=null, OC_QID=null;
+try{ const q=JSON.parse(sessionStorage.getItem('currentReviewQuestion')||'null'); OC_QID=q&&(q.id||q.questionId); }catch(e){}
+fetch('/skills/writing/reviews/data/samples.json').then(r=>r.ok?r.json():null).then(d=>{ OC_SAMPLES=d; }).catch(()=>{});
+window.OC={
+  line:(slot,idx)=>lineHTML(slot,idx), state:(slot,idx)=>stateFor(slot,idx), roll:(slot,dir,idx)=>roll(slot,dir,idx),
+  label:(slot,idx)=>slot==='open'?'01 · Introduction':slot==='close'?'03 · Recommendation':'02 · '+['First','Second','Third'][idx]+' feature',
+  head:(slot,idx)=>slot==='open'?'Catch the reader':slot==='close'?'Recommend it':['What impressed you','What else stands out','The best feature'][idx],
+  sample:(slot,idx)=>{ const r=OC_SAMPLES&&OC_QID&&OC_SAMPLES[OC_QID]; if(!r||!Array.isArray(r.default)) return null;
+    const P=r.default, x=slot==='open'?P.find(p=>/intro/i.test(p.label)):slot==='close'?P.find(p=>/recommend/i.test(p.label)):P.find(p=>p.label==='Feature '+(idx+1));
+    return x?(x.sentences||[]).slice(0,2).join(' '):null; }};
+
 init();
 </script>
 <script src="/skills/grammar-rules/intuity-sound.js"></script>

@@ -177,6 +177,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .narr-note{margin-top:0.9rem}
 </style>
 <script src="/tools/be2-brand.js?v=20261012c"></script>
+<script src="/data/writing/open-card.js?v=1"></script>
 </head>
 <body>
 <div class="shell">
@@ -190,7 +191,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
   <div class="topic-tabs" id="tabsContainer"></div>
 
   <div class="stage" id="stage">
-    <div class="hint">Tap the arrows on any line to juggle — every line rolls on its own.</div>
+    <div class="hint">Tap Open to see the frame closer — and choose another wording.</div>
     <div class="stack" id="stack"><div class="state">Loading…</div></div>
   </div>
 
@@ -403,7 +404,7 @@ function render(){
         <div class="frame-row">
           <div class="frame-lead">frame</div>
           <div class="rline"><div class="rtext"><div class="line frame-line">${fmt(frame)}</div></div>
-            <div class="nav"><button onclick="rollFrame(-1)">‹</button><button onclick="rollFrame(1)">›</button></div>
+            ${OC_pill('frame')}
           </div>
         </div>
 
@@ -418,8 +419,23 @@ function render(){
     </div>`;
   document.getElementById('stack').classList.add('has-cards');
   Object.keys(STAGES[STAGE].ingredients||{}).forEach(paintChosen);
-  if(!taught){ const first=document.querySelector('.nav button'); if(first) first.classList.add('teach'); }
 }
+/* OPEN › (27 Oct): the frame opens as the poster card; Another wording
+   walks through the stage's frames, and the chosen question's sample
+   story shows its paragraph for this stage */
+let OC_SMP=null, OC_Q=null;
+try{ OC_Q=JSON.parse(sessionStorage.getItem('currentNarrativeQuestion')||'null'); }catch(e){}
+fetch('/skills/writing/narrative/data/narrative-samples.json').then(r=>r.ok?r.json():null).then(d=>{ OC_SMP=d; }).catch(()=>{});
+window.OC={
+  line:()=>{ const fr=STAGES[STAGE].frames||['...']; return fmt(fr[frameIdx%fr.length]); },
+  state:()=>({i:frameIdx%((STAGES[STAGE].frames||['']).length)}),
+  roll:(slot,dir)=>rollFrame(dir),
+  label:()=>String(STAGES[STAGE].order||1).padStart(2,'0')+' · '+(STAGES[STAGE].label||STAGE),
+  head:()=>STAGES[STAGE].label||STAGE,
+  sample:()=>{ const L=OC_SMP&&OC_SMP.samples; if(!L||!OC_Q) return null;
+    const smp=L.find(x=>x.title===OC_Q.title)||L.find(x=>x.question===OC_Q.opening); if(!smp) return null;
+    const p=(smp.paragraphs||[])[(STAGES[STAGE].order||1)-1]; if(!p) return null;
+    return String(p.text).replace(/[«»]/g,'').split(/(?<=[.!?])\s+/).slice(0,2).join(' '); }};
 
 /* ── FOOTER NAV ── */
 function switchMode(mode){

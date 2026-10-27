@@ -124,8 +124,36 @@ const NUM={This:'s',It:'s',They:'p',These:'p',this:'s',it:'s',they:'p',these:'p'
 let QS=[], SM={}, Q=null, S=null, round=0, checked=false, score=0, state={};
 /* ?task=reviews (27 Oct): the same six rounds, built from the review
    questions and samples. Round 1 reads the task, round 4 describes. */
-const TASK=new URLSearchParams(location.search).get('task')==='reviews'?'reviews':'essays';
-const RV=TASK==='reviews';
+const TASKS=['reviews','reports','emails','articles','story'];
+const TASK=TASKS.includes(new URLSearchParams(location.search).get('task'))?new URLSearchParams(location.search).get('task'):'essays';
+const RV=TASK==='reviews', GEN=TASK!=='essays';
+/* what changes from task to task: words, links, round 4 */
+const CONF={
+  reviews:{name:'review',back:'Review',r1:'The task',r4:'Describe',end:'Recommendation',endTag:'Ending',
+    introGood:'The good one catches the reader and names what you are reviewing.',endGood:'The good one recommends it clearly and says who would enjoy it.',
+    r1miss:'A review that skips one of them loses <b>Content</b> marks.',write:['Write a review','/skills/writing/reviews/review-question-selector.html']},
+  reports:{name:'report',back:'Report',r1:'The task',r4:'Register',end:'Conclusion',endTag:'Conclusion',
+    introGood:'The good one says what the report is for and where the information comes from.',endGood:'The good one sums up the findings and makes a clear recommendation.',
+    r1miss:'A report that skips one of them loses <b>Content</b> marks.',write:['Write a report','/skills/writing/reports/report-question-selector.html']},
+  emails:{name:'email',back:'Email',r1:'The task',r4:'Register',end:'Sign-off',endTag:'Ending',
+    introGood:'The good one greets the reader in the right register and says why you are writing.',endGood:'The good one closes politely in the same register, with the right sign-off.',
+    r1miss:'An email that skips one of them loses <b>Content</b> marks.',write:['Write an email','/skills/writing/emails/email-question.html']},
+  articles:{name:'article',back:'Article',r1:'The task',r4:'Style',end:'Ending',endTag:'Ending',
+    introGood:'The good one hooks the reader at once — a question, a surprise, a picture.',endGood:'The good one leaves the reader with a final thought, a question or some advice.',
+    r1miss:'An article that ignores part of the question loses <b>Content</b> marks.',write:['Write an article','/skills/writing/articles/article-question.html']},
+  story:{name:'story',back:'Story',r1:'The task',r4:'Storytelling',end:'Ending',endTag:'Ending',
+    introGood:'The good one begins with the exact sentence you were given.',endGood:'The good one resolves the story and leaves the reader with a feeling.',
+    r1miss:'A story without them loses <b>Content</b> marks.',write:['Write a story','/skills/writing/narrative/narrative-question.html']}};
+const C=CONF[TASK]||{};
+/* round 4 for reports, emails, articles and stories: which phrases fit? */
+const TONE={
+  formal:['I am writing to enquire about …','I would be grateful if you could …','Furthermore, …','I look forward to hearing from you.','Please do not hesitate to contact me.','I would appreciate it if …'],
+  report:['The aim of this report is to …','It was generally agreed that …','Furthermore, …','It is recommended that …','The majority of students felt that …','Taking everything into account, …'],
+  informal:['Guess what?','Anyway, …','Can’t wait to see you!','By the way, …','Loads of love,','Take care!','Drop me a line soon!'],
+  lively:['Have you ever wondered …?','Picture this: …','Believe it or not, …','Let’s face it, …','So, what are you waiting for?','Imagine …'],
+  dry:['This report aims to …','The purpose of this email is to …','In conclusion, the findings show that …','I am writing to complain about …'],
+  narr:['All of a sudden, …','Little did I know that …','Just as …, …','By the time …, …','Without warning, …','Before I knew it, …'],
+  nonnarr:['In conclusion, …','I would strongly recommend …','This report aims to …','Furthermore, it is recommended that …']};
 let ADJ=null;
 
 /* the function each tagged phrase does, in words a student uses */
@@ -153,7 +181,7 @@ function newQuestion(){
   Q=pool[Math.floor(Math.random()*pool.length)]; S=SM[Q.id];
   round=0; score=0; build(); draw();
 }
-function build(){ if(RV) return buildReview(); buildEssay(); }
+function build(){ if(GEN) return buildReview(); buildEssay(); }
 /* ── REVIEWS ─────────────────────────────────────────────────────────── */
 const ADJCAT=t=>/TV|Film/.test(t)?'films_tv_shows':/Music|Event/.test(t)?'events_concerts':/Food|Restaurant/.test(t)?'restaurants_cafes':/Holiday|Sport/.test(t)?'places_destinations':/Book/.test(t)?'books':/App|Game|Technology/.test(t)?'games_apps':'general_quality';
 const FAR={films_tv_shows:'restaurants_cafes',events_concerts:'books',restaurants_cafes:'games_apps',places_destinations:'gadgets_technology',books:'restaurants_cafes',games_apps:'restaurants_cafes',general_quality:'restaurants_cafes'};
@@ -162,13 +190,20 @@ function rparas(rec,st){ return (rec&&Array.isArray(rec[st])?rec[st]:[]).map(p=>
 function buildReview(){
   /* round 1: what does THIS question ask you to do? */
   const right=(Q.keyPoints||[]).slice(0,3);
-  const others=QS.filter(q=>q.id!==Q.id&&q.type!==Q.type).flatMap(q=>q.keyPoints||[]).filter(k=>!right.includes(k));
+  /* a wrong point must not be a near-copy of a right one ("Recommend improvements") */
+  const kw=t=>new Set((t.toLowerCase().match(/[a-z]{4,}/g)||[]));
+  const near=k=>right.some(r=>{ const a=kw(r), b=kw(k); let n=0; b.forEach(w=>{ if(a.has(w)) n++; }); return n>=Math.max(1,Math.min(a.size,b.size)/2); });
+  /* and must not fit ANY question ("Say whether you would recommend it") */
+  const generic=/recommend|whether|other people|others|your ideas|about you/i;
+  const others=[];
+  shuffle([...new Set(QS.filter(q=>q.id!==Q.id&&(q.type!==Q.type||!RV)).flatMap(q=>q.keyPoints||[]))]).forEach(k=>{
+    if(!right.includes(k)&&!near(k)&&!generic.test(k)&&!others.some(o=>{ const a=kw(o), b=kw(k); let n=0; b.forEach(w=>{ if(a.has(w)) n++; }); return n>=Math.max(1,Math.min(a.size,b.size)/2); })) others.push(k); });
   state.ideas=shuffle([...right.map(t=>({t,ok:true})),...pick(others,3).map(t=>({t,ok:false}))]); state.sel=new Set();
   const P=rparas(S,'default');
   /* round 2: the sample's introduction vs a weak one */
   const intro=P.find(x=>/intro/i.test(x.label))||P[0];
   const otherRec=SM[pick(QS.filter(q=>q.id!==Q.id&&SM[q.id]),1)[0].id];
-  const weakers=[
+  const weakers=!RV?weakIntros(intro,otherRec):[
     {t:`${(Q.question.match(/^[^.?!]+[.?!]/)||[Q.question])[0]} In this review I am going to write about it.`,why:'It copies the task and says nothing about the thing you are reviewing.'},
     {t:'There are many things to do in the world, and everyone has different tastes. This review is about one of them.',why:'It never names what you are reviewing. The reader must know at once what it is.'},
     {t:(rparas(otherRec,'default')[0]||{}).text||'',why:'Good English — but it introduces a different review. Every sentence must be about what you were asked to review.'}].filter(x=>x.t);
@@ -177,12 +212,59 @@ function buildReview(){
   /* round 3: the first feature paragraph without its first sentence; the
      same paragraph's opening from the other two sample styles also fits */
   const f1=P.find(x=>/feature 1/i.test(x.label))||P[1], f2=P.find(x=>/feature 2/i.test(x.label))||P[2];
+  const sameLabel=(a,b)=>a&&b&&(a.label===b.label||(!RV&&true));
   const rest=f1.sents.slice(1).join(' ');
   const cw=t=>(t.toLowerCase().match(/[a-z]{5,}/g)||[]).map(x=>x.slice(0,6)), rw=new Set(cw(rest));
   const opts=[{t:f1.sents[0],ok:true}];
-  ['alternative1','alternative2'].forEach(st=>{ const a=rparas(S,st).find(x=>/feature 1/i.test(x.label)); if(a&&a.sents[0]&&cw(a.sents[0]).some(x=>rw.has(x))) opts.push({t:a.sents[0],ok:true}); });
-  if(f2) opts.push({t:f2.sents[0],ok:false,why:'opens the next paragraph — it is about a different feature'});
+  ['alternative1','alternative2'].forEach(st=>{ const a=RV?rparas(S,st).find(x=>/feature 1/i.test(x.label)):rparas(S,st)[1]; if(a&&a.sents[0]&&a.sents[0]!==f1.sents[0]&&cw(a.sents[0]).some(x=>rw.has(x))) opts.push({t:a.sents[0],ok:true}); });
+  if(f2) opts.push({t:f2.sents[0],ok:false,why:RV?'opens the next paragraph — it is about a different feature':'opens the next paragraph — it is about something else'});
   state.topic={rest,opts:shuffle(opts),sel:new Set()};
+  if(!RV) toneRound(); else describeRound();
+  /* round 5: the sample's ending vs a weak one */
+  const rec=RV?(P.find(x=>/recommend/i.test(x.label))||P[P.length-1]):P[P.length-1];
+  const weakEnds=RV?[
+    {t:`${rec.sents[0]} Also, the weather was quite cold that week.`,why:'It ends with a new point that has nothing to do with the review.'},
+    {t:'That is all I have to say about it. Thank you for reading my review.',why:'It recommends nothing. A review must end by telling the reader whether to try it — and who would enjoy it.'},
+    {t:'Some people will like it and some people will not, so it is up to you.',why:'It sits on the fence. The reader wants YOUR recommendation and a reason for it.'}]:weakEndsFor(rec);
+  const we=pick(weakEnds,1)[0];
+  state.ends=shuffle([{t:rec.text,ok:true},{t:we.t,ok:false,why:we.why}]);
+  /* round 6: link back, from every style's sentences */
+  state.links=linksFrom(['default','alternative1','alternative2'].flatMap(st=>rparas(S,st).map(x=>x.text)));
+  /* a sample with too few link-back words borrows from the task's other samples */
+  if(state.links.length<2) state.links=linksFrom(Object.values(SM).flatMap(r=>['default','alternative1','alternative2'].flatMap(st=>rparas(r,st).map(x=>x.text))));
+}
+function toneRound(){
+  const reg=TASK==='emails'?Q.register:TASK;
+  const [R,W,kind]=TASK==='articles'?[TONE.lively,TONE.dry,'would make readers want to read on']:TASK==='story'?[TONE.narr,TONE.nonnarr,'moves a story along']
+    :reg==='informal'?[TONE.informal,TONE.formal,'suits an email to a friend']:TASK==='reports'?[TONE.report,TONE.informal,'is formal enough for a report']:[TONE.formal,TONE.informal,'suits a formal email'];
+  state.desc={kind,opts:shuffle([...pick(R,4).map(t=>({t,ok:true})),...pick(W,3).map(t=>({t,ok:false}))]),sel:new Set()};
+}
+function weakIntros(intro,otherRec){
+  const other=(rparas(otherRec,'default')[0]||{}).text||'';
+  const copy=`${(Q.question.match(/^[^.?!]+[.?!]/)||[Q.question])[0]} In this ${C.name} I am going to write about it.`;
+  const L={
+    reports:[{t:copy,why:'It copies the task. A report opens by saying what it is for and where the information comes from.'},
+             {t:'Hi everyone! Today I’m going to tell you loads of stuff about our school. Let’s go!',why:'Far too informal. A report is written for someone in charge.'}],
+    emails:Q.register==='informal'?[{t:'Dear Sir or Madam, I am writing to inform you that I have received your message.',why:'Far too formal for a friend.'}]
+                                  :[{t:'Hi there! How’s it going? Just writing to say I saw your ad.',why:'Far too informal for someone you don’t know.'}],
+    articles:[{t:`In this article I am going to write about ${Q.topic?Q.topic.toLowerCase():'this topic'}.`,why:'It tells the reader what you will do instead of hooking them.'}].map(x=>({...x,t:x.t.replace(/[!?.]+\.$/,'.')})),
+    story:[{t:'This is a story about something that happened to a boy. It was quite interesting.',why:'It doesn’t begin with the sentence you were given — that loses marks straight away.'}]}[TASK]||[];
+  if(other&&TASK!=='story') L.push({t:other,why:`Good English — but it belongs to a different ${C.name}. Every sentence must answer your question.`});
+  return L;
+}
+function weakEndsFor(rec){
+  const body=rec.sents.filter(x=>!/^(Yours|Best|Kind|Love|Lots|Take care|See you|Regards|All the best)/i.test(x)&&x.split(' ').length>2).slice(0,1).join(' ');
+  return ({
+    reports:[{t:'Thank you for reading my report. I hope you liked it!',why:'Too informal, and it makes no recommendation.'},
+             {t:`${rec.sents[0]} Also, the school should sell more pizza.`,why:'It adds a new point at the very end instead of concluding.'}],
+    emails:Q.register==='informal'?[{t:`${body} Yours faithfully, A. Silva`,why:'“Yours faithfully” is for a stranger — far too formal for a friend.'}]
+                                  :[{t:`${body} Lots of love, xx`,why:'“Lots of love” is for friends and family — never for this reader.'}],
+    articles:[{t:'In conclusion, this article has explained my ideas about the topic.',why:'Flat: it gives the reader no final thought, question or advice.'},
+              {t:'That’s all. Bye!',why:'It just stops. An article ends by leaving the reader with something to think about.'}],
+    story:[{t:'Then I woke up. It had all been a dream.',why:'The oldest trick: the examiner sees it as avoiding a real ending.'},
+           {t:'And that was it. The end.',why:'It stops instead of resolving the story.'}]}[TASK])||[];
+}
+function describeRound(){
   /* round 4: which adjectives could describe THIS kind of thing? */
   const cat=ADJCAT(Q.type||''), A=(ADJ&&ADJ[cat])||{}, B=(ADJ&&ADJ[FAR[cat]])||{};
   /* the lists are named differently per kind (positive, positive_food,
@@ -196,17 +278,7 @@ function buildReview(){
   const SPEC={food:['mouth-watering','greasy','delicious','overcooked','juicy'],app:['glitchy','buggy','user-friendly','laggy'],film:['well-acted','badly-acted']};
   const own={restaurants_cafes:'food',games_apps:'app',films_tv_shows:'film'}[cat];
   const bad=pick(Object.keys(SPEC).filter(k=>k!==own).flatMap(k=>SPEC[k]).filter(x=>!inA.has(x)),3);
-  state.desc={kind:KIND[cat],opts:shuffle([...good.map(t=>({t,ok:true})),...bad.map(t=>({t,ok:false}))]),sel:new Set()};
-  /* round 5: the sample's recommendation vs a weak one */
-  const rec=P.find(x=>/recommend/i.test(x.label))||P[P.length-1];
-  const weakEnds=[
-    {t:`${rec.sents[0]} Also, the weather was quite cold that week.`,why:'It ends with a new point that has nothing to do with the review.'},
-    {t:'That is all I have to say about it. Thank you for reading my review.',why:'It recommends nothing. A review must end by telling the reader whether to try it — and who would enjoy it.'},
-    {t:'Some people will like it and some people will not, so it is up to you.',why:'It sits on the fence. The reader wants YOUR recommendation and a reason for it.'}];
-  const we=pick(weakEnds,1)[0];
-  state.ends=shuffle([{t:rec.text,ok:true},{t:we.t,ok:false,why:we.why}]);
-  /* round 6: link back, from every style's sentences */
-  state.links=linksFrom(['default','alternative1','alternative2'].flatMap(st=>rparas(S,st).map(x=>x.text)));
+  state.desc={kind:'this '+KIND[cat],opts:shuffle([...good.map(t=>({t,ok:true})),...bad.map(t=>({t,ok:false}))]),sel:new Set()};
 }
 function linksFrom(texts){
   const DUMMY=/^It (is|was|seems|appears|has been|had been|would be|could be|can be|will be|might be|may be|must be|should be|remains)\b/;
@@ -328,7 +400,7 @@ function buildEssay(){
   state.links=shuffle(chosenL).map(x=>({...x,ans:null}));
 }
 function head(){
-  if(RV) return `<section class="card"><p class="lab">Today’s question</p><h1>${esc(Q.topic||'Review')}</h1><p class="ask">${esc(Q.question)}</p></section>`;
+  if(GEN) return `<section class="card"><p class="lab">Today’s question</p><h1>${esc(Q.topic||C.back)}</h1>${Q.given?`<p class="ask"><b>Begin with:</b> “${esc(Q.given)}”</p>`:''}<p class="ask">${esc(Q.question)}</p></section>`;
   return `<section class="card"><p class="lab">Today’s question</p><h1>${esc(Q.topic||'Essay')}</h1><p class="ask">${esc(Q.mainQuestion)}</p>`+
     `<ul class="notes">${(Q.writingPoints||[]).map(n=>`<li>${esc(n)}</li>`).join('')}</ul></section>`;
 }
@@ -339,7 +411,7 @@ function draw(){
   if(round===6) return drawEnd();
   let h=head();
   if(round===0){
-    h+=`<section class="card"><p class="lab">Round 1 · ${RV?'The task':'Ideas'}</p><p class="do">${RV?'<b>Tap everything this question asks you to do.</b> Some come from other questions.':'<b>Tap the ideas that belong in this essay.</b> Some come from other questions.'}</p>`+
+    h+=`<section class="card"><p class="lab">Round 1 · ${GEN?'The task':'Ideas'}</p><p class="do">${GEN?(TASK==='story'?'<b>Tap everything your story must include.</b> Some come from other stories.':TASK==='articles'?'<b>Tap every question your article must answer.</b> Some come from other articles.':'<b>Tap everything this question asks you to do.</b> Some come from other questions.'):'<b>Tap the ideas that belong in this essay.</b> Some come from other questions.'}</p>`+
        `<div class="chips">${state.ideas.map((x,i)=>`<button type="button" class="chip" data-i="${i}" aria-pressed="${state.sel.has(i)}">${esc(x.t)}</button>`).join('')}</div><p class="why" id="why"></p></section>`;
   }
   if(round===1){
@@ -351,17 +423,22 @@ function draw(){
        `<p class="para"><b class="gap" style="min-width:70px">…</b> <span style="color:var(--soft)">${esc(state.topic.rest)}</span></p>`+
        `<div class="chips" style="margin-top:14px">${state.topic.opts.map((x,i)=>`<button type="button" class="chip" data-i="${i}" aria-pressed="false">${esc(x.t)}</button>`).join('')}</div><p class="why" id="why"></p></section>`;
   }
-  if(round===3&&RV){
-    h+=`<section class="card"><p class="lab">Round 4 · Describe</p><p class="do"><b>Tap every word that could describe this ${esc(state.desc.kind)}.</b> Some belong to a different kind of review.</p>`+
+  if(round===3&&GEN){
+    h+=`<section class="card"><p class="lab">Round 4 · ${C.r4}</p><p class="do">${RV?`<b>Tap every word that could describe ${esc(state.desc.kind)}.</b> Some belong to a different kind of review.`:`<b>Tap every phrase that ${esc(state.desc.kind)}.</b> Some don’t.`}</p>`+
        `<div class="chips">${state.desc.opts.map((x,i)=>`<button type="button" class="chip" data-i="${i}" aria-pressed="false">${esc(x.t)}</button>`).join('')}</div><p class="why" id="why"></p></section>`;
   }
-  if(round===3&&!RV){
+  if(round===3&&!GEN){
     h+=`<section class="card"><p class="lab">Round 4 · Fill the model</p><p class="do"><b>Tap a gap, then the phrase it needs.</b> Think about its job: a reason, an example, a result, your opinion …</p>`+
        `<p class="para" id="para">${state.para}</p><div class="picker"><div class="chips" id="opts">${state.opts.map(t=>`<button type="button" class="chip" data-o="${esc(t)}">${esc(t)}</button>`).join('')}</div><p class="why" id="why"></p></div></section>`;
   }
   if(round===4){
-    h+=`<section class="card"><p class="lab">Round 5 · ${RV?'Recommendation':'Conclusion'}</p><p class="do"><b>Which ${RV?'ending':'conclusion'} would you use?</b> Tap one.</p>`+
-       `<div class="intros">${state.ends.map((x,i)=>`<button type="button" class="intro" data-i="${i}"><span class="tag">${RV?'Ending':'Conclusion'} ${'AB'[i]}</span>${esc(x.t)}</button>`).join('')}</div><p class="why" id="why"></p></section>`;
+    h+=`<section class="card"><p class="lab">Round 5 · ${GEN?C.end:'Conclusion'}</p><p class="do"><b>Which ${GEN?'ending':'conclusion'} would you use?</b> Tap one.</p>`+
+       `<div class="intros">${state.ends.map((x,i)=>`<button type="button" class="intro" data-i="${i}"><span class="tag">${GEN?C.endTag:'Conclusion'} ${'AB'[i]}</span>${esc(x.t)}</button>`).join('')}</div><p class="why" id="why"></p></section>`;
+  }
+  /* no link-back words anywhere in this task's samples: the round is skipped */
+  if(round===5&&!state.links.length){
+    h+=`<section class="card"><p class="lab">Round 6 · Link back</p><p class="do">No <i>This / It / They / These</i> to practise in this one — well done, you’re through.</p></section>`;
+    $('main').innerHTML=h; checked=true; next(); return;
   }
   if(round===5){
     h+=`<section class="card"><p class="lab">Round 6 · Link back</p><p class="do"><b>Which word refers back to something already mentioned?</b> One word for each gap.</p>`+
@@ -384,9 +461,9 @@ function wire(){
     box.querySelectorAll('[data-w]').forEach(b=>b.onclick=()=>{ if(checked) return; state.links[i].ans=b.dataset.w;
       box.querySelectorAll('[data-w]').forEach(x=>x.setAttribute('aria-pressed',x===b)); const g=box.querySelector('[data-lg]'); g.textContent=b.dataset.w; g.classList.add('filled');
       $('go').disabled=!state.links.every(x=>x.ans); }); });
-  if(round===3&&RV) $('main').querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{ if(checked) return; const i=+b.dataset.i, T=state.desc;
+  if(round===3&&GEN) $('main').querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{ if(checked) return; const i=+b.dataset.i, T=state.desc;
     T.sel.has(i)?T.sel.delete(i):T.sel.add(i); b.setAttribute('aria-pressed',T.sel.has(i)); $('go').disabled=!T.sel.size; });
-  if(round===3&&!RV){
+  if(round===3&&!GEN){
     const paint=()=>{ $('para').querySelectorAll('[data-g]').forEach(b=>{ const g=state.gaps[+b.dataset.g];
       b.textContent=g.ans||'…'; b.classList.toggle('filled',!!g.ans); b.classList.toggle('on',+b.dataset.g===state.active&&!checked); });
       $('go').disabled=!state.gaps.every(g=>g.ans); };
@@ -401,14 +478,14 @@ function check0(){
   $('main').querySelectorAll('[data-i]').forEach(b=>{ const i=+b.dataset.i, x=state.ideas[i], on=state.sel.has(i); b.disabled=true;
     if(x.ok&&on){ b.classList.add('ok'); right++; } else if(x.ok){ b.classList.add('miss'); } else if(on){ b.classList.add('no'); wrong++; } });
   const pts=Math.max(0,right-wrong); score+=pts>=total-1?1:0;
-  $('why').innerHTML=`<b>${right} of ${total} found${wrong?`, ${wrong} from another question`:''}.</b> The outlined ones also belong. `+(RV?'A review that skips one of them loses <b>Content</b> marks.':'Remember: write about <b>both notes</b> and add <b>one idea of your own</b>.');
+  $('why').innerHTML=`<b>${right} of ${total} found${wrong?`, ${wrong} from another question`:''}.</b> The outlined ones also belong. `+(GEN?C.r1miss:'Remember: write about <b>both notes</b> and add <b>one idea of your own</b>.');
   next();
 }
 function check1(i){
   checked=true; const x=state.intros[i], weak=state.intros.find(y=>!y.ok);
   $('main').querySelectorAll('[data-i]').forEach((b,j)=>{ b.disabled=true; b.classList.add(state.intros[j].ok?'ok':'no'); });
   if(x.ok) score++;
-  $('why').innerHTML=(x.ok?'<b>Yes.</b> ':'<b>Not this one.</b> ')+`The weaker introduction: ${esc(weak.why)} `+(RV?'The good one catches the reader and names what you are reviewing.':'The good one sets the scene, names the topic and says what the essay will do.');
+  $('why').innerHTML=(x.ok?'<b>Yes.</b> ':'<b>Not this one.</b> ')+`The weaker introduction: ${esc(weak.why)} `+(GEN?C.introGood:'The good one sets the scene, names the topic and says what the essay will do.');
   next();
 }
 function checkT(){
@@ -425,7 +502,8 @@ function checkD(){
   $('main').querySelectorAll('[data-i]').forEach(b=>{ const i=+b.dataset.i, x=T.opts[i], on=T.sel.has(i); b.disabled=true;
     if(x.ok&&on){ b.classList.add('ok'); right++; } else if(x.ok){ b.classList.add('miss'); } else if(on){ b.classList.add('no'); wrong++; } });
   if(right>=total-1&&!wrong) score++;
-  $('why').innerHTML=`<b>${right} of ${total} found${wrong?`, ${wrong} from another kind of review`:''}.</b> A negative word can describe it too — a fair review gives both sides.`;
+  $('why').innerHTML=RV?`<b>${right} of ${total} found${wrong?`, ${wrong} from another kind of review`:''}.</b> A negative word can describe it too — a fair review gives both sides.`
+    :`<b>${right} of ${total} found${wrong?`, ${wrong} that ${wrong===1?'doesn’t':'don’t'} fit`:''}.</b> `+({reports:'A report is formal: no chatty words, no exclamation marks.',emails:Q.register==='informal'?'With a friend, sound like yourself — warm and relaxed.':'With someone you don’t know, stay polite and formal from greeting to sign-off.',articles:'An article talks to the reader: questions, surprises, pictures in words.',story:'A story moves through time: sudden events, suspense, one thing after another.'}[TASK]||'');
   next();
 }
 function check2(){
@@ -441,7 +519,7 @@ function check3(i){
   checked=true; const x=state.ends[i], weak=state.ends.find(y=>!y.ok);
   $('main').querySelectorAll('[data-i]').forEach((b,j)=>{ b.disabled=true; b.classList.add(state.ends[j].ok?'ok':'no'); });
   if(x.ok) score++;
-  $('why').innerHTML=(x.ok?'<b>Yes.</b> ':'<b>Not this one.</b> ')+`The weaker conclusion: ${esc(weak.why)} `+(RV?'The good one recommends it clearly and says who would enjoy it.':'The good one states your view and sums up the reasons — no new ideas.');
+  $('why').innerHTML=(x.ok?'<b>Yes.</b> ':'<b>Not this one.</b> ')+`The weaker conclusion: ${esc(weak.why)} `+(GEN?C.endGood:'The good one states your view and sums up the reasons — no new ideas.');
   next();
 }
 /* singular This/It and plural They/These: swapping within a pair is
@@ -460,25 +538,48 @@ function check4(){
 function next(){ $('go').disabled=false; $('go').textContent=round<5?'Next round':'Finish'; }
 function drawEnd(){
   [...$('rounds').children].forEach(s=>s.className='done');
-  $('main').innerHTML=head()+`<section class="card"><div class="score"><b>${score} / 6</b><p>${score===6?'A clean workout. Now write one paragraph of your own.':score>=4?'Nearly there. Now try writing a paragraph.':'Every round makes the next '+(RV?'review':'essay')+' easier. Now try writing a paragraph.'}</p></div></section>`;
-  $('go').textContent=RV?'Write a review':'Expand a point'; $('go').disabled=false;
+  $('main').innerHTML=head()+`<section class="card"><div class="score"><b>${score} / ${state.links.length?6:5}</b><p>${score===(state.links.length?6:5)?'A clean workout. Now write one paragraph of your own.':score>=4?'Nearly there. Now try writing a paragraph.':'Every round makes the next '+(GEN?C.name:'essay')+' easier. Now try writing a paragraph.'}</p></div></section>`;
+  $('go').textContent=GEN?C.write[0]:'Expand a point'; $('go').disabled=false;
   $('newQ').textContent='Another question';
 }
 $('go').onclick=()=>{
   /* the end of the workout leads into writing: same question */
-  if(round===6) return location.href=RV?'/skills/writing/reviews/review-question-selector.html':'/skills/writing/expand.html?q='+encodeURIComponent(Q.id);
-  if(!checked){ if(round===0) return check0(); if(round===2) return checkT(); if(round===3) return RV?checkD():check2(); if(round===5) return check4(); return; }
+  if(round===6) return location.href=GEN?C.write[1]:'/skills/writing/expand.html?q='+encodeURIComponent(Q.id);
+  if(!checked){ if(round===0) return check0(); if(round===2) return checkT(); if(round===3) return GEN?checkD():check2(); if(round===5) return check4(); return; }
   round++; draw(); window.scrollTo({top:0,behavior:'smooth'});
 };
 $('newQ').onclick=newQuestion;
-if(RV){
-  document.title='INTUITY — Review Workout';
-  [...$('rounds').children].forEach((sp,i)=>{ const L=['The task','Intro','Topic','Describe','End','Link'][i]; sp.innerHTML=`<i>${i+1} · </i>${L}`; });
-  const bk=document.querySelector('.back'); if(bk){ bk.href='/skills/writing/gate.html?task=reviews'; bk.textContent='← Review'; }
-  const RB='/skills/writing/reviews/data/';
-  Promise.all([fetch(RB+'review-questions.json').then(r=>r.json()),fetch(RB+'samples.json').then(r=>r.json()),fetch(RB+'topics-adjectives.json').then(r=>r.json())]).then(([q,s,a])=>{
-    QS=q.questions||[]; ADJ=a; Object.keys(s).forEach(k=>{ if(k!=='meta') SM[k]=s[k]; }); newQuestion();
-  }).catch(()=>{ $('main').innerHTML='<p class="state">The workout didn’t load — reload to try again.</p>'; });
+/* every task's questions and samples, read into one shape:
+   QS [{id, topic, question, keyPoints, type, register?, given?}]
+   SM[id] {default|alternative1|alternative2: [{label, sentences}]} */
+const W='/skills/writing/', J=u=>fetch(u).then(r=>r.json());
+const sentsOf=t=>String(t).replace(/[«»]/g,'').replace(/\s+/g,' ').trim().split(/(?<=[.!?])\s+(?=[A-Z“"‘'])/).filter(Boolean);
+function fromHTML(h){ if(!h) return null; const d=document.createElement('div'); d.innerHTML=h;
+  const secs=[...d.querySelectorAll('.report-section')]; if(!secs.length) return null;
+  return secs.map(sc=>({label:(sc.querySelector('.section-heading')||{}).textContent||'',sentences:sentsOf((sc.querySelector('.section-content')||sc).textContent)})); }
+const LOAD={
+  reviews:()=>Promise.all([J(W+'reviews/data/review-questions.json'),J(W+'reviews/data/samples.json'),J(W+'reviews/data/topics-adjectives.json')]).then(([q,s,a])=>{
+    QS=q.questions||[]; ADJ=a; Object.keys(s).forEach(k=>{ if(k!=='meta') SM[k]=s[k]; }); }),
+  reports:()=>Promise.all([J(W+'reports/data/report-questions.json'),J(W+'reports/data/report-samples.json')]).then(([q,s])=>{
+    QS=(q.questions||[]).map(x=>({...x,topic:x.topic||x.title||'Report',type:'report'}));
+    (s.reports||[]).forEach(r=>{ const st=r.styles||{}, ks=Object.keys(st); SM[r.id]={default:fromHTML(st[ks[0]]),alternative1:fromHTML(st[ks[1]]),alternative2:fromHTML(st[ks[2]])};
+      const q=QS.find(x=>x.id===r.id); if(q&&!q.topic) q.topic=r.topic; if(q) q.topic=r.title||q.topic; }); }),
+  emails:()=>Promise.all([J(W+'emails/data/emails-questions-formal.json'),J(W+'emails/data/emails-questions-informal.json'),J(W+'emails/data/email-samples.json')]).then(([f,i,s])=>{
+    QS=[...(f.questions||[]).map(x=>({id:'f-'+x.id,topic:x.topic||'Formal email',question:x.question,keyPoints:x.keyPoints,type:x.type,register:'formal'})),
+        ...(i.emails||[]).map(x=>({id:'i-'+x.id,topic:x.title||'Email to a friend',question:(x.questionData||{}).question||'',keyPoints:(x.questionData||{}).keyPoints||[],type:x.topic,register:'informal'}))];
+    ['formal','informal'].forEach(reg=>Object.keys(s[reg]||{}).forEach(id=>{ const r=s[reg][id]; SM[reg[0]+'-'+id]={default:r.default,alternative1:r.alternative1,alternative2:r.alternative2}; })); }),
+  articles:()=>Promise.all([J(W+'articles/data/article-questions.json'),J(W+'articles/data/article-samples.json')]).then(([q,s])=>{
+    /* an article's "task points" are the questions inside its question */
+    QS=(q.questions||[]).map(x=>({id:x.id,topic:x.title,question:x.question,type:x.type,keyPoints:sentsOf(x.question).filter(t=>(/\?$|^(Describe|Explain|Share|Tell|Say)\b/.test(t))&&t.split(' ').length>3)}));
+    Object.keys(s).forEach(k=>{ if(k!=='meta'&&s[k].default) SM[k]={default:s[k].default}; }); }),
+  story:()=>Promise.all([J(W+'narrative/data/narrative-questions.json'),J(W+'narrative/data/narrative-samples.json')]).then(([q,s])=>{
+    QS=(q.questions||[]).map(x=>({id:x.id,topic:x.title,question:x.prompt,given:x.opening,type:'story',keyPoints:['Begin with the sentence you were given',...(x.mustInclude||[]).map(m=>'Include '+m)]}));
+    (s.samples||[]).forEach(r=>{ const qq=QS.find(x=>x.topic===r.title)||QS.find(x=>x.given===r.question); if(qq) SM[qq.id]={default:(r.paragraphs||[]).map((p,i)=>({label:'Paragraph '+(i+1),sentences:sentsOf(p.text)}))}; }); })};
+if(GEN){
+  document.title='INTUITY — '+C.back+' Workout';
+  [...$('rounds').children].forEach((sp,i)=>{ const L=[C.r1,'Intro','Topic',C.r4,'End','Link'][i]; sp.innerHTML=`<i>${i+1} · </i>${L}`; });
+  const bk=document.querySelector('.back'); if(bk){ bk.href='/skills/writing/gate.html?task='+TASK; bk.textContent='← '+C.back; }
+  LOAD[TASK]().then(newQuestion).catch(e=>{ console.error(e); $('main').innerHTML='<p class="state">The workout didn’t load — reload to try again.</p>'; });
 } else
 Promise.all([fetch(BASE+'essay-questions.json').then(r=>r.json()),fetch(BASE+'samples.json').then(r=>r.json())]).then(([q,s])=>{
   QS=q.questions||[]; let list=s[Object.keys(s)[0]]; if(!Array.isArray(list)) list=Object.values(list);

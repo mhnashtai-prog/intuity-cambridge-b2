@@ -302,6 +302,15 @@ body.board-page .board-toggle .viewtog{margin:0}
 .qb .qdot{font-family:'Anton',Impact,sans-serif;font-size:15px;fill:var(--ring-ink,#E5D1B8);text-anchor:middle;dominant-baseline:central;pointer-events:none}
 .nc-modes .nc-mode.quiet,body .nc-modes .nc-mode.quiet{border-color:transparent!important;background:none!important;color:var(--mute,#8A8378)!important;font-weight:500}
 .nc-modes .nc-mode.quiet[aria-pressed="true"]{background:var(--ink)!important;color:var(--sheet)!important}
+.nc-modes{flex-direction:column;align-items:center;gap:.55rem}
+.gseg{display:inline-flex;padding:3px;border-radius:999px;background:rgba(35,44,49,.07)}
+.gseg button{border:none;background:none;cursor:pointer;border-radius:999px;padding:.55rem 1.1rem;font:600 .74rem var(--f-display,Geist,sans-serif);letter-spacing:.06em;text-transform:uppercase;color:var(--soft,#5C5852)}
+.gseg button[aria-selected="true"]{background:var(--ink,#232C31);color:#FAF8F5}
+.gsub{display:flex;gap:.3rem;flex-wrap:wrap;justify-content:center}
+.gsub[hidden]{display:none}
+.gsub .nc-mode{padding:.35rem .8rem;font-size:.66rem;border:none;background:none;color:var(--mute,#8A8378)}
+.gsub .nc-mode[aria-pressed="true"]{background:none;color:var(--ink,#232C31);box-shadow:inset 0 -2px 0 var(--ink,#232C31);border-radius:0}
+.nc-board.qb:empty{min-height:60vh}
 .nc-modes .nc-sep{align-self:center;font:500 .66rem 'Geist Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--mute,#8A8378);margin:0 .1rem 0 .4rem}
 
 /* ══ THIS PAGE ══ */
@@ -450,17 +459,23 @@ body.look-rings .nc-dial{transition:box-shadow .2s,transform .2s}
 </header>
 
 <main class="wrap nc-wrap">
-  <div class="nc-modes" role="group" aria-label="How to play">
-    <button class="nc-mode" type="button" data-m="q">The Question</button>
-    <span class="nc-sep">or noughts &amp; crosses:</span>
-    <button class="nc-mode quiet" type="button" data-m="solo">Solo</button>
-    <button class="nc-mode quiet" type="button" data-m="duo">Two teams</button>
-    <button class="nc-mode quiet" type="button" data-m="self">Both sides</button>
+  <!-- one choice, two games; Noughts & Crosses' three ways to play only
+       appear once it is chosen -->
+  <div class="nc-modes" role="group" aria-label="Which game">
+    <div class="gseg" role="tablist">
+      <button type="button" role="tab" data-g="q">The Question</button>
+      <button type="button" role="tab" data-g="nc">Noughts &amp; Crosses</button>
+    </div>
+    <div class="gsub" id="gsub" hidden>
+      <button class="nc-mode" type="button" data-m="solo">Solo</button>
+      <button class="nc-mode" type="button" data-m="duo">Two teams</button>
+      <button class="nc-mode" type="button" data-m="self">Both sides</button>
+    </div>
   </div>
   <div class="nc-status" id="status" aria-live="polite"></div>
-  <div class="nc-board" id="board" aria-label="The board">
-    <div class="nc-grid" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-  </div>
+  <!-- empty until the topic loads: no grid flashes before The Question -->
+  <div class="nc-board" id="board" aria-label="The board"></div>
+  <script>if(!/[?&]mode=(solo|duo|self)\b/.test(location.search)) document.getElementById('board').classList.add('qb');</script>
   <p class="nc-how" id="how"></p>
   <div class="nc-foot"><button class="btn" type="button" id="newBoard">New board</button></div>
   <p class="nc-tally" id="tally"></p>
@@ -698,7 +713,16 @@ function paintStatus(){
     :'Take turns. <b>Answer right</b> and the ring is yours. <b>Answer wrong</b> and '+(RINGS?'it is knocked':'the string snaps')+' — it comes back as a different game, still open for the other side. First to three in a row wins.';
   $('tally').textContent=mode==='solo'?'':`${NAMES[mode].O} ${tally.O} · ${NAMES[mode].X} ${tally.X} · Draws ${tally.D}`;
 }
-function drawModes(){ document.body.classList.toggle('duel',mode==='duo'||mode==='self'); document.querySelectorAll('.nc-mode').forEach(b=>{ b.setAttribute('aria-pressed',b.dataset.m===mode); b.onclick=()=>{ if(b.dataset.m===mode) return; mode=b.dataset.m; tally={O:0,X:0,D:0}; drawModes(); deal(); }; }); }
+let lastNC='solo';
+function drawModes(){
+  document.body.classList.toggle('duel',mode==='duo'||mode==='self');
+  const q=mode==='q'; if(!q) lastNC=mode;
+  document.querySelectorAll('.gseg [data-g]').forEach(b=>{ const on=(b.dataset.g==='q')===q; b.setAttribute('aria-selected',on);
+    b.onclick=()=>{ const want=b.dataset.g==='q'?'q':lastNC; if(want===mode) return; mode=want; tally={O:0,X:0,D:0}; closeCard(true); drawModes(); deal(); }; });
+  $('gsub').hidden=q;
+  document.querySelectorAll('.gsub .nc-mode').forEach(b=>{ b.setAttribute('aria-pressed',b.dataset.m===mode);
+    b.onclick=()=>{ if(b.dataset.m===mode) return; mode=b.dataset.m; tally={O:0,X:0,D:0}; drawModes(); deal(); }; });
+}
 $('newBoard').onclick=()=>{ closeCard(true); deal(); };
 
 /* ══ THE FOCUS CARD ══ */

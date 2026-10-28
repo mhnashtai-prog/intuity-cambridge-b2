@@ -9,336 +9,248 @@
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@400..600&family=Anton&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════════════════════════════════
-   WRITING — WATCH FIRST (27 Oct 2026, v2)
+   WRITING — WATCH (28 Oct 2026, v3: three clips on one recorded take)
 
-   A 9:16 presentation that plays itself, built from the SAME poster card
-   the student meets behind "Open ›": caramel label, Anton title, the line
-   in Geist, the "1 / 5" counter and the Next pill. On screen the card
-   ROLLS through the sheet's real phrases, PICKS one, and the blanks FILL
-   as the voice says them — the decision the paper sheet asks for, shown
-   once, so the card is familiar when they tap it themselves.
-
-   Every frame is a pure function of one clock t (seconds): the recording's
-   currentTime, or the wall clock without one. So the page plays in the
-   app, records cleanly (?rec=1), and renders frame by frame into an MP4
-   (window.WATCH.seek). One take: the slides find their places in the
-   ElevenLabs file by its pauses (?make=1 → Load recording).
+   Watch-and-listen only: no blanks, no buttons to press inside the frame,
+   nothing to get right. The voice builds one review (Café Azul); after
+   each "Here are some more examples" six finished models roll past in
+   silence, the current paragraph open, the rest folded so the shape of
+   the whole review stays in view. Three marks, three meanings:
+     sage underlay  = the expression you borrow from the sheet
+     caramel box    = the thing being reviewed (yours, every time)
+     underline      = the linker that carries the idea on
+   Every frame is a pure function of one clock t: the recording's
+   currentTime. ?rec=1 hides the controls; window.WATCH.seek renders MP4s.
    ═══════════════════════════════════════════════════════════════════════ */
 :root{
-  --paper:#F3F1EC; --card:#FBFAF7; --ink:#141210; --dim:#5C5852; --faint:#8C867E; --line:rgba(20,17,14,.18);
+  --paper:#F3F1EC; --card:#FBFAF7; --ink:#141210; --dim:#5C5852; --faint:#8C867E; --line:rgba(20,17,14,.14);
   --sage:#8AA79C; --sage-ink:#4F6B61; --caramel:#A9875F; --caramel-ink:#7A5C3A;
   --anton:'Anton',Impact,sans-serif; --geist:'Geist',system-ui,sans-serif; --mono:'Geist Mono',ui-monospace,monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:#201E1C;color:var(--ink);font-family:var(--geist);-webkit-font-smoothing:antialiased}
-body{display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;
-  padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
 #fit{position:relative;flex:none}
 #stage{position:absolute;left:0;top:0;width:360px;height:640px;transform-origin:0 0;background:var(--paper);overflow:hidden;cursor:pointer}
 html.rec,html.rec body{background:var(--paper)}
 
-/* furniture: four bars = the four paragraphs */
 .bars{position:absolute;left:20px;right:20px;top:18px;display:flex;gap:5px;z-index:3}
 .bars i{flex:1;height:3px;background:rgba(20,17,14,.12);border-radius:2px;overflow:hidden}
 .bars i b{display:block;height:100%;width:0;background:var(--ink)}
-.brand{position:absolute;left:24px;bottom:20px;z-index:3;font:500 9.5px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+.lab{position:absolute;left:20px;top:38px;display:flex;align-items:center;gap:9px;z-index:3;font:600 10px/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:#6B655C}
+.lab::before{content:"";width:24px;height:8px;background:var(--caramel)}
+.brand{position:absolute;left:20px;bottom:18px;z-index:3;font:500 9.5px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
 .brand b{color:var(--ink);font-weight:600}
+.sc{position:absolute;left:20px;right:20px;top:62px;bottom:40px;display:flex;flex-direction:column;justify-content:center;gap:14px}
 
-.sl{position:absolute;left:20px;right:20px;top:40px;bottom:44px;display:flex;flex-direction:column;justify-content:center;gap:14px}
-.rv{will-change:opacity,transform}
+/* the three marks */
+.x{background:linear-gradient(transparent 58%,rgba(138,167,156,.45) 58%);-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.nm{border:1.5px solid rgba(169,135,95,var(--nb,1));background:rgba(169,135,95,calc(var(--nb,1)*.13));border-radius:3px;padding:0 3px;-webkit-box-decoration-break:clone;box-decoration-break:clone;font-weight:600}
+.lk{text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px;text-decoration-color:var(--ink);font-weight:600}
 
-/* THE card — the poster card from open-card.js, at 360 wide */
-.card{background:var(--card);padding:20px 18px 14px;box-shadow:0 1px 0 rgba(20,17,14,.05),0 18px 40px -24px rgba(20,17,14,.35)}
-.ml{display:flex;align-items:center;gap:10px;font:600 10px/1 var(--mono);letter-spacing:.24em;text-transform:uppercase;color:#6B655C}
-.ml::before{content:"";width:28px;height:9px;background:var(--caramel);flex:none}
-.mt{margin-top:12px;padding-bottom:12px;border-bottom:1.5px solid var(--line);font:400 34px/1.02 var(--anton);text-transform:uppercase;letter-spacing:.005em}
-.mb{padding:16px 0 18px;min-height:168px;display:flex;align-items:center}
-.mline{font:400 21px/1.5 var(--geist);color:var(--ink)}
-.mline.raw{color:#3a3632}
-.mline .bl{display:inline-block;min-width:46px;border-bottom:2.5px solid var(--sage);line-height:1.05;color:transparent;vertical-align:baseline}
-.mline .fl{font-weight:650;color:var(--sage-ink);background:linear-gradient(transparent 64%,rgba(138,167,156,.38) 64%);border-radius:1px}
-.mfoot{display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:1.5px solid var(--line)}
-.mv{font:400 15px/1 var(--geist);color:#6B655C}
-.mv b{color:var(--ink);font-weight:800}
-.mv .ok{display:inline-block;margin-left:8px;font:600 9.5px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:#fff;background:var(--sage);padding:5px 7px;border-radius:999px;vertical-align:2px}
-.mnext{background:var(--ink);color:#fff;border-radius:999px;padding:10px 17px;font:700 14px/1 var(--geist)}
-.tip{display:flex;gap:10px;align-items:baseline;font:500 17px/1.35 var(--geist);color:var(--ink);padding:0 4px}
-.tip::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--caramel);flex:none;transform:translateY(-1px)}
-
-/* the map: one page, four paragraphs */
-.mega{font:400 98px/.88 var(--anton);text-transform:uppercase;letter-spacing:-.01em}
-.types{font:400 14px/1.4 var(--geist);color:var(--dim);margin-top:-4px}
-.page{background:var(--card);padding:14px 14px 12px;display:flex;flex-direction:column;gap:7px;box-shadow:0 18px 40px -24px rgba(20,17,14,.35)}
-.para{display:grid;grid-template-columns:1fr auto;align-items:center;padding:10px 12px;background:#EDE9E2;border-left:5px solid #D8D1C6;transition:none}
-.para small{font:600 9.5px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--faint)}
-.para span{grid-column:1;font:600 16px/1.2 var(--geist);color:#A39C92;margin-top:5px}
-.para em{grid-row:1/3;grid-column:2;font:400 26px/1 var(--anton);color:#CFC8BD;font-style:normal}
-.para.f{min-height:66px}
-.para.on{background:#fff;border-left-color:var(--sage)}
-.para.on small{color:var(--sage-ink)} .para.on span{color:var(--ink)} .para.on em{color:var(--sage)}
+/* clip 1 opening */
+.mega{font:400 104px/.86 var(--anton);text-transform:uppercase;letter-spacing:-.01em}
 .words{font:400 30px/1 var(--anton);color:var(--caramel-ink);text-transform:uppercase}
+.k{font:600 9.5px/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--faint);margin-bottom:-6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips span{font:500 15px/1 var(--geist);padding:9px 12px;border-radius:999px;background:var(--card);border:1px solid var(--line)}
+.does{display:flex;flex-direction:column;gap:10px}
+.does div{display:flex;gap:12px;align-items:baseline;font:500 20px/1.25 var(--geist)}
+.does div::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--sage);flex:none;transform:translateY(-2px)}
 
-/* choose: three small cards */
-.h{font:400 34px/1.02 var(--anton);text-transform:uppercase}
-.cards{display:flex;flex-direction:column;gap:9px}
-.cards div{background:var(--card);padding:13px 15px;font:400 18px/1.32 var(--geist);border-left:5px solid var(--sage)}
-.cards div small{display:block;font:600 9.5px/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--sage-ink);margin-bottom:7px}
-.cards div.neg{border-left-color:var(--caramel)} .cards div.neg small{color:var(--caramel-ink)}
-.never{display:flex;flex-direction:column;gap:14px}
-.never div{font:400 24px/1.2 var(--geist);color:var(--dim);display:grid;grid-template-columns:30px 1fr;align-items:baseline}
-.never div::before{content:"✕";font:600 21px/1 var(--geist);color:#A4543A}
-.never div span{text-decoration:line-through;text-decoration-color:#A4543A;text-decoration-thickness:2px}
-.big{font:400 62px/.95 var(--anton);text-transform:uppercase}
-.sub{font:400 21px/1.3 var(--geist);color:var(--dim)}
+/* the review page */
+.pg{background:var(--card);padding:16px 16px 14px;box-shadow:0 1px 0 rgba(20,17,14,.05),0 18px 40px -26px rgba(20,17,14,.4)}
+.ph{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:1.5px solid var(--line);margin-bottom:6px}
+.ph b{font:400 22px/1 var(--anton);text-transform:uppercase;letter-spacing:.01em}
+.ph span{font:500 13px/1 var(--geist);color:var(--faint)}
+.ph span em{font-style:normal;color:var(--ink);font-weight:800}
+.row{padding:7px 0 7px 10px;border-left:3px solid transparent}
+.row small{display:block;font:600 9px/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--faint)}
+.row .fold{margin-top:5px;font:400 13px/1.2 var(--geist);color:#B3ACA2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row.op{border-left-color:var(--sage);padding:9px 0 10px 11px}
+.row.op small{color:var(--sage-ink)}
+.row .tx{margin-top:7px;font:400 17px/1.5 var(--geist);color:var(--ink)}
+.row .sn{display:block;margin-top:9px;font:400 18.5px/1.45 var(--geist)}
+.row .sn:first-of-type{margin-top:6px}
+.row .sn i{display:block;font:600 9px/1 var(--mono);font-style:normal;letter-spacing:.18em;text-transform:uppercase;color:var(--caramel-ink);margin-bottom:5px}
+.notes{display:flex;flex-direction:column;gap:7px;margin-top:10px;padding-left:14px}
+.notes div{display:flex;gap:9px;align-items:baseline;font:500 15px/1.3 var(--geist);color:var(--dim)}
+.notes div::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--caramel);flex:none}
+.legend{display:flex;justify-content:center;gap:14px;font:400 12px/1 var(--geist);color:var(--dim)}
+.car{position:relative;overflow:visible}
+.track{display:flex;gap:16px;will-change:transform}
+.track .pg{flex:0 0 320px;width:320px;min-width:0}
+.pg.dense .ph{padding-bottom:7px;margin-bottom:2px} .pg.dense .ph b{font-size:19px}
+.pg.dense .row{padding-top:5px;padding-bottom:5px} .pg.dense .row.op{padding-top:6px;padding-bottom:6px}
+.pg.dense .sn{font-size:16.5px;line-height:1.38;margin-top:6px} .pg.dense .row .fold{margin-top:3px}
+
+.big{font:400 66px/.95 var(--anton);text-transform:uppercase}
+.sub{font:400 20px/1.35 var(--geist);color:var(--dim)}
+.go{align-self:flex-start;background:var(--sage);color:#fff;font:600 17px/1 var(--geist);padding:15px 22px;border-radius:999px;text-decoration:none}
 
 /* controls — app only */
 .ctl{width:min(100vw,460px);display:flex;flex-wrap:wrap;justify-content:center;gap:6px;padding:12px 12px 4px;flex:none}
-.ctl button,.ctl a{font:500 12.5px/1 var(--geist);color:#E9E4DB;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);
-  padding:9px 12px;border-radius:999px;cursor:pointer;text-decoration:none}
+.ctl button,.ctl a{font:500 12.5px/1 var(--geist);color:#E9E4DB;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);padding:9px 12px;border-radius:999px;cursor:pointer;text-decoration:none}
 .ctl button.on{background:#F3F1EC;color:#201E1C;border-color:#F3F1EC}
 .ctl a{background:none;border-color:transparent;color:#B9B2A7}
-.rec .ctl,.rec .make{display:none}
-.veil{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:9;
-  background:rgba(243,241,236,.84);backdrop-filter:blur(2px);font:600 15px/1 var(--geist);color:var(--ink)}
+.rec .ctl{display:none}
+.veil{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:9;background:rgba(243,241,236,.84);backdrop-filter:blur(2px);font:600 15px/1 var(--geist);color:var(--ink)}
 .veil[hidden]{display:none}
 .veil .play{width:74px;height:74px;border-radius:50%;background:var(--ink);display:grid;place-items:center}
 .veil .play::after{content:"";margin-left:6px;border-left:22px solid var(--paper);border-top:14px solid transparent;border-bottom:14px solid transparent}
-.veil .row{display:flex;gap:8px}
-.veil .row a,.veil .row button{font:600 15px/1 var(--geist);padding:13px 18px;border-radius:999px;border:1.5px solid var(--ink);background:none;color:var(--ink);text-decoration:none;cursor:pointer}
-.veil .row a{background:var(--ink);color:#fff}
-.make{width:min(100vw,460px);padding:10px 14px 14px;color:#E9E4DB;font:400 12.5px/1.45 var(--geist);flex:none}
-.make label,.make button{display:inline-block;font:600 12.5px/1 var(--geist);background:#8AA79C;color:#fff;border:0;border-radius:999px;padding:10px 14px;cursor:pointer;margin:4px 6px 4px 0}
-.make p{color:#B9B2A7;margin-top:6px}
-.make input{display:none}
+.veil .vr{display:flex;gap:8px}
+.veil .vr a,.veil .vr button{font:600 15px/1 var(--geist);padding:13px 18px;border-radius:999px;border:1.5px solid var(--ink);background:none;color:var(--ink);text-decoration:none;cursor:pointer}
+.veil .vr a{background:var(--ink);color:#fff}
 </style>
 </head>
 <body>
 <div id="fit"><div id="stage">
   <div class="bars" id="bars"></div>
-  <div class="sl" id="sl"></div>
+  <div class="lab" id="lab"></div>
+  <div class="sc" id="sc"></div>
   <div class="brand"><b>INTUITY</b> · B2 First</div>
-  <div class="veil" id="veil"><div class="play" id="vplay"></div><div id="vtx">Tap to watch</div><div class="row" id="vrow" hidden></div></div>
+  <div class="veil" id="veil"><div class="play" id="vplay"></div><div id="vtx">Tap to watch</div><div class="vr" id="vrow" hidden></div></div>
 </div></div>
 <nav class="ctl" id="ctl"></nav>
-<div class="make" id="make" hidden>
-  <label>Load recording (MP3)<input type="file" id="file" accept="audio/*"></label>
-  <button id="recgo" type="button">Full screen &amp; play</button>
-  <p id="mk">One take from ElevenLabs. The slides find their places by the pauses.</p>
-</div>
 <script>
 (function(){
 'use strict';
 const Q=new URLSearchParams(location.search);
-const TASK=Q.get('task')||'reviews', REC=Q.has('rec'), MAKE=Q.has('make');
+const TASK=Q.get('task')||'reviews', REC=Q.has('rec');
 if(REC) document.documentElement.classList.add('rec');
 const $=id=>document.getElementById(id);
 const stage=$('stage'), fit=$('fit');
-let D=null, S=[], start=[], speak=[], END=0, audio=null, marks=null;
-let playing=false, t0=0, tAt=0, to=Infinity, built=-1, part=-1, key='';
+let D=null, SC=[], END=0, audio=null, playing=false, t0=0, tAt=0, to=Infinity, built=-1, part=-1;
 
 function size(){
-  const ch=REC?0:($('ctl').offsetHeight+(MAKE&&!$('make').hidden?$('make').offsetHeight:0));
-  const k=Math.min(innerWidth/360,(innerHeight-ch)/640);
+  const ch=REC?0:$('ctl').offsetHeight, k=Math.min(innerWidth/360,(innerHeight-ch)/640);
   fit.style.width=360*k+'px'; fit.style.height=640*k+'px'; stage.style.transform='scale('+k+')';
 }
 addEventListener('resize',size);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+/* {expression}  <name>  _linker_  → the three marks */
+const mark=s=>s.replace(/\{([^}]*)\}|<([^>]*)>|_([^_]*)_|([^{<_]+)/g,(m,x,n,l,p)=>
+  x!=null?'<span class="x">'+esc(x)+'</span>':n!=null?'<span class="nm">'+esc(n)+'</span>':l!=null?'<span class="lk">'+esc(l)+'</span>':esc(p));
+const plain=s=>s.replace(/[{}<>_]/g,'');
+const ease=p=>1-Math.pow(1-p,3), cl=v=>Math.min(1,Math.max(0,v));
 
-/* where in the spoken line a phrase is said (0–1), searching from word `from` */
-const norm=s=>s.toLowerCase().replace(/[’']/g,'').replace(/[^a-z0-9é ]+/g,' ').split(/\s+/).filter(Boolean);
-function wpos(say,needle,from){
-  const w=norm(say), n=norm(needle).slice(0,3);
-  for(let i=from||0;i<=w.length-n.length;i++) if(n.every((x,j)=>w[i+j]===x)) return i;
-  return -1;
+/* one page of a review: open paragraphs in full, the others folded */
+function page(M,open,opt){
+  opt=opt||{};
+  let h='<div class="pg'+(open.length>1?' dense':'')+'"><div class="ph"><b>'+esc(M.tag)+'</b>'+(opt.count?'<span><em>'+opt.count[0]+'</em> / '+opt.count[1]+'</span>':'<span>Review</span>')+'</div>';
+  M.p.forEach((sents,i)=>{
+    const lab=esc(D.paraLabels[i]);
+    if(!open.includes(i)){ h+='<div class="row"><small>'+lab+'</small><div class="fold">'+esc(plain(sents.join(' ')))+'</div></div>'; return; }
+    h+='<div class="row op"><small>'+lab+'</small>';
+    if(opt.show){                       /* the voice builds it, sentence by sentence */
+      sents.forEach((s,j)=>{ const k=i+'.'+j, t=opt.show[k]; if(t==null) return;
+        const L=opt.labels&&opt.labels[k];
+        h+='<span class="sn rv" data-t="'+(L?Math.min(L[1],t):t)+'">'+(L?'<i class="rv" data-t="'+L[1]+'">'+esc(L[0])+'</i>':'')
+          +'<span class="rv" data-t="'+t+'">'+mark(s)+'</span></span>'; });
+    }else h+='<div class="tx">'+sents.map(mark).join(' ')+'</div>';
+    h+='</div>';
+  });
+  if(opt.notes) h+='<div class="notes">'+opt.notes.map(n=>'<div class="rv" data-t="'+n[1]+'">'+esc(n[0])+'</div>').join('')+'</div>';
+  return h+'</div>';
 }
-function frac(say,needle,fb,from){ const i=wpos(say,needle,from); return i<0?fb:i/norm(say).length; }
-const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-
-const WPS=2.55;
-function timeline(){
-  start=[]; speak=[];
-  if(marks&&marks.length===S.length){
-    start=marks.slice();
-    END=(audio&&audio.duration&&isFinite(audio.duration))?audio.duration+1.6:start[start.length-1]+8;
-    S.forEach((x,i)=>{ const nxt=i<S.length-1?start[i+1]:END-1.6; speak[i]=Math.max(1.2,nxt-start[i]-0.8); });
-  }else{
-    let t=0.6;
-    S.forEach((x,i)=>{ start[i]=t; speak[i]=x.say.split(/\s+/).length/WPS;
-      t+=speak[i]+(i<S.length-1&&S[i+1].part!==x.part?1.5:1.0); });
-    END=t+1.6;
-  }
-  S.forEach((x,i)=>plan(x,speak[i]));
-}
-const partStart=p=>{ const i=S.findIndex(x=>x.part===p); return i<=0?0:start[i]-0.35; };
-const partEnd=p=>{ const i=S.findIndex(x=>x.part>p); return i<0?END:start[i]-0.35; };
-
-/* the seconds (into the slide) at which things happen, from the words */
-function plan(x,sp){
-  const at=f=>Math.max(0,f*sp-0.15);
-  if(x.kind==='pick'){
-    const N=x.opts.length, ex=x.line.split('…')[0].trim();
-    const exI=wpos(x.say,ex);
-    const land=at(exI<0?0.45:exI/norm(x.say).length)-0.25;
-    const roll0=Math.min(land-1.2,at(frac(x.say,'roll',0.15)));
-    x._seq=[]; for(let k=1;k<=N;k++) x._seq.push((x.pick+k)%N);      /* ends on the pick */
-    x._roll=[Math.max(0.3,roll0),Math.max(0.6,land)];
-    x._fill=x.fills.map(f=>Math.max(land+0.2,at(frac(x.say,f,0.7,exI<0?0:exI))));
-    x._tip=x.tip?at(frac(x.say,x.tip,0.85)):0;
-  }
+function legend(c){
+  const L=[['x','expression'],c===1?['lk','linker']:['nm','what is reviewed']];
+  return '<div class="legend">'+L.map(([k,w])=>'<span><span class="'+k+'">'+w+'</span></span>').join('')+'</div>';
 }
 
 function build(i){
-  const x=S[i], sp=speak[i];
-  const at=f=>Math.max(0,f*sp-0.15).toFixed(2);
-  const r=(cls,f,html,tag)=>'<'+(tag||'div')+' class="rv '+cls+'" data-t="'+at(f)+'">'+html+'</'+(tag||'div')+'>';
-  let h='';
-  switch(x.kind){
-    case 'map':
-      h=r('mega',0,esc(x.big))+r('types',frac(x.say,'A film',0.2),esc(x.types))
-        +'<div class="page rv" data-t="'+at(frac(x.say,'four paragraphs',0.35))+'">'
-        +x.blocks.map((b,k)=>'<div class="para'+(k===1||k===2?' f':'')+'" data-on="'+at(frac(x.say,b[2],0.4+k*.12))+'"><small>'+esc(b[0])+'</small><span>'+esc(b[1])+'</span><em>'+(k+1)+'</em></div>').join('')
-        +'</div>'+r('words',frac(x.say,'One hundred',0.85),esc(x.words)); break;
-    case 'pick':
-      h='<div class="card rv" data-t="0"><div class="ml">'+esc(x.band)+'</div><div class="mt">'+esc(x.head)+'</div>'
-        +'<div class="mb"><div class="mline" id="mline"></div></div>'
-        +'<div class="mfoot"><span class="mv" id="mv"></span><span class="mnext" id="mnext">Next ›</span></div></div>'
-        +(x.tip?'<div class="tip rv" data-t="'+x._tip.toFixed(2)+'">'+esc(x.tip)+'</div>':''); break;
-    case 'choose':
-      h=r('h',0,esc(x.head))+'<div class="cards">'+x.lines.map(([k,s],j)=>'<div class="rv'+(k==='Negative'?' neg':'')+'" data-t="'+at(frac(x.say,s,(j+1)/4))+'"><small>'+esc(k)+'</small>'+esc(s)+'</div>').join('')+'</div>'; break;
-    case 'never': h=r('h',0,'Never')+'<div class="never">'+x.lines.map((l,k)=>'<div class="rv" data-t="'+at(frac(x.say,l,(k+1)/3))+'"><span>'+esc(l)+'</span></div>').join('')+'</div>'; break;
-    case 'end': h=r('big',0,esc(x.big))+r('sub',frac(x.say,'Roll',0.4),esc(x.sub)); break;
+  const s=SC[i]; let h='';
+  if(s.kind==='def'){
+    h='<div class="mega rv" data-t="0.1">'+esc(s.big)+'</div><div class="words rv" data-t="'+s.wt+'">'+esc(s.words)+'</div>'
+     +'<div class="k rv" data-t="'+s.for[0][1]+'">Written for</div><div class="chips">'+s.for.map(f=>'<span class="rv" data-t="'+f[1]+'">'+esc(f[0])+'</span>').join('')+'</div>'
+     +'<div class="k rv" data-t="'+s.does[0][1]+'">It</div><div class="does">'+s.does.map(f=>'<div class="rv" data-t="'+f[1]+'">'+esc(f[0])+'</div>').join('')+'</div>';
+  }else if(s.kind==='page'){
+    h='<div class="rv" data-t="'+s.t+'">'+page(D.azul,s.open,{show:s.show,labels:s.labels,notes:s.notes})+'</div>'+legend(s.clip);
+  }else if(s.kind==='car'){
+    h='<div class="car"><div class="track" id="track">'+D.models.map((M,k)=>page(M,s.open,{count:[k+1,D.models.length]})).join('')+'</div></div>'+legend(s.clip);
+  }else if(s.kind==='end'){
+    h='<div class="big rv" data-t="'+s.t+'">'+esc(s.big)+'</div><div class="sub rv" data-t="'+(s.t+0.4)+'">'+esc(s.sub)+'</div>'
+     +'<a class="go rv" data-t="'+(s.t+1.2)+'" href="'+(REC?'#':D.try)+'">'+esc(s.btn)+'</a>';
   }
-  $('sl').innerHTML=h; built=i; key='';
-}
-const ease=p=>1-Math.pow(1-p,3), cl=v=>Math.min(1,Math.max(0,v));
-
-/* the card's line at instant `l` seconds into the slide */
-function drawPick(x,l){
-  const [r0,r1]=x._roll, N=x.opts.length;
-  let idx, picked=l>=r1;
-  if(l<r0) idx=x._seq[N-1]===x.pick?(x.pick+1)%N:x._seq[0];
-  else if(!picked) idx=x._seq[Math.min(N-1,Math.floor((l-r0)/((r1-r0)/N)))];
-  else idx=x.pick;
-  const nf=picked?x._fill.filter(t=>l>=t).length:0;
-  const k=idx+'|'+picked+'|'+nf;
-  if(k!==key){
-    key=k;
-    let html;
-    if(!picked) html='<div class="mline raw">'+esc(x.opts[idx]).replace(/…/g,'<span class="bl">…</span>')+'</div>';
-    else{ let j=0; html='<div class="mline">'+esc(x.line).replace(/…/g,()=>{ const f=x.fills[j], t=x._fill[j]; j++;
-            return j>nf?'<span class="bl">…</span>':'<span class="fl" data-f="'+t.toFixed(2)+'">'+esc(f)+'</span>'; })+'</div>'; }
-    $('mline').outerHTML=html.replace('<div class="mline','<div id="mline" class="mline');
-    $('mv').innerHTML='<b>'+(idx+1)+'</b> / '+N+(picked?'<span class="ok">Picked</span>':'');
-  }
-  /* blanks fill as they are said; the Next pill "taps" on every roll */
-  $('mline').querySelectorAll('.fl').forEach(el=>{ const p=ease(cl((l-(+el.dataset.f))/0.35)); el.style.opacity=.15+.85*p; });
-  const step=(r1-r0)/N, ph=l>=r0&&l<r1?((l-r0)%step)/step:1;
-  $('mnext').style.transform='scale('+(ph<.18?1-.08*Math.sin(ph/.18*Math.PI):1)+')';
+  $('sc').innerHTML=h; built=i;
+  $('lab').textContent=(s.clip+1)+' · '+D.parts[s.clip];
 }
 
 function draw(t){
-  let i=0; while(i<S.length-1&&t>=start[i+1]-0.35) i++;
+  let i=0; while(i<SC.length-1&&t>=SC[i+1].t) i++;
   if(i!==built) build(i);
-  const x=S[i], local=t-start[i]+0.35, out=i<S.length-1?start[i+1]-0.35-t:99;
-  const enter=ease(cl(local/0.45)), leave=cl(out/0.3);
-  const sl=$('sl'); sl.style.opacity=Math.min(enter,leave); sl.style.transform='translateY('+((1-enter)*18-(1-leave)*10).toFixed(1)+'px)';
-  const l=local-0.35;
-  sl.querySelectorAll('.rv').forEach(el=>{ const p=ease(cl((l-(+el.dataset.t))/0.4));
-    el.style.opacity=p; el.style.transform='translateY('+((1-p)*12).toFixed(1)+'px)'; });
-  sl.querySelectorAll('[data-on]').forEach(el=>el.classList.toggle('on',l>=+el.dataset.on));
-  if(x.kind==='pick') drawPick(x,l);
-  /* the bars are the paragraphs: intro · feature · feature · recommendation */
-  const bs=$('bars').children, seg=[[partStart(1),partEnd(1)],[partStart(2),(partStart(2)+partEnd(2))/2],[(partStart(2)+partEnd(2))/2,partEnd(2)],[partStart(3),partEnd(3)]];
-  for(let p=0;p<bs.length;p++){ const [a,b]=seg[p]; bs[p].firstChild.style.width=(cl((t-a)/(b-a))*100)+'%'; }
+  const s=SC[i], nxt=i<SC.length-1?SC[i+1].t:1e9;
+  const enter=ease(cl((t-s.t)/0.45)), leave=cl((nxt-t)/0.3), sc=$('sc');
+  sc.style.opacity=Math.min(i===0?1:enter,leave); sc.style.transform='translateY('+((i===0?0:(1-enter)*16)-(1-leave)*8).toFixed(1)+'px)';
+  sc.querySelectorAll('.rv').forEach(el=>{ const p=ease(cl((t-(+el.dataset.t))/0.45));
+    el.style.opacity=p; el.style.transform=el.tagName==='SPAN'&&!el.classList.contains('sn')?'':'translateY('+((1-p)*10).toFixed(1)+'px)';
+    if(el.tagName==='SPAN'&&!el.classList.contains('sn')) el.querySelectorAll('.nm').forEach(n=>n.style.setProperty('--nb',cl((t-(+el.dataset.t)-0.55)/0.4).toFixed(2))); });
+  if(s.kind==='car'){
+    const N=D.models.length, f=Math.max(0,t-s.t-0.6)/s.step, k=Math.min(N-1,Math.floor(f)), w=f-k;
+    const x=k+(k<N-1?ease(cl((w*s.step-(s.step-0.5))/0.5)):0);
+    $('track').style.transform='translateX('+(-x*336).toFixed(1)+'px)';
+  }
+  const bs=$('bars').children;
+  D.clips.forEach(([a,b],p)=>{ bs[p].firstChild.style.width=(cl((t-a)/(b-a))*100)+'%'; });
 }
 
-/* the clock */
-const now=()=>audio&&!audio.paused?audio.currentTime:(playing?tAt+(performance.now()-t0)/1000:tAt);
+/* the clock: the recording, or the wall clock if it cannot play */
+const now=()=>audio&&!audio.paused&&audio.currentTime>0?audio.currentTime:audio&&playing&&audio.readyState<3?tAt:(playing?tAt+(performance.now()-t0)/1000:tAt);
 function loop(){ if(!playing) return; const t=now(); draw(t); if(t>=to){ stop(); return; } requestAnimationFrame(loop); }
 function play(a,b){
-  to=b; tAt=a; playing=true; $('veil').hidden=true;
-  if(audio){ audio.currentTime=a; audio.play().catch(()=>{ audio=null; }); }
-  t0=performance.now(); requestAnimationFrame(loop);
+  to=b; tAt=a; playing=true; $('veil').hidden=true; t0=performance.now();
+  if(audio){
+    const A=audio, start=()=>{ A.currentTime=a; A.play().catch(()=>{ audio=null; t0=performance.now(); }); };
+    if(A.readyState>=1) start(); else { A.addEventListener('loadedmetadata',start,{once:true}); A.load(); }
+  }
+  requestAnimationFrame(loop);
 }
-function pause(){ tAt=now(); playing=false; if(audio) audio.pause(); veil('Paused · tap to go on'); }
+function pause(){ tAt=now(); playing=false; if(audio) audio.pause(); veil('Paused · tap to go on','pause'); }
 function resume(){ if(audio){ audio.currentTime=tAt; audio.play(); } playing=true; t0=performance.now(); $('veil').hidden=true; requestAnimationFrame(loop); }
-function stop(){
-  playing=false; if(audio) audio.pause(); tAt=to;
-  if(REC) return;
-  /* the hand-over: watch the pattern, then do it on the card */
-  veil(part<0?'That’s a review.':'That’s the '+D.parts[part].toLowerCase()+'.','end');
-}
+function stop(){ playing=false; if(audio) audio.pause(); tAt=to; if(!REC) veil(part<0?'That’s the whole review.':'End of clip '+(part+1)+'.','end'); }
 function veil(txt,mode){
-  const v=$('veil'), row=$('vrow'); v.hidden=false; $('vtx').textContent=txt; v.dataset.mode=mode||'';
+  const v=$('veil'), row=$('vrow'); v.hidden=false; $('vtx').textContent=txt; v.dataset.mode=mode;
   $('vplay').hidden=mode==='end'; row.hidden=mode!=='end';
-  if(mode==='end') row.innerHTML='<button type="button" id="again">↻ Again</button>'+(D.try?'<a href="'+D.try+'">Try it on the cards ›</a>':'');
-  const ag=$('again'); if(ag) ag.onclick=e=>{ e.stopPropagation(); go(part); };
+  if(mode==='end'){
+    const nx=part>=0&&part<D.parts.length-1?'<button type="button" id="vnext">Clip '+(part+2)+' ›</button>':'';
+    row.innerHTML='<button type="button" id="again">↻ Again</button>'+nx+(part<0||part===D.parts.length-1?'<a href="'+D.try+'">Open the cards ›</a>':'');
+    $('again').onclick=e=>{ e.stopPropagation(); go(part); };
+    if($('vnext')) $('vnext').onclick=e=>{ e.stopPropagation(); go(part+1); };
+  }
 }
 stage.onclick=e=>{
-  if(e.target.closest('.row')) return;
+  if(e.target.closest('.vr')||e.target.closest('.go')) return;
   if(playing) return pause();
-  const m=$('veil').dataset.mode;
-  if(m==='start'||m==='end') return go(part);
-  resume();
+  const m=$('veil').dataset.mode; if(m==='pause') return resume(); go(part);
 };
 function go(p){
   part=p;
   [...$('ctl').querySelectorAll('button')].forEach(b=>b.classList.toggle('on',+b.dataset.p===p));
-  if(p<0) play(0,END); else play(partStart(p),partEnd(p));
-}
-
-/* the recording: find the pauses between slides */
-function findMarks(buf){
-  const ch=buf.getChannelData(0), hop=Math.round(buf.sampleRate*0.02), n=Math.floor(ch.length/hop), rms=new Float32Array(n);
-  let mx=0;
-  for(let f=0;f<n;f++){ let s=0; for(let j=f*hop;j<(f+1)*hop;j++) s+=ch[j]*ch[j]; rms[f]=Math.sqrt(s/hop); if(rms[f]>mx) mx=rms[f]; }
-  const th=mx*0.03, runs=[]; let a=-1;
-  for(let f=0;f<=n;f++){ const q=f<n&&rms[f]<th; if(q&&a<0) a=f; if(!q&&a>=0){ runs.push([a*0.02,f*0.02]); a=-1; } }
-  const lead=runs.length&&runs[0][0]===0?runs[0][1]:0;
-  const inner=runs.filter(r=>r[0]>0&&r[1]<n*0.02-0.05&&r[1]-r[0]>=0.5);
-  if(inner.length<S.length-1) return null;
-  const pick=inner.slice().sort((x,y)=>(y[1]-y[0])-(x[1]-x[0])).slice(0,S.length-1).sort((x,y)=>x[0]-y[0]);
-  return [Math.max(0,lead-0.2)].concat(pick.map(r=>Math.max(r[0]+0.1,r[1]-0.25)));
-}
-function useAudio(url,m){
-  audio=new Audio(url); audio.preload='auto'; if(m) marks=m;
-  audio.addEventListener('loadedmetadata',()=>{ timeline(); built=-1; draw(tAt); });
-}
-async function loadFile(f){
-  $('mk').textContent='Listening for the pauses…';
-  const ab=await f.arrayBuffer(), ac=new (window.AudioContext||window.webkitAudioContext)();
-  const buf=await ac.decodeAudioData(ab.slice(0));
-  const m=findMarks(buf);
-  useAudio(URL.createObjectURL(f), m);
-  marks=m;
-  $('mk').innerHTML=m?'Found all '+S.length+' slides in '+buf.duration.toFixed(0)+' s. Press <b>Full screen &amp; play</b>, start your screen recorder, then tap the slide.'
-                     :'Could not find '+(S.length-1)+' clear pauses — the slides will follow the word count instead. (Keep the &lt;break&gt; tags in the script.)';
-  timeline(); tAt=0; built=-1; draw(3);
+  if(p<0) play(0,END); else play(D.clips[p][0],D.clips[p][1]);
 }
 
 fetch('/data/writing/presentations/presentations.json').then(r=>r.json()).then(J=>{
   D=J[TASK]; if(!D){ document.body.textContent='No presentation yet.'; return; }
-  S=D.slides; document.title='INTUITY — '+D.title;
-  $('bars').innerHTML=Array.from({length:D.bars||4},()=>'<i><b></b></i>').join('');
-  if(D.audio&&!Q.has('silent')) useAudio(D.audio,D.marks);
-  timeline();
+  SC=D.scenes; END=D.end; document.title='INTUITY — '+D.title;
+  $('bars').innerHTML=D.clips.map(()=>'<i><b></b></i>').join('');
+  if(D.audio&&!Q.has('silent')){
+    /* held in memory, so jumping to clip 2 or 3 works on any server */
+    audio=new Audio(D.audio); audio.preload='auto';
+    fetch(D.audio).then(r=>r.blob()).then(bl=>{ if(!playing){ audio.src=URL.createObjectURL(bl); audio.load(); } }).catch(()=>{});
+  }
   if(!REC){
     const back=(()=>{ try{ return JSON.parse(sessionStorage.getItem('intuity.sheetReturn')||'null'); }catch(e){ return null; } })();
     const c=$('ctl');
-    c.innerHTML='<button data-p="-1" class="on">Watch it all</button>'+D.parts.map((p,i)=>'<button data-p="'+i+'">'+(i?i+' · ':'')+esc(p)+'</button>').join('')
+    c.innerHTML='<button data-p="-1" class="on">Watch it all</button>'+D.parts.map((p,i)=>'<button data-p="'+i+'">'+(i+1)+' · '+esc(p)+'</button>').join('')
       +'<a href="'+(back?back.url:'/skills/writing/gate.html?task='+TASK)+'">← back</a>';
     c.querySelectorAll('button').forEach(b=>b.onclick=()=>go(+b.dataset.p));
   }
-  if(MAKE){ $('make').hidden=false; $('file').onchange=e=>e.target.files[0]&&loadFile(e.target.files[0]);
-    $('recgo').onclick=()=>{ document.documentElement.classList.add('rec'); size(); (document.documentElement.requestFullscreen||function(){}).call(document.documentElement); veil('Tap to start','start'); }; }
   const sp=Q.get('part'); if(sp!==null&&D.parts[+sp]) part=+sp;
-  size(); draw(part<0?3:partStart(part)+3);
-  veil(REC?'Tap to start':'Tap to watch','start');
+  size(); draw(part<0?14:D.clips[part][0]+3); veil(REC?'Tap to start':'Tap to watch','start');
   document.fonts.ready.then(()=>{ size(); window.WATCH.ready=true; });
 });
 
-/* for the MP4 renderer: draw any instant, no clock */
-window.WATCH={ready:false, seek:t=>{ $('veil').hidden=true; draw(t); }, get end(){ return END; }, get starts(){ return start; },
-  setMarks:(m,dur)=>{ marks=m; audio={duration:dur,paused:true}; timeline(); built=-1; audio=null; }};
+window.WATCH={ready:false, seek:t=>{ $('veil').hidden=true; draw(t); }, get end(){ return END; }, get clips(){ return D.clips; }};
 })();
 </script>
 </body>

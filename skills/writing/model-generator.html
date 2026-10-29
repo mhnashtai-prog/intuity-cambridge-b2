@@ -222,7 +222,7 @@ textarea.wr::placeholder{color:rgba(20,17,14,.32);font-style:italic}
 /* the shared header and footer read data-writing: set it from ?type= first */
 (function(){
   var t=(new URLSearchParams(location.search).get('type')||'').toLowerCase();
-  var ok={essays:1,reviews:1,reports:1,emails:1,articles:1};
+  var ok={essays:1,reviews:1,reports:1,emails:1,articles:1,story:1};
   if(!ok[t]){ try{ t=sessionStorage.getItem('intuity.gen.type')||''; }catch(e){} }
   if(!ok[t]) t='reviews';
   document.body.setAttribute('data-writing',t);
@@ -295,9 +295,10 @@ const SRC={
   reviews:['reviews/data/reviews-cards-models.json'],
   reports:['reports/data/reports-cards-models.json'],
   emails:['emails/data/emails-structure-formal.json','emails/data/emails-structure-informal.json'],
-  articles:['articles/data/article-cards-models.json']
+  articles:['articles/data/article-cards-models.json'],
+  story:['narrative/data/story-generator.json']
 };
-const TAG={essays:'Essay',reviews:'Review',reports:'Report',emails:'Email',articles:'Article'};
+const TAG={essays:'Essay',reviews:'Review',reports:'Report',emails:'Email',articles:'Article',story:'Story'};
 
 function recipesEssays(D){
   const SH=D.shared;
@@ -372,7 +373,22 @@ function recipesArticles(D){
     {word:'Closing',sub:'Sign off with style',lines:[()=>({html:'<span class="k">'+fmt(pick(C))+'</span>'})]}
   ]}];
 }
-const BUILD={essays:d=>recipesEssays(d[0]),reviews:d=>recipesReviews(d[0]),reports:d=>recipesReports(d[0]),emails:d=>recipesEmails(d),articles:d=>recipesArticles(d[0])};
+/* STORY (29 Oct 2026): a story only works if every paragraph follows the one
+   before, so each model is a fixed, coherent mini-story; what rotates is the
+   target language (suspense, time, feeling, ending) — short and focused. */
+function recipesStory(D){
+  const P=Object.assign({},D.pools);
+  return D.stories.map(S=>{
+    const pools=Object.assign({},P,{feel:S.feel,end:S.end,close:S.close});
+    const line=x=>av=>{ if(x.pool==='look'){ const y=pickAvoid(S.look,av.k); return {html:'<span class="sg">'+esc(y)+'</span>',used:{k:y}}; }
+      const e=pickAvoid(pools[x.pool],av.k); return {html:'<span class="sg">'+esc(e)+'</span> '+esc(x.t),used:{k:e}}; };
+    return {key:S.key,label:S.label,sections:[
+      {word:'Set the scene',sub:'Past simple · past perfect · past continuous',lines:[()=>({html:'<span class="k">'+esc(S.given)+'</span> <span class="ex">'+esc(S.before)+' '+esc(S.background)+'</span>'})]},
+      {word:'Build the tension',sub:'Suspense · time · feeling',lines:S.tension.map(line)},
+      {word:'How it ended',sub:'Feeling · closing time · looking back',lines:S.ending.map(line)}]};
+  });
+}
+const BUILD={story:d=>recipesStory(d[0]),essays:d=>recipesEssays(d[0]),reviews:d=>recipesReviews(d[0]),reports:d=>recipesReports(d[0]),emails:d=>recipesEmails(d),articles:d=>recipesArticles(d[0])};
 
 /* ── a MODEL is one recipe, run: every line keeps its history so ‹ goes back ── */
 const PER=6;
@@ -445,7 +461,7 @@ function gallery(){
   let seed=20261022+DEAL*7919; for(const ch of TYPE+SUBJ) seed=(seed*31+ch.charCodeAt(0))|0;
   R=seeded(seed); MODELS=[]; for(let n=1;n<=PER;n++) MODELS.push(runRecipe(rec,DEAL*PER+n)); R=Math.random;
   const tag=ABBR(rec.label)||TYPE.slice(0,2).toUpperCase();
-  const PLURAL={essays:'Essays',reviews:'Reviews',reports:'Reports',emails:'Emails',articles:'Articles'};
+  const PLURAL={essays:'Essays',reviews:'Reviews',reports:'Reports',emails:'Emails',articles:'Articles',story:'Stories'};
   Parade.mount($('parade'),{
     label:'<b>'+PLURAL[TYPE]+'</b> · Finished models to read', aria:'Finished models',
     items:MODELS.map((m,i)=>({

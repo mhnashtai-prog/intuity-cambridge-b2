@@ -41,6 +41,7 @@ emails:   { label:'Email',   part:'Part 2', back:'/index.html?openModal=writing'
   story:    { label:'Story',   part:'Part 2', back:'/index.html?openModal=writing',
               stages:{ question:'/skills/writing/narrative/narrative-question.html',
                        model:   '/skills/writing/narrative/narrative-cards.html',
+                       generate:'/skills/writing/model-generator.html?type=story',
                        sample:  '/skills/writing/narrative/narrative-sample.html' } }
 };
 

@@ -10,7 +10,9 @@
         you need. Released in …, it … ."
      · the hook ends on a slot ("By far one of the best … is …")  → ", hinge"
      · otherwise the hinge needs its subject → "[Name], hinge"
-   Used by the Model cards, the Model Generator and the slide galleries, so
+   Since 29 Oct the cards use the sheet itself: background = column A
+   (Catch the reader), hinge = column B (Introduce it) — whole sentences,
+   so no gap follows. Used by the Model cards, the Model Generator and the slide galleries, so
    they can never disagree again.
    ═══════════════════════════════════════════════════════════════════════ */
 (function(){
@@ -19,15 +21,18 @@
   const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
   /* → {lead, mid}: lead is the hook as it should be printed, mid the text
      that follows it, up to the "…" the student completes. */
+  const whole=h=>/^[A-Z\[]/.test(h)&&/[.?!]$/.test(h);   /* column B of the sheet: a full sentence */
   function parts(bg,hinge){
     bg=String(bg||'').trim(); hinge=String(hinge||'').trim();
+    if(whole(hinge)){ let lead=bg; if(/(\.\.\.|…)$/.test(lead)||!/[.?!]$/.test(lead)) lead+='.';
+      return {lead, mid:hinge, named:true, gap:false}; }
     if(named(bg)){
       let lead=bg.replace(/\s*,\s*$/,'');
       if(/(\.\.\.|…)$/.test(lead)||!/[.?!]$/.test(lead)) lead+='.';   /* "… is …" still needs its full stop */
-      return {lead, mid:cap(hinge.replace(/\s*,\s*$/,''))+', it', named:true};
+      return {lead, mid:cap(hinge.replace(/\s*,\s*$/,''))+', it', named:true, gap:true};
     }
-    if(/(\.\.\.|…)\s*$/.test(bg)) return {lead:bg+',', mid:hinge, named:false};
-    return {lead:bg, mid:'[Name], '+hinge, named:false};
+    if(/(\.\.\.|…)\s*$/.test(bg)) return {lead:bg+',', mid:hinge, named:false, gap:true};
+    return {lead:bg, mid:'[Name], '+hinge, named:false, gap:true};
   }
   window.ReviewOpen={parts, named};
 })();

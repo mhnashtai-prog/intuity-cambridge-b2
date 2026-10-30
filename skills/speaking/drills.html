@@ -32,6 +32,7 @@ html,body{background:var(--paper)}
 body{height:100vh;height:100dvh;display:flex;flex-direction:column;color:var(--ink);overflow:hidden}
 .header{position:relative;flex:none}
 .header::after{display:none}
+#sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:min(52vw,520px);margin:0 auto}
 [hidden]{display:none!important}
 
 /* ── the areas ── */
@@ -99,6 +100,8 @@ body{height:100vh;height:100dvh;display:flex;flex-direction:column;color:var(--i
 .blk.q .who{color:var(--car-ink)}
 .blk.a .who{color:var(--sage-ink)}
 .blk.dim{opacity:.38}
+.blk.q.partner .who{color:#5F7E9C}
+.scene{margin:0;font:500 .7rem/1.45 'Geist Mono',monospace;letter-spacing:.02em;color:var(--faint);padding:.5rem .6rem;border:1px dashed var(--rule);border-radius:4px}
 .you{display:flex;flex-direction:column;align-items:center;gap:.7rem;text-align:center}
 .you .who{color:var(--ink)}
 .you .big{font:700 clamp(1.15rem,5vw,1.4rem)/1.25 Geist,system-ui,sans-serif;margin:0}
@@ -149,7 +152,7 @@ body{height:100vh;height:100dvh;display:flex;flex-direction:column;color:var(--i
 </header>
 
 <main id="areas"><div class="ar-in">
-  <p class="ar-lead"><b>Pick an area.</b> One phrase per screen: Samara says it, you say it back, then the examiner asks <i>you</i>. Swipe up for the next one, and replay as often as you like.</p>
+  <p class="ar-lead"><b>Pick an area.</b> One phrase per screen: Samara says it, you say it back, then it's <i>your</i> turn to answer. Swipe up for the next one, and replay as often as you like.</p>
   <div id="arList"></div>
 </div></main>
 
@@ -159,7 +162,9 @@ body{height:100vh;height:100dvh;display:flex;flex-direction:column;color:var(--i
 (function(){
 'use strict';
 /* areas with recordings and a reel file; everything else in the library shows as "soon" */
-const LIVE = { buying_time:'buying-time', reacting:'reacting' };
+const LIVE = { buying_time:'buying-time', reacting:'reacting', initiating:'initiating', asking_opinion:'asking', justifying:'reasons',
+  partly_agreeing:'partly', building_on:'building', negotiating:'deciding', comparing:'share', contrasting:'differ',
+  speculating:'guessing', managing_minute:'question', describing_one:'onephoto', answering_prompt:'answering' };
 const KEEP_KEY = 'intuity.speakingKeep';
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -306,7 +311,7 @@ function buildFeed(){
       '<p class="intro-t">'+esc(D.intro.t)+'</p>'+
       '<div class="plist">'+D.reels.map(r=>'<div>'+esc(r.p)+'<span class="meter">'+meter(r.time)+'</span></div>').join('')+'</div>'+
       '<div class="legend"><span><b>1 · Hear</b>Samara says it</span><span><b>2 · Say it</b>you say it back</span><span><b>3 · Copy</b>copy her answer</span>'+
-        '<span><b>4 · Listen</b>a new topic</span><span><b>5 · Your turn</b>the examiner asks you</span><span><b>6 · Compare</b>hear her version</span></div>'+
+        '<span><b>4 · Listen</b>a new topic</span><span><b>5 · Your turn</b>now you answer</span><span><b>6 · Compare</b>hear her version</span></div>'+
       '<div class="spacer"></div>'+
       '<div class="r-ctrl"><button class="btn dark" data-start><i class="play-i"></i> Start with Samara</button><span class="swipe" style="margin-left:auto">or swipe ↑</span></div>'+
       '</div></section>';
@@ -366,7 +371,8 @@ async function runPhrase(i){
   const step = n => steps.forEach((d, k) => { d.className = k < n ? 'done' : (k === n ? 'now' : ''); });
   const P = '<span class="paused-tag" hidden>Paused · tap</span>';
   const who = (cls, label) => '<div class="who"><span class="wave"><i></i><i></i><i></i><i></i></span>'+label+'</div>';
-  const blkQ = (q, talking) => '<div class="blk q'+(talking?' talking':'')+'">'+who('q','Examiner')+'<p class="line-q">'+esc(q)+'</p></div>';
+  const blkQ = (e, talking) => (e.scene ? '<p class="scene">'+esc(e.scene)+'</p>' : '') +
+    '<div class="blk q'+(e.role==='Partner'?' partner':'')+(talking?' talking':'')+'">'+who('q', e.role||'Examiner')+'<p class="line-q">'+esc(e.q)+'</p></div>';
   const blkA = (t, talking, dim) => '<div class="blk a'+(talking?' talking':'')+(dim?' dim':'')+'">'+who('a','Samara')+'<p class="line-a">'+markUp(t)+'</p></div>';
   const show = html => { if (!T.dead) stage.innerHTML = P + html; };
   const echo = async (label, big, secs) => {
@@ -384,24 +390,24 @@ async function runPhrase(i){
   /* 2 Say it */
   step(1); await go(() => echo('say it back', '<mark>'+esc(bt)+'</mark>', Math.max(1.6, d*1.5 + .5))); if (T.dead) return;
   /* 3 Copy */
-  step(2); show(blkQ(ex[0].q, true)); await go(() => say(exUrl(ex[0].qa), ex[0].q, T)); if (T.dead) return;
-  show(blkQ(ex[0].q) + blkA(ex[0].t, true)); d = await say(audioUrl(D, ex[0].a), ex[0].t, T); if (T.dead) return;
+  step(2); show(blkQ(ex[0], true)); await go(() => say(exUrl(ex[0].qa), ex[0].q, T)); if (T.dead) return;
+  show(blkQ(ex[0]) + blkA(ex[0].t, true)); d = await say(audioUrl(D, ex[0].a), ex[0].t, T); if (T.dead) return;
   await go(() => echo('copy her answer', markUp(ex[0].t), Math.max(2.5, d*1.15 + .8))); if (T.dead) return;
   /* 4 Listen */
-  step(3); show(blkQ(ex[1].q, true)); await go(() => say(exUrl(ex[1].qa), ex[1].q, T)); if (T.dead) return;
-  show(blkQ(ex[1].q) + blkA(ex[1].t, true)); await go(() => say(audioUrl(D, ex[1].a), ex[1].t, T)); if (T.dead) return;
+  step(3); show(blkQ(ex[1], true)); await go(() => say(exUrl(ex[1].qa), ex[1].q, T)); if (T.dead) return;
+  show(blkQ(ex[1]) + blkA(ex[1].t, true)); await go(() => say(audioUrl(D, ex[1].a), ex[1].t, T)); if (T.dead) return;
   await go(() => wait(.6, T)); if (T.dead) return;
   /* 5 Your turn */
-  step(4); show(blkQ(ex[2].q, true)); await go(() => say(exUrl(ex[2].qa), ex[2].q, T)); if (T.dead) return;
+  step(4); show(blkQ(ex[2], true)); await go(() => say(exUrl(ex[2].qa), ex[2].q, T)); if (T.dead) return;
   const RING = 8, C = 2*Math.PI*36;
-  show(blkQ(ex[2].q) + '<div class="you"><div class="who">Your turn · start with</div><p class="big"><mark>'+esc(r.p)+'</mark></p>'+
+  show(blkQ(ex[2]) + '<div class="you"><div class="who">Your turn · start with</div><p class="big"><mark>'+esc(r.p)+'</mark></p>'+
     '<svg class="ring" viewBox="0 0 84 84"><circle class="bg" cx="42" cy="42" r="36"/><circle class="fg" cx="42" cy="42" r="36" stroke-dasharray="'+C+'" stroke-dashoffset="0"/><text x="42" y="50" text-anchor="middle">'+RING+'</text></svg></div>');
   const fg = stage.querySelector('.ring .fg'), tx = stage.querySelector('.ring text');
   await wait(RING, T, p => { if (fg){ fg.setAttribute('stroke-dashoffset', (C*p).toFixed(1)); tx.textContent = Math.ceil(RING*(1-p)); } }); if (T.dead) return;
   /* 6 Compare */
-  step(5); show(blkQ(ex[2].q) + blkA(ex[2].t, true)); await go(() => say(audioUrl(D, ex[2].a), ex[2].t, T)); if (T.dead) return;
+  step(5); show(blkQ(ex[2]) + blkA(ex[2].t, true)); await go(() => say(audioUrl(D, ex[2].a), ex[2].t, T)); if (T.dead) return;
   steps.forEach(x => x.className = 'done');
-  show(blkQ(ex[2].q) + blkA(ex[2].t, false) + '<div class="swipe">Swipe ↑ for the next phrase · ↻ to go again</div>');
+  show(blkQ(ex[2]) + blkA(ex[2].t, false) + '<div class="swipe">Swipe ↑ for the next phrase · ↻ to go again</div>');
 }
 
 /* ═══ TAPS & KEYS ═══ */

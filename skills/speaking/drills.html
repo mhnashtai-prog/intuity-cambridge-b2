@@ -260,7 +260,10 @@ function setPaused(p){
 /* ═══ AREAS ═══ */
 /* ?part=N (from a Part page's "Drills with Maya" pill) shows only that Part's
    drills; the full list is one tap away. Areas not recorded yet are not shown. */
-const PARTQ = +new URLSearchParams(location.search).get('part') || 0;
+const QS = new URLSearchParams(location.search);
+const PARTQ = +QS.get('part') || 0;
+let ALL = QS.get('all') === '1';            /* Part N → "All drills": the list widens, the way home stays Part N */
+const listUrl = () => location.pathname + (PARTQ ? '?part='+PARTQ+(ALL ? '&all=1' : '') : '');
 const PART_PAGE = {1:'part1.html',2:'part2-turn.html',3:'part3-talk.html',4:'part4-views.html'};
 const BUILD = [
   {id:'mirror', part:1, href:'mirror.html', h:'Part 1 · Mirroring', p:'Maya asks, you record yourself: answer, reason, example, contrast.'},
@@ -268,13 +271,13 @@ const BUILD = [
   {id:'discussion3',part:3, h:'Part 3 · The discussion', p:'Start, react, add, decide: two minutes with a partner.'},
   {id:'opinion4',   part:4, h:'Part 4 · Your opinion', p:'Opinion, reason, example, then hand it back.'}];
 function drawAreas(){
-  const k = kept(), inPart = parts => !PARTQ || (parts||[]).includes(PARTQ);
+  const k = kept(), inPart = parts => !PARTQ || ALL || (parts||[]).includes(PARTQ);
   let h = '';
-  if (PARTQ) h += '<p class="ar-part">Part '+PARTQ+' · drills <a href="drills.html">All drills ›</a></p>';
-  if (k.length && !PARTQ) h += '<div class="ar-grid" style="margin-bottom:.4rem"><button class="ac mine" data-area="mine"><h3>My phrases</h3><p>The phrases you kept with ♡, all in one feed.</p><div class="meta"><span class="go">▶ '+k.length+'</span></div></button></div>';
+  if (PARTQ) h += '<p class="ar-part">'+(ALL ? 'All drills' : 'Part '+PARTQ+' · drills')+' <a href="#" data-widen>'+(ALL ? 'Only Part '+PARTQ+' ›' : 'All drills ›')+'</a></p>';
+  if (k.length && (!PARTQ || ALL)) h += '<div class="ar-grid" style="margin-bottom:.4rem"><button class="ac mine" data-area="mine"><h3>My phrases</h3><p>The phrases you kept with ♡, all in one feed.</p><div class="meta"><span class="go">▶ '+k.length+'</span></div></button></div>';
   const b = BUILD.filter(x => inPart([x.part]));
   if (b.length) h += '<div class="ar-cat">Build the answer</div><div class="ar-grid">'+b.map(x =>
-    (x.href ? '<a class="ac feat" href="'+x.href+'" style="text-decoration:none">' : '<button class="ac feat" data-area="'+x.id+'">')+
+    (x.href ? '<a class="ac feat" href="'+x.href+'?back='+encodeURIComponent(location.search.replace(/[?&]area=[^&]*/,''))+'" style="text-decoration:none">' : '<button class="ac feat" data-area="'+x.id+'">')+
     '<h3>'+x.h+'</h3><p>'+x.p+'</p><div class="meta"><span class="pc">P'+x.part+'</span><span class="go">▶ Start</span></div>'+(x.href ? '</a>' : '</button>')).join('')+'</div>';
   let first = true;
   Object.keys(LIB.categories).forEach(cat => {
@@ -292,6 +295,7 @@ function drawAreas(){
   $('#arList').innerHTML = h;
 }
 $('#arList').addEventListener('click', e => {
+  if (e.target.closest('[data-widen]')){ e.preventDefault(); ALL = !ALL; history.replaceState(null,'',listUrl()); drawAreas(); scrollTo(0,0); return; }
   const b = e.target.closest('[data-area]'); if (!b) return;
   unlock(); openArea(b.dataset.area, true);
 });
@@ -314,10 +318,10 @@ async function openArea(id, push){
     D = await loadArea(id); D.reels.forEach(r => r._area = D);
   }
   DATA = D;
-  if (push) history.pushState({area:id}, '', '?area='+id);
+  if (push) history.pushState({area:id}, '', listUrl()+(PARTQ ? '&' : '?')+'area='+id);
   $('#areas').hidden = true; $('#feed').hidden = false;
   $('#sub').textContent = 'Drill · ' + D.title;
-  $('#back').textContent = '← Areas';
+  $('#back').textContent = '← Drills';
   buildFeed();
 }
 function closeFeed(){
@@ -326,9 +330,9 @@ function closeFeed(){
   $('#sub').textContent = 'Speaking · Drills'; setHomeBack();
   drawAreas();
 }
-$('#back').addEventListener('click', e => {
-  if (!$('#feed').hidden){ e.preventDefault(); if (history.state && history.state.area) history.back(); else { history.replaceState(null,'',location.pathname); closeFeed(); } }
-});
+/* one way up from a drill: back to the list you came from (never off the site) */
+function toList(){ if (history.state && history.state.area) history.back(); else { history.replaceState(null,'',listUrl()); closeFeed(); } }
+$('#back').addEventListener('click', e => { if (!$('#feed').hidden){ e.preventDefault(); toList(); } });
 window.addEventListener('popstate', () => {
   const a = new URLSearchParams(location.search).get('area');
   if (a) openArea(a, false); else closeFeed();
@@ -390,7 +394,7 @@ function buildFeed(){
       '<h1 class="r-title">'+(D.reels.length? 'Well done.' : 'Nothing kept yet.')+'</h1>'+
       '<p class="intro-t">'+esc(D.close ? D.close.t : (D.reels.length ? 'Come back tomorrow and say them again.' : 'Tap ♡ on any phrase to keep it here.'))+'</p>'+
       '<div class="spacer"></div>'+
-      '<div class="r-ctrl"><button class="btn dark" data-top>↺ From the top</button><button class="btn next" data-areas>Other areas</button></div>'+
+      '<div class="r-ctrl"><button class="btn dark" data-top>↺ From the top</button><button class="btn next" data-areas>Other drills</button></div>'+
       '</div></section>';
   }
   F.innerHTML = h; F.scrollTop = 0; cur = -1;
@@ -506,7 +510,7 @@ document.getElementById('feed').addEventListener('click', e => {
   if (t.closest('[data-next]')){ goTo(+t.closest('.reel').dataset.i + 1); return; }
   if (t.closest('[data-done]')){ tok.skip = true; return; }
   if (t.closest('[data-top]')){ goTo(DATA.intro ? 1 : 0); return; }
-  if (t.closest('[data-areas]')){ history.back(); return; }
+  if (t.closest('[data-areas]')){ toList(); return; }
   if (t.closest('[data-stage]') && !tok.dead){ setPaused(!paused); }
 });
 document.addEventListener('keydown', e => {

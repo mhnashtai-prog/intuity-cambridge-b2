@@ -114,6 +114,13 @@ body{height:100vh;height:100dvh;display:flex;flex-direction:column;color:var(--i
 .ring text{font:700 22px Geist,system-ui,sans-serif;fill:var(--ink)}
 .paused-tag{position:absolute;top:.7rem;right:.8rem;font:500 .62rem/1 'Geist Mono',monospace;letter-spacing:.14em;color:var(--car-ink);text-transform:uppercase}
 .tapstart{display:flex;flex-direction:column;align-items:center;gap:.8rem;text-align:center;color:var(--dim);font-size:.92rem}
+.tl{display:flex;gap:3px;width:100%}
+.tl i{display:block;font-style:normal;height:20px;border-radius:3px;background:var(--rule);position:relative;overflow:hidden}
+.tl i b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:500 .54rem/1 'Geist Mono',monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--faint)}
+.tl i.on{background:var(--car)} .tl i.on b{color:#fff}
+.crib{margin:0;padding:.6rem .9rem .6rem 2rem;background:var(--card);border-radius:6px;font:400 .8rem/1.45 Geist,system-ui,sans-serif;color:var(--dim)}
+.crib li::marker{font:500 .7rem 'Geist Mono',monospace;color:var(--car-ink)}
+.ac.feat{background:var(--ink);color:#fff} .ac.feat p{color:rgba(255,255,255,.7)} .ac.feat .pc{background:rgba(255,255,255,.14);color:#fff} .ac.feat .go{background:var(--car)}
 .r-note{font:400 .84rem/1.4 Geist,system-ui,sans-serif;color:var(--dim);margin:0;padding-left:.75rem;border-left:2px solid var(--car)}
 .r-ctrl{display:flex;align-items:center;gap:.5rem}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:.45rem;border:none;cursor:pointer;font:600 .86rem/1 Geist,system-ui,sans-serif;
@@ -137,6 +144,15 @@ body{height:100vh;height:100dvh;display:flex;flex-direction:column;color:var(--i
 .legend span{border-top:3px solid var(--sage);padding-top:.4rem}
 .legend span:nth-child(5){border-color:var(--car)}
 .spacer{flex:1}
+.r-phrase.longp{font-size:clamp(1.55rem,6.4vw,2.25rem);line-height:1.12}
+.stage{justify-content:flex-start;overflow-y:auto}
+.stage>:nth-child(2){margin-top:auto} .stage>:last-child{margin-bottom:auto}
+.line-a.small{font-size:clamp(.92rem,3.9vw,1.05rem);line-height:1.5}
+.ri.long .r-phrase{font-size:clamp(2.2rem,10vw,3.2rem)}
+.ri{overflow:hidden}
+.ri.long .legend{display:none}
+.ri.long .plist div{padding:.4rem 0;font-size:.86rem;font-weight:500}
+.ri.long .intro-t{font-size:.92rem}
 .swipe{font:500 .66rem/1 'Geist Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);text-align:center}
 @media (max-height:640px){ .r-note{display:none} .legend{display:none} }
 @media (prefers-reduced-motion:reduce){ .talking .wave i{animation:none;height:9px} }
@@ -215,14 +231,14 @@ function say(url, text, tok){
   });
 }
 /* a wait that stands still while paused; prog(0..1) every frame */
-function wait(sec, tok, prog){
+function wait(sec, tok, prog, early){
   return new Promise(res => {
     let acc = 0, last = performance.now();
     (function f(now){
       if (tok.dead) return res();
       if (!paused) acc += (now - last)/1000; last = now;
       if (prog) prog(Math.min(1, acc/sec));
-      if (acc >= sec) return res();
+      if (acc >= sec || (early && early())) return res();
       requestAnimationFrame(f);
     })(last);
   });
@@ -240,6 +256,11 @@ function drawAreas(){
   const k = kept();
   let h = '';
   if (k.length) h += '<div class="ar-grid" style="margin-bottom:.4rem"><button class="ac mine" data-area="mine"><h3>My phrases</h3><p>The phrases you kept with ♡, all in one feed.</p><div class="meta"><span class="go">▶ '+k.length+'</span></div></button></div>';
+  h += '<div class="ar-cat">Build the answer · part by part</div><div class="ar-grid">'+
+    '<button class="ac feat" data-area="longturn2"><h3>Part 2 · The long turn</h3><p>Similar, different, likely, another possibility: the whole minute, frame by frame.</p><div class="meta"><span class="pc">P2</span><span class="go">▶ Start</span></div></button>'+
+    '<button class="ac soon" disabled><h3>Part 3 · The discussion</h3><p>Start, react, add, decide: two minutes with a partner.</p><div class="meta"><span class="pc">P3</span><span class="go">Soon</span></div></button>'+
+    '<button class="ac soon" disabled><h3>Part 4 · Your opinion</h3><p>Opinion, reason, example, then hand it back.</p><div class="meta"><span class="pc">P4</span><span class="go">Soon</span></div></button></div>'+
+    '<div class="ar-cat">Phrases by area</div>';
   Object.keys(LIB.categories).forEach(cat => {
     const fns = Object.keys(LIB.functions).filter(id => LIB.functions[id].category === cat);
     if (!fns.length) return;
@@ -298,6 +319,9 @@ window.addEventListener('popstate', () => {
 });
 
 function meter(n){ return '<span>'+[1,2,3].map(i=>'<b class="'+(i<=n?'f':'')+'"></b>').join('')+'</span>'; }
+/* the one-minute shape of Part 2: where this frame sits in it */
+const SECS = [['Similarity',18],['Differences',40],['Speculation',42]];
+function timeline(cur){ return '<span class="tl" aria-label="'+cur+'">'+SECS.map(x=>'<i class="'+(x[0]===cur?'on':'')+'" style="flex:'+x[1]+'"><b>'+x[0]+'</b></i>').join('')+'</span>'; }
 const STEPS = ['Hear','Say it','Copy','Listen','Your turn','Compare'];
 
 function buildFeed(){
@@ -305,7 +329,8 @@ function buildFeed(){
   REELS = [];
   if (D.intro){
     REELS.push({kind:'intro'});
-    h += '<section class="reel" data-i="0"><div class="ri">'+
+    const longList = D.reels.length > 6 || D.reels.some(r => r.p.length > 30);
+    h += '<section class="reel" data-i="0"><div class="ri'+(longList?' long':'')+'">'+
       '<div class="r-top"><span class="kick">'+esc(D.kicker)+' · '+D.reels.length+' phrases</span>'+(D.parts||[]).map(p=>'<span class="pc">P'+p+'</span>').join('')+'</div>'+
       '<h1 class="r-title">'+esc(D.title)+'</h1>'+
       '<p class="intro-t">'+esc(D.intro.t)+'</p>'+
@@ -323,15 +348,25 @@ function buildFeed(){
     h += '<section class="reel" data-i="'+i+'"><div class="ri">'+
       '<div class="r-top"><span class="kick">'+esc(r._area.title)+' · '+(j+1)+' / '+D.reels.length+'</span>'+
         '<button class="keep'+(on?' on':'')+'" data-keep="'+key+'"><i>'+(on?'♥':'♡')+'</i>'+(on?'Kept':'Keep')+'</button></div>'+
-      '<h2 class="r-phrase">'+esc(r.p)+'</h2>'+
-      '<div class="r-info"><span class="meter">'+esc(r._area.meterLabel||'Time bought')+' '+meter(r.time)+'</span><span class="job">'+esc(r.job)+'</span>'+
-        '<span class="mouth">'+(r.mouth==='teen'?'Sounds like you':'Anyone can say it')+'</span></div>'+
+      '<h2 class="r-phrase'+(r.p.length > 26 ? ' longp' : '')+'">'+esc(r.p)+'</h2>'+
+      '<div class="r-info">'+(r.sec ? timeline(r.sec) : '<span class="meter">'+esc(r._area.meterLabel||'Time bought')+' '+meter(r.time)+'</span>')+'<span class="job">'+esc(r.job)+'</span>'+
+        (r.sec ? '' : '<span class="mouth">'+(r.mouth==='teen'?'Sounds like you':'Anyone can say it')+'</span>')+'</div>'+
       '<div class="steps">'+STEPS.map(s=>'<div>'+s+'</div>').join('')+'</div>'+
       '<div class="stage" data-stage><div class="tapstart"><button class="btn sage" data-run><i class="play-i"></i> Play</button>Tap to start this phrase</div></div>'+
       '<p class="r-note">'+esc(r.note)+'</p>'+
       '<div class="r-ctrl"><button class="btn" data-again>↻ Again</button><button class="btn next" data-next>Next ↓</button></div>'+
       '</div></section>';
   });
+  if (D.minute){
+    const m = D.minute, i = REELS.length; REELS.push({kind:'minute', m, D});
+    h += '<section class="reel" data-i="'+i+'"><div class="ri">'+
+      '<div class="r-top"><span class="kick">'+esc(D.title)+' · the whole minute</span></div>'+
+      '<h2 class="r-phrase">Now the whole minute.</h2>'+
+      '<ol class="crib">'+m.crib.map(c=>'<li>'+esc(c)+'</li>').join('')+'</ol>'+
+      '<div class="stage" data-stage><div class="tapstart"><button class="btn sage" data-run><i class="play-i"></i> Play</button>New photos. Use every frame, in order.</div></div>'+
+      '<div class="r-ctrl"><button class="btn" data-again>↻ Again</button><button class="btn next" data-next>Next ↓</button></div>'+
+      '</div></section>';
+  }
   if (D.close || D.id === 'mine'){
     REELS.push({kind:'close'});
     h += '<section class="reel" data-i="'+(REELS.length-1)+'"><div class="ri">'+
@@ -357,11 +392,33 @@ function stopReel(){ tok.dead = true; if (tok.stop) tok.stop(); setPaused(false)
 function enter(i){
   stopReel();
   const R = REELS[i];
-  if (R.kind === 'phrase' && started) runPhrase(i);
+  if ((R.kind === 'phrase' || R.kind === 'minute') && started) run(i);
   if (R.kind === 'close' && started && DATA.close) { tok = {dead:false}; say(DATA.close && (DATA.close._url || audioUrl(DATA, DATA.close.a)), DATA.close.t, tok); }
 }
 function audioUrl(D, a){ return (D.audio||'/audio/drills/'+D.id+'/') + a + '.mp3'; }
 const exUrl = qa => (qa.charAt(0) === '/' ? '' : '/audio/speaking/') + qa + '.mp3';
+
+function run(i){ return REELS[i].kind === 'minute' ? runMinute(i) : runPhrase(i); }
+
+/* ═══ THE WHOLE MINUTE: new photos, the frames as a crib, sixty seconds, then Samara ═══ */
+async function runMinute(i){
+  const T = tok = {dead:false, skip:false};
+  const s = sec(i), m = REELS[i].m, D = REELS[i].D, stage = s.querySelector('[data-stage]');
+  const P = '<span class="paused-tag" hidden>Paused · tap</span>';
+  const show = html => { if (!T.dead) stage.innerHTML = P + html; };
+  const qb = talking => '<p class="scene">'+esc(m.scene)+'</p><div class="blk q'+(talking?' talking':'')+'"><div class="who"><span class="wave"><i></i><i></i><i></i><i></i></span>Examiner</div><p class="line-q">'+esc(m.q)+'</p></div>';
+  const go = async fn => { await until(T); if (!T.dead) await fn(); };
+  show(qb(true)); await say(exUrl(m.qa), m.q, T); if (T.dead) return;
+  const RING = 60, C = 2*Math.PI*36;
+  show(qb(false)+'<div class="you"><div class="who">Your turn · one minute</div>'+
+    '<svg class="ring" viewBox="0 0 84 84"><circle class="bg" cx="42" cy="42" r="36"/><circle class="fg" cx="42" cy="42" r="36" stroke-dasharray="'+C+'" stroke-dashoffset="0"/><text x="42" y="50" text-anchor="middle">60</text></svg>'+
+    '<button class="btn" data-done>I\'ve finished</button></div>');
+  const fg = stage.querySelector('.ring .fg'), tx = stage.querySelector('.ring text');
+  await wait(RING, T, p => { if (fg){ fg.setAttribute('stroke-dashoffset', (C*p).toFixed(1)); tx.textContent = Math.ceil(RING*(1-p)); } }, () => T.skip); if (T.dead) return;
+  show('<p class="scene">'+esc(m.scene)+'</p><div class="blk a talking"><div class="who"><span class="wave"><i></i><i></i><i></i><i></i></span>Samara</div><p class="line-a small">'+esc(m.t)+'</p></div>');
+  await go(() => say(audioUrl(D, m.a), m.t, T)); if (T.dead) return;
+  const b = stage.querySelector('.blk'); if (b) b.classList.remove('talking');
+}
 
 /* ═══ ONE PHRASE, SIX BEATS ═══ */
 async function runPhrase(i){
@@ -399,7 +456,7 @@ async function runPhrase(i){
   await go(() => wait(.6, T)); if (T.dead) return;
   /* 5 Your turn */
   step(4); show(blkQ(ex[2], true)); await go(() => say(exUrl(ex[2].qa), ex[2].q, T)); if (T.dead) return;
-  const RING = 8, C = 2*Math.PI*36;
+  const RING = D.ring || 8, C = 2*Math.PI*36;
   show(blkQ(ex[2]) + '<div class="you"><div class="who">Your turn · start with</div><p class="big"><mark>'+esc(r.p)+'</mark></p>'+
     '<svg class="ring" viewBox="0 0 84 84"><circle class="bg" cx="42" cy="42" r="36"/><circle class="fg" cx="42" cy="42" r="36" stroke-dasharray="'+C+'" stroke-dashoffset="0"/><text x="42" y="50" text-anchor="middle">'+RING+'</text></svg></div>');
   const fg = stage.querySelector('.ring .fg'), tx = stage.querySelector('.ring text');
@@ -419,8 +476,9 @@ document.getElementById('feed').addEventListener('click', e => {
   if (kb){ const k = kept(), key = kb.dataset.keep, ix = k.indexOf(key);
     if (ix > -1) k.splice(ix, 1); else k.push(key); setKept(k);
     const on = ix < 0; kb.classList.toggle('on', on); kb.innerHTML = '<i>'+(on?'♥':'♡')+'</i>'+(on?'Kept':'Keep'); return; }
-  if (t.closest('[data-run]') || t.closest('[data-again]')){ unlock(); started = true; const i = +t.closest('.reel').dataset.i; stopReel(); cur = i; runPhrase(i); return; }
+  if (t.closest('[data-run]') || t.closest('[data-again]')){ unlock(); started = true; const i = +t.closest('.reel').dataset.i; stopReel(); cur = i; run(i); return; }
   if (t.closest('[data-next]')){ goTo(+t.closest('.reel').dataset.i + 1); return; }
+  if (t.closest('[data-done]')){ tok.skip = true; return; }
   if (t.closest('[data-top]')){ goTo(DATA.intro ? 1 : 0); return; }
   if (t.closest('[data-areas]')){ history.back(); return; }
   if (t.closest('[data-stage]') && !tok.dead){ setPaused(!paused); }

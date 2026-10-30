@@ -321,7 +321,7 @@
     border-radius:999px;background:var(--fill);font-size:13px;font-weight:600;color:var(--dim);
     white-space:nowrap;scroll-snap-align:start;transition:background .25s,color .25s,transform .2s}
   .pill:active{transform:scale(.95)}
-  .pill.on{background:var(--poster-ink);color:#161513}
+  .pill.on{background:var(--poster-ink);color:#F6F3EE}   /* was #161513: dark on dark, the label vanished */
   .pill.done{background:var(--good-soft);color:var(--good-ink)}
   .pill.done.on{background:var(--good);color:#161513}
   .pill:disabled{opacity:.4;cursor:default}
@@ -449,6 +449,9 @@
   .ring b{position:absolute;inset:0;display:grid;place-items:center;font-size:14px;font-weight:800;
     font-variant-numeric:tabular-nums}
   .rsent{font-size:19px;line-height:1.75;color:var(--poster-ink)}
+  .sbseg{display:inline-flex;gap:2px;padding:2px;margin:0 0 10px;border-radius:999px;background:rgba(20,17,14,.06)}
+  .sbseg button{border:none;background:none;border-radius:999px;padding:6px 12px;font:600 13px/1 var(--f-body,Geist,system-ui,sans-serif);color:var(--faint);cursor:pointer}
+  .sbseg button.on{background:#FAF8F5;color:var(--ink,#14110E);box-shadow:0 1px 2px rgba(20,17,14,.12)}
   .rw{display:inline;transition:opacity .35s,filter .35s,color .3s}
   .rw.target{box-shadow:inset 0 -2px 0 rgba(142,98,56,0.25)}
   .rw.gone{opacity:0;filter:blur(6px)}
@@ -1609,7 +1612,12 @@
     'will would can could should may might must than then very also into over such which who whom whose what when where '+
     'while if because about more most some any all each other only just many much even well both one own').split(' '));
   const normW=w=>String(w||'').toLowerCase().replace(/[’‘`´]/g,"'").replace(/[^a-z0-9']/g,'');
+  /* GAPS: KEY WORDS or EVERY WORD (30 Oct 2026). The first Storyboard blanked
+     every word; this one blanks the key words only. Classroom test: both have
+     their students, so a pill lets the kid choose. Remembered on this device. */
+  let SB_ALL=false; try{ SB_ALL=localStorage.getItem('intuity-storyboard-gaps')==='all'; }catch(e){}
   function pickBlanks(tokens){
+    if(SB_ALL) return new Set(tokens.map((_,i)=>i));
     const clean=tokens.map(normW), chosen=new Set();
     FRAMES.forEach(f=>{ const fw=f.toLowerCase().split(' ').map(normW);
       for(let i=0;i+fw.length<=clean.length;i++){ if(fw.every((w,j)=>clean[i+j]===w)){ fw.forEach((_,j)=>chosen.add(i+j)); break; } } });
@@ -1639,8 +1647,16 @@
     RC.readLeft=null;
     $('readbox').innerHTML='<div class="readhead"><span>Sentence '+(RC.idx+1)+' of '+RC.st.sents.length+' · read it</span>'+
       '<div class="ring" id="ring"><svg viewBox="0 0 40 40" aria-hidden="true"><circle class="trk" cx="20" cy="20" r="17"/><circle class="arc" id="arc" cx="20" cy="20" r="17" stroke-dasharray="'+C+'" stroke-dashoffset="0"/></svg><b id="ringN">'+secs+'</b></div></div>'+
+      '<div class="sbseg" role="group" aria-label="Which words disappear"><button type="button" data-g="some"'+(SB_ALL?'':' class="on"')+'>Key words</button><button type="button" data-g="all"'+(SB_ALL?' class="on"':'')+'>Every word</button></div>'+
       '<div class="rsent" id="rsent">'+RC.tokens.map((t,k)=>'<span class="rw'+(RC.blanks.has(k)?' target':'')+'">'+esc(t)+'</span>').join(' ')+'</div>';
-    $('rcHint').innerHTML='The underlined words will disappear. Tap <b>I’ve got it</b> early for a quick-read bonus.';
+    $('rcHint').innerHTML=(SB_ALL?'Every word will disappear.':'The underlined words will disappear.')+' Tap <b>I’ve got it</b> early for a quick-read bonus.';
+    document.querySelectorAll('.sbseg button').forEach(b=>b.onclick=()=>{
+      SB_ALL=b.dataset.g==='all'; try{ localStorage.setItem('intuity-storyboard-gaps',SB_ALL?'all':'some'); }catch(e){}
+      document.querySelectorAll('.sbseg button').forEach(x=>x.classList.toggle('on',x===b));
+      RC.blanks=pickBlanks(RC.tokens);
+      document.querySelectorAll('#rsent .rw').forEach((w,k)=>w.classList.toggle('target',RC.blanks.has(k)));
+      $('rcHint').innerHTML=(SB_ALL?'Every word will disappear.':'The underlined words will disappear.')+' Tap <b>I’ve got it</b> early for a quick-read bonus.';
+    });
     setActions('<button class="btn primary" id="rcReady" type="button">I’ve got it</button>');
     $('rcReady').onclick=()=>endRead(true);
     runRing();

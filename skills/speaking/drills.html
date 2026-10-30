@@ -258,8 +258,8 @@ function drawAreas(){
   if (k.length) h += '<div class="ar-grid" style="margin-bottom:.4rem"><button class="ac mine" data-area="mine"><h3>My phrases</h3><p>The phrases you kept with ♡, all in one feed.</p><div class="meta"><span class="go">▶ '+k.length+'</span></div></button></div>';
   h += '<div class="ar-cat">Build the answer · part by part</div><div class="ar-grid">'+
     '<button class="ac feat" data-area="longturn2"><h3>Part 2 · The long turn</h3><p>Similar, different, likely, another possibility: the whole minute, frame by frame.</p><div class="meta"><span class="pc">P2</span><span class="go">▶ Start</span></div></button>'+
-    '<button class="ac soon" disabled><h3>Part 3 · The discussion</h3><p>Start, react, add, decide: two minutes with a partner.</p><div class="meta"><span class="pc">P3</span><span class="go">Soon</span></div></button>'+
-    '<button class="ac soon" disabled><h3>Part 4 · Your opinion</h3><p>Opinion, reason, example, then hand it back.</p><div class="meta"><span class="pc">P4</span><span class="go">Soon</span></div></button></div>'+
+    '<button class="ac feat" data-area="discussion3"><h3>Part 3 · The discussion</h3><p>Start, react, add, decide: two minutes with a partner.</p><div class="meta"><span class="pc">P3</span><span class="go">▶ Start</span></div></button>'+
+    '<button class="ac feat" data-area="opinion4"><h3>Part 4 · Your opinion</h3><p>Opinion, reason, example, then hand it back.</p><div class="meta"><span class="pc">P4</span><span class="go">▶ Start</span></div></button></div>'+
     '<div class="ar-cat">Phrases by area</div>';
   Object.keys(LIB.categories).forEach(cat => {
     const fns = Object.keys(LIB.functions).filter(id => LIB.functions[id].category === cat);
@@ -321,7 +321,7 @@ window.addEventListener('popstate', () => {
 function meter(n){ return '<span>'+[1,2,3].map(i=>'<b class="'+(i<=n?'f':'')+'"></b>').join('')+'</span>'; }
 /* the one-minute shape of Part 2: where this frame sits in it */
 const SECS = [['Similarity',18],['Differences',40],['Speculation',42]];
-function timeline(cur){ return '<span class="tl" aria-label="'+cur+'">'+SECS.map(x=>'<i class="'+(x[0]===cur?'on':'')+'" style="flex:'+x[1]+'"><b>'+x[0]+'</b></i>').join('')+'</span>'; }
+function timeline(cur, secs){ return '<span class="tl" aria-label="'+cur+'">'+(secs||SECS).map(x=>'<i class="'+(x[0]===cur?'on':'')+'" style="flex:'+x[1]+'"><b>'+x[0]+'</b></i>').join('')+'</span>'; }
 const STEPS = ['Hear','Say it','Copy','Listen','Your turn','Compare'];
 
 function buildFeed(){
@@ -349,7 +349,7 @@ function buildFeed(){
       '<div class="r-top"><span class="kick">'+esc(r._area.title)+' · '+(j+1)+' / '+D.reels.length+'</span>'+
         '<button class="keep'+(on?' on':'')+'" data-keep="'+key+'"><i>'+(on?'♥':'♡')+'</i>'+(on?'Kept':'Keep')+'</button></div>'+
       '<h2 class="r-phrase'+(r.p.length > 26 ? ' longp' : '')+'">'+esc(r.p)+'</h2>'+
-      '<div class="r-info">'+(r.sec ? timeline(r.sec) : '<span class="meter">'+esc(r._area.meterLabel||'Time bought')+' '+meter(r.time)+'</span>')+'<span class="job">'+esc(r.job)+'</span>'+
+      '<div class="r-info">'+(r.sec ? timeline(r.sec, r._area.secs) : '<span class="meter">'+esc(r._area.meterLabel||'Time bought')+' '+meter(r.time)+'</span>')+'<span class="job">'+esc(r.job)+'</span>'+
         (r.sec ? '' : '<span class="mouth">'+(r.mouth==='teen'?'Sounds like you':'Anyone can say it')+'</span>')+'</div>'+
       '<div class="steps">'+STEPS.map(s=>'<div>'+s+'</div>').join('')+'</div>'+
       '<div class="stage" data-stage><div class="tapstart"><button class="btn sage" data-run><i class="play-i"></i> Play</button>Tap to start this phrase</div></div>'+
@@ -360,10 +360,10 @@ function buildFeed(){
   if (D.minute){
     const m = D.minute, i = REELS.length; REELS.push({kind:'minute', m, D});
     h += '<section class="reel" data-i="'+i+'"><div class="ri">'+
-      '<div class="r-top"><span class="kick">'+esc(D.title)+' · the whole minute</span></div>'+
-      '<h2 class="r-phrase">Now the whole minute.</h2>'+
+      '<div class="r-top"><span class="kick">'+esc(D.title)+' · the whole answer</span></div>'+
+      '<h2 class="r-phrase">'+esc(m.title||'Now the whole minute.')+'</h2>'+
       '<ol class="crib">'+m.crib.map(c=>'<li>'+esc(c)+'</li>').join('')+'</ol>'+
-      '<div class="stage" data-stage><div class="tapstart"><button class="btn sage" data-run><i class="play-i"></i> Play</button>New photos. Use every frame, in order.</div></div>'+
+      '<div class="stage" data-stage><div class="tapstart"><button class="btn sage" data-run><i class="play-i"></i> Play</button>'+(D.id==='longturn2'?'New photos. ':'A new task. ')+'Use every frame, in order.</div></div>'+
       '<div class="r-ctrl"><button class="btn" data-again>↻ Again</button><button class="btn next" data-next>Next ↓</button></div>'+
       '</div></section>';
   }
@@ -406,18 +406,28 @@ async function runMinute(i){
   const s = sec(i), m = REELS[i].m, D = REELS[i].D, stage = s.querySelector('[data-stage]');
   const P = '<span class="paused-tag" hidden>Paused · tap</span>';
   const show = html => { if (!T.dead) stage.innerHTML = P + html; };
-  const qb = talking => '<p class="scene">'+esc(m.scene)+'</p><div class="blk q'+(talking?' talking':'')+'"><div class="who"><span class="wave"><i></i><i></i><i></i><i></i></span>Examiner</div><p class="line-q">'+esc(m.q)+'</p></div>';
+  const qb = talking => (m.scene ? '<p class="scene">'+esc(m.scene)+'</p>' : '')+'<div class="blk q'+(talking?' talking':'')+'"><div class="who"><span class="wave"><i></i><i></i><i></i><i></i></span>Examiner</div><p class="line-q">'+esc(m.q)+'</p></div>';
   const go = async fn => { await until(T); if (!T.dead) await fn(); };
   show(qb(true)); await say(exUrl(m.qa), m.q, T); if (T.dead) return;
-  const RING = 60, C = 2*Math.PI*36;
-  show(qb(false)+'<div class="you"><div class="who">Your turn · one minute</div>'+
-    '<svg class="ring" viewBox="0 0 84 84"><circle class="bg" cx="42" cy="42" r="36"/><circle class="fg" cx="42" cy="42" r="36" stroke-dasharray="'+C+'" stroke-dashoffset="0"/><text x="42" y="50" text-anchor="middle">60</text></svg>'+
+  const RING = m.ring || 60, C = 2*Math.PI*36;
+  const span = RING >= 60 && RING % 60 === 0 ? (RING/60 === 1 ? 'one minute' : RING/60+' minutes') : RING >= 60 ? Math.floor(RING/60)+' min '+(RING%60)+' s' : RING+' seconds';
+  show(qb(false)+'<div class="you"><div class="who">Your turn · '+span+'</div>'+
+    '<svg class="ring" viewBox="0 0 84 84"><circle class="bg" cx="42" cy="42" r="36"/><circle class="fg" cx="42" cy="42" r="36" stroke-dasharray="'+C+'" stroke-dashoffset="0"/><text x="42" y="50" text-anchor="middle">'+RING+'</text></svg>'+
     '<button class="btn" data-done>I\'ve finished</button></div>');
   const fg = stage.querySelector('.ring .fg'), tx = stage.querySelector('.ring text');
   await wait(RING, T, p => { if (fg){ fg.setAttribute('stroke-dashoffset', (C*p).toFixed(1)); tx.textContent = Math.ceil(RING*(1-p)); } }, () => T.skip); if (T.dead) return;
-  show('<p class="scene">'+esc(m.scene)+'</p><div class="blk a talking"><div class="who"><span class="wave"><i></i><i></i><i></i><i></i></span>Samara</div><p class="line-a small">'+esc(m.t)+'</p></div>');
-  await go(() => say(audioUrl(D, m.a), m.t, T)); if (T.dead) return;
-  const b = stage.querySelector('.blk'); if (b) b.classList.remove('talking');
+  /* the model: one Samara turn, or a whole exchange with the partner */
+  const parts = m.parts || [{role:'Samara', a:m.a, t:m.t}];
+  const blocks = k => (m.scene ? '<p class="scene">'+esc(m.scene)+'</p>' : '') + parts.map((x, j) =>
+    '<div class="blk '+(x.role==='Partner'?'q partner':'a')+(j===k?' talking':'')+(k>-1&&j>k?' dim':'')+'"><div class="who"><span class="wave"><i></i><i></i><i></i><i></i></span>'+x.role+'</div>'+
+    '<p class="line-a small">'+esc(x.t)+'</p></div>').join('');
+  for (let k = 0; k < parts.length; k++){
+    show(blocks(k));
+    const cur = stage.querySelectorAll('.blk')[k]; if (cur && parts.length > 1) cur.scrollIntoView({block:'nearest'});
+    const x = parts[k];
+    await go(() => say(x.qa ? exUrl(x.qa) : audioUrl(D, x.a), x.t, T)); if (T.dead) return;
+  }
+  show(blocks(-1));
 }
 
 /* ═══ ONE PHRASE, SIX BEATS ═══ */

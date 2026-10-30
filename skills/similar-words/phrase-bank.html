@@ -104,6 +104,17 @@
   .map{position:relative;height:calc(100vh - 176px);min-height:540px;
     margin:0 10px calc(12px + env(safe-area-inset-bottom,0px));}
   @media(max-width:480px){ .map{margin:0 6px calc(10px + env(safe-area-inset-bottom,0px));} }
+  /* PHONE: eight stance moves need room. At one screen high the long lists ran into
+     the next family's label ("Cause and reason" over "Opinion · Agree"); the map now
+     takes the height its lists need and the stage scrolls (30 Oct 2026). */
+  @media(max-width:560px){ .map{height:auto;min-height:1040px;} }
+  .cc-hear{display:inline-flex;align-items:center;gap:.45rem;margin:.7rem 0 0;padding:.5rem .9rem .5rem .5rem;border:none;border-radius:999px;
+    background:#527065;color:#fff;font:600 .82rem/1 var(--f-body);cursor:pointer}
+  .cc-hear i{width:1.4rem;height:1.4rem;border-radius:50%;background:rgba(255,255,255,.2);display:grid;place-items:center}
+  .cc-hear i::after{content:"";margin-left:2px;border-left:6px solid #fff;border-top:4px solid transparent;border-bottom:4px solid transparent}
+  .cc-hear.on i{animation:pbPulse 1s ease-in-out infinite}
+  @keyframes pbPulse{50%{transform:scale(1.15)}}
+  .cc-say{margin-top:.55rem;font:500 .7rem/1.3 'Geist Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--dim,#5C5852)}
   .mapPath{position:absolute;inset:0;width:100%;height:100%;overflow:visible;}
   .mapPath .road{fill:none;stroke:var(--mute);stroke-width:.16;stroke-linecap:round;}
   .mapPath .stem{stroke:var(--rule);stroke-width:.4;}
@@ -620,6 +631,8 @@
               <div class="cc-reveal-label">Model answer</div>
               <div class="cc-reveal-model" id="ccModel"></div>
               <div class="cc-reveal-alt" id="ccAlt"></div>
+              <button class="cc-hear" id="ccHear" type="button" onclick="ccHear()"><i aria-hidden="true"></i><span>Hear it</span></button>
+              <div class="cc-say">Now say it out loud, just like that.</div>
             </div>
             <div class="cc-assess" id="ccAssess">
               <button class="cc-assess-btn cc-got" onclick="ccMark(true)">✓ I built it</button>
@@ -1496,7 +1509,32 @@ function ccReveal(){
   document.getElementById('ccReveal').classList.add('show');
   document.getElementById('ccActions').style.display='none';
   document.getElementById('ccAssess').classList.add('show');
+  pbSay(it.models[0]);
 }
+/* ── SAMARA: the model, said out loud (30 Oct 2026) ─────────────────────────
+   Reveal plays the model straight away; ▶ replays it as often as the kid likes.
+   Recorded sentences come from phrase-bank-audio.json (keyed by the exact model
+   text); anything not recorded yet is read by the browser's own voice. */
+let PB_AUDIO={}; const pbA=new Audio(); pbA.preload='auto';
+function pbVoice(){ const v=(window.speechSynthesis&&speechSynthesis.getVoices())||[];
+  return v.find(x=>/en-GB/i.test(x.lang))||v.find(x=>/^en/i.test(x.lang))||null; }
+function pbTTS(t,done){
+  if(!window.speechSynthesis){ done&&done(); return; }
+  speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t); const v=pbVoice(); if(v) u.voice=v; u.lang='en-GB'; u.rate=.95;
+  u.onend=u.onerror=()=>done&&done(); speechSynthesis.speak(u);
+}
+function pbSay(t){
+  const b=document.getElementById('ccHear'); if(b) b.classList.add('on');
+  const fin=()=>{ if(b) b.classList.remove('on'); };
+  try{ speechSynthesis.cancel(); }catch(e){}
+  pbA.pause();
+  const url=PB_AUDIO[t];
+  if(!url){ pbTTS(t,fin); return; }
+  pbA.onended=fin; pbA.onerror=()=>{ pbA.onerror=null; pbTTS(t,fin); };
+  pbA.src=url; pbA.currentTime=0; pbA.play().catch(()=>{ pbA.onerror=null; pbTTS(t,fin); });
+}
+function ccHear(){ const m=document.getElementById('ccModel').textContent; if(m) pbSay(m); }
+
 function ccMark(got){
   if(!ccCurrent) return;
   // mark this cue as done (tick) regardless — the self-judgement is the student's own
@@ -1504,6 +1542,7 @@ function ccMark(got){
   ccCloseCard();
 }
 function ccCloseCard(){
+  pbA.pause(); try{ speechSynthesis.cancel(); }catch(e){}
   document.getElementById('ccOverlay').classList.remove('show');
   ccCurrent=null;
   // re-layout so the completed cue shows its tick, back to the spread for the next student
@@ -1600,9 +1639,11 @@ let QUESTIONS={};   // { functionId: [ "…", "…" ] }
   Promise.all([
     fetch(corpusUrl()).then(r=>{ if(!r.ok) throw new Error('corpus HTTP '+r.status); return r.json(); }),
     fetch(questionsUrl()).then(r=> r.ok ? r.json() : {questions:{}}).catch(()=>({questions:{}})),
-    fetch(drillsUrl()).then(r=> r.ok ? r.json() : {drills:{}}).catch(()=>({drills:{}}))
+    fetch(drillsUrl()).then(r=> r.ok ? r.json() : {drills:{}}).catch(()=>({drills:{}})),
+    fetch('/data/similar-words/phrase-bank-audio.json',{cache:'no-cache'}).then(r=> r.ok ? r.json() : {}).catch(()=>({}))
   ])
-    .then(([corpus, q, dr])=>{
+    .then(([corpus, q, dr, au])=>{
+      PB_AUDIO=(au && au.audio) || {};
       CORPUS=adaptCorpus(corpus);
       FAM_ORDER=Object.keys(CORPUS);   /* ten categories now, not five */
       QUESTIONS=(q && q.questions) ? q.questions : {};

@@ -50,6 +50,10 @@ body{height:100vh;height:100dvh;display:flex;flex-direction:column;color:var(--i
 .ac .meta{display:flex;align-items:center;gap:.3rem;flex-wrap:wrap}
 .pc{font:600 .66rem/1 'Geist Mono',monospace;padding:.28rem .4rem;border-radius:3px;background:var(--sage-bg);color:var(--sage-ink)}
 .ac .go{display:inline-block;line-height:1;align-self:center;margin-left:auto;white-space:nowrap;text-transform:none;letter-spacing:0;font:600 .74rem/1 Geist,system-ui,sans-serif;color:#fff;background:var(--sage-ink);padding:.42rem .7rem;border-radius:999px}
+.ar-part{display:flex;align-items:baseline;gap:.8rem;margin:0 0 .6rem;font:700 1.15rem/1.2 Geist,system-ui,sans-serif}
+.ar-part a{font:500 .8rem/1 Geist,system-ui,sans-serif;color:var(--sage-ink);text-decoration:none;margin-left:auto}
+.ar-head{margin-top:2rem}
+.ac .go{min-height:0!important;height:auto!important;display:inline-flex;align-items:center;padding:.42rem .75rem!important;line-height:1!important}
 .ac.soon{cursor:default;opacity:.55;box-shadow:none;background:transparent;border:1px dashed var(--rule)}
 .ac.soon .go{background:none;color:var(--faint);padding:0}
 .ac.mine{background:var(--car-bg)}
@@ -179,8 +183,10 @@ body{height:100vh;height:100dvh;display:flex;flex-direction:column;color:var(--i
 'use strict';
 /* areas with recordings and a reel file; everything else in the library shows as "soon" */
 const LIVE = { buying_time:'buying-time', reacting:'reacting', initiating:'initiating', asking_opinion:'asking', justifying:'reasons',
-  partly_agreeing:'partly', building_on:'building', negotiating:'deciding', comparing:'share', contrasting:'differ',
-  speculating:'guessing', managing_minute:'question', describing_one:'onephoto', answering_prompt:'answering' };
+  partly_agreeing:'partly', building_on:'building', negotiating:'deciding', repairing:'repairing' };
+/* Recorded in text but not in Samara's voice yet, so not shown (30 Oct 2026):
+   comparing:'share', contrasting:'differ', speculating:'guessing', managing_minute:'question',
+   describing_one:'onephoto', answering_prompt:'answering' — add back when recorded. */
 const KEEP_KEY = 'intuity.speakingKeep';
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -252,24 +258,32 @@ function setPaused(p){
 }
 
 /* ═══ AREAS ═══ */
+/* ?part=N (from a Part page's "Drills with Samara" pill) shows only that Part's
+   drills; the full list is one tap away. Areas not recorded yet are not shown. */
+const PARTQ = +new URLSearchParams(location.search).get('part') || 0;
+const PART_PAGE = {1:'part1.html',2:'part2-turn.html',3:'part3-talk.html',4:'part4-views.html'};
+const BUILD = [
+  {id:'longturn2',  part:2, h:'Part 2 · The long turn', p:'Similar, different, likely, another possibility: the whole minute, frame by frame.'},
+  {id:'discussion3',part:3, h:'Part 3 · The discussion', p:'Start, react, add, decide: two minutes with a partner.'},
+  {id:'opinion4',   part:4, h:'Part 4 · Your opinion', p:'Opinion, reason, example, then hand it back.'}];
 function drawAreas(){
-  const k = kept();
+  const k = kept(), inPart = parts => !PARTQ || (parts||[]).includes(PARTQ);
   let h = '';
-  if (k.length) h += '<div class="ar-grid" style="margin-bottom:.4rem"><button class="ac mine" data-area="mine"><h3>My phrases</h3><p>The phrases you kept with ♡, all in one feed.</p><div class="meta"><span class="go">▶ '+k.length+'</span></div></button></div>';
-  h += '<div class="ar-cat">Build the answer · part by part</div><div class="ar-grid">'+
-    '<button class="ac feat" data-area="longturn2"><h3>Part 2 · The long turn</h3><p>Similar, different, likely, another possibility: the whole minute, frame by frame.</p><div class="meta"><span class="pc">P2</span><span class="go">▶ Start</span></div></button>'+
-    '<button class="ac feat" data-area="discussion3"><h3>Part 3 · The discussion</h3><p>Start, react, add, decide: two minutes with a partner.</p><div class="meta"><span class="pc">P3</span><span class="go">▶ Start</span></div></button>'+
-    '<button class="ac feat" data-area="opinion4"><h3>Part 4 · Your opinion</h3><p>Opinion, reason, example, then hand it back.</p><div class="meta"><span class="pc">P4</span><span class="go">▶ Start</span></div></button></div>'+
-    '<div class="ar-cat">Phrases by area</div>';
+  if (PARTQ) h += '<p class="ar-part">Part '+PARTQ+' · drills <a href="drills.html">All drills ›</a></p>';
+  if (k.length && !PARTQ) h += '<div class="ar-grid" style="margin-bottom:.4rem"><button class="ac mine" data-area="mine"><h3>My phrases</h3><p>The phrases you kept with ♡, all in one feed.</p><div class="meta"><span class="go">▶ '+k.length+'</span></div></button></div>';
+  const b = BUILD.filter(x => inPart([x.part]));
+  if (b.length) h += '<div class="ar-cat">Build the answer</div><div class="ar-grid">'+b.map(x =>
+    '<button class="ac feat" data-area="'+x.id+'"><h3>'+x.h+'</h3><p>'+x.p+'</p><div class="meta"><span class="pc">P'+x.part+'</span><span class="go">▶ Start</span></div></button>').join('')+'</div>';
+  let first = true;
   Object.keys(LIB.categories).forEach(cat => {
-    const fns = Object.keys(LIB.functions).filter(id => LIB.functions[id].category === cat);
+    const fns = Object.keys(LIB.functions).filter(id => LIB.functions[id].category === cat && LIVE[id] && inPart(LIB.functions[id].parts));
     if (!fns.length) return;
+    if (first){ h += '<div class="ar-cat ar-head">Phrases by area</div>'; first = false; }
     h += '<div class="ar-cat">'+esc(LIB.categories[cat].label)+'</div><div class="ar-grid">';
     fns.forEach(id => {
-      const f = LIB.functions[id], live = LIVE[id];
-      h += '<button class="ac'+(live?'':' soon')+'"'+(live?' data-area="'+live+'"':' disabled')+'><h3>'+esc(f.label)+'</h3><p>'+esc(f.when||'')+'</p><div class="meta">'+
-        (f.parts||[]).map(p=>'<span class="pc">P'+p+'</span>').join('')+
-        '<span class="go">'+(live?'▶ Start':'Soon')+'</span></div></button>';
+      const f = LIB.functions[id];
+      h += '<button class="ac" data-area="'+LIVE[id]+'"><h3>'+esc(f.label)+'</h3><p>'+esc(f.when||'')+'</p><div class="meta">'+
+        (f.parts||[]).map(p=>'<span class="pc">P'+p+'</span>').join('')+'<span class="go">▶ Start</span></div></button>';
     });
     h += '</div>';
   });
@@ -307,7 +321,7 @@ async function openArea(id, push){
 function closeFeed(){
   stopReel(); cur = -1;
   $('#feed').hidden = true; $('#areas').hidden = false;
-  $('#sub').textContent = 'Speaking · Drills'; $('#back').textContent = '← Speaking';
+  $('#sub').textContent = 'Speaking · Drills'; setHomeBack();
   drawAreas();
 }
 $('#back').addEventListener('click', e => {
@@ -501,6 +515,10 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden && !tok.dead) setPaused(true); });
 
+function setHomeBack(){ const b = $('#back');
+  if (PARTQ){ b.textContent = '← Part '+PARTQ; b.href = '/skills/speaking/'+PART_PAGE[PARTQ]; }
+  else { b.textContent = '← Speaking'; b.href = '/index.html?openModal=speaking'; } }
+setHomeBack();
 /* ═══ START ═══ */
 fetch('/skills/speaking/data/speaking-phrases.json', {cache:'no-cache'}).then(r => r.json()).then(L => {
   LIB = L; drawAreas();

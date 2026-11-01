@@ -77,6 +77,13 @@ button{font-family:inherit;-webkit-tap-highlight-color:transparent}
 .alts{display:flex;gap:10px;width:100%;max-width:340px}
 .alts button{flex:1;height:52px;border-radius:999px;border:1.5px solid var(--pb-rule);background:transparent;color:#2F2B27;font:600 17px/1 Geist,sans-serif;cursor:pointer}
 
+.frames{list-style:none;margin:-.3rem 0 .2rem;padding:0;display:flex;flex-direction:column;gap:.45rem;text-align:center}
+.frames li{font:600 1.05rem/1.3 Geist,sans-serif;color:var(--pb-ink)}
+.qscreen.spoken{gap:1.05rem}
+.q-big.long{font-size:clamp(1.75rem,8vw,2.2rem)}
+.cmap{display:none}
+@media (min-width:900px) and (hover:hover){ .cmap{display:block;margin:3.2rem 0 0;text-align:center;font-size:.72rem;color:var(--pb-faint);text-decoration:none} .cmap:hover{color:var(--pb-ink)} }
+
 /* ── MAYA'S PILL (hallmark) ── */
 .maya{position:relative;width:212px;height:76px;flex:none}
 .maya svg.ring-o{position:absolute;inset:0;overflow:visible}
@@ -161,7 +168,12 @@ const qHtml = src => esc(src).replace(/\[([^\]]+)\]/g, '<em>$1</em>');
 function findFn(id){ for (const F of DATA.families) for (const f of F.functions) if (f.id === id){ S.fam = F; return f; } return null; }
 function findFam(id){ return DATA.families.find(F => F.id === id) || null; }
 function T(){ return S.fn.tracks[S.track]; }
-function Q(){ const qs = T().questions; return qs[S.qi % qs.length]; }
+function NQ(){ return T().questions.length + ((S.fn.more || []).length); }          /* belts + spoken questions */
+function spoken(){ return S.qi % NQ() >= T().questions.length; }
+function Q(){ const qs = T().questions, i = S.qi % NQ(); return i < qs.length ? qs[i] : { q:S.fn.more[i - qs.length], s:[] }; }
+/* the six expressions of a track, as frames: "What makes … appealing is …" */
+function frameOf(src){ const out = []; parse(src).forEach(g => { if (g.f) out.push(g.t); else if (out[out.length-1] !== ' … ') out.push(' … '); });
+  return out.join('').replace(/\s+/g, ' ').replace(/ ([,.!?])/g, '$1').trim(); }
 
 /* ── MAYA: recorded if we have it, otherwise the phone's own voice ── */
 const A = new Audio(); A.preload = 'auto';
@@ -202,7 +214,7 @@ function setHeader(){
   const b = $('#back'), sub = $('#sub');
   if (S.view === 'menu'){ b.textContent = FROM === 'writing' ? '← Writing' : '← Vocabulary'; b.href = '/index.html?openModal=' + FROM; sub.textContent = 'Phrase Bank'; }
   else if (S.view === 'fam'){ b.textContent = '← Phrase Bank'; b.href = '#'; sub.textContent = 'Phrase Bank'; }
-  else if (S.view === 'fn'){ b.textContent = '← ' + S.fam.label; b.href = '#'; sub.textContent = S.fn.label; }
+  else if (S.view === 'fn'){ b.textContent = '← ' + ({weighing:'Weighing up',reasoning:'Reasons',stance:'Stance',comparison:'Comparing',projecting:'Likelihood',assess:'Assess'}[S.fam.id] || 'Back'); b.href = '#'; sub.textContent = S.fn.label; }
   else { b.textContent = '← Question'; b.href = '#'; sub.textContent = S.fn.label; }
 }
 
@@ -214,7 +226,8 @@ function drawMenu(){
       '<div class="pend-dial still" aria-hidden="true"><span>'+(i+1)+'</span></div>'+
       '<span class="dial-name">'+esc(F.label)+'</span></button>';
   });
-  $('#app').innerHTML = h.replace('<div class="dials">','<div class="dials fam-dials">') + '</div>';
+  $('#app').innerHTML = h.replace('<div class="dials">','<div class="dials fam-dials">') + '</div>' +
+    '<a class="cmap mono" href="/skills/similar-words/phrase-map.html">Classroom map ›</a>';   /* teacher's PC only: the drag-around map and the class relay */
 }
 function drawFam(){
   const F = S.fam;
@@ -225,8 +238,23 @@ function drawFam(){
         '<span class="dial-name">'+esc(f.label)+'</span></button>'; }).join('')+'</div>';
 }
 
+function drawSpoken(){
+  const t = T(), q = Q(), n = S.qi % NQ() + 1;
+  $('#app').innerHTML =
+    '<div class="trk" role="tablist"><button data-track="everyday" class="'+(S.track==='everyday'?'on':'')+'">Everyday</button>'+
+    '<button data-track="academic" class="'+(S.track==='academic'?'on':'')+'">Academic</button></div>'+
+    '<div class="qscreen spoken">'+
+      '<div class="asks mono"><span class="wave" aria-hidden="true"><i style="height:8px"></i><i style="height:16px"></i><i style="height:11px"></i><i style="height:18px"></i><i style="height:9px"></i></span>Out loud · question '+n+' of '+NQ()+'</div>'+
+      '<h1 class="q-big'+(q.q.length > 55 ? ' long' : '')+'">'+qHtml(q.q)+'</h1>'+
+      '<p class="use">Answer out loud. Start with one of these:</p>'+
+      '<ul class="frames">'+t.questions[0].s.map(x => '<li>'+esc(frameOf(x))+'</li>').join('')+'</ul>'+
+      pill('play','PLAY',0)+
+      '<div class="alts"><button data-again-q>Next question →</button></div>'+
+    '</div>';
+}
 function drawFn(){
-  const t = T(), q = Q(), qs = t.questions.length;
+  if (spoken()) return drawSpoken();
+  const t = T(), q = Q(), qs = NQ();
   $('#app').innerHTML =
     '<div class="trk" role="tablist"><button data-track="everyday" class="'+(S.track==='everyday'?'on':'')+'">Everyday</button>'+
     '<button data-track="academic" class="'+(S.track==='academic'?'on':'')+'">Academic</button></div>'+
@@ -311,7 +339,7 @@ async function practiseTap(){
 }
 
 document.addEventListener('click', e => {
-  const el = e.target.closest('[data-fam],[data-fn],[data-track],[data-mode],[data-pill],[data-next],#belt,#back');
+  const el = e.target.closest('[data-fam],[data-fn],[data-track],[data-mode],[data-pill],[data-next],[data-again-q],#belt,#back');
   if (!el) return;
   if (el.id === 'back'){
     if (S.view === 'menu'){                       /* leave: back to the INTUITY page that sent us, else the menu */
@@ -324,6 +352,7 @@ document.addEventListener('click', e => {
   if (el.dataset.fn){ S.fn = findFn(el.dataset.fn); S.track = 'everyday'; S.qi = 0; S.mode = null; go('fn'); return; }
   if (el.dataset.track){ S.track = el.dataset.track; S.qi = 0; history.replaceState(Object.assign({}, history.state, { track:S.track, qi:0 }), ''); drawFn(); return; }
   if (el.hasAttribute('data-pill')){
+    if (S.view === 'fn' && spoken()){ hush(); const t = tok = { dead:false }; speak(plain(Q().q), t); return; }   /* Maya asks; the kid answers */
     if (S.view === 'fn'){ startMode('watch'); return; }
     if (S.mode === 'watch' && !S.end){                       /* one tap pauses, one tap resumes */
       if (S.paused){ S.paused = false; drawBelt(); runWatch(); }
@@ -332,7 +361,8 @@ document.addEventListener('click', e => {
     return;
   }
   if (el.dataset.mode){ startMode(el.dataset.mode); return; }
-  if (el.hasAttribute('data-next')){ S.qi++; S.mode = null; S.end = null; history.back(); setTimeout(() => { if (S.view === 'fn') drawFn(); }, 60); return; }
+  if (el.hasAttribute('data-again-q')){ hush(); S.qi = (S.qi + 1) % NQ(); drawFn(); scrollTo(0, 0); return; }
+  if (el.hasAttribute('data-next')){ S.qi = (S.qi + 1) % NQ(); S.mode = null; S.end = null; history.back(); setTimeout(() => { if (S.view === 'fn') drawFn(); }, 60); return; }
   if (el.id === 'belt'){ practiseTap(); return; }
 });
 window.addEventListener('popstate', e => {

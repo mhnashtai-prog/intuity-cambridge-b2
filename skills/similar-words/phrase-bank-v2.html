@@ -32,19 +32,33 @@ body{margin:0;min-height:100dvh;display:flex;flex-direction:column}
 .mono{font-family:'Geist Mono',monospace;font-weight:500;letter-spacing:.14em;text-transform:uppercase}
 button{font-family:inherit;-webkit-tap-highlight-color:transparent}
 
-/* ── MENU: the rings ── */
-.lead{margin:.4rem 0 1.4rem;font:400 1rem/1.5 Geist,system-ui,sans-serif;color:var(--pb-body);text-align:center}
-.fam{margin:0 0 1.6rem}
-.fam-h{font-size:.72rem;color:var(--pb-faint);text-align:center;margin:0 0 1rem}
-.rings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.1rem .6rem;justify-items:center}
-.ring{border:none;background:none;padding:0;display:flex;flex-direction:column;align-items:center;gap:.55rem;cursor:pointer;width:100%}
-.ring .pend-dial{--mark-sweep:var(--pb-sage);--mark-rest:var(--pb-sage);--mark-core:var(--pb-ink);--mark-ink:#FAF8F5;--mark-pct:100%;width:60px;height:60px}
-.ring .pend-dial span{font-size:1.05rem}
-.ring b{font:400 .82rem/1.15 Anton,Impact,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--pb-ink);text-align:center}
-.ring.soon{cursor:default}
-.ring.soon .pend-dial{--mark-sweep:#CFC8BC;--mark-rest:#CFC8BC;--mark-core:#B8B0A5;box-shadow:none}
-.ring.soon b{color:#A39B91}
-.ring:not(.soon):active .pend-dial{transform:scale(.95)}
+/* ── MENU: six swinging rings, one per family (the Speaking hub's gate) ── */
+:root{--dial:clamp(84px,22vw,116px)}
+.lead{margin:.2rem 0 2.6rem;font:400 1rem/1.5 Geist,system-ui,sans-serif;color:var(--pb-body);text-align:center}
+.dials{display:grid;grid-template-columns:repeat(2,auto);gap:clamp(3.4rem,8vh,4.4rem) clamp(2.2rem,12vw,4.5rem);justify-content:center;padding-top:30px}
+@media(min-width:720px){ .dials{grid-template-columns:repeat(3,auto)} }
+.dial-b{display:flex;flex-direction:column;align-items:center;gap:.85rem;border:none;background:none;padding:0;cursor:pointer;font:inherit;color:inherit}
+.dial-b .pend-hang{display:block;width:var(--dial);height:var(--dial);will-change:transform;animation:pbCalm 5.2s cubic-bezier(.37,0,.63,1) infinite}
+.dial-b .pend-dial{--mark-sweep:#708A81;--mark-rest:#4A433D;--mark-core:#201E1C;--mark-ink:#E5D1B8;--mark-pct:100%}
+.dial-b .pend-dial span{font-size:calc(var(--dial) * .3)}
+@keyframes pbCalm{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+@media(prefers-reduced-motion:reduce){ .dial-b .pend-hang{animation:none} }
+.dial-name{font:600 .82rem/1.2 Geist,sans-serif;color:#4A443D;text-align:center;max-width:9rem}
+.dial-b:active .pend-hang{transform:scale(.95)}
+.dial-b.soon{cursor:default}
+.dial-b.soon .pend-dial{--mark-sweep:#CFC8BC;--mark-rest:#CFC8BC;--mark-core:#B8B0A5;--mark-ink:#F3F1EC}
+.dial-b.soon .dial-name{color:#A39B91}
+
+/* ── FAMILY: its functions, as a short list ── */
+.fam-title{margin:.6rem 0 .3rem;text-align:center;font:400 clamp(2.2rem,10vw,2.8rem)/1.05 Anton,Impact,sans-serif;letter-spacing:.01em;color:var(--pb-ink)}
+.fam-note{margin:0 0 1.6rem;text-align:center;font-size:.72rem;color:var(--pb-faint)}
+.fns{display:flex;flex-direction:column;border-top:1px solid var(--pb-rule)}
+.fn-b{display:flex;align-items:center;justify-content:space-between;gap:1rem;min-height:68px;border:none;border-bottom:1px solid var(--pb-rule);background:none;padding:0 .3rem;cursor:pointer;text-align:left}
+.fn-b b{font:400 1.45rem/1.1 Anton,Impact,sans-serif;letter-spacing:.015em;color:var(--pb-ink)}
+.fn-b span{font-size:.68rem;color:var(--pb-sage-ink)}
+.fn-b.soon{cursor:default}
+.fn-b.soon b{color:#B3AB9F}
+.fn-b.soon span{color:#B3AB9F}
 
 /* ── FUNCTION: the question ── */
 .trk{display:flex;gap:6px;padding:4px;border-radius:999px;background:var(--pb-chip);margin:.2rem 0 0}
@@ -121,7 +135,7 @@ button{font-family:inherit;-webkit-tap-highlight-color:transparent}
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let DATA = null, AUDIO = {};
-const S = { view:'menu', fn:null, track:'everyday', qi:0, mode:null, n:-1, shown:false, end:null, playing:false, paused:false };
+const S = { view:'menu', fam:null, fn:null, track:'everyday', qi:0, mode:null, n:-1, shown:false, end:null, playing:false, paused:false };
 let tok = { dead:true };
 
 /* ── sentences: {…} = the target expression, […] = its key word ── */
@@ -138,7 +152,8 @@ function parse(src){
 const plain = src => src.replace(/[{}\[\]]/g, '');
 const qHtml = src => esc(src).replace(/\[([^\]]+)\]/g, '<em>$1</em>');
 
-function findFn(id){ for (const F of DATA.families) for (const f of F.functions) if (f.id === id) return f; return null; }
+function findFn(id){ for (const F of DATA.families) for (const f of F.functions) if (f.id === id){ S.fam = F; return f; } return null; }
+function findFam(id){ return DATA.families.find(F => F.id === id) || null; }
 function T(){ return S.fn.tracks[S.track]; }
 function Q(){ const qs = T().questions; return qs[S.qi % qs.length]; }
 
@@ -180,20 +195,26 @@ function pill(state, label, pct, small){
 function setHeader(){
   const b = $('#back'), sub = $('#sub');
   if (S.view === 'menu'){ b.textContent = '← Vocabulary'; b.href = '/index.html?openModal=vocabulary'; sub.textContent = 'Phrase Bank'; }
-  else if (S.view === 'fn'){ b.textContent = '← Phrase Bank'; b.href = '#'; sub.textContent = S.fn.label; }
+  else if (S.view === 'fam'){ b.textContent = '← Phrase Bank'; b.href = '#'; sub.textContent = 'Phrase Bank'; }
+  else if (S.view === 'fn'){ b.textContent = '← ' + S.fam.label; b.href = '#'; sub.textContent = S.fn.label; }
   else { b.textContent = '← Question'; b.href = '#'; sub.textContent = S.fn.label; }
 }
 
 function drawMenu(){
-  let h = '<p class="lead">Pick a ring. Each one is a job your English has to do.</p>', i = 0;
-  DATA.families.forEach(F => {
-    h += '<section class="fam"><h2 class="fam-h mono">'+esc(F.label)+'</h2><div class="rings">';
-    F.functions.forEach(f => { i++; const live = !!f.tracks;
-      h += '<button class="ring'+(live?'':' soon')+'" '+(live?'data-fn="'+f.id+'"':'disabled aria-disabled="true"')+'>'+
-        '<span class="pend-dial"><span>'+String(i).padStart(2,'0')+'</span></span><b>'+esc(f.label)+'</b></button>'; });
-    h += '</div></section>';
+  let h = '<p class="lead">Six families. Each one is a job your English has to do.</p><div class="dials">';
+  DATA.families.forEach((F, i) => {
+    const live = F.functions.some(f => f.tracks);
+    h += '<button class="dial-b'+(live?'':' soon')+'" type="button" '+(live?'data-fam="'+F.id+'"':'disabled aria-disabled="true"')+' aria-label="'+esc(F.label)+'">'+
+      '<div class="pend-hang" style="animation-delay:'+(i * -1.3).toFixed(2)+'s" aria-hidden="true"><div class="pend-dial"><span>'+(i+1)+'</span></div></div>'+
+      '<span class="dial-name">'+esc(F.label)+'</span></button>';
   });
-  $('#app').innerHTML = h;
+  $('#app').innerHTML = h + '</div>';
+}
+function drawFam(){
+  const F = S.fam;
+  $('#app').innerHTML = '<h1 class="fam-title">'+esc(F.label)+'</h1><p class="fam-note mono">'+F.functions.length+' jobs · Everyday and Academic</p><div class="fns">'+
+    F.functions.map(f => { const live = !!f.tracks;
+      return '<button class="fn-b'+(live?'':' soon')+'" type="button" '+(live?'data-fn="'+f.id+'"':'disabled aria-disabled="true"')+'><b>'+esc(f.label)+'</b><span class="mono">'+(live?'Open ›':'Soon')+'</span></button>'; }).join('')+'</div>';
 }
 
 function drawFn(){
@@ -247,13 +268,13 @@ function drawBelt(){
   if (cur) cur.scrollIntoView({ block:'nearest', behavior:'smooth' });
 }
 
-function draw(){ setHeader(); $('#app').classList.toggle('full', S.view === 'belt'); if (S.view === 'menu') drawMenu(); else if (S.view === 'fn') drawFn(); else drawBelt(); }
+function draw(){ setHeader(); $('#app').classList.toggle('full', S.view === 'belt'); if (S.view === 'menu') drawMenu(); else if (S.view === 'fam') drawFam(); else if (S.view === 'fn') drawFn(); else drawBelt(); }
 
 /* ═══ FLOW ═══ */
 function go(view, push){
   hush();
   S.view = view;
-  if (push !== false) history.pushState({ v:view, fn:S.fn && S.fn.id, track:S.track, qi:S.qi, mode:S.mode }, '', location.pathname + (S.fn && view !== 'menu' ? '?fn='+S.fn.id : ''));
+  if (push !== false) history.pushState({ v:view, fam:S.fam && S.fam.id, fn:S.fn && S.fn.id, track:S.track, qi:S.qi, mode:S.mode }, '', location.pathname + (view === 'fam' ? '?fam='+S.fam.id : S.fn && view !== 'menu' ? '?fn='+S.fn.id : ''));
   draw(); scrollTo(0, 0);
 }
 function startMode(mode){
@@ -282,12 +303,13 @@ async function practiseTap(){
 }
 
 document.addEventListener('click', e => {
-  const el = e.target.closest('[data-fn],[data-track],[data-mode],[data-pill],[data-next],#belt,#back');
+  const el = e.target.closest('[data-fam],[data-fn],[data-track],[data-mode],[data-pill],[data-next],#belt,#back');
   if (!el) return;
   if (el.id === 'back'){
     if (S.view === 'menu') return;               /* the real link: home */
     e.preventDefault(); history.back(); return;
   }
+  if (el.dataset.fam){ S.fam = findFam(el.dataset.fam); S.fn = null; go('fam'); return; }
   if (el.dataset.fn){ S.fn = findFn(el.dataset.fn); S.track = 'everyday'; S.qi = 0; S.mode = null; go('fn'); return; }
   if (el.dataset.track){ S.track = el.dataset.track; S.qi = 0; history.replaceState(Object.assign({}, history.state, { track:S.track, qi:0 }), ''); drawFn(); return; }
   if (el.hasAttribute('data-pill')){
@@ -306,6 +328,7 @@ window.addEventListener('popstate', e => {
   hush();
   const st = e.state;
   if (!st || st.v === 'menu'){ S.view = 'menu'; S.fn = null; draw(); return; }
+  if (st.v === 'fam'){ S.fam = findFam(st.fam); S.fn = null; S.view = 'fam'; draw(); return; }
   S.fn = findFn(st.fn); S.view = st.v;
   if (S.view === 'belt'){ S.view = 'fn'; }       /* coming back to a belt: start again from the question */
   draw();
@@ -326,9 +349,10 @@ Promise.all([
   fetch('/data/similar-words/phrase-bank-v2-audio.json', { cache:'no-cache' }).then(r => r.ok ? r.json() : {}).catch(() => ({}))
 ]).then(([d, a]) => {
   DATA = d; AUDIO = a || {};
-  const want = new URLSearchParams(location.search).get('fn'), f = want && findFn(want);
+  const qs = new URLSearchParams(location.search), f = qs.get('fn') && findFn(qs.get('fn')), F = qs.get('fam') && findFam(qs.get('fam'));
   history.replaceState({ v:'menu' }, '', location.pathname);
-  if (f && f.tracks){ S.fn = f; go('fn'); } else draw();
+  if (f && f.tracks){ S.fam = F || S.fam; history.pushState({ v:'fam', fam:S.fam.id }, '', location.pathname+'?fam='+S.fam.id); S.fn = f; go('fn'); }
+  else if (F){ S.fam = F; go('fam'); } else draw();
 });
 </script>
 </body>

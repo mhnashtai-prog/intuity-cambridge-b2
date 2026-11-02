@@ -41,7 +41,6 @@
     'academic-vocabulary-sets': 'Academic Vocabulary', 'phrasal-verbs': 'Phrasal Verbs',
     'gerunds-infinitives': 'Gerunds & Infinitives', 'conditionals': 'Conditionals',
     'master-part4': 'Use of English · Part 4', 'full-test': 'Full test',
-    'turn-the-card': 'Turn the Card · Part 4'
   };
   function topicName(t) {
     if (NAMES[t]) return NAMES[t];

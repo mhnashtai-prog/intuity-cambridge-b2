@@ -489,17 +489,37 @@ function tabs(){
 }
 /* THE ROW (2 Nov 2026, after a class): under the task tabs, always on
    screen — "new models" first, then every model by name. */
-function drawRow(){
-  const bar=$('subjects'), N=LINE.length;
-  bar.innerHTML=
-    LINE.map((x,i)=>`<button class="ftab" type="button" data-i="${i}">${esc(x.short)}</button>`).join('');
-  bar.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{ if(PA) PA.goTo(+b.dataset.i,true); });
-}
-function syncRow(i){
-  const bar=$('subjects'); if(!bar) return;
-  bar.querySelectorAll('[data-i]').forEach(b=>{ const on=+b.dataset.i===i; b.classList.toggle('active',on); b.setAttribute('aria-current',on?'true':'false');
+/* THE ROW follows the task (the teacher, 2 Nov): Essay shows the six essay
+   types, Email its four emails; Review and Report show their subjects, and
+   a subject tap turns that one card to it. */
+let ROWT=null;
+function drawRow(){}
+function rowFor(i){
+  const bar=$('subjects'), x=LINE[i]; if(!bar||!x) return;
+  const t=x.t, sub=x.all;
+  const key=t+(sub?':'+i:'');
+  if(ROWT!==key){ ROWT=key;
+    bar.innerHTML=sub? x.recs.map(r=>`<button class="ftab" type="button" data-s="${esc(r.key)}">${esc(r.label)}</button>`).join('')
+      : LINE.map((y,k)=>y.t===t?`<button class="ftab" type="button" data-i="${k}">${esc(y.short)}</button>`:'').join('');
+    bar.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{ if(PA) PA.goTo(+b.dataset.i,true); });
+    bar.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>setSubject(i,b.dataset.s));
+    bar.scrollLeft=0;
+  }
+  const curS=sub?MODELS[i].rec.key:null;
+  bar.querySelectorAll('.ftab').forEach(b=>{ const on=sub?b.dataset.s===curS:+b.dataset.i===i; b.classList.toggle('active',on); b.setAttribute('aria-current',on?'true':'false');
     if(on){ const l=b.offsetLeft-(bar.clientWidth-b.offsetWidth)/2; try{ bar.scrollTo({left:Math.max(0,l),behavior:'smooth'}); }catch(e){ bar.scrollLeft=l; } } });
 }
+/* a Review or Report card turns to another subject, in place */
+function setSubject(i,key){
+  const x=LINE[i], k=x.recs.findIndex(r=>r.key===key); if(k<0) return;
+  x.rot=((k-DEAL)%x.recs.length+x.recs.length)%x.recs.length;
+  const rec=x.recs[k]; let seed=20261022+DEAL*7919; for(const ch of x.t+rec.key) seed=(seed*31+ch.charCodeAt(0))|0;
+  R=seeded(seed); const m=runRecipe(rec,DEAL+1); R=Math.random; m.type=x.t; m.title=x.name+' · '+rec.label; MODELS[i]=m;
+  const col=$('parade').querySelectorAll('.pa-col')[i]; if(col){ col.querySelector('.pa-t').textContent=m.title; col.querySelector('.pm').innerHTML=modelHTML(m);
+    col.setAttribute('aria-label',m.title+'. '+(i+1)+' of '+LINE.length+'.'); }
+  rowFor(i);
+}
+function syncRow(i){ rowFor(i); }
 function syncTabs(i){
   syncRow(i);
   const t=LINE[i]&&LINE[i].t; if(!t||PAGE==='story') return;

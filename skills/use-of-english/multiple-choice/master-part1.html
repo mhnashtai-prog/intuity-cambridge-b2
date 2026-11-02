@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@400..600&family=Space+Grotesk:wght@700&family=Anton&family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400..500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=20261018">
+<link rel="stylesheet" href="/data/use-of-english/master-kit.css?v=1">
 <style>
 /* ═══ MASTER · PART 1 · the learning ring for the multiple-choice cloze ════
    The exam ring (multiple-choice.html) practises the task. This page
@@ -244,6 +245,7 @@ main.wf{padding-top:calc(var(--wf-head,170px) + 1rem)}
   <div class="mode-selector" id="modes">
     <button class="mode-btn" data-mode="practice" type="button">Practice</button>
     <button class="mode-btn" data-mode="game" type="button">Game</button>
+    <a class="mode-btn" href="/skills/challenge/challenge.html?board=1&amp;section=vocabulary&amp;topic=uoe-part1">Board</a>
   </div>
   <div class="set-tabs" id="sets"></div>
 </header>
@@ -257,6 +259,8 @@ main.wf{padding-top:calc(var(--wf-head,170px) + 1rem)}
 
 <script src="/tools/intuity-log.js?v=1"></script>
 <script src="/tools/intuity-ring.js?v=1"></script>
+<script src="/skills/grammar-rules/intuity-sound.js"></script>
+<script src="/data/use-of-english/master-kit.js?v=1"></script>
 <script>
 (function(){
 'use strict';
@@ -264,7 +268,7 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
 const TOPIC='master-part1', PART='UoE1';
-const SETS=[['colloc','Collocations'],['word','Word choice'],['prep','Prepositions'],['pv','Phrasal verbs'],['grammar','Grammar'],['mix','Mix']];
+const SETS=[['mix','Mix'],['colloc','Collocations'],['word','Word choice'],['prep','Prepositions'],['pv','Phrasal verbs'],['grammar','Grammar']];
 const P=new URLSearchParams(location.search);
 /* Part 1 has no Explore: Practice gives the answer and the reason straight
    after each question, which is what the card list was for. Old links that
@@ -289,6 +293,7 @@ function drawNav(){
     $('topline').innerHTML=`${esc(set==='mix'?'All topics':label)} · <b>${n}</b> questions · <b>${g}</b> ${g===1?'set':'sets'} of 8 · ${all} in Part 1`; }
   document.querySelectorAll('#modes .mode-btn').forEach(b=>{ const on=b.dataset.mode===mode; b.classList.toggle('active',on); on?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'); });
   ['explore','practice','game'].forEach(v=>$(v).classList.toggle('hidden',v!==mode));
+  $('topline').classList.toggle('hidden',mode==='practice');          /* Practice carries its own line on the sheet */
   history.replaceState(null,'',location.pathname+'?'+new URLSearchParams({mode,set}));
 }
 function go(){ stopClock(); drawNav(); if(mode==='explore') explore(); else if(mode==='practice') gate(); else clockGate(); }
@@ -317,59 +322,18 @@ function openCard(html){ closeCard(); const s=document.createElement('div'); s.c
 function closeCard(){ const s=$('scrim'); if(s) s.remove(); }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeCard(); });
 
-/* ══ PRACTICE: eight questions — one exam set — mistakes first, the answer and the reason straight after ══ */
-let S=null;
+/* ══ PRACTICE: the Part 1 exam sheet — eight sentences, All or One at a
+   time, tap a gap for its four options, Submit marks the set, mistakes come
+   back first. /data/use-of-english/master-kit.js ══ */
 function gate(){
-  const n=pool().length, d=pool().filter(i=>due(i.id)).length;
-  $('practice').innerHTML=`<div class="q result"><p class="lead">Eight questions — one exam set — from ${n}, four options each, as in the exam.${d?` <b>${d}</b> ${d===1?'is a mistake':'are mistakes'} from last time, so ${d===1?'it comes':'they come'} first.`:''}</p>
-    <button class="btn" type="button" id="pStart">Start</button></div>`;
-  $('pStart').onclick=start;
-}
-function start(){ const all=shuffle(pool()); all.sort((a,b)=>due(b.id)-due(a.id)); S={items:all.slice(0,8),i:0,res:[],fixed:0,half:0}; showQ(); }
-function showQ(){
-  const i=S.items[S.i]; if(!i) return results(); const p=parts(i.s);
-  const dots=S.items.map((x,k)=>`<i class="${S.res[k]===true?'ok':S.res[k]===false?'no':k===S.i?'now':''}"></i>`).join('');
-  $('practice').innerHTML=`<div class="dots" aria-label="Question ${S.i+1} of ${S.items.length}">${dots}</div><div class="q">
-    <p class="ask">Which word fits the gap?</p>
-    <div class="line"><p class="sent">${esc(p.pre)}<span class="blank" id="blank">&nbsp;</span>${esc(p.post)}</p></div>
-    <div class="opts">${shuffle([i.a].concat(i.o)).map(o=>`<button class="opt" type="button" data-o="${esc(o)}">${esc(o)}</button>`).join('')}</div>
-    <div class="fb" id="fb" aria-live="polite"></div><div class="next-row hidden" id="nextRow"><button class="btn" type="button" id="next">${S.i+1<S.items.length?'Next':'See your result'}</button></div></div>`;
-  $('practice').querySelectorAll('.opt').forEach(b=>b.onclick=()=>answer(b));
-  $('next').onclick=()=>{ S.i++; showQ(); };
-}
-/* NO "NEXT" BUTTON. After an answer the page moves on by itself: about a
-   second after a right answer, longer after a wrong one so the answer and
-   its reason are read. A thin line shows it is about to go; any tap or
-   Enter skips the wait. The button is still there, hidden, so the flow
-   behind it (last question → result) is exactly the one it always was. */
-let goT=null, goOff=null;
-function autoNext(ms){
-  const row=$('nextRow'), nb=$('next'); if(!row||!nb) return;
-  if(goOff) goOff(); clearTimeout(goT);
-  row.classList.remove('hidden'); row.classList.add('auto'); row.style.setProperty('--ms',ms+'ms');
-  const done=()=>{ clearTimeout(goT); if(goOff) goOff(); if(nb.isConnected) nb.click(); };
-  const tap=e=>{ if(!nb.isConnected){ goOff&&goOff(); return; } if(e.target.closest&&e.target.closest('a,header,.mode-btn,.vtab,.seg,button.tab')) return; done(); };
-  const key=e=>{ if(!nb.isConnected){ goOff&&goOff(); return; } if(e.key==='Enter'||e.key===' '){ e.preventDefault(); done(); } };
-  const arm=setTimeout(()=>{ document.addEventListener('pointerdown',tap,true); document.addEventListener('keydown',key,true); },300);
-  goOff=()=>{ clearTimeout(arm); document.removeEventListener('pointerdown',tap,true); document.removeEventListener('keydown',key,true); goOff=null; };
-  goT=setTimeout(done,ms);
-}
-function answer(btn){
-  const i=S.items[S.i]; if(S.res[S.i]!==undefined) return; const right=btn.dataset.o===i.a;
-  S.res[S.i]=right; const was=(()=>{ try{ return IntuityRing.has(i.id); }catch(e){ return false; } })();
-  remember(i,right); if(right&&was){ try{ IntuityRing.has(i.id)?S.half++:S.fixed++; }catch(e){} }
-  $('practice').querySelectorAll('.opt').forEach(b=>{ b.disabled=true; if(b.dataset.o===i.a) b.classList.add('ok'); }); if(!right) btn.classList.add('no');
-  $('blank').textContent=i.a;
-  $('fb').innerHTML=(right?'<b class="ok">Right.</b> ':`<b class="no">The answer: ${esc(i.a)}.</b> `)+esc(i.why);
-  autoNext(right?1100:3200);
-}
-function results(){
-  const r=S.res.filter(Boolean).length, waiting=(()=>{ try{ return pool().filter(i=>IntuityRing.has(i.id)).length; }catch(e){ return 0; } })();
-  const bits=[]; if(S.fixed) bits.push(`<b>${S.fixed}</b> ${S.fixed===1?'mistake':'mistakes'} fixed for good`); if(S.half) bits.push(`<b>${S.half}</b> right today — ${S.half===1?'it comes':'they come'} back tomorrow to make sure`);
-  $('practice').innerHTML=`<div class="q result"><p class="kick" style="justify-content:center"><i></i>Practice</p><div class="big">${r} of ${S.items.length}</div>
-    <p class="lead">right</p><p class="ring-line">${bits.length?bits.join(' · ')+'. ':''}${waiting?`Still to fix here: <b>${waiting}</b>.`:'Nothing left to fix in this set.'}</p>
-    <button class="btn" type="button" id="again">Eight more</button></div>`;
-  $('again').onclick=start;
+  MasterKit.mount($('practice'),{
+    n:8, max:1, kind:'choose', kick:'Part 1',
+    rubric:'Tap each gap and choose the word that fits.',
+    label:()=>set==='mix'?'Mixed':((SETS.find(x=>x[0]===set)||[])[1]||''),
+    items:()=>pool().map(i=>{ const p=parts(i.s); return { id:i.id, pre:p.pre, post:p.post, ans:i.a, why:i.why,
+      opts:[i.a].concat(i.o), check:v=>v===i.a?1:0 }; }),
+    remember:(q,ok)=>remember(D.items.find(i=>i.id===q.id),ok)
+  });
 }
 
 /* ══ GAME · AGAINST THE CLOCK — the ring is the fuse ══

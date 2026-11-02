@@ -285,7 +285,7 @@
    To bring the old looks back, delete this block. */
 (function(){ try{
   if(!document.querySelector('link[href*="/tools/intuity-cards.css"]')){
-    var l=document.createElement('link'); l.rel='stylesheet'; l.href='/tools/intuity-cards.css?v=2';
+    var l=document.createElement('link'); l.rel='stylesheet'; l.href='/tools/intuity-cards.css?v=3';
     (document.head||document.documentElement).appendChild(l); }
   /* a grammar Explore card open inside its slides: hide the slides' own ✕ */
   window.addEventListener('message',function(e){ if(e.data&&e.data.intuity==='cardOpen') document.documentElement.classList.toggle('card-open-inside',!!e.data.open); });

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>INTUITY — Cue Cards to print</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@400..600&display=swap" rel="stylesheet">
+<style>
+/* ═══ CUE CARDS · THE PRINT SET (Nov 2026) ═══════════════════════════════
+   The printed cards were made by hand from the essay gallery and the review
+   cards, so they stopped matching the Model Generator as soon as it moved
+   on. This page draws them FROM THE GENERATOR'S OWN DATA
+   (/data/writing/cue-generator.json): edit a phrase there and the cards
+   follow. Thirteen types, six cards each, six cards to an A4 sheet with
+   dashed cut lines — the layout of the Film / Series sheet.
+
+   Each card is one route through the text: 01 open · 02 the body, one line
+   per paragraph or feature · 03 close. Card 1 is the SAFE card (the ★
+   go-to phrase at every step); cards 2–6 deal the other checked phrases.
+   Print: A4, margins none, scale 100%. ═══════════════════════════════════ */
+@page{size:A4;margin:0}
+*{box-sizing:border-box}
+html,body{margin:0;background:#E9E6E0;color:#1E1A17;font-family:'Geist',system-ui,sans-serif;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.note{max-width:210mm;margin:14px auto 10px;font-size:13px;line-height:1.5;color:#5C5852;padding:0 4px}
+.note b{color:#1E1A17}
+.sheet{width:210mm;height:297mm;margin:0 auto 14px;background:#fff;display:grid;
+  grid-template-columns:1fr 1fr;grid-template-rows:repeat(3,1fr);position:relative;overflow:hidden;
+  box-shadow:0 2px 10px rgba(0,0,0,.12);page-break-after:always;break-after:page}
+.sheet:last-child{page-break-after:auto;break-after:auto}
+/* cut lines */
+.sheet::before,.sheet::after{content:'';position:absolute;pointer-events:none}
+.sheet::before{left:50%;top:0;bottom:0;border-left:1px dashed #B9B2A8}
+.sheet::after{left:0;right:0;top:33.333%;height:33.333%;border-top:1px dashed #B9B2A8;border-bottom:1px dashed #B9B2A8}
+.card{position:relative;padding:7mm 7mm 5.5mm 7mm;display:flex;flex-direction:column;overflow:hidden;--c:#5A3560}
+.top{display:flex;align-items:flex-start;justify-content:space-between;gap:4mm;margin-bottom:3mm}
+.title{font-weight:800;font-size:15pt;line-height:1;letter-spacing:.01em;text-transform:uppercase;color:var(--c)}
+.title small{display:block;font-size:7.4pt;font-weight:700;letter-spacing:.16em;margin-top:1.4mm;color:#8A8378}
+.num{flex:none;width:9.5mm;height:9.5mm;border-radius:50%;background:var(--c);color:#fff;
+  font-weight:700;font-size:11pt;display:grid;place-items:center}
+.spine{flex:1;position:relative;display:flex;flex-direction:column;justify-content:space-between;padding-left:9mm}
+.spine::before{content:'';position:absolute;left:3.1mm;top:2mm;bottom:2mm;width:.55mm;background:var(--c);opacity:.75}
+.st{position:relative;margin-bottom:1.6mm}
+.st:last-child{margin-bottom:0}
+.dot{position:absolute;left:-9mm;top:-.6mm;width:6.8mm;height:6.8mm;border-radius:50%;background:var(--c);color:#fff;
+  font-family:'Geist Mono',ui-monospace,monospace;font-size:6.2pt;font-weight:600;display:grid;place-items:center}
+.kk{font-size:5.9pt;font-weight:700;letter-spacing:.17em;text-transform:uppercase;color:#6B645C;margin:0 0 .8mm}
+.ln{font-size:var(--fs,8.6pt);line-height:1.34;margin:0 0 1.2mm;color:#3A3530}
+.ln:last-child{margin-bottom:0}
+.ln b{font-weight:700;color:#1E1A17}
+.mid .ln b{color:var(--c)}
+.ln .g{color:#8A8378;font-weight:500}
+.ln .h{font-family:'Geist Mono',ui-monospace,monospace;font-size:.78em;color:#8A8378;white-space:nowrap}
+.foot{display:flex;justify-content:space-between;align-items:baseline;border-top:.3mm solid #CFC8BC;padding-top:1.6mm;margin-top:2.4mm}
+.foot .b{font-size:6.2pt;font-weight:600;letter-spacing:.3em;color:#6B645C}
+.foot .c{font-size:5.8pt;font-style:italic;color:#8A8378}
+.sm{--fs:8pt}.xs{--fs:7.5pt}.xxs{--fs:7pt}
+@media print{ html,body{background:#fff} .note{display:none} .sheet{margin:0;box-shadow:none} }
+</style>
+</head>
+<body>
+<p class="note" id="note">Loading the cards…</p>
+<div id="out"></div>
+<script>
+(function(){
+'use strict';
+/* one colour per family, as on the printed sets: essays plum, reviews green */
+const COLOR={essay:'#5A3560',ar:'#9A5A2C',rv:'#4F6B57',rp:'#3B4A5A',formal:'#2F5470',informal:'#7A4E6E'};
+const CODE={fa:'FA',op:'OP',ad:'AD',ps:'PS',ce:'CE',st:'ST',ar:'AR','ef-app':'EA','ef-req':'ER','ei-news':'IN','ei-advice':'IA',rv:'RV',rp:'RP'};
+const ESSAYS=['fa','op','ad','ps','ce','st'];
+const colorOf=id=>ESSAYS.includes(id)?COLOR.essay:id.startsWith('ef')?COLOR.formal:id.startsWith('ei')?COLOR.informal:COLOR[id];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const PER=6;   /* cards per type: card 1 the safe one, then five more */
+
+/* a phrase as the card prints it: the fixed words in bold up to the first
+   gap, the gap as "…", the rest plain, the grammar hint small */
+function phrase(item){
+  let t=String(item.t).replace(/\[[^\]]*\]/g,'…');
+  const k=t.indexOf('…');
+  let html=k>0?'<b>'+esc(t.slice(0,k).trimEnd())+'</b> '+esc(t.slice(k)):'<b>'+esc(t)+'</b>';
+  html=html.replace(/…/g,'<span class="g">…</span>');
+  if(item.h) html+=' <span class="h">'+esc(item.h)+'</span>';
+  return html;
+}
+/* which phrase a step gives on card k: the ★ one first, then the others in turn */
+function pick(step,k,shift){
+  const L=step.items; if(!L.length) return null;
+  const g=Math.max(0,L.findIndex(i=>i.go));
+  const order=[g].concat(L.map((_,i)=>i).filter(i=>i!==g));
+  return L[order[(k+shift)%order.length]];
+}
+const real=p=>p.steps.filter(s=>!s.support&&s.items.length);
+
+function cardsFor(t){
+  const P=t.paras.filter(p=>real(p).length);
+  /* the article's title is advice, not a phrase: the card opens on the hook */
+  let first=P[0], rest=P.slice(1);
+  if(t.id==='ar'){ first=P[1]; rest=P.slice(2); }
+  /* a report closes with its recommendations and its conclusion */
+  const closeN=t.id==='rp'?2:1;
+  const close=rest.slice(-closeN), body=rest.slice(0,rest.length-closeN);
+  const bodySteps=[]; body.forEach(p=>real(p).forEach(s=>bodySteps.push({p,s})));
+  const isEssay=ESSAYS.includes(t.id);
+  const midName=body.length===1?body[0].name:'Body';
+  const out=[];
+  for(let k=0;k<PER;k++){
+    const seen={};
+    /* each step its own line: a sentence that ends on a grammar hint must
+       not run straight into the next one */
+    const one=real(first).map((s,i)=>'<p class="ln">'+phrase(pick(s,k,i))+'</p>').join('');
+    const mid=bodySteps.slice(0,4).map(({s},i)=>{
+      /* the emails ask the same step twice (two questions, two pieces of
+         advice): the second line takes the next phrase, never the same one */
+      const key=s.label; seen[key]=(seen[key]||0)+1;
+      return '<p class="ln">'+phrase(pick(s,k,i+seen[key]-1))+'</p>'; }).join('');
+    /* a formal email signs off to match its greeting: Dear Sir or Madam →
+       Yours faithfully, Dear Ms Lopes → Yours sincerely */
+    const greet=String((pick(real(first)[0],k,0)||{}).t||'');
+    const three=close.flatMap(p=>real(p)).map((s,i)=>{
+      let it=pick(s,k,i);
+      if(/^Sign-off/i.test(s.label)&&/^Dear /.test(greet)){
+        const want=/Sir or Madam/.test(greet)?/faithfully/i:/sincerely/i;
+        it=s.items.find(x=>want.test(x.t))||it; it=Object.assign({},it,{h:''});
+      }
+      return '<p class="ln">'+phrase(it)+'</p>'; }).join('');
+    out.push({k,one,mid,three,
+      /* the labels of the printed sets: what the step does · where it sits */
+      l1:'Open · '+(first.name==='Opening'?'Opening':'Introduction'),
+      l2:isEssay?'Argue · Body':t.id==='rv'?'Features · Body':t.id==='rp'?'Findings · Body':t.id==='ar'?'Develop · Body':'Body',
+      l3:t.id==='rv'?'Recommend · Verdict':t.id==='rp'?'Recommend · Conclusion':t.id==='ar'?'Close · Closing':first.name==='Opening'?'Close · Sign-off':'Close · Conclusion'});
+  }
+  return out;
+}
+
+function cardHTML(t,c){
+  const name=t.name.split(' · ');
+  return `<div class="card" style="--c:${colorOf(t.id)}" data-id="${esc(CODE[t.id])}-${c.k+1}">
+    <div class="top"><div class="title">${esc(name[0])}${name[1]?`<small>${esc(name[1])}</small>`:`<small>${esc(t.group)}</small>`}</div><div class="num">${c.k+1}</div></div>
+    <div class="spine">
+      <div class="st"><span class="dot">01</span><p class="kk">${esc(c.l1)}</p>${c.one}</div>
+      <div class="st mid"><span class="dot">02</span><p class="kk">${esc(c.l2)}</p>${c.mid}</div>
+      <div class="st"><span class="dot">03</span><p class="kk">${esc(c.l3)}</p>${c.three}</div>
+    </div>
+    <div class="foot"><span class="b">INTUITY</span><span class="c">${esc(CODE[t.id])}-${c.k+1} · © Majid Nashtai 2026</span></div>
+  </div>`;
+}
+
+/* a card that runs long steps its type down until it fits — never clipped */
+function fit(){
+  document.querySelectorAll('.card').forEach(card=>{
+    for(const cls of ['sm','xs','xxs']){
+      if(card.scrollHeight<=card.clientHeight+1) return;
+      card.classList.add(cls);
+    }
+  });
+}
+
+fetch('/data/writing/cue-generator.json',{cache:'no-cache'}).then(r=>r.json()).then(D=>{
+  const want=new URLSearchParams(location.search).get('type');
+  const types=D.types.filter(t=>!want||want.split(',').includes(t.id));
+  document.getElementById('out').innerHTML=types.map(t=>`<section class="sheet">${cardsFor(t).map(c=>cardHTML(t,c)).join('')}</section>`).join('');
+  document.getElementById('note').innerHTML=`<b>${types.length} types · ${types.length*PER} cards · ${types.length} A4 sheets.</b> Drawn live from the Model Generator, so the wording always matches it. Print on A4 with margins set to none and scale 100%, then cut along the dashed lines. One type only: add <b>?type=fa</b> (fa, op, ad, ps, ce, st, ar, ef-app, ef-req, ei-news, ei-advice, rv, rp).`;
+  (document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve()).then(()=>{ fit(); document.body.dataset.ready='1'; });
+}).catch(()=>{ document.getElementById('note').textContent='The cards did not load. Check your connection and reload.'; });
+})();
+</script>
+</body>
+</html>

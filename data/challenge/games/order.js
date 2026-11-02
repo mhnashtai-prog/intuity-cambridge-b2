@@ -8,7 +8,7 @@
   solution:r=>r.words.join(' '),
   render(host,r,ctx){
     const seq=[];
-    host.innerHTML=`<p class="cg-prompt">${ctx.esc(r.prompt||'Build the sentence.')} Tap the words in order.</p><div class="cg-built" id="cgBuilt"></div>
+    host.innerHTML=`<p class="cg-prompt">${ctx.esc(r.prompt||'Build the sentence.')} Tap the ${r.unit==='sentences'?'sentences':'words'} in order.</p><div class="cg-built" id="cgBuilt"></div>
       <div class="cg-chips" id="cgPool">${ctx.shuffle(r.words.map((w,k)=>({w,k}))).map(o=>`<button class="cg-chip" type="button" data-k="${o.k}">${ctx.esc(o.w)}</button>`).join('')}</div>
       <div class="cg-row"><button class="cg-btn cg-ghost" type="button" id="cgUndo">Undo</button><button class="cg-btn" type="button" id="cgCheck">Check</button></div>`;
     const built=host.querySelector('#cgBuilt'), draw=()=>{ built.innerHTML=seq.map(k=>`<span class="cg-chip">${ctx.esc(r.words[k])}</span>`).join(''); };

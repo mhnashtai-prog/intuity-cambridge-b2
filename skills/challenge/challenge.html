@@ -319,7 +319,7 @@ body.board-page .board-toggle .viewtog{margin:0}
 <script src="/data/challenge/games/choose.js?v=2"></script>
 <script src="/data/challenge/games/pendulum.js?v=3"></script>
 <script src="/data/challenge/games/gap.js?v=4"></script>
-<script src="/data/challenge/games/order.js?v=3"></script>
+<script src="/data/challenge/games/order.js?v=4"></script>
 <script src="/data/challenge/games/odd.js?v=3"></script>
 <script src="/data/challenge/games/sort.js?v=2"></script>
 <script src="/data/challenge/games/transform.js?v=3"></script>
@@ -367,6 +367,8 @@ const NOTE={game:'Game · fourteen tiles, fourteen games — Defuse, Swing, Knoc
    label shown on the card: '' for multiple choice, which is a sentence-level
    cousin of Part 1 and not claimed as Part 1 itself. */
 const CAMBRIDGE={choose:'',opencloze:'Part 2',wordform:'Part 3',transform:'Part 4'};
+/* a topic may name its own exam formats (Writing: sort, match, order …) */
+const inExam=k=>(k in CAMBRIDGE)||!!(topic&&topic.exam&&topic.exam.indexOf(k)>=0);
 
 /* ══ STATE ══ */
 /* GAME AND BOARD ARE TWO BUTTONS ON EVERY TOPIC'S ROW. Game (?mode=game) is
@@ -493,7 +495,7 @@ async function choose(id){
       for(const im of d.ultimate?[]:(d.imports||[])){
         try{ const x=await (await fetch(im.file,{cache:'no-store'})).json(); (x.rounds||[]).forEach(r=>rounds.push(Object.assign({game:im.game},r))); }catch(e){}
       }
-      pool=rounds.filter(r=>G[r.game]); topic={id,label:d.topic||t.label,focus:t.focus||''};
+      pool=rounds.filter(r=>G[r.game]); topic={id,label:d.topic||t.label,focus:t.focus||'',exam:d.exam||null,productive:d.productive||0};
     }
     if(!pool.length) throw new Error('no rounds');
     /* THE BOARD'S CHALLENGE PLAYS THE WHOLE TOPIC. Split into sets of about
@@ -565,7 +567,7 @@ function draw(){
   const dueIn=k=>by[k].reduce((n,r)=>n+due(r),0);
   const have=Object.keys(by).filter(k=>G[k]);
   const fill=(types,n)=>{ if(!types.length||n<=0) return []; const s=shuffle(types).slice(0,n); while(s.length<n) s.push(types[(Math.random()*types.length)|0]); return s; };
-  const exOK=k=>kind(k)==='exam'&&(k in CAMBRIDGE);
+  const exOK=k=>kind(k)==='exam'&&inExam(k);
   const side=(sk,want)=>{
     const ex=have.filter(k=>exOK(k)&&skill(k)===sk), gm=have.filter(k=>kind(k)==='game'&&skill(k)===sk);
     /* EXAM plays the exam formats, GAME plays the games — every tile a game.
@@ -584,7 +586,8 @@ function draw(){
   /* seven to recognise and seven to produce — unless one side is thin: then
      it lends its spare tiles to the other. Passive has six multiple-choice
      rounds, so its Exam is six and eight, never seven with a repeat. */
-  let rec=side('receptive',N/2), pro=side('productive',N-rec.length);
+  /* a topic with long productive rounds (Writing's paragraphs) asks for fewer of them */
+  let rec=side('receptive',N-(topic&&topic.productive||N/2)), pro=side('productive',N-rec.length);
   if(rec.length+pro.length<N) rec=side('receptive',N-pro.length);
   let slots=rec.concat(pro);
   /* a topic with nothing on one side (Word formation has no recognising
@@ -1005,7 +1008,7 @@ function usePool(){
      holds seven or eight of them: it borrows exam rounds from the next sets,
      in order, so fourteen cells are fourteen different questions */
   if(mode==='exam'){
-    const isEx=r=>G[r.game]&&(G[r.game].kind||'exam')==='exam'&&(r.game in CAMBRIDGE);
+    const isEx=r=>G[r.game]&&(G[r.game].kind||'exam')==='exam'&&inExam(r.game);
     let n=p.filter(isEx).length;
     for(let j=1;j<SETS.length&&n<20;j++) SETS[(SETK-1+j)%SETS.length].forEach(r=>{ if(n<20&&isEx(r)){ p.push(r); n++; } });
   }
@@ -1086,6 +1089,12 @@ if(BOARD){
   $('modeRow').setAttribute('aria-label','Topic modes'); $('modeRow').innerHTML=`<span class="mode-btn active" aria-current="page">${mode==='game'?'Game':'Board'}</span>`;
 }
 async function boardHeader(t){
+  if(SECTION==='writing'){
+    const HERE=mode==='game'?'Game':'Board', u=k=>'/skills/challenge/challenge.html?board=1&section=writing&topic='+encodeURIComponent(t.id)+(k==='Game'?'&mode=game':'');
+    document.querySelector('.app-subtitle').textContent=t.label+' · '+HERE; document.title='INTUITY — '+t.label+' · '+HERE;
+    $('modeRow').innerHTML=['Board','Game'].map(k=>k===HERE?`<span class="mode-btn active" aria-current="page">${k}</span>`:`<a class="mode-btn" href="${esc(u(k))}">${k}</a>`).join('');
+    return;
+  }
   const page=RULES_PAGE[t.id]; if(!page) return;
   const url='/skills/'+page;
   const HERE=mode==='game'?'Game':'Board';
@@ -1107,7 +1116,7 @@ async function boardHeader(t){
       if(/^(forge|board)$/i.test(label)&&!m||/\/challenge(\.html)?(\?|#|$)/.test(href||'')){          /* Forge's place, a Game or a Board link: ours */
         const isGame=/mode=game/.test(href||'')||/^game$/i.test(label), mine=isGame===(mode==='game');
         if(mine){ if(!placed){ out.push(`<span class="mode-btn active" aria-current="page">${HERE}</span>`); placed=true; } return; }
-        out.push(`<a class="mode-btn" href="${esc('/skills/challenge/challenge.html?board=1'+(SECTION==='vocabulary'?'&section=vocabulary':'')+'&topic='+encodeURIComponent(t.id)+(isGame?'&mode=game':''))}">${isGame?'Game':'Board'}</a>`); return; }
+        out.push(`<a class="mode-btn" href="${esc('/skills/challenge/challenge.html?board=1'+(SECTION!=='grammar'?'&section='+SECTION:'')+'&topic='+encodeURIComponent(t.id)+(isGame?'&mode=game':''))}">${isGame?'Game':'Board'}</a>`); return; }
       if(el.classList.contains('mode-soon')) return;
       const go=m?(url+'?mode='+m):href?new URL(href,location.origin+url).pathname+new URL(href,location.origin+url).search:url;
       if(go) out.push(`<a class="mode-btn" href="${esc(go)}">${esc(label)}</a>`);
@@ -1128,6 +1137,8 @@ document.querySelector('.header').addEventListener('click', e => {
 /* ← goes back to the submenu this page was opened from */
 (function(){
   const b=document.querySelector('.back-link'); if(!b) return;
+  if(SECTION==='writing'){ const task=(P.get('topic')||'').replace(/^writing-/,'')+'s';   /* writing-essay → the Essay doors */
+    const w=(P.get('topic')||'').replace(/^writing-/,''); b.textContent='← '+w.charAt(0).toUpperCase()+w.slice(1); b.setAttribute('href','/skills/writing/gate.html?task='+task); return; }
   b.textContent='← '+(SECTION==='vocabulary'?'Vocabulary':'Grammar');
   b.setAttribute('href','/index.html?openModal='+SECTION);
 })();

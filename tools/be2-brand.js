@@ -280,3 +280,16 @@
 
 /* LEARN · PRACTISE · PLAY: the long mode rows, grouped (tools/mode-groups.js) */
 (function(){ try{ var s=document.createElement('script'); s.src='/tools/mode-groups.js?v=1'; (document.head||document.documentElement).appendChild(s); }catch(e){} })();
+
+/* ONE CARD: every pop-up in one square style (tools/intuity-cards.css).
+   To bring the old looks back, delete this block. */
+(function(){ try{
+  if(!document.querySelector('link[href*="/tools/intuity-cards.css"]')){
+    var l=document.createElement('link'); l.rel='stylesheet'; l.href='/tools/intuity-cards.css?v=1';
+    (document.head||document.documentElement).appendChild(l); }
+  /* a grammar Explore card open inside its slides: hide the slides' own ✕ */
+  window.addEventListener('message',function(e){ if(e.data&&e.data.intuity==='cardOpen') document.documentElement.classList.toggle('card-open-inside',!!e.data.open); });
+  /* the slides closed with a card still open: the slides' ✕ comes back */
+  document.addEventListener('DOMContentLoaded',function(){ var sl=document.getElementById('slides'); if(!sl) return;
+    new MutationObserver(function(){ if(!sl.classList.contains('open')) document.documentElement.classList.remove('card-open-inside'); }).observe(sl,{attributes:true,attributeFilter:['class']}); });
+}catch(e){} })();

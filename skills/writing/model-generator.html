@@ -96,7 +96,22 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .pm-nav .pa-count b{color:#14110E}
 .pm-ar{width:44px;height:44px;border-radius:50%;border:none;background:rgba(118,118,128,.12);color:#14110E;font:500 26px/1 'Geist',sans-serif;cursor:pointer;display:grid;place-items:center;padding:0 0 3px}
 .pm-ar:disabled{opacity:.3;cursor:default}
-/* "new models" sits inside every card, in the space above its footer (the teacher, 2 Nov) */
+/* THE TASK GALLERY (2 Nov): a card's pill opens a clean screen of 13 models
+   of that one task, with its own arrows; × goes back to the same card */
+.gal{position:fixed;inset:0;z-index:250;display:flex;flex-direction:column;background:#F0EFEC;opacity:0;visibility:hidden;transition:opacity .2s ease,visibility 0s .2s}
+body.gal-open .gal{opacity:1;visibility:visible;transition:opacity .22s ease,visibility 0s}
+body.gal-open{overflow:hidden}
+.gal-top{flex:none;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;max-width:640px;width:100%;margin:0 auto;padding:calc(14px + env(safe-area-inset-top)) 20px 4px}
+.gal-k{font:500 .6875rem/1.3 'Geist Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:rgba(20,17,14,.5);margin:0 0 4px}
+.gal-t{font:400 clamp(28px,8vw,38px)/1 'Anton',Impact,sans-serif;color:#14110E;margin:0}
+.gal-x{flex:none;width:40px;height:40px;border-radius:50%;border:none;background:rgba(20,17,14,.08);color:#3A3530;display:grid;place-items:center;cursor:pointer}
+.gal-x svg{width:13px;height:13px}
+.gal-nav{flex:none;display:flex;align-items:center;justify-content:center;gap:12px;padding:8px 0 4px}
+.gal-count{margin:0;min-width:64px;text-align:center;font:600 13px/1 'Geist Mono',monospace;letter-spacing:.06em;color:#5C5852}
+.gal-count b{color:#14110E}
+.gal-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.gal-body .pa-h,.gal-body .pa-dots,.gal-body .pa-count,.gal-body .pa-hint{display:none}
+/* the pill that opens it sits inside every card, above its footer (the teacher, 2 Nov) */
 #parade .pa-b{display:flex;flex-direction:column}
 .pm-new{align-self:center;margin:auto 0 0;display:inline-flex;align-items:center;gap:8px;padding:11px 20px;border-radius:999px;
   background:#14110E;color:#F6F3EE;font:600 14px/1 'Geist',sans-serif;letter-spacing:.01em;cursor:pointer;-webkit-tap-highlight-color:transparent}
@@ -253,6 +268,14 @@ textarea.wr::placeholder{color:rgba(20,17,14,.32);font-style:italic}
   </div>
 </div>
 
+<section class="gal" id="gal" role="dialog" aria-modal="true" aria-labelledby="galTitle" aria-hidden="true">
+  <div class="gal-top">
+    <div><p class="gal-k" id="galKick"></p><h2 class="gal-t" id="galTitle"></h2></div>
+    <button class="gal-x" id="galClose" type="button" aria-label="Close and go back"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="gal-nav"><button type="button" class="pm-ar" id="galPrev" aria-label="Previous model">‹</button><p class="gal-count" aria-live="polite"><b id="galN">1</b> / <span id="galOf">13</span></p><button type="button" class="pm-ar" id="galNext" aria-label="Next model">›</button></div>
+  <div class="gal-body" id="galBody"></div>
+</section>
 <div class="scrim" id="scrim"></div>
 <section class="cin" id="cin" role="dialog" aria-modal="true" aria-labelledby="cTitle" aria-hidden="true">
   <div class="cnav">
@@ -539,13 +562,13 @@ function gallery(start){
     items:MODELS.map((m,i)=>({
       kicker:TAG[m.type]+' · '+(PART[m.type]||'Part 2'),
       title:m.title,
-      html:'<span class="pm">'+modelHTML(m)+'</span><span class="pm-gap"></span><span class="pm-new" role="button" tabindex="0">↻ View '+N+' new models</span>',
+      html:'<span class="pm">'+modelHTML(m)+'</span><span class="pm-gap"></span><span class="pm-new" role="button" tabindex="0">View 13 models →</span>',
       meta:'<b>'+m.secs.length+'</b> parts'
     })),
     action:'Make your own',
     onOpen:i=>openModel(i), onCentre:i=>syncTabs(i)
   });
-  $('parade').querySelectorAll('.pm-new').forEach(b=>{ const go=e=>{ e.stopPropagation(); e.preventDefault(); const i=PA.index(); DEAL++; gallery(i); };
+  $('parade').querySelectorAll('.pm-new').forEach((b,k)=>{ const go=e=>{ e.stopPropagation(); e.preventDefault(); openGallery(k); };
     b.addEventListener('click',go); b.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' ') go(e); }); });
   /* say what to do, where the eye lands: above the strip, not under it */
   const h=$('parade').querySelector('.pa-h'), hint=$('parade').querySelector('.pa-hint');
@@ -569,10 +592,10 @@ function gallery(start){
 }
 
 /* ══ CINEMA ══ */
-function openModel(i){
+function openModel(i,list){
   /* the card IS the reading; opening it is for MAKING YOUR OWN (24 Oct):
      swap any line, save it, write from it */
-  OPEN=MODELS[i]; TYPE=OPEN.type; SUBJ=OPEN.rec.key; RECIPES=ALL[TYPE]||RECIPES; OPEN.tag=ABBR(OPEN.rec.label)+'-'+(DEAL+1); MODE='card';
+  OPEN=(list||MODELS)[i]; TYPE=OPEN.type; SUBJ=OPEN.rec.key; RECIPES=ALL[TYPE]||RECIPES; OPEN.tag=ABBR(OPEN.rec.label)+'-'+OPEN.n; MODE='card';
   document.body.classList.add('cin-open'); $('cin').setAttribute('aria-hidden','false');
   try{ history.pushState({gen:1},''); }catch(e){}
   paint(); setTimeout(()=>{ try{ $('cClose').focus({preventScroll:true}); }catch(e){} },60);
@@ -580,7 +603,32 @@ function openModel(i){
 function closeModel(){ clearInterval(TICK); if(OPEN&&OPEN.draft) saveDraft(OPEN.draft,true); document.body.classList.remove('cin-open'); $('cin').setAttribute('aria-hidden','true'); OPEN=null; }
 $('cClose').onclick=()=>{ try{ history.back(); }catch(e){ closeModel(); } };
 $('scrim').onclick=$('cClose').onclick;
-addEventListener('popstate',()=>{ if(OPEN) closeModel(); });
+addEventListener('popstate',()=>{ if(OPEN) closeModel(); else if(GAL) closeGallery(); });
+/* ══ THE TASK GALLERY ══ */
+let GAL=null, GPA=null;
+function openGallery(k){
+  const x=LINE[k], rec=MODELS[k].rec, G=[];
+  /* model 1 is the card itself; the other twelve are new deals of the same task */
+  for(let g=0;g<13;g++){ let seed=20261022+(DEAL+g)*7919; for(const ch of x.t+rec.key) seed=(seed*31+ch.charCodeAt(0))|0;
+    R=seeded(seed); const m=runRecipe(rec,g+1); R=Math.random; m.type=x.t; m.title=MODELS[k].title; G.push(m); }
+  GAL={k,list:G};
+  $('galKick').textContent=TAG[x.t]+' · '+(PART[x.t]||'Part 2')+' · 13 models';
+  $('galTitle').textContent=MODELS[k].title;
+  GPA=Parade.mount($('galBody'),{label:'',aria:MODELS[k].title+' models',
+    items:G.map(m=>({kicker:TAG[m.type]+' · model '+m.n,title:m.title,html:'<span class="pm">'+modelHTML(m)+'</span>',meta:'<b>'+m.n+'</b> of 13'})),
+    action:'Make your own', onOpen:i=>openModel(i,G), onCentre:i=>galCount(i)});
+  galCount(0);
+  document.body.classList.add('gal-open'); $('gal').setAttribute('aria-hidden','false');
+  try{ history.pushState({gal:1},''); }catch(e){}
+  setTimeout(()=>{ try{ $('galClose').focus({preventScroll:true}); }catch(e){} },60);
+}
+function galCount(i){ $('galN').textContent=i+1; $('galPrev').disabled=i===0; $('galNext').disabled=i===12; }
+function closeGallery(){ const k=GAL?GAL.k:0; GAL=null; document.body.classList.remove('gal-open'); $('gal').setAttribute('aria-hidden','true');
+  $('galBody').innerHTML=''; if(PA) PA.goTo(k,true); }
+$('galClose').onclick=()=>{ try{ history.back(); }catch(e){ closeGallery(); } };
+$('galPrev').onclick=()=>{ if(GPA) GPA.goTo(Math.max(0,GPA.index()-1)); };
+$('galNext').onclick=()=>{ if(GPA) GPA.goTo(Math.min(12,GPA.index()+1)); };
+addEventListener('keydown',e=>{ if(e.key==='Escape'&&GAL&&!OPEN) $('galClose').onclick(); });
 addEventListener('keydown',e=>{ if(e.key==='Escape'&&OPEN) $('cClose').onclick(); });
 /* SUPPORT — scaffolding that fades: Full shows each key expression whole,
    Starters only its opening words, Moves only what the section must do.

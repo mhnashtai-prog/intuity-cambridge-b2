@@ -277,3 +277,6 @@
   /* Never leave a header invisible if something above throws. */
   setTimeout(function () { document.documentElement.classList.add('be2-ready'); }, 1500);
 })();
+
+/* LEARN · PRACTISE · PLAY: the long mode rows, grouped (tools/mode-groups.js) */
+(function(){ try{ var s=document.createElement('script'); s.src='/tools/mode-groups.js?v=1'; (document.head||document.documentElement).appendChild(s); }catch(e){} })();

@@ -96,6 +96,8 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .pm-nav .pa-count b{color:#14110E}
 .pm-ar{width:44px;height:44px;border-radius:50%;border:none;background:rgba(118,118,128,.12);color:#14110E;font:500 26px/1 'Geist',sans-serif;cursor:pointer;display:grid;place-items:center;padding:0 0 3px}
 .pm-ar:disabled{opacity:.3;cursor:default}
+#subjects .gen-new{position:sticky;left:0;z-index:2;flex:none;background:#14110E!important;color:#F6F3EE!important;opacity:1!important;border-radius:999px!important;padding:.45rem .85rem!important;margin-right:.35rem;box-shadow:-24px 0 0 rgb(243,241,237),10px 0 12px -2px rgb(243,241,237)}
+#subjects .gen-new::after{display:none!important}
 </style>
 <!--
   THE MODEL GENERATOR — the fifth stage of every writing task
@@ -424,10 +426,10 @@ const SET13=[
   {t:'essays',m:'For & Against'},{t:'essays',m:'Opinion'},{t:'essays',m:'Agree & Disagree'},
   {t:'essays',m:'Problems & Solutions'},{t:'essays',m:'Cause & Effect'},{t:'essays',m:'Speculation & Trends'},
   {t:'articles',name:'Article'},
-  {t:'emails',m:/^Formal · Job/i,name:'Formal email · Application'},
-  {t:'emails',m:/^Formal · Request/i,name:'Formal email · Request'},
-  {t:'emails',m:/^Informal · React/i,name:'Informal email · News & plans'},
-  {t:'emails',m:/^Informal · Giving Advice/i,name:'Informal email · Advice'},
+  {t:'emails',m:/^Formal · Job/i,name:'Formal email · Application',short:'Application email'},
+  {t:'emails',m:/^Formal · Request/i,name:'Formal email · Request',short:'Request email'},
+  {t:'emails',m:/^Informal · React/i,name:'Informal email · News & plans',short:'News email'},
+  {t:'emails',m:/^Informal · Giving Advice/i,name:'Informal email · Advice',short:'Advice email'},
   {t:'reviews',name:'Review',all:true},{t:'reports',name:'Report',all:true}];
 const PART={essays:'Part 1'};
 let ALL={}, LINE=[], PA=null;
@@ -441,15 +443,14 @@ async function init(){
   const wantFor=t=>{ TYPE=t; RECIPES=ALL[t]; const want=(t===PAGE&&urlSub)||fromQuestion(); TYPE=PAGE; if(!want) return null;
     const R0=ALL[t], reg=want.split('-')[0], w=want.slice(reg.length+1).replace(/[^a-z]/g,'').slice(0,5);
     return R0.find(r=>r.key===want)||(w&&want.indexOf('-')>0?R0.find(r=>r.key.indexOf(reg+'-')===0&&r.key.replace(/[^a-z]/g,'').indexOf(w)>=0):null)||R0.find(r=>r.key.indexOf(want)===0)||null; };
-  LINE=PAGE==='story'?ALL.story.map(r=>({t:'story',name:r.label,recs:[r],rot:0}))
+  LINE=PAGE==='story'?ALL.story.map(r=>({t:'story',name:r.label,short:r.label,recs:[r],rot:0}))
     :SET13.map(x=>{ const R0=ALL[x.t]||[], recs=x.all?R0:R0.filter(r=>typeof x.m==='string'?r.label===x.m:(x.m?x.m.test(r.label):true));
-        return recs.length?{t:x.t,name:x.name||recs[0].label,all:!!x.all,recs,rot:0}:null; }).filter(Boolean);
+        return recs.length?{t:x.t,name:x.name||recs[0].label,short:x.short||x.name||recs[0].label,all:!!x.all,recs,rot:0}:null; }).filter(Boolean);
   /* start on the arriving task; a review or report starts on the student's subject */
   let start=Math.max(0,LINE.findIndex(x=>x.t===PAGE));
   if(PAGE!=='story'){ const w=wantFor(PAGE);
     if(w){ const k=LINE.findIndex(x=>x.t===PAGE&&x.recs.includes(w)); if(k>=0){ start=k; LINE[k].rot=LINE[k].recs.indexOf(w); } } }
   else if(urlSub){ const k=LINE.findIndex(x=>x.recs[0].key===urlSub); if(k>=0) start=k; }
-  $('subjects').style.display='none';
   tabs(); gallery(start);
 }
 /* the header's task tabs jump along the strip instead of reloading */
@@ -459,7 +460,22 @@ function tabs(){
   document.querySelectorAll('.mode-selector .mode-btn').forEach(b=>{ const t=TABTYPE[b.textContent.trim()]; if(!t||t==='story') return;
     b.style.cursor='pointer'; b.addEventListener('click',e=>{ e.preventDefault(); const k=LINE.findIndex(x=>x.t===t); if(k>=0&&PA) PA.goTo(k,true); }); });
 }
+/* THE ROW (2 Nov 2026, after a class): under the task tabs, always on
+   screen — "new models" first, then every model by name. */
+function drawRow(){
+  const bar=$('subjects'), N=LINE.length;
+  bar.innerHTML='<button class="ftab gen-new" type="button" id="moreModels" aria-label="'+N+' new models">↻ '+N+' new</button>'+
+    LINE.map((x,i)=>`<button class="ftab" type="button" data-i="${i}">${esc(x.short)}</button>`).join('');
+  bar.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{ if(PA) PA.goTo(+b.dataset.i,true); });
+  $('moreModels').onclick=()=>{ const i=PA?PA.index():0; DEAL++; gallery(i); };
+}
+function syncRow(i){
+  const bar=$('subjects'); if(!bar) return;
+  bar.querySelectorAll('[data-i]').forEach(b=>{ const on=+b.dataset.i===i; b.classList.toggle('active',on); b.setAttribute('aria-current',on?'true':'false');
+    if(on){ const l=b.offsetLeft-(bar.clientWidth-b.offsetWidth)/2; try{ bar.scrollTo({left:Math.max(0,l),behavior:'smooth'}); }catch(e){ bar.scrollLeft=l; } } });
+}
 function syncTabs(i){
+  syncRow(i);
   const t=LINE[i]&&LINE[i].t; if(!t||PAGE==='story') return;
   document.querySelectorAll('.mode-selector .mode-btn').forEach(b=>{ const on=TABTYPE[b.textContent.trim()]===t; b.classList.toggle('active',on);
     if(on) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
@@ -508,6 +524,7 @@ const modelHTML=m=>m.secs.map(S=>`<span class="pm-w">${esc(S.word)}</span><span 
 /* the same 13 every visit; "13 new models" deals again, and a review or
    report moves on to its next subject */
 function gallery(start){
+  if(!$('moreModels')) drawRow();
   MODELS=LINE.map((x,i)=>{ const rec=x.recs[(x.rot+DEAL)%x.recs.length];
     let seed=20261022+DEAL*7919; for(const ch of x.t+rec.key) seed=(seed*31+ch.charCodeAt(0))|0;
     R=seeded(seed); const m=runRecipe(rec,DEAL+1); R=Math.random;
@@ -543,10 +560,6 @@ function gallery(start){
   $('pmNext').onclick=()=>{ PA.goTo(Math.min(N-1,PA.index()+1)); arrows(); };
   $('parade').querySelector('.pa-track').addEventListener('scroll',()=>requestAnimationFrame(arrows),{passive:true});
   arrows(); syncTabs(PA.index());
-  const more=document.createElement('div'); more.className='pm-more';
-  more.innerHTML='<button class="btn" type="button" id="moreModels">'+N+' new models</button>';
-  $('parade').appendChild(more);
-  $('moreModels').onclick=()=>{ const i=PA.index(); DEAL++; gallery(i); };
   drawMine();
 }
 

@@ -87,6 +87,16 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
 .loading-msg{font-family:'Geist', sans-serif;font-size:0.85rem;font-weight:700;color:rgba(0,0,0,0.25);letter-spacing:0.12em;text-transform:uppercase}
 </style>
 <link rel="stylesheet" href="/tools/parade.css?v=3">
+<style>
+/* the procession's instruction and arrows (2 Nov 2026) */
+.pm-do{max-width:520px;margin:-4px auto 10px;padding:0 24px;text-align:center;font-size:15px;line-height:1.45;color:#3A3530}
+.pm-do b{color:#14110E;font-weight:650}
+.pm-nav{display:flex;align-items:center;justify-content:center;gap:10px;margin:0 0 12px}
+.pm-nav .pa-count{margin:0;min-width:64px;text-align:center;font:600 13px/1 'Geist Mono',monospace;letter-spacing:.06em;color:#5C5852}
+.pm-nav .pa-count b{color:#14110E}
+.pm-ar{width:44px;height:44px;border-radius:50%;border:none;background:rgba(118,118,128,.12);color:#14110E;font:500 26px/1 'Geist',sans-serif;cursor:pointer;display:grid;place-items:center;padding:0 0 3px}
+.pm-ar:disabled{opacity:.3;cursor:default}
+</style>
 <!--
   THE MODEL GENERATOR — the fifth stage of every writing task
   (Question · Plan · Model · Generate · Sample).
@@ -224,7 +234,7 @@ textarea.wr::placeholder{color:rgba(20,17,14,.32);font-style:italic}
   var t=(new URLSearchParams(location.search).get('type')||'').toLowerCase();
   var ok={essays:1,reviews:1,reports:1,emails:1,articles:1,story:1};
   if(!ok[t]){ try{ t=sessionStorage.getItem('intuity.gen.type')||''; }catch(e){} }
-  if(!ok[t]) t='reviews';
+  if(!ok[t]) t='essays';   /* the strip starts at its first card */
   document.body.setAttribute('data-writing',t);
   try{ sessionStorage.setItem('intuity.gen.type',t); }catch(e){}
 })();
@@ -262,7 +272,8 @@ textarea.wr::placeholder{color:rgba(20,17,14,.32);font-style:italic}
 <script>
 (function(){
 'use strict';
-const TYPE=document.body.getAttribute('data-writing');
+let TYPE=document.body.getAttribute('data-writing');
+const PAGE=TYPE;   /* the task the student arrived from; TYPE follows the open model */
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 /* the gaps a student fills: "...", "…" and [Placeholders] */
@@ -391,7 +402,6 @@ function recipesStory(D){
 const BUILD={story:d=>recipesStory(d[0]),essays:d=>recipesEssays(d[0]),reviews:d=>recipesReviews(d[0]),reports:d=>recipesReports(d[0]),emails:d=>recipesEmails(d),articles:d=>recipesArticles(d[0])};
 
 /* ── a MODEL is one recipe, run: every line keeps its history so ‹ goes back ── */
-const PER=6;
 function avoidFor(model,si,li){
   const av={s:[],v:[],k:[]};
   model.secs[si].lines.forEach((L,j)=>{ if(j===li||!L.h.length) return; const u=L.h[L.i].used; if(!u) return;
@@ -407,16 +417,55 @@ function runRecipe(rec,n){
 let RECIPES=[], SUBJ=null, MODELS=[], OPEN=null;
 const ABBR=s=>{ const w=s.replace(/^(Formal|Informal) · /,'').split(/[\s/&·-]+/).filter(Boolean); return (w.length>1?w.map(x=>x[0]).join(''):(w[0]||'').slice(0,2)).slice(0,2).toUpperCase(); };
 
+/* THE PROCESSION (2 Nov 2026): one strip of 13 finished models, one for
+   every task type, the same 13 as the printed cue cards. Story keeps its
+   own strip: one card per story. The task tabs above jump along the strip. */
+const SET13=[
+  {t:'essays',m:'For & Against'},{t:'essays',m:'Opinion'},{t:'essays',m:'Agree & Disagree'},
+  {t:'essays',m:'Problems & Solutions'},{t:'essays',m:'Cause & Effect'},{t:'essays',m:'Speculation & Trends'},
+  {t:'articles',name:'Article'},
+  {t:'emails',m:/^Formal · Job/i,name:'Formal email · Application'},
+  {t:'emails',m:/^Formal · Request/i,name:'Formal email · Request'},
+  {t:'emails',m:/^Informal · React/i,name:'Informal email · News & plans'},
+  {t:'emails',m:/^Informal · Giving Advice/i,name:'Informal email · Advice'},
+  {t:'reviews',name:'Review',all:true},{t:'reports',name:'Report',all:true}];
+const PART={essays:'Part 1'};
+let ALL={}, LINE=[], PA=null;
 async function init(){
-  let data;
-  try{ data=await Promise.all(SRC[TYPE].map(p=>fetch(p).then(r=>{ if(!r.ok) throw new Error(p); return r.json(); }))); }
+  const types=PAGE==='story'?['story']:['essays','reviews','reports','emails','articles'];
+  try{ await Promise.all(types.map(t=>Promise.all(SRC[t].map(p=>fetch(p).then(r=>{ if(!r.ok) throw new Error(p); return r.json(); })))
+    .then(d=>{ ALL[t]=BUILD[t](d).filter(r=>r.sections.length); }))); }
   catch(e){ $('loading').textContent='⚠ Could not load the model data'; return; }
-  RECIPES=BUILD[TYPE](data).filter(r=>r.sections.length);
-  const want=new URLSearchParams(location.search).get('subject')||fromQuestion();
-  const fuzzy=()=>{ if(!want||want.indexOf('-')<0) return null; const reg=want.split('-')[0], w=want.slice(reg.length+1).replace(/[^a-z]/g,'').slice(0,5);
-    return w?RECIPES.find(r=>r.key.indexOf(reg+'-')===0&&r.key.replace(/[^a-z]/g,'').indexOf(w)>=0):null; };
-  SUBJ=(RECIPES.find(r=>r.key===want)||fuzzy()||RECIPES.find(r=>want&&r.key.indexOf(want)===0)||RECIPES[0]).key;
-  subjects(); gallery();
+  const urlSub=new URLSearchParams(location.search).get('subject');
+  /* the subject the student is working on, for one task: from ?subject= or the Question page */
+  const wantFor=t=>{ TYPE=t; RECIPES=ALL[t]; const want=(t===PAGE&&urlSub)||fromQuestion(); TYPE=PAGE; if(!want) return null;
+    const R0=ALL[t], reg=want.split('-')[0], w=want.slice(reg.length+1).replace(/[^a-z]/g,'').slice(0,5);
+    return R0.find(r=>r.key===want)||(w&&want.indexOf('-')>0?R0.find(r=>r.key.indexOf(reg+'-')===0&&r.key.replace(/[^a-z]/g,'').indexOf(w)>=0):null)||R0.find(r=>r.key.indexOf(want)===0)||null; };
+  LINE=PAGE==='story'?ALL.story.map(r=>({t:'story',name:r.label,recs:[r],rot:0}))
+    :SET13.map(x=>{ const R0=ALL[x.t]||[], recs=x.all?R0:R0.filter(r=>typeof x.m==='string'?r.label===x.m:(x.m?x.m.test(r.label):true));
+        return recs.length?{t:x.t,name:x.name||recs[0].label,all:!!x.all,recs,rot:0}:null; }).filter(Boolean);
+  /* start on the arriving task; a review or report starts on the student's subject */
+  let start=Math.max(0,LINE.findIndex(x=>x.t===PAGE));
+  if(PAGE!=='story'){ const w=wantFor(PAGE);
+    if(w){ const k=LINE.findIndex(x=>x.t===PAGE&&x.recs.includes(w)); if(k>=0){ start=k; LINE[k].rot=LINE[k].recs.indexOf(w); } } }
+  else if(urlSub){ const k=LINE.findIndex(x=>x.recs[0].key===urlSub); if(k>=0) start=k; }
+  $('subjects').style.display='none';
+  tabs(); gallery(start);
+}
+/* the header's task tabs jump along the strip instead of reloading */
+const TABTYPE={Essay:'essays',Review:'reviews',Report:'reports',Email:'emails',Article:'articles',Story:'story'};
+function tabs(){
+  if(PAGE==='story') return;
+  document.querySelectorAll('.mode-selector .mode-btn').forEach(b=>{ const t=TABTYPE[b.textContent.trim()]; if(!t||t==='story') return;
+    b.style.cursor='pointer'; b.addEventListener('click',e=>{ e.preventDefault(); const k=LINE.findIndex(x=>x.t===t); if(k>=0&&PA) PA.goTo(k,true); }); });
+}
+function syncTabs(i){
+  const t=LINE[i]&&LINE[i].t; if(!t||PAGE==='story') return;
+  document.querySelectorAll('.mode-selector .mode-btn').forEach(b=>{ const on=TABTYPE[b.textContent.trim()]===t; b.classList.toggle('active',on);
+    if(on) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
+  const sub=document.querySelector('.app-subtitle'); if(sub) sub.textContent=TAG[t]+' · '+(PART[t]||'Part 2');
+  document.body.setAttribute('data-writing',t);
+  try{ history.replaceState(null,'','?type='+t+'&support=full'); sessionStorage.setItem('intuity.gen.type',t); }catch(e){}
 }
 /* No ?subject=: open on the subject of the question the student chose on the
    Question page — the same keys and aliases the Model pages read. */
@@ -456,27 +505,48 @@ let DEAL=0;
    gaps has no example content and stays as it is. */
 const exWrap=h=>h.replace(/^(<span class="sg">[^<]*<\/span>)([\s\S]+)$/,'$1<span class="ex">$2</span>');
 const modelHTML=m=>m.secs.map(S=>`<span class="pm-w">${esc(S.word)}</span><span class="pm-p">${S.lines.map(L=>exWrap(L.h[L.i].html)).join(' ')}</span>`).join('');
-function gallery(){
-  const rec=RECIPES.find(r=>r.key===SUBJ);
-  let seed=20261022+DEAL*7919; for(const ch of TYPE+SUBJ) seed=(seed*31+ch.charCodeAt(0))|0;
-  R=seeded(seed); MODELS=[]; for(let n=1;n<=PER;n++) MODELS.push(runRecipe(rec,DEAL*PER+n)); R=Math.random;
-  const tag=ABBR(rec.label)||TYPE.slice(0,2).toUpperCase();
-  const PLURAL={essays:'Essays',reviews:'Reviews',reports:'Reports',emails:'Emails',articles:'Articles',story:'Stories'};
-  Parade.mount($('parade'),{
-    label:'<b>'+PLURAL[TYPE]+'</b> · Finished models to read', aria:'Finished models',
+/* the same 13 every visit; "13 new models" deals again, and a review or
+   report moves on to its next subject */
+function gallery(start){
+  MODELS=LINE.map((x,i)=>{ const rec=x.recs[(x.rot+DEAL)%x.recs.length];
+    let seed=20261022+DEAL*7919; for(const ch of x.t+rec.key) seed=(seed*31+ch.charCodeAt(0))|0;
+    R=seeded(seed); const m=runRecipe(rec,DEAL+1); R=Math.random;
+    m.type=x.t; m.title=x.all?x.name+' · '+rec.label:x.name; return m; });
+  const N=MODELS.length, story=PAGE==='story';
+  PA=Parade.mount($('parade'),{
+    label:story?'<b>'+N+' stories</b> · finished models':'<b>'+N+' models</b> · one for every task', aria:'Finished models',
+    start:start||0,
     items:MODELS.map((m,i)=>({
-      kicker:tag+'-'+(DEAL*PER+i+1)+' · '+TAG[TYPE]+' model',
-      title:rec.label,
+      kicker:TAG[m.type]+' · '+(PART[m.type]||'Part 2'),
+      title:m.title,
       html:'<span class="pm">'+modelHTML(m)+'</span>',
       meta:'<b>'+m.secs.length+'</b> parts'
     })),
-    action:'Make your own', hint:'Read them here · tap one to make your own model from it.',
-    onOpen:i=>openModel(i)
+    action:'Make your own',
+    onOpen:i=>openModel(i), onCentre:i=>syncTabs(i)
   });
+  /* say what to do, where the eye lands: above the strip, not under it */
+  const h=$('parade').querySelector('.pa-h'), hint=$('parade').querySelector('.pa-hint');
+  if(hint) hint.remove();
+  const doIt=document.createElement('p'); doIt.className='pm-do';
+  doIt.innerHTML='<b>Swipe</b> to see every '+(story?'story':'task')+'. Tap <b>Make your own</b> on the one you need.';
+  h.insertAdjacentElement('afterend',doIt);
+  /* arrows either side of the dots or the counter */
+  const marks=$('parade').querySelector('.pa-count,.pa-dots');
+  const row=document.createElement('div'); row.className='pm-nav';
+  marks.remove(); doIt.insertAdjacentElement('afterend',row);
+  row.innerHTML='<button type="button" class="pm-ar" id="pmPrev" aria-label="Previous model">‹</button>';
+  row.appendChild(marks);
+  row.insertAdjacentHTML('beforeend','<button type="button" class="pm-ar" id="pmNext" aria-label="Next model">›</button>');
+  const arrows=()=>{ const i=PA.index(); $('pmPrev').disabled=i===0; $('pmNext').disabled=i===N-1; };
+  $('pmPrev').onclick=()=>{ PA.goTo(Math.max(0,PA.index()-1)); arrows(); };
+  $('pmNext').onclick=()=>{ PA.goTo(Math.min(N-1,PA.index()+1)); arrows(); };
+  $('parade').querySelector('.pa-track').addEventListener('scroll',()=>requestAnimationFrame(arrows),{passive:true});
+  arrows(); syncTabs(PA.index());
   const more=document.createElement('div'); more.className='pm-more';
-  more.innerHTML='<button class="btn" type="button" id="moreModels">More models</button>';
+  more.innerHTML='<button class="btn" type="button" id="moreModels">'+N+' new models</button>';
   $('parade').appendChild(more);
-  $('moreModels').onclick=()=>{ DEAL++; gallery(); };
+  $('moreModels').onclick=()=>{ const i=PA.index(); DEAL++; gallery(i); };
   drawMine();
 }
 
@@ -484,7 +554,7 @@ function gallery(){
 function openModel(i){
   /* the card IS the reading; opening it is for MAKING YOUR OWN (24 Oct):
      swap any line, save it, write from it */
-  OPEN=MODELS[i]; OPEN.tag=ABBR(OPEN.rec.label)+'-'+(DEAL*PER+i+1); MODE='card';
+  OPEN=MODELS[i]; TYPE=OPEN.type; SUBJ=OPEN.rec.key; RECIPES=ALL[TYPE]||RECIPES; OPEN.tag=ABBR(OPEN.rec.label)+'-'+(DEAL+1); MODE='card';
   document.body.classList.add('cin-open'); $('cin').setAttribute('aria-hidden','false');
   try{ history.pushState({gen:1},''); }catch(e){}
   paint(); setTimeout(()=>{ try{ $('cClose').focus({preventScroll:true}); }catch(e){} },60);
@@ -535,7 +605,7 @@ function paint(){
   const m=OPEN;
   document.querySelectorAll('#supp button').forEach(b=>{ const on=b.dataset.v===SUPPORT; b.classList.toggle('on',on); b.setAttribute('aria-checked',String(on)); });
   $('cKick').textContent=(m.saved?m.tag+' · '+TAG[TYPE]:m.tag+' · '+(MODE==='write'?TAG[TYPE]+' model · your draft':'Make your own model'));
-  $('cTitle').textContent=m.rec.label;
+  $('cTitle').textContent=m.title||m.rec.label;
   if(MODE==='write') return paintWrite();
   const build=!m.saved;
   $('cMain').innerHTML=m.secs.map((S,si)=>
@@ -561,15 +631,23 @@ const viewHTML=L=>SUPPORT==='full'?exWrap(lineHTML(L)):lineHTML(L);
 /* MY MODELS — what a student made, kept on this device, per subject */
 const MKEY=()=>'intuity.gen.mine.'+TYPE+'.'+SUBJ;
 const mineList=()=>{ try{ return JSON.parse(localStorage.getItem(MKEY())||'[]')||[]; }catch(e){ return []; } };
+/* the strip shows what the student made for every task (stories apart) */
+function mineAll(){
+  const out=[]; try{ for(let j=0;j<localStorage.length;j++){ const k=localStorage.key(j);
+    if(!k||k.indexOf('intuity.gen.mine.')!==0) continue; const t=k.split('.')[3];
+    if((PAGE==='story')!==(t==='story')) continue;
+    (JSON.parse(localStorage.getItem(k)||'[]')||[]).forEach(x=>out.push({key:k,t,sub:k.split('.').slice(4).join('.'),x})); } }catch(e){}
+  return out.sort((a,b)=>String(b.x.id).localeCompare(String(a.x.id)));
+}
 function saveMine(m){
   const list=mineList(), id=Date.now().toString(36);
-  list.unshift({id,label:m.rec.label,secs:m.secs.map(S=>({word:S.word,sub:S.sub,lines:S.lines.map(L=>L.h[L.i].html)}))});
+  list.unshift({id,label:m.title||m.rec.label,secs:m.secs.map(S=>({word:S.word,sub:S.sub,lines:S.lines.map(L=>L.h[L.i].html)}))});
   try{ localStorage.setItem(MKEY(),JSON.stringify(list.slice(0,12))); }catch(e){}
   drawMine();
 }
 function delMine(id){ try{ localStorage.setItem(MKEY(),JSON.stringify(mineList().filter(x=>x.id!==id))); }catch(e){} drawMine(); }
 function openMine(k){
-  const x=mineList()[k]; if(!x) return;
+  const e=mineAll()[k]; if(!e) return; const x=e.x; TYPE=e.t; SUBJ=e.sub; RECIPES=ALL[TYPE]||RECIPES;
   OPEN={saved:true,savedId:x.id,n:'mine-'+x.id,tag:'My model '+(k+1),rec:{label:x.label},
     secs:x.secs.map(S=>({word:S.word,sub:S.sub,lines:S.lines.map(h=>({h:[{html:h}],i:0}))}))};
   MODE='card'; document.body.classList.add('cin-open'); $('cin').setAttribute('aria-hidden','false');
@@ -577,10 +655,11 @@ function openMine(k){
   paint();
 }
 function drawMine(){
-  let box=$('mine'); if(!box){ box=document.createElement('section'); box.id='mine'; box.className='mine'; $('parade').appendChild(box); }
-  const list=mineList();
-  box.innerHTML=list.length?`<p class="mine-h">My models · ${list.length}</p>`+list.map((x,k)=>
-    `<button class="mine-c" type="button" data-k="${k}"><b>My model ${k+1}</b><span>${plain(x.secs[0].lines[0]).slice(0,90)}…</span></button>`).join(''):'';
+  let box=$('mine'); if(!box){ box=document.createElement('section'); box.id='mine'; box.className='mine'; }
+  $('parade').appendChild(box);
+  const list=mineAll();
+  box.innerHTML=list.length?`<p class="mine-h">My models · ${list.length}</p>`+list.map((e,k)=>
+    `<button class="mine-c" type="button" data-k="${k}"><b>${esc(e.x.label||('My model '+(k+1)))}</b><span>${esc(plain(e.x.secs[0].lines[0]).slice(0,90))}…</span></button>`).join(''):'';
   box.querySelectorAll('.mine-c').forEach(b=>b.onclick=()=>openMine(+b.dataset.k));
 }
 

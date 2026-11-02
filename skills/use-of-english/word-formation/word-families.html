@@ -249,7 +249,6 @@ main.wf{padding-top:calc(var(--wf-head,170px) + 1rem)}
   <div class="mode-selector" id="modes">
     <button class="mode-btn" data-mode="explore" type="button">Explore</button>
     <button class="mode-btn" data-mode="practice" type="button">Practice</button>
-    <button class="mode-btn" data-mode="game" type="button">Game</button>
     <a class="mode-btn" href="/skills/challenge/challenge.html?board=1&amp;section=vocabulary&amp;topic=word-formation">Board</a>
   </div>
   <!-- Prefixes or Suffixes, then the tab — the order the exam pages use.
@@ -300,6 +299,8 @@ function inSet(n,f){ return LADDER[set] ? LADDER[set].includes(n.set) : f.cls===
 function inGroup(f,label){ const g=(((D.groups||{})[f.cls]||{})[kind]||[]).find(x=>x.label===label); return !!g&&g.affixes.includes(f.affix); }
 function basePool(){ const out=[]; D.nodes.forEach(n=>n.forms.forEach(f=>{ if(f.type===kind&&inSet(n,f)) out.push({n,f}); })); return out; }
 function pool(){ return basePool().filter(x=>!aff||inGroup(x.f,aff)); }
+/* Practice: both kinds, no affix filter — the word-class tab is the only choice */
+function practicePool(){ const out=[]; D.nodes.forEach(n=>n.forms.forEach(f=>{ if(inSet(n,f)) out.push({n,f}); })); return out; }
 /* the groups on offer here, with how many forms each has in this tab */
 function groupsHere(){ const classes=LADDER[set]?CLASSES:[set], m=new Map(), B=basePool();
   classes.forEach(c=>(((D.groups||{})[c]||{})[kind]||[]).forEach(g=>{ if(!m.has(g.label)) m.set(g.label,{label:g.label,meaning:[],n:0}); const e=m.get(g.label);
@@ -331,7 +332,7 @@ function ruleBox(f){ const r=f.rule&&RULES[f.rule]; const a=D.affixes[f.affix];
 function countIn(k,kd){ kd=kd||kind; let c=0; D.nodes.forEach(n=>n.forms.forEach(f=>{ if(f.type===kd&&(LADDER[k]?LADDER[k].includes(n.set):f.cls===k)) c++; })); return c; }
 function countAll(){ let c=0; D.nodes.forEach(n=>c+=n.forms.length); return c; }
 function drawNav(){
-  $('sets').innerHTML=SETS.map(([k,l])=>{ const n=countIn(k);
+  $('sets').innerHTML=SETS.map(([k,l])=>{ const n=mode==='practice'?countIn(k,'prefix')+countIn(k,'suffix'):countIn(k);
     return `<button class="vtab${k===set?' active':''}${n?'':' none'}" type="button" data-set="${k}">${l}<span class="pct">${n}</span></button>`; }).join('');
   document.querySelectorAll('#kind button').forEach(b=>{ b.innerHTML=`${b.dataset.kind==='prefix'?'Prefixes':'Suffixes'}<small>${countIn(set,b.dataset.kind)}</small>`; });
   { const n=pool().length, label=(SETS.find(x=>x[0]===set)||[])[1]||'', g=Math.ceil(n/8);
@@ -340,6 +341,7 @@ function drawNav(){
   document.querySelectorAll('#kind button').forEach(b=>{ const on=b.dataset.kind===kind; b.classList.toggle('on',on); b.setAttribute('aria-selected',on); });
   ['explore','practice','game'].forEach(v=>$(v).classList.toggle('hidden',v!==mode));
   $('topline').classList.toggle('hidden',mode==='practice');          /* Practice carries its own line on the sheet */
+  { const vr=$('kind').closest('.view-row'); if(vr) vr.classList.toggle('hidden',mode==='practice'); }   /* Prefixes / Suffixes: Explore only */
   const q=new URLSearchParams({mode,set,kind}); if(aff) q.set('aff',aff); history.replaceState(null,'',location.pathname+'?'+q);
 }
 function go(){ if(D&&aff&&!groupsHere().some(g=>g.label===aff)) aff=''; drawNav(); if(mode==='explore') explore(); else if(mode==='practice') practiceGate(); else labStart(); }
@@ -408,20 +410,23 @@ let S=null;
    reason sits under any missed. Mistakes come back first. The affix chips
    still narrow the set. /data/use-of-english/master-kit.js */
 function practiceGate(){
-  if(!pool().length){ $('practice').innerHTML=`<p class="lead">No ${kind==='prefix'?'prefixed':'suffixed'} words in this set. Try another tab.</p>`; return; }
-  $('practice').innerHTML=`${affixRow()}<div id="mkHost"></div>`;
-  $('practice').querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ aff=c.dataset.aff; drawNav(); practiceGate(); });
+  if(!practicePool().length){ $('practice').innerHTML=`<p class="lead">No words in this set yet. Try another tab.</p>`; return; }
+  /* ONE LAYER, NOT THREE: Practice is the word-class tab and nothing else.
+     Prefixes / Suffixes and the affix chips are ways to BROWSE, so they live
+     in Explore; Practice mixes both kinds, as the exam does. */
+  $('practice').innerHTML=`<div id="mkHost"></div>`;
   MasterKit.mount($('mkHost'),{
+    exam:{href:'/skills/use-of-english/word-formation/word-formation.html',label:'Now try a real Part 3 text'}, dispute:true,
     n:8, max:1, kind:'type', kick:'Part 3',
     rubric:'Use the word in capitals to form a word that fits the gap.',
-    label:()=>((SETS.find(x=>x[0]===set)||[])[1]||'')+(aff?' · '+aff:''),
-    items:()=>pool().map(({n,f})=>{ const s0=f.teen&&gapped(f.teen,f.w)?f.teen:f.ex, g=s0&&gapped(s0,f.w); if(!g) return null;
+    label:()=>((SETS.find(x=>x[0]===set)||[])[1]||''),
+    items:()=>practicePool().map(({n,f})=>{ const s0=f.teen&&gapped(f.teen,f.w)?f.teen:f.ex, g=s0&&gapped(s0,f.w); if(!g) return null;
       const r=f.rule&&RULES[f.rule];
       return { id:f.id, pre:g.pre, post:g.post, key:src(n,f).toUpperCase(), ans:f.w,
         why:`${f.w} (${f.cls}): ${f.gloss}.${r?' '+r.title+'.':''}`,
         check:v=>ok(f,v)?1:0,
         validate:v=>/\s/.test(norm(v))?'One word only.':'' }; }).filter(Boolean),
-    remember:(q,ok2)=>{ const hit=pool().find(x=>x.f.id===q.id); if(hit) remember(hit.f,ok2); }
+    remember:(q,ok2)=>{ const hit=practicePool().find(x=>x.f.id===q.id); if(hit) remember(hit.f,ok2); }
   });
 }
 function options(n,f){ const real=[n.base].concat(n.forms.map(x=>x.w)).filter((w,i,a)=>a.indexOf(w)===i&&w!==f.w);

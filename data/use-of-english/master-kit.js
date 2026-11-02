@@ -67,20 +67,68 @@
     Kit.cur = this;
   }
 
-  /* A new set: what is due first, then what this visit has not shown yet. */
-  Kit.prototype.deal = function () {
-    var all = this.cfg.items(), n = this.cfg.n || 8, seen = this.seen;
-    var dueOnes = shuffle(all.filter(function (i) { return due(i.id); }));
-    var fresh = shuffle(all.filter(function (i) { return !due(i.id) && !seen[i.id]; }));
-    if (dueOnes.length + fresh.length < n) { this.seen = {}; seen = this.seen; fresh = shuffle(all.filter(function (i) { return !due(i.id); })); }
-    var pick = dueOnes.concat(fresh).slice(0, n);
-    pick.forEach(function (i) { seen[i.id] = 1; });
-    this.qs = pick; this.reset();
+  /* FIXED, NUMBERED TESTS (2 Nov, Michael's request). A tab's sentences are
+     split once into tests of n, in an order that never changes — shuffled
+     by a fixed seed so a Mix test mixes topics — so "Test 7" is the same
+     seven-or-eight sentences for every student, every visit. The row above
+     the sheet shows them all: empty = not tried, filled = done, a rust dot =
+     done with mistakes. Mistakes still come back: whenever any are due, a
+     "To fix" pill leads the row and deals a test made of just those. */
+  function hash(str) { var h = 2166136261; for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+  function seeded(arr, seed) {
+    var a = arr.slice(), t = seed || 1;
+    var r = function () { t |= 0; t = t + 0x6D2B79F5 | 0; var x = Math.imul(t ^ t >>> 15, 1 | t); x = x + Math.imul(x ^ x >>> 7, 61 | x) ^ x; return ((x ^ x >>> 14) >>> 0) / 4294967296; };
+    for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(r() * (i + 1)), y = a[i]; a[i] = a[j]; a[j] = y; }
+    return a;
+  }
+  var PROG = 'intuity.master.tests';
+  function progAll() { try { return JSON.parse(localStorage.getItem(PROG) || '{}'); } catch (e) { return {}; } }
+  Kit.prototype.progKey = function () { return location.pathname + '|' + this.cfg.label(); };
+  Kit.prototype.prog = function () { return progAll()[this.progKey()] || {}; };
+  Kit.prototype.saveProg = function (sig, got, max) {
+    try { var all = progAll(), k = this.progKey(), m = all[k] || (all[k] = {}); m[sig] = { got: got, max: max, at: Date.now() }; localStorage.setItem(PROG, JSON.stringify(all)); } catch (e) {}
+  };
+  Kit.prototype.buildTests = function () {
+    var n = this.cfg.n || 8, all = seeded(this.cfg.items(), hash(this.progKey()));
+    this.tests = [];
+    for (var i = 0; i < all.length; i += n) this.tests.push(all.slice(i, i + n));
+    /* a short last test borrows from the first, so every test is full length */
+    var last = this.tests[this.tests.length - 1];
+    if (this.tests.length > 1 && last.length < n) { var ids = {}; last.forEach(function (q) { ids[q.id] = 1; }); this.tests[0].forEach(function (q) { if (last.length < n && !ids[q.id]) last.push(q); }); }
+    this.pool = all;
+  };
+  Kit.prototype.sig = function (t) { return this.tests[t] && this.tests[t].length ? this.tests[t][0].id : ''; };
+  Kit.prototype.dueList = function () { return (this.pool || []).filter(function (q) { return due(q.id); }); };
+  Kit.prototype.firstOpen = function (from) {
+    var p = this.prog(), n = this.tests.length;
+    for (var j = 0; j < n; j++) { var t = ((from || 0) + j) % n; if (!p[this.sig(t)]) return t; }
+    return ((from || 0)) % Math.max(1, n);
+  };
+  Kit.prototype.deal = function (t) {
+    if (!this.tests) this.buildTests();
+    if (t === 'fix') { this.test = 'fix'; this.qs = this.dueList().slice(0, this.cfg.n || 8); }
+    else { this.test = (t === undefined ? this.firstOpen(0) : t); this.qs = (this.tests[this.test] || []).slice(); }
+    this.reset();
     /* choice options are shuffled once per set, so they do not jump about */
     this.qs.forEach(function (q) { if (q.opts) q._o = shuffle(q.opts); });
     var rb = this.ringBefore = {}; this.qs.forEach(function (q) { rb[q.id] = held(q.id); });
     this.render();
   };
+  Kit.prototype.nextLabel = function () { return this.test === 'fix' ? 'Back to the tests' : 'Next test'; };
+  Kit.prototype.goNext = function () { this.deal(this.test === 'fix' ? undefined : this.firstOpen(this.test + 1)); };
+
+  Kit.prototype.testsHTML = function () {
+    var self = this, p = this.prog(), nd = this.dueList().length;
+    var pills = this.tests.map(function (_, t) {
+      var r = p[self.sig(t)], cls = 'mk-t' + (t === self.test ? ' on' : '') + (r ? ' done' : '') + (r && r.got < r.max ? ' miss' : '');
+      return '<button class="' + cls + '" type="button" data-t="' + t + '">Test ' + (t + 1) + (r ? '<small>' + r.got + '/' + r.max + '</small>' : '') + '</button>';
+    }).join('');
+    var done = this.tests.filter(function (_, t) { return p[self.sig(t)]; }).length;
+    return '<div class="mk-tests"><div class="mk-trow">' +
+      (nd ? '<button class="mk-t fix' + (this.test === 'fix' ? ' on' : '') + '" type="button" data-t="fix">To fix<small>' + nd + '</small></button>' : '') +
+      pills + '</div><div class="mk-tcount">' + done + ' of ' + this.tests.length + ' tests done</div></div>';
+  };
+
   Kit.prototype.reset = function () { this.answers = {}; this.marks = {}; this.checked = {}; this.marked = false; this.qi = 0; this.warn = {}; this.disputed = {}; };
 
   Kit.prototype.answered = function () { var a = this.answers; return this.qs.filter(function (q) { return filled(a[q.id]); }).length; };
@@ -132,7 +180,7 @@
 
   /* The bar. ALL: Clear · Submit. ONE: Prev · Check (or Next once checked) · Next. */
   Kit.prototype.barHTML = function () {
-    var n = this.qs.length, cfg = this.cfg, more = esc(cfg.moreLabel || ('Next ' + (cfg.n || 8)));
+    var n = this.qs.length, cfg = this.cfg, more = esc(this.nextLabel());
     if (this.marked) return '<button type="button" data-b="again">Try again</button><button class="go" type="button" data-b="more">' + more + ' &rsaquo;</button>';
     if (this.view !== 'one') {
       var left = n - this.answered();
@@ -152,7 +200,7 @@
     var self = this, cfg = this.cfg, qs = this.qs, n = qs.length, one = this.view === 'one';
     if (!n) { this.el.innerHTML = '<p class="mk-empty">Nothing to practise in this tab yet. Try another.</p>'; return; }
     var shown = one ? [this.qi] : qs.map(function (_, i) { return i; });
-    var kick = '<div class="mk-kick">' + esc(cfg.kick || 'Practice') + '<span class="right">' +
+    var kick = '<div class="mk-kick">' + esc((cfg.kick || 'Practice') + ' · ' + (this.test === 'fix' ? 'To fix' : 'Test ' + (this.test + 1))) + '<span class="right">' +
       (one ? 'Sentence ' + (this.qi + 1) + ' of ' + n : this.answered() + ' / ' + n + ' answered') + '</span></div>';
     var rubric = cfg.rubric && (!one || this.qi === 0) && !this.marked ? '<p class="mk-rubric">' + esc(cfg.rubric) + '</p>' : '';
     var dots = qs.map(function (q, i) {
@@ -162,7 +210,7 @@
       if (one && i === self.qi) c += ' cur';
       return '<button class="mk-dot ' + c + '" type="button" data-i="' + i + '" aria-label="Sentence ' + (i + 1) + '"></button>';
     }).join('');
-    this.el.innerHTML =
+    this.el.innerHTML = this.testsHTML() +
       '<div class="mk-viewrow"><div class="mk-info">' + esc(this.infoText()) + '</div>' +
         '<div class="mk-tog" role="group" aria-label="How much to show">' +
           '<button class="mk-vb viewbtn' + (one ? '' : ' active') + '" type="button" data-v="full" aria-pressed="' + !one + '">All</button>' +
@@ -174,6 +222,7 @@
       (this.marked && cfg.exam ? '<a class="mk-exam" href="' + esc(cfg.exam.href) + '">' + esc(cfg.exam.label) + ' &rsaquo;</a>' : '') +
       '<div class="mk-bar">' + this.barHTML() + '</div>';
     this.wire();
+    var on = this.el.querySelector('.mk-t.on'); if (on && on.scrollIntoView) { try { on.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch (e) {} }
   };
 
   /* typing must not re-render (the caret would jump): update only the counters */
@@ -194,6 +243,9 @@
 
   Kit.prototype.wire = function () {
     var self = this, el = this.el;
+    el.querySelectorAll('.mk-t').forEach(function (b) {
+      b.onclick = function () { var t = b.dataset.t; self.deal(t === 'fix' ? 'fix' : +t); };
+    });
     el.querySelectorAll('.mk-vb').forEach(function (b) {
       b.onclick = function () {
         if (b.classList.contains('active')) return;
@@ -253,7 +305,7 @@
         else if (w === 'clear') { self.answers = {}; self.warn = {}; self.render(); }
         else if (w === 'submit') self.submit();
         else if (w === 'again') { self.reset(); self.render(); window.scrollTo(0, 0); }
-        else if (w === 'more') { self.deal(); window.scrollTo(0, 0); }
+        else if (w === 'more') { self.goNext(); window.scrollTo(0, 0); }
       };
     });
   };
@@ -343,8 +395,10 @@
 
   Kit.prototype.finish = function () {
     var self = this, cfg = this.cfg, max = cfg.max || 1;
-    this.marked = true; this.closeTip(); this.render();
+    this.marked = true; this.closeTip();
     var sc = this.score(), pct = Math.round(sc.got / sc.max * 100);
+    if (this.test !== 'fix') this.saveProg(this.sig(this.test), sc.got, sc.max);
+    this.render();
     var missed = this.qs.filter(function (q) { return (self.marks[q.id] || 0) < max; });
     var fixed = this.qs.filter(function (q) { return self.ringBefore[q.id] && (self.marks[q.id] || 0) >= max; }).length;
     var lines = [];
@@ -360,11 +414,11 @@
         return '<div class="mk-ov-i">' + String(i + 1).padStart(2, '0') + ' · <s>' + esc(self.answers[q.id] || '—') + '</s> → <b>' + esc(q.ans) + '</b>' +
           (q.why ? '<span class="mk-ov-w">' + esc(q.why) + '</span>' : '') + '</div>';
       }).join('') + '</div>' : '') +
-      '<div class="mk-ov-btns"><button class="mk-ov-btn primary" type="button" data-o="more">' + esc(cfg.moreLabel || ('Next ' + (cfg.n || 8))) + ' &rsaquo;</button>' +
+      '<div class="mk-ov-btns"><button class="mk-ov-btn primary" type="button" data-o="more">' + esc(this.nextLabel()) + ' &rsaquo;</button>' +
       '<button class="mk-ov-btn ghost" type="button" data-o="review">See the answers</button></div>' +
       /* the bridge: single sentences are the drill, the exam is a text */
       (cfg.exam ? '<a class="mk-ov-exam" href="' + esc(cfg.exam.href) + '">' + esc(cfg.exam.label) + ' &rsaquo;</a>' : '') + '</div>';
-    this.ov.querySelector('[data-o="more"]').onclick = function () { self.ov.classList.remove('show'); self.deal(); window.scrollTo(0, 0); };
+    this.ov.querySelector('[data-o="more"]').onclick = function () { self.ov.classList.remove('show'); self.goNext(); window.scrollTo(0, 0); };
     this.ov.querySelector('[data-o="review"]').onclick = function () { self.ov.classList.remove('show'); window.scrollTo(0, 0); };
     this.ov.onclick = function (e) { if (e.target === self.ov) self.ov.classList.remove('show'); };
     sfx(pct === 100 ? 'fanfare' : 'bowlLow');
@@ -375,6 +429,8 @@
 
   window.MasterKit = {
     mount: function (el, cfg) { var k = new Kit(el, cfg); k.deal(); return k; },
+    /* every test result on this device, for a teacher page later */
+    progress: function () { return progAll(); },
     disputes: function () { try { return JSON.parse(localStorage.getItem(DISPUTES) || '[]'); } catch (e) { return []; } }
   };
 })();

@@ -357,11 +357,12 @@ const N=14;                    /* fourteen cells, all identical — every one fe
    menu already calls this The Ultimate Challenge, so the word is familiar:
    play it as a Game, or take the Challenge. Underneath it is still
    mode=exam, so every link already shared keeps working. */
-const NOTE={game:'Game · fourteen tiles, fourteen games — Defuse, Swing, Knock-out, Sort, Pegs, Forge, Pairs, Flip and Hunt. Three lives, another try after a mistake, the answer explained straight away.',
-            exam:'Challenge · Cambridge task types only: multiple choice, open cloze (Part 2), word formation (Part 3) and key word transformation (Part 4). One attempt per question and the answer straight after — then your percentage, how close you are, and a full review.'};
+/* one line each (Nov 2026 audit): the student needs the rule, not the list of formats */
+const NOTE={game:'Fourteen tiles, a different game on each. Three lives — and another try after a mistake.',
+            exam:'Exam-style questions, one try each. Your score at the end.'};
 /* Writing's Ultimate: sentences from the model texts, never from a Board */
-const NOTE_W={game:'Game · fourteen tiles from every writing Board — Sort, Pegs, Forge, Knock-out and Defuse. Three lives, another try after a mistake, the answer explained straight away.',
-            exam:'Challenge · introductions, body paragraphs and conclusions from the model texts, never seen on a Board: where each sentence belongs, which task it comes from, and real paragraphs to put back in order. One attempt per question — then your percentage and a full review.'};
+const NOTE_W={game:'Fourteen tiles from the writing Boards. Three lives — and another try after a mistake.',
+            exam:'Real sentences from the model texts, one try each. Your score at the end.'};
 /* THE EXAM PLAYS ONLY WHAT THE PAPER ASKS. Odd one out, Sort it, Match, Put
    it in order, Correct the error and the bracketed-verb gap are good
    practice and live on in Game, as Knock-out, Sort, Pegs, Forge, Hunt and
@@ -508,6 +509,7 @@ async function choose(id){
     if(BOARD&&mode!=='exam') makeSets();
     else if(BOARD){ SETS=[]; SETK=0; FULL=pool.slice(); const el=$('boardSets'); if(el){ el.hidden=true; el.classList.add('hidden'); el.innerHTML=''; } }
   }catch(e){ $('pick').textContent='That topic didn’t load — pick it again'; return; }
+  try{ if(!BOARD) localStorage.setItem('intuity.challenge.'+SECTION,id); }catch(e){}
   $('gate').hidden=true; $('trackCard').hidden=false; drawTopics(); drawModes();
   reset(); drawBoard(); scrollTo(0,0);
 }
@@ -723,7 +725,8 @@ function drawBoard(){
    across the whole run. Results appear automatically once all fourteen are
    answered — there's no separate finish tile to tap. */
 let doneSet=new Set(), triesAt={}, revealed=false;
-function reset(){ stop(); doneSet=new Set(); triesAt={}; revealed=false; lives=3; score=0; playing=false; log=[]; cur=null;
+let aimShown=false;
+function reset(){ aimShown=false; stop(); doneSet=new Set(); triesAt={}; revealed=false; lives=3; score=0; playing=false; log=[]; cur=null;
   practice=false; practiceAt=0; practiceRight=0; ringRun={came:0,fixed:0,half:0};
   const waiting=dueCount();
   $('clock').textContent='0:00'; $('answered').textContent='0 / '+N; $('hint').hidden=false;
@@ -836,11 +839,12 @@ function openCell(i){
      practised, and in one plain line what that means — a learner who chose
      the tab by accident, or came back after a break, still knows the aim */
   openCard(`<div class="kick">${esc(topic.label)} · Tile ${String(i+1).padStart(2,'0')} of ${N}</div><h2 id="fTitle">${esc(g.title)}</h2>${mode==='exam'&&CAMBRIDGE[r.game]?`<div class="partno">Use of English · ${CAMBRIDGE[r.game]}</div>`:''}
-    ${topic.focus?`<p class="aim">${esc(topic.focus)}</p>`:''}<div id="host"></div><p class="feedback" id="fb" aria-live="polite"></p><div class="cta" id="next" hidden><button class="btn fill" type="button" id="nextBtn">Continue</button></div>`);
+    ${topic.focus&&!aimShown?`<p class="aim">${esc(topic.focus)}</p>`:''}<div id="host"></div><p class="feedback" id="fb" aria-live="polite"></p><div class="cta" id="next" hidden><button class="btn fill" type="button" id="nextBtn">Continue</button></div>`);
   /* exam:false even in the Challenge: every answer is shown straight away now,
      so the formats draw right and wrong as they do in Game. ONE attempt is
      still the rule — answer() settles the tile on the first answer — so the
      percentage measures exactly what it did before. */
+  aimShown=true;   /* the aim once per run: after the first tile, the kick line names the topic */
   g.render($('host'), r, {exam:false, esc, shuffle, answer, nudge});
   paint();
 }
@@ -1153,6 +1157,10 @@ drawModes();
 fetch(BASE+'challenge-topics.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{
   TOPICS=d; drawTopics(); drawModes();
   const want=P.get('topic'); if(want) choose(want);      /* a teacher's link: ?topic=passive&mode=exam */
+  /* NO EMPTY GATE: the Challenge opens on the topic this student played last
+     (or the first one), so the board is one tap closer. The tabs still switch. */
+  else if(!BOARD){ let last=null; try{ last=localStorage.getItem('intuity.challenge.'+SECTION); }catch(e){}
+    const ts=SEC().topics.filter(t=>t.file||t.vocab), t=ts.find(x=>x.id===last)||ts[0]; if(t) choose(t.id); }
   if(BOARD){ const t=d.sections.flatMap(x=>x.topics).find(x=>x.id===want); if(t) boardHeader(t); }
 }).catch(()=>{ $('pick').textContent='The topics didn’t load — reload to try again'; });
 })();

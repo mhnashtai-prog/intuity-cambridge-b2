@@ -124,9 +124,10 @@
       return '<button class="' + cls + '" type="button" data-t="' + t + '">Test ' + (t + 1) + (r ? '<small>' + r.got + '/' + r.max + '</small>' : '') + '</button>';
     }).join('');
     var done = this.tests.filter(function (_, t) { return p[self.sig(t)]; }).length;
+    this.tDone = done + ' of ' + this.tests.length + ' tests done';   /* shown beside the All | One switch: one row, not two */
     return '<div class="mk-tests"><div class="mk-trow">' +
       (nd ? '<button class="mk-t fix' + (this.test === 'fix' ? ' on' : '') + '" type="button" data-t="fix">To fix<small>' + nd + '</small></button>' : '') +
-      pills + '</div><div class="mk-tcount">' + done + ' of ' + this.tests.length + ' tests done</div></div>';
+      pills + '</div></div>';
   };
 
   Kit.prototype.reset = function () { this.answers = {}; this.marks = {}; this.checked = {}; this.marked = false; this.qi = 0; this.warn = {}; this.disputed = {}; };
@@ -211,7 +212,7 @@
       return '<button class="mk-dot ' + c + '" type="button" data-i="' + i + '" aria-label="Sentence ' + (i + 1) + '"></button>';
     }).join('');
     this.el.innerHTML = this.testsHTML() +
-      '<div class="mk-viewrow"><div class="mk-info">' + esc(this.infoText()) + '</div>' +
+      '<div class="mk-viewrow"><div class="mk-info">' + esc(this.tDone || '') + '</div>' +   /* the info line went (Nov 2026 audit): the dots and the card's own "Sentence 1 of 8" already say it */
         '<div class="mk-tog" role="group" aria-label="How much to show">' +
           '<button class="mk-vb viewbtn' + (one ? '' : ' active') + '" type="button" data-v="full" aria-pressed="' + !one + '">All</button>' +
           '<button class="mk-vb viewbtn' + (one ? ' active' : '') + '" type="button" data-v="one" aria-pressed="' + one + '">One at a time</button>' +
@@ -228,7 +229,7 @@
   /* typing must not re-render (the caret would jump): update only the counters */
   Kit.prototype.paintProgress = function () {
     var self = this, n = this.qs.length;
-    var info = this.el.querySelector('.mk-info'); if (info) info.textContent = this.infoText();
+    var info = this.el.querySelector('.mk-info'); if (info) info.textContent = this.tDone || '';
     var r = this.el.querySelector('.mk-kick .right'); if (r && this.view !== 'one') r.textContent = this.answered() + ' / ' + n + ' answered';
     var s = this.el.querySelector('[data-b="submit"]');
     if (s) { var left = n - this.answered(); s.disabled = !!left; s.textContent = left ? 'Submit — ' + left + ' to go' : 'Submit'; }

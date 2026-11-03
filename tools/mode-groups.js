@@ -32,7 +32,11 @@
       'border:0;background:transparent;color:var(--dim,#6E6660);padding:.45rem .95rem;border-radius:999px;cursor:pointer;min-height:2.1rem}' +
     '.mg-b.on{background:var(--ink,#1E1B19);color:var(--card,#FBF9F6)}' +
     '@media(hover:hover){.mg-b:not(.on):hover{color:var(--ink,#1E1B19)}}' +
-    '.mode-selector .mg-off{display:none !important}';
+    '.mode-selector .mg-off{display:none !important}' +
+    '.mg-gate{top:0;bottom:0;left:0;right:0;padding-top:3.2rem !important}' +
+    '.mg-gate .gate-pick{display:flex;flex-direction:column;align-items:center;gap:.2rem;border-radius:999px;padding:.75rem 1.3rem}' +
+    '.mg-gate .gate-pick small{font-family:var(--f-body,inherit);font-weight:400;font-size:.72rem;letter-spacing:0;opacity:.7}' +
+    'html.mg-gated body{overflow:hidden}';
   var st = document.createElement('style'); st.textContent = css; (document.head || document.documentElement).appendChild(st);
 
   function label(el) {
@@ -59,6 +63,7 @@
       return '<button type="button" class="mg-b' + (g === shown ? ' on' : '') + '" data-g="' + g + '" aria-pressed="' + (g === shown) + '">' + NAMES[g] + '</button>';
     }).join('') + '</div>';
     if (bar.innerHTML !== html) bar.innerHTML = html;
+    gate(row, its, gs, shown, act);
     bar.onclick = function (e) {
       var b = e.target.closest('.mg-b'); if (!b) return;
       var g = b.getAttribute('data-g'), members = its.filter(function (_, i) { return gs[i] === g; });
@@ -66,6 +71,30 @@
       /* one mode in the group, and it is not the one open: go straight there */
       if (members.length === 1 && !isActive(members[0])) members[0].click();
     };
+  }
+  /* A GROUP CHOSEN, NO MODE YET (3 Nov): the page below would still show the
+     last mode's content (Explore under PLAY). So the screen clears to the
+     pendulum, as every other entry in the app does: one instruction, and the
+     group's modes as picks — tapping one is the same as tapping it above. */
+  var WHAT = { game: 'Noughts & Crosses', defuse: 'Beat the clock', board: '14 tiles, one game each',
+    'gap-fill': 'Fill each gap', rewrite: 'Rewrite the sentence', quiz: 'Choose the answer', practice: 'Fill each gap', match: 'Match the pairs' };
+  var GATE = { practise: ['Pick an exercise', 'Choose one to start — the same choices are in the row above.'],
+    play: ['Pick a game', 'Choose one to start — the same choices are in the row above.'],
+    learn: ['Start here', 'Read the rules and examples first.'] };
+  function gate(row, its, gs, shown, act) {
+    var g = document.getElementById('mgGate');
+    var need = !act || groupOf(act) !== shown;
+    if (!need) { if (g) g.classList.remove('open'); document.documentElement.classList.remove('mg-gated'); return; }
+    if (!g) { g = document.createElement('div'); g.id = 'mgGate'; g.className = 'sheet-gate gate-standalone mg-gate'; document.body.appendChild(g); }
+    var members = its.filter(function (_, i) { return gs[i] === shown; });
+    g.innerHTML = '<div class="gate-mark pend-hang"><div class="pend-dial"><span>?</span></div></div>' +
+      '<div class="gate-head">' + GATE[shown][0] + '</div><div class="gate-sub">' + GATE[shown][1] + '</div>' +
+      '<div class="gate-list">' + members.map(function (m, k) { var l = label(m), w = WHAT[l.toLowerCase()];
+        return '<button type="button" class="gate-pick" data-k="' + k + '">' + l + (w ? '<small>' + w + '</small>' : '') + '</button>'; }).join('') + '</div>';
+    [].slice.call(g.querySelectorAll('.gate-pick')).forEach(function (b) { b.onclick = function () { members[+b.dataset.k].click(); }; });
+    var place = function () { var r = row.getBoundingClientRect(); g.style.top = Math.max(0, Math.round(r.bottom + 6)) + 'px'; };
+    place(); g.classList.add('open'); document.documentElement.classList.add('mg-gated');
+    if (!g.__placed) { g.__placed = true; addEventListener('resize', place); addEventListener('scroll', place, { passive: true }); }
   }
   function watch(row) {
     if (row.__mgWatch) return; row.__mgWatch = true;

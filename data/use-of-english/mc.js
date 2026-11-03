@@ -437,7 +437,9 @@ function submit() {
           (q.why ? '<span class="ov-miss-w">' + esc(q.why) + '</span>' : '') +
           (note ? '<span class="ov-miss-w">' + esc(yours) + ' \u2014 ' + esc(note) + '</span>' : '') +
           '</div>';
-      }).join('')
+      }).join('') +
+      /* the way to fix it, from the result (3 Nov 2026) */
+      '<a class="to-master" href="/skills/use-of-english/multiple-choice/master-part1.html">Practise Part 1 item by item, with a reason for each \u2192</a>'
     : '';
   saveScore(pct);
   /* THE REVIEW DECK (3 Nov 2026): every answered gap reports, so a missed

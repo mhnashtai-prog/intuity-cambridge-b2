@@ -791,6 +791,15 @@ function flashQ(i, cls){
   setTimeout(() => t.classList.remove(cls), 900);
 }
 function closeQ(){ const c = $('qcard'); if (!c) return; c.classList.remove('on'); $('qscrim').classList.remove('on'); QI = -1; if (document.activeElement) document.activeElement.blur(); paintQ(); }
+/* THE REVIEW DECK (3 Nov 2026): the first answer to each cell reports, so a
+   preposition missed once comes back on the review page, spaced over days */
+function reportPrep(c, ok){
+  try{
+    if (c.reported || !window.Be2 || !Be2.answer) return; c.reported = true;
+    Be2.answer('prepositions', { id: c.kind + ':' + c.it.w, prompt: String(c.it.s || (c.it.w + ' ___')).replace('___', '_____'),
+      answer: c.it.p, given: c.lastWrong || '', correct: ok, rule: c.it.w + ' ' + c.it.p + ' (' + c.kind + ')', href: location.pathname });
+  }catch(e){}
+}
 function checkQ(i){
   const c = CELLS[i], inp = $('qin'), fb = $('qfb'); if (!c || c.done || !inp) return;
   const v = norm(inp.value); if (!v) { inp.focus(); return; }
@@ -799,12 +808,13 @@ function checkQ(i){
   const other = ok ? null : ['verb', 'adjective', 'noun'].find(k => k !== c.kind && ACCEPT[k + ':' + c.it.w] && ACCEPT[k + ':' + c.it.w].has(v));
   if (other) { fb.innerHTML = `<b>${esc(c.it.w)} ${esc(v)}</b> is the ${other}. Here it’s a ${c.kind}. Try again.`; inp.select(); return; }
   if (ok) {
+    reportPrep(c, c.tries === 0);
     c.done = true; c.it = Object.assign({}, c.it, { p: v }); c.late = c.tries > 0;
     inp.classList.add('ok'); inp.readOnly = true; sfx(c.late ? 'pop' : 'jingle');
     fb.innerHTML = (c.late ? 'Yes — <b>' + esc(c.it.w + ' ' + v) + '</b>.' : 'Yes!') + ' <b>+' + ptsOf(c) + '</b>';
     return backQ(i, 'hit', 450);
   }
-  c.tries++; MISS++; c.lastWrong = v; c.typed = ''; sfx('wrong');
+  c.tries++; MISS++; c.lastWrong = v; c.typed = ''; sfx('wrong'); reportPrep(c, false);
   if (!MISSED.includes(c)) MISSED.push(c);
   inp.classList.remove('shake'); void inp.offsetWidth; inp.classList.add('shake', 'no');
   $('qcard').querySelectorAll('.qtries i').forEach((d, k) => d.classList.toggle('on', k < TRIES - c.tries));
@@ -928,11 +938,12 @@ function check(i, value, advance){
     return;
   }
   if (ok) {
+    reportPrep(c, c.tries === 0);
     c.done = true; c.it = Object.assign({}, c.it, { p: v }); c.late = c.tries > 0; c.fresh = true;
     sfx(c.late ? 'pop' : 'jingle');
     settle(i, true, advance);
   } else {
-    c.tries++; MISS++; c.lastWrong = v; sfx('wrong');
+    c.tries++; MISS++; c.lastWrong = v; sfx('wrong'); reportPrep(c, false);
     if (!MISSED.includes(c)) MISSED.push(c);
     count();
     if (el) { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake', 'wrong'); }

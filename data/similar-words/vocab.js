@@ -477,7 +477,10 @@ function checkAnswers() {
       slot.classList.add('locked', ok ? 'correct' : 'incorrect');
       if (!ok) {
         var a = slot.parentElement.querySelector('.answer');
-        a.textContent = want;
+        /* the meaning, right where the mistake is (3 Nov 2026): the whole point
+           of these sets is the fine difference, so it is shown when it matters */
+        var mm = MEANINGS && MEANINGS[String(set.setNumber)] ? MEANINGS[String(set.setNumber)][want] : '';
+        a.innerHTML = esc(want) + (mm ? '<span class="answer-m"> \u2014 ' + esc(mm) + '</span>' : '');
         a.hidden = false;
       }
     });

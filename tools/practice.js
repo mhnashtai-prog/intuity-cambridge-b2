@@ -22,6 +22,7 @@ var SCORE_KEY = CFG.scoreKey;
 var MODE      = CFG.mode || 'transform';
 
 var allTests = [], currentTest = 0, isChecked = false, testScores = {};
+var retryRound = false, firstWrong = {};
 var answers = {};
 var $ = function (id) { return document.getElementById(id); };
 var esc = function (v) {
@@ -203,6 +204,7 @@ function loadTest(index) {
   if (index == null || index < 0 || index >= allTests.length) return;
   currentTest = index;
   isChecked = false;
+  retryRound = false; firstWrong = {}; retryNote(0);
   Object.keys(answers).forEach(function (k) { delete answers[k]; });
   renderTestSelector();
   renderTest();
@@ -331,7 +333,7 @@ function markTransform(item, i, revealOnly) {
   var given = normalize(inp.value);
   var ok = given === normalize(item.answer) ||
            (item.alternatives || []).some(function (a) { return normalize(a) === given; });
-  inp.classList.remove('has-value');
+  inp.classList.remove('has-value', 'retry');
   inp.classList.add(ok ? 'correct' : 'incorrect');
   inp.readOnly = true;
   if (!ok && !revealOnly) {
@@ -385,6 +387,27 @@ function mark(i, revealOnly) {
    mistakes were never seen again. Each item now reports to Be2 like
    Gap-fill does, so a missed transformation comes back on the review page
    and leaves once it is right on two different days. */
+
+/* ── ONE MORE TRY (3 Nov 2026) ───────────────────────────────────────────
+   The first Check no longer hands over the answers. Right ones lock green;
+   wrong ones stay open, marked, for one more attempt; the second Check
+   reveals everything with the rules. Being prompted to self-correct teaches
+   more than being given the form (Ammar & Spada 2006, in the audit). A
+   mistake still counts as a mistake: the review deck gets the first try. */
+var RETRY_CSS = '.answer-input.retry:not(.correct):not(.incorrect){background:#FBEFE4 !important;box-shadow:inset 0 0 0 2px #C2956E !important;color:var(--poster-ink,#14110E) !important}' +
+  '#retryNote{display:block;margin:.2rem 0 .9rem;background:#14110E;color:#FBF8F3;border-radius:999px;padding:.6rem 1.1rem;' +
+  'font:600 .84rem/1.35 Geist,system-ui,sans-serif;text-align:center}';
+function retryNote(n) {
+  if (!document.getElementById('retryCss')) { var st = document.createElement('style'); st.id = 'retryCss'; st.textContent = RETRY_CSS; document.head.appendChild(st); }
+  var el = document.getElementById('retryNote');
+  if (!n) { if (el) el.remove(); return; }
+  /* in line, just above the first answer to fix, so it never covers a sentence */
+  var first = document.querySelector('.answer-input.retry'), row = first && first.closest('.question-card');
+  if (!el) { el = document.createElement('div'); el.id = 'retryNote'; el.setAttribute('role', 'status'); }
+  if (row && row.parentNode) row.parentNode.insertBefore(el, row); else document.body.appendChild(el);
+  el.textContent = n + (n === 1 ? ' answer needs' : ' answers need') + ' another look. Try once more, then Check again.';
+}
+
 function report(test) {
   if (!window.Be2 || !Be2.answer) return;
   var href = EMBEDDED ? (document.referrer || location.pathname) : location.pathname;
@@ -401,7 +424,7 @@ function report(test) {
         card = { id: id, prompt: (item.original ? item.original + ' \u2192 ' : '') +
                    String(item.keyword || '').toUpperCase() + ': ' + (item.before || '') + '_____' + (item.after || ''),
                  answer: item.answer, given: inp ? inp.value.trim() : '',
-                 correct: !!(inp && inp.classList.contains('correct')) };
+                 correct: !!(inp && inp.classList.contains('correct')) && !firstWrong[i] };
       }
       /* a blank is not an answer: checking a half-done set must not fill the deck */
       if (!card.correct && !String(card.given || '').trim()) return;
@@ -411,8 +434,30 @@ function report(test) {
   });
 }
 
+function transformOk(item, i) {
+  var inp = $('in-' + i), g = normalize(inp ? inp.value : '');
+  return !!g && (g === normalize(item.answer) || (item.alternatives || []).some(function (a) { return normalize(a) === g; }));
+}
 function checkAnswers() {
   var test = allTests[currentTest], correct = 0;
+  if (MODE !== 'choice' && !retryRound) {
+    var wrong = [];
+    test.items.forEach(function (item, i) { var inp = $('in-' + i); if (inp && inp.value.trim() && !transformOk(item, i)) wrong.push(i); });
+    if (wrong.length) {
+      retryRound = true; firstWrong = {}; wrong.forEach(function (i) { firstWrong[i] = 1; });
+      test.items.forEach(function (item, i) {
+        var inp = $('in-' + i); if (!inp) return;
+        if (firstWrong[i]) inp.classList.add('retry');
+        else if (transformOk(item, i)) { inp.classList.add('correct'); inp.readOnly = true; }
+      });
+      retryNote(wrong.length);
+      $('checkBtn').textContent = 'Check again';
+      var first = document.querySelector('.answer-input.retry');
+      if (first) { first.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(function () { try { first.focus({ preventScroll: true }); } catch (e) {} }, 350); }
+      return;
+    }
+  }
+  retryNote(0);
   test.items.forEach(function (_, i) { if (mark(i, false)) correct++; });
   report(test);
 
@@ -454,6 +499,7 @@ function clearAnswers() {
   if (banner) banner.remove();
   Object.keys(answers).forEach(function (k) { delete answers[k]; });
   isChecked = false;
+  retryRound = false; firstWrong = {}; retryNote(0);
   /* Choice mode re-renders because its buttons are disabled in place;
      transform mode clears the fields it already has. Both end identical. */
   if (MODE === 'choice') {
@@ -463,7 +509,7 @@ function clearAnswers() {
       var inp = $('in-' + i);
       inp.value = '';
       inp.readOnly = false;
-      inp.classList.remove('correct', 'incorrect', 'has-value');
+      inp.classList.remove('correct', 'incorrect', 'has-value', 'retry');
       autoExpand(inp);
       $('fb-' + i).classList.remove('show');
     });

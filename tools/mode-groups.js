@@ -61,6 +61,10 @@
     if (!eligible) { if (bar) bar.remove(); row.classList.remove('mg-solo'); its.forEach(function (el) { el.classList.remove('mg-off'); }); return; }
     var order = ['learn', 'practise', 'play'].filter(function (g) { return gs.indexOf(g) >= 0; });
     var act = its.filter(isActive)[0];
+    /* a mode opened by the page itself (a ?mode= link, a Board's "Gap-fill"):
+       the switch follows it, or the group gate would cover the open exercise */
+    if (act && row.__mgLastAct !== act) row.__mgShown = groupOf(act);
+    row.__mgLastAct = act;
     var shown = row.__mgShown && order.indexOf(row.__mgShown) >= 0 ? row.__mgShown : act ? groupOf(act) : order[0];
     row.__mgShown = shown;
     its.forEach(function (el, i) { el.classList.toggle('mg-off', gs[i] !== shown); });

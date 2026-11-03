@@ -25,6 +25,7 @@
     let currentTest = 0;
     let userAnswers = {};
     let isChecked = false;
+    let retryRound = false, firstWrong = new Set();
 
     /* ─────────── answers ─────────── */
 
@@ -439,6 +440,7 @@
       currentTest = index;
       userAnswers = {};
       isChecked = false;
+      retryRound = false; firstWrong = new Set(); retryNote(0);
       renderTestSelector();
       renderTest();
       updateProgressInfo();
@@ -663,12 +665,55 @@
       updateFooter();
     }
 
+
+    /* ── ONE MORE TRY (3 Nov 2026) ───────────────────────────────────────────
+       The first Check no longer hands over the answers. Right ones lock green;
+       wrong ones stay open, marked, for one more attempt; the second Check
+       reveals everything with the rules. Being prompted to self-correct teaches
+       more than being given the form (Ammar & Spada 2006, in the audit). A
+       mistake still counts as a mistake: the review deck gets the first try. */
+    var RETRY_CSS = '.answer-input.retry:not(.correct):not(.incorrect){background:#FBEFE4 !important;box-shadow:inset 0 0 0 2px #C2956E !important;color:var(--poster-ink,#14110E) !important}' +
+      '#retryNote{display:block;margin:.2rem 0 .9rem;background:#14110E;color:#FBF8F3;border-radius:999px;padding:.6rem 1.1rem;' +
+      'font:600 .84rem/1.35 Geist,system-ui,sans-serif;text-align:center}';
+    function retryNote(n) {
+      if (!document.getElementById('retryCss')) { var st = document.createElement('style'); st.id = 'retryCss'; st.textContent = RETRY_CSS; document.head.appendChild(st); }
+      var el = document.getElementById('retryNote');
+      if (!n) { if (el) el.remove(); return; }
+      /* in line, just above the first answer to fix, so it never covers a sentence */
+  var first = document.querySelector('.answer-input.retry'), row = first && first.closest('.sentence-row');
+  if (!el) { el = document.createElement('div'); el.id = 'retryNote'; el.setAttribute('role', 'status'); }
+  if (row && row.parentNode) row.parentNode.insertBefore(el, row); else document.body.appendChild(el);
+      el.textContent = n + (n === 1 ? ' answer needs' : ' answers need') + ' another look. Try once more, then Check again.';
+    }
+    
     /* ─────────── scoring ─────────── */
 
     function checkAnswers() {
       const test = allTests[currentTest];
       const total = test.sentences.length;
       let correct = 0;
+      if (!isChecked && !retryRound) {
+        const wrong = [];
+        test.sentences.forEach(function (item, idx) {
+          const v = userAnswers[idx];
+          if (String(v || '').replace(/[\s\/]/g, '') && !isAnswerCorrect(item, v)) wrong.push(idx);
+        });
+        if (wrong.length) {
+          retryRound = true; firstWrong = new Set(wrong);
+          test.sentences.forEach(function (item, idx) {
+            ['-1', '-2'].forEach(function (k) {
+              const inp = document.getElementById('input-' + idx + k); if (!inp) return;
+              if (firstWrong.has(idx)) inp.classList.add('retry');
+              else if (isAnswerCorrect(item, userAnswers[idx])) { inp.classList.add('correct'); inp.readOnly = true; }
+            });
+          });
+          retryNote(wrong.length);
+          const first = document.querySelector('.answer-input.retry');
+          if (first) { first.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(function () { try { first.focus({ preventScroll: true }); first.select(); } catch (e) {} }, 350); }
+          return;
+        }
+      }
+      retryNote(0);
 
       test.sentences.forEach(function (item, idx) {
         const ok = isAnswerCorrect(item, userAnswers[idx]);
@@ -678,7 +723,7 @@
           if (!ok && !String(userAnswers[idx] || '').replace(/[\s\/]/g, '')) throw 0;
           if (window.Be2 && Be2.answer) Be2.answer(window.QUIZ_DATA || 'grammar', {
             id: (item.id || ('t' + currentTest + '-' + idx)), prompt: item.text, answer: item.answer,
-            given: userAnswers[idx] || '', correct: ok, rule: item.rule || '',
+            given: userAnswers[idx] || '', correct: ok && !firstWrong.has(idx), rule: item.rule || '',
             href: (EMBEDDED ? document.referrer || location.pathname : location.pathname) });
         } catch (e) {}
       });
@@ -689,7 +734,8 @@
       document.getElementById('modalSubtitle').textContent = test.title;
       document.getElementById('scoreNumber').textContent = correct + '/' + total;
       document.getElementById('scoreLabel').textContent =
-        Math.round((correct / total) * 100) + '% Correct';
+        Math.round((correct / total) * 100) + '% Correct' +
+        (firstWrong.size ? ' \u00b7 ' + (total - firstWrong.size - test.sentences.filter(function (it, i) { return !firstWrong.has(i) && !isAnswerCorrect(it, userAnswers[i]); }).length) + ' right first time' : '');
 
       document.getElementById('nextTestBtn').style.display =
         currentTest < allTests.length - 1 ? 'block' : 'none';

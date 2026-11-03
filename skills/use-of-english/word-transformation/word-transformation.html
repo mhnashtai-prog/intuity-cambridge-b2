@@ -43,7 +43,9 @@
     .viewrow .viewtog{margin-left:auto;flex:none}
     /* phones: the line takes its own row, the toggle sits under it on the right */
     @media(max-width:520px){ .viewrow{flex-wrap:wrap;row-gap:.45rem} .viewrow .test-info{flex:1 1 100%} }
-  </style>
+  .kw-m{font-size:.75rem;font-weight:600;color:var(--poster-faint,#8A8378);margin-left:.4rem}
+.kw-note{font-size:.8rem;color:var(--poster-body,#5C5852);margin-top:.25rem}
+</style>
   <link rel="stylesheet" href="/tools/intuity-pills.css?v=20261012">
   <script src="/tools/intuity-overflow.js?v=3"></script>
 <script src="/tools/be2-brand.js?v=20261012c"></script>
@@ -209,6 +211,34 @@
         out = out.flatMap(x => x.includes(c) ? [x].concat(subs.map(w => x.split(c).join(' ' + w))) : [x]);
       });
       return out.flatMap(x => { x = x.replace(/\s+/g, ' ').trim(); return [x, x.replace(/ise\b/g, 'ize').replace(/our\b/g, 'or')]; });
+    }
+    /* ── MARKED THE WAY CAMBRIDGE MARKS (3 Nov 2026, from the audit) ──────
+       The exam page gave one mark, all or nothing, and never checked length.
+       Now, as Master 4 and the exam: two to five words including the key
+       word, unchanged (a contraction counts as two words); 2 marks for the
+       whole answer, 1 for either half. These items have no hand-marked
+       halves, so an answer is split at its key word: up to and including
+       it, then the rest (when the key word ends the answer, before it). */
+    function kwWords(t) { return normalizeAnswer(t).replace(/[.!?;:,]+/g, ' ').trim().split(/\s+/).filter(Boolean); }
+    function kwCount(t) { const w = kwWords(t); return w.length + (String(t).match(/n['\u2019]t\b|['\u2019](ll|ve|re|m|d)\b/gi) || []).length; }
+    function kwHalves(ans, key) {
+      const w = kwWords(ans), k = w.indexOf(String(key || '').toLowerCase());
+      if (k < 0 || w.length < 2) return null;
+      const cut = k < w.length - 1 ? k + 1 : k;
+      return [w.slice(0, cut).join(' '), w.slice(cut).join(' ')];
+    }
+    function kwScore(sentence, userAnswer) {
+      const v = String(userAnswer || '').trim(); if (!v) return { m: 0, note: '' };
+      const key = String(sentence.keyword || '').toLowerCase(), n = kwCount(v);
+      if (key && !kwWords(v).includes(key)) return { m: 0, note: 'The key word ' + key.toUpperCase() + ' must be used, unchanged.' };
+      if (n < 2 || n > 5) return { m: 0, note: 'That is ' + n + ' word' + (n === 1 ? '' : 's') + ': use two to five, including the key word (a contraction counts as two).' };
+      if (answersMatch(v, sentence.answers || [])) return { m: 2, note: '' };
+      const mine = expand(v);
+      const half = (sentence.answers || []).some(a => { const h = kwHalves(a, key); if (!h) return false;
+        /* the key word on its own is never half an answer */
+        const h0ok = h[0].split(' ').length > 1;
+        return (h0ok && expand(h[0]).some(x => mine.some(y => y === x || y.startsWith(x + ' ')))) || expand(h[1]).some(x => mine.some(y => y.endsWith(' ' + x))); });
+      return half ? { m: 1, note: 'One mark: half of it is right.' } : { m: 0, note: '' };
     }
     function answersMatch(userAnswer, correctAnswers) {
       if (!String(userAnswer || '').trim()) return false;
@@ -808,18 +838,15 @@ item.appendChild(keywordDiv);
       const test = allTests[currentTest];
       let correct = 0;
       const total = test.sentences.length;
-      test.sentences.forEach((sentence, idx) => {
-        const userAns = userAnswers[idx] || '';
-        if (answersMatch(userAns, sentence.answers)) correct++;
-      });
+      test.sentences.forEach((sentence, idx) => { correct += kwScore(sentence, userAnswers[idx]).m; });
       /* THE REVIEW DECK (3 Nov 2026): answered items report, laid out like the exam */
       try { if (window.Be2 && Be2.answer) test.sentences.forEach((x, idx) => {
         const ua = userAnswers[idx] || ''; if (!ua.trim()) return;
         Be2.answer('uoe-part4', { id: 't' + currentTest + '-' + (x.number || idx),
-          prompt: x.original_sentence + ' \u2192 ' + String(x.keyword || '').toUpperCase() + ': ' + String(x.gapped_sentence || '').replace(/\.{3,}/, '_____'),
-          answer: (x.answers || [])[0] || '', given: ua, correct: answersMatch(ua, x.answers), href: location.pathname });
+          prompt: (x.original_sentence || x.first_sentence || '') + ' \u2192 ' + String(x.keyword || '').toUpperCase() + ': ' + String(x.gapped_sentence || x.prompt || '').replace(/\.{3,}|_{3,}/, '_____'),
+          answer: (x.answers || [])[0] || '', given: ua, correct: kwScore(x, ua).m === 2, href: location.pathname });
       }); } catch (e) {}
-      const percentage = Math.round((correct / total) * 100);
+      const percentage = Math.round((correct / (2 * total)) * 100);
       const existingScore = testScores[`test${currentTest}`];
       const isNewBest = !existingScore || percentage > (existingScore.bestPercentage || 0);
       testScores[`test${currentTest}`] = {
@@ -848,7 +875,7 @@ item.appendChild(keywordDiv);
       let subtitle = `Test ${currentTest + 1}`;
       if (attempts > 1) subtitle += ` • Attempt ${attempts}`;
       document.getElementById('modalSubtitle').textContent = subtitle;
-      document.getElementById('scoreNumber').textContent = `${correct}/${total}`;
+      document.getElementById('scoreNumber').textContent = `${correct}/${2 * total}`;
       const answersDisplay = document.getElementById('answersDisplay');
       let html = '';
       if (isNewBest) {
@@ -866,22 +893,23 @@ item.appendChild(keywordDiv);
         }
         html += badge;
       } else {
-        html += `<div style="text-align: center; padding: 1rem; color: var(--poster-faint);">Your best: ${existingScore.bestScore}/${total} (${existingScore.bestPercentage}%)</div>`;
+        html += `<div style="text-align: center; padding: 1rem; color: var(--poster-faint);">Your best: ${existingScore.bestScore}/${2 * total} (${existingScore.bestPercentage}%)</div>`;
       }
       test.sentences.forEach((sentence, idx) => {
         const userAns = userAnswers[idx] || '';
-        const isCorrect = answersMatch(userAns, sentence.answers);
+        const sc = kwScore(sentence, userAns), isCorrect = sc.m === 2;
         html += `
           <div class="answer-item ${isCorrect ? 'correct' : 'incorrect'}" style="animation-delay: ${idx * 50}ms">
             <div class="answer-user">
-              <strong>Q${sentence.number}:</strong> ${sanitizeText(userAns) || '(empty)'}
+              <strong>Q${sentence.number}:</strong> ${sanitizeText(userAns) || '(empty)'} <span class="kw-m">${sc.m} mark${sc.m === 1 ? '' : 's'}</span>
             </div>
             ${!isCorrect ? `<div class="answer-correct">✓ ${sanitizeText(sentence.answers[0])}</div>` : '<div class="answer-correct">✓</div>'}
+            ${sc.note ? `<div class="kw-note">${sanitizeText(sc.note)}</div>` : ''}
           </div>
         `;
       });
       /* the way to fix it, from the result (3 Nov 2026): the Master teaches this Part item by item, with a reason for each */
-      if (correct < total) html += '<a class="to-master" href="/skills/use-of-english/word-transformation/master-part4.html">Practise Part 4 item by item, with a reason for each \u2192</a>';
+      if (correct < 2 * total) html += '<a class="to-master" href="/skills/use-of-english/word-transformation/master-part4.html">Practise Part 4 item by item, with a reason for each \u2192</a>';
       answersDisplay.innerHTML = html;
       document.getElementById('scoreModal').classList.add('active');
     }

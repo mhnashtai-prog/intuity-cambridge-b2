@@ -215,6 +215,15 @@ textarea.wr{display:block;width:100%;box-sizing:border-box;border:0;resize:none;
 textarea.wr:focus{background:repeating-linear-gradient(transparent 0 29px,rgba(176,134,92,.55) 29px 30px)}
 textarea.wr::placeholder{color:rgba(20,17,14,.32);font-style:italic}
 .wc{margin:12px 2px 0}
+.ck{margin:16px 2px 0;border-top:1px solid rgba(20,17,14,.14);padding-top:12px}
+.ck-h{display:flex;justify-content:space-between;font:600 11px 'Geist Mono',monospace;letter-spacing:.08em;color:var(--body2);margin-bottom:6px}
+.ck-h b{color:var(--ink2)}
+.ck-i{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;padding:9px 2px;border:0;border-bottom:1px solid rgba(20,17,14,.07)!important;background:none;font:inherit;color:var(--ink2);cursor:pointer}
+.ck-i i{flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid rgba(20,17,14,.3);display:grid;place-items:center;font-style:normal;font-size:12px;margin-top:1px}
+.ck-i.on i{background:var(--ink2);border-color:var(--ink2);color:#FBF8F3}
+.ck-i span{font-size:14px;line-height:1.4}
+.ck-i span b{display:block;font:600 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#9A6A3C;margin-bottom:2px}
+.ck-n{font-size:13px;color:var(--body2);margin:8px 2px 0}
 .wc .row{display:flex;justify-content:space-between;font:600 11px 'Geist Mono',monospace;letter-spacing:.08em;color:var(--body2)}
 .wc .bar{position:relative;height:6px;margin-top:6px;border-radius:3px;background:rgba(20,17,14,.1)}
 .wc .fill{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:#B0865C;transition:width .2s}
@@ -786,6 +795,32 @@ function lineBlock(m,d,si,li,lvl,ro){
     `<textarea class="wr" spellcheck="false" autocorrect="off" autocapitalize="sentences" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" data-k="${k}"${ro?' readonly':''} aria-label="${esc(S.word)}, sentence ${li+1}" placeholder="${lvl==='moves'?esc(S.sub||'Write your sentence'):'Start with the expression above, finish it your way'}">${esc(val)}</textarea>`;
 }
 
+/* ══ CHECK IT THE EXAMINER'S WAY (3 Nov 2026, from the pedagogical audit) ══
+   The student wrote a whole text and nothing asked them to review it. Under
+   the word count: Cambridge's four scales, one statement each, written for
+   this task. One tap ticks a scale; the ticks are saved with the draft.
+   A self-review, not a mark: it says what to look for before Copy or Print. */
+const CA_FOR={
+  essays:'Formal or neutral throughout, and my opinion is clear from start to end',
+  emails:'The register suits the reader (friend: friendly; manager: polite), with a fitting opening and close',
+  articles:'A catchy title and a lively, personal voice that talks to the reader',
+  reviews:'I describe, I evaluate, and I end with a clear recommendation',
+  reports:'A title, headings and a neutral tone, ending with recommendations',
+  story:'It uses the words or sentence I was given and keeps the reader wanting to know what happens'
+};
+function checkItems(m){
+  return [
+    {k:'Content',t:m.type==='essays'?'Both given points are answered, plus my own idea':m.type==='emails'?'Every note in the task is answered':m.type==='story'?'The story follows the task: its opening line or words, its title':'Every point in the question is answered'},
+    {k:'Communicative achievement',t:CA_FOR[m.type]||CA_FOR.essays},
+    {k:'Organisation',t:'Each paragraph has one job, and linking words join the ideas'},
+    {k:'Language',t:'A range of words and structures, with no errors that stop the reader'}];
+}
+function checkHTML(m,d){
+  const its=checkItems(m), on=d.ck||[];
+  return `<div class="ck"><div class="ck-h"><span>CHECK IT LIKE THE EXAMINER</span><b>${on.length} / ${its.length}</b></div>`+
+    its.map((x,i)=>`<button type="button" class="ck-i${on.includes(i)?' on':''}" data-ck="${i}" aria-pressed="${on.includes(i)}"><i>${on.includes(i)?'✓':''}</i><span><b>${esc(x.k)}</b>${esc(x.t)}</span></button>`).join('')+
+    `<p class="ck-n">${on.length===its.length?'All four checked: copy or print it for your teacher.':'Read your text once for each line, then tick it.'}</p></div>`;
+}
 function paintWrite(){
   const m=OPEN, d=loadDraft(), pts=points();
   clearInterval(TICK);
@@ -816,6 +851,7 @@ function paintWrite(){
     `<div class="paper">`+body+`</div>`+
     `<div class="wc"><div class="row"><span id="wcN">0 WORDS</span><span>TARGET 140–190</span></div>
       <div class="bar"><i class="fill" id="wcF"></i><i class="mk" style="left:${140/220*100}%"></i><i class="mk" style="left:${190/220*100}%"></i></div></div>`+
+    checkHTML(m,d)+
     `<p class="tip">${TIMED?'Tap Start on a paragraph. Read the expressions while the clock runs, then finish the paragraph from memory before the fuse burns out.':SUPPORT==='moves'?'Every word is yours this time: follow the moves, no key expressions given.':SUPPORT==='starters'?'Complete each expression from memory, then add your own details. ✓ appears once you have written on past the given words.':'Keep the key expressions and fill every … with your own ideas about your subject. A caramel sentence is an example, not something to copy. ✓ means you kept the expression.'}</p>`;
   const tas=[...$('cMain').querySelectorAll('textarea.wr')];
   const fit=t=>{ t.style.height='auto'; t.style.height=Math.max(60,t.scrollHeight)+'px'; };
@@ -834,6 +870,8 @@ function paintWrite(){
   tas.forEach(t=>{ fit(t); t.addEventListener('input',()=>{ d.t[t.dataset.k]=t.value; saveDraft(d); fit(t); update(); }); });
   $('cMain').querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ const i=+c.dataset.i, at=d.c.indexOf(i);
     if(at<0) d.c.push(i); else d.c.splice(at,1); saveDraft(d,true); paintWrite(); });
+  $('cMain').querySelectorAll('.ck-i').forEach(b=>b.onclick=()=>{ const i=+b.dataset.ck; d.ck=d.ck||[]; const at=d.ck.indexOf(i);
+    if(at<0) d.ck.push(i); else d.ck.splice(at,1); saveDraft(d,true); paintWrite(); });
   $('tToggle').onclick=()=>{ TIMED=!TIMED; try{ localStorage.setItem('intuity.gen.timed',TIMED?'1':'0'); }catch(e){} paintWrite(); };
   /* the clocks */
   const now=()=>Date.now()/1000;

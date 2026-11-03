@@ -26,10 +26,16 @@
   var LEARN = /^(explore|learn|rules)$/i;
   var NAMES = { learn: 'Learn', practise: 'Practise', play: 'Play' };
 
-  var css = '.mg{display:flex;justify-content:center;margin:.35rem auto .15rem;}' +
-    '.mg-in{display:inline-flex;gap:.1rem;background:var(--poster-fill,#E7E2DA);border-radius:999px;padding:.18rem}' +
-    '.mg-b{font-family:var(--f-display,inherit);font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;' +
-      'border:0;background:transparent;color:var(--dim,#6E6660);padding:.45rem .95rem;border-radius:999px;cursor:pointer;min-height:2.1rem}' +
+  /* compact (3 Nov): the switch and the header's pills are signposts, not buttons to admire */
+  var css = '.mg{display:flex;justify-content:center;margin:.25rem auto .1rem;}' +
+    '.mg-in{display:inline-flex;gap:.1rem;background:var(--poster-fill,#E7E2DA);border-radius:999px;padding:.14rem}' +
+    '.mg-b{font-family:var(--f-display,inherit);font-size:.64rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;' +
+      'border:0;background:transparent;color:var(--dim,#6E6660);padding:.32rem .8rem;border-radius:999px;cursor:pointer;min-height:1.75rem}' +
+    /* a group of ONE mode (Learn = Explore): the switch already names it, so its row goes */
+    '.mode-selector.mg-solo{display:none !important}' +
+    '.header .set-tabs .vtab{padding:.3rem .55rem !important}' +
+    '.header .ovf-row.has-pill > .vtab{padding-left:.6rem !important;padding-right:.6rem !important}' +
+    '.header .set-tabs{margin-top:.1rem !important}' +
     '.mg-b.on{background:var(--ink,#1E1B19);color:var(--card,#FBF9F6)}' +
     '@media(hover:hover){.mg-b:not(.on):hover{color:var(--ink,#1E1B19)}}' +
     '.mode-selector .mg-off{display:none !important}' +
@@ -52,12 +58,14 @@
     var gs = its.map(groupOf);
     var eligible = its.length >= 5 && gs.indexOf('play') >= 0 && gs.some(function (g) { return g !== 'play'; });
     var bar = row.previousElementSibling && row.previousElementSibling.classList.contains('mg') ? row.previousElementSibling : null;
-    if (!eligible) { if (bar) bar.remove(); its.forEach(function (el) { el.classList.remove('mg-off'); }); return; }
+    if (!eligible) { if (bar) bar.remove(); row.classList.remove('mg-solo'); its.forEach(function (el) { el.classList.remove('mg-off'); }); return; }
     var order = ['learn', 'practise', 'play'].filter(function (g) { return gs.indexOf(g) >= 0; });
     var act = its.filter(isActive)[0];
     var shown = row.__mgShown && order.indexOf(row.__mgShown) >= 0 ? row.__mgShown : act ? groupOf(act) : order[0];
     row.__mgShown = shown;
     its.forEach(function (el, i) { el.classList.toggle('mg-off', gs[i] !== shown); });
+    var inShown = its.filter(function (_, i) { return gs[i] === shown; });
+    row.classList.toggle('mg-solo', inShown.length === 1 && isActive(inShown[0]));
     if (!bar) { bar = document.createElement('div'); bar.className = 'mg'; row.parentNode.insertBefore(bar, row); }
     var html = '<div class="mg-in" role="group" aria-label="Learn, practise or play">' + order.map(function (g) {
       return '<button type="button" class="mg-b' + (g === shown ? ' on' : '') + '" data-g="' + g + '" aria-pressed="' + (g === shown) + '">' + NAMES[g] + '</button>';

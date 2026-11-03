@@ -381,9 +381,40 @@ function mark(i, revealOnly) {
                            : markTransform(item, i, revealOnly);
 }
 
+/* THE REVIEW DECK (3 Nov 2026): Rewrite was the only exercise whose
+   mistakes were never seen again. Each item now reports to Be2 like
+   Gap-fill does, so a missed transformation comes back on the review page
+   and leaves once it is right on two different days. */
+function report(test) {
+  if (!window.Be2 || !Be2.answer) return;
+  var href = EMBEDDED ? (document.referrer || location.pathname) : location.pathname;
+  test.items.forEach(function (item, i) {
+    try {
+      var inp = $('in-' + i), id = 'rw-' + currentTest + '-' + i, card;
+      if (MODE === 'choice') {
+        var right = item.correct, opts = item.options || [];
+        var rightText = typeof right === 'number' ? opts[right] : right;
+        var given = answers[i], givenText = typeof given === 'number' ? opts[given] : given;
+        card = { id: id, prompt: item.sentence, answer: rightText, given: givenText || '',
+                 correct: given === right, rule: item.explanation || '' };
+      } else {
+        card = { id: id, prompt: (item.original ? item.original + ' \u2192 ' : '') +
+                   String(item.keyword || '').toUpperCase() + ': ' + (item.before || '') + '_____' + (item.after || ''),
+                 answer: item.answer, given: inp ? inp.value.trim() : '',
+                 correct: !!(inp && inp.classList.contains('correct')) };
+      }
+      /* a blank is not an answer: checking a half-done set must not fill the deck */
+      if (!card.correct && !String(card.given || '').trim()) return;
+      card.href = href;
+      Be2.answer(String(CFG.data || 'grammar') + '-rewrite', card);
+    } catch (e) {}
+  });
+}
+
 function checkAnswers() {
   var test = allTests[currentTest], correct = 0;
   test.items.forEach(function (_, i) { if (mark(i, false)) correct++; });
+  report(test);
 
   isChecked = true;
   var total = test.items.length;

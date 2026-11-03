@@ -674,6 +674,8 @@
         const ok = isAnswerCorrect(item, userAnswers[idx]);
         if (ok) correct++;
         try {
+          /* a blank is not an answer: it must not become a review card */
+          if (!ok && !String(userAnswers[idx] || '').replace(/[\s\/]/g, '')) throw 0;
           if (window.Be2 && Be2.answer) Be2.answer(window.QUIZ_DATA || 'grammar', {
             id: (item.id || ('t' + currentTest + '-' + idx)), prompt: item.text, answer: item.answer,
             given: userAnswers[idx] || '', correct: ok, rule: item.rule || '',

@@ -8,9 +8,16 @@
        Be2.answer('similar-words', { id, prompt, answer, given, correct,
                                      meaning?, rule?, href? });
 
-   A wrong answer joins the review deck; two right answers later (in the
-   deck or anywhere else) take it out. Any answer, right or wrong, marks
-   today as a practice day, which is all a streak is.
+   A wrong answer joins the review deck. It leaves only after a right answer
+   on TWO DIFFERENT DAYS, the Ring's rule (tools/intuity-ring.js): two right
+   answers in one sitting prove short-term memory, not learning (3 Nov 2026).
+       wrong                 → in the deck, due today
+       right, first day      → stays, due tomorrow
+       right, a later day    → learnt: it leaves the deck
+       wrong again           → back to the start
+   A second right answer on the same day changes nothing, and the deck shows
+   only the cards that are due. Any answer, right or wrong, marks today as a
+   practice day, which is all a streak is.
 
    Games that already call INTUITY.log (intuity-log.js) feed this too, with
    no change to the game: the log is wrapped the moment it appears.
@@ -30,6 +37,10 @@
     var d = new Date();   /* the student's own calendar day, not UTC */
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
+  function dayAfter(s) {
+    var p = s.split('-'), d = new Date(+p[0], +p[1] - 1, +p[2] + 1);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
   function dayBefore(s) {
     var p = s.split('-'), d = new Date(+p[0], +p[1] - 1, +p[2] - 1);
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -44,8 +55,9 @@
   };
   function topicName(t) {
     if (NAMES[t]) return NAMES[t];
-    var s = String(t || '').replace(/-(data|gapfill|complete|rules)$/, '').replace(/[-_]+/g, ' ');
-    return s.charAt(0).toUpperCase() + s.slice(1);
+    var rw = /-rewrite$/.test(String(t || ''));
+    var s = String(t || '').replace(/-rewrite$/, '').replace(/-(data|gapfill|complete|rules)$/, '').replace(/[-_]+/g, ' ');
+    return s.charAt(0).toUpperCase() + s.slice(1) + (rw ? ' · Rewrite' : '');
   }
 
   function markDay() {
@@ -59,10 +71,14 @@
       markDay();
       var deck = read(REVIEW, {}), key = topic + '::' + r.id, c = deck[key];
       if (r.correct) {
-        if (c) { c.rights = (c.rights || 0) + 1; c.last = today(); if (c.rights >= 2) delete deck[key]; }
+        /* right on a day the card was already answered right: no proof yet */
+        if (c && c.rday !== today()) {
+          c.rights = (c.rights || 0) + 1; c.rday = today(); c.last = today();
+          if (c.rights >= 2) delete deck[key]; else c.due = dayAfter(today());
+        }
       } else {
         c = deck[key] = c || { topic: topic, id: String(r.id), misses: 0, rights: 0, first: today() };
-        c.misses++; c.rights = 0; c.last = today();
+        c.misses++; c.rights = 0; c.rday = null; c.due = today(); c.last = today();
         if (r.prompt) c.prompt = String(r.prompt).slice(0, 400);
         if (r.answer != null) c.answer = String(r.answer).slice(0, 160);
         if (r.given) c.given = String(r.given).slice(0, 160);
@@ -80,10 +96,12 @@
       write(REVIEW, deck);
     },
 
-    /* Cards to review, most-missed and most recent first. */
+    /* Cards DUE to review, most-missed and most recent first. A card from
+       before due dates (no `due`) is due now. */
     review: function (limit) {
-      var deck = read(REVIEW, {});
-      var list = Object.keys(deck).map(function (k) { var c = deck[k]; c.key = k; c.topicName = topicName(c.topic); return c; });
+      var deck = read(REVIEW, {}), t = today();
+      var list = Object.keys(deck).filter(function (k) { return !deck[k].due || deck[k].due <= t; })
+        .map(function (k) { var c = deck[k]; c.key = k; c.topicName = topicName(c.topic); return c; });
       list.sort(function (a, b) { return (b.misses - a.misses) || (a.last < b.last ? 1 : -1); });
       return limit ? list.slice(0, limit) : list;
     },
@@ -99,6 +117,8 @@
       var n = 0; while (set[d]) { n++; d = dayBefore(d); }
       return n;
     },
+    /* every card in the deck, due or not (for "N waiting for tomorrow") */
+    deckSize: function () { return Object.keys(read(REVIEW, {})).length; },
     practisedToday: function () { var days = read(DAYS, []); return days[days.length - 1] === today(); },
     topicName: topicName
   };

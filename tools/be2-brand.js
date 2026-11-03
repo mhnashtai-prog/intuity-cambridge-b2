@@ -279,17 +279,32 @@
 })();
 
 /* LEARN · PRACTISE · PLAY: the long mode rows, grouped (tools/mode-groups.js) */
-(function(){ try{ var s=document.createElement('script'); s.src='/tools/mode-groups.js?v=4'; (document.head||document.documentElement).appendChild(s); }catch(e){} })();
+(function(){ try{ var s=document.createElement('script'); s.src='/tools/mode-groups.js?v=5'; (document.head||document.documentElement).appendChild(s); }catch(e){} })();
 
 /* ONE CARD: every pop-up in one square style (tools/intuity-cards.css).
    To bring the old looks back, delete this block. */
 (function(){ try{
   if(!document.querySelector('link[href*="/tools/intuity-cards.css"]')){
-    var l=document.createElement('link'); l.rel='stylesheet'; l.href='/tools/intuity-cards.css?v=3';
+    var l=document.createElement('link'); l.rel='stylesheet'; l.href='/tools/intuity-cards.css?v=4';
     (document.head||document.documentElement).appendChild(l); }
   /* a grammar Explore card open inside its slides: hide the slides' own ✕ */
   window.addEventListener('message',function(e){ if(e.data&&e.data.intuity==='cardOpen') document.documentElement.classList.toggle('card-open-inside',!!e.data.open); });
   /* the slides closed with a card still open: the slides' ✕ comes back */
   document.addEventListener('DOMContentLoaded',function(){ var sl=document.getElementById('slides'); if(!sl) return;
     new MutationObserver(function(){ if(!sl.classList.contains('open')) document.documentElement.classList.remove('card-open-inside'); }).observe(sl,{attributes:true,attributeFilter:['class']}); });
+  /* THE RESULT (3 Nov): a bare finish overlay gets its card, and the score
+     takes the emoji's place — the number is the reward */
+  function result(){
+    [].slice.call(document.querySelectorAll('.overlay')).forEach(function(o){
+      if(!o.querySelector('.ov-title')||o.querySelector('.ov-card')) return;
+      var c=document.createElement('div'); c.className='ov-card';
+      while(o.firstChild) c.appendChild(o.firstChild); o.appendChild(c); });
+    var em=document.getElementById('ovEm'), sc=document.getElementById('ovScore'); if(!em||!sc||em.__res) return; em.__res=true;
+    function sync(){ var t=sc.textContent||'', m=t.match(/(\d+)\s*%/), f=t.match(/(\d+)\s*\/\s*(\d+)/), v='';
+      if(m) v=m[1]+'%'; else if(f&&+f[2]) v=Math.round(+f[1]/+f[2]*100)+'%';
+      if(em.textContent!==v) em.textContent=v; }
+    var mo=new MutationObserver(sync); mo.observe(sc,{childList:true,characterData:true,subtree:true}); mo.observe(em,{childList:true,characterData:true,subtree:true});
+    sync();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',result); else result();
 }catch(e){} })();

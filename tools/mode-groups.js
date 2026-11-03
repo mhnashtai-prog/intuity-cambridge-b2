@@ -75,6 +75,13 @@
     bar.onclick = function (e) {
       var b = e.target.closest('.mg-b'); if (!b) return;
       var g = b.getAttribute('data-g'), members = its.filter(function (_, i) { return gs[i] === g; });
+      /* ONE GATE, NOT TWO (3 Nov): when the group's first mode opens on its
+         own pendulum ("Pick a set above" — the grammar topics), the group's
+         gate would only be a pendulum in front of a pendulum. Open that mode
+         straight away; its sister modes stay one tap away in the row. */
+      if (members.length > 1 && !members.some(isActive) && selfGated(members[0])) {
+        row.__mgShown = g; members[0].click(); apply(row); return;
+      }
       row.__mgShown = g; apply(row);
       /* one mode in the group, and it is not the one open: go straight there */
       if (members.length === 1 && !isActive(members[0])) members[0].click();
@@ -89,6 +96,10 @@
   var GATE = { practise: ['Pick an exercise', 'Choose one to start — the same choices are in the row above.'],
     play: ['Pick a game', 'Choose one to start — the same choices are in the row above.'],
     learn: ['Start here', 'Read the rules and examples first.'] };
+  function selfGated(el) {
+    var m = el.tagName === 'BUTTON' && el.getAttribute('data-mode');
+    return !!(m && document.getElementById(m + 'Gate'));
+  }
   function gate(row, its, gs, shown, act) {
     var g = document.getElementById('mgGate');
     var need = !act || groupOf(act) !== shown;

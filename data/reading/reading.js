@@ -529,7 +529,9 @@ function submit() {
           var q = T().questions[i];
           return '<div class="ov-miss-i">' + (q.number != null ? q.number : i + 1) +
             ' \u00b7 <s>' + esc(answers[i]) + '</s> \u2192 <b>' + esc(rightFor(i)) + '</b>' +
-            '<span class="ov-miss-w">' + esc(q.question) + '</span></div>';
+            '<span class="ov-miss-w">' + esc(q.question) + '</span>' +
+            /* the evidence was in all 150 questions' data and never shown (3 Nov 2026) */
+            (q.why ? '<span class="ov-miss-w">Evidence: ' + esc(q.why) + '</span>' : '') + '</div>';
         }).join('')
       : '';
   }

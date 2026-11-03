@@ -99,6 +99,9 @@ Promise.all(wanted.map(function (n) {
   BANKS = list;
   var first = BANKS.findIndex(function (b) { return b; });
   if (first < 0) throw new Error('no texts available');
+  /* a text that is due comes first */
+  var due = BANKS.findIndex(function (b, i) { return b && isDue(i); });
+  if (due > -1) first = due;
   paintTexts();
   openText(first);
 }).catch(function (err) {
@@ -143,9 +146,9 @@ function usedBy(gap) {
    different question — how much of one text is on screen. */
 function paintTexts() {
   $('setTabs').innerHTML = BANKS.map(function (b, i) {
-    return '<button class="vtab' + (i === bi ? ' active' : '') + '" type="button" data-i="' + i + '"'
-      + (b ? '' : ' disabled aria-disabled="true" title="Not written yet"') + '>'
-      + 'Text ' + (i + 1) + '</button>';
+    return '<button class="vtab' + (i === bi ? ' active' : '') + (b && isDue(i) ? ' due' : '') + '" type="button" data-i="' + i + '"'
+      + (b ? (isDue(i) ? ' title="Missed last time: read it again"' : '') : ' disabled aria-disabled="true" title="Not written yet"') + '>'
+      + 'Text ' + (i + 1) + (b && isDue(i) ? '<i class="due-dot" aria-hidden="true"></i>' : '') + '</button>';
   }).join('');
   $('setTabs').querySelectorAll('.vtab').forEach(function (b) {
     b.onclick = function () { if (!b.disabled && +b.dataset.i !== bi) openText(+b.dataset.i); };
@@ -559,7 +562,27 @@ function finishScore(got, n, pct) {
   $('ov').classList.add('show');
 }
 
+/* ── A MISSED TEXT COMES BACK (3 Nov 2026, from the audit) ──────────────
+   Reading offered each text once and forgot it. A text finished below 100%
+   is now due again TOMORROW (a day's gap, the Ring's rule): its tab wears a
+   caramel dot and the page opens on it. A clean read clears it. Kept on this
+   device only, like every other score. */
+var DUEKEY = 'be2.reading.due.p' + (CFG.part || 0);
+function day(off) { var d = new Date(); d.setDate(d.getDate() + (off || 0));
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function dueMap() { try { return JSON.parse(localStorage.getItem(DUEKEY) || '{}') || {}; } catch (e) { return {}; } }
+function isDue(i) { var d = dueMap()[i]; return !!d && d <= day(0); }
+function setDue(pct) {
+  try { var m = dueMap(); if (pct < 100) m[bi] = day(1); else delete m[bi]; localStorage.setItem(DUEKEY, JSON.stringify(m)); } catch (e) {}
+}
+(function () { try { var st = document.createElement('style');
+  st.textContent = '#setTabs .vtab .due-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#C2956E;margin-left:.4em;vertical-align:middle}' +
+    '.ov-again{margin:.8rem 0 0;font-size:.82rem;color:var(--poster-body,#5C5852);text-align:center}';
+  document.head.appendChild(st); } catch (e) {} })();
+
 function saveScore(pct) {
+  setDue(pct);
+  if (pct < 100) { try { $('ovMiss').insertAdjacentHTML('beforeend', '<p class="ov-again">This text comes back tomorrow: read it again then.</p>'); } catch (e) {} }
   if (!CFG.scoreKey) return;
   try {
     var all = JSON.parse(localStorage.getItem(CFG.scoreKey) || '{}');

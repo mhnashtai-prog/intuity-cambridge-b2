@@ -279,7 +279,7 @@
 })();
 
 /* LEARN · PRACTISE · PLAY: the long mode rows, grouped (tools/mode-groups.js) */
-(function(){ try{ var s=document.createElement('script'); s.src='/tools/mode-groups.js?v=1'; (document.head||document.documentElement).appendChild(s); }catch(e){} })();
+(function(){ try{ var s=document.createElement('script'); s.src='/tools/mode-groups.js?v=2'; (document.head||document.documentElement).appendChild(s); }catch(e){} })();
 
 /* ONE CARD: every pop-up in one square style (tools/intuity-cards.css).
    To bring the old looks back, delete this block. */

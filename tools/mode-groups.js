@@ -76,6 +76,10 @@
     row.addEventListener('click', function (e) { var b = e.target.closest('.mode-btn'); if (b) row.__mgShown = groupOf(b); }, true);
     apply(row);
   }
+  /* back from another page (the browser's cache keeps the old state): the
+     switch follows the mode that is really open, not the group last tapped */
+  addEventListener('pageshow', function (e) { if (!e.persisted) return;
+    [].slice.call(document.querySelectorAll('.mode-selector')).forEach(function (r) { r.__mgShown = null; apply(r); }); });
   function scan() { [].slice.call(document.querySelectorAll('.mode-selector')).forEach(watch); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', scan); else scan();
   /* rows built after load (Defuse, the Board and the Game fetch the topic's row) */

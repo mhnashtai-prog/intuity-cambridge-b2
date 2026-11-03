@@ -52,6 +52,8 @@
     'academic-vocabulary-sets': 'Academic Vocabulary', 'phrasal-verbs': 'Phrasal Verbs',
     'gerunds-infinitives': 'Gerunds & Infinitives', 'conditionals': 'Conditionals',
     'master-part4': 'Use of English · Part 4', 'full-test': 'Full test',
+    'uoe-part1': 'Use of English · Part 1', 'uoe-part2': 'Use of English · Part 2',
+    'uoe-part3': 'Use of English · Part 3', 'uoe-part4': 'Use of English · Part 4',
   };
   function topicName(t) {
     if (NAMES[t]) return NAMES[t];
@@ -119,6 +121,17 @@
     },
     /* every card in the deck, due or not (for "N waiting for tomorrow") */
     deckSize: function () { return Object.keys(read(REVIEW, {})).length; },
+    /* the sentence of a passage that holds a gap marker, so a review card
+       shows one sentence, not the whole text */
+    around: function (text, marker) {
+      var t = Array.isArray(text) ? text.join(' ') : String(text || ''), i = t.indexOf(marker);
+      if (i < 0) return '';
+      var st = Math.max(t.lastIndexOf('. ', i), t.lastIndexOf('? ', i), t.lastIndexOf('! ', i), t.lastIndexOf('\n', i));
+      st = st < 0 ? 0 : st + 1;
+      var en = t.slice(i + marker.length).search(/[.!?]['\u2019"]?(\s|$)/);
+      en = en < 0 ? t.length : i + marker.length + en + 1;
+      return t.slice(st, en).replace(/\s+/g, ' ').trim();
+    },
     practisedToday: function () { var days = read(DAYS, []); return days[days.length - 1] === today(); },
     topicName: topicName
   };

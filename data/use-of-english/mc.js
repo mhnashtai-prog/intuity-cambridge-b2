@@ -440,6 +440,17 @@ function submit() {
       }).join('')
     : '';
   saveScore(pct);
+  /* THE REVIEW DECK (3 Nov 2026): every answered gap reports, so a missed
+     one comes back on the review page with its reason, spaced over days. */
+  try { if (window.Be2 && Be2.answer) qs.forEach(function (q, i) {
+    var k = keyOf(q, i), a = answers[k];
+    var yours = TEXTS ? q.options[a] : wordFor(q, a), right = TEXTS ? q.options[q.correct] : wordFor(q, q.answer);
+    var prompt = TEXTS ? Be2.around(T().text, '{' + q.number + '}').replace('{' + q.number + '}', '_____').replace(/\{\d+\}/g, '\u2026')
+                       : String(q.q || '');
+    var note = q.distractors && q.distractors[yours];
+    Be2.answer('uoe-part1', { id: (CFG.scoreKey || 'mc') + '-' + si + '-' + k, prompt: prompt, answer: right, given: yours || '',
+      correct: isRight(q, i), rule: [q.why, note ? yours + ' \u2014 ' + note : ''].filter(Boolean).join(' '), href: location.pathname });
+  }); } catch (e) {}
   if (CFG.seg) paintTests();
   sfx(pct === 100 ? 'fanfare' : 'bowlLow');
   $('ov').classList.add('show');

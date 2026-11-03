@@ -21,6 +21,10 @@ var sets = [], tests = [], currentTest = 0, isChecked = false, scores = {};
    word used in card 2 must stay available in card 3. */
 var answers = {};
 var picked  = null;                   /* {set, word} — armed, awaiting a gap */
+/* ONE MORE TRY (3 Nov 2026): after the first Check the right words lock
+   green and the wrong ones go back to the bank, their gaps ringed caramel,
+   for one more go. The review deck still records the first try. */
+var retryRound = false, keep = {}, firstWrong = {};
 
 /* ── ALL / ONE ───────────────────────────────────────────────────────────
    'all'  five cards down the page
@@ -192,6 +196,7 @@ function loadTest(i) {
   answers = {};
   picked = null;
   hereCard = 0;
+  retryRound = false; keep = {}; firstWrong = {}; retryNote(0);
   buildTabs();
   render();
   updateStrip();
@@ -322,6 +327,7 @@ function pick(si, wi) {
 
 function place(si, li) {
   if (isChecked) return;
+  if (keep[si] && keep[si][li]) return;          /* right first time: locked */
   answers[si] = answers[si] || {};
   /* Tapping a full gap empties it and returns the word to the pool. That is
      the only way back for a student who changed their mind, and it must not
@@ -364,7 +370,9 @@ function paint() {
        receive it. Only this card's — the caramel ring should not light up
        on four other cards the word does not belong to. */
     el.classList.toggle('armed', !isChecked && !!picked && picked.set === si && !v);
-    el.classList.toggle('locked', isChecked);
+    el.classList.toggle('locked', isChecked || !!(keep[si] && keep[si][li]));
+    el.classList.toggle('kept', !isChecked && !!(keep[si] && keep[si][li]));
+    el.classList.toggle('retry', !isChecked && !!firstWrong[si + '-' + li] && !(keep[si] && keep[si][li]));
   });
 }
 
@@ -437,6 +445,18 @@ function navButtons() {
   if (next.disabled) next.textContent = 'Next →';
 }
 
+function retryNote(n) {
+  if (!document.getElementById('retryCss')) { var st = document.createElement('style'); st.id = 'retryCss';
+    st.textContent = '.slot.kept{background:var(--tile-ok-bg,#DCEBE0) !important;color:var(--tile-ok-ink,#2F5A4B) !important;box-shadow:none !important;padding:0 .25em !important}' +
+      '.slot.retry:not(.filled):not(.correct):not(.incorrect){box-shadow:inset 0 0 0 2px #C2956E !important;background:#FBEFE4 !important}' +
+      '#retryNote{display:block;margin:0 0 .9rem;background:#14110E;color:#FBF8F3;border-radius:999px;padding:.6rem 1.1rem;font:600 .84rem/1.35 Geist,system-ui,sans-serif;text-align:center}';
+    document.head.appendChild(st); }
+  var el = document.getElementById('retryNote');
+  if (!n) { if (el) el.remove(); return; }
+  if (!el) { el = document.createElement('div'); el.id = 'retryNote'; el.setAttribute('role', 'status'); }
+  el.textContent = n + (n === 1 ? ' word needs' : ' words need') + ' another look. The right ones are locked: place the others again, then Check.';
+  var b = $('board'); b.insertBefore(el, b.firstChild);
+}
 /* ═══ MARKING ═══════════════════════════════════════════════════════════ */
 function checkAnswers() {
   /* Belt and braces. The button is disabled above, but this is the function
@@ -448,6 +468,25 @@ function checkAnswers() {
     filled += Object.keys(answers[si] || {}).length;
   });
   if (filled < want || isChecked) return;
+  if (!retryRound) {
+    var wrong = [];
+    tests[currentTest].forEach(function (set, si) {
+      set.sentences.forEach(function (sn, li) { if ((answers[si] || {})[li] !== set.words[sn.correct]) wrong.push([si, li]); });
+    });
+    if (wrong.length) {
+      retryRound = true; keep = {};
+      tests[currentTest].forEach(function (set, si) {
+        set.sentences.forEach(function (sn, li) { if ((answers[si] || {})[li] === set.words[sn.correct]) { keep[si] = keep[si] || {}; keep[si][li] = 1; } });
+      });
+      wrong.forEach(function (w) { firstWrong[w[0] + '-' + w[1]] = 1; delete answers[w[0]][w[1]]; });
+      if (view === 'one') { var c0 = wrong[0][0]; hereCard = c0; }
+      render(); updateStrip();
+      retryNote(wrong.length);
+      snd('wrong');
+      return;
+    }
+  }
+  retryNote(0);
 
   var correct = 0, total = 0;
   /* ORDER MATTERS. Marking always shows the WHOLE test, so in ONE view the
@@ -467,7 +506,7 @@ function checkAnswers() {
       if (ok) correct++;
       try {
         if (window.Be2 && Be2.answer) Be2.answer(CFG.data, {
-          id: 's' + set.setNumber + '-' + li, prompt: s.text, answer: want, given: got || '', correct: ok,
+          id: 's' + set.setNumber + '-' + li, prompt: s.text, answer: want, given: got || '', correct: ok && !firstWrong[si + '-' + li],
           meaning: MEANINGS && MEANINGS[String(set.setNumber)] ? MEANINGS[String(set.setNumber)][want] : '',
           href: location.pathname });
       } catch (e) {}
@@ -506,7 +545,7 @@ function checkAnswers() {
   $('board').insertAdjacentHTML('afterbegin',
     '<div class="score-banner' + (correct === total ? ' clean' : '') + '">' +
     '<div class="score-text" id="scoreText">0/' + total + '</div>' +
-    '<div class="score-label">' + pct + '% correct</div></div>');
+    '<div class="score-label">' + pct + '% correct' + (Object.keys(firstWrong).length ? ' \u00b7 ' + (total - Object.keys(firstWrong).length) + ' right first time' : '') + '</div></div>');
   countUp($('scoreText'), correct, total);
 
   $('clearBtn').textContent = 'Try again';

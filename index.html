@@ -178,6 +178,20 @@
   .item .idx.glyph{font-size:1.25rem;font-weight:600;}
 
   .group{margin-top:14px;}
+  /* a hairline between Part 1 and Part 2, and between the menu's sections */
+  .group.ruled{border-top:1px solid rgba(20,17,14,.14);padding-top:14px;margin-top:16px}
+  .item.banner{grid-column:1/-1;flex-direction:row;align-items:center;gap:14px;text-align:left;justify-content:flex-start;
+    background:#14110E;color:#FBF8F3;padding:12px 16px 12px 12px;border-radius:0;min-height:0}
+  .item.banner .idx{--d:56px;flex:none;margin:0}
+  .item.banner .bn-t{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+  .item.banner .lbl{color:#FBF8F3;font-family:'Anton',Impact,sans-serif;font-size:1.15rem;letter-spacing:.02em;text-transform:uppercase;text-align:left;margin:0}
+  .item.banner .bn-s{font-size:.78rem;color:rgba(251,248,243,.72);line-height:1.3}
+  .item.banner .go{color:#C2956E;opacity:1;position:static;font-size:1.1rem}
+  .item.today{display:flex;flex-direction:row;align-items:center;gap:12px;width:100%;margin:10px 0 2px;padding:11px 14px;
+    background:#F3EADF;border:0;border-left:3px solid #C2956E;border-radius:0;text-align:left;min-height:0}
+  .item.today .td-k{font-family:'Geist Mono',monospace;font-size:.625rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#9A5A2C}
+  .item.today .td-t{flex:1;font-size:.9rem;color:#14110E}
+  .item.today .go{position:static;opacity:1;color:#9A5A2C}
   .item .etag{font-family:'Geist Mono', monospace;font-size:0.625rem;letter-spacing:.06em;text-transform:uppercase;
     color:rgba(20,17,14,.62);margin-top:-4px;}
   .item .etag.fix{color:#9A5A2C;font-weight:600}
@@ -341,20 +355,25 @@ const SKILLS = {
      (Story: for Schools; Report: standard). Both are always shown: the school
      teaches both. */
     writing:[
-    {group:"Revise a task"},
+    /* THE EXAM'S SHAPE (5 Nov 2026, from an assessor's critique): the essay is
+       the compulsory Part 1; the rest are Part 2 choices, below a hairline.
+       The review deck sits on top, so the momentum does not stop here. */
+    {reviewStrip:true},
+    {group:"Part 1 · Everyone writes"},
     {name:"Essay", glyph:"¶", url:"skills/writing/gate.html?task=essays"},
+    {group:"Part 2 · Choose one", rule:true},
     {name:"Email / Letter", glyph:"@", url:"skills/writing/gate.html?task=emails"},
     {name:"Article", glyph:"A", url:"skills/writing/gate.html?task=articles"},
     {name:"Review", glyph:"★", url:"skills/writing/gate.html?task=reviews"},
     {name:"Story", glyph:"✎", exam:"schools", url:"skills/writing/gate.html?task=story"},
     {name:"Report", glyph:"≡", exam:"standard", url:"skills/writing/gate.html?task=reports"},
-    {group:"Practise the language"},
+    {group:"Practise the language", rule:true},
+    {name:"The Ultimate Challenge", glyph:"◆", banner:"Every introduction, body and conclusion, all six tasks", url:"skills/challenge/challenge.html?section=writing"},
     {name:"Phrase Bank", glyph:"“", url:"skills/writing/phrase-bank.html"},
     {name:"Sentence Structure", glyph:"›", sub:"sentence"},
     {name:"Model Generator", glyph:"◧", url:"skills/writing/model-generator.html"},
     {name:"Games", glyph:"▶\uFE0E", url:"skills/writing/games/essay-games-staged.html"},
-    {name:"The Ultimate Challenge", glyph:"◆", url:"skills/challenge/challenge.html?section=writing"},
-    {group:"Test yourself"},
+    {group:"Test yourself", rule:true},
     {name:"Revision Round", glyph:"?", url:"skills/writing/the-question.html"},
     {name:"How it's marked", glyph:"✓", url:"skills/writing/sentence-structure/band-descriptors.html"}
   ],
@@ -672,6 +691,10 @@ function toFix(prefix){
   }catch(e){ return 0; }
 }
 function itemHTML(o, n){
+  /* a full-width banner: the most inviting door on the page, given the room to say so */
+  if(o.banner)
+    return '<button class="item banner" type="button" data-url="'+o.url+'"><span class="idx glyph"><span>'+o.glyph+'</span></span>'+
+           '<span class="bn-t"><span class="lbl">'+o.name+'</span><span class="bn-s">'+o.banner+'</span></span><span class="go">&rarr;</span></button>';
     const num = o.noNum ? '0' : String(o.part || n+1).padStart(2,'0');
   const idx = '<span class="idx'+(o.glyph?' glyph':'')+'"><span>'+
     (o.glyph ? o.glyph : (o.sub ? '&rsaquo;' : num))+'</span></span>';
@@ -692,14 +715,28 @@ function itemHTML(o, n){
 /* A list with {group:…} rows is drawn as labelled rows of rings; an item
    marked exam:'schools'|'standard' carries a small tag saying so. */
 function groupedHTML(list){
-  const groups = [];
+  const groups = []; let top = '';
   list.forEach(o => {
-    if(o.group){ groups.push({name:o.group, items:[]}); return; }
+    if(o.reviewStrip){ top = reviewStripHTML(); return; }
+    if(o.group){ groups.push({name:o.group, rule:!!o.rule, items:[]}); return; }
     if(!groups.length) groups.push({name:'', items:[]});
     groups[groups.length-1].items.push(o);
   });
-  return groups.map(g => '<div class="group">'+(g.name?'<h3 class="gname">'+g.name+'</h3>':'')+
+  return top + groups.map(g => '<div class="group'+(g.rule?' ruled':'')+'">'+(g.name?'<h3 class="gname">'+g.name+'</h3>':'')+
       '<div class="items">'+g.items.map(itemHTML).join('')+'</div></div>').join('');
+}
+/* TODAY: the review deck at the top of the menu, only when cards are due */
+function reviewStripHTML(){
+  try{
+    /* read the saved deck directly: the menu can open before Be2 has loaded */
+    const deck = JSON.parse(localStorage.getItem('be2.review.v1') || '{}'), d = new Date();
+    const today = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    const n = Object.keys(deck).filter(k => !deck[k].due || deck[k].due <= today).length;
+    if(!n) return '';
+    const min = Math.max(1, Math.round(n * 20 / 60));
+    return '<button class="item today" type="button" data-url="review.html"><span class="td-k">Today</span>'+
+           '<span class="td-t"><b>'+n+'</b> to review · about '+min+' min</span><span class="go">&rarr;</span></button>';
+  }catch(e){ return ''; }
 }
 
 function paintPanel(title, list, accent, back){

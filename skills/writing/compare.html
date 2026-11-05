@@ -60,15 +60,16 @@ h1.cmp .vs{color:var(--b);margin:0 .15em}
 .txt p + .hd{margin-top:.6rem}
 mark{background:none;color:inherit;box-shadow:inset 0 -.5em 0 rgba(112,138,129,.22);padding:0 .05em}
 .txt.b mark{box-shadow:inset 0 -.5em 0 rgba(194,149,110,.3)}
-/* the example arrows: big round targets, the count and the source between */
-.txt .nav{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-top:.8rem;padding-top:.65rem;border-top:1px solid var(--line)}
-.txt .ar{width:44px;height:44px;flex:none;border-radius:50%;border:0;background:var(--ink);color:var(--paper);font-size:1.5rem;line-height:1;
+/* the topic arrows: under each pair, big round targets, the topic between */
+.part .nav{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin:.7rem 0 0;padding:.55rem .6rem;background:var(--paper);box-shadow:0 6px 22px rgba(43,33,41,.06)}
+.part .ar{width:48px;height:48px;flex:none;border-radius:50%;border:0;background:var(--ink);color:var(--paper);font-size:1.6rem;line-height:1;
   display:grid;place-items:center;cursor:pointer;padding:0 0 .12em}
-.txt.b .ar{background:#9A6A3C}
-.txt .ar:disabled{background:rgba(20,17,14,.12);color:rgba(20,17,14,.35);cursor:default}
-.txt .cnt{flex:1;text-align:center;font:600 .78rem/1.25 'Geist Mono',monospace;color:var(--dim)}
-.txt .cnt b{color:var(--ink);font-size:.95rem}
-.txt .cnt small{display:block;font:400 .74rem/1.3 var(--f-body,'Geist',sans-serif);color:var(--dim);margin-top:.15rem}
+.part .ar:disabled{background:rgba(20,17,14,.1);color:rgba(20,17,14,.3);cursor:default}
+.part .cnt{flex:1;text-align:center;display:flex;flex-direction:column;gap:.15rem}
+.part .cnt small{font:600 .58rem/1 'Geist Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#9A5A2C}
+.part .cnt b{font-family:'Anton',Impact,sans-serif;font-weight:400;font-size:1.15rem;letter-spacing:.02em;text-transform:uppercase;color:var(--ink)}
+.part .cnt i{font:500 .7rem/1 'Geist Mono',monospace;font-style:normal;color:var(--dim)}
+.txt .src{font-size:.76rem;color:var(--dim);margin:-.25rem 0 .45rem;font-style:italic}
 .txt.flip{animation:flip .28s ease-out}
 @keyframes flip{from{opacity:.25;transform:translateX(6px)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.txt.flip{animation:none}}
@@ -152,55 +153,90 @@ const PAIRS={
 };
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const marked=s=>esc(s).replace(/\[\[(.+?)\]\]/g,'<mark>$1</mark>');
-/* MORE EXAMPLES (5 Nov 2026): every card steps through the same part of the
-   app's other model texts of that type (25 essays, 5 articles, 10 reviews,
-   10 reports), built by tools/build-compare.py with the giveaway words
-   marked from Michael's portfolio sheets. The hand-marked pair stays first. */
+/* SAME SUBJECT, BOTH SIDES (5 Nov 2026, Michael): the arrows step through
+   PAIRS ON ONE TOPIC, so only the text type ever changes. Every arrow moves
+   the whole page (both cards, all three parts) to the next topic; the topic
+   sits between the arrows. The hand-marked pair stays first; the others come
+   from data/writing/compare-examples.json (tools/build-compare.py). */
 const TYPE={Essay:'essay',Article:'article',Review:'review',Report:'report'};
 const PART={Introduction:'intro',Body:'body',Conclusion:'concl'};
-const SRC={essay:'Technology & Social Interaction',article:'Technology',review:'Italian restaurant meal',report:'Assessment of School Cafeteria Services'};
-let MORE=null; const at={};
-function listFor(name,h,first){
-  const t=TYPE[name], extra=MORE&&MORE[t]?MORE[t][PART[h]].filter(x=>x.src!==SRC[t]):[];
-  return [Object.assign({src:SRC[t]},first)].concat(extra);
+const TOPICS={
+ 'essay-article':[
+  {topic:'Technology',a:'Technology & Social Interaction',b:'Technology'},
+  {topic:'Social media',a:'Social Media Addiction',b:'Technology'},
+  {topic:'Health',a:'Childhood Obesity',b:'Staying healthy as a student'},
+  {topic:'Fame and money',a:'Money for Sports People',b:'Being famous for something'},
+  {topic:'Change',a:'Life Better Today',b:'Changes!'},
+  {topic:'Travel',a:'Gap Year',b:'A place worth visiting'}],
+ 'review-report':[
+  {topic:'Food',a:'Italian restaurant meal',b:'Assessment of School Cafeteria Services'},
+  {topic:'Sport',a:'Surf camp portugal',b:'Assessment of Local Sports Facilities'},
+  {topic:'Learning languages',a:'Duolingo app',b:'Evaluation of Summer Language Course'},
+  {topic:'Spain',a:'Lonely planet spain',b:'Evaluation of Exchange Programme in Spain'},
+  {topic:'Reading',a:'Atomic habits book',b:'Assessment of School Library Services'},
+  {topic:'The environment',a:'Ocean documentary',b:'Evaluation of School Environmental Initiative'},
+  {topic:'Free time',a:'Stardew valley game',b:'Assessment of Local Youth Club'}]
+};
+const TITLE={'Surf camp portugal':'Surf camp in Portugal','Duolingo app':'The Duolingo app','Lonely planet spain':'Lonely Planet Spain',
+  'Atomic habits book':'Atomic Habits (book)','Ocean documentary':'An ocean documentary','Stardew valley game':'Stardew Valley (game)','Italian restaurant meal':'An Italian restaurant'};
+const nice=s=>TITLE[s]||s;
+let MORE=null; const ti={};
+function pairsFor(k){ return MORE ? TOPICS[k] : TOPICS[k].slice(0,1); }
+function textFor(name,h,src,i,first){
+  if(i===0) return first;                      /* the hand-marked pair */
+  const L=MORE[TYPE[name]][PART[h]].filter(x=>x.src===src);
+  return L[0] || {tag:'',t:'(No '+h.toLowerCase()+' in this text.)'};
 }
-function cardHTML(x,side,name,id,i,n){
+function cardHTML(x,side,name,src){
   return '<div class="k"><span>'+name+'</span><em>'+esc(x.tag)+'</em></div>'+
+    '<div class="src">'+esc(nice(src))+'</div>'+
     (x.hd?'<span class="hd">'+esc(x.hd)+'</span>':'')+'<p>'+marked(x.t)+'</p>'+
-    (x.hd2?'<span class="hd">'+esc(x.hd2)+'</span><p>'+marked(x.t2)+'</p>':'')+
-    (n>1?'<div class="nav"><button class="ar" type="button" data-id="'+id+'" data-d="-1" aria-label="Previous example"'+(i===0?' disabled':'')+'>‹</button>'+
-      '<span class="cnt"><b>'+(i+1)+'</b> / '+n+'<small>'+esc(x.src)+'</small></span>'+
-      '<button class="ar" type="button" data-id="'+id+'" data-d="1" aria-label="Next example"'+(i===n-1?' disabled':'')+'>›</button></div>':'');
+    (x.hd2?'<span class="hd">'+esc(x.hd2)+'</span><p>'+marked(x.t2)+'</p>':'');
 }
-function card(x,side,name,h){
-  const id=name+'|'+h, L=listFor(name,h,x), i=Math.min(at[id]||0,L.length-1);
-  return '<div class="txt '+side+'" data-card="'+id+'" data-side="'+side+'" data-name="'+name+'" data-h="'+h+'">'+cardHTML(L[i],side,name,id,i,L.length)+'</div>';
+function navHTML(i,n,topic){
+  if(n<2) return '';
+  return '<div class="nav"><button class="ar" type="button" data-d="-1" aria-label="Previous topic"'+(i===0?' disabled':'')+'>‹</button>'+
+    '<span class="cnt"><small>Same topic</small><b>'+esc(topic)+'</b><i>'+(i+1)+' / '+n+'</i></span>'+
+    '<button class="ar" type="button" data-d="1" aria-label="Next topic"'+(i===n-1?' disabled':'')+'>›</button></div>';
 }
-function step(id,d){
-  const el=document.querySelector('[data-card="'+CSS.escape(id)+'"]'); if(!el) return;
-  const P=PAIRS[key], part=P.parts.find(x=>x.h===el.dataset.h), first=el.dataset.side==='a'?part.a:part.b;
-  const L=listFor(el.dataset.name,el.dataset.h,first), i=Math.max(0,Math.min(L.length-1,(at[id]||0)+d)); at[id]=i;
-  el.innerHTML=cardHTML(L[i],el.dataset.side,el.dataset.name,id,i,L.length);
-  el.classList.remove('flip'); void el.offsetWidth; el.classList.add('flip');
+function partHTML(P,x,i,T){
+  return '<section class="part" data-h="'+x.h+'"><h2>'+x.h+'</h2><div class="pair">'+
+    '<div class="txt a">'+cardHTML(textFor(P.a,x.h,T.a,i,x.a),'a',P.a,T.a)+'</div>'+
+    '<div class="txt b">'+cardHTML(textFor(P.b,x.h,T.b,i,x.b),'b',P.b,T.b)+'</div></div>'+
+    navHTML(i,pairsFor(key).length,T.topic)+
+    '<p class="diff"><b>The difference</b>'+esc(x.d)+'</p></section>';
 }
-document.addEventListener('click',e=>{ const b=e.target.closest('.ar'); if(b&&!b.disabled) step(b.dataset.id,+b.dataset.d); });
+function paintParts(flip){
+  const P=PAIRS[key], L=pairsFor(key), i=Math.min(ti[key]||0,L.length-1), T=L[i];
+  document.getElementById('lead').textContent='Same subject: '+T.topic.toLowerCase()+'. Different reader, purpose and voice.';
+  document.getElementById('parts').innerHTML=P.parts.map(x=>partHTML(P,x,i,T)).join('');
+  if(flip) document.querySelectorAll('#parts .txt').forEach(el=>el.classList.add('flip'));
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('.ar'); if(!b||b.disabled) return;
+  /* keep the tapped arrow where it was on screen while everything changes */
+  const sec=b.closest('.part'), h=sec&&sec.dataset.h, y=sec?sec.getBoundingClientRect().top:0;
+  ti[key]=Math.max(0,Math.min(pairsFor(key).length-1,(ti[key]||0)+(+b.dataset.d)));
+  paintParts(true);
+  const now=h&&document.querySelector('#parts .part[data-h="'+h+'"]'); if(now) window.scrollBy(0,now.getBoundingClientRect().top-y);
+});
 function paint(k){
   key=k; const P=PAIRS[key];
   document.querySelectorAll('.chip').forEach(c=>{const on=c.dataset.p===key; c.classList.toggle('active',on); c.setAttribute('aria-selected',on);});
   document.title='INTUITY — '+P.a+' or '+P.b;
   document.getElementById('out').innerHTML=
-    '<h1 class="cmp">'+P.a+'<span class="vs">or</span>'+P.b+'</h1><p class="lead">'+esc(P.lead)+'</p>'+
+    '<h1 class="cmp">'+P.a+'<span class="vs">or</span>'+P.b+'</h1><p class="lead" id="lead"></p>'+
     '<div class="glance" role="table" aria-label="At a glance"><div class="g-row" role="row"><div></div><div class="g-h a">'+P.a+'</div><div class="g-h b">'+P.b+'</div></div>'+
     P.glance.map(r=>'<div class="g-row" role="row"><div class="g-k">'+esc(r[0])+'</div><div class="va">'+esc(r[1])+'</div><div class="vb">'+esc(r[2])+'</div></div>').join('')+'</div>'+
-    '<p class="key">The <mark>highlighted words</mark> are the ones that give each type away. Use the arrows for more examples.</p>'+
-    P.parts.map(x=>'<section class="part"><h2>'+x.h+'</h2><div class="pair">'+card(x.a,'a',P.a,x.h)+card(x.b,'b',P.b,x.h)+'</div>'+
-      '<p class="diff"><b>The difference</b>'+esc(x.d)+'</p></section>').join('');
+    '<p class="key">The <mark>highlighted words</mark> are the ones that give each type away. The arrows change the topic for the whole page.</p>'+
+    '<div id="parts"></div>';
+  paintParts(false);
 }
 var key=new URLSearchParams(location.search).get('pair');
 if(!PAIRS[key]) key='essay-article';            /* the more common mix-up opens first */
 document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{ paint(c.dataset.p); history.replaceState(null,'','?pair='+c.dataset.p); window.scrollTo({top:0}); });
 paint(key);
-fetch('/data/writing/compare-examples.json?v=2').then(r=>r.json()).then(d=>{ MORE=d; paint(key); }).catch(()=>{});
+fetch('/data/writing/compare-examples.json?v=3').then(r=>r.json()).then(d=>{ MORE=d; paint(key); }).catch(()=>{});
 })();
 </script>
 </body>

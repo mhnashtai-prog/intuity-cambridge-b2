@@ -236,8 +236,9 @@ function build(i){
 
 function draw(t){
   let i=0; while(i<SC.length-1&&t>=SC[i+1].t) i++;
+  if(HOLD) i=HOLD.i;
   if(i!==built) build(i);
-  const s=SC[i], nxt=i<SC.length-1?SC[i+1].t:1e9, sc=$('sc');
+  const s=SC[i], nxt=HOLD?HOLD.end:i<SC.length-1?SC[i+1].t:1e9, sc=$('sc');
   if(s.kind==='card'){
     let k=0; while(k<s.w.length-1&&t>=s.w[k+1].t-0.3) k++;
     if(built===i&&s._h==null){ /* the card keeps one height for all its wordings: only the words change */
@@ -264,13 +265,29 @@ function draw(t){
     if(n&&dt<0.3) $('oc').querySelectorAll('.ex,.smp,.notes').forEach(el=>el.style.opacity=Math.min(+el.style.opacity||1,dt/0.3));
   }
   const bs=$('bars').children;
-  D.clips.forEach(([a,b],p)=>{ bs[p].firstChild.style.width=(cl((t-a)/(b-a))*100)+'%'; });
+  const tb=HOLD?HOLD.base:t;   /* the bar waits while a silent scene holds */
+  D.clips.forEach(([a,b],p)=>{ bs[p].firstChild.style.width=(cl((tb-a)/(b-a))*100)+'%'; });
 }
 
 /* the clock: the recording, or the wall clock if it cannot play */
-const now=()=>audio&&!audio.paused&&audio.currentTime>0?audio.currentTime:audio&&playing&&audio.readyState<3?tAt:(playing?tAt+(performance.now()-t0)/1000:tAt);
-function loop(){ if(!playing) return; const t=now(); draw(t); if(t>=to){ stop(); return; } requestAnimationFrame(loop); }
+/* A SILENT SCENE (5 Nov 2026, Michael: the Review clip had no exam
+   question). A scene with hold: N is shown for N seconds with the recording
+   stopped; then the recording goes on from the next scene. Its own times
+   (qt, notes) run from its t to t + N on the wall clock. Pausing works as
+   anywhere else. */
+let HOLD=null;
+function holdNow(){ return HOLD.base+((playing?performance.now():HOLD.p)-HOLD.t0)/1000; }
+function startHold(k){ const x=SC[k]; x._held=true; HOLD={i:k,base:x.t,end:x.t+x.hold,t0:performance.now()}; if(audio) audio.pause(); }
+function endHold(){ const nx=HOLD.i<SC.length-1?SC[HOLD.i+1].t:HOLD.end; HOLD=null; tAt=nx; t0=performance.now();
+  if(audio){ audio.currentTime=nx; audio.play().catch(()=>{}); } }
+const now0=()=>audio&&!audio.paused&&audio.currentTime>0?audio.currentTime:audio&&playing&&audio.readyState<3?tAt:(playing?tAt+(performance.now()-t0)/1000:tAt);
+const now=()=>HOLD?holdNow():now0();
+function loop(){ if(!playing) return; let t=now();
+  if(!HOLD){ const k=SC.findIndex(x=>x.hold&&!x._held&&t>=x.t&&t<x.t+0.6&&x.t<to); if(k>-1){ startHold(k); t=now(); } }
+  else if(t>=HOLD.end){ endHold(); t=now(); }
+  draw(t); if(!HOLD&&t>=to){ stop(); return; } requestAnimationFrame(loop); }
 function play(a,b){
+  HOLD=null; SC.forEach(x=>x._held=false);
   to=b; tAt=a; playing=true; $('veil').hidden=true; t0=performance.now();
   if(audio){
     const A=audio, start=()=>{ A.currentTime=a; A.play().catch(()=>{ audio=null; t0=performance.now(); }); };
@@ -286,9 +303,10 @@ function allWordings(){
   return '<small>All the wordings · copy what you like</small>'+W.map((w,i)=>'<div class="aw"><b>'+esc(w.foot||(w.tag||('Wording '+(s.w.filter(x=>!x.steps).indexOf(w)+1))))+'</b>'
     +w.rows.map(r=>'<p>'+mark(r[2])+'</p>').join('')+'</div>').join('');
 }
-function pause(){ tAt=now(); playing=false; if(audio) audio.pause(); veil('Paused · tap to go on','pause');
+function pause(){ tAt=now(); if(HOLD) HOLD.p=performance.now(); playing=false; if(audio) audio.pause(); veil('Paused · tap to go on','pause');
   const a=allWordings(), v=$('vall'); v.innerHTML=a; v.hidden=!a; $('veil').classList.toggle('withall',!!a); }
-function resume(){ if(audio){ audio.currentTime=tAt; audio.play(); } playing=true; t0=performance.now(); $('veil').hidden=true; requestAnimationFrame(loop); }
+function resume(){ if(HOLD){ HOLD.t0+=performance.now()-HOLD.p; playing=true; $('veil').hidden=true; requestAnimationFrame(loop); return; }
+  if(audio){ audio.currentTime=tAt; audio.play(); } playing=true; t0=performance.now(); $('veil').hidden=true; requestAnimationFrame(loop); }
 function stop(){ playing=false; if(audio) audio.pause(); tAt=to; if(!REC) veil(part<0?'That’s the whole review.':'End of clip '+(part+1)+'.','end'); }
 function veil(txt,mode){
   const v=$('veil'), row=$('vrow'); v.hidden=false; $('vtx').textContent=txt; v.dataset.mode=mode;
@@ -312,7 +330,7 @@ function go(p){
   if(p<0) play(0,END); else play(D.clips[p][0],D.clips[p][1]);
 }
 
-fetch('/data/writing/presentations/presentations.json?v=6').then(r=>r.json()).then(J=>{
+fetch('/data/writing/presentations/presentations.json?v=7').then(r=>r.json()).then(J=>{
   D=J[TASK]; if(!D){ document.body.textContent='No presentation yet.'; return; }
   SC=D.scenes; END=D.end; document.title='INTUITY — '+D.title;
   $('bars').innerHTML=D.clips.map(()=>'<i><b></b></i>').join('');

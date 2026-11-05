@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@400..600&family=Space+Grotesk:wght@700&family=Anton&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=20261105">
-<link rel="stylesheet" href="/data/writing/writing.css?v=20261018m">
+<link rel="stylesheet" href="/data/writing/writing.css?v=20261105">
 <style>
 /* ═══════════════════════════════════════════════════════════════════════
    YOUR REVIEW IN FIVE  ·  v3 (5 Nov 2026) — the blueprint for every task
@@ -64,6 +64,10 @@
 .rungs i b{position:relative;font-weight:600}
 .rungs i.own{background:var(--ink)} .rungs i.own::before{background:var(--ink)} .rungs i.own b{color:var(--mark-ink)}
 .today{font-size:.84rem;color:var(--ink);margin:.7rem 0 0;font-weight:600}
+.kb{display:flex;gap:.55rem;align-items:center;margin:1rem 0 0;font-size:.9rem;color:var(--ink);cursor:pointer}
+.kb input{width:18px;height:18px;accent-color:var(--ink)} .kb small{color:var(--f5-faint)}
+.tg{display:inline-block;min-width:2.4em;text-align:center;border-bottom:2px solid var(--ink);background:rgba(194,149,110,.12);padding:0 .25em;border-radius:3px 3px 0 0}
+.tg.cur{background:rgba(194,149,110,.35)} .tg.ok{border-color:var(--f5-ok);color:var(--f5-ok);background:rgba(79,122,99,.1)}
 .how{border:0;background:none;color:var(--f5-faint);font:500 .78rem var(--f-display);text-decoration:underline;text-underline-offset:3px;cursor:pointer;margin:1.3rem 0 0;padding:.4rem}
 
 /* ── the focus card (the Challenge's tiles) ── */
@@ -178,8 +182,14 @@ const STEP=[null,
   {k:'select',name:'Select',how:'Tap the sentence that does this job.'},
   {k:'match', name:'Match',how:'Tap the end that fits.'},
   {k:'sort',  name:'Sort', how:'Tap the pieces in the right order.'},
-  {k:'fill',  name:'Fill the gaps',how:'Type the missing words. The first letter is your clue.'},
-  {k:'memory',name:'From memory',how:'Write the whole sentence. Only its job is shown.'}];
+  {k:'fill',  name:'Fill the gaps',how:'Type the missing words. The first letter is your clue.',howTap:'Tap the missing words in order. The first letter is your clue.'},
+  {k:'memory',name:'From memory',how:'Write the whole sentence. Only its job is shown.',howTap:'Build the whole sentence. Two pieces don’t belong.'}];
+/* NO KEYBOARD (v4, 5 Nov): for students who won't type on a phone, Fill and
+   From memory are tapped, still checked by the app: Fill offers three words
+   for each gap (same first letter where it can), From memory builds the
+   sentence from its pieces with two that don't belong. ?tap=1 or the switch
+   in How it works; remembered on this device. */
+const howOf=(st,r)=>ST.tap&&st.howTap?st.howTap:st.how;
 
 /* ── state ── */
 function SUB(){ return D.subjects.find(s=>s.key===ST.key)||D.subjects[0]; }
@@ -230,10 +240,12 @@ function gate(){
 }
 function how(){
   card('<div class="kick">How it works</div><h2 id="fTitle">5 sentences, 5 steps</h2>'+
-    '<p class="aim">A review in five sentences: one to open it, three about its features, one to recommend it. All about your own '+esc(SUB().a.replace(/^an? /,''))+'.</p>'+
-    '<p class="aim">Each sentence climbs five steps: select it, match its halves, sort its pieces, fill its gaps, then write it from memory.</p>'+
+    '<p class="aim">A review in five sentences: one to open it, two features, one drawback, one to recommend it. All about your own '+esc(SUB().a.replace(/^an? /,''))+'.</p>'+
+    '<p class="aim">Each sentence climbs five steps: select it, match its halves, sort its pieces, fill its gaps, then build it from memory.</p>'+
     '<p class="aim">One step a day: come back tomorrow and it climbs again. Write it from memory on a new day, and it’s yours ✓.</p>'+
+    '<label class="kb"><input type="checkbox" id="kb"'+(ST.tap?'':' checked')+'> Type my answers <small>(off: tap only)</small></label>'+
     '<div class="cta"><button type="button" class="btn fill" id="ok">Got it</button></div>');
+  $('kb').onchange=()=>{ ST.tap=!$('kb').checked; save(); };
   $('ok').onclick=close;
 }
 
@@ -245,7 +257,7 @@ function head(i,r){
   const st=STEP[r], seen=(ST.seen=ST.seen||{})[st.k];
   return '<div class="kick">'+(i+1)+' · '+esc(D.slots[i].part)+'</div><h2 id="fTitle">'+esc(st.name)+'</h2>'+
     '<div class="steps5" aria-label="Step '+r+' of 5">'+[1,2,3,4,5].map(k=>'<i class="'+(k<r?'on':k===r?'now':'')+'"></i>').join('')+'</div>'+
-    '<p class="aim">'+(seen?'':'<span class="new">NEW</span>')+esc(st.how)+'</p>';
+    '<p class="aim">'+(seen?'':'<span class="new">NEW</span>')+esc(howOf(st,r))+'</p>';
 }
 
 /* ── a session: his thing's name first (once), then one card per slot ── */
@@ -301,22 +313,25 @@ function match(w,r){
   });
 }
 /* 3 · SORT: tap the pieces in order (two words a piece; his thing's name is one) */
-function sort(w,r){
-  const tk=tokens(fill(w)), pcs=[];
+function pieces(t){ const tk=tokens(t), pcs=[];
   for(let i=0;i<tk.length;){ if(tk[i][0]==='\u0001'){ pcs.push(shown(tk[i])); i++; continue; }
     const two=tk[i+1]&&tk[i+1][0]!=='\u0001'; pcs.push(two?tk[i]+' '+tk[i+1]:tk[i]); i+=two?2:1; }
-  const pool=shuffle(pcs.map((p,k)=>({p,k}))); let n=0, miss=0;
-  card(head(at,r)+'<div class="built" id="built"></div><div class="pool" id="pool">'+
+  return pcs; }
+function sort(w,r,extra){
+  const pcs=pieces(fill(w));
+  const pool=shuffle(pcs.map((p,k)=>({p,k})).concat((extra||[]).map(p=>({p,k:-1})))); let n=0, miss=0;
+  card(head(at,r)+(extra?'<p class="job">'+esc(D.slots[at].pick||D.slots[at].job)+'</p>':'')+'<div class="built" id="built"></div><div class="pool" id="pool">'+
     pool.map((x,j)=>'<button type="button" class="chip" data-j="'+j+'">'+esc(x.p)+'</button>').join('')+'</div><div id="after"></div>');
   $('pool').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{
     const x=pool[+b.dataset.j];
-    if(pcs[x.k]===pcs[n]){ $('built').insertAdjacentHTML('beforeend','<span class="pc">'+html(x.p)+'</span>'); b.remove(); n++; sfx('pop');
+    if(x.k>=0&&pcs[x.k]===pcs[n]){ $('built').insertAdjacentHTML('beforeend','<span class="pc">'+html(x.p)+'</span>'); b.remove(); n++; sfx('pop');
       if(n===pcs.length){ if(open(w.t)) $('built').insertAdjacentHTML('beforeend','<span class="pc"><span class="gap"></span></span>'); result(miss<=1,w,r); } }
     else { miss++; b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake'); sfx('wrong'); }
   });
 }
 /* 4 · FILL: three words gone (from the key word on), first letters as clues */
 function gaps(w,r){
+  if(ST.tap) return gapsTap(w,r);
   const tk=tokens(fill(w)); let k=tk.findIndex(t=>norm(t)===w.hide); if(k<0) k=0;
   const idx=[]; for(let j=k;j<tk.length&&idx.length<3;j++) if(tk[j][0]!=='\u0001') idx.push(j);
   for(let j=k-1;j>=0&&idx.length<3;j--) if(tk[j][0]!=='\u0001') idx.unshift(j);
@@ -334,8 +349,34 @@ function gaps(w,r){
     $('chk').parentNode.remove(); result(ok,w,r);
   };
 }
+/* 4 · FILL, no keyboard: three words to choose from for each gap, in order */
+function gapsTap(w,r){
+  const tk=tokens(fill(w)); let k=tk.findIndex(t=>norm(t)===w.hide); if(k<0) k=0;
+  const idx=[]; for(let j=k;j<tk.length&&idx.length<3;j++) if(tk[j][0]!=='\u0001') idx.push(j);
+  for(let j=k-1;j>=0&&idx.length<3;j--) if(tk[j][0]!=='\u0001') idx.unshift(j);
+  const word=t=>t.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9']+$/g,'');
+  /* every word of every wording, for the wrong choices */
+  const bank=[...new Set(D.slots.map(s=>s.ways.map(x=>tokens(fill(x)).filter(t=>t[0]!=='\u0001').map(word))).flat(2).filter(Boolean))];
+  let g=0, miss=0;
+  const line=()=>tk.map((t,j)=>{ if(t[0]==='\u0001') return '<span class="nm">'+esc(shown(t))+'</span>'; const q=idx.indexOf(j);
+    if(q<0) return esc(t); const a=word(t), rest=esc(t.slice(t.indexOf(a)+a.length));
+    return q<g?'<span class="tg ok">'+esc(a)+'</span>'+rest:'<span class="tg'+(q===g?' cur':'')+'">'+esc(a[0])+'…</span>'+rest; }).join(' ')+(open(w.t)?' <span class="gap"></span>':'');
+  const choices=()=>{ const a=word(tk[idx[g]]), na=norm(a);
+    const same=shuffle(bank.filter(b=>norm(b)!==na&&b[0].toLowerCase()===a[0].toLowerCase())), any=shuffle(bank.filter(b=>norm(b)!==na));
+    const wrong=[...new Set(same.concat(any))].slice(0,2); return shuffle([a].concat(wrong)); };
+  const draw=()=>{ const ch=g<idx.length?choices():[];
+    card(head(at,r)+'<p class="line">'+line()+'</p><div class="pool" id="pool">'+ch.map(c=>'<button type="button" class="chip" data-c="'+esc(c)+'">'+esc(c)+'</button>').join('')+'</div><div id="after"></div>');
+    $('pool').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{
+      if(norm(b.dataset.c)===norm(word(tk[idx[g]]))){ g++; sfx('pop'); if(g===idx.length){ draw(); result(miss<=1,w,r); } else draw(); }
+      else { miss++; b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake'); sfx('wrong'); }
+    }); };
+  draw();
+}
 /* 5 · MEMORY: only the job; he writes the whole phrase */
 function memory(w,r){
+  if(ST.tap){ /* two pieces that don't belong, from the other sentences */
+    const mine=pieces(fill(w)), ex=[]; shuffle(others(at).map(o=>pieces(fill(o))).flat()).forEach(p=>{ if(ex.length<2&&mine.indexOf(p)<0&&ex.indexOf(p)<0&&p!==X()) ex.push(p); });
+    return sort(w,r,ex); }
   card(head(at,r)+'<p class="job">'+esc(D.slots[at].pick||D.slots[at].job)+'</p><p class="use">About <span class="nm">'+esc(X())+'</span>'+(open(w.t)?'. Write the phrase; you finish it after.':'.')+'</p>'+
     '<textarea class="wr" id="mem" rows="3" autocapitalize="sentences" spellcheck="false" placeholder="Your sentence"></textarea><div class="cta"><button type="button" class="btn fill" id="chk" disabled>Check</button></div><div id="after"></div>');
   $('mem').oninput=()=>{ $('chk').disabled=$('mem').value.trim().split(/\s+/).length<3; };
@@ -378,7 +419,7 @@ function result(ok,w,r,diff){
     prompt:fill(w).replace(new RegExp('\\b'+w.hide+'\\b'),w.hide[0]+'___'),answer:fill(w),href:'/skills/writing/five.html?task='+TASK}); }catch(e){}
   const wantIdea=ok&&open(w.t)&&(r>=3||!ideas()[at]);
   $('after').innerHTML='<p class="fb">'+line+'</p>'+(wantIdea?
-    '<p class="aim" style="margin-top:.9rem"><b>Now make it yours.</b> Finish it: '+esc(SUB().ask)+'</p><input class="wr" id="idea" maxlength="80" placeholder="your own idea" value="'+esc(ideas()[at]||'')+'">':'')+
+    '<p class="aim" style="margin-top:.9rem"><b>Now make it yours.</b> Finish it: '+esc(D.slots[at].part==='Drawback'?SUB().askBad:SUB().ask)+'</p><input class="wr" id="idea" maxlength="80" placeholder="your own idea" value="'+esc(ideas()[at]||'')+'">':'')+
     '<div class="cta"><button type="button" class="btn fill" id="nx">'+(at===D.slots.length-1?'Finish':'Next')+' →</button></div>';
   $('nx').onclick=()=>{ const v=$('idea')&&$('idea').value.trim(); if(v){ ideas()[at]=v; save(); } at++; next(); };
   $('nx').focus({preventScroll:true}); $('after').scrollIntoView({block:'nearest',behavior:'smooth'});
@@ -425,12 +466,15 @@ function paint(){ if(MODE==='mine') mine(); else gate(); }
 function setMode(m){ MODE=m; document.querySelectorAll('.wr-stage[data-m]').forEach(b=>{ const on=b.dataset.m===m; b.classList.toggle('active',on); if(on) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); }); paint(); window.scrollTo(0,0); }
 document.querySelectorAll('.wr-stage[data-m]').forEach(b=>b.onclick=()=>setMode(b.dataset.m));
 
-fetch('/data/writing/five/'+TASK+'.json?v=3').then(r=>{ if(!r.ok) throw 0; return r.json(); }).then(d=>{
+fetch('/data/writing/five/'+TASK+'.json?v=4').then(r=>{ if(!r.ok) throw 0; return r.json(); }).then(d=>{
   D=d; ST=load();
   /* earlier versions: one subject {key,name}; slots by days right */
   if(ST.subj&&!ST.key){ ST.key=ST.subj.key; ST.names={}; ST.names[ST.subj.key]=ST.subj.name; delete ST.subj; }
   (ST.slots||[]).forEach(s=>{ if(s&&s.days&&!s.rung){ s.rung=s.days.length>=2?4:s.days.length?2:1; delete s.days; } });
   if(!D.subjects.some(s=>s.key===ST.key)) ST.key=D.subjects[0].key;
+  /* v4: slot 4 became the drawback, so its progress and ideas start again */
+  if((ST.v||0)<4){ if(ST.slots&&ST.slots[3]) ST.slots[3]={rung:1}; Object.values(ST.ideas||{}).forEach(o=>{ delete o[3]; delete o.own3; }); ST.v=4; }
+  if(P.get('tap')==='1') ST.tap=true; else if(P.get('tap')==='0') ST.tap=false;
   save();
   document.title='INTUITY — Your '+D.name.toLowerCase()+' in five';
   tabs(); if(P.get('mode')==='mine') setMode('mine'); else paint();
@@ -438,6 +482,6 @@ fetch('/data/writing/five/'+TASK+'.json?v=3').then(r=>{ if(!r.ok) throw 0; retur
 })();
 </script>
 <script src="/skills/grammar-rules/intuity-sound.js"></script>
-<script src="/data/writing/writing-chrome.js?v=14"></script>
+<script src="/data/writing/writing-chrome.js?v=15"></script>
 </body>
 </html>

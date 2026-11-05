@@ -173,7 +173,12 @@ else if (STAGE !== 'generate') {
   var mb = newTop.querySelector('.mute'); if (!mb) return;
   function paint() {
     var on = !window.SFX || SFX.isOn();
-    mb.textContent = on ? '\uD83D\uDD0A' : '\uD83D\uDD07';
+    /* drawn, not an emoji (5 Nov): the same line weight as the app's other marks */
+    mb.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" fill="currentColor" stroke="none"/>' +
+      (on ? '<path d="M15.5 9.2a4 4 0 0 1 0 5.6"/><path d="M18 6.8a7.4 7.4 0 0 1 0 10.4"/>' : '<path d="M16 9.5l5 5M21 9.5l-5 5"/>') + '</svg>';
+    mb.setAttribute('aria-pressed', on ? 'false' : 'true');
+    mb.setAttribute('aria-label', on ? 'Sound on' : 'Sound off');
     mb.classList.toggle('off', !on);
   }
   mb.onclick = function () { if (window.SFX) SFX.toggle(); paint(); };

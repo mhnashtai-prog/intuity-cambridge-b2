@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>INTUITY — Phrase recall</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@400..600&family=Space+Grotesk:wght@700&family=Anton&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=20261105">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   PHRASE RECALL · think, then reveal  ·  v1 (5 Nov 2026)
+
+   From Michael's class: the students had SEEN every review phrase, but
+   seeing is recognition. Pulling a phrase out of memory is what fixes it
+   (retrieval practice), and saying it in your head works about as well as
+   writing it (Smith, Roediger & Karpicke 2013). So:
+
+     one phrase from the Quick revision sheet, one key word hidden, its
+     first letter as the cue  →  the student says it  →  Show it  →
+     Got it / Not yet
+
+   Eight phrases a round, from the beginning, middle and end of the text.
+   Every answer joins the review deck (Be2, keep: true), so each phrase
+   comes back after 1, 3, 7 and 21 days: the return a week later.
+   The round ends with a task for the NOTEBOOK, not the screen: three
+   sentences about the student's own subject with two of the phrases,
+   for the teacher to mark in class.
+   Phrases: data/writing/portfolio.json (the same sheets as Quick revision).
+   ═══════════════════════════════════════════════════════════════════════ */
+:root{ --ink:#14110E; --paper:#FBF8F3; --dim:#5C5852; --line:rgba(20,17,14,.12); --car:#C2956E; --car-d:#9A5A2C; --ok:#4F7A63; --no:#B4532F }
+body{background:var(--bg,#F3EFE8)}
+.header{position:sticky;top:0;z-index:20}
+.wrap{max-width:640px;margin:0 auto;padding:1.1rem var(--gutter,16px) 4rem;color:var(--ink)}
+.wrap h1,.wrap h2,.wrap p,.wrap li{color:var(--ink)}
+.rc-dots{display:flex;gap:.3rem;justify-content:center;margin:0 0 1rem}
+.rc-dots i{width:10px;height:10px;border-radius:50%;background:rgba(20,17,14,.12)}
+.rc-dots i.rc-here{background:var(--ink)} .rc-dots i.rc-got{background:var(--ok)} .rc-dots i.rc-not{background:var(--car)}
+.rc-card{background:var(--paper);box-shadow:0 8px 30px rgba(43,33,41,.08);padding:1.15rem 1.1rem 1.25rem}
+.rc-kick{font:600 .62rem/1 'Geist Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--car-d);display:flex;justify-content:space-between;gap:.5rem}
+.rc-kick em{font-style:normal;color:var(--dim)}
+.rc-phrase{font-size:1.22rem;line-height:1.5;margin:.9rem 0 .5rem;font-weight:500}
+.rc-cue{color:var(--car-d);font-weight:700;letter-spacing:.04em}
+.rc-phrase mark{background:none;color:inherit;box-shadow:inset 0 -.55em 0 rgba(194,149,110,.45);animation:rcIn .4s ease}
+@keyframes rcIn{from{box-shadow:inset 0 0 0 rgba(194,149,110,.45)}}
+.rc-task{color:var(--dim);font-size:.88rem;margin:0}
+.rc-row{display:grid;grid-template-columns:1fr 1fr;gap:.55rem;margin:1.1rem 0 0}
+.rc-row.rc-one{grid-template-columns:1fr}
+.rc-b{min-height:52px;border-radius:999px;border:2px solid var(--ink);background:transparent;color:var(--ink);font:700 .95rem/1 var(--f-body,'Geist',sans-serif);cursor:pointer}
+.rc-b.rc-dark{background:var(--ink);color:var(--paper)}
+@media(hover:hover){.rc-b:not(.rc-dark):hover{background:rgba(20,17,14,.06)}}
+.rc-res{text-align:center}
+.rc-big{font-family:'Anton',Impact,sans-serif;font-size:4rem;line-height:1;margin:.4rem 0 .2rem}
+.rc-big small{font-size:1.5rem;color:var(--dim)}
+.rc-say{color:var(--dim);margin:0 auto 1.2rem;max-width:32ch;line-height:1.45}
+/* the notebook: paper, not a screen */
+.rc-note{text-align:left;background:#fff;border:1px solid var(--line);border-left:3px solid #D98A8A;padding:1rem 1.05rem 1.1rem 1.2rem;margin:0 0 1.3rem}  /* a notebook's margin line */
+.rc-note h2{font-family:'Anton',Impact,sans-serif;font-weight:400;font-size:1.25rem;text-transform:uppercase;letter-spacing:.02em;margin:0 0 .55rem}
+.rc-note p{margin:0 0 .5rem;line-height:1.55}
+.rc-note ol{margin:.2rem 0 .6rem 1.1rem;padding:0;line-height:1.5}
+.rc-note li{margin:0 0 .35rem}
+.rc-note small{display:block;color:var(--dim);font-size:.8rem}
+.rc-cta{display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap}
+.rc-cta a,.rc-cta button{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 1.4rem;border-radius:999px;
+  font:700 .9rem/1 var(--f-body,'Geist',sans-serif);text-decoration:none;cursor:pointer}
+.rc-cta button{border:0;background:var(--ink);color:var(--paper)}
+.rc-cta a{border:2px solid var(--ink);color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.rc-phrase mark{animation:none}}
+</style>
+<script src="/tools/be2-brand.js?v=20261012c"></script>
+</head>
+<body>
+<header class="header">
+  <div class="header-top">
+    <a class="back-link" id="back" href="/skills/writing/gate.html" target="_top">← Quick revision</a>
+    <div class="header-title"><div class="app-title">INTUITY</div><div class="app-subtitle">Phrase recall</div></div>
+    <span class="header-spacer">Level <b>B2</b></span>
+  </div>
+</header>
+<main class="wrap"><div class="rc-dots" id="dots" aria-hidden="true"></div><div id="out"><p style="text-align:center;color:var(--dim)">Loading…</p></div></main>
+<script>
+(function(){
+'use strict';
+const N=8;
+const P=new URLSearchParams(location.search);
+const ALIAS={review:'reviews',essay:'essays',article:'articles',report:'reports',email:'emails'};
+let TASK=P.get('task')||'reviews'; TASK=ALIAS[TASK]||TASK;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];}return a;};
+const hash=s=>{let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))|0;return (h>>>0).toString(36);};
+/* the notebook: a subject of the student's own */
+const OWN={rv:['your favourite video game','a series you watched recently','a café or restaurant you like','an app you use every day'],
+  ar:['a place in your town worth visiting','something you could not live without','a person who inspires you'],
+  rp:['your school canteen','the library at your school','a sports centre near you'],
+  ef:['an email to a language school asking about a summer course'],ei:['an email to a friend about your plans for the weekend'],
+  sy:['a story that begins: “The door was already open when I got home.”']};
+const ESSAY=['“Teenagers should have less homework.” Do you agree?','“Young people spend too much time online.” Do you agree?','“Every school should teach cooking.” Do you agree?'];
+const STOP=new Set('about above after again also although among another because been before being below between both could does doing during each either every from further have having here into itself just more most much must neither other ought over same should since some such than that their theirs them then there these they this those through under until very were what when where whether which while whom whose will with within without would your yours'.split(' '));
+
+/* one phrase → its cue: the longest content word, not one of the “a / b” choices */
+function cueOf(t){
+  const w=t.split(' ');
+  let best=-1,len=0;
+  w.forEach((x,i)=>{ const core=x.replace(/^[“"(‘']+|[”"),.;:!?’']+$/g,'');
+    if(!/^[A-Za-z]{4,}$/.test(core)||STOP.has(core.toLowerCase())) return;
+    if(w[i-1]==='/'||w[i+1]==='/'||/\//.test(x)) return;
+    if(core.length>len){ len=core.length; best=i; } });
+  if(best<0) return null;
+  const x=w[best], m=x.match(/^([“"(‘']*)([A-Za-z]+)(.*)$/);
+  const cue=w.slice(); cue[best]=m[1]+m[2][0]+'___'+m[3];
+  return {cue:cue.join(' '), k:best};
+}
+function clean(t){ return String(t).replace(/\*\*/g,'').replace(/^[>#=!]+\s*/,'').replace(/\s+/g,' ').trim(); }
+
+let D,ID,S,pool,run,at,res;
+function deckKeys(){ try{ return JSON.parse(localStorage.getItem('be2.review.v1')||'{}'); }catch(e){ return {}; } }
+function build(){
+  pool=[];
+  S.bands.forEach((b,bi)=>b.cols.forEach(col=>col.forEach(it=>{ const t=clean(it); const c=cueOf(t);
+    if(c&&t.length<=170) pool.push({id:hash(ID+'|'+t),band:b.label,bi,text:t,cue:c.cue,k:c.k}); })));
+}
+/* eight a round: from every part of the text, the ones not yet in the deck first */
+function draw(){
+  const deck=deckKeys(), fresh=x=>!deck['phrases-'+ID+'::'+x.id];
+  const bands=[...new Set(pool.map(x=>x.bi))], out=[];
+  const by=bands.map(b=>shuffle(pool.filter(x=>x.bi===b)).sort((a,c)=>fresh(c)-fresh(a)));
+  for(let r=0;out.length<N&&r<40;r++){ const L=by[r%by.length]; if(L.length) out.push(L.shift()); }
+  return out.sort((a,b)=>a.bi-b.bi);
+}
+function start(){ run=draw(); at=0; res=[]; show(); }
+function dots(){ $('dots').innerHTML=run.map((_,k)=>'<i class="'+(res[k]===true?'rc-got':res[k]===false?'rc-not':k===at?'rc-here':'')+'"></i>').join(''); }
+function show(){
+  dots(); if(at>=run.length) return end();
+  const x=run[at];
+  $('out').innerHTML='<section class="rc-card"><div class="rc-kick"><span>'+esc(S.tab)+' · '+esc(x.band)+'</span><em>'+(at+1)+' / '+run.length+'</em></div>'+
+    '<p class="rc-phrase">'+esc(x.cue).replace(/(\S)___/,'<span class="rc-cue">$1___</span>')+'</p>'+
+    '<p class="rc-task">Say the missing word, out loud or in your head. Then check.</p>'+
+    '<div class="rc-row rc-one"><button class="rc-b rc-dark" type="button" id="see">Show it</button></div></section>';
+  $('see').onclick=reveal; $('see').focus({preventScroll:true});
+}
+function reveal(){
+  const x=run[at], w=x.text.split(' ');
+  $('out').innerHTML='<section class="rc-card"><div class="rc-kick"><span>'+esc(S.tab)+' · '+esc(x.band)+'</span><em>'+(at+1)+' / '+run.length+'</em></div>'+
+    '<p class="rc-phrase">'+w.map((y,j)=>j===x.k?'<mark>'+esc(y)+'</mark>':esc(y)).join(' ')+'</p>'+
+    '<p class="rc-task">Did you have it?</p>'+
+    '<div class="rc-row"><button class="rc-b" type="button" id="no">Not yet</button><button class="rc-b rc-dark" type="button" id="yes">Got it</button></div></section>';
+  $('no').onclick=()=>mark(false); $('yes').onclick=()=>mark(true);
+}
+function mark(ok){
+  const x=run[at]; res[at]=ok;
+  try{ Be2.answer('phrases-'+ID,{id:x.id,correct:ok,keep:true,kind:'recall',prompt:x.cue,answer:x.text,
+    href:'/skills/writing/recall.html?task='+TASK+'&s='+ID}); }catch(e){}
+  at++; show();
+}
+function end(){
+  const got=res.filter(Boolean).length, not=run.filter((_,k)=>!res[k]);
+  const two=shuffle(not).concat(shuffle(run.filter((_,k)=>res[k]))).slice(0,2);
+  const own=OWN[ID]||ESSAY, subj=own[Math.random()*own.length|0];
+  const say=got===run.length?'All eight. They come back in a day, then 3, 7 and 21 days, to stay.':
+    'The “Not yet” ones are waiting in your review now. The rest come back in a day, then 3, 7 and 21 days.';
+  $('out').innerHTML='<section class="rc-card rc-res"><div class="rc-kick" style="justify-content:center"><span>'+esc(S.tab)+' phrases</span></div>'+
+    '<div class="rc-big">'+got+'<small> / '+run.length+'</small></div><p class="rc-say">'+say+'</p>'+
+    '<div class="rc-note"><h2>In your notebook</h2>'+
+      '<p>Write <b>3 sentences</b> about '+(OWN[ID]?'<b>'+esc(subj)+'</b>':'this question: <b>'+esc(subj)+'</b>')+'. Use these 2 phrases:</p>'+
+      '<ol>'+two.map(x=>'<li>'+esc(x.text)+'</li>').join('')+'</ol><small>On paper, not here. Show your teacher in class.</small></div>'+
+    '<div class="rc-cta"><button type="button" id="again">Another 8</button><a href="'+esc($('back').href)+'">← Quick revision</a></div></section>';
+  $('again').onclick=()=>{ start(); window.scrollTo(0,0); };
+}
+fetch('/data/writing/portfolio.json?v=recall1').then(r=>r.json()).then(d=>{
+  D=d; if(!D.tasks[TASK]) TASK='reviews';
+  const ids=D.tasks[TASK]; ID=ids.indexOf(P.get('s'))>-1?P.get('s'):ids[0]; S=D.sheets[ID];
+  $('back').href='/skills/writing/sheet.html?task='+TASK+'&s='+ID;
+  document.title='INTUITY — '+S.tab+' phrase recall';
+  build(); start();
+}).catch(()=>{ $('out').innerHTML='<p style="text-align:center">The phrases could not load. Check your connection and try again.</p>'; });
+})();
+</script>
+</body>
+</html>

@@ -58,6 +58,8 @@ body{margin:0;color:var(--ink);font-family:'Geist',system-ui,sans-serif;-webkit-
 @media(prefers-reduced-motion:reduce){.card{animation:none}}
   .tf-1{display:block;font-size:.88em;color:#5C5852;margin-bottom:.5rem}
   .tf-k{display:block;font-family:'Geist',sans-serif;font-weight:700;font-size:.72em;letter-spacing:.14em;margin-bottom:.35rem}
+  .phrase .cue{color:#9A5A2C;font-weight:700;letter-spacing:.04em}
+  .phrase mark{background:none;box-shadow:inset 0 -.5em 0 rgba(194,149,110,.45);color:inherit}
 </style>
 <script src="/tools/be2-brand.js?v=20261012c"></script>
 </head>
@@ -78,10 +80,11 @@ body{margin:0;color:var(--ink);font-family:'Geist',system-ui,sans-serif;-webkit-
   <div id="stage"></div>
 </main>
 
-<script src="/tools/be2-progress.js?v=20261103b"></script>
+<script src="/tools/be2-progress.js?v=20261105b"></script>
 <script>
 (function () {
-  var deck = Be2.review(10), i = 0, results = [];
+  /* at most 12 a day (5 Nov): the oldest-due first, the rest wait for tomorrow */
+  var deck = Be2.review(Be2.dueToday ? Be2.dueToday() : 10), i = 0, results = [];
   var lead = document.getElementById('lead'), stage = document.getElementById('stage');
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 
@@ -94,7 +97,19 @@ body{margin:0;color:var(--ink);font-family:'Geist',system-ui,sans-serif;-webkit-
       '</div>' : '');
   }
 
+  /* a phrase from the Quick revision sheet, one word hidden: “could be the p___ option” */
+  function recallHTML(c, shown) {
+    var cue = String(c.prompt || ''), full = String(c.answer || '');
+    if (!shown) return '<div class="phrase">' + esc(cue).replace(/(\S)___/, '<span class="cue">$1___</span>') + '</div>' +
+      '<p class="task">Say the missing word, out loud or in your head. Then check.</p>';
+    var a = full.split(' '), k = cue.split(' ').findIndex(function (w) { return /___/.test(w); });
+    return '<div class="phrase">' + a.map(function (w, j) { return j === k ? '<mark>' + esc(w) + '</mark>' : esc(w); }).join(' ') + '</div>';
+  }
+  function from(c) {
+    return '<div class="from"><i></i>' + esc(c.topicName) + '<span class="misses">' + (c.misses ? 'missed ' + c.misses + '×' : 'check-in') + '</span></div>';
+  }
   function promptHTML(c, shown) {
+    if (c.kind === 'recall') return recallHTML(c, shown);
     if (c.kind === 'phrase') return '<div class="phrase">' + esc(c.prompt) + '</div>' +
       '<p class="task">Say a sentence of your own with it, out loud. Then go back and use it in the game.</p>';
     /* a key word transformation (Rewrite): the first sentence, the key word,
@@ -111,8 +126,7 @@ body{margin:0;color:var(--ink);font-family:'Geist',system-ui,sans-serif;-webkit-
     head();
     if (i >= deck.length) return end();
     var c = deck[i];
-    stage.innerHTML = '<div class="card"><div class="from"><i></i>' + esc(c.topicName) +
-      '<span class="misses">missed ' + c.misses + '×</span></div>' + promptHTML(c, false) +
+    stage.innerHTML = '<div class="card">' + from(c) + promptHTML(c, false) +
       '<div class="row"><button class="btn dark" id="see" type="button">' + (c.kind === 'phrase' ? 'Done' : 'Show the answer') + '</button></div></div>';
     document.getElementById('see').onclick = c.kind === 'phrase' ? function () { mark(true); } : reveal;
   }
@@ -120,9 +134,8 @@ body{margin:0;color:var(--ink);font-family:'Geist',system-ui,sans-serif;-webkit-
   function reveal() {
     var c = deck[i];
     var why = c.meaning || c.rule || '';
-    stage.innerHTML = '<div class="card"><div class="from"><i></i>' + esc(c.topicName) +
-      '<span class="misses">missed ' + c.misses + '×</span></div>' + promptHTML(c, true) +
-      '<div class="reveal"><span class="ans">' + esc(c.answer) + '</span>' +
+    stage.innerHTML = '<div class="card">' + from(c) + promptHTML(c, true) +
+      '<div class="reveal">' + (c.kind === 'recall' ? '' : '<span class="ans">' + esc(c.answer) + '</span>') +
         (c.given ? '<span class="yours">' + esc(c.given) + '</span>' : '') +
         (why ? '<div class="why">' + esc(why) + '</div>' : '') +
         (c.href ? '<a class="practise" href="' + esc(c.href) + '">Practise ' + esc(c.topicName) + ' →</a>' : '') +
@@ -135,25 +148,27 @@ body{margin:0;color:var(--ink);font-family:'Geist',system-ui,sans-serif;-webkit-
   function mark(ok) {
     var c = deck[i];
     results[i] = ok;
+    if (Be2.countReviewed) Be2.countReviewed();
     Be2.answer(c.topic, { id: c.id, correct: ok, prompt: c.prompt, answer: c.answer, meaning: c.meaning, rule: c.rule, href: c.href, kind: c.kind });
     i++; show();
   }
 
   function end() {
-    var later = Be2.deckSize ? Be2.deckSize() - Be2.review().length : 0;
+    var due = Be2.review().length, room = Be2.dueToday ? Be2.dueToday() : due, later = Be2.deckSize() - due;
+    var rule = 'A card comes back after 1, 3, 7 and 21 days, and leaves once you know it every time.';
     if (!deck.length) {
-      stage.innerHTML = '<div class="empty"><h2>' + (later ? 'Nothing due today' : 'Nothing to review') + '</h2>' +
-        (later ? later + ' card' + (later === 1 ? ' comes' : 's come') + ' back tomorrow or later. ' : '') +
-        'When you get something wrong, it comes back here. It leaves once you get it right on two different days.' +
-        '<br><a href="/index.html">' + (later ? 'Back home' : 'Start practising') + '</a></div>';
+      var capped = due && !room;
+      stage.innerHTML = '<div class="empty"><h2>' + (capped ? 'Done for today' : later ? 'Nothing due today' : 'Nothing to review') + '</h2>' +
+        (capped ? 'You have reviewed ' + Be2.daily + ' cards today: that is enough. ' + due + ' wait' + (due === 1 ? 's' : '') + ' for tomorrow. ' :
+          later ? later + ' card' + (later === 1 ? ' comes' : 's come') + ' back on a later day. ' : 'What you get wrong comes back here, and some of what you get right. ') +
+        rule + '<br><a href="/index.html">' + (capped || later ? 'Back home' : 'Start practising') + '</a></div>';
       return;
     }
-    var got = results.filter(Boolean).length, left = Be2.review().length;
+    var got = results.filter(Boolean).length;
     stage.innerHTML = '<div class="empty"><h2>' + got + ' of ' + deck.length + '</h2>' +
       (got === deck.length ? 'Every one. ' : '') +
-      (left ? left + ' card' + (left === 1 ? '' : 's') + ' still due today. ' : '') +
-      (later ? later + ' card' + (later === 1 ? ' comes' : 's come') + ' back tomorrow or later: a card leaves once you get it right on two different days.' : (left ? '' : 'Your deck is empty.')) +
-      '<br><a href="' + (left ? '/review.html' : '/index.html') + '">' + (left ? 'Another round' : 'Back home') + '</a></div>';
+      (room ? room + ' more card' + (room === 1 ? '' : 's') + ' due today. ' : due ? 'That is today’s ' + Be2.daily + '. The rest wait for tomorrow. ' : '') +
+      rule + '<br><a href="' + (room ? '/review.html' : '/index.html') + '">' + (room ? 'Another round' : 'Back home') + '</a></div>';
   }
 
   /* The shell header is fixed; measure it so the deck starts below it. */

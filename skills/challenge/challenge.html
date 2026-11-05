@@ -163,6 +163,8 @@ body.board-page .board-toggle{display:flex;justify-content:center;padding:.2rem 
 body.board-page .board-toggle .viewtog{margin:0}
 .aim{font-size:.86rem;line-height:1.5;color:var(--dim);margin:.6rem 0 0;padding-left:.7rem;border-left:3px solid var(--caramel)}   /* not .focus: that is the card */
 .cg-line{font-family:var(--f-display);font-weight:700;font-size:1.12rem;line-height:1.5;color:var(--ink);margin:.9rem 0 1rem}
+.cg-line mark.cg-clue{background:none;color:inherit;box-shadow:inset 0 -.55em 0 rgba(194,149,110,.45);padding:0 .04em;animation:cgClue .45s ease}
+@keyframes cgClue{from{box-shadow:inset 0 0 0 rgba(194,149,110,.45)}}
 .cg-blank{display:inline-block;min-width:5.5em;border-bottom:2px solid var(--ink);text-align:center;color:var(--accent-ink)}
 .cg-opts{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
 .cg-opt{display:flex;align-items:center;gap:.8rem;text-align:left;padding:.8rem .2rem;border:none;border-bottom:1px solid var(--rule);background:none;
@@ -816,7 +818,7 @@ function lookAgain(i){
   const waiting=(()=>{ try{ return r.id&&window.IntuityRing&&IntuityRing.has(r.id); }catch(x){ return false; } })();
   cur=null;
   openCard(`<div class="kick">Tile ${String(i+1).padStart(2,'0')} · Look again</div><h2 id="fTitle">${esc(g.title)}</h2>
-    <p class="cg-line">${qText(r)}</p>
+    <p class="cg-line">${clueHTML(qText(r),r)}</p>
     <p class="look ${e.ok?'ok':'no'}"><b>${head}</b>${!e.ok&&e.given&&e.given!=='(shown)'?` · you wrote <i>${esc(e.given)}</i>`:''}</p>
     <p class="feedback">${e.ok?'':kwtWhy(r,e.given)}The answer: <b>${esc(sol)}</b>${tagNote(r)}</p>
     ${waiting?'<p class="ring-line">Still to fix — it will come back first next time.</p>':''}
@@ -857,7 +859,24 @@ function nudge(note){
   $('fb').innerHTML='<b>That’s correct English</b> — but not the one we’re after. '+esc(note||('Try it again with '+topic.label.toLowerCase()+'.'));
   return true;
 }
-function answer(ok,given){
+/* THE CLUE LIGHTS UP (5 Nov 2026). A round may list clue: [phrases] — the
+   words that give the answer away ("Which task?": “It is widely recognised
+   that”, “Have you ever…?”). Once the tile is settled they are highlighted
+   in the question, so a wrong answer shows what to look for next time.
+   Rounds without clue are drawn exactly as before. */
+function clueHTML(html,r){
+  (r&&Array.isArray(r.clue)?r.clue:[]).forEach(c=>{ const e=esc(String(c)); const k=html.indexOf(e);
+    if(e&&k>-1) html=html.slice(0,k)+'<mark class="cg-clue">'+e+'</mark>'+html.slice(k+e.length); });
+  return html;
+}
+function markClue(){
+  if(!cur||!cur.r||!Array.isArray(cur.r.clue)) return;
+  const L=$('host')&&$('host').querySelector('.cg-line'); if(L&&!L.querySelector('.cg-clue')) L.innerHTML=clueHTML(L.innerHTML,cur.r);
+}
+function answer(ok,given){ const again=answerCore(ok,given); if(settled) markClue(); tidyFb(); return again; }
+/* a tag that ends in its own mark (“Which task?”) takes no extra full stop */
+function tidyFb(){ const f=$('fb'); if(f&&/[?!]\.<\/b>/.test(f.innerHTML)) f.innerHTML=f.innerHTML.replace(/([?!])\.(<\/b>)/g,'$1$2'); }
+function answerCore(ok,given){
   if(settled) return false;
   const fb=$('fb');
   if(mode==='exam'){                                   /* one attempt — and the answer straight after */
@@ -955,7 +974,7 @@ function showMe(){
   let sol=''; try{ sol=String(cur.g.solution(cur.r)||''); }catch(e){}
   log.push({i:cur.i,r:cur.r,g:cur.g,ok:false,given:'(shown)'}); doneSet.add(cur.i);
   const h=$('host'); h.dataset.locked='1'; h.querySelectorAll('input,button').forEach(x=>x.disabled=true);
-  paint(); $('fb').innerHTML='<b>The answer: '+esc(sol)+'</b>'+(cur.r.tag?' · '+esc(cur.r.tag):'')+'. '+esc(cur.r.note||'')+' It will come back, so you can get it on your own.';
+  paint(); markClue(); $('fb').innerHTML='<b>The answer: '+esc(sol)+'</b>'+(cur.r.tag?' · '+esc(cur.r.tag):'')+'. '+esc(cur.r.note||'')+' It will come back, so you can get it on your own.';
   const last=doneSet.size>=N; showNext(last?()=>finish(true):()=>{ closeCard(); }, last?'See your result':'Carry on');
 }
 /* what this run did to the learner's mistakes, in one plain line */

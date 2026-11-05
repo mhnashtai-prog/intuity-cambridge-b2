@@ -125,15 +125,23 @@ def build(tasks,R,key,cap):
     rounds.append({'id':rid('odd'),'game':'odd','prompt':f'Three come from {word[0]}. Tap the one from {word[1]}.','options':good+[bad],'answer':bad,
       'note':CLUE['intro' if flip else 'concl'],'tag':'Introduction / Conclusion'})
   if not one:
-    # CHOOSE — which task is this from? (essay and article are never offered together: both can argue)
-    # only openings and closings: a body sentence can belong to more than one task.
-    # Tasks that can sound alike are never offered together.
+    # CHOOSE — WHICH TASK? (5 Nov 2026: recognition before production)
+    # The rounds come from data/writing/which-task.json (tools/build-which-task.py):
+    # hand-picked lines that put the CONFUSABLE tasks side by side (essay or
+    # article, review or report), openings, endings, real exam questions and
+    # body lines, each with the clue words the engine lights up after the
+    # answer and one line saying why. Always the four choices here.
+    # The old random draw is still made, and thrown away, so every round
+    # after this one stays exactly as it was (the Ring keys on round ids).
     ALIKE=[{'essay','article'},{'review','report'},{'review','article'}]
     for p,s in [x for x in leads if x[0]['part']!='body'][:cap['which']]:
-      t=p['task']; others=[x for x in tasks if x!=t and {x,t} not in ALIKE]
-      opts=[TASK[t]]+[TASK[x] for x in R.sample(others,3)]
-      rounds.append({'id':rid('which'),'game':'choose','prompt':f'Which task is this sentence from?  “{s}”','options':opts,'answer':TASK[t],
-        'note':f'{TASK[t]}: {WHY[t]}.','tag':'Which task?'})
+      t=p['task']; R.sample([x for x in tasks if x!=t and {x,t} not in ALIKE],3)
+    WT=json.load(open(ROOT+'data/writing/which-task.json'))
+    ASK={1:'Which task is this opening from?',2:'Which task is this ending from?',3:'Which task is this exam question asking for?',4:'Which task is this sentence from?'}
+    for x in WT['items']:
+      rounds.append({'id':'wu-all-'+x['id'],'game':'choose','prompt':ASK[x['step']]+'  “'+x['text'].replace('[[','').replace(']]','')+'”',
+        'options':['Essay','Article','Review','Report'],'answer':x['answer'],'clue':re.findall(r'\[\[(.+?)\]\]',x['text']),
+        'note':x['why'][0].upper()+x['why'][1:],'tag':'Which task?'})
     # MATCH — four sentences, four tasks
     for k in range(cap['match']):
       ts=R.sample(tasks,4)

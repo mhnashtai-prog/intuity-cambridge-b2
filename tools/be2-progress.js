@@ -76,7 +76,7 @@
     'master-part4': 'Use of English · Part 4', 'full-test': 'Full test',
     'uoe-part1': 'Use of English · Part 1', 'uoe-part2': 'Use of English · Part 2',
     'uoe-part3': 'Use of English · Part 3', 'uoe-part4': 'Use of English · Part 4',
-    'which-task': 'Writing · Which task?',
+    'which-task': 'Writing · Which task?', 'five-reviews': 'Your review in five',
   };
   var SHEET = { fa: 'For & Against essay', ps: 'Problems & Solutions essay', ce: 'Cause & Effect essay', ad: 'Agree & Disagree essay',
     op: 'Opinion essay', st: 'Speculation & Trends essay', ar: 'Article', ef: 'Formal email', ei: 'Informal email', rv: 'Review', rp: 'Report', sy: 'Story' };

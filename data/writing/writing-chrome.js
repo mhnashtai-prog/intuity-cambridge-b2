@@ -160,7 +160,10 @@ else shell.insertBefore(newTop, shell.firstChild);
 var oldFoot = firstIn(shell, ['.foot', '.bottom-nav', '.control-bar']);
 /* the generator stands alone: no stage bar into the task journey */
 var newFoot = null;
-if (STAGE !== 'generate') {
+/* a page with modes of its own (Your review in five) brings its own
+   .wr-foot pill: it is kept, and measured like ours */
+if (oldFoot && oldFoot.classList.contains('wr-foot')) newFoot = oldFoot;
+else if (STAGE !== 'generate') {
   newFoot = foot();
   if (oldFoot && oldFoot.parentNode) oldFoot.parentNode.replaceChild(newFoot, oldFoot);
   else shell.appendChild(newFoot);

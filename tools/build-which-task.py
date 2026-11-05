@@ -23,35 +23,39 @@ ALL4 = ['Essay', 'Article', 'Review', 'Report']
 
 # step, answer, text with [[clue]], why (said after "Answer —")
 ITEMS = [
+ # One clue phrase, one answer: no clue is used twice, and no phrase that
+ # gives one item away appears in an item with another answer (checked at
+ # the end of this file). Michael, 5 Nov: students must learn the genre,
+ # not a handful of stock phrases.
  # ── 1 · OPENINGS ───────────────────────────────────────────────────────
  (1, 'Essay', '[[It is widely recognised that]] technology has transformed modern communication completely.',
   'it states the topic in an impersonal way: no “I”, no “you”.'),
- (1, 'Article', '[[Which piece of technology would our lives be better without?]] It’s a provocative question in a world where we carry our phones [[like a second heartbeat]].',
-  'it asks the reader a question and paints a vivid picture.'),
- (1, 'Essay', '[[In recent years]], social media addiction has become a significant concern among young people. [[It is widely recognised that]] excessive use has led to serious consequences for mental health.',
-  'it introduces an issue calmly and formally, as a discussion.'),
- (1, 'Article', '[[Why do so many students find it so difficult to stay healthy?]]',
-  'a question hooks the reader before any answer is given.'),
+ (1, 'Essay', '[[In recent years]], social media addiction has become [[a significant concern]] among young people.',
+  'an impersonal opening that sets out a current issue to discuss.'),
  (1, 'Essay', 'Nowadays, there is considerable debate about whether life today is better than in the past. [[Hence, I would like to present my views on this issue.]]',
   'it promises a view on a debate. In an essay “I” is only for your opinion.'),
- (1, 'Article', '[[Who has never experienced a change that turned their world upside down?]]',
-  'a question every reader answers “me!”: an article pulls the reader in.'),
  (1, 'Essay', '[[It is common knowledge that]] taking time off from education can have [[both positive and negative effects]].',
   '“both positive and negative effects”: an essay promises a balanced discussion.'),
+ (1, 'Article', '[[Which piece of technology would our lives be better without?]] It’s a provocative question in a world where we carry our phones [[like a second heartbeat]].',
+  'it asks the reader a question and paints a vivid picture.'),
+ (1, 'Article', '[[Why do so many students find it so difficult to stay healthy?]]',
+  'a question hooks the reader before any answer is given.'),
+ (1, 'Article', '[[Who has never experienced a change that turned their world upside down?]]',
+  'a question every reader answers “me!”: an article pulls the reader in.'),
  (1, 'Article', '[[For me, the answer has always been the same:]] Sintra, a small town tucked into the hills just outside Lisbon.',
   '“For me”: an article is personal and sounds like a person talking.'),
  (1, 'Review', '[[I visited]] last weekend to celebrate my birthday, and [[I have to say]] it exceeded all my expectations.',
   'the writer was there: a review starts from personal experience.'),
+ (1, 'Review', '[[A friend dragged me along]] to Wembley not knowing what to expect, and [[I ended up having one of the best evenings of my life]].',
+  'a personal story told with feeling: the writer went and loved it.'),
+ (1, 'Review', '[[I sat down to watch one episode]] and [[ended up finishing the entire series in a single evening]].',
+  'the writer’s own experience, told to entertain: a review judges as it tells.'),
  (1, 'Report', '[[The main objective of this report is to]] assess the school cafeteria and suggest improvements.',
   'it states its aim in the first line, as every report does.'),
- (1, 'Review', '[[I spent a week there last summer]], and [[I have to say]] it was a brilliant experience from start to finish.',
-  'first person and enthusiasm: the writer tried it and loved it.'),
- (1, 'Report', '[[This report is based on feedback collected from students]] who regularly use the library.',
-  'it says where its information comes from: other people’s views, not the writer’s.'),
- (1, 'Review', 'I downloaded it expecting to play for an hour, and [[I have to say I am still playing it three months later]].',
-  'a personal story with a smile: a review entertains as it judges.'),
- (1, 'Report', '[[This report is based on a questionnaire conducted among over 200 students.]]',
-  'a questionnaire and 200 students: a report collects facts.'),
+ (1, 'Report', '[[This report is based on a questionnaire]] conducted among over 200 students.',
+  'a questionnaire and 200 students: a report collects facts from others.'),
+ (1, 'Report', '[[The information presented was collected through]] questionnaires completed by participating students.',
+  'where the facts came from, in impersonal words: no “I”, no story.'),
  # ── 2 · ENDINGS ────────────────────────────────────────────────────────
  (2, 'Essay', '[[All things considered]], it enhances communication [[when used responsibly alongside]] real-world interaction.',
   'it weighs both sides and reaches a balanced verdict.'),
@@ -59,46 +63,46 @@ ITEMS = [
   'a formal linker to sum up, then a clear opinion: the essay’s “I” is for its view.'),
  (2, 'Essay', '[[On the whole]], the best choice depends entirely on individual priorities, personality and circumstances.',
   'it weighs the question up and concludes: no “you”, no story.'),
- (2, 'Article', '[[Whether you agree or not]], there’s no denying that some technologies leave a more complicated impression than their creators ever intended — and [[maybe it’s time we decided who is really in control]].',
-  'it talks to “you” and leaves the reader with a thought.'),
- (2, 'Article', '[[Whether you love change or not]], there’s no denying that it leaves a lasting impression on who we become — and sometimes [[the biggest disruptions turn out to be the greatest gifts]].',
-  'it ends on a memorable line for the reader to take away.'),
- (2, 'Article', '[[Whether you start with sleep, food, or movement]], there’s no denying that small, consistent steps leave a lasting impression on [[how you feel]].',
-  'friendly advice aimed straight at “you”, the reader.'),
+ (2, 'Article', 'It’s hard to imagine life without our smartphones, [[but perhaps that’s exactly the problem]].',
+  'a chatty twist (“It’s”, “our”) that leaves the reader thinking.'),
+ (2, 'Article', '[[Whether you agree with my choice or not]], lasting fame means leaving something meaningful behind long after the applause has faded.',
+  'it talks to “you” about “my choice”: personal and direct.'),
+ # written for this test (not from a model text), as Michael suggested: an ending with a call to the reader
+ (2, 'Article', '[[So next time]] you reach for your phone at dinner, [[ask yourself]]: who is really in control — you or the screen?',
+  'it ends with a challenge and a question for the reader to take away.'),
  (2, 'Review', '[[I would highly recommend]] Bella Napoli [[to anyone interested in]] genuine Italian food.',
   'it tells readers whether to go: every review ends with a recommendation.'),
- (2, 'Review', '[[I can assure you that]] this game will leave a lasting impression and provide hundreds of hours of genuine enjoyment.',
-  'a personal promise to the reader about something the writer has tried.'),
- (2, 'Review', '[[I would highly recommend]] The Intern [[to anyone looking for]] a film that is funny, warm and actually has something to say.',
-  'it recommends a film to a type of reader.'),
+ (2, 'Review', '[[I would strongly urge anyone]] heading to Spain to [[pick up a copy before they go]].',
+  'it tells readers what to buy: a review of a guidebook.'),
+ (2, 'Review', '[[I guarantee you will leave satisfied]] and already planning your next visit.',
+  'a personal promise to the reader about a place the writer has tried.'),
  (2, 'Report', '[[Taking everything into account, it seems clear that]] these changes would improve student satisfaction and make lunchtime more enjoyable.',
   'an impersonal verdict on “these changes”: a report sums up its recommendations.'),
  (2, 'Report', '[[One key recommendation would be to]] introduce staggered lunch times to reduce queues.',
   'a polite, formal suggestion to the people in charge.'),
- (2, 'Report', '[[In order to]] maximise study space, [[I would strongly recommend]] adding more library seating.',
-  'reports can say “I recommend” too, but this advice is for the people in charge (more seating), not for readers.'),
- (2, 'Report', '[[Taking everything into account, it seems clear that]] the programme [[should be offered again next year]] as it provides invaluable learning experiences.',
-  '“should be offered again”: the report advises the people who decide.'),
+ (2, 'Report', '[[It is essential that]] students receive clear guidance and support throughout the placement.',
+  'a firm, impersonal recommendation about what the organisers must do.'),
  # ── 4 · BODY LINES, REVIEW OR REPORT ───────────────────────────────────
- (4, 'Review', '[[By far the best feature is]] the homemade pasta — [[I ordered]] the seafood linguine and it was absolutely delicious.',
+ (4, 'Review', 'The best feature is the homemade pasta — [[I ordered the seafood linguine]] and it was absolutely delicious.',
   '“I ordered”: the writer judges by their own experience.'),
  (4, 'Review', '[[The thing that is most likely to impress you is]] how he builds complex songs layer by layer [[right in front of your eyes]].',
   'it talks to “you” and gets excited about it.'),
- (4, 'Review', 'By far one of the most useful ideas was habit stacking, which [[helped me]] build a consistent study schedule.',
+ (4, 'Review', 'One of the most useful ideas was habit stacking, which [[helped me]] build a consistent study schedule.',
   '“helped me”: a review judges by what it did for the writer.'),
- (4, 'Review', 'By far the best feature is the honest recommendations — the writers are not afraid to [[tell you]] which attractions are overrated.',
+ (4, 'Review', 'The writers are not afraid to [[tell you]] which attractions are overrated.',
   'it speaks to “you”, the reader who might buy the guidebook.'),
- (4, 'Review', '[[The thing that is most likely to impress you is]] how it turns what could feel like a chore into something [[you actually look forward to]].',
-  'a lively “you” and a personal verdict.'),
+ (4, 'Review', '[[What I found particularly charming]] was when the owner came to our table to recommend dishes personally.',
+  '“What I found…”: the writer’s own reactions, in their own voice.'),
  (4, 'Report', 'However, [[one major concern expressed by students]] is the long queues at lunchtime.',
   'the views are other people’s, reported calmly: “expressed by students”.'),
  (4, 'Report', '[[It was generally felt that]] host families were welcoming and provided comfortable accommodation.',
   '“It was generally felt”: a report gives what the group thought, not “I”.'),
  (4, 'Report', '[[Many participants reported]] improved confidence, greater independence and a better understanding of Spanish culture.',
   'it reports findings from many people.'),
- (4, 'Report', 'By far the worst aspect of the service is the early closing time, which [[prevents many students from]] studying after school.',
-  '“By far the worst” could be a review, but the effect is on “many students”: a finding.'),
- (4, 'Report', 'However, [[a common complaint relates to]] the course materials, which [[some students found]] repetitive.',
+ # adapted (5 Nov): the model line opened “By far the worst aspect…”, which could be a review
+ (4, 'Report', '[[Several students mentioned]] the early closing time, which prevents them from studying after school.',
+  'it passes on what “several students” said: a finding, not the writer’s taste.'),
+ (4, 'Report', 'However, [[a common complaint relates to]] the course materials, which some participants found repetitive.',
   'a complaint gathered from others, in neutral words.'),
 ]
 
@@ -131,6 +135,8 @@ q('Essay', essay('life-better-today'), ['your English teacher has asked you', 'D
   'a teacher, a statement to agree with and three notes, one your own: always the essay.')
 q('Essay', essay('friends-vs-family'), ['your English teacher has asked you', '(your own idea)'],
   'a question to discuss in class, with notes to cover: the essay.')
+q('Essay', essay('endangered-animals'), ['Now, your English teacher has asked you', 'Do you agree?', 'Notes — write about:'],
+  'a statement to agree or disagree with, and notes to cover: the essay.')
 q('Article', article('technology'), ['English-language magazine', 'Why?', 'will be printed next month'],
   'a magazine asks readers for their view, and the best ones are printed: an article.')
 q('Article', article('famous'), ['If you could be famous for something', 'will be printed next month'],
@@ -164,6 +170,18 @@ for step, ans, text, why in ITEMS:
     out.append({'id': 'wt%d-%02d' % (step, n[step]), 'step': step, 'answer': ans,
                 'options': ALL4 if step in (2, 3) else sorted([ans, PAIR[ans]], key=ALL4.index),
                 'text': text, 'why': why})
+# ── THE CHECK: one clue, one answer ────────────────────────────────────────
+low = lambda t: re.sub(r'\s+', ' ', t.replace('[[', '').replace(']]', '').lower())
+seen = {}
+for x in out:
+    if x['step'] == 3: continue          # the exam's own fixed wording repeats on purpose
+    for c in re.findall(r'\[\[(.+?)\]\]', x['text']):
+        k = c.lower().strip(' ,.:')
+        assert k not in seen, 'clue used twice: %r (%s, %s)' % (c, seen[k], x['id'])
+        seen[k] = x['id']
+        for y in out:
+            if y['answer'] != x['answer'] and k in low(y['text']):
+                raise SystemExit('clue %r of %s also appears in %s (%s)' % (c, x['id'], y['id'], y['answer']))
 STEPS = [{'step': 1, 'name': 'Openings', 'ask': 'Which task does this opening come from?'},
          {'step': 2, 'name': 'Endings', 'ask': 'Which task does this ending come from?'},
          {'step': 3, 'name': 'Exam questions', 'ask': 'Which task is this question asking for?'},

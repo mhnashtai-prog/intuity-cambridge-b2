@@ -64,6 +64,8 @@
 .rungs i b{position:relative;font-weight:600}
 .rungs i.own{background:var(--ink)} .rungs i.own::before{background:var(--ink)} .rungs i.own b{color:var(--mark-ink)}
 .today{font-size:.84rem;color:var(--ink);margin:.7rem 0 0;font-weight:600}
+.q{margin:.9rem 0 0;padding:.75rem .85rem;background:#F3EFE8;border-left:3px solid var(--ink);font-size:.9rem;line-height:1.5;color:var(--ink)}
+.five.plan{margin:.8rem 0 .4rem}.five.plan li{font-size:.92rem}
 .kb{display:flex;gap:.55rem;align-items:center;margin:1rem 0 0;font-size:.9rem;color:var(--ink);cursor:pointer}
 .kb input{width:18px;height:18px;accent-color:var(--ink)} .kb small{color:var(--f5-faint)}
 .tg{display:inline-block;min-width:2.4em;text-align:center;border-bottom:2px solid var(--ink);background:rgba(194,149,110,.12);padding:0 .25em;border-radius:3px 3px 0 0}
@@ -429,10 +431,65 @@ function done(){
   card('<div class="kick">Five done</div><h2 id="fTitle">'+got+' of 5</h2>'+
     '<div class="rungs" style="justify-content:flex-start;margin-top:1rem">'+D.slots.map((_,i)=>{ const s=slot(i); return '<i class="'+(s.own?'own':'')+'" style="--p:'+(s.own?100:(s.rung-1)*25)+'"><b>'+(s.own?'✓':i+1)+'</b></i>'; }).join('')+'</div>'+
     '<p class="aim">'+(got===5?'Every one.':'The ones you missed come back in your review too.')+' Come back tomorrow: each sentence climbs one step a day.</p>'+
-    '<div class="cta"><button type="button" class="btn fill" id="see5">See my review</button><button type="button" class="btn" id="again">Again</button></div>');
+    '<div class="cta"><button type="button" class="btn fill" id="see5">See my review</button><button type="button" class="btn" id="qx">Try a real question</button></div>');
   sfx(got===5?'jingle':'rise');
   $('see5').onclick=()=>{ setMode('mine'); close(); };
-  $('again').onclick=start;
+  $('qx').onclick=bridge;
+}
+
+/* ── THE BRIDGE: his five on a real exam question (6 Nov) ──────────────
+   Owning five sentences about Minecraft is not yet answering "tell us what
+   you learnt". A real Part 2 question from the bank, chosen for his
+   subject: for each of its points he taps the sentence that covers it (a
+   point that describes goes in a feature; "would others like it?" in the
+   recommendation). Then the plan shows each point INSIDE the gap it fills:
+   the points are what his “…” are for. Checked by the app. */
+let QS=null, QI=0;
+function bridge(){
+  if(!QS) return fetch(D.bridge.questions).then(r=>r.json()).then(d=>{ QS=d.questions; QI=0; bridge(); }).catch(()=>{});
+  const want=D.bridge.bySubject[ST.key]||[], order=QS.filter(q=>want.indexOf(q.id)>-1).concat(QS.filter(q=>want.indexOf(q.id)<0));
+  const q=order[QI%order.length], noun=D.bridge.noun[q.id]||'thing', rec=new RegExp(D.bridge.recommend,'i');
+  const pts=q.keyPoints.map(t=>({t,rec:rec.test(t)})), nFeat=pts.filter(x=>!x.rec).length;
+  /* his name if his thing is this kind of thing; otherwise "your documentary" */
+  const mine=SUB().a.replace(/^an? /,'').split(' ').pop()===noun.split(' ').pop(), Xq=mine?X():'your '+noun;
+  const a=(/^[aeiou]/.test(noun)?'an ':'a ')+noun;
+  const fillQ=w=>w.t.replace(/\{a\}/g,a).replace(/\{plural\}/g,noun+'s').replace(/\{X\}/g,Xq);
+  let k=0, miss=0; const put=[];
+  /* "Describe the gameplay" → "the gameplay": what goes in the gap */
+  const gist=t=>t.replace(/^(describe|explain|tell us|say|information (on|about)|the)\s+/i,m=>/^the\s/i.test(m)?m:'').replace(/^./,c=>c.toLowerCase());
+  const label=i=>(i+1)+' · '+D.slots[i].part;
+  const draw=()=>{
+    const done=k>=pts.length;
+    let h='<div class="kick">A real exam question</div><h2 id="fTitle">Use your five</h2>'+
+      '<div class="q"><b>'+esc(q.announcement||'')+'</b> '+esc(q.question)+'</div>';
+    if(!done){
+      h+='<p class="aim">Point '+(k+1)+' of '+pts.length+': which of your five covers it?</p><p class="line" style="font-size:1.02rem">'+esc(pts[k].t)+'</p>'+
+        '<div class="pool" id="pool">'+D.slots.map((_,i)=>'<button type="button" class="chip" data-i="'+i+'">'+esc(label(i))+'</button>').join('')+'</div><p class="fb" id="hint"></p>';
+    } else {
+      /* the plan: his five for THIS question, each point in its gap */
+      const at2={}; put.forEach((i,j)=>{ (at2[i]=at2[i]||[]).push(pts[j].t); });
+      h+='<p class="aim">'+(miss?'Done. ':'All right first time. ')+'Here is your plan for this question: each point goes in the gap it fills.</p><ol class="five plan">'+
+        D.slots.map((sl,i)=>{ const p=at2[i];
+          /* a third point in the drawback's place takes a feature's wording */
+          const w=i===3&&p?D.slots[2].ways[2]:way(i);
+          const note=p?' <span class="idea">→ '+esc(p.map(gist).join(' · '))+'</span>':'';
+          const t=w?esc(fillQ(w)).replace(/\s*…\s*$/,' <span class="gap"></span>')+note:'<i>Your own sentence</i>'+note;
+          return '<li><b class="n">'+(i+1)+'</b><div><small><span>'+esc(i===3&&p?'Feature, not the drawback':sl.part)+'</span></small>'+t+(i===3&&p?'<br><small style="display:block;margin-top:.2rem">Three points to cover: the third takes the drawback’s place.</small>':'')+'</div></li>'; }).join('')+'</ol>'+
+        '<p class="aim">In your notebook: write this review, 140–190 words, with a detail for every point.</p>'+
+        '<div class="cta"><button type="button" class="btn fill" id="qn">Another question</button><button type="button" class="btn" id="qd">Done</button></div>';
+    }
+    card(h);
+    if(!done) $('pool').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{
+      const i=+b.dataset.i, P=pts[k], used=put.filter(x=>x===i).length;
+      const featOK=(i===1||i===2||(i===3&&nFeat>2))&&!used;
+      const ok=P.rec?i===4:featOK;
+      if(ok){ put.push(i); k++; sfx('pop'); draw(); if(k>=pts.length) sfx(miss?'rise':'jingle'); }
+      else { miss++; b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake'); sfx('wrong');
+        $('hint').textContent=P.rec?'“Would others like it?” is what the recommendation is for.':i===0?'The introduction names it; a point like this needs a feature.':used&&(i===1||i===2)?'That feature already covers a point. Use the other one.':'A point that describes it goes in a feature.'; }
+    });
+    else { $('qn').onclick=()=>{ QI++; bridge(); }; $('qd').onclick=close; }
+  };
+  draw();
 }
 
 /* ── MY REVIEW: his five, with his own ideas, then the notebook ── */
@@ -445,7 +502,9 @@ function mine(){
         (s.own?'<br><button type="button" class="chg" data-i="'+i+'">Change the wording</button>':'')+'</div></li>'; }).join('')+'</ol>'+
     '<div class="note"><div class="kick">In your notebook</div><p>Write your review of <b>'+esc(X())+'</b> in five sentences, one per slot. Then check:</p>'+
       '<ul class="ticks">'+['I named it in the first sentence.','Each feature has a detail of my own.','I said who would enjoy it.','I didn’t copy any example word for word.','I read it aloud once.'].map(t=>'<li><label><input type="checkbox"><span>'+t+'</span></label></li>').join('')+'</ul>'+
-      '<p class="tch">Five ticks? It’s a review. In class, show your teacher.</p></div></section>';
+      '<p class="tch">Five ticks? It’s a review. In class, show your teacher.</p></div>'+
+    (D.bridge?'<button type="button" class="btn fill" id="qx" style="display:block;margin:1.2rem auto 0">Try your five on a real exam question →</button>':'')+'</section>';
+  if($('qx')) $('qx').onclick=bridge;
   $('stage').querySelectorAll('.chg').forEach(b=>b.onclick=()=>choose(+b.dataset.i));
 }
 /* a slot that is his: another wording, or his own sentence */
@@ -466,7 +525,7 @@ function paint(){ if(MODE==='mine') mine(); else gate(); }
 function setMode(m){ MODE=m; document.querySelectorAll('.wr-stage[data-m]').forEach(b=>{ const on=b.dataset.m===m; b.classList.toggle('active',on); if(on) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); }); paint(); window.scrollTo(0,0); }
 document.querySelectorAll('.wr-stage[data-m]').forEach(b=>b.onclick=()=>setMode(b.dataset.m));
 
-fetch('/data/writing/five/'+TASK+'.json?v=4').then(r=>{ if(!r.ok) throw 0; return r.json(); }).then(d=>{
+fetch('/data/writing/five/'+TASK+'.json?v=5').then(r=>{ if(!r.ok) throw 0; return r.json(); }).then(d=>{
   D=d; ST=load();
   /* earlier versions: one subject {key,name}; slots by days right */
   if(ST.subj&&!ST.key){ ST.key=ST.subj.key; ST.names={}; ST.names[ST.subj.key]=ST.subj.name; delete ST.subj; }

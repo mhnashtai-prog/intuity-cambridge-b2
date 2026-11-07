@@ -113,8 +113,26 @@
     for (var k = 0; k < lv.length && room(); k++) c.classList.add(lv[k]);
   }
   var RO = window.ResizeObserver ? new ResizeObserver(function () { queue(); }) : null;
+  /* CARDS · PHRASES INSIDE THE CARD (7 Nov 2026): on a Model page the
+     toggle moves from its own row above the card into the card's top right
+     corner, so the card gets the row's height back. The page's own buttons
+     (#mbCards, #mbPhrases) stay the switch; these only press them. In the
+     Phrases view there is no card, so the page shows its own row again. */
+  function seg(c) {
+    if (c.__fcSeg || c.closest('.pa-track,.gal-body,.mcard')) return;
+    var ph = document.getElementById('mbPhrases'), cd = document.getElementById('mbCards');
+    if (!ph || !cd || !c.closest('.fc-wrap')) return;
+    c.__fcSeg = 1;
+    var w = document.createElement('span'); w.className = 'fc-seg'; w.setAttribute('role', 'group'); w.setAttribute('aria-label', 'View');
+    w.innerHTML = '<button type="button" class="on" aria-pressed="true">Cards</button><button type="button" aria-pressed="false">Phrases</button>';
+    w.children[1].onclick = function (e) { e.stopPropagation(); ph.click(); };
+    w.children[0].onclick = function (e) { e.stopPropagation(); };
+    c.insertBefore(w, c.firstChild);
+    document.documentElement.classList.add('fc-segged');
+    setTimeout(queue, 0);   /* the row above has gone: measure again with the room it left */
+  }
   function fitAll() { var cs = document.querySelectorAll('.fc-card');
-    for (var i = 0; i < cs.length; i++) { if (RO && !cs[i].__fcObs) { cs[i].__fcObs = 1; var sc = scroller(cs[i]); if (sc) RO.observe(sc); } fitCard(cs[i]); } }
+    for (var i = 0; i < cs.length; i++) { seg(cs[i]); if (RO && !cs[i].__fcObs) { cs[i].__fcObs = 1; var sc = scroller(cs[i]); if (sc) RO.observe(sc); } fitCard(cs[i]); } }
   var fq = null;
   function queue() { if (fq) return; fq = requestAnimationFrame(function () { fq = null; fitAll(); }); }
   if (window.MutationObserver) new MutationObserver(function (ms) {

@@ -547,6 +547,27 @@ function avoidFor(model,si,li){
     if(u.s) av.s.push(u.s); if(u.v) av.v.push(u.v); if(u.k) av.k.push(u.k); });
   return av;
 }
+/* ONE ESSAY 1 (7 Nov 2026): Spin, Ready and Study card 1 open on the same
+   essay - the ★ go-to phrase of each step on the study cards
+   (data/writing/cue-generator.json). The wheel's other versions stay random. */
+let CUE1={};
+const CUEID={'For & Against':'fa','Opinion':'op','Agree & Disagree':'ad','Problems & Solutions':'ps','Cause & Effect':'ce','Speculation & Trends':'st'};
+function cueOne(D){ const out={};
+  (D.types||[]).forEach(t=>{ if(!Object.values(CUEID).includes(t.id)) return;
+    const go=st=>{ const it=(st.items||[]).find(i=>i.go)||(st.items||[])[0]; return it?it.t.replace(/\[[^\]]+\]/g,'…'):''; };
+    const one={intro:[],body:[],close:''};
+    t.paras.forEach(pa=>pa.steps.forEach(st=>{ if(st.support||!st.items||!st.items.length) return; const x=go(st); if(!x) return;
+      if(pa.name==='Introduction') one.intro.push(x); else if(pa.name==='Conclusion') one.close=x; else one.body.push(x); }));
+    out[t.id]=one; });
+  return out; }
+const tail=t=>/[.?!…]$/.test(t)||/…/.test(t.slice(-3))?t:t+' …';
+function safeOf(m){
+  const was=R; R=()=>0; const s2=runRecipe(m.rec,m.n); R=was;
+  s2.type=m.type; s2.title=m.title; s2.num=m.num; s2.safe=true;
+  const c=m.type==='essays'&&CUE1[CUEID[m.rec.label]];
+  if(c){ const put=(si,li,t)=>{ const L=s2.secs[si]&&s2.secs[si].lines[li]; if(L&&t) L.h[0]=Object.assign({},L.h[0],{html:`<span class="k">${fmt(t)}</span>`}); };
+    put(0,0,c.intro.join(' ')); c.body.slice(0,3).forEach((t,i)=>put(1,i,tail(t))); put(2,0,c.close); }
+  return s2; }
 function runRecipe(rec,n){
   const m={rec,n,secs:rec.sections.map(s=>({word:s.word,sub:s.sub,lines:s.lines.map(()=>({h:[],i:0}))}))};
   rec.sections.forEach((s,si)=>s.lines.forEach((gen,li)=>{ m.secs[si].lines[li].h.push(gen(avoidFor(m,si,li))); }));
@@ -575,6 +596,7 @@ async function init(){
   try{ await Promise.all(types.map(t=>Promise.all(SRC[t].map(p=>fetch(p).then(r=>{ if(!r.ok) throw new Error(p); return r.json(); })))
     .then(d=>{ ALL[t]=BUILD[t](d).filter(r=>r.sections.length); }))); }
   catch(e){ $('loading').textContent='⚠ Could not load the model data'; return; }
+  try{ CUE1=cueOne(await fetch('/data/writing/cue-generator.json',{cache:'no-cache'}).then(r=>r.json())); }catch(e){ CUE1={}; }
   const urlSub=new URLSearchParams(location.search).get('subject');
   /* the subject the student is working on, for one task: from ?subject= or the Question page */
   const wantFor=t=>{ TYPE=t; RECIPES=ALL[t]; const want=(t===PAGE&&urlSub)||fromQuestion(); TYPE=PAGE; if(!want) return null;
@@ -735,7 +757,9 @@ function gallery(start){
   MODELS=LINE.map((x,i)=>{ const rec=x.recs[(x.rot+DEAL)%x.recs.length];
     let seed=20261022+DEAL*7919; for(const ch of x.t+rec.key) seed=(seed*31+ch.charCodeAt(0))|0;
     R=seeded(seed); const m=runRecipe(rec,DEAL+1); R=Math.random;
-    m.type=x.t; m.title=x.all?x.name+' · '+rec.label:x.name; return m; });
+    m.type=x.t; m.title=x.all?x.name+' · '+rec.label:x.name;
+    /* the first deal shows each essay type's safe card, the one Spin opens on */
+    return x.t==='essays'&&!DEAL?safeOf(m):m; });
   const N=MODELS.length, story=PAGE==='story', seen={};
   MODELS.forEach(m=>{ seen[m.type]=(seen[m.type]||0)+1; m.num=seen[m.type]; });
   const subOf=m=>{ const x=m.title.split(' · '); return x.length>1?x.slice(1).join(' · '):(m.type==='essays'||m.type==='story'?m.title:''); };
@@ -1160,8 +1184,7 @@ function showWheels(i){
   let m=MODELS[i]; if(!m) return;
   /* every wheel opens on the safe line: the first phrase of each pool, which
      the essay bank sets to the starred choice; the other versions are random */
-  if(!m.safe){ const was=R; R=()=>0; const s2=runRecipe(m.rec,m.n); R=was;
-    s2.type=m.type; s2.title=m.title; s2.num=m.num; s2.safe=true; MODELS[i]=m=s2; }
+  if(!m.safe){ MODELS[i]=m=safeOf(m); }
   if(OPEN){ clearInterval(TICK); if(OPEN.draft) saveDraft(OPEN.draft,true); }
   OPEN=m; TYPE=m.type; SUBJ=m.rec.key; RECIPES=ALL[TYPE]||RECIPES; m.tag=ABBR(m.rec.label)+'-'+m.n; MODE='card';
   document.body.classList.add('wheel-mode','cin-open'); $('cin').setAttribute('aria-hidden','false'); $('stage').inert=true;
@@ -1192,6 +1215,6 @@ init();
 })();
 </script>
 <script src="/skills/grammar-rules/intuity-sound.js"></script>
-<script src="/data/writing/writing-chrome.js?v=22"></script>
+<script src="/data/writing/writing-chrome.js?v=23"></script>
 </body>
 </html>

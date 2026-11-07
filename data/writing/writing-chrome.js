@@ -23,7 +23,7 @@ var GENRES = {
               stages:{ question:'/skills/writing/essays/essay-question.html',
                        plan:    '/skills/writing/essays/essay-plan.html',
                        model:   '/skills/writing/essays/essay-model.html',
-                       generate:'/skills/writing/model-generator.html?type=essays',
+                       generate:'/skills/writing/build.html?type=essays',
                        sample:  '/skills/writing/essays/essay-sample.html' } },
       reviews:  { label:'Review',  part:'Part 2', back:'/index.html?openModal=writing',
               stages:{ question:'/skills/writing/reviews/review-question-selector.html',

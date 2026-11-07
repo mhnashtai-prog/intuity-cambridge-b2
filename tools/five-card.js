@@ -29,7 +29,9 @@
   var GAP = '<span class="fc-gap">…</span>';
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-  function head(h) { return h ? '<span class="fc-h">' + (h === '…' ? GAP : esc(h)) + '</span>' : ''; }
+  /* a heading that is only a gap ("your heading here") sits inline before
+     its sentence instead of taking a line of its own */
+  function head(h) { return !h ? '' : h === '…' ? '<span class="fc-h fc-hgap">' + GAP + '</span>' : '<span class="fc-h">' + esc(h) + '</span>'; }
   /* THE STUDY CARD (7 Nov 2026, from the design review): the card reads like
      an old paper study card. Three sections split by hairlines, each with
      its role in a narrow mono margin (Intro / Body / End, or s.roles); no
@@ -89,5 +91,36 @@
     var over = function () { return (mb && mb.scrollHeight > mb.clientHeight + 1) || c.getBoundingClientRect().height > window.innerHeight - 12; };
     for (var k = 0; k < lv.length && over(); k++) c.classList.add(lv[k]);
   }
-  window.FiveCard = { body: body, card: card, title: title, gap: GAP, esc: esc, skel: skel, tap: tap, own: own, fitModal: fitModal };
+  /* ONE SCREEN for the Model card (7 Nov 2026): a card on a Model page steps
+     its type down (fit1 → fit3) until it ends above the bottom of the box it
+     scrolls in, so the Question · Plan · Model · Sample bar never covers it.
+     A card in the Model Generator's strip has its own fitter, so is left out. */
+  function scroller(el) {
+    for (var p = el.parentElement; p; p = p.parentElement) {
+      var o = getComputedStyle(p).overflowY;
+      if ((o === 'auto' || o === 'scroll') && p.scrollHeight > 0) return p;
+    }
+    return null;
+  }
+  function fitCard(c) {
+    if (!c || c.closest('.pa-track,.gal-body,.mcard')) return;
+    c.classList.remove('fc-fit1', 'fc-fit2', 'fc-fit3');
+    var sc = scroller(c), lv = ['fc-fit1', 'fc-fit2', 'fc-fit3'];
+    var room = function () {
+      var bot = sc ? sc.getBoundingClientRect().bottom : (window.visualViewport ? visualViewport.height : window.innerHeight);
+      return c.getBoundingClientRect().bottom + (sc ? sc.scrollTop : 0) > bot - 8;
+    };
+    for (var k = 0; k < lv.length && room(); k++) c.classList.add(lv[k]);
+  }
+  var RO = window.ResizeObserver ? new ResizeObserver(function () { queue(); }) : null;
+  function fitAll() { var cs = document.querySelectorAll('.fc-card');
+    for (var i = 0; i < cs.length; i++) { if (RO && !cs[i].__fcObs) { cs[i].__fcObs = 1; var sc = scroller(cs[i]); if (sc) RO.observe(sc); } fitCard(cs[i]); } }
+  var fq = null;
+  function queue() { if (fq) return; fq = requestAnimationFrame(function () { fq = null; fitAll(); }); }
+  if (window.MutationObserver) new MutationObserver(function (ms) {
+    for (var i = 0; i < ms.length; i++) { var n = ms[i].target; if (n.closest && (n.closest('.fc-card') || (n.querySelector && n.querySelector('.fc-card')))) { queue(); return; } }
+  }).observe(document.documentElement, { childList: true, subtree: true });
+  addEventListener('resize', queue); addEventListener('load', function () { queue(); setTimeout(queue, 600); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(queue);
+  window.FiveCard = { body: body, card: card, title: title, gap: GAP, esc: esc, skel: skel, tap: tap, own: own, fitModal: fitModal, fitCard: fitCard };
 })();

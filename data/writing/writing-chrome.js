@@ -26,32 +26,57 @@ var GENRES = {
                        generate:'/skills/writing/build.html?type=essays',
                        sample:  '/skills/writing/essays/essay-sample.html' } },
       reviews:  { label:'Review',  part:'Part 2', back:'/index.html?openModal=writing',
+              turn:'Write your opening on paper, using one line from this card.',
+              checks:[['Content','I described it, covered every point in the question and said who it is for.'],
+                      ['Communicative Achievement','It sounds like a review: lively, it talks to the reader, my opinion is clear.'],
+                      ['Organisation','A title, an opening, a paragraph for each feature, a recommendation to finish.'],
+                      ['Language','I used two or more phrases from the cards, changed to fit my question.']],
               stages:{ question:'/skills/writing/reviews/review-question-selector.html',
                        plan:    '/skills/writing/reviews/review-plan.html',
                        model:   '/skills/writing/reviews/reviews-cards.html',
-                       generate:'/skills/writing/model-generator.html?type=reviews',
+                       generate:'/skills/writing/build.html?type=reviews',
                        sample:  '/skills/writing/reviews/review-sample.html' } },
     reports:  { label:'Report',  part:'Part 2', back:'/index.html?openModal=writing',
+              turn:'Write your introduction on paper (the aim), using one line from this card.',
+              checks:[['Content','I covered every point the question asks for and made a recommendation.'],
+                      ['Communicative Achievement','It sounds like a report: formal and factual, no chatty language.'],
+                      ['Organisation','A title and clear headings: introduction, findings, recommendation.'],
+                      ['Language','I used two or more phrases from the cards, changed to fit my question.']],
               stages:{ question:'/skills/writing/reports/report-question-selector.html',
                        plan:    '/skills/writing/reports/report-plan.html',
                        model:   '/skills/writing/reports/reports-cards.html',
-                       generate:'/skills/writing/model-generator.html?type=reports',
+                       generate:'/skills/writing/build.html?type=reports',
                        sample:  '/skills/writing/reports/report-sample.html' } },
 emails:   { label:'Email',   part:'Part 2', back:'/index.html?openModal=writing',
+            turn:'Write your greeting and first line on paper, using one line from this card.',
+            checks:[['Content','I answered every question in the message and gave all the information asked for.'],
+                    ['Communicative Achievement','The tone fits the reader: formal for an organisation, friendly for a friend.'],
+                    ['Organisation','A greeting, an opening, a paragraph for each point and a suitable ending.'],
+                    ['Language','I used two or more phrases from the cards, changed to fit my question.']],
             stages:{ question:'/skills/writing/emails/email-question.html',
                      plan:    '/skills/writing/emails/email-plan.html',
                      model:   '/skills/writing/emails/email-model.html',
-                       generate:'/skills/writing/model-generator.html?type=emails',
+                       generate:'/skills/writing/build.html?type=emails',
                      sample:  '/skills/writing/emails/email-sample.html' } },
   articles: { label:'Article', part:'Part 2', back:'/index.html?openModal=writing',
+              turn:'Write your title and opening (the hook) on paper, using one line from this card.',
+              checks:[['Content','I answered every question in the task and gave examples of my own.'],
+                      ['Communicative Achievement','It talks to the reader: a catchy title, a question or two, my own voice.'],
+                      ['Organisation','A title, an opening that hooks, a paragraph for each point, a closing thought.'],
+                      ['Language','I used two or more phrases from the cards, changed to fit my question.']],
               stages:{ question:'/skills/writing/articles/article-question.html',
                        model:   '/skills/writing/articles/article-model.html',
-                       generate:'/skills/writing/model-generator.html?type=articles',
+                       generate:'/skills/writing/build.html?type=articles',
                        sample:  '/skills/writing/articles/article-sample.html' } },
   story:    { label:'Story',   part:'Part 2', back:'/index.html?openModal=writing',
+              turn:'Write your first two sentences on paper, using one line from this card.',
+              checks:[['Content','I used the sentence or words the task gives, and the story makes sense.'],
+                      ['Communicative Achievement','It keeps the reader hooked: feelings, a little suspense, a real ending.'],
+                      ['Organisation','A beginning, a middle where something happens and an ending, linked by time words.'],
+                      ['Language','Past tenses used well, plus two or more phrases from the cards.']],
               stages:{ question:'/skills/writing/narrative/narrative-question.html',
                        model:   '/skills/writing/narrative/narrative-cards.html',
-                       generate:'/skills/writing/model-generator.html?type=story',
+                       generate:'/skills/writing/build.html?type=story',
                        sample:  '/skills/writing/narrative/narrative-sample.html' } }
 };
 
@@ -65,7 +90,7 @@ if (!G) return;
    the level chip and the two tab rows go: they repeated what the card
    already says and put twelve ways out above the language. If it works,
    the other tasks join by adding their key here. */
-var LEAN = /^(essays)$/.test(GENRE);
+var LEAN = /^(essays|reviews|reports|emails|articles|story)$/.test(GENRE);   /* 7 Nov 2026: every task, after the Essay blueprint */
 
 /* Oct 2026: the task journey and the Model Generator are two separate
    things. The portfolio slide is the only place that leads to both, so the
@@ -333,7 +358,7 @@ function turnStrip() {
     var cmp = false; try { cmp = sessionStorage.getItem(CMP_KEY) === '1'; sessionStorage.removeItem(CMP_KEY); } catch (e) {}
     var d2 = el('div', 'wr-turn'), t2 = el('span');
     t2.appendChild(el('b', null, cmp ? 'Compare' : 'Finished?'));
-    t2.appendChild(document.createTextNode(cmp ? 'What did the sample do that yours did not?' : 'Check your own essay against four points.'));
+    t2.appendChild(document.createTextNode(cmp ? 'What did the sample do that yours did not?' : 'Check your own ' + G.label.toLowerCase() + ' against four points.'));
     var bt = el('button', 'be2-nohit', 'Check yours'); bt.type = 'button'; bt.onclick = openCheck;
     d2.appendChild(t2); d2.appendChild(bt); return d2;
   }
@@ -343,9 +368,9 @@ function openCheck() {
   var close = function () { var a = document.querySelector('.wr-sheet'), b = document.querySelector('.wr-sheet-bg'); if (a) a.remove(); if (b) b.remove(); };
   close();
   var bg = el('div', 'wr-sheet-bg'); bg.onclick = close;
-  var sh = el('div', 'wr-sheet'); sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-label', 'Check your essay');
+  var sh = el('div', 'wr-sheet'); sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-label', 'Check your ' + G.label.toLowerCase());
   sh.appendChild(el('h3', null, 'Check yours'));
-  sh.appendChild(el('p', 'wr-lead', 'Read your essay on paper. Tick what is true.'));
+  sh.appendChild(el('p', 'wr-lead', 'Read your ' + G.label.toLowerCase() + ' on paper. Tick what is true.'));
   G.checks.forEach(function (c) {
     var lb = el('label', 'wr-ck'), cb = el('input'); cb.type = 'checkbox';
     var tx = el('span'); tx.appendChild(el('b', null, c[0])); tx.appendChild(document.createTextNode(c[1]));
@@ -390,7 +415,8 @@ function leanFoot() {
   var pill = el('div', 'wr-stages'); pill.setAttribute('role', 'group'); pill.setAttribute('aria-label', 'Stages');
   var seen = seenStages(), list = ORDER.filter(function (k) { return G.stages[k]; }), n = 0;
   ORDER.forEach(function (k) {
-    var url = G.stages[k]; if (url) n++;
+    var url = G.stages[k]; if (!url && k !== STAGE) return;   /* a task without a Plan shows three steps, not a grey fourth */
+    n++;
     var cls = 'wr-stage' + (k === STAGE ? ' active' : !url ? ' off' : (seen.indexOf(k) >= 0 ? ' seen be2-nohit' : ' be2-nohit'));
     var s = el(k === STAGE || !url ? 'span' : 'a', cls);
     if (url) { s.appendChild(el('i', null, String(n))); s.setAttribute('data-n', n); }

@@ -77,6 +77,14 @@
 /* ── the focus card (the Challenge's tiles) ── */
 .kick{display:flex;align-items:center;gap:9px;font-family:var(--f-mono);font-size:0.6875rem;letter-spacing:.2em;text-transform:uppercase;color:var(--accent-ink,#8A5A35)}
 .kick::before{content:'';display:block;width:26px;height:10px;flex:none;background:var(--f5-car)}
+/* a question as the title: a sentence to read, not a poster to shout */
+.scrim > .focus h2.fq{font-family:var(--f-display,'Geist'),system-ui,sans-serif!important;text-transform:none!important;font-weight:500!important;font-size:clamp(1.25rem,5.4vw,1.45rem)!important;line-height:1.28!important;letter-spacing:-.01em!important}
+#again{margin-right:1.2rem}
+.stepl{margin:.45rem 0 0;font:500 .6875rem/1.2 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:#8A8378}
+ol.pv{list-style:none;margin:.9rem 0 0;padding:0}
+ol.pv li{padding:.6rem 0;border-top:1px solid rgba(20,17,14,.1)}
+ol.pv small{display:block;font:500 .625rem/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:#9A5A2C;margin-bottom:4px}
+ol.pv span{font-size:1rem;line-height:1.5}
 .scrim{position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;padding:1rem;
   background:rgba(20,17,14,.34);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);opacity:0;transition:opacity .25s}
 .scrim.on{opacity:1}
@@ -240,6 +248,15 @@ const STEP=[null,
    sentence from its pieces with two that don't belong. ?tap=1 or the switch
    in How it works; remembered on this device. */
 const howOf=(st,r)=>ST.tap&&st.howTap?st.howTap:st.how;
+/* A NEW KID'S CARD (7 Nov 2026): the kicker says which sentence ("Sentence 3
+   of 5 · Second reason"), the title is the question itself (Select) or what
+   to do, a small line names the step, and the instruction shows only the
+   first time a step appears. Before, a card said "3 · REASON / SELECT",
+   two different "of 5" bars, and the same instruction twice. */
+const LB=i=>D.slots[i].label||D.slots[i].part;
+const STEPT={select:null,match:'Which end fits?',sort:'Put it in order',fill:'Fill the gaps',memory:'From memory'};
+const STEPV={select:'pick it',match:'match it',sort:'order it',fill:'fill it',memory:'from memory'};
+let PRACTICE=false;   /* "Practise anyway": a round that does not move the steps */
 
 /* ── state ── */
 function SUB(){ return D.subjects.find(s=>s.key===ST.key)||D.subjects[0]; }
@@ -284,9 +301,10 @@ function gate(){
     '<h1 class="big">5 sentences.<br>1 '+esc(D.name.toLowerCase())+'.</h1><p class="sm">About 2 minutes</p>'+
     '<div class="rungs" aria-label="Your five sentences">'+D.slots.map((_,i)=>{ const s=slot(i);
       return '<i class="'+(s.own?'own':'')+'" style="--p:'+(s.own?100:(s.rung-1)*25)+'" title="'+esc(D.slots[i].part)+(s.own?' · yours':' · step '+s.rung+' of 5')+'"><b>'+(s.own?'✓':i+1)+'</b></i>'; }).join('')+'</div>'+
-    (started?'<p class="today">'+(c?'Today '+c+' can climb a step':'All climbed today. Back tomorrow!')+'</p>':'')+
+    (started?'<p class="today">'+(c?'Today '+c+' can climb a step':'All climbed today. They climb again tomorrow.')+'</p>'+(c?'':'<button type="button" class="how" id="again">Practise anyway</button>'):'')+
     '<button type="button" class="how" id="how">How it works</button></section>';
-  $('dial').onclick=start; $('how').onclick=how;
+  $('dial').onclick=()=>start(!c&&started); $('how').onclick=how;
+  if($('again')) $('again').onclick=()=>start(true);
 }
 function how(){
   card('<div class="kick">How it works</div><h2 id="fTitle">5 sentences, 5 steps</h2>'+
@@ -310,13 +328,15 @@ addEventListener('resize',()=>fitFocus());
 function close(){ const s=$('scrim'); s.classList.remove('on'); setTimeout(()=>{ s.hidden=true; paint(); },250); }
 function head(i,r){
   const st=STEP[r], seen=(ST.seen=ST.seen||{})[st.k];
-  return '<div class="kick">'+(i+1)+' · '+esc(D.slots[i].part)+'</div><h2 id="fTitle">'+esc(st.name)+'</h2>'+
+  const qt=!STEPT[st.k];   /* Select: the title is the question, in sentence case */
+  return '<div class="kick">'+(i+1)+' of '+D.slots.length+' · '+esc(LB(i))+'</div><h2 id="fTitle"'+(qt?' class="fq"':'')+'>'+esc(STEPT[st.k]||D.slots[i].q||st.name)+'</h2>'+
     '<div class="steps5" aria-label="Step '+r+' of 5">'+[1,2,3,4,5].map(k=>'<i class="'+(k<r?'on':k===r?'now':'')+'"></i>').join('')+'</div>'+
-    '<p class="aim">'+(seen?'':'<span class="new">NEW</span>')+esc(howOf(st,r))+'</p>';
+    '<p class="stepl">Step '+r+' of 5 · '+esc(STEPV[st.k])+(PRACTICE?' · practice':'')+'</p>'+
+    (seen?'':'<p class="aim"><span class="new">NEW</span>'+esc(howOf(st,r))+'</p>');
 }
 
 /* ── a session: his thing's name first (once), then one card per slot ── */
-function start(){ sfx('unlock'); at=0; res=[]; if(!name()) return askName(); next(); }
+function start(practice){ PRACTICE=!!practice; sfx('unlock'); at=0; res=[]; if(!name()) return askName(); next(); }
 function askName(){
   const s=SUB();
   const NA=D.nameAsk||{};
@@ -329,7 +349,17 @@ function askName(){
   $('ownIn').onkeydown=e=>{ if(e.key==='Enter'&&$('ownIn').value.trim()) setName($('ownIn').value); };
   $('ownGo').onclick=()=>setName($('ownIn').value);
 }
-function setName(n){ ST.names=ST.names||{}; ST.names[ST.key]=n.trim().replace(/\s+/g,' ').slice(0,40); save(); sfx('pop'); next(); }
+function setName(n){ ST.names=ST.names||{}; ST.names[ST.key]=n.trim().replace(/\s+/g,' ').slice(0,40); save(); sfx('pop'); preview(); }
+/* SHAPE FIRST (7 Nov 2026): the whole five, once per topic, before sentence 1 */
+function preview(){
+  ST.pv=ST.pv||{}; if(ST.pv[ST.key]) return next();
+  ST.pv[ST.key]=1; save();
+  card('<div class="kick">Your '+esc(D.name.toLowerCase())+' · '+esc(X())+'</div><h2 id="fTitle">Here it is</h2>'+
+    '<p class="aim">Five sentences make your '+esc(D.name.toLowerCase())+'. Now learn them, one at a time.</p>'+
+    '<ol class="pv">'+D.slots.map((sl,i)=>{ const w=way(i)||sl.ways[0]; return '<li><small>'+esc(LB(i))+'</small><span>'+html(fill(w))+'</span></li>'; }).join('')+'</ol>'+
+    '<div class="cta"><button type="button" class="btn fill" id="pvGo">Start</button></div>');
+  $('pvGo').onclick=()=>next();
+}
 function next(){
   if(at>=D.slots.length) return done();
   const s=slot(at), w=way(at);
@@ -343,7 +373,7 @@ function others(i,pred){ return shuffle(D.slots.map((_,j)=>j).filter(j=>j!==i&&(
 /* 1 · SELECT: which one does this job? */
 function select(w,r){
   const opts=shuffle([w].concat(others(at,j=>D.slots[j].part!==D.slots[at].part).slice(0,2)));
-  card(head(at,r)+'<p class="line" style="font-size:1rem">'+esc(D.slots[at].q)+'</p><div class="opts">'+
+  card(head(at,r)+'<div class="opts">'+
     opts.map((o,k)=>'<button type="button" class="opt" data-k="'+k+'"><span class="l">'+'ABC'[k]+'</span><span>'+html(fill(o))+'</span></button>').join('')+'</div><div id="after"></div>');
   $('focus').querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
     const ok=opts[+b.dataset.k]===w;
@@ -451,7 +481,7 @@ function memory(w,r){
 }
 /* his own sentence (a slot he chose to write his own way) */
 function ownSentence(){
-  card('<div class="kick">'+(at+1)+' · '+esc(D.slots[at].part)+'</div><h2 id="fTitle">Your own</h2><p class="aim">Write your own sentence. It must '+esc(D.slots[at].job)+'.</p>'+
+  card('<div class="kick">'+(at+1)+' of '+D.slots.length+' · '+esc(LB(at))+'</div><h2 id="fTitle">Your own</h2><p class="aim">Write your own sentence. It must '+esc(D.slots[at].job)+'.</p>'+
     '<textarea class="wr" id="mem" rows="3" placeholder="Your sentence">'+esc((ideas()['own'+at])||'')+'</textarea><div class="cta"><button type="button" class="btn fill" id="chk">Save</button><button type="button" class="btn" id="back">Choose a wording</button></div>');
   $('chk').onclick=()=>{ const v=$('mem').value.trim(); if(v.split(/\s+/).length<5){ $('mem').focus(); return; } ideas()['own'+at]=v; save(); res[at]=true; sfx('correct'); at++; next(); };
   $('back').onclick=()=>{ delete slot(at).pick; save(); next(); };
@@ -460,6 +490,7 @@ function ownSentence(){
 /* ── the result of a card: climb or drop, then his own idea ── */
 function result(ok,w,r,diff){
   const s=slot(at), t=today(); let line;
+  const r0=s.rung, rd0=s.rday, own0=s.own;   /* restored after a practice round */
   (ST.seen=ST.seen||{})[STEP[r].k]=1;
   if(ok){
     if(r===5&&!s.own&&s.rday!==t){ s.own=true; s.rday=t; line='<b class="yes">It’s yours ✓</b> You wrote it from memory.'; sfx('fanfare'); }
@@ -470,12 +501,14 @@ function result(ok,w,r,diff){
     /* Select and Match already show the right one in green */
     line='<b class="no">Not yet.</b> '+(drop?'Back to step '+s.rung+'. ':s.own?'':'It comes back tomorrow. ')+(r<=2?'':'Here it is:<span class="full">'+(diff||html(fill(w)))+'</span>'); sfx('wrong');
   }
+  if(PRACTICE){ s.rung=r0; s.rday=rd0; s.own=own0;
+    line=(ok?'<b class="yes">Yes!</b> ':'<b class="no">Not yet.</b> '+(r<=2?'':'Here it is:<span class="full">'+(diff||html(fill(w)))+'</span> '))+'Practice round: your steps stay as they are.'; }
   save(); res[at]=ok;
   try{ Be2.answer('five-'+TASK,{id:'s'+(at+1)+'-'+D.slots[at].ways.indexOf(w),correct:ok,keep:true,kind:'recall',
     prompt:fill(w).replace(new RegExp('\\b'+w.hide+'\\b'),w.hide[0]+'___'),answer:fill(w),href:'/skills/writing/five.html?task='+TASK}); }catch(e){}
   const wantIdea=ok&&open(w.t)&&(r>=3||!ideas()[at]);
   $('after').innerHTML='<p class="fb">'+line+'</p>'+(wantIdea?
-    '<p class="aim" style="margin-top:.9rem"><b>Now make it yours.</b> Finish it: '+esc(against(at)?SUB().askBad:SUB().ask)+'</p><input class="wr" id="idea" maxlength="80" placeholder="your own idea" value="'+esc(ideas()[at]||'')+'">':'')+
+    '<p class="aim" style="margin-top:.9rem"><b>Now make it yours.</b> '+(a=>/\?\s*$/.test(a)?'Finish it: '+esc(a):'Finish it with '+esc(a)+'.')(against(at)?SUB().askBad:SUB().ask)+'</p><input class="wr" id="idea" maxlength="80" placeholder="your own idea" value="'+esc(ideas()[at]||'')+'">':'')+
     '<div class="cta"><button type="button" class="btn fill" id="nx">'+(at===D.slots.length-1?'Finish':'Next')+' →</button></div>';
   $('nx').onclick=()=>{ const v=$('idea')&&$('idea').value.trim(); if(v){ ideas()[at]=v; save(); } at++; next(); };
   $('nx').focus({preventScroll:true}); $('after').scrollIntoView({block:'nearest',behavior:'smooth'});
@@ -484,8 +517,8 @@ function done(){
   const got=res.filter(Boolean).length;
   card('<div class="kick">Five done</div><h2 id="fTitle">'+got+' of 5</h2>'+
     '<div class="rungs" style="justify-content:flex-start;margin-top:1rem">'+D.slots.map((_,i)=>{ const s=slot(i); return '<i class="'+(s.own?'own':'')+'" style="--p:'+(s.own?100:(s.rung-1)*25)+'"><b>'+(s.own?'✓':i+1)+'</b></i>'; }).join('')+'</div>'+
-    '<p class="aim">'+(got===5?'Every one.':'The ones you missed come back in your review too.')+' Come back tomorrow: each sentence climbs one step a day.</p>'+
-    '<div class="cta"><button type="button" class="btn fill" id="see5">See my review</button>'+(D.bridge?'<button type="button" class="btn" id="qx">Try a real question</button>':'')+'</div>');
+    '<p class="aim">'+(PRACTICE?'Practice round done. ':got===5?'Every one. ':'The ones you missed come back tomorrow. ')+'Each sentence climbs one step a day.</p>'+
+    '<div class="cta"><button type="button" class="btn fill" id="see5">See my '+esc(D.name.toLowerCase())+'</button>'+(D.bridge?'<button type="button" class="btn" id="qx">Try a real question</button>':'')+'</div>');
   sfx(got===5?'jingle':'rise');
   $('see5').onclick=()=>{ setMode('mine'); close(); };
   if($('qx')) $('qx').onclick=bridge;
@@ -574,7 +607,7 @@ function mine(){
 function choose(i){
   const ways=D.slots[i].ways, cur=slot(i).pick; let k=typeof cur==='number'?cur:cur==='own'?'own':0;
   const draw=()=>{
-    card('<div class="kick">'+(i+1)+' · '+esc(D.slots[i].part)+' · Yours ✓</div><h2 id="fTitle">Pick your way</h2><p class="aim">To '+esc(D.slots[i].pick||D.slots[i].job)+'. A new wording starts at step 3.</p><div class="opts">'+
+    card('<div class="kick">'+(i+1)+' of '+D.slots.length+' · '+esc(LB(i))+' · Yours ✓</div><h2 id="fTitle">Pick your way</h2><p class="aim">To '+esc(D.slots[i].pick||D.slots[i].job)+'. A new wording starts at step 3.</p><div class="opts">'+
       ways.map((w,j)=>'<button type="button" class="opt'+(j===k?' on':'')+'" data-j="'+j+'"><span class="l">'+'ABC'[j]+'</span><span>'+html(fill(w))+'</span></button>').join('')+
       '<button type="button" class="opt'+(k==='own'?' on':'')+'" data-j="own"><span class="l">✎</span><span><b>My own sentence</b>, if it does the same job</span></button></div>'+
       '<div class="cta"><button type="button" class="btn fill" id="keep">Keep this one</button></div>');

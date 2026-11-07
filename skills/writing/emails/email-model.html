@@ -10,6 +10,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@400..600&family=Space+Grotesk:wght@700&family=Anton&family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400..500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=20261105">
 <link rel="stylesheet" href="/data/writing/writing.css?v=20261105">
+<link rel="stylesheet" href="/tools/five-card.css?v=1">
+<script src="/tools/five-card.js?v=1"></script>
 <style>
 :root{
   --bg:#f0efec;--ink:#111111;--white:#ffffff;--rule:rgba(0,0,0,0.07);
@@ -393,7 +395,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
   </div>
 
   <div class="stage" id="stage">
-    <div class="hint" id="hint">Tap Open on any line to see it closer — and choose another wording.</div>
+    <div class="hint" id="hint"></div>
     <div class="stack" id="stack"><div class="state">Loading…</div></div>
   </div>
 
@@ -527,7 +529,7 @@ function setView(v){
   document.getElementById('mbCards').classList.toggle('active',v==='cards');
   document.getElementById('mbPhrases').classList.toggle('active',v!=='cards');
   const h=document.getElementById('hint');
-  if(h) h.textContent=v==='cards'?'Tap Open on any line to see it closer — and choose another wording.':v==='phrases'?'Every phrase for this email on one page':'Listen to a model email, line by line';
+  if(h) h.textContent=v==='cards'?'':v==='phrases'?'Every phrase for this email on one page':'Listen to a model email, line by line';
   renderContent();
 }
 window.setView=setView;
@@ -535,7 +537,7 @@ function navigate(){}  function updateNav(){}
 function renderContent(){
   const st=document.getElementById('stack');
   st.innerHTML=view==='cards'?renderSkeleton():view==='phrases'?renderPhrases():renderPracticeCard();
-  st.classList.add('has-cards');
+  st.classList.toggle('has-cards',view!=='cards');   /* the five card has no timeline */
   document.getElementById('stage').scrollTop=0;
 }
 function renderPracticeCard(){
@@ -611,23 +613,31 @@ window.OC={
   state:(slot,i)=>({i:ocK(i)}),
   roll:(slot,dir,i)=>{ const sec=ocSec(i), n=(sec&&sec.phrases||[]).length||1; let k=ocK(i);
     k=dir>0?(k+1)%n:Math.max(0,k-1); OC_K[ocKey(i)]=k;
-    const el=document.getElementById('ebprev-'+i); if(el) el.innerHTML=fmtPrev(sec.phrases[k]); try{ sndSwitch(); }catch(e){} },
+    const el=document.getElementById('ebprev-'+i); if(el) el.innerHTML=FiveCard.skel(fmtPrev(sec.phrases[k])); try{ sndSwitch(); }catch(e){} },
   label:(slot,i)=>{ const st=getStruct(), n=st&&st.sections?Object.keys(st.sections).length:3, r=boneRole((ocSec(i)||{}).label||'',i,n);
     return String(i+1).padStart(2,'0')+' · '+(r==='intro'?'Opening':r==='body'?'Main body':'Closing'); },
   head:(slot,i)=>{ const L=String((ocSec(i)||{}).label||''); return (L.split(':')[1]||L).trim(); },
   sample:(slot,i)=>{ const smp=getSample(); if(!smp||!smp.content) return null; const S=extractSections(smp.content); const x=S[i]; return x?x.sentences.slice(0,2).join(' '):null; }};
+/* THE FIVE CARD (7 Nov 2026): the email is the one card every task shares —
+   its opening, three body lines, its closing; tap a line to open its part */
 function renderSkeleton(){
   const struct=getStruct();
   if(!struct?.sections)return'<div class="state">No structure data available</div>';
-  const E=Object.entries(struct.sections), total=E.length;
-  return E.map(([key,sec],i)=>{
-    const role=boneRole(sec.label||key,i,total), phrases=sec.phrases||[], preview=phrases[ocK(i)]||phrases[0]||'';
-    const word=role==='intro'?'Opening':role==='body'?'Main':'Closing';
-    return `<div class="card"><div class="band"><span class="band-num">${String(i+1).padStart(2,'0')}</span><span class="band-word">${word}</span></div>
-      <div class="content"><div class="e-label">${sec.label||key}</div><div class="e-purpose">${bonePurpose(sec.label||key,role)}</div>
-        <div class="rline" onclick="openM('bone',${i})" role="button" tabindex="0"><div class="rtext"><div class="line" id="ebprev-${i}">${fmtPrev(preview)}</div></div>${OC_pill('bone',i)}</div>
-      </div></div>`+(i<total-1?'<div class="flow">&#9662;</div>':'');
-  }).join('');
+  const E=Object.values(struct.sections), n=E.length;
+  const ph=(i,k)=>{ const p=(E[i]&&E[i].phrases)||[]; return p.length?p[(ocK(i)+(k||0))%p.length]:''; };
+  const ln=(i,k)=>FiveCard.tap(FiveCard.skel(fmtPrev(ph(i,k))),"openM('bone',"+i+")",k?'':'ebprev-'+i);
+  /* an email opens with its greeting and a first line, and ends with a line and its sign-off */
+  const GREET=/^(dear|hi|hello|hey)\b/i, SIGN=/^(yours|best|kind|warm|regards|love|take care|all the best|see you|speak soon|cheers)\b/i;
+  const P=i=>(E[i]&&E[i].phrases)||[];
+  const openL=()=>{ const g=GREET.test(ph(0)); const nxt=P(0).findIndex((p,k)=>k!==ocK(0)%Math.max(1,P(0).length)&&!GREET.test(p));
+    return g&&nxt>=0?[ln(0),FiveCard.tap(FiveCard.skel(fmtPrev(P(0)[nxt])),"openM('bone',0)")]:[ln(0)]; };
+  const closeL=()=>{ const s=P(n-1).findIndex(p=>SIGN.test(p)); const main=SIGN.test(ph(n-1))?P(n-1).findIndex(p=>!SIGN.test(p)):-1;
+    const a=main>=0?FiveCard.tap(FiveCard.skel(fmtPrev(P(n-1)[main])),"openM('bone',"+(n-1)+")"):ln(n-1);
+    return s>=0&&!SIGN.test(ph(n-1))?[a,'<br>'+FiveCard.tap(FiveCard.skel(fmtPrev(P(n-1)[s])),"openM('bone',"+(n-1)+")")]:[a]; };
+  const mid=n<=3?[0,1,2].map(k=>ln(1,k)):E.slice(1,n-1).slice(0,3).map((_,j)=>ln(j+1));
+  const reg=(typeof currentRegister==='string'&&currentRegister)?currentRegister.charAt(0).toUpperCase()+currentRegister.slice(1):'';
+  return '<div class="fc-wrap">'+FiveCard.card({label:'Part 2'+(reg?' · '+reg:''),task:'Email',n:1,
+    open:openL(),body:mid.map(h=>({html:h})),close:n>1?closeL():[]})+'</div>';
 }
 
 /* ══ RENDER PHRASES — the traditional list ══ */

@@ -5,7 +5,7 @@
 
      var P = Parade.mount(el, {
        label:  '<b>Part 2</b> · Choose a topic to expand',   (html)
-       items:  [{ kicker, title, html, meta, action }],        (html for html/meta)
+       items:  [{ kicker, title, titleHtml, html, meta, action }],   (html for titleHtml/html/meta)
        start:  0,
        nav:    false                       (only for a page that draws its own arrows)
        onOpen: function (i, col) {},      a tap on the centre column
@@ -39,7 +39,7 @@
           ' style="animation-delay:' + (RM ? 0 : i * 70) + 'ms"' +
           ' aria-label="' + esc(it.title) + '. ' + (i + 1) + ' of ' + items.length + '.">' +
           (it.kicker ? '<span class="pa-k">' + esc(it.kicker) + '</span>' : '') +
-          '<span class="pa-t">' + esc(it.title) + '</span>' +
+          '<span class="pa-t">' + (it.titleHtml || esc(it.title)) + '</span>' +
           '<span class="pa-b">' + (it.html || '') + '</span>' +
           '<span class="pa-f"><span>' + (it.meta || '') + '</span>' +
           '<span class="pa-go" aria-hidden="true">' + esc(it.action || o.action || 'Expand it') + ' <i>→</i></span></span>' +

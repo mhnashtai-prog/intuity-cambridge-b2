@@ -7,6 +7,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@400..600&family=Space+Grotesk:wght@700&family=Anton&family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400..500&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=20261105">
 <link rel="stylesheet" href="/data/writing/writing.css?v=20261105">
+<link rel="stylesheet" href="/tools/five-card.css?v=1">
+<script src="/tools/five-card.js?v=1"></script>
 <style>
 :root{
   --bg:#f0efec;--ink:#111111;--white:#ffffff;
@@ -170,7 +172,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;background:var(-
   </div>
 
   <div class="stage" id="stage">
-    <div class="hint" id="hint">Tap Open on any line to see it closer — and choose another wording.</div>
+    <div class="hint" id="hint"></div>
     <div class="stack" id="stack"><div class="state">Loading…</div></div>
   </div>
 
@@ -344,7 +346,7 @@ function roll(slot,dir,idx){
   const el = document.getElementById(lineId(slot,idx));
   if(!el){ render(); return; }
   const commit=()=>{
-    el.innerHTML = lineHTML(slot,idx);
+    el.innerHTML = lineFC(slot,idx);
     if(slot==='open') syncHinge();
   };
   const holder = el.closest('.rtext');
@@ -356,6 +358,8 @@ window.roll=roll; window.switchType=switchType;
 
 const cur=(slot,idx)=> slot==='feat'?S.feat[idx].h[S.feat[idx].i]:S[slot].h[S[slot].i];
 
+/* a body line here is a worked example: its signpost fixed, the rest the student's own words (grey) */
+const lineFC=(slot,idx)=>{ const h=FiveCard.skel(lineHTML(slot,idx)); return slot==='feat'?FiveCard.own(h):h; };
 function lineHTML(slot,idx){
   if(slot==='open'){const o=cur('open'), P=ReviewOpen.parts(o.bg,o.hinge);   /* one joining rule: /data/writing/review-open.js */
     const nm=h=>h.replace(/\[Name\]/g,'<span class="gap">[Name]</span>');
@@ -388,7 +392,7 @@ function setHinge(e,i){
   cur('open').hinge = T.open.hinge[i];
   sndRoll();
   const el=document.getElementById('ln-open');
-  if(el) el.innerHTML=lineHTML('open');
+  if(el) el.innerHTML=lineFC('open');
   syncHinge();
 }
 window.setHinge=setHinge;
@@ -520,7 +524,7 @@ function setView(v){
   if(c)c.classList.toggle('active',v==='cards');
   if(p)p.classList.toggle('active',v==='phrases');
   const h=document.getElementById('hint');
-  if(h && v==='cards') h.textContent='Tap Open on any line to see it closer — and choose another wording.';
+  if(h && v==='cards') h.textContent='';
   render();
 }
 window.setView=setView;
@@ -533,16 +537,10 @@ function render(){
   const hingeNote=`<div class="card-note"><span class="k">*</span>`+(T.open.hinge||[]).map((h,i)=>`<span class="opt" data-hinge="${i}" role="button" tabindex="0" onclick="setHinge(event,${i})">${h}</span>`).join('')+`</div>`;
   const supportNote=`<div class="card-note"><span class="k">*</span>`+(SH.support||[]).map(s=>`<span class="opt">${s.move}</span>`).join('')+`</div>`;
 
-  document.getElementById('stack').innerHTML=`
-    <div class="card"><div class="band"><span class="band-num">01</span><span class="band-word">Intro</span></div>
-      <div class="content"><div class="rline" id="rl-open" data-slot="open" role="button" tabindex="0" aria-label="Another way of opening"><div class="rtext"><div class="line" id="ln-open">${openLine}</div></div>${OC_pill('open')}</div>${hingeNote}</div></div>
-    <div class="flow">&#9662;</div>
-    <div class="card"><div class="band"><span class="band-num">02</span><span class="band-word">Features</span></div>
-      <div class="content">${featLines}${supportNote}</div></div>
-    <div class="flow">&#9662;</div>
-    <div class="card"><div class="band"><span class="band-num">03</span><span class="band-word">Recommend</span></div>
-      <div class="content"><div class="rline" id="rl-close" data-slot="close" role="button" tabindex="0" aria-label="Another way of recommending"><div class="rtext"><div class="line" id="ln-close">${closeLine}</div></div>${OC_pill('close')}</div></div></div>`;
-  document.getElementById('stack').classList.add('has-cards');
+  /* THE FIVE CARD (7 Nov 2026): the one card every task shares; tap a line to open it */
+  const RL=(slot,i)=>{ const s=i===undefined?'':'-'+i; return '<span class="rline" id="rl-'+slot+s+'" data-slot="'+slot+'"'+(i===undefined?'':' data-idx="'+i+'"')+' role="button" tabindex="0" aria-label="Open this line"><span class="line" id="ln-'+slot+s+'">'+lineFC(slot,i)+'</span></span>'; };
+  document.getElementById('stack').innerHTML='<div class="fc-wrap">'+FiveCard.card({label:'Part 2 · '+((T&&T.label)||''),task:'Review',n:1,open:[RL('open')],body:[0,1,2].map(i=>({html:RL('feat',i)})),close:[RL('close')]})+'</div>';
+  document.getElementById('stack').classList.remove('has-cards');
   syncHinge();
   demonstrate();
 }

@@ -25,9 +25,13 @@ What it does to each:
   cut   the phrase is removed wherever it appears
   star  the safe choice: cue card 1 (go:true), first and bold in Essentials,
         first in the Model's pool, first way in the five
-  keep  (and unmarked) stays; a kept phrase missing from a page is added to
-        the matching slot, so no page is a dead end. The five is a curated
-        drill of three ways a slot, so nothing is added to it.
+  keep  (and unmarked) stays; a kept phrase missing from a practice page
+        (cue cards, Model) is added to the matching slot, so practice offers
+        the whole pool.
+  Essentials takes cuts and stars only, never additions (7 Nov 2026,
+  decision B): it is the raft for the student with the exam tomorrow, and
+  the practice pages hold the variants. The five is a curated drill of
+  three ways a slot, so nothing is added to it either.
 
 Run:  python3 tools/writing-bank/build.py            (report only)
       python3 tools/writing-bank/build.py --apply    (write the files)
@@ -37,6 +41,7 @@ import json, re, sys, os, collections
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 P = lambda *a: os.path.join(ROOT, *a)
 APPLY = '--apply' in sys.argv
+ESSENTIALS_ADDS = False   # decision B (7 Nov 2026): Essentials takes cuts and stars only
 
 CODES = ['fa', 'op', 'ad', 'ps', 'ce', 'st']
 LONG = {'fa': 'for-against', 'op': 'opinion', 'ad': 'agree-disagree', 'ps': 'problem-solution',
@@ -62,6 +67,30 @@ except FileNotFoundError: MARKS = {}
 for r in ROWS: r['m'] = MARKS.get(r['id'], 'keep')
 INDEX = {}
 for r in ROWS: INDEX[(CODE_OF[r['ty']], r['pa'], key(r['t']))] = r
+# A STAR FAMILY: the pages keep the same phrase in different shapes — a whole
+# sentence on a cue card ("Few people would deny that … has become an
+# essential part of daily life."), its opening in Essentials ("Few people
+# would deny that …"), a fragment in the Model ("the benefits of ... outweigh
+# the drawbacks"). A phrase whose words start or end a starred phrase of the
+# same type and part counts as starred too, so every page opens on one card.
+STARS = collections.defaultdict(list)
+def _stars():
+    for r in ROWS:
+        if r['m'] == 'star': STARS[(CODE_OF[r['ty']], r['pa'])].append(key(r['t']))
+def starred(code, part, text):
+    r = row(code, part, text)
+    if r and r['m'] == 'star': return True
+    k = key(text)
+    if len(k) < 12: return False
+    parts = [part] + (['Conclusion'] if part == 'Conclusion pieces' else [])
+    # a type's own star wins over the five's (which serves every type) for the
+    # conclusion's pieces, where both would claim the first place
+    scope = {code} if (part == 'Conclusion pieces' and code != 'all') else {code, 'all'}
+    for c in scope | (set(CODES) if code == 'all' else set()):
+        for pa in parts:
+            for sk in STARS[(c, pa)]:
+                if sk != k and (sk.startswith(k) or sk.endswith(k)): return True
+    return False
 def row(code, part, text):
     return INDEX.get((code, part, key(text))) or INDEX.get(('all', part, key(text)))
 
@@ -99,6 +128,7 @@ def to_cue(t):       # "Few people would deny that …" -> "Few people would den
     t = re.sub(r'\s*…\s*$', '', t)
     return t.replace('…', '[topic]')
 
+_stars()
 REPORT = collections.defaultdict(lambda: collections.Counter())
 def note(page, what, n=1): REPORT[page][what] += n
 
@@ -119,17 +149,18 @@ def build_portfolio():
                     r = row(c, part, ph)
                     if r and r['m'] == 'cut': note('Essentials', 'cut'); continue
                     seen.add(key(ph)); out.append(ph)
-                # add kept phrases this column is missing
-                if part == 'Introduction': want = ['Set the scene', 'Say what you will do'][i] if i < 2 else None; pick = lambda r: want in r['sl'].split(' / ')
+                # decision B: Essentials is never added to (see the note at the top)
+                if not ESSENTIALS_ADDS: pass
+                elif part == 'Introduction': want = ['Set the scene', 'Say what you will do'][i] if i < 2 else None; pick = lambda r: want in r['sl'].split(' / ')
                 elif part == 'Conclusion': pick = lambda r: 'Verdict' in r['sl'].split(' / ')
                 else:
                     slots = [s for s, v in BODY[c].items() if v[0] == i]
                     pick = lambda r: body_slot(c, r['sl']) in slots
-                for r in kept(c, part, pick):
+                for r in (kept(c, part, pick) if ESSENTIALS_ADDS else []):
                     if key(r['t']) in seen or not is_frame(r['t']): continue
                     out.append(r['t']); seen.add(key(r['t'])); note('Essentials', 'added')
                 # the starred phrase leads its column, in bold
-                st = [ph for ph in out if (row(c, part, ph) or {}).get('m') == 'star']
+                st = [ph for ph in out if starred(c, part, ph)]
                 if st:
                     out = [ph for ph in out if ph not in st]
                     lead = ['**' + clean(ph).replace('**', '') + '**' for ph in st]
@@ -162,7 +193,7 @@ def build_cue():
                     if key(r['t']) in seen or not is_frame(r['t']): continue
                     items.append({'t': to_cue(r['t']), 'h': '', 'go': False}); seen.add(key(r['t'])); note('Cue cards', 'added')
                 if not items: continue
-                st = [i for i, it in enumerate(items) if (row(c, part, it['t']) or {}).get('m') == 'star']
+                st = [i for i, it in enumerate(items) if starred(c, part, it['t'])]
                 if st:
                     for it in items: it['go'] = False
                     items[st[0]]['go'] = True; note('Cue cards', 'starred')
@@ -183,11 +214,42 @@ def build_model():
                 t = to_fragment(r['t']) if frag else r['t'].replace('…', '...')
                 if not t or key(t) in seen: continue
                 out.append(t); seen.add(key(t)); note('Model', 'added')
-        st = [ph for ph in out if (row(code, part, ph) or {}).get('m') == 'star']
+        st = [ph for ph in out if starred(code, part, ph)]
         if st: out = st + [ph for ph in out if ph not in st]; note('Model', 'starred', len(st))
         return out
     S = D['shared']
     S['background'] = pool(S['background'], 'all', 'Introduction')
+    # the Model builds its ending from three pieces: summary + stance + verdict.
+    # A starred conclusion sentence is split into those pieces, which then lead
+    # their pools, so the Model card closes on the same sentence as cue card 1
+    for c in CODES:
+        T = D['types'][LONG[c]]; cl = T['close']
+        for r in ROWS:
+            if CODE_OF[r['ty']] != c or r['pa'] != 'Conclusion' or r['m'] != 'star': continue
+            t = clean(r['t'])
+            for stc in sorted(cl['stance'], key=len, reverse=True):
+                i = t.lower().find(' ' + stc.lower().rstrip(',') + ' ')
+                if i > 0:
+                    summ = t[:i].strip(); verd = t[i + 1 + len(stc.rstrip(',')):].strip().replace('…', '...')
+                    summ = summ if summ.endswith(',') else summ + ','
+                    if summ not in cl['summary']: cl['summary'].append(summ)
+                    if verd not in cl['verdict']: cl['verdict'].append(verd)
+                    cl['summary'] = [summ] + [x for x in cl['summary'] if x != summ]
+                    cl['stance'] = [stc] + [x for x in cl['stance'] if x != stc]
+                    cl['verdict'] = [verd] + [x for x in cl['verdict'] if x != verd]
+                    note('Model', 'conclusion split'); break
+            else:
+                # a stance the Model does not have yet ("I am convinced that"): learn it
+                mt = re.match(r'^(.*?,)\s+((?:I|it)\s[^,]*?\bthat)\s+(.+)$', t)
+                if mt:
+                    summ, stc, verd = mt.group(1), mt.group(2), mt.group(3).replace('…', '...')
+                    for k, v in (('summary', summ), ('stance', stc), ('verdict', verd)):
+                        cl[k] = [v] + [x for x in cl[k] if x != v]
+                    note('Model', 'conclusion split')
+    for k in ('summary', 'stance'):   # the conclusion's pieces lead with the starred verdict's own words
+        for c in CODES:
+            T = D['types'][LONG[c]]
+            T['close'][k] = pool(T['close'][k], c, 'Conclusion pieces')
     for c in CODES:
         T = D['types'][LONG[c]]
         T['open']['aim'] = pool(T['open']['aim'], c, 'Introduction', lambda r: 'Say what you will do' in r['sl'].split(' / '))

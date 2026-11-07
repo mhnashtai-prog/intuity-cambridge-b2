@@ -48,6 +48,15 @@ emails:   { label:'Email',   part:'Part 2', back:'/index.html?openModal=writing'
 var G = GENRES[GENRE];
 if (!G) return;
 
+/* THE LEAN HEADER (7 Nov 2026), Essay first as the blueprint. A study
+   screen, not a newspaper: one line for where you are (back · task and
+   type in one picker), the chosen question in one grey line, and the four
+   stages at the bottom as numbered steps with a Next button. The brand,
+   the level chip and the two tab rows go: they repeated what the card
+   already says and put twelve ways out above the language. If it works,
+   the other tasks join by adding their key here. */
+var LEAN = /^(essays)$/.test(GENRE);
+
 /* Oct 2026: the task journey and the Model Generator are two separate
    things. The portfolio slide is the only place that leads to both, so the
    stage bar no longer offers Generate. (stages.generate stays: the
@@ -63,6 +72,7 @@ function el(tag, cls, text) {
 }
 
 function header() {
+  if (LEAN) return leanHeader();
   var h = el('header', 'header');
   var top = el('div', 'header-top');
   var back = el('a', 'back-link', '\u2190 Writing');
@@ -118,7 +128,177 @@ function header() {
   return h;
 }
 
+function backLink() {
+  var back = el('a', 'back-link', '\u2190 Writing');
+  back.href = G.back; back.target = '_top';
+  try {
+    var ret = JSON.parse(sessionStorage.getItem('intuity.sheetReturn') || 'null');
+    if (ret && ret.task === GENRE && /^\/skills\/writing\/(sheet|gate)\.html/.test(ret.url)) {
+      back.href = ret.url; back.textContent = '\u2190 ' + (ret.label || 'Structure');
+    }
+  } catch (e) {}
+  return back;
+}
+/* the question the student chose on the Question page, if there is one */
+function chosenQuestion() {
+  try {
+    var q = JSON.parse(sessionStorage.getItem('currentQuestion') || 'null');
+    var t = q && (q.mainQuestion || q.question || q.text);
+    if (t) return String(t);
+  } catch (e) {}
+  try { var s2 = sessionStorage.getItem('current' + G.label + 'Question'); if (s2) return s2; } catch (e) {}
+  return '';
+}
+function leanHeader() {
+  var css = document.createElement('style');
+  css.textContent =
+    '.wr-lean{padding:calc(10px + env(safe-area-inset-top,0px)) var(--gutter,1rem) 10px!important}' +
+    '.wr-lean .header-top{display:flex!important;align-items:center;justify-content:space-between;gap:10px;padding:0!important;margin:0!important;grid-template-columns:none!important}' +
+    '.wr-lean .back-link{flex:none}' +
+    '.wr-lean .wr-right{display:flex;align-items:center;gap:4px;min-width:0}' +
+    '.wr-pick{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:62vw;padding:8px 4px 8px 10px;border-radius:10px;font:500 .9rem/1.2 var(--f-body,"Geist",system-ui,sans-serif);color:var(--ink,#14110E)}' +
+    '.wr-pick span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+    '.wr-pick::after{content:"";flex:none;width:6px;height:6px;margin:-3px 4px 0 0;border-right:1.5px solid #8A8378;border-bottom:1.5px solid #8A8378;transform:rotate(45deg)}' +
+    '.wr-pick:active{background:rgba(20,17,14,.06)}.wr-pick:focus-visible{outline:2px solid #B0865C;outline-offset:2px}' +
+    '.wr-lean .mute{padding:8px!important}' +
+    '.wr-lean .wr-filters{display:none!important}' +
+    '.wr-q{all:unset;display:block;box-sizing:border-box;width:100%;margin-top:6px;cursor:pointer;font:400 .8125rem/1.4 var(--f-body,"Geist",system-ui,sans-serif);color:#6B655C;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+    '.wr-q b{font-weight:500;color:#9A5A2C;font-family:"Geist Mono",ui-monospace,monospace;font-size:.6875rem;letter-spacing:.12em;margin-right:6px}' +
+    '.wr-q.open{white-space:normal}' +
+    '.wr-sheet-bg{position:fixed;inset:0;z-index:90;background:rgba(20,17,14,.35)}' +
+    '.wr-sheet{position:fixed;left:0;right:0;bottom:0;z-index:91;max-height:80vh;overflow:auto;background:#FAF8F5;border-radius:16px 16px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 30px rgba(20,17,14,.18)}' +
+    '.wr-sheet h3{margin:4px 0 8px;font:500 .6875rem/1 "Geist Mono",ui-monospace,monospace;letter-spacing:.16em;text-transform:uppercase;color:#8A8378}' +
+    '.wr-sheet h3+div{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}' +
+    '.wr-opt{all:unset;cursor:pointer;padding:10px 14px;border-radius:999px;background:rgba(20,17,14,.06);font:500 .9rem/1 var(--f-body,"Geist",system-ui,sans-serif);color:#14110E}' +
+    '.wr-opt.on{background:#14110E;color:#FAF8F5}' +
+    '.wr-opt:focus-visible{outline:2px solid #B0865C;outline-offset:2px}';
+  document.head.appendChild(css);
+
+  var h = el('header', 'header wr-lean');
+  var top = el('div', 'header-top');
+  top.appendChild(backLink());
+  var right = el('div', 'wr-right');
+  var pick = el('button', 'wr-pick'); pick.type = 'button';
+  pick.setAttribute('aria-haspopup', 'dialog');
+  var lab = el('span'); pick.appendChild(lab);
+  var mute = el('button', 'mute'); mute.type = 'button'; mute.setAttribute('aria-label', 'Sound');
+  right.appendChild(pick); right.appendChild(mute);
+  top.appendChild(right);
+  h.appendChild(top);
+
+  /* the page's own type tabs stay in the DOM (the page drives them) but
+     out of sight; the picker reads them and presses them */
+  var filts = shell.querySelectorAll('.filter-bar, .topic-tabs, .register-bar, .nav-tabs, .mode-toggle');
+  for (var fi = 0; fi < filts.length; fi++) { filts[fi].classList.add('wr-filters'); h.appendChild(filts[fi]); }
+
+  /* not on Question (it is the page) or Plan (its card leads with the question) */
+  var q = !/^(question|plan)$/.test(STAGE) && chosenQuestion();
+  if (q) {
+    var ql = el('button', 'wr-q'); ql.type = 'button';
+    ql.appendChild(el('b', null, 'Q')); ql.appendChild(document.createTextNode(q));
+    ql.setAttribute('aria-label', 'Your question: ' + q);
+    ql.onclick = function () { ql.classList.toggle('open'); sync(); };
+    h.appendChild(ql);
+  }
+
+  function typeButtons() {
+    var out = [];
+    Array.prototype.forEach.call(h.querySelectorAll('.wr-filters'), function (row) {
+      Array.prototype.forEach.call(row.querySelectorAll('button, a'), function (b) {
+        var t = (b.textContent || '').trim(); if (t) out.push(b);
+      });
+    });
+    return out;
+  }
+  function isOn(b) { return b.classList.contains('active') || b.classList.contains('on') || b.getAttribute('aria-selected') === 'true'; }
+  function paintLabel() {
+    var on = typeButtons().filter(isOn)[0];
+    var t = G.label + (on ? ' \u00b7 ' + on.textContent.trim().replace(/\s+/g, ' ') : '');
+    if (lab.textContent !== t) lab.textContent = t;
+    pick.setAttribute('aria-label', 'Task and type: ' + t);
+  }
+  paintLabel();
+  if (window.MutationObserver) new MutationObserver(paintLabel).observe(h, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'aria-selected'] });
+
+  function close() {
+    var a = document.querySelector('.wr-sheet'), b = document.querySelector('.wr-sheet-bg');
+    if (a) a.remove(); if (b) b.remove(); pick.focus();
+  }
+  pick.onclick = function () {
+    var bg = el('div', 'wr-sheet-bg'); bg.onclick = close;
+    var sh = el('div', 'wr-sheet'); sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-label', 'Choose task and type');
+    sh.appendChild(el('h3', null, 'Task'));
+    var tk = el('div');
+    Object.keys(GENRES).forEach(function (k) {
+      var o = el(k === GENRE ? 'button' : 'a', 'wr-opt' + (k === GENRE ? ' on' : ''), GENRES[k].label);
+      if (k === GENRE) { o.type = 'button'; o.onclick = close; o.setAttribute('aria-current', 'page'); }
+      else o.href = GENRES[k].stages[STAGE] || GENRES[k].stages.question;
+      tk.appendChild(o);
+    });
+    sh.appendChild(tk);
+    var tb = typeButtons();
+    if (tb.length) {
+      sh.appendChild(el('h3', null, 'Type'));
+      var ty = el('div');
+      tb.forEach(function (b) {
+        var o = el('button', 'wr-opt' + (isOn(b) ? ' on' : ''), b.textContent.trim().replace(/\s+/g, ' '));
+        o.type = 'button'; o.onclick = function () { b.click(); close(); };
+        ty.appendChild(o);
+      });
+      sh.appendChild(ty);
+    }
+    document.body.appendChild(bg); document.body.appendChild(sh);
+    var first = sh.querySelector('.wr-opt.on') || sh.querySelector('.wr-opt'); if (first) first.focus();
+  };
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && document.querySelector('.wr-sheet')) close(); });
+  return h;
+}
+
+/* the stages this student has opened for this task, this session */
+function seenStages() {
+  var k = 'intuity.wr.seen.' + GENRE, seen = [];
+  try { seen = JSON.parse(sessionStorage.getItem(k) || '[]'); } catch (e) {}
+  if (STAGE && seen.indexOf(STAGE) < 0) seen.push(STAGE);
+  try { sessionStorage.setItem(k, JSON.stringify(seen)); } catch (e) {}
+  return seen;
+}
+function leanFoot() {
+  var css = document.createElement('style');
+  css.textContent =
+    '.wr-foot.wr-steps{align-items:center;gap:8px}' +
+    '.wr-steps .wr-stage{display:inline-flex;align-items:center;gap:5px;padding:.5rem .7rem}' +
+    '.wr-steps .wr-stage i{font-style:normal;font-family:"Geist Mono",ui-monospace,monospace;font-weight:500;font-size:.625rem;letter-spacing:0;width:15px;height:15px;border-radius:50%;display:inline-grid;place-items:center;border:1px solid currentColor;opacity:.7}' +
+    '.wr-steps .wr-stage.seen i{background:#B0865C;border-color:#B0865C;color:#FAF8F5;opacity:1}' +
+    '.wr-steps .wr-stage.active i{background:#14110E;border-color:#14110E;color:#FAF8F5;opacity:1}' +
+    '.wr-next{flex:none;display:inline-grid;place-items:center;width:40px;height:40px;border-radius:50%;background:#14110E;color:#FAF8F5;text-decoration:none;font:500 1.25rem/1 var(--f-body,"Geist",system-ui,sans-serif);padding-bottom:2px;box-sizing:border-box}' +
+    '.wr-next:active{transform:scale(.95)}.wr-next:focus-visible{outline:2px solid #B0865C;outline-offset:2px}' +
+    '@media(max-width:400px){.wr-steps .wr-stage{padding:.45rem .5rem;letter-spacing:.04em}.wr-steps .wr-stage i{display:none}.wr-steps .wr-stage::before{content:attr(data-n);font-family:"Geist Mono",ui-monospace,monospace;font-weight:500;opacity:.6;margin-right:3px}}';
+  document.head.appendChild(css);
+  var f = el('div', 'wr-foot wr-steps');
+  var pill = el('div', 'wr-stages'); pill.setAttribute('role', 'group'); pill.setAttribute('aria-label', 'Stages');
+  var seen = seenStages(), list = ORDER.filter(function (k) { return G.stages[k]; }), n = 0;
+  ORDER.forEach(function (k) {
+    var url = G.stages[k]; if (url) n++;
+    var cls = 'wr-stage' + (k === STAGE ? ' active' : !url ? ' off' : (seen.indexOf(k) >= 0 ? ' seen be2-nohit' : ' be2-nohit'));
+    var s = el(k === STAGE || !url ? 'span' : 'a', cls);
+    if (url) { s.appendChild(el('i', null, String(n))); s.setAttribute('data-n', n); }
+    s.appendChild(document.createTextNode(NAMES[k]));
+    if (k === STAGE) s.setAttribute('aria-current', 'step');
+    else if (url) s.href = url;
+    pill.appendChild(s);
+  });
+  f.appendChild(pill);
+  var i = list.indexOf(STAGE), nxt = i >= 0 && i < list.length - 1 ? list[i + 1] : null;
+  if (nxt) {
+    var a = el('a', 'wr-next be2-nohit', '\u203A'); a.href = G.stages[nxt];
+    a.setAttribute('aria-label', 'Next: ' + NAMES[nxt]); a.title = 'Next: ' + NAMES[nxt];
+    f.appendChild(a);
+  }
+  return f;
+}
+
 function foot() {
+  if (LEAN) return leanFoot();
   var f = el('div', 'wr-foot');
   var pill = el('div', 'wr-stages');
   pill.setAttribute('role', 'group');

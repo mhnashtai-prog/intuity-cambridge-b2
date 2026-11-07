@@ -11,6 +11,13 @@ var STAGE = (B.getAttribute('data-stage') || '').toLowerCase();
 var GENRES = {
   essays:   { label:'Essay',   part:'Part 1', back:'/index.html?openModal=writing',
               /* the type row on every stage, in the Model's order */
+              /* the "your turn" route (7 Nov 2026): one line to try on paper,
+                 then the sample as feedback, then four checks, one per criterion */
+              turn:'Write your introduction on paper, using one line from this card.',
+              checks:[['Content','I covered both notes and added an idea of my own.'],
+                      ['Communicative Achievement','It sounds right for a teacher: formal, no contractions, my opinion clear.'],
+                      ['Organisation','An introduction, two or three body paragraphs and a conclusion, each with one job.'],
+                      ['Language','I used two or more phrases from the cards, changed to fit my question.']],
               types:[['for-against','For & Against'],['opinion','Opinion'],['agree-disagree','Agree & Disagree'],
                      ['problem-solution','Problems & Solutions'],['cause-effect','Cause & Effect'],['speculation-trends','Speculation & Trends']],
               stages:{ question:'/skills/writing/essays/essay-question.html',
@@ -143,6 +150,12 @@ function backLink() {
   return back;
 }
 /* the question the student chose on the Question page, if there is one */
+function chosenId() {
+  try { var q = JSON.parse(sessionStorage.getItem('currentQuestion') || 'null'); return q && (q.questionId || q.id) || ''; } catch (e) { return ''; }
+}
+var DONE_KEY = 'intuity.wr.done.' + GENRE;
+function doneList() { try { return JSON.parse(localStorage.getItem(DONE_KEY) || '[]'); } catch (e) { return []; } }
+function markDone(id) { if (!id) return; var d = doneList(); if (d.indexOf(id) < 0) d.push(id); try { localStorage.setItem(DONE_KEY, JSON.stringify(d)); } catch (e) {} }
 function chosenQuestion() {
   try {
     var q = JSON.parse(sessionStorage.getItem('currentQuestion') || 'null');
@@ -176,6 +189,7 @@ function leanHeader() {
     '.wr-q b{font-weight:500;color:#9A5A2C;font-family:"Geist Mono",ui-monospace,monospace;font-size:.6875rem;letter-spacing:.12em;margin-right:6px}' +
     '.wr-q.open{white-space:normal}' +
     '.wr-q.hint{color:#8A8378}' +
+    '.wr-done{font-style:normal;font-weight:500;color:#3F6B4E;margin-right:6px}' +
     'a.wr-q{text-decoration:none}' +
     '.wr-typerow a.ttab{text-decoration:none}' +
     'body[data-stage="plan"] .kq{display:none!important}' +
@@ -257,9 +271,12 @@ function leanHeader() {
   ql.appendChild(el('b', null, 'Q'));
   if (STAGE === 'question') {
     ql.type = 'button'; ql.classList.add('hint');
-    ql.appendChild(document.createTextNode('Swipe to a question, then Plan it'));
+    var nd = doneList().length;
+    ql.appendChild(document.createTextNode('Swipe to a question, then Plan it' + (nd ? ' \u00b7 ' + nd + ' done' : '')));
   } else if (q) {
-    ql.type = 'button'; ql.appendChild(document.createTextNode(q));
+    ql.type = 'button';
+    if (doneList().indexOf(chosenId()) >= 0) { var dm = el('i', 'wr-done', '\u2713 Done'); ql.appendChild(dm); }
+    ql.appendChild(document.createTextNode(q));
     ql.setAttribute('aria-label', 'Your question: ' + q);
     ql.onclick = function () { ql.classList.toggle('open'); sync(); };
   } else {
@@ -299,10 +316,68 @@ function seenStages() {
   try { sessionStorage.setItem(k, JSON.stringify(seen)); } catch (e) {}
   return seen;
 }
+/* YOUR TURN (Model) → COMPARE (Sample) → CHECK YOURS. Research on model
+   texts: learners notice most in a model after trying the task themselves,
+   so the Model asks for one line on paper and the Sample is read as
+   feedback; four checks, one per criterion, close the question. */
+var CMP_KEY = 'intuity.wr.compare.' + GENRE;
+function turnStrip() {
+  if (STAGE === 'model' && G.turn && G.stages.sample) {
+    var d = el('div', 'wr-turn'), t = el('span');
+    t.appendChild(el('b', null, 'Your turn')); t.appendChild(document.createTextNode(G.turn));
+    var a = el('a', 'be2-nohit', 'Compare \u203A'); a.href = G.stages.sample;
+    a.onclick = function () { try { sessionStorage.setItem(CMP_KEY, '1'); } catch (e) {} };
+    d.appendChild(t); d.appendChild(a); return d;
+  }
+  if (STAGE === 'sample' && G.checks) {
+    var cmp = false; try { cmp = sessionStorage.getItem(CMP_KEY) === '1'; sessionStorage.removeItem(CMP_KEY); } catch (e) {}
+    var d2 = el('div', 'wr-turn'), t2 = el('span');
+    t2.appendChild(el('b', null, cmp ? 'Compare' : 'Finished?'));
+    t2.appendChild(document.createTextNode(cmp ? 'What did the sample do that yours did not?' : 'Check your own essay against four points.'));
+    var bt = el('button', 'be2-nohit', 'Check yours'); bt.type = 'button'; bt.onclick = openCheck;
+    d2.appendChild(t2); d2.appendChild(bt); return d2;
+  }
+  return null;
+}
+function openCheck() {
+  var close = function () { var a = document.querySelector('.wr-sheet'), b = document.querySelector('.wr-sheet-bg'); if (a) a.remove(); if (b) b.remove(); };
+  close();
+  var bg = el('div', 'wr-sheet-bg'); bg.onclick = close;
+  var sh = el('div', 'wr-sheet'); sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-label', 'Check your essay');
+  sh.appendChild(el('h3', null, 'Check yours'));
+  sh.appendChild(el('p', 'wr-lead', 'Read your essay on paper. Tick what is true.'));
+  G.checks.forEach(function (c) {
+    var lb = el('label', 'wr-ck'), cb = el('input'); cb.type = 'checkbox';
+    var tx = el('span'); tx.appendChild(el('b', null, c[0])); tx.appendChild(document.createTextNode(c[1]));
+    lb.appendChild(cb); lb.appendChild(tx); sh.appendChild(lb);
+  });
+  var acts = el('div', 'wr-acts');
+  var more = el('a', null, 'Full checklist \u203A'); more.href = '/skills/writing/sentence-structure/band-descriptors.html?tab=check';
+  var done = el('button', null, 'Done with this question'); done.type = 'button';
+  done.onclick = function () { markDone(chosenId()); close(); location.href = G.stages.question; };
+  acts.appendChild(more); acts.appendChild(done); sh.appendChild(acts);
+  document.body.appendChild(bg); document.body.appendChild(sh);
+  var f = sh.querySelector('input'); if (f) f.focus();
+}
+
 function leanFoot() {
   var css = document.createElement('style');
   css.textContent =
-    '.wr-foot.wr-steps{align-items:center;gap:8px}' +
+    '.wr-foot.wr-steps{flex-direction:column;align-items:center;gap:8px}' +
+    '.wr-row{display:flex;align-items:center;gap:8px}' +
+    '.wr-turn{box-sizing:border-box;width:100%;max-width:560px;display:flex;align-items:center;gap:10px;padding:8px 8px 8px 12px;background:#F3EADF;border-left:3px solid #B0865C;font:400 .8125rem/1.35 var(--f-body,"Geist",system-ui,sans-serif);color:#3A3530}' +
+    '.wr-turn b{display:block;font:500 .625rem/1 "Geist Mono",ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase;color:#9A5A2C;margin-bottom:3px}' +
+    '.wr-turn span{flex:1;min-width:0}' +
+    '.wr-turn button,.wr-turn a{all:unset;flex:none;cursor:pointer;padding:8px 12px;border-radius:999px;background:#14110E;color:#FAF8F5;font:500 .8125rem/1 var(--f-body,"Geist",system-ui,sans-serif);white-space:nowrap}' +
+    '.wr-turn button:focus-visible,.wr-turn a:focus-visible{outline:2px solid #B0865C;outline-offset:2px}' +
+    '.wr-ck{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid rgba(20,17,14,.1);cursor:pointer}' +
+    '.wr-ck input{flex:none;width:20px;height:20px;margin:2px 0 0;accent-color:#14110E}' +
+    '.wr-ck b{display:block;font:500 .625rem/1 "Geist Mono",ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:#9A5A2C;margin-bottom:4px}' +
+    '.wr-ck span{font:400 .95rem/1.45 var(--f-body,"Geist",system-ui,sans-serif);color:#2A2622}' +
+    '.wr-sheet p.wr-lead{margin:0 0 6px;font:400 .95rem/1.45 var(--f-body,"Geist",system-ui,sans-serif);color:#4A443E}' +
+    '.wr-acts{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:14px}' +
+    '.wr-acts a{color:#6B655C;font:500 .875rem/1 var(--f-body,"Geist",system-ui,sans-serif)}' +
+    '.wr-acts button{all:unset;cursor:pointer;padding:12px 18px;border-radius:999px;background:#14110E;color:#FAF8F5;font:500 .95rem/1 var(--f-body,"Geist",system-ui,sans-serif)}' +
     '.wr-steps .wr-stage{display:inline-flex;align-items:center;gap:5px;padding:.5rem .7rem}' +
     '.wr-steps .wr-stage i{font-style:normal;font-family:"Geist Mono",ui-monospace,monospace;font-weight:500;font-size:.625rem;letter-spacing:0;width:15px;height:15px;border-radius:50%;display:inline-grid;place-items:center;border:1px solid currentColor;opacity:.7}' +
     '.wr-steps .wr-stage.seen i{background:#B0865C;border-color:#B0865C;color:#FAF8F5;opacity:1}' +
@@ -324,12 +399,14 @@ function leanFoot() {
     else if (url) s.href = url;
     pill.appendChild(s);
   });
-  f.appendChild(pill);
+  var row = el('div', 'wr-row'); row.appendChild(pill);
+  var strip = turnStrip(); if (strip) f.appendChild(strip);
+  f.appendChild(row);
   var i = list.indexOf(STAGE), nxt = i >= 0 && i < list.length - 1 ? list[i + 1] : null;
   if (nxt) {
     var a = el('a', 'wr-next be2-nohit', '\u203A'); a.href = G.stages[nxt];
     a.setAttribute('aria-label', 'Next: ' + NAMES[nxt]); a.title = 'Next: ' + NAMES[nxt];
-    f.appendChild(a);
+    row.appendChild(a);
   }
   return f;
 }

@@ -245,6 +245,26 @@ body.cin-open .cin{opacity:1;visibility:visible;transition:opacity .26s ease,vis
 .wr8{position:absolute;left:0;top:50%;width:14px;height:14px;margin-top:-7px;color:#B0865C;opacity:.75;pointer-events:none}
 .wh.one .wr8{display:none}
 .wh.one{padding-left:0}.wh.one .whb{left:0!important}
+/* ONE CARD: Build wears the Ready card's styles (see #parade above) */
+.cin #cTitle{font-size:clamp(34px,10vw,44px)!important;margin:10px 0 22px!important}
+.cin #cTitle::after{bottom:-12px!important;width:40px!important}
+#cMain .bcard{font-size:var(--cin-fs,17px);line-height:1.5;font-weight:500;letter-spacing:-.005em;color:#14110E}
+#cMain .bcard .fc{border-top:0}
+#cMain .bcard .fc-sec:last-child{border-bottom:1px solid rgba(20,17,14,.12)}
+#cMain .bcard .fc-p{font-size:1em!important;line-height:1.36}
+#cMain .bcard .fc-end .fc-p{font-size:1.04em!important}
+#cMain .bcard .fc-list{gap:.45em}
+#cMain .bcard .fc-h{font-size:.84em;margin-bottom:.15em}
+#cMain .bcard .fc .k,#cMain .bcard .fc .sg{font-weight:inherit}
+#cMain .bcard .fc .vw{color:inherit}
+#cMain .bcard .fc .fc-own{color:#6A625A;font-weight:400}
+#cMain .bcard .fc-sec.bs{display:grid!important;align-items:start!important;gap:10px}
+#cMain .bcard .fc-sec.bs:not(.one){grid-template-columns:2.9rem minmax(0,1fr) 30px;touch-action:pan-y}
+#cMain .bcard .bnx{align-self:center;margin-right:-6px}
+#cMain .bcard .fc-in{transition:opacity .14s ease,transform .14s ease}
+#cMain .bcard .fc-in.out{opacity:0;transform:translateX(var(--dx,-14px))}
+#cMain .bcard .fc-in.in{opacity:0;transform:translateX(var(--dx,14px));transition:none}
+#cMain:has(.bcard) .wsec{border:0!important;padding:0!important}
 /* THREE SECTIONS: the grammar Explore card's quiet text and faint hairlines */
 #cMain .wsec{border-bottom:1px solid rgba(20,17,14,.08)!important;padding:12px 0!important}
 #cMain .wsec:last-of-type{border-bottom:0!important}
@@ -896,14 +916,22 @@ function paint(){
   $('cTitle').innerHTML=cardTitle(TYPE,m.num||m.n||1);   /* the five card's title: Review 1 */
   if(MODE==='write') return paintWrite();
   const build=!m.saved;
+  if(SUPPORT!=='moves'){
+    /* ONE CARD (7 Nov 2026): Build draws the very card Ready shows - the
+       same FiveCard body, the same title, the same hairlines - and adds only
+       one › to the right of each section */
+    $('cMain').innerHTML=`<div class="pa-b bcard">${modelHTML(m)}</div>`;
+    if(build) addArrows(m);
+    WH.mount($('cMain'));
+  } else
   $('cMain').innerHTML=m.secs.map((S,si)=>
     `<div class="wsec"><div class="secw"><b>${String(si+1).padStart(2,'0')}</b>${esc(S.word)}</div>`+
     (SUPPORT==='moves'
       ? `<div class="mv">${esc(S.sub||'')}<br><i>${S.lines.length} ${S.lines.length>1?'sentences':'sentence'}</i></div>`
       : build ? secHTML(m,si)
       : `<p class="mp">${S.lines.map(L=>viewHTML(L)).join(' ')}</p>`)+`</div>`).join('')+
-    `<p class="tip">${SUPPORT==='moves'?'No key expressions this time: you know the moves. Write it in your own words.':build?'Tap › for another way to say it.':'Your card. Write from it, or delete it.'}</p>`;
-  WH.mount($('cMain'));
+    `<p class="tip">No key expressions this time: you know the moves. Write it in your own words.</p>`;
+  if(SUPPORT==='moves') WH.mount($('cMain'));
   $('cAct').innerHTML=(build?`<button class="btn" type="button" id="aSave">Save</button>`:`<button class="btn" type="button" id="aDel">Delete</button>`)+
     `<button class="btn go" type="button" id="aWrite">Write it</button>`;
   if($('aSave')) $('aSave').onclick=()=>{ saveMine(m); $('aSave').textContent='Saved'; $('aSave').disabled=true; };
@@ -1126,6 +1154,13 @@ function wheelOrder(L){ const N=L.h.length, mid=Math.floor(N/2); return L.h.map(
    swipe across the section, brings the next way to write that whole section;
    a swipe the other way goes back. */
 const CHEV='<svg viewBox="0 0 10 16" aria-hidden="true"><path d="M2 2l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function addArrows(m){
+  const secs=$('cMain').querySelectorAll('.fc-sec'), last=m.secs.length-1;
+  secs.forEach((el,k)=>{ const si=k===0?0:k===secs.length-1?last:1; const S=m.secs[si]; if(!S) return;
+    el.dataset.si=si; el.classList.add('bs');
+    if(!S.lines.some((L,li)=>ensureOptions(m,si,li).h.length>1)){ el.classList.add('one'); return; }
+    el.insertAdjacentHTML('beforeend',`<button type="button" class="bnx" aria-label="Another way to write the ${esc((S.word||'section').toLowerCase())}">${CHEV}</button>`); });
+}
 function secHTML(m,si){
   const S=m.secs[si], many=S.lines.some((L,li)=>ensureOptions(m,si,li).h.length>1);
   return `<div class="bs${many?'':' one'}" data-si="${si}"><div class="bt">${secText(S)}</div>`+
@@ -1135,12 +1170,14 @@ const secText=S=>S.lines.map(L=>`<p class="lt bln">${viewHTML({h:L.h,i:L.i})}</p
 function turnSec(si,dir){
   const m=OPEN; if(!m||m.saved) return; const S=m.secs[si]; if(!S) return;
   S.lines.forEach((L,li)=>{ const N=ensureOptions(m,si,li).h.length; if(N>1) L.i=(L.i+dir+N)%N; });
-  const box=document.querySelector(`#cMain .bs[data-si="${si}"] .bt`); if(!box) return;
+  const box=document.querySelector(`#cMain .bs[data-si="${si}"] .fc-in`); if(!box) return;
+  const fresh=()=>{ const d=document.createElement('div'); d.innerHTML=modelHTML(m); const all=d.querySelectorAll('.fc-sec');
+    const k=si===0?0:si===m.secs.length-1?all.length-1:1; return all[k]?all[k].querySelector('.fc-in').innerHTML:''; };
   const sv=$('aSave'); if(sv){ sv.textContent='Save'; sv.disabled=false; }
   try{ if(window.SFX&&SFX.isOn()&&SFX.pop) SFX.pop(); }catch(e){}
-  if(matchMedia('(prefers-reduced-motion: reduce)').matches){ box.innerHTML=secText(S); fitCin(); return; }
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches){ box.innerHTML=fresh(); fitCin(); return; }
   box.style.setProperty('--dx',(dir>0?-14:14)+'px'); box.classList.add('out');
-  setTimeout(()=>{ box.innerHTML=secText(S); box.style.setProperty('--dx',(dir>0?14:-14)+'px'); box.classList.remove('out'); box.classList.add('in');
+  setTimeout(()=>{ box.innerHTML=fresh(); box.style.setProperty('--dx',(dir>0?14:-14)+'px'); box.classList.remove('out'); box.classList.add('in');
     requestAnimationFrame(()=>requestAnimationFrame(()=>{ box.classList.remove('in'); fitCin(); })); },140);
 }
 document.addEventListener('click',e=>{ const b=e.target.closest&&e.target.closest('#cMain .bnx'); if(b) turnSec(+b.closest('.bs').dataset.si,1); });

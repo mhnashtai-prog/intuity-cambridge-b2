@@ -153,15 +153,22 @@ function leanHeader() {
   var css = document.createElement('style');
   css.textContent =
     '.wr-lean{padding:calc(10px + env(safe-area-inset-top,0px)) var(--gutter,1rem) 10px!important}' +
-    '.wr-lean .header-top{display:flex!important;align-items:center;justify-content:space-between;gap:10px;padding:0!important;margin:0!important;grid-template-columns:none!important}' +
+    '.wr-lean .header-top{display:grid!important;grid-template-columns:1fr auto 1fr!important;align-items:center;gap:10px;padding:0!important;margin:0!important}' +
+    '.wr-lean .header-title{order:0!important;grid-column:auto!important;display:flex;flex-direction:column;align-items:center;text-align:center}' +
+    '.wr-lean .wr-right{justify-self:end}' +
     '.wr-lean .back-link{flex:none}' +
     '.wr-lean .wr-right{display:flex;align-items:center;gap:4px;min-width:0}' +
-    '.wr-pick{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:62vw;padding:8px 4px 8px 10px;border-radius:10px;font:500 .9rem/1.2 var(--f-body,"Geist",system-ui,sans-serif);color:var(--ink,#14110E)}' +
+    '.wr-pick{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-top:2px;padding:3px 6px 3px 8px;border-radius:8px;font:600 .6875rem/1.2 var(--f-display,"Geist",system-ui,sans-serif);letter-spacing:.2em;text-transform:uppercase;color:#4A443E}' +
     '.wr-pick span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
-    '.wr-pick::after{content:"";flex:none;width:6px;height:6px;margin:-3px 4px 0 0;border-right:1.5px solid #8A8378;border-bottom:1.5px solid #8A8378;transform:rotate(45deg)}' +
+    '.wr-pick::after{content:"";flex:none;width:5px;height:5px;margin:-3px 2px 0 0;border-right:1.5px solid #8A8378;border-bottom:1.5px solid #8A8378;transform:rotate(45deg)}' +
     '.wr-pick:active{background:rgba(20,17,14,.06)}.wr-pick:focus-visible{outline:2px solid #B0865C;outline-offset:2px}' +
     '.wr-lean .mute{padding:8px!important}' +
-    '.wr-lean .wr-filters{display:none!important}' +
+    '.wr-tabs{position:relative;display:flex;align-items:center;margin-top:8px}' +
+    /* start-aligned: a centred row wider than the screen hides its first tabs */
+    '.wr-tabs .wr-filters{flex:1;min-width:0;margin:0!important;justify-content:flex-start!important}' +
+    '.wr-arr{all:unset;flex:none;width:28px;height:32px;display:grid;place-items:center;cursor:pointer;color:#6B655C;font:500 1.2rem/1 var(--f-body,"Geist",system-ui,sans-serif);transition:opacity .2s}' +
+    '.wr-arr[hidden]{display:grid!important;opacity:0;pointer-events:none}' +
+    '.wr-arr:focus-visible{outline:2px solid #B0865C;outline-offset:-2px;border-radius:6px}' +
     '.wr-q{all:unset;display:block;box-sizing:border-box;width:100%;margin-top:6px;cursor:pointer;font:400 .8125rem/1.4 var(--f-body,"Geist",system-ui,sans-serif);color:#6B655C;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
     '.wr-q b{font-weight:500;color:#9A5A2C;font-family:"Geist Mono",ui-monospace,monospace;font-size:.6875rem;letter-spacing:.12em;margin-right:6px}' +
     '.wr-q.open{white-space:normal}' +
@@ -174,22 +181,49 @@ function leanHeader() {
     '.wr-opt:focus-visible{outline:2px solid #B0865C;outline-offset:2px}';
   document.head.appendChild(css);
 
+  /* 7 Nov, after the first look: the INTUITY wordmark stays (without it the
+     page left the app); its subtitle, "ESSAY · PART 1 ▾", is the task picker.
+     The type row stays visible: one tap, no sheet. */
   var h = el('header', 'header wr-lean');
   var top = el('div', 'header-top');
   top.appendChild(backLink());
-  var right = el('div', 'wr-right');
+  var title = el('div', 'header-title');
+  title.appendChild(el('div', 'app-title', 'INTUITY'));
   var pick = el('button', 'wr-pick'); pick.type = 'button';
   pick.setAttribute('aria-haspopup', 'dialog');
-  var lab = el('span'); pick.appendChild(lab);
+  var lab = el('span', null, G.label + ' \u00b7 ' + (G.part || '')); pick.appendChild(lab);
+  pick.setAttribute('aria-label', 'Change task: ' + G.label);
+  title.appendChild(pick);
+  top.appendChild(title);
+  var right = el('div', 'wr-right');
   var mute = el('button', 'mute'); mute.type = 'button'; mute.setAttribute('aria-label', 'Sound');
-  right.appendChild(pick); right.appendChild(mute);
+  right.appendChild(mute);
   top.appendChild(right);
   h.appendChild(top);
 
-  /* the page's own type tabs stay in the DOM (the page drives them) but
-     out of sight; the picker reads them and presses them */
+  /* the page's type row, with an arrow at each end that shows (and reaches)
+     the types beyond the edge; an arrow fades when its end is in view */
   var filts = shell.querySelectorAll('.filter-bar, .topic-tabs, .register-bar, .nav-tabs, .mode-toggle');
-  for (var fi = 0; fi < filts.length; fi++) { filts[fi].classList.add('wr-filters'); h.appendChild(filts[fi]); }
+  for (var fi = 0; fi < filts.length; fi++) {
+    var row = filts[fi]; row.classList.add('wr-filters');
+    var wrap = el('div', 'wr-tabs');
+    var la = el('button', 'wr-arr', '\u2039'), ra = el('button', 'wr-arr', '\u203A');
+    la.type = ra.type = 'button'; la.setAttribute('aria-label', 'Earlier types'); ra.setAttribute('aria-label', 'More types');
+    wrap.appendChild(la); wrap.appendChild(row); wrap.appendChild(ra); h.appendChild(wrap);
+    (function (row, la, ra) {
+      var step = function (d) { row.scrollBy({ left: d * Math.max(120, row.clientWidth * 0.7), behavior: 'smooth' }); };
+      la.onclick = function () { step(-1); }; ra.onclick = function () { step(1); };
+      var ends = function () {
+        var over = row.scrollWidth > row.clientWidth + 2;
+        la.hidden = !over || row.scrollLeft <= 2;
+        ra.hidden = !over || row.scrollLeft + row.clientWidth >= row.scrollWidth - 2;
+      };
+      row.addEventListener('scroll', ends, { passive: true });
+      addEventListener('resize', ends);
+      if (window.MutationObserver) new MutationObserver(function () { setTimeout(ends, 60); }).observe(row, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+      setTimeout(ends, 120);
+    })(row, la, ra);
+  }
 
   /* not on Question (it is the page) or Plan (its card leads with the question) */
   var q = !/^(question|plan)$/.test(STAGE) && chosenQuestion();
@@ -201,32 +235,13 @@ function leanHeader() {
     h.appendChild(ql);
   }
 
-  function typeButtons() {
-    var out = [];
-    Array.prototype.forEach.call(h.querySelectorAll('.wr-filters'), function (row) {
-      Array.prototype.forEach.call(row.querySelectorAll('button, a'), function (b) {
-        var t = (b.textContent || '').trim(); if (t) out.push(b);
-      });
-    });
-    return out;
-  }
-  function isOn(b) { return b.classList.contains('active') || b.classList.contains('on') || b.getAttribute('aria-selected') === 'true'; }
-  function paintLabel() {
-    var on = typeButtons().filter(isOn)[0];
-    var t = G.label + (on ? ' \u00b7 ' + on.textContent.trim().replace(/\s+/g, ' ') : '');
-    if (lab.textContent !== t) lab.textContent = t;
-    pick.setAttribute('aria-label', 'Task and type: ' + t);
-  }
-  paintLabel();
-  if (window.MutationObserver) new MutationObserver(paintLabel).observe(h, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'aria-selected'] });
-
   function close() {
     var a = document.querySelector('.wr-sheet'), b = document.querySelector('.wr-sheet-bg');
     if (a) a.remove(); if (b) b.remove(); pick.focus();
   }
   pick.onclick = function () {
     var bg = el('div', 'wr-sheet-bg'); bg.onclick = close;
-    var sh = el('div', 'wr-sheet'); sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-label', 'Choose task and type');
+    var sh = el('div', 'wr-sheet'); sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-label', 'Choose a task');
     sh.appendChild(el('h3', null, 'Task'));
     var tk = el('div');
     Object.keys(GENRES).forEach(function (k) {
@@ -236,17 +251,6 @@ function leanHeader() {
       tk.appendChild(o);
     });
     sh.appendChild(tk);
-    var tb = typeButtons();
-    if (tb.length) {
-      sh.appendChild(el('h3', null, 'Type'));
-      var ty = el('div');
-      tb.forEach(function (b) {
-        var o = el('button', 'wr-opt' + (isOn(b) ? ' on' : ''), b.textContent.trim().replace(/\s+/g, ' '));
-        o.type = 'button'; o.onclick = function () { b.click(); close(); };
-        ty.appendChild(o);
-      });
-      sh.appendChild(ty);
-    }
     document.body.appendChild(bg); document.body.appendChild(sh);
     var first = sh.querySelector('.wr-opt.on') || sh.querySelector('.wr-opt'); if (first) first.focus();
   };
@@ -387,6 +391,15 @@ if (window.ResizeObserver) {
 function centreActive(row) {
   if (row.scrollWidth <= row.clientWidth + 2) return;
   var on = row.querySelector('.active, .on, [aria-selected="true"]');
+  /* lean header: the row has arrows, so it only makes sure the chosen type
+     is in view, and the first type sits at the start rather than centred */
+  if (LEAN) {
+    if (!on) return;
+    var l = on.offsetLeft - row.offsetLeft, r = l + on.offsetWidth;
+    if (l < row.scrollLeft) row.scrollLeft = Math.max(0, l - 8);
+    else if (r > row.scrollLeft + row.clientWidth) row.scrollLeft = r - row.clientWidth + 8;
+    return;
+  }
   if (on) row.scrollLeft = on.offsetLeft - (row.clientWidth - on.offsetWidth) / 2;
 }
 /* Plan pages: the plan says WHAT to say, the Model says HOW. Where a plan

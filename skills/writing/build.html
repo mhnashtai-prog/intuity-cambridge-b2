@@ -231,18 +231,20 @@ body.cin-open .cin{opacity:1;visibility:visible;transition:opacity .26s ease,vis
 /* ONE SCREEN in Make your own: fitCin steps the lines down until nothing scrolls */
 #cMain .lt{font-size:var(--cin-fs,clamp(15px,3.9vw,17px))}
 #cin.tight #cMain .ln{padding:1px 0} #cin.tight #cMain .wsec{padding:4px 0} #cin.tight #cMain .lt{line-height:1.32} #cin.tight #cMain .tip{margin:4px 0 0;font-size:12px} #cin.tight .cbody{padding-bottom:4px} #cin.tight #cTitle{font-size:30px;margin:6px 0 16px} #cin.tight #cTitle::after{bottom:-10px;height:3px}
-/* THE CALM WHEEL (7 Nov 2026, after the first look): no tilt, no icons, no
-   band; the chosen line in ink, a faint glimpse of the line above and below,
-   a hairline between lines. Overrides the first wheel's rules below. */
-.wh{margin:0!important;border-bottom:1px solid rgba(20,17,14,.08)}
-.wh:last-child{border-bottom:0}
-.whb{display:none}
-/* the chosen line sits at the top of its wheel; below it, a soft glimpse of the next */
-.whs{padding-block:0 var(--pk,18px)!important;-webkit-mask-image:linear-gradient(#000 0,#000 calc(100% - var(--pk,18px)*.75),transparent 100%)!important;mask-image:linear-gradient(#000 0,#000 calc(100% - var(--pk,18px)*.75),transparent 100%)!important}
-.wh .wi{scroll-snap-align:start!important}
-.wh{padding-top:8px}
-.wh .wi{padding-right:0!important;padding-block:4px!important;transition:opacity .15s ease!important;will-change:opacity!important;flex-direction:column;justify-content:flex-start!important;align-items:stretch!important}
+/* THE TURNING WHEEL (7 Nov 2026, after the sketch): the chosen line sits in one soft
+   band; the line before and after curve away above and below it, like the iPhone alarm
+   picker. A small turn mark on the left says "this spins". Nothing else. */
+.wh{margin:2px 0!important;padding-left:22px}
+.whb{left:16px!important;border-radius:10px!important;background:rgba(20,17,14,.045)!important}
+.whs{padding-block:var(--pk,24px)!important;perspective:none;
+  -webkit-mask-image:linear-gradient(transparent 0,#000 calc(var(--pk,24px)*.9),#000 calc(100% - var(--pk,24px)*.9),transparent 100%)!important;
+  mask-image:linear-gradient(transparent 0,#000 calc(var(--pk,24px)*.9),#000 calc(100% - var(--pk,24px)*.9),transparent 100%)!important}
+.wh .wi{scroll-snap-align:center!important;padding:4px 10px 4px 8px!important;flex-direction:column;justify-content:center!important;align-items:stretch!important;
+  backface-visibility:hidden;will-change:transform,opacity!important}
 .wh .wt{display:block;width:100%}
+.wr8{position:absolute;left:0;top:50%;width:14px;height:14px;margin-top:-7px;color:#B0865C;opacity:.75;pointer-events:none}
+.wh.one .wr8{display:none}
+.wh.one{padding-left:0}.wh.one .whb{left:0!important}
 /* building has no top bar: the card starts under the header */
 body.wheel-mode #cin:not(.writing) .cnav{display:none}
 body.wheel-mode .cbody{padding-top:14px}
@@ -1065,12 +1067,15 @@ function ensureOptions(m,si,li){
     if(!seen.has(k)){ seen.add(k); L.h.push(x); } }
   return L;
 }
+const WTURN='<svg class="wr8" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.6-3.7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M11.8 1.6v3.1H8.7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const WCHEV='<svg class="whi" viewBox="0 0 16 22" aria-hidden="true"><path d="M3 8l5-5 5 5M3 14l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+/* the chosen line sits mid-wheel, so there is always a line above and below it */
+function wheelOrder(L){ const N=L.h.length, mid=Math.floor(N/2); return L.h.map((_,p)=>(L.i+p-mid+N*2)%N); }
 function wheelHTML(m,si,li){
   const L=ensureOptions(m,si,li), S=m.secs[si];
-  return `<div class="wh${L.h.length<2?' one':''}" data-si="${si}" data-li="${li}"><div class="whb"></div>`+
+  return `<div class="wh${L.h.length<2?' one':''}" data-si="${si}" data-li="${li}"><div class="whb"></div>${WTURN}`+
     `<div class="whs" tabindex="0" role="listbox" aria-label="${esc(S.word)}, sentence ${li+1} of ${S.lines.length}">`+
-    L.h.map((x,k)=>`<div class="lt wi" role="option" aria-selected="${k===L.i}"><div class="wt">${viewHTML({h:L.h,i:k})}</div></div>`).join('')+
+    wheelOrder(L).map(k=>`<div class="lt wi" data-k="${k}" role="option" aria-selected="${k===L.i}"><div class="wt">${viewHTML({h:L.h,i:k})}</div></div>`).join('')+
     `</div></div>`;
 }
 const WH=(function(){
@@ -1080,21 +1085,29 @@ const WH=(function(){
     const sc=el.querySelector('.whs'), items=Array.prototype.slice.call(sc.children);
     const si=+el.dataset.si, li=+el.dataset.li, w={el,sc,items,ih:56,idx:0};
     const L0=OPEN&&OPEN.secs[si]&&OPEN.secs[si].lines[li];
-    w.idx=L0?Math.max(0,Math.min(L0.i,items.length-1)):0;
+    w.idx=Math.max(0,items.findIndex(x=>x.getAttribute('aria-selected')==='true'));
     let raf=0;
     /* row height = the tallest version at the current type size; the wheel shows about two rows */
     w.measure=function(){ el.style.removeProperty('--ih'); el.style.removeProperty('--h');
       let mx=0; items.forEach(x=>{ mx=Math.max(mx,x.offsetHeight); });
       w.ih=Math.max(30,Math.ceil(mx));
       /* the wheel is one line tall plus a glimpse of the line above and below */
-      const pk=Math.round(Math.min(24,w.ih*.5));
-      el.style.setProperty('--ih',w.ih+'px'); el.style.setProperty('--pk',pk+'px'); el.style.setProperty('--h',(w.ih+pk)+'px'); };
-    w.change=function(n){ const L=OPEN&&OPEN.secs[si]&&OPEN.secs[si].lines[li]; if(!L) return; L.i=n;
+      const pk=Math.round(Math.min(26,w.ih*.5));
+      /* tilt so a neighbour's whole row folds into the glimpse: projected height = pk */
+      const P=420; let lo=0,hi=1.45;
+      for(let k=0;k<24;k++){ const t=(lo+hi)/2, hp=w.ih*Math.cos(t)*P/(P+w.ih*Math.sin(t)); if(hp>pk) lo=t; else hi=t; }
+      w.tilt=Math.min(58,lo*180/Math.PI); w.P=P;
+      el.style.setProperty('--ih',w.ih+'px'); el.style.setProperty('--pk',pk+'px'); el.style.setProperty('--h',(w.ih+2*pk)+'px'); };
+    w.change=function(n){ const L=OPEN&&OPEN.secs[si]&&OPEN.secs[si].lines[li]; if(!L) return; L.i=+items[n].dataset.k;
       const sv=$('aSave'); if(sv){ sv.textContent='Save'; sv.disabled=false; }   /* changed again: save again */
       try{ if(window.SFX&&SFX.isOn()&&SFX.pop) SFX.pop(); }catch(e){} };
     w.paint=function(){ const st=sc.scrollTop, ih=w.ih;
-      items.forEach((x,i)=>{ const a=Math.abs(i-st/ih);
-        x.style.opacity=a<.5?1:.38; });
+      items.forEach((x,i)=>{ const d=i-st/ih, a=Math.min(1,Math.abs(d));
+        if(Math.abs(d)>2.5){ x.style.transform=''; x.style.opacity='0'; return; }
+        /* below the band: hinge on its top edge, fold back; above: hinge on its bottom edge */
+        x.style.transformOrigin=d>0?'50% 0':'50% 100%';
+        x.style.transform=reduce?'':'perspective('+w.P+'px) rotateX('+(d>0?-1:1)*w.tilt*a+'deg)';
+        x.style.opacity=String(1-a*.6); });
       const n=Math.max(0,Math.min(items.length-1,Math.round(st/ih)));
       if(n!==w.idx){ w.idx=n; items.forEach((x,i)=>x.setAttribute('aria-selected',String(i===n))); w.change(n); } };
     w.go=function(i,smooth){ i=Math.max(0,Math.min(items.length-1,i));

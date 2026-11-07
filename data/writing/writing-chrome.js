@@ -10,6 +10,9 @@ var STAGE = (B.getAttribute('data-stage') || '').toLowerCase();
 
 var GENRES = {
   essays:   { label:'Essay',   part:'Part 1', back:'/index.html?openModal=writing',
+              /* the type row on every stage, in the Model's order */
+              types:[['for-against','For & Against'],['opinion','Opinion'],['agree-disagree','Agree & Disagree'],
+                     ['problem-solution','Problems & Solutions'],['cause-effect','Cause & Effect'],['speculation-trends','Speculation & Trends']],
               stages:{ question:'/skills/writing/essays/essay-question.html',
                        plan:    '/skills/writing/essays/essay-plan.html',
                        model:   '/skills/writing/essays/essay-model.html',
@@ -163,7 +166,7 @@ function leanHeader() {
     '.wr-pick::after{content:"";flex:none;width:5px;height:5px;margin:-3px 2px 0 0;border-right:1.5px solid #8A8378;border-bottom:1.5px solid #8A8378;transform:rotate(45deg)}' +
     '.wr-pick:active{background:rgba(20,17,14,.06)}.wr-pick:focus-visible{outline:2px solid #B0865C;outline-offset:2px}' +
     '.wr-lean .mute{padding:8px!important}' +
-    '.wr-tabs{position:relative;display:flex;align-items:center;margin-top:8px}' +
+    '.wr-tabs{position:relative;display:flex;align-items:center;margin-top:8px;height:40px}' +
     /* start-aligned: a centred row wider than the screen hides its first tabs */
     '.wr-tabs .wr-filters{flex:1;min-width:0;margin:0!important;justify-content:flex-start!important}' +
     '.wr-arr{all:unset;flex:none;width:28px;height:32px;display:grid;place-items:center;cursor:pointer;color:#6B655C;font:500 1.2rem/1 var(--f-body,"Geist",system-ui,sans-serif);transition:opacity .2s}' +
@@ -172,6 +175,11 @@ function leanHeader() {
     '.wr-q{all:unset;display:block;box-sizing:border-box;width:100%;margin-top:6px;cursor:pointer;font:400 .8125rem/1.4 var(--f-body,"Geist",system-ui,sans-serif);color:#6B655C;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
     '.wr-q b{font-weight:500;color:#9A5A2C;font-family:"Geist Mono",ui-monospace,monospace;font-size:.6875rem;letter-spacing:.12em;margin-right:6px}' +
     '.wr-q.open{white-space:normal}' +
+    '.wr-q.hint{color:#8A8378}' +
+    'a.wr-q{text-decoration:none}' +
+    '.wr-typerow a.ttab{text-decoration:none}' +
+    'body[data-stage="plan"] .kq{display:none!important}' +
+    'body[data-stage="plan"] .card-scroll{padding-top:2.4rem!important}' +
     '.wr-sheet-bg{position:fixed;inset:0;z-index:90;background:rgba(20,17,14,.35)}' +
     '.wr-sheet{position:fixed;left:0;right:0;bottom:0;z-index:91;max-height:80vh;overflow:auto;background:#FAF8F5;border-radius:16px 16px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 30px rgba(20,17,14,.18)}' +
     '.wr-sheet h3{margin:4px 0 8px;font:500 .6875rem/1 "Geist Mono",ui-monospace,monospace;letter-spacing:.16em;text-transform:uppercase;color:#8A8378}' +
@@ -203,7 +211,23 @@ function leanHeader() {
 
   /* the page's type row, with an arrow at each end that shows (and reaches)
      the types beyond the edge; an arrow fades when its end is in view */
-  var filts = shell.querySelectorAll('.filter-bar, .topic-tabs, .register-bar, .nav-tabs, .mode-toggle');
+  /* ONE HEADER FOR ALL FOUR STAGES (7 Nov 2026): the same three rows, the
+     same height, on Question, Plan, Model and Sample. A page with no type
+     row of its own (Plan, Sample) gets one: the chosen question's type is
+     lit, and another type goes back to Question, filtered to it. */
+  var filts = Array.prototype.slice.call(shell.querySelectorAll('.filter-bar, .topic-tabs, .register-bar, .nav-tabs, .mode-toggle'));
+  if (!filts.length && G.types) {
+    var cq = null; try { cq = JSON.parse(sessionStorage.getItem('currentQuestion') || 'null'); } catch (e) {}
+    var ct = cq && String(cq.essayType || cq.type || '').toLowerCase();
+    var tr = el('div', 'topic-tabs wr-typerow');
+    G.types.forEach(function (t) {
+      var a = el(t[0] === ct ? 'span' : 'a', 'ttab' + (t[0] === ct ? ' active' : ''), t[1]);
+      if (t[0] === ct) a.setAttribute('aria-current', 'true');
+      else a.href = G.stages.question + '?type=' + t[0];
+      tr.appendChild(a);
+    });
+    filts = [tr];
+  }
   for (var fi = 0; fi < filts.length; fi++) {
     var row = filts[fi]; row.classList.add('wr-filters');
     var wrap = el('div', 'wr-tabs');
@@ -225,15 +249,24 @@ function leanHeader() {
     })(row, la, ra);
   }
 
-  /* not on Question (it is the page) or Plan (its card leads with the question) */
-  var q = !/^(question|plan)$/.test(STAGE) && chosenQuestion();
-  if (q) {
-    var ql = el('button', 'wr-q'); ql.type = 'button';
-    ql.appendChild(el('b', null, 'Q')); ql.appendChild(document.createTextNode(q));
+  /* the question line, always there so the header never changes height:
+     the chosen question on Plan, Model and Sample (the Plan card no longer
+     repeats it); on Question, what to do; before any choice, a way back */
+  var q = chosenQuestion();
+  var ql = el(STAGE === 'question' || q ? 'button' : 'a', 'wr-q');
+  ql.appendChild(el('b', null, 'Q'));
+  if (STAGE === 'question') {
+    ql.type = 'button'; ql.classList.add('hint');
+    ql.appendChild(document.createTextNode('Swipe to a question, then Plan it'));
+  } else if (q) {
+    ql.type = 'button'; ql.appendChild(document.createTextNode(q));
     ql.setAttribute('aria-label', 'Your question: ' + q);
     ql.onclick = function () { ql.classList.toggle('open'); sync(); };
-    h.appendChild(ql);
+  } else {
+    ql.href = G.stages.question; ql.classList.add('hint');
+    ql.appendChild(document.createTextNode('Choose a question \u203A'));
   }
+  h.appendChild(ql);
 
   function close() {
     var a = document.querySelector('.wr-sheet'), b = document.querySelector('.wr-sheet-bg');

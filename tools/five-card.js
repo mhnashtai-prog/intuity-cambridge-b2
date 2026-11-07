@@ -68,5 +68,15 @@
   function tap(html, onclick, id) {
     return '<button type="button" class="fc-tap"' + (id ? ' id="' + id + '"' : '') + ' onclick="' + onclick + '">' + html + '</button>';
   }
-  window.FiveCard = { body: body, card: card, title: title, gap: GAP, esc: esc, skel: skel, tap: tap, own: own };
+  /* ONE SCREEN (7 Nov 2026): a detail card (the Open card, .mcard) never
+     scrolls inside. If its body overflows, it steps down — smaller type,
+     then the sample and plan rows cut to fewer lines — until it fits. */
+  function fitModal(c) {
+    if (!c) return;
+    c.classList.remove('fit1', 'fit2', 'fit3');
+    var mb = c.querySelector('.mb'), lv = ['fit1', 'fit2', 'fit3'];
+    var over = function () { return (mb && mb.scrollHeight > mb.clientHeight + 1) || c.getBoundingClientRect().height > window.innerHeight - 12; };
+    for (var k = 0; k < lv.length && over(); k++) c.classList.add(lv[k]);
+  }
+  window.FiveCard = { body: body, card: card, title: title, gap: GAP, esc: esc, skel: skel, tap: tap, own: own, fitModal: fitModal };
 })();

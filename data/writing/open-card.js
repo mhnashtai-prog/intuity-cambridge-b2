@@ -66,6 +66,7 @@
       (smp?`<div class="mrows"><div class="dr"><span class="dl">In the sample</span><span>${esc(smp)}</span></div></div>`:'')+`</div>`+
       `<div class="mfoot"><span class="mv">Wording <b>${s.i+1}</b></span><span class="mbtns"><button type="button" class="mprev" id="mprev"${s.i>0?'':' disabled'} aria-label="Previous wording">←</button><button type="button" class="mnext" id="mnext">Another wording →</button></span></div>`;
     document.getElementById('mx').onclick=closeM;
+    if(window.FiveCard&&FiveCard.fitModal) requestAnimationFrame(()=>FiveCard.fitModal(c));   /* one screen, 7 Nov */
     document.getElementById('mprev').onclick=()=>{ O.roll(slot,-1,idx); setTimeout(draw,120); };
     document.getElementById('mnext').onclick=()=>{ O.roll(slot,1,idx); setTimeout(draw,120); };
   }

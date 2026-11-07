@@ -15,6 +15,8 @@
                         header, e.g. tools/parade.js)
    FiveCard.card(spec)  the whole card, header included
    FiveCard.title(task, n)  'Review <span>1</span>'
+   spec.study  optional grey line under the title ('Study card · 2 of 6')
+   spec.roles  optional margin labels, default ['Intro','Body','End']
    FiveCard.gap         the caramel …
 
    spec = { label:'Part 2', task:'Review', n:1,
@@ -28,16 +30,23 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function head(h) { return h ? '<span class="fc-h">' + (h === '…' ? GAP : esc(h)) + '</span>' : ''; }
+  /* THE STUDY CARD (7 Nov 2026, from the design review): the card reads like
+     an old paper study card. Three sections split by hairlines, each with
+     its role in a narrow mono margin (Intro / Body / End, or s.roles); no
+     bullets and no for/against marks, the signposts already say it. */
+  function sec(role, inner) {
+    return '<span class="fc-sec"><span class="fc-role">' + esc(role) + '</span><span class="fc-in">' + inner + '</span></span>';
+  }
   function body(s) {
     var open = (s.open || []).join(' '), close = (s.close || []).join(' ');
+    var R = s.roles || ['Intro', 'Body', 'End'];
+    var list = (s.body || []).map(function (b) {
+      return '<span class="fc-li' + (b.against ? ' fc-vs' : '') + '">' + head(b.head) + '<span class="fc-p">' + b.html + '</span></span>';
+    }).join('');
     return '<span class="fc">' +
-      '<span class="fc-end">' + head(s.openHead) + '<span class="fc-p">' + open + '</span></span>' +
-      '<span class="fc-rule" aria-hidden="true"></span>' +
-      '<span class="fc-list">' + (s.body || []).map(function (b) {
-        return '<span class="fc-li' + (b.against ? ' fc-vs' : '') + '">' + head(b.head) + '<span class="fc-p">' + b.html + '</span></span>';
-      }).join('') + '</span>' +
-      '<span class="fc-rule" aria-hidden="true"></span>' +
-      '<span class="fc-end">' + head(s.closeHead) + '<span class="fc-p">' + close + '</span></span>' +
+      sec(R[0], '<span class="fc-end">' + head(s.openHead) + '<span class="fc-p">' + open + '</span></span>') +
+      (list ? sec(R[1], '<span class="fc-list">' + list + '</span>') : '') +
+      (close || s.closeHead ? sec(R[2], '<span class="fc-end">' + head(s.closeHead) + '<span class="fc-p">' + close + '</span></span>') : '') +
       '</span>';
   }
   function title(task, n) { return esc(task) + (n ? ' <span class="fc-n">' + esc(n) + '</span>' : ''); }
@@ -45,7 +54,9 @@
     return '<span class="fc-card">' +
       '<span class="fc-k">' + esc(s.label || '') + '</span>' +
       '<span class="fc-t">' + title(s.task, s.n) + '</span>' +
-      '<span class="fc-bar" aria-hidden="true"></span>' + body(s) + '</span>';
+      '<span class="fc-bar" aria-hidden="true"></span>' +
+      /* "Study card · …": a grey line so a model reads as one way, not the way */
+      (s.study ? '<span class="fc-study">' + esc(s.study) + '</span>' : '') + body(s) + '</span>';
   }
   /* a page's own gap markups ("...", <span class="gap">...</span>, the asterisk
      that points to a footnote) become the card's caramel … */

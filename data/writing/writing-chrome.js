@@ -98,7 +98,10 @@ function header() {
     } else {
       var a = el('a', 'mode-btn', GENRES[k].label);
       /* inside the generator, the task tabs stay in the generator */
-      a.href = (STAGE === 'generate' && GENRES[k].stages.generate) || GENRES[k].stages.question;
+      a.href = (STAGE === 'generate' && GENRES[k].stages.generate) ||
+        /* 7 Nov 2026: inside "Your … in five", the task tabs stay in the five (same mode) */
+        (STAGE === 'five' && '/skills/writing/five.html?task=' + k + (/[?&]mode=mine\b/.test(location.search) || (document.querySelector('.wr-stage.active[data-m="mine"]')) ? '&mode=mine' : '')) ||
+        GENRES[k].stages.question;
       nav.appendChild(a);
     }
   });

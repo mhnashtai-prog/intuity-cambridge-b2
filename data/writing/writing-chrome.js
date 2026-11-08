@@ -364,7 +364,18 @@ function turnStrip() {
   }
   return null;
 }
+/* 8 Nov 2026: the Board games' celebration for the checklist - a pop for each
+   tick, a jingle and glitter when all four are true. Loaded only when needed. */
+function cheerKit(cb) {
+  if (window.Cheer) return cb && cb();
+  var need = [];
+  if (!window.SFX) need.push('/skills/grammar-rules/intuity-sound.js');
+  need.push('/tools/intuity-cheer.js?v=1');
+  var go = function () { if (!need.length) return cb && cb(); var s = document.createElement('script'); s.src = need.shift(); s.onload = go; s.onerror = function () {}; document.head.appendChild(s); };
+  go();
+}
 function openCheck() {
+  cheerKit();
   var close = function () { var a = document.querySelector('.wr-sheet'), b = document.querySelector('.wr-sheet-bg'); if (a) a.remove(); if (b) b.remove(); };
   close();
   var bg = el('div', 'wr-sheet-bg'); bg.onclick = close;
@@ -375,6 +386,12 @@ function openCheck() {
     var lb = el('label', 'wr-ck'), cb = el('input'); cb.type = 'checkbox';
     var tx = el('span'); tx.appendChild(el('b', null, c[0])); tx.appendChild(document.createTextNode(c[1]));
     lb.appendChild(cb); lb.appendChild(tx); sh.appendChild(lb);
+    cb.onchange = function () {
+      if (!cb.checked || !window.Cheer) return;
+      var all = sh.querySelectorAll('.wr-ck input'), n = 0;
+      for (var i = 0; i < all.length; i++) if (all[i].checked) n++;
+      if (n === all.length) Cheer.done(sh.querySelector('h3')); else Cheer.tick(cb);
+    };
   });
   var acts = el('div', 'wr-acts');
   var more = el('a', null, 'Full checklist \u203A'); more.href = '/skills/writing/sentence-structure/band-descriptors.html?tab=check';

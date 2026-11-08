@@ -61,17 +61,27 @@ main{flex:1;display:flex;flex-direction:column;align-items:center;padding:calc(v
 .pr-kind button[aria-checked=true]{background:#14110E;color:#F6F3EE}
 .pr-kind button:focus-visible{outline:2px solid var(--car);outline-offset:2px}
 body.sorting #tabs,body.sorting #seg,body.sorting #bEx{display:none}
-.so-ask{display:block;margin:16px 0 0;font-size:14px;line-height:1.4;color:#8A8378}
-.so-p{display:block;margin:6px 0 6px;font-size:clamp(18px,4.8vw,20px);line-height:1.5;font-weight:500;color:var(--ink)}
+body:not(.sorting) #bCheck{display:none}
+.so-ask{display:block;font-size:14px;line-height:1.4;color:#8A8378}
+.so-p{display:block;margin:16px 0 6px;font-size:clamp(18px,4.8vw,20px);line-height:1.5;font-weight:500;color:var(--ink)}
 .so-p .fc-gap{color:#B4ADA2}
 .so-q{display:block;margin:16px 0 6px;font:500 10.5px/1.3 'Geist Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#9A948B}
-.so-row{display:flex;padding:3px;border-radius:999px;background:rgba(20,17,14,.06)}
-.so-row button{all:unset;cursor:pointer;flex:1;text-align:center;padding:10px 4px;border-radius:999px;font:600 14px/1 'Geist',sans-serif;color:#5C5852}
-.so-row button[aria-checked=true]{background:#14110E;color:#F6F3EE}
-.so-row button.ok{background:#4F6B61;color:#fff}
-.so-row button.no{background:rgba(176,134,92,.22);color:#7A5C3A;text-decoration:line-through}
-.so-row button:focus-visible{outline:2px solid var(--car);outline-offset:2px}
+.so-pick{width:100%;max-width:520px;box-sizing:border-box;margin:20px auto 0;padding:0 2px}
+.so-pick[hidden],body:not(.sorting) .so-pick{display:none}
+.so-pick .so-ask{margin:0 0 4px;padding-top:14px;border-top:1px solid var(--rule);text-align:center;font-size:15px;color:#5C5852}
+.so-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+.so-row button{all:unset;position:relative;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:9px;-webkit-tap-highlight-color:transparent}
+.so-row .pl{display:block;width:100%;box-sizing:border-box;text-align:center;padding:10px 2px;border-radius:999px;border:1px solid rgba(20,17,14,.18);font:600 14px/1 'Geist',sans-serif;color:#5C5852;background:#FBF9F5;transition:background .15s,color .15s,border-color .15s}
+.so-row .dot{width:14px;height:14px;border-radius:50%;box-sizing:border-box;border:1.5px solid rgba(20,17,14,.3);transition:background .15s,border-color .15s,transform .2s}
+.so-row button[aria-checked=true] .pl{border-color:var(--ink);color:var(--ink)}
+.so-row button[aria-checked=true] .dot{background:var(--ink);border-color:var(--ink);transform:scale(1.1)}
+.so-row button.ok .pl{background:#4F6B61;border-color:#4F6B61;color:#fff}
+.so-row button.ok .dot{background:#4F6B61;border-color:#4F6B61}
+.so-row button.no .pl{background:rgba(176,134,92,.16);border-color:rgba(176,134,92,.5);color:#7A5C3A;text-decoration:line-through}
+.so-row button.no .dot{background:#B0865C;border-color:#B0865C}
+.so-row button:focus-visible .pl{outline:2px solid var(--car);outline-offset:2px}
 .so-row.done button{cursor:default}
+.pr-act button:disabled{opacity:.35;cursor:default}
 .so-why{display:block;margin:16px 0 8px;padding-top:12px;border-top:1px dashed rgba(20,17,14,.14);font-size:14.5px;line-height:1.5;color:#5C5852}
 .so-why b{color:var(--ink)}
 .so-hud[hidden]{display:none}
@@ -104,7 +114,8 @@ body.sorting #tabs,body.sorting #seg,body.sorting #bEx{display:none}
 </header>
 <main>
   <article class="fc-card pr-card" id="card" aria-live="polite"></article>
-  <div class="pr-act"><button type="button" id="bEx" aria-expanded="false">Example</button><button type="button" class="go" id="bNext">Next <span aria-hidden="true">›</span></button></div>
+  <section class="so-pick" id="pick" aria-label="Where does this phrase belong?" hidden></section>
+  <div class="pr-act"><button type="button" id="bEx" aria-expanded="false">Example</button><button type="button" class="go" id="bCheck" hidden>Check</button><button type="button" class="go" id="bNext">Next <span aria-hidden="true">›</span></button></div>
 </main>
 <script src="/skills/grammar-rules/intuity-sound.js"></script>
 <script src="/tools/intuity-cheer.js?v=2"></script>
@@ -190,22 +201,28 @@ body.sorting #tabs,body.sorting #seg,body.sorting #bEx{display:none}
     `<span class="so-hud"><span><b>${RD.kept}</b> right</span><span><b>${RD.missed}</b> missed</span><span><b>${ROUND-RD.kept-RD.missed}</b> to go</span>`+
     `<span class="so-fire${RD.run>=2?' on':''}">🔥 <b>${RD.run}</b></span></span>`;
   function paintSort(){
-    $('bNext').hidden=true;   /* Next appears once both pills are chosen; before that it only skipped */
-    if(!SORT) return paintEnd();
+    $('bNext').hidden=true;   /* Next appears after Check; before that it only skipped */
+    if(!SORT){ $('pick').hidden=true; $('bCheck').hidden=true; return paintEnd(); }
     const {k,P}=SORT, txt=esc(P.p).replace(/\{T\}|\{t\}|\{k\}/g,'…').replace(/…(\s*…)+/g,'…').replace(/…/g,'<span class="fc-gap">…</span>');
-    const row=(name,list)=>`<span class="so-row" role="radiogroup" data-r="${name}">`+list.map(([v,l])=>`<button type="button" role="radio" aria-checked="false" data-v="${v}">${l}</button>`).join('')+`</span>`;
+    const row=(name,list)=>`<div class="so-row" role="radiogroup" aria-label="${name==='task'?'Which task':'Which part'}" data-r="${name}">`+list.map(([v,l])=>`<button type="button" role="radio" aria-checked="false" data-v="${v}"><span class="pl">${l}</span><span class="dot" aria-hidden="true"></span></button>`).join('')+`</div>`;
     $('card').innerHTML=`<span class="fc-k">Sort · Round ${RD.n}${SORT.tries?' · second go':''}</span><span class="fc-t">Sort <span class="fc-n">${RD.kept+RD.missed+1}</span></span><span class="fc-bar" aria-hidden="true"></span>`+
-      hud()+`<span class="so-ask">Where does this phrase belong? Tap one of each.</span><span class="so-p">${txt}</span>`+
-      `<span class="so-q">Which task?</span>`+row('task',SORT_TASKS.map(t=>[t,D.tasks[t].label]))+
-      `<span class="so-q">Which part?</span>`+row('part',PARTS)+
+      hud()+`<span class="so-p">${txt}</span>`+
       `<span class="so-why" id="soWhy" hidden></span>`;
-    $('card').querySelectorAll('.so-row').forEach(r=>r.onclick=e=>{ const b=e.target.closest('button'); if(!b||r.classList.contains('done')) return;
+    /* 8 Nov 2026, from the teacher's sketch: the card holds only the phrase; the choices sit under it,
+       a dot under each to fill, and Check when both are filled, so a pupil can change their mind first */
+    $('pick').hidden=false;
+    $('pick').innerHTML=`<span class="so-ask">Where does this phrase belong?</span>`+row('task',SORT_TASKS.map(t=>[t,D.tasks[t].label]))+row('part',PARTS);
+    $('bCheck').hidden=false; $('bCheck').disabled=true;
+    $('pick').querySelectorAll('.so-row').forEach(r=>r.onclick=e=>{ const b=e.target.closest('button'); if(!b||r.classList.contains('done')) return;
       r.querySelectorAll('button').forEach(x=>x.setAttribute('aria-checked',String(x===b))); SORT.pick[r.dataset.r]=b.dataset.v;
-      if(SORT.pick.task&&SORT.pick.part) checkSort(); });
+      if(window.SFX) try{ if(SFX.isOn()) SFX.tick(); }catch(_){}
+      $('bCheck').disabled=!(SORT.pick.task&&SORT.pick.part); });
   }
   function checkSort(){
+    if(!SORT||!SORT.pick.task||!SORT.pick.part||$('pick').querySelector('.so-row.done')) return;
+    $('bCheck').hidden=true;
     const x=SORT, {k,P}=x, okT=x.pick.task===k, okP=x.pick.part===P.s, ok=okT&&okP, first=!x.tries; x.tries++;
-    $('card').querySelectorAll('.so-row').forEach(r=>{ r.classList.add('done'); const want=r.dataset.r==='task'?k:P.s;
+    $('pick').querySelectorAll('.so-row').forEach(r=>{ r.classList.add('done'); const want=r.dataset.r==='task'?k:P.s;
       r.querySelectorAll('button').forEach(b=>{ const v=b.dataset.v, mine=b.getAttribute('aria-checked')==='true';
         b.classList.toggle('ok',v===want); b.classList.toggle('no',mine&&v!==want); }); });
     let head;
@@ -218,7 +235,7 @@ body.sorting #tabs,body.sorting #seg,body.sorting #bEx{display:none}
     w.innerHTML='<b>'+esc(head)+'</b> '+(ok?'':'It’s <b>'+esc(T)+' · '+esc(Pt)+'</b>. ')+esc(okT?(ok?WHY[k]:''):WHY[k])+(okP||ok?'':' '+esc(WHY[P.s]));
     const h=$('card').querySelector('.so-hud'); if(h) h.outerHTML=hud();
     if(window.Cheer){
-      if(ok){ $('card').querySelectorAll('.so-row button.ok').forEach(b=>Cheer.right(b,first));
+      if(ok){ $('pick').querySelectorAll('.so-row button.ok .pl').forEach(b=>Cheer.right(b,first));
         if(RD.run>=3&&RD.run%3===0) Cheer.streak($('card').querySelector('.so-fire')); }
       else Cheer.soft();
     }
@@ -263,6 +280,7 @@ body.sorting #tabs,body.sorting #seg,body.sorting #bEx{display:none}
   $('tabs').onclick=e=>{ const b=e.target.closest('.pr-tab'); if(!b||b.dataset.k===TASK) return; TASK=b.dataset.k; keep('task',TASK); N=0; chrome(); deal(); paint(); };
   $('seg').onclick=e=>{ const b=e.target.closest('button'); if(!b||b.dataset.m===MODE) return; MODE=b.dataset.m; keep('mode',MODE); chrome(); deal(); paint(); };
   $('bNext').onclick=next;
+  $('bCheck').onclick=()=>checkSort();
   $('bEx').onclick=()=>{ const open=$('bEx').getAttribute('aria-expanded')!=='true';
     document.querySelectorAll('.pr-ex').forEach(x=>x.hidden=!open); $('bEx').setAttribute('aria-expanded',String(open)); $('bEx').textContent=open?'Hide example':'Example'; };
   /* a swipe to the left is Next */

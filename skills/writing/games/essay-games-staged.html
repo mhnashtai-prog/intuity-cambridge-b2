@@ -668,6 +668,9 @@
   .gamecard .title{font-family:'Anton', Impact, var(--f-display), sans-serif;font-weight:400;
     letter-spacing:.01em;line-height:1;font-size:clamp(30px,8.4vw,40px)}
   .gamecard .hint{color:var(--poster-body)}
+  .pz-peek{margin:0 0 10px;padding:12px 14px;border-radius:10px;background:rgba(176,134,92,.12);font-size:17px;line-height:1.45;color:var(--poster-ink);
+    transition:opacity .45s ease,max-height .45s ease,margin .45s ease,padding .45s ease;max-height:240px;overflow:hidden}
+  .pz-peek.gone{opacity:0;max-height:0;margin:0;padding-top:0;padding-bottom:0}
 
   /* SEQUENCE — rows on paper, not tiles on a board */
   .gamecard .rlist{gap:0;border-top:1px solid var(--poster-rule)}
@@ -1553,9 +1556,31 @@ body:not(.card-open) #hud{display:none}
       '<div class="pool" id="pool"></div><p class="hint" id="pzHint" style="margin-top:6px"></p>';
     openPiece(0);
   }
+  /* PEEK (8 Nov 2026): Puzzle tests word order, so the sentence is never shown
+     first. After a first wrong check, two peeks per sentence: the whole sentence
+     for a few seconds, a star each - as Show again costs in Storyboard. */
+  const PEEKS=2;
+  function pzActions(){
+    const left=PEEKS-(PZ.peeks||0), can=PZ.tries>0&&left>0;
+    setActions('<button class="btn tinted" id="pzClear" type="button">Clear line</button>'+
+      (can?'<button class="btn" id="pzPeek" type="button">Peek · '+left+' left</button>':''));
+    $('pzClear').onclick=clearLine;
+    if(can) $('pzPeek').onclick=peek;
+  }
+  function peek(){
+    if(PZ.busy||PZ.peeking||(PZ.peeks||0)>=PEEKS) return;
+    PZ.peeks=(PZ.peeks||0)+1; PZ.peeking=true; loseStar(); sfxTick();
+    const sent=PZ.st.sents[PZ.idx], ms=RM?2500:Math.min(4500,Math.max(2500,sent.split(/\s+/).length*180+1200));
+    let box=$('pzPeek_'); if(!box){ box=document.createElement('div'); box.id='pzPeek_'; box.className='pz-peek'; box.setAttribute('aria-live','polite'); $('line').before(box); }
+    box.textContent=sent; box.classList.remove('gone'); pzActions();
+    const b=$('pzPeek'); if(b) b.disabled=true;
+    const ep=epoch, i=PZ.idx;
+    setTimeout(()=>{ if(ep!==epoch||PZ.idx!==i||!$('line')) return; box.classList.add('gone'); PZ.peeking=false; pzActions(); },ms);
+  }
   function openPiece(i){
     const st=PZ.st;
-    Object.assign(PZ,{idx:i,units:unitsOf(st.sents[i]),lockN:0,tries:0,busy:false});
+    Object.assign(PZ,{idx:i,units:unitsOf(st.sents[i]),lockN:0,tries:0,busy:false,peeks:0,peeking:false});
+    { const pk=$('pzPeek_'); if(pk) pk.remove(); }
     const line=$('line'), pool=$('pool');
     line.innerHTML=''; pool.innerHTML=''; line.classList.remove('won');
     let order; do{ order=shuffle(PZ.units.map((_,k)=>k)); }while(order.length>1&&order.every((v,k)=>PZ.units[v]===PZ.units[k]));
@@ -1573,8 +1598,7 @@ body:not(.card-open) #hud{display:none}
     });
     order.forEach(k=>pool.appendChild(PZ.els[k]));
     hintPiece();
-    setActions('<button class="btn tinted" id="pzClear" type="button">Clear line</button>');
-    $('pzClear').onclick=clearLine;
+    pzActions();
   }
   const lineCount=()=>[...$('line').children].filter(c=>!c.classList.contains('ghost')&&!c.classList.contains('dragsrc')).length;
   function hintPiece(){
@@ -1633,7 +1657,7 @@ body:not(.card-open) #hud{display:none}
       appendBuilt(PZ.st.sents[PZ.idx]);
       const next=PZ.idx+1;
       if(next<PZ.st.sents.length){ openPiece(next); }
-      else { $('line').remove(); $('pool').remove(); $('pzHint').textContent=''; setActions(''); await wait(RM?100:500); if(ep===epoch) paragraphDone(); }
+      else { $('line').remove(); $('pool').remove(); { const pk=$('pzPeek_'); if(pk) pk.remove(); } $('pzHint').textContent=''; setActions(''); await wait(RM?100:500); if(ep===epoch) paragraphDone(); }
       return;
     }
     PZ.tries++;
@@ -1648,6 +1672,7 @@ body:not(.card-open) #hud{display:none}
     flip(PZ.els,()=>shuffle(wrong).forEach(c=>pool.appendChild(c)),420);
     PZ.busy=false;
     $('pzHint').innerHTML=pre?'The first <b>'+pre+'</b> word'+(pre===1?' is':'s are')+' right and locked. The rest went back.':'The first word was wrong, so every word went back.';
+    if(!PZ.peeking) pzActions();   /* the first miss brings Peek */
   }
 
   /* ═══ STORYBOARD — read it, it vanishes, bring it back ═══

@@ -128,7 +128,7 @@
   if (!document.querySelector('link[href*="/tools/be2-system.css"]')) {
     var sys = document.createElement('link');
     sys.rel = 'stylesheet';
-    sys.href = '/tools/be2-system.css?v=20261012';
+    sys.href = '/tools/be2-system.css?v=20261108';
     (document.head || document.documentElement).appendChild(sys);
   }
 

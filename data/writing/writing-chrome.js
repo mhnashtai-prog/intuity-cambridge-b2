@@ -370,7 +370,7 @@ function cheerKit(cb) {
   if (window.Cheer) return cb && cb();
   var need = [];
   if (!window.SFX) need.push('/skills/grammar-rules/intuity-sound.js');
-  need.push('/tools/intuity-cheer.js?v=1');
+  need.push('/tools/intuity-cheer.js?v=2');
   var go = function () { if (!need.length) return cb && cb(); var s = document.createElement('script'); s.src = need.shift(); s.onload = go; s.onerror = function () {}; document.head.appendChild(s); };
   go();
 }

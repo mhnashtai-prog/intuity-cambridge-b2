@@ -45,6 +45,7 @@ main{flex:1;display:flex;flex-direction:column;align-items:center;padding:calc(v
 .pr-act{display:flex;gap:10px;justify-content:center;margin-top:18px}
 .pr-act button{all:unset;cursor:pointer;padding:12px 22px;border-radius:999px;font:600 15px/1 'Geist',sans-serif;background:rgba(20,17,14,.07);color:var(--ink)}
 .pr-act .go{background:var(--ink);color:#F6F3EE;display:inline-flex;align-items:center;gap:8px}
+.pr-act button[hidden]{display:none}
 .pr-act button:focus-visible{outline:2px solid var(--car);outline-offset:2px}
 .pr-act button:active{transform:scale(.97)}
 .pr-card.out{opacity:0;transform:translateX(-16px);transition:opacity .14s ease,transform .14s ease}
@@ -72,6 +73,16 @@ body.sorting #tabs,body.sorting #seg,body.sorting #bEx{display:none}
 .so-row.done button{cursor:default}
 .so-why{display:block;margin:16px 0 8px;padding-top:12px;border-top:1px dashed rgba(20,17,14,.14);font-size:14.5px;line-height:1.5;color:#5C5852}
 .so-why b{color:var(--ink)}
+.so-hud{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:14px;font:500 11px/1.4 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#8A8378}
+.so-hud b{font-size:13px;color:var(--ink)}
+.so-fire{opacity:0;transition:opacity .3s}.so-fire.on{opacity:1}
+.so-big{display:block;margin:14px 0 4px;font:400 clamp(64px,20vw,88px)/1 'Anton',Impact,sans-serif;color:var(--ink)}
+.so-praise{display:block;font-size:18px;font-weight:500;color:var(--ink)}
+.so-sub{display:block;margin-top:6px;font:500 11px/1.4 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#8A8378}
+.so-acts{display:flex;flex-wrap:wrap;gap:10px;margin:22px 0 10px}
+.so-acts button{all:unset;cursor:pointer;padding:12px 18px;border-radius:999px;font:600 15px/1 'Geist',sans-serif;background:rgba(20,17,14,.07);color:var(--ink)}
+.so-acts .go{background:var(--ink);color:#F6F3EE}
+.so-acts button:focus-visible{outline:2px solid var(--car);outline-offset:2px}
 .so-why[hidden]{display:none}
 </style>
 </head>
@@ -90,7 +101,9 @@ body.sorting #tabs,body.sorting #seg,body.sorting #bEx{display:none}
   <div class="pr-act"><button type="button" id="bEx" aria-expanded="false">Example</button><button type="button" class="go" id="bNext">Next <span aria-hidden="true">›</span></button></div>
 </main>
 <script src="/skills/grammar-rules/intuity-sound.js"></script>
-<script src="/tools/intuity-cheer.js?v=1"></script>
+<script src="/tools/intuity-cheer.js?v=2"></script>
+<script src="/tools/intuity-log.js?v=1"></script>
+<script src="/tools/be2-progress.js?v=20261105b"></script>
 <script>
 (async function(){
   const $=id=>document.getElementById(id);
@@ -102,7 +115,7 @@ body.sorting #tabs,body.sorting #seg,body.sorting #bEx{display:none}
   let TASK=TASKS.includes(q.get('task'))?q.get('task'):TASKS.includes(mem('task'))?mem('task'):'essays';
   let MODE=MODES.some(m=>m[0]===q.get('mode'))?q.get('mode'):MODES.some(m=>m[0]===mem('mode'))?mem('mode'):'full';
   let N=0, CUR=null;
-  let KIND=q.get('kind')==='sort'?'sort':mem('kind')==='sort'?'sort':'finish', SORT=null, RIGHT=0, DONE=0, RUN=0;
+  let KIND=q.get('kind')==='sort'?'sort':mem('kind')==='sort'?'sort':'finish', SORT=null;
   const SORT_TASKS=['essays','reports','reviews'].filter(k=>D.tasks[k]), PARTS=[['intro','Introduction'],['body','Body'],['end','Conclusion']];
   const WHY={essays:'An essay weighs up an issue in a neutral voice.',reports:'A report is formal: findings and recommendations about a place or an event.',reviews:'A review talks to the reader and gives an opinion of something.',
     intro:'It sets the scene.',body:'It develops one point.',end:'It sums up or recommends.'};
@@ -134,6 +147,7 @@ body.sorting #tabs,body.sorting #seg,body.sorting #bEx{display:none}
     CUR={top,parts,reg}; N++;
   }
   function paint(){
+    $('bNext').hidden=false;
     const T=D.tasks[TASK], [t,k]=CUR.top;
     const sec=([s,ps])=>`<span class="fc-sec"><span class="fc-role">${ROLE[s]}</span><span class="fc-in">`+
       ps.map(P=>`<span class="pr-p">${fill(P.p,t,k,'t')}</span><span class="pr-ex" hidden>${exHTML(P)}</span>`).join('')+`</span></span>`;
@@ -141,15 +155,39 @@ body.sorting #tabs,body.sorting #seg,body.sorting #bEx{display:none}
       `<span class="fc">${CUR.parts.map(sec).join('')}</span><span class="pr-turn">Finish it aloud or on paper: ${esc(T.what)}.</span>`;
     $('bEx').setAttribute('aria-expanded','false'); $('bEx').textContent='Example';
   }
-  function dealSort(){
-    const all=SORT_TASKS.flatMap(k=>D.tasks[k].prompts.map(P=>({k,P})));
-    SORT=draw('sort',all); SORT.pick={}; N++;
+  /* SORT IN ROUNDS (8 Nov 2026, after the vocabulary Rack, Pegs and Pairs):
+     nine phrases a round and a live tally - kept, missed, left, and a 🔥 run
+     from two in a row. A miss is not the end of that phrase: it comes back
+     three cards later for a second go. Three in a row is a fanfare. After
+     nine, the round's card: 7 / 9, a line of praise, the same nine again or
+     the next nine. Every answer is written to the INTUITY log, so practising
+     here keeps the home page's streak alive. The next card comes by itself. */
+  const ROUND=9, RIGHT_LINES=['Nice catch!','Exactly right!','Straight to it!','Sharp eyes!','Right in one!','Got it!'],
+        AGAIN_LINES=['So close: it comes back in a moment.','Good guess: you will see it again.'],
+        MISS_LINES=['Worth remembering.','Keep going!'];
+  const pickOf=a=>a[Math.floor(Math.random()*a.length)];
+  let RD=null, AUTO=null;
+  function newRound(same){
+    const all=SORT_TASKS.flatMap(k=>D.tasks[k].prompts.map((P,i)=>({k,P,id:'sort-'+k+'-'+i})));
+    const items=same&&RD?RD.items.map(x=>({k:x.k,P:x.P,id:x.id})):Array.from({length:ROUND},()=>draw('sort',all));
+    RD={items,q:items.map((_,i)=>i),pos:0,kept:0,missed:0,run:0,best:0,n:(RD?RD.n:0)+(same?0:1),end:false};
+    items.forEach(x=>{ x.tries=0; x.state=''; });
   }
+  function dealSort(){
+    clearTimeout(AUTO);
+    if(!RD||RD.end) newRound(false);
+    if(RD.pos>=RD.q.length){ RD.end=true; SORT=null; return; }
+    SORT=RD.items[RD.q[RD.pos]]; SORT.pick={};
+  }
+  const hud=()=>`<span class="so-hud"><span><b>${RD.kept}</b> kept</span><span><b>${RD.missed}</b> missed</span><span><b>${ROUND-RD.kept-RD.missed}</b> left</span>`+
+    `<span class="so-fire${RD.run>=2?' on':''}">🔥 <b>${RD.run}</b></span></span>`;
   function paintSort(){
+    $('bNext').hidden=false;
+    if(!SORT) return paintEnd();
     const {k,P}=SORT, txt=esc(P.p).replace(/\{T\}|\{t\}|\{k\}/g,'…').replace(/…(\s*…)+/g,'…').replace(/…/g,'<span class="fc-gap">…</span>');
     const row=(name,list)=>`<span class="so-row" role="radiogroup" data-r="${name}">`+list.map(([v,l])=>`<button type="button" role="radio" aria-checked="false" data-v="${v}">${l}</button>`).join('')+`</span>`;
-    $('card').innerHTML=`<span class="fc-k">Sort${DONE?' · '+RIGHT+' right'+(RUN>1?' · '+RUN+' in a row':''):''}</span><span class="fc-t">Sort <span class="fc-n">${N}</span></span><span class="fc-bar" aria-hidden="true"></span>`+
-      `<span class="so-p">${txt}</span>`+
+    $('card').innerHTML=`<span class="fc-k">Sort · Round ${RD.n}${SORT.tries?' · second go':''}</span><span class="fc-t">Sort <span class="fc-n">${RD.kept+RD.missed+1}</span></span><span class="fc-bar" aria-hidden="true"></span>`+
+      hud()+`<span class="so-p">${txt}</span>`+
       `<span class="so-q">Which task?</span>`+row('task',SORT_TASKS.map(t=>[t,D.tasks[t].label]))+
       `<span class="so-q">Which part?</span>`+row('part',PARTS)+
       `<span class="so-why" id="soWhy" hidden></span>`;
@@ -158,20 +196,43 @@ body.sorting #tabs,body.sorting #seg,body.sorting #bEx{display:none}
       if(SORT.pick.task&&SORT.pick.part) checkSort(); });
   }
   function checkSort(){
-    const {k,P}=SORT, okT=SORT.pick.task===k, okP=SORT.pick.part===P.s; DONE++; if(okT&&okP) RIGHT++;
+    const x=SORT, {k,P}=x, okT=x.pick.task===k, okP=x.pick.part===P.s, ok=okT&&okP, first=!x.tries; x.tries++;
     $('card').querySelectorAll('.so-row').forEach(r=>{ r.classList.add('done'); const want=r.dataset.r==='task'?k:P.s;
       r.querySelectorAll('button').forEach(b=>{ const v=b.dataset.v, mine=b.getAttribute('aria-checked')==='true';
         b.classList.toggle('ok',v===want); b.classList.toggle('no',mine&&v!==want); }); });
-    const T=D.tasks[k].label, Pt=PARTS.find(x=>x[0]===P.s)[1];
+    let head;
+    if(ok){ x.state='kept'; RD.kept++; RD.run++; RD.best=Math.max(RD.best,RD.run); head=pickOf(RIGHT_LINES); }
+    else if(first){ RD.run=0; head=pickOf(AGAIN_LINES); RD.q.splice(Math.min(RD.pos+4,RD.q.length),0,RD.q[RD.pos]); }   /* it comes back */
+    else { x.state='missed'; RD.missed++; RD.run=0; head=pickOf(MISS_LINES); }
+    RD.pos++;
+    const T=D.tasks[k].label, Pt=PARTS.find(y=>y[0]===P.s)[1];
     const w=$('soWhy'); w.hidden=false;
-    w.innerHTML=(okT&&okP?'<b>Right.</b> ':'<b>It’s '+esc(T)+' · '+esc(Pt)+'.</b> ')+esc(okT?'':WHY[k]+' ')+esc(okP?'':WHY[P.s]+' ')+(okT&&okP?esc(WHY[k]):'');
-    /* the Board games' celebration: the bowl and glitter from the right pills; every fifth in a row, a jingle */
-    if(window.Cheer){ if(okT&&okP){ RUN++; $('card').querySelectorAll('.so-row button.ok').forEach(b=>Cheer.right(b)); Cheer.run(RUN,$('card').querySelector('.fc-t')); } else { RUN=0; Cheer.soft(); } }
-    const k2=$('card').querySelector('.fc-k'); if(k2) k2.textContent='Sort · '+RIGHT+' right'+(RUN>1?' · '+RUN+' in a row':'');
+    w.innerHTML='<b>'+esc(head)+'</b> '+(ok?'':'It’s <b>'+esc(T)+' · '+esc(Pt)+'</b>. ')+esc(okT?(ok?WHY[k]:''):WHY[k])+(okP||ok?'':' '+esc(WHY[P.s]));
+    const h=$('card').querySelector('.so-hud'); if(h) h.outerHTML=hud();
+    if(window.Cheer){
+      if(ok){ $('card').querySelectorAll('.so-row button.ok').forEach(b=>Cheer.right(b,first));
+        if(RD.run>=3&&RD.run%3===0) Cheer.streak($('card').querySelector('.so-fire')); }
+      else Cheer.soft();
+    }
+    try{ if(window.INTUITY) INTUITY.log('writing',x.id,ok,{game:'sort',task:k,part:P.s}); }catch(e){}
+    clearTimeout(AUTO); AUTO=setTimeout(next,ok?1400:2600);   /* the next card comes by itself; Next skips the wait */
+  }
+  function praise(n){ const f=n/ROUND; return f===1?'Perfect round: every one sorted.':f>=.75?'Great run: barely any got away.':f>=.5?'Solid work. A few worth another look.':'A tricky set: good ones to come back to.'; }
+  function paintEnd(){
+    $('bNext').hidden=true;
+    try{ if(window.INTUITY) INTUITY.session('writing','sort',{kept:RD.kept,missed:RD.missed}); }catch(e){}
+    $('card').innerHTML=`<span class="fc-k">Sort · Round ${RD.n} done</span><span class="so-big">${RD.kept} / ${ROUND}</span>`+
+      `<span class="so-praise">${esc(praise(RD.kept))}</span>`+
+      `<span class="so-sub">${RD.missed?RD.missed+(RD.missed===1?' missed':' missed'):'none missed'}${RD.best>=3?' · best run '+RD.best:''}</span>`+
+      `<span class="so-acts"><button type="button" id="soAgain">↻ These nine again</button><button type="button" class="go" id="soNext">Next nine →</button></span>`;
+    $('soAgain').onclick=()=>{ newRound(true); dealSort(); paintSort(); };
+    $('soNext').onclick=()=>{ newRound(false); dealSort(); paintSort(); };
+    if(window.Cheer){ const big=$('card').querySelector('.so-big'); if(RD.kept===ROUND) Cheer.finale(); else if(RD.kept>=7) Cheer.done(big); else Cheer.tick(big); }
   }
   function next(){
     /* finishing cards is its own run: every fifth card, a jingle */
     if(KIND==='finish'&&N%5===0&&window.Cheer) Cheer.done($('card').querySelector('.fc-n'));
+    clearTimeout(AUTO); if(KIND==='sort'&&RD&&RD.end) return;
     const c=$('card'), go=()=>{ if(KIND==='sort'){ dealSort(); paintSort(); } else { deal(); paint(); } };
     if(matchMedia('(prefers-reduced-motion: reduce)').matches){ go(); return; }
     c.classList.add('out'); setTimeout(()=>{ go(); c.classList.remove('out'); c.classList.add('in'); requestAnimationFrame(()=>requestAnimationFrame(()=>c.classList.remove('in'))); },150);

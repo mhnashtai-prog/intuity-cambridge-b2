@@ -10,6 +10,7 @@
    Cheer.done(el)          a finish line (an essay built, a checklist complete): jingle + glitter
    Cheer.finale()          the big one: fanfare and fireworks across the screen
    Cheer.tick(el)          a small pop on a tick or a save
+   Cheer.streak(el)        a run milestone (three in a row): fanfare and a big burst
 
    Sound follows the app-wide mute (skills/grammar-rules/intuity-sound.js, SFX);
    glitter and fireworks follow reduced motion. Load intuity-sound.js first. */
@@ -69,6 +70,8 @@
       for (var k = 0; k < 7; k++) (function (k) { setTimeout(function () {
         burstAt(innerWidth * (.15 + Math.random() * .7), innerHeight * (.12 + Math.random() * .5), 70, 1); sfx(k % 2 ? 'pop' : 'rise'); }, k * 260); })(k);
     },
-    tick: function (el) { sfx('tick'); pop(el); from(el, 8, .35); }
+    tick: function (el) { sfx('tick'); pop(el); from(el, 8, .35); },
+    /* a run milestone, as in the Rack: the fanfare and a bigger burst */
+    streak: function (el) { setTimeout(function () { sfx('fanfare'); pop(el); from(el, 56, 1); }, 240); }
   };
 })(window);

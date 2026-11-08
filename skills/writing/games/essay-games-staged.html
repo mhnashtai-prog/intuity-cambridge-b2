@@ -761,6 +761,26 @@
 body:not(.card-open) #hud{display:none}
 #chGate #timerModes{display:flex;gap:6px;justify-content:center;margin-top:18px}
 #chGate #timerModes .mbtn{min-height:34px;padding:0 14px}
+/* STORYBOARD, FOCUSED (8 Nov 2026, the teacher's call): the pendulum asks
+   which task, then a tap starts; the card shows one sentence and little
+   else, and READY · SET · GO! comes before each stage's first sentence */
+.g-ask{margin:18px 0 6px;font:500 10.5px/1.3 'Geist Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#9A948B;text-align:center}
+#chGate #typeStrip{text-transform:none;letter-spacing:0;display:flex;gap:0;padding:3px;border-radius:999px;background:rgba(20,17,14,.06);margin:0 auto;max-width:100%;justify-content:center}
+#chGate #typeStrip .mode-btn{all:unset;text-transform:none;letter-spacing:0;cursor:pointer;padding:9px 14px;border-radius:999px;font:600 13px/1 'Geist',sans-serif;color:#5C5852;white-space:nowrap}
+#chGate #typeStrip .mode-btn.active{background:#14110E;color:#F6F3EE}
+#chGate #typeStrip .mode-btn:focus-visible{outline:2px solid #B0865C;outline-offset:2px}
+#sbGaps{display:flex;gap:6px;justify-content:center;margin-top:10px}
+#sbGaps[hidden]{display:none}
+#sbGaps button{all:unset;cursor:pointer;padding:7px 12px;border-radius:999px;font:600 12.5px/1 'Geist',sans-serif;color:#5C5852;background:rgba(20,17,14,.06)}
+#sbGaps button.on{background:#4F6B61;color:#fff}
+#gamecard.story #pills{display:none}
+.sdots{display:inline-flex;gap:5px;margin-left:10px;vertical-align:middle}
+.sdots i{width:7px;height:7px;border-radius:50%;border:1.5px solid #B0865C;box-sizing:border-box}
+.sdots i.done{background:#B0865C}.sdots i.now{background:#14110E;border-color:#14110E}
+.rgo{display:grid;place-items:center;min-height:180px}
+.rgo span{font:400 clamp(56px,17vw,84px)/1 'Anton',Impact,sans-serif;letter-spacing:.02em;text-transform:uppercase;color:#14110E;animation:rgoIn .5s cubic-bezier(.3,1.5,.5,1)}
+.rgo span.go{color:#B0865C}
+@keyframes rgoIn{0%{opacity:0;transform:scale(1.6)}60%{opacity:1}100%{transform:scale(1)}}
 </style>
 </head>
 <body>
@@ -1019,6 +1039,7 @@ body:not(.card-open) #hud{display:none}
   function resumeClocks(){
     if(suspendedLeft!=null&&stageRunning){ timerEnd=performance.now()+suspendedLeft; suspendedLeft=null; runTimer(stageToken); }
     if(RC&&game==='story'&&RC.phase==='read'&&RC.readLeft!=null){ RC.readEnd=performance.now()+RC.readLeft; RC.readLeft=null; runRing(); }
+    if(RC&&game==='story'&&RC.phase==='ready'&&RC.goLater){ const f=RC.goLater; RC.goLater=null; RC.phase=''; f(); }
   }
   function pauseClock(){ stageRunning=false; if(timerRAF) cancelAnimationFrame(timerRAF); }
   function registerHit(){
@@ -1202,7 +1223,7 @@ body:not(.card-open) #hud{display:none}
   }
 
   /* ═══ CONTENT ═══ */
-  const TYPES=[{id:'essays',label:'ESSAY'},{id:'reports',label:'REPORT'},{id:'reviews',label:'REVIEW'},{id:'emails',label:'EMAIL'}];
+  const TYPES=[{id:'essays',label:'Essay'},{id:'reports',label:'Report'},{id:'reviews',label:'Review'},{id:'emails',label:'Email'}];
   const DATA={essays:'/skills/writing/games/data/essays-models.json',reports:'/skills/writing/games/data/reports-models.json',
     reviews:'/skills/writing/games/data/reviews-models.json',emails:'/skills/writing/games/data/emails-models.json'};
   const FRAMES=['This is because','For example','As a result','Firstly','Secondly','Furthermore','Moreover','In addition',
@@ -1240,11 +1261,15 @@ body:not(.card-open) #hud{display:none}
       b.className='mode-btn'+(t.id===type?' active':''); b.textContent=t.label;
       b.onclick=()=>{ if(t.id!==type) chooseType(t.id); }; s.appendChild(b); });
   }
+  function paintGaps(){ const g=$('sbGaps'); if(!g) return; g.hidden=game!=='story';
+    g.querySelectorAll('button').forEach(b=>b.classList.toggle('on',(b.dataset.g==='all')===SB_ALL)); }
   function renderGames(){
     const s=$('gameTabs'); s.innerHTML='';
     GAMES.forEach(gm=>{ const b=document.createElement('button');
-      b.className='tabitem'+(gm.id===game&&(cardOpen||live)?' active':''); b.textContent=gm.nm;
-      b.onclick=()=>openGame(gm.id); s.appendChild(b); });
+      b.className='tabitem'+(gm.id===game?' active':''); b.textContent=gm.nm;
+      /* a game tab chooses; the pendulum starts (8 Nov 2026) - unless a game is already live, then it switches */
+      b.onclick=()=>{ if(cardOpen) return openGame(gm.id); if(live&&gm.id===game) return openGame(gm.id); game=gm.id; live=false; renderGames(); renderChooser(); };
+      s.appendChild(b); });
   }
   function chooseType(id){
     type=id; renderTypeStrip(); live=false; renderChooser(); renderGames();
@@ -1337,6 +1362,7 @@ body:not(.card-open) #hud{display:none}
     stars=3; run.k=p;
     const st=stages[p], n=stages.length;
     setHead((run.full?'Paragraph ':'Stage ')+(p+1)+' of '+n,st.label);
+    if(game==='story') $('stepLabel').innerHTML='Stage '+(p+1)+' of '+n+'<span class="sdots" aria-hidden="true">'+stages.map((_,k)=>'<i class="'+(k<p?'done':k===p?'now':'')+'"></i>').join('')+'</span>';
     $('cardBody').scrollTop=0;
     if(run.full) renderControls();
     if(game==='sequence') renderSequence(st);
@@ -1644,7 +1670,21 @@ body:not(.card-open) #hud{display:none}
     if(!chosen.size){ let bi=0; clean.forEach((w,i)=>{ if(w.length>clean[bi].length) bi=i; }); chosen.add(bi); }
     return chosen;
   }
-  let RC=null, rcTok=0;
+  let RC=null, rcTok=0, SB_HINTED=false;
+  /* READY · SET · GO! before each stage's first sentence: the eyes land on the card before the clock starts */
+  function readyGo(done){
+    if(RM){ done(); return; }
+    const ep=epoch; RC.phase='ready'; setActions(''); $('rcHint').innerHTML='';
+    const W=['Ready','Set','Go!']; let k=0;
+    (function step(){
+      if(ep!==epoch||!RC) return;
+      if(!cardOpen){ RC.goLater=done; return; }   /* closed mid-count: Go! waits for the card to reopen */
+      if(k===W.length){ RC.phase=''; done(); return; }
+      $('readbox').innerHTML='<div class="rgo" aria-live="assertive"><span class="'+(k===2?'go':'')+'">'+W[k]+'</span></div>';
+      if(k<2) sfxTick(); else sfxLock(4);
+      k++; setTimeout(step,k===3?520:700);
+    })();
+  }
   function renderRecall(st){
     RC={st,idx:0};
     $('cardBody').innerHTML=sofarHTML()+'<div class="built" id="built"></div><div class="readbox" id="readbox"></div><p class="hint" id="rcHint" style="margin-top:12px"></p>';
@@ -1653,7 +1693,7 @@ body:not(.card-open) #hud{display:none}
   function openRecall(i){
     const tokens=RC.st.sents[i].split(/\s+/).filter(Boolean);
     Object.assign(RC,{idx:i,tokens,blanks:pickBlanks(tokens),found:new Set(),given:new Set(),typed:{},tries:0,reads:0,phase:'read',early:0});
-    startRead();
+    if(i===0) readyGo(startRead); else startRead();
   }
   function startRead(){
     RC.phase='read'; RC.reads++;
@@ -1663,16 +1703,10 @@ body:not(.card-open) #hud{display:none}
     RC.readLeft=null;
     $('readbox').innerHTML='<div class="readhead"><span>Sentence '+(RC.idx+1)+' of '+RC.st.sents.length+' · read it</span>'+
       '<div class="ring" id="ring"><svg viewBox="0 0 40 40" aria-hidden="true"><circle class="trk" cx="20" cy="20" r="17"/><circle class="arc" id="arc" cx="20" cy="20" r="17" stroke-dasharray="'+C+'" stroke-dashoffset="0"/></svg><b id="ringN">'+secs+'</b></div></div>'+
-      '<div class="sbseg" role="group" aria-label="Which words disappear"><button type="button" data-g="some"'+(SB_ALL?'':' class="on"')+'>Key words</button><button type="button" data-g="all"'+(SB_ALL?' class="on"':'')+'>Every word</button></div>'+
       '<div class="rsent" id="rsent">'+RC.tokens.map((t,k)=>'<span class="rw'+(RC.blanks.has(k)?' target':'')+'">'+esc(t)+'</span>').join(' ')+'</div>';
-    $('rcHint').innerHTML=(SB_ALL?'Every word will disappear.':'The underlined words will disappear.')+' Tap <b>I’ve got it</b> early for a quick-read bonus.';
-    document.querySelectorAll('.sbseg button').forEach(b=>b.onclick=()=>{
-      SB_ALL=b.dataset.g==='all';
-      document.querySelectorAll('.sbseg button').forEach(x=>x.classList.toggle('on',x===b));
-      RC.blanks=pickBlanks(RC.tokens);
-      document.querySelectorAll('#rsent .rw').forEach((w,k)=>w.classList.toggle('target',RC.blanks.has(k)));
-      $('rcHint').innerHTML=(SB_ALL?'Every word will disappear.':'The underlined words will disappear.')+' Tap <b>I’ve got it</b> early for a quick-read bonus.';
-    });
+    /* the how-to once a visit; after that the sentence is alone on the card */
+    $('rcHint').innerHTML=SB_HINTED?'':(SB_ALL?'Every word will disappear.':'The underlined words will disappear.')+' Tap <b>I’ve got it</b> early for a quick-read bonus.';
+    SB_HINTED=true;
     setActions('<button class="btn primary" id="rcReady" type="button">I’ve got it</button>');
     $('rcReady').onclick=()=>endRead(true);
     runRing();
@@ -1962,14 +1996,15 @@ body:not(.card-open) #hud{display:none}
       /* 8 Nov 2026: not an empty "pick a game" - the pendulum starts the first game */
       const first=gm||GAMES[0];
       $('gateHead').textContent='Tap to play '+first.nm;
-      $('gateSub').innerHTML='Today’s text: <b>'+esc(topic)+'</b>. Or choose another game above.';
+      $('gateSub').innerHTML=(first.id==='story'?'Read a sentence. It vanishes. Bring it back. ':'')+'Today’s text: <b>'+esc(topic)+'</b>.';
+      paintGaps();
       $('gateGlyph').textContent='▶\uFE0E';
     }
   }
   function openGame(id,from){
     if(!DATASET){ pendingOpen=id; return; }
     const resume=live&&id===game;
-    game=id; cardOpen=true; renderGames();
+    game=id; cardOpen=true; renderGames(); $('gamecard').classList.toggle('story',id==='story');
     $('gTitle').textContent=GAMES.find(g=>g.id===id).nm;
     $('gamecard').setAttribute('aria-hidden','false');
     document.body.classList.add('card-open');
@@ -2014,6 +2049,13 @@ body:not(.card-open) #hud{display:none}
   $('muteBtn').onclick=()=>setMute(!soundOn);
   setMute(soundOn);
   /* the clock choice waits under the pendulum, where a game is chosen */
+  { const ask=document.createElement('div'); ask.className='g-ask'; ask.textContent='Which task?';
+    $('chGate').appendChild(ask); $('chGate').appendChild($('typeStrip'));
+    const gp=document.createElement('div'); gp.id='sbGaps'; gp.setAttribute('role','group'); gp.setAttribute('aria-label','Which words disappear');
+    gp.innerHTML='<button type="button" data-g="some">Key words vanish</button><button type="button" data-g="all">Every word vanishes</button>';
+    $('chGate').appendChild(gp);
+    gp.onclick=e=>{ const b=e.target.closest('button'); if(!b) return; SB_ALL=b.dataset.g==='all'; paintGaps(); };
+  }
   $('chGate').appendChild($('timerModes'));
   { const go=()=>{ if(DATASET) openGame(game||GAMES[0].id); };
     $('gateGo').style.cursor='pointer'; $('gateGo').onclick=go; $('gateGo').onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); go(); } }; }

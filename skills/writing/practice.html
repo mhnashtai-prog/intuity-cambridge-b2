@@ -60,14 +60,31 @@ main{flex:1;display:flex;flex-direction:column;align-items:center;padding:calc(v
 .pr-kind button{all:unset;position:relative;cursor:pointer;padding:10px 22px;border-radius:999px;font:700 13px/1 'Geist',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8A8378}
 .pr-kind button[aria-checked=true]{background:#14110E;color:#F6F3EE}
 .pr-kind button:focus-visible{outline:2px solid var(--car);outline-offset:2px}
-body.sorting #tabs,body.sorting #seg,body.sorting #bEx{display:none}
-body:not(.sorting) #bCheck{display:none}
+body.sorting #tabs,body.sorting #seg{display:none}
+/* FINISH IT AS A PUZZLE (8 Nov 2026, the teacher's idea): the ending in word chips to put back in order */
+.fi-tray{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:14px;min-height:40px}
+.fi-c{all:unset;position:relative;cursor:pointer;padding:10px 14px;border-radius:999px;border:1px solid rgba(20,17,14,.18);background:#FBF9F5;font:600 15px/1.1 'Geist',sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;transition:transform .12s}
+.fi-c:active{transform:scale(.95)}
+.fi-c:focus-visible{outline:2px solid var(--car);outline-offset:2px}
+.fi-w{all:unset;position:relative;cursor:pointer;color:var(--ink);border-bottom:2px solid var(--car);padding:0 1px;margin-right:.28em;-webkit-tap-highlight-color:transparent}
+.fi-w.lock{cursor:default;border-bottom-color:#4F6B61}
+.fi-w.in{animation:fiIn .22s cubic-bezier(.3,1.5,.5,1)}
+@keyframes fiIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.fi-slot{transition:color .3s}
+.fi-done{color:#4F6B61}
+.fi-shown{color:#9A5A2C}
+.pr-p.wait{color:#A39B90;font-size:14.5px;line-height:1.4}.pr-p.wait .t{color:#C2A88C}
+.fi-no{display:block;margin-top:6px;color:#A39B90}
+.fi-no s{text-decoration-color:#B0865C;text-decoration-thickness:1.5px}
+.fi-no b{font:600 10.5px/1 'Geist Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#9A5A2C;margin-right:6px}
+.fi-tray:empty::after{content:'All placed: check it.';font-size:13px;color:#A39B90;align-self:center}
+@media (prefers-reduced-motion:reduce){ .fi-w.in{animation:none} }
 .so-ask{display:block;font-size:14px;line-height:1.4;color:#8A8378}
 .so-p{display:block;margin:16px 0 6px;font-size:clamp(18px,4.8vw,20px);line-height:1.5;font-weight:500;color:var(--ink)}
 .so-p .fc-gap{color:#B4ADA2}
 .so-q{display:block;margin:16px 0 6px;font:500 10.5px/1.3 'Geist Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#9A948B}
 .so-pick{width:100%;max-width:520px;box-sizing:border-box;margin:20px auto 0;padding:0 2px}
-.so-pick[hidden],body:not(.sorting) .so-pick{display:none}
+.so-pick[hidden]{display:none}
 .so-pick .so-ask{margin:0 0 4px;padding-top:14px;border-top:1px solid var(--rule);text-align:center;font-size:15px;color:#5C5852}
 .so-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
 .so-row button{all:unset;position:relative;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:9px;-webkit-tap-highlight-color:transparent}
@@ -115,7 +132,7 @@ body:not(.sorting) #bCheck{display:none}
 <main>
   <article class="fc-card pr-card" id="card" aria-live="polite"></article>
   <section class="so-pick" id="pick" aria-label="Where does this phrase belong?" hidden></section>
-  <div class="pr-act"><button type="button" id="bEx" aria-expanded="false">Example</button><button type="button" class="go" id="bCheck" hidden>Check</button><button type="button" class="go" id="bNext">Next <span aria-hidden="true">›</span></button></div>
+  <div class="pr-act"><button type="button" class="go" id="bCheck" hidden>Check</button><button type="button" class="go" id="bNext">Next <span aria-hidden="true">›</span></button></div>
 </main>
 <script src="/skills/grammar-rules/intuity-sound.js"></script>
 <script src="/tools/intuity-cheer.js?v=2"></script>
@@ -144,33 +161,130 @@ body:not(.sorting) #bCheck{display:none}
   function fill(p,t,k,cls){
     return esc(p).replace(/\{T\}/g,`<span class="${cls}">${esc(cap(t))}</span>`).replace(/\{t\}/g,`<span class="${cls}">${esc(t)}</span>`).replace(/\{k\}/g,esc(k||'')).replace(/…/g,'<span class="fc-gap">…</span>');
   }
-  function exHTML(P){
-    const e=P.ex; let s;
-    if(e.full) s=esc(e.full);
-    else { const head=P.p.replace(/\s*…\s*$/,' ').replace(/\{T\}/g,cap(e.t)).replace(/\{t\}/g,e.t).replace(/\{k\}/g,e.k||'');
-      s=`<span class="ph">${esc(head.replace(/…/g,'').trimEnd())}</span> ${esc(e.end)}`; }
-    const no=P.no?`<span class="no"><b>Not</b><s>${esc(P.no)}</s></span>`:'';
-    return `<span class="about">About ${esc(e.t)}</span>${s}${no}`;
+  /* FINISH IT AS A PUZZLE (8 Nov 2026, the teacher's idea): the app cannot mark a
+     free ending, so nothing was at stake. Now the model ending comes back as word
+     chips to tap into order, then Check. A slip keeps the words already right
+     and sends the rest back for a second go; a second miss shows the line. Rounds
+     of five cards, a tally, a run, a best to beat - the same game as Sort. */
+  const FROUND=5;
+  let FR=null;
+  const usable=P=>P.ex&&P.ex.end&&/…\s*$/.test(P.p)&&(P.p.match(/…/g)||[]).length===1;
+  /* chips are words, but a/an/the travel with their noun, and a long ending joins its
+     shortest neighbours until there are eight chips at most: the phrases stay whole */
+  const chunk=str=>{ const w=str.trim().split(/\s+/), out=[];
+    for(let i=0;i<w.length;i++){ if(/^(a|an|the)$/i.test(w[i])&&i<w.length-1){ out.push(w[i]+' '+w[i+1]); i++; } else out.push(w[i]); }
+    while(out.length>8){ let m=0; for(let i=1;i<out.length-1;i++) if(out[i].length+out[i+1].length<out[m].length+out[m+1].length) m=i; out.splice(m,2,out[m]+' '+out[m+1]); }
+    return out; };
+  const mix=n=>{ const ix=[...Array(n).keys()]; if(n<2) return ix; let g=0; do{ ix.sort(()=>Math.random()-.5); }while(ix.every((v,i)=>v===i)&&g++<9); return ix; };
+  const lineOf=(s,P)=>({s,P,ans:chunk(P.ex.end),tray:null,placed:[],lock:0,tries:0,state:''});
+  function newFR(same){
+    const deck=same&&FR?FR.deck:[];
+    FR={deck,card:0,kept:0,missed:0,run:0,best:0,n:(FR?FR.n:0)+(same?0:1),end:false,per:MODE==='full'?4:1};
   }
   function deal(){
-    const T=D.tasks[TASK], top=draw(TASK+':topic',T.topics);
-    /* an email keeps one register: formal to an organisation, friendly to a friend */
-    const regs=[...new Set(T.prompts.map(p=>p.r).filter(Boolean))], reg=regs.length?regs[Math.floor(Math.random()*regs.length)]:null;
-    const by=s=>T.prompts.filter(p=>p.s===s&&(!reg||p.r===reg));
-    const pick=s=>draw(TASK+':'+s+':'+reg,by(s));
-    /* two different body lines, even when the shuffled pile runs out between them */
-    const two=()=>{ const a=pick('body'); let b=pick('body'), k=0; while(b===a&&k++<5) b=pick('body'); return [a,b]; };
-    const parts=MODE==='full'?[['intro',[pick('intro')]],['body',two()],['end',[pick('end')]]]:[[MODE,[pick(MODE)]]];
-    CUR={top,parts,reg}; N++;
+    if(!FR||FR.end) newFR(false);
+    if(FR.card>=FROUND){ FR.end=true; CUR=null; return; }
+    let spec=FR.deck[FR.card];
+    if(!spec){
+      const T=D.tasks[TASK];
+      const regs=[...new Set(T.prompts.filter(usable).map(p=>p.r).filter(Boolean))], reg=regs.length?regs[Math.floor(Math.random()*regs.length)]:null;
+      const by=s=>T.prompts.filter(p=>p.s===s&&usable(p)&&(!reg||p.r===reg));
+      const pick=s=>draw(TASK+':f:'+s+':'+reg,by(s));
+      const two=()=>{ const a=pick('body'); let b=pick('body'), k=0; while(b===a&&k++<5) b=pick('body'); return [a,b]; };
+      spec={reg,lines:MODE==='full'?[['intro',pick('intro')],...two().map(P=>['body',P]),['end',pick('end')]]:[[MODE,pick(MODE)]]};
+      FR.deck[FR.card]=spec;
+    }
+    CUR={reg:spec.reg,lines:spec.lines.map(([s,P])=>lineOf(s,P)),at:0};
+    CUR.lines.forEach(L=>L.tray=mix(L.ans.length)); N=FR.card+1;
+  }
+  const fhud=()=>{ const tot=FROUND*FR.per, done=FR.kept+FR.missed; return done===0?'<span class="so-hud" hidden></span>':
+    `<span class="so-hud"><span><b>${FR.kept}</b> right</span><span><b>${FR.missed}</b> missed</span><span><b>${tot-done}</b> to go</span>`+
+    `<span class="so-fire${FR.run>=2?' on':''}">🔥 <b>${FR.run}</b></span></span>`; };
+  const head=L=>fill(L.P.p.replace(/\s*…\s*$/,' '),L.P.ex.t,L.P.ex.k,'t');
+  function slot(L,i){
+    if(L.state==='kept') return `<span class="fi-done">${esc(L.P.ex.end)}</span>`;
+    if(L.state==='shown') return `<span class="fi-shown">${esc(L.P.ex.end)}</span>`;
+    if(i!==CUR.at) return '<span class="fc-gap">…</span>';
+    return L.placed.map((c,j)=>`<button type="button" class="fi-w${j<L.lock?' lock':''}" data-j="${j}">${esc(L.ans[c])}</button>`).join('')+
+      (L.placed.length<L.ans.length?'<span class="fc-gap">…</span>':'');
   }
   function paint(){
-    $('bNext').hidden=false;
-    const T=D.tasks[TASK], [t,k]=CUR.top;
-    const sec=([s,ps])=>`<span class="fc-sec"><span class="fc-role">${ROLE[s]}</span><span class="fc-in">`+
-      ps.map(P=>`<span class="pr-p">${fill(P.p,t,k,'t')}</span><span class="pr-ex" hidden>${exHTML(P)}</span>`).join('')+`</span></span>`;
-    $('card').innerHTML=`<span class="fc-k">Practice · ${esc(T.label)}${CUR.reg?' · '+esc(CUR.reg):''}</span><span class="fc-t">${esc(T.label)} <span class="fc-n">${N}</span></span><span class="fc-bar" aria-hidden="true"></span>`+
-      `<span class="fc">${CUR.parts.map(sec).join('')}</span><span class="pr-turn">Finish it aloud or on paper: ${esc(T.what)}.</span>`;
-    $('bEx').setAttribute('aria-expanded','false'); $('bEx').textContent='Example';
+    $('bNext').hidden=true;
+    if(!CUR){ $('pick').hidden=true; $('bCheck').hidden=true; return paintFinishEnd(); }
+    const T=D.tasks[TASK]; let prev='';
+    const rows=CUR.lines.map((L,i)=>{ const role=L.s===prev?'':ROLE[L.s]; prev=L.s;
+      return `<span class="fc-sec"><span class="fc-role">${role}</span><span class="fc-in"><span class="pr-p${i>CUR.at?' wait':''}">${head(L)}<span class="fi-slot" id="fs${i}">${slot(L,i)}</span></span></span></span>`; }).join('');
+    $('card').innerHTML=`<span class="fc-k">Finish it · ${esc(T.label)}${CUR.reg?' · '+esc(CUR.reg):''} · Round ${FR.n}</span><span class="fc-t">${esc(T.label)} <span class="fc-n">${N}</span></span><span class="fc-bar" aria-hidden="true"></span>`+
+      fhud()+`<span class="fc">${rows}</span><span class="so-why" id="soWhy" hidden></span>`;
+    tray();
+  }
+  function tray(){
+    const L=CUR.lines[CUR.at];
+    $('pick').hidden=false;
+    const left=L.tray.filter(c=>!L.placed.includes(c));
+    $('pick').innerHTML=`<span class="so-ask">${CUR.lines.length>1?'Line '+(CUR.at+1)+' of '+CUR.lines.length+': f':'F'}inish it. Tap the words in order.</span>`+
+      `<div class="fi-tray">${left.map(c=>`<button type="button" class="fi-c" data-c="${c}">${esc(L.ans[c])}</button>`).join('')}</div>`;
+    $('bCheck').hidden=false; $('bCheck').disabled=L.placed.length<L.ans.length;
+    /* in Full the card is tall: bring the chips into view when a new line starts */
+    if(!L.placed.length&&CUR.lines.length>1){ const r=$('pick').getBoundingClientRect(); if(r.top+120>innerHeight) $('pick').scrollIntoView({block:'end',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}); }
+  }
+  function reslot(fresh){
+    const i=CUR.at, el=$('fs'+i); if(!el) return; el.innerHTML=slot(CUR.lines[i],i);
+    if(fresh!=null){ const w=el.querySelector(`.fi-w[data-j="${fresh}"]`); if(w) w.classList.add('in'); }
+  }
+  const tickS=()=>{ if(window.SFX) try{ if(SFX.isOn()) SFX.tick(); }catch(_){} };
+  $('pick').addEventListener('click',e=>{
+    if(KIND!=='finish'||!CUR) return; const b=e.target.closest('.fi-c'); if(!b) return;
+    const L=CUR.lines[CUR.at]; if(L.state) return;
+    L.placed.push(+b.dataset.c); tickS(); reslot(L.placed.length-1); tray();
+  });
+  $('card').addEventListener('click',e=>{
+    if(KIND!=='finish'||!CUR) return; const w=e.target.closest('.fi-w'); if(!w||w.classList.contains('lock')) return;
+    const L=CUR.lines[CUR.at]; if(L.state) return;
+    L.placed.splice(+w.dataset.j,1); reslot(); tray();
+  });
+  function checkFinish(){
+    const L=CUR&&CUR.lines[CUR.at]; if(!L||L.state||L.placed.length<L.ans.length) return;
+    const got=L.placed.map(c=>L.ans[c]); let p=0; while(p<got.length&&got[p]===L.ans[p]) p++;
+    const ok=p===got.length, first=!L.tries; L.tries++;
+    const w=$('soWhy'), T=D.tasks[TASK], idx=T.prompts.indexOf(L.P);
+    const no=L.P.no?`<span class="fi-no"><b>Not</b><s>${esc(L.P.no)}</s></span>`:'';
+    let done=false;
+    if(ok){ L.state='kept'; FR.kept++; FR.run++; FR.best=Math.max(FR.best,FR.run); done=true;
+      w.innerHTML='<b>'+esc(pickOf(RIGHT_LINES))+'</b> '+esc(cap(T.what))+'.'+no; }
+    else if(first){
+      L.lock=p; L.placed=L.placed.slice(0,p); FR.run=0;
+      w.innerHTML=p?`<b>Nearly!</b> The first ${p===1?'word is':p+' pieces are'} right. Try the rest.`:'<b>Not yet.</b> Start again: which piece comes first?';
+    } else { L.state='shown'; FR.missed++; FR.run=0; done=true;
+      w.innerHTML='<b>'+esc(pickOf(MISS_LINES))+'</b> Here’s how it goes.'+no; }
+    w.hidden=false;
+    if(done) try{ if(window.INTUITY) INTUITY.log('writing','finish-'+TASK+'-'+idx,ok,{game:'finish',task:TASK,part:L.s}); }catch(e){}
+    const h=$('card').querySelector('.so-hud'); if(h) h.outerHTML=fhud();
+    reslot(); if(!done){ tray(); if(window.Cheer) Cheer.soft(); return; }
+    $('bCheck').hidden=true; $('pick').hidden=true;
+    if(window.Cheer){
+      if(ok){ Cheer.right($('fs'+CUR.at),first); if(FR.run>=3&&FR.run%3===0) Cheer.streak($('card').querySelector('.so-fire')); }
+      else Cheer.soft();
+    }
+    clearTimeout(AUTO);
+    const last=CUR.at>=CUR.lines.length-1;
+    if(!last){ AUTO=setTimeout(()=>{ CUR.at++; $('soWhy').hidden=true; paint(); },ok?1300:2600); }
+    else { FR.card++; $('bNext').hidden=false; AUTO=setTimeout(next,ok?1500:2800); }
+  }
+  function paintFinishEnd(){
+    const tot=FROUND*FR.per, key='intuity.best.finish.'+TASK+'.'+MODE;
+    try{ if(window.INTUITY) INTUITY.session('writing','finish',{kept:FR.kept,missed:FR.missed}); }catch(e){}
+    let best=0; try{ best=+localStorage.getItem(key)||0; }catch(e){}
+    const newBest=FR.kept>best; if(newBest) try{ localStorage.setItem(key,String(FR.kept)); }catch(e){}
+    const f=FR.kept/tot, line=f===1?'Perfect round: every line in place.':f>=.75?'Great run: barely any got away.':f>=.5?'Solid work. A few worth another look.':'A tricky set: good ones to come back to.';
+    $('card').innerHTML=`<span class="fc-k">Finish it · Round ${FR.n} done</span><span class="so-big">${FR.kept} / ${tot}</span>`+
+      `<span class="so-praise">${esc(line)}</span>`+
+      `<span class="so-sub">${FR.missed?FR.missed+' missed':'none missed'}${FR.best>=3?' · best run '+FR.best:''}</span>`+
+      (newBest||best?`<span class="so-best${newBest&&best?' new':''}">${newBest?(best?'New best · beat '+best+' / '+tot:'First score to beat'):'Your best · '+best+' / '+tot}</span>`:'')+
+      `<span class="so-acts"><button type="button" id="soAgain">↻ These again</button><button type="button" class="go" id="soNext">Next five →</button></span>`;
+    $('soAgain').onclick=()=>{ newFR(true); deal(); paint(); };
+    $('soNext').onclick=()=>{ newFR(false); deal(); paint(); };
+    if(window.Cheer){ const big=$('card').querySelector('.so-big'); if(FR.kept===tot) Cheer.finale(); else if(newBest&&best) Cheer.streak(big); else if(f>=.75) Cheer.done(big); else Cheer.tick(big); }
   }
   /* SORT IN ROUNDS (8 Nov 2026, after the vocabulary Rack, Pegs and Pairs):
      nine phrases a round and a live tally - kept, missed, left, and a 🔥 run
@@ -261,8 +375,7 @@ body:not(.sorting) #bCheck{display:none}
   }
   function next(){
     /* finishing cards is its own run: every fifth card, a jingle */
-    if(KIND==='finish'&&N%5===0&&window.Cheer) Cheer.done($('card').querySelector('.fc-n'));
-    clearTimeout(AUTO); if(KIND==='sort'&&RD&&RD.end) return;
+    clearTimeout(AUTO); if(KIND==='sort'&&RD&&RD.end) return; if(KIND==='finish'&&(!CUR||FR.end)) return;
     const c=$('card'), go=()=>{ if(KIND==='sort'){ dealSort(); paintSort(); } else { deal(); paint(); } };
     if(matchMedia('(prefers-reduced-motion: reduce)').matches){ go(); return; }
     c.classList.add('out'); setTimeout(()=>{ go(); c.classList.remove('out'); c.classList.add('in'); requestAnimationFrame(()=>requestAnimationFrame(()=>c.classList.remove('in'))); },150);
@@ -271,23 +384,17 @@ body:not(.sorting) #bCheck{display:none}
     document.body.classList.toggle('sorting',KIND==='sort');
     $('kind').querySelectorAll('button').forEach(b=>b.setAttribute('aria-checked',String(b.dataset.v===KIND)));
   }
-  $('kind').onclick=e=>{ const b=e.target.closest('button'); if(!b||b.dataset.v===KIND) return; KIND=b.dataset.v; keep('kind',KIND); N=0; kind();
+  $('kind').onclick=e=>{ const b=e.target.closest('button'); if(!b||b.dataset.v===KIND) return; KIND=b.dataset.v; keep('kind',KIND); clearTimeout(AUTO); FR=null; kind();
     if(typeof room==='function') room(); if(KIND==='sort'){ dealSort(); paintSort(); } else { deal(); paint(); } };
   function chrome(){
     $('tabs').innerHTML=TASKS.map(k=>`<button type="button" class="pr-tab" role="tab" data-k="${k}" aria-selected="${k===TASK}">${esc(D.tasks[k].label)}</button>`).join('');
     $('seg').innerHTML=MODES.map(([m,l])=>`<button type="button" role="radio" data-m="${m}" aria-checked="${m===MODE}">${l}</button>`).join('');
   }
-  $('tabs').onclick=e=>{ const b=e.target.closest('.pr-tab'); if(!b||b.dataset.k===TASK) return; TASK=b.dataset.k; keep('task',TASK); N=0; chrome(); deal(); paint(); };
-  $('seg').onclick=e=>{ const b=e.target.closest('button'); if(!b||b.dataset.m===MODE) return; MODE=b.dataset.m; keep('mode',MODE); chrome(); deal(); paint(); };
+  $('tabs').onclick=e=>{ const b=e.target.closest('.pr-tab'); if(!b||b.dataset.k===TASK) return; TASK=b.dataset.k; keep('task',TASK); clearTimeout(AUTO); FR=null; chrome(); deal(); paint(); };
+  $('seg').onclick=e=>{ const b=e.target.closest('button'); if(!b||b.dataset.m===MODE) return; MODE=b.dataset.m; keep('mode',MODE); clearTimeout(AUTO); FR=null; chrome(); deal(); paint(); };
   $('bNext').onclick=next;
-  $('bCheck').onclick=()=>checkSort();
-  $('bEx').onclick=()=>{ const open=$('bEx').getAttribute('aria-expanded')!=='true';
-    document.querySelectorAll('.pr-ex').forEach(x=>x.hidden=!open); $('bEx').setAttribute('aria-expanded',String(open)); $('bEx').textContent=open?'Hide example':'Example'; };
-  /* a swipe to the left is Next */
-  let x0=null,y0=0;
-  $('card').addEventListener('touchstart',e=>{ x0=e.touches[0].clientX; y0=e.touches[0].clientY; },{passive:true});
-  $('card').addEventListener('touchend',e=>{ if(x0===null) return; const t=e.changedTouches[0], dx=t.clientX-x0, dy=t.clientY-y0; x0=null;
-    if(dx<-50&&Math.abs(dx)>Math.abs(dy)*1.4) next(); },{passive:true});
+  $('bCheck').onclick=()=>KIND==='sort'?checkSort():checkFinish();
+  /* no swipe: both games are answered first, and a swipe skipped the card unscored */
   /* the shell's header is fixed: the card starts under it */
   const room=()=>{ const h=document.querySelector('.header'); if(h) document.documentElement.style.setProperty('--hh',Math.round(h.getBoundingClientRect().height)+'px'); };
   addEventListener('resize',room);

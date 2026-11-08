@@ -586,22 +586,37 @@ function avoidFor(model,si,li){
    essay - the ★ go-to phrase of each step on the study cards
    (data/writing/cue-generator.json). The wheel's other versions stay random. */
 let CUE1={};
-const CUEID={'For & Against':'fa','Opinion':'op','Agree & Disagree':'ad','Problems & Solutions':'ps','Cause & Effect':'ce','Speculation & Trends':'st'};
+const CUEID={'For & Against':'fa','Opinion':'op','Agree & Disagree':'ad','Problems & Solutions':'ps','Cause & Effect':'ce','Speculation & Trends':'st',
+  'Application':'ef-app','Request':'ef-req','News & Plans':'ei-news','Advice':'ei-advice'};
+/* 8 Nov 2026: every task, not only the Essay. Which study-card paragraph
+   feeds which of the card's three sections (0 opening, 1 body, 2 ending);
+   a paragraph not listed (an Article's Title, which is an instruction) is left out */
+const CUESEC={
+  rv:{'Introduction':0,'Features':1,'Recommendation':2},
+  rp:{'Introduction':0,'Findings':1,'Recommendations':2,'Conclusion':2},
+  ar:{'Opening':0,'Development':1,'Closing':2},
+  mail:{'Opening':0,'Body':1,'Closing':2},
+  essay:{'Introduction':0,'Conclusion':2}};
+const cueFor=m=>m.type==='reviews'?'rv':m.type==='reports'?'rp':m.type==='articles'?'ar':CUEID[m.rec&&m.rec.label];
 function cueOne(D){ const out={};
-  (D.types||[]).forEach(t=>{ if(!Object.values(CUEID).includes(t.id)) return;
+  (D.types||[]).forEach(t=>{
+    const map=CUESEC[t.id]||(/^e[fi]-/.test(t.id)?CUESEC.mail:/^(fa|op|ad|ps|ce|st)$/.test(t.id)?CUESEC.essay:null); if(!map) return;
     const go=st=>{ const it=(st.items||[]).find(i=>i.go)||(st.items||[])[0]; return it?it.t.replace(/\[[^\]]+\]/g,'…'):''; };
-    const one={intro:[],body:[],close:''};
-    t.paras.forEach(pa=>pa.steps.forEach(st=>{ if(st.support||!st.items||!st.items.length) return; const x=go(st); if(!x) return;
-      if(pa.name==='Introduction') one.intro.push(x); else if(pa.name==='Conclusion') one.close=x; else one.body.push(x); }));
-    out[t.id]=one; });
+    const sec=[[],[],[]];
+    t.paras.forEach(pa=>{ const k=pa.name in map?map[pa.name]:(map===CUESEC.essay?1:-1); if(k<0) return;
+      pa.steps.forEach(st=>{ if(st.support||!st.items||!st.items.length) return; const x=go(st); if(x&&!sec[k].includes(x)) sec[k].push(x); }); });
+    out[t.id]=sec; });
   return out; }
-const tail=t=>/[.?!…]$/.test(t)||/…/.test(t.slice(-3))?t:t+' …';
+const tail=t=>/[.?!…,]$/.test(t)||/…/.test(t.slice(-3))?t:t+' …';
 function safeOf(m){
   const was=R; R=()=>0; const s2=runRecipe(m.rec,m.n); R=was;
   s2.type=m.type; s2.title=m.title; s2.num=m.num; s2.safe=true;
-  const c=m.type==='essays'&&CUE1[CUEID[m.rec.label]];
+  const c=m.type!=='story'&&CUE1[cueFor(m)];
   if(c){ const put=(si,li,t)=>{ const L=s2.secs[si]&&s2.secs[si].lines[li]; if(L&&t) L.h[0]=Object.assign({},L.h[0],{html:`<span class="k">${fmt(t)}</span>`}); };
-    put(0,0,c.intro.join(' ')); c.body.slice(0,3).forEach((t,i)=>put(1,i,tail(t))); put(2,0,c.close); }
+    /* a one-line section takes the whole study-card paragraph; a three-line body takes its steps one by one */
+    s2.secs.forEach((S,si)=>{ const k=si===0?0:si===s2.secs.length-1?2:1, xs=c[k]; if(!xs||!xs.length) return;
+      if(S.lines.length===1) put(si,0,xs.map(tail).join(' '));
+      else xs.slice(0,S.lines.length).forEach((t,i)=>put(si,i,tail(t))); }); }
   return s2; }
 function runRecipe(rec,n){
   const m={rec,n,secs:rec.sections.map(s=>({word:s.word,sub:s.sub,lines:s.lines.map(()=>({h:[],i:0}))}))};
@@ -794,7 +809,7 @@ function gallery(start){
     R=seeded(seed); const m=runRecipe(rec,DEAL+1); R=Math.random;
     m.type=x.t; m.title=x.all?x.name+' · '+rec.label:x.name;
     /* the first deal shows each essay type's safe card, the one Spin opens on */
-    return x.t==='essays'&&!DEAL?safeOf(m):m; });
+    return x.t!=='story'&&!DEAL?safeOf(m):m; });
   const N=MODELS.length, story=PAGE==='story', seen={};
   MODELS.forEach(m=>{ seen[m.type]=(seen[m.type]||0)+1; m.num=seen[m.type]; });
   const subOf=m=>{ const x=m.title.split(' · '); return x.length>1?x.slice(1).join(' · '):(m.type==='essays'||m.type==='story'?m.title:''); };

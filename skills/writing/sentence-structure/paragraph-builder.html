@@ -204,14 +204,29 @@ function sheetOpeners(){
 }
 
 /* EXPLORE */
+/* EVERY LINKER SHOWS ITSELF (8 Nov 2026): the data only has sentences for
+   some linkers, so the others are built from sentences we do have, the
+   grammatical way: For instance from For example; Therefore, Thus and
+   Consequently from As a result; This is because + a reason; Since and
+   Because open the topic sentence (Since X, topic). A linker this sentence
+   cannot carry (no data, no safe rule) is simply not offered. */
+const lc1=t=>t.charAt(0).toLowerCase()+t.slice(1), noDot=t=>t.replace(/[.!]\s*$/,'');
+const starts=(o,w)=>{ const l=o.toLowerCase(), x=w.toLowerCase(); return l.startsWith(x+' ')||l.startsWith(x+','); };
+const FROM={'For instance':['example','For example'],'Therefore':['result','As a result'],'Thus':['result','As a result'],'Consequently':['result','As a result']};
+const plainReasons=()=>(D.S[idx].reason||[]).filter(o=>!RX.test(o));
 function expansion(k,w){
-  const opts=D.S[idx][k]||[]; if(!opts.length) return null;
-  const m=opts.filter(o=>o.toLowerCase().startsWith(w.toLowerCase()+' ')); if(m.length) return rnd(m);
-  let e=rnd(opts); const lead=ALL.find(x=>e.toLowerCase().startsWith(x.toLowerCase()+' '));
-  return lead?w+e.slice(lead.length):e;
+  const S=D.S[idx], own=(S[k]||[]).filter(o=>starts(o,w)); if(own.length) return {t:rnd(own)};
+  if(FROM[w]){ const [kk,src]=FROM[w], m=(S[kk]||[]).filter(o=>starts(o,src)); if(m.length) return {t:w+rnd(m).slice(src.length)}; }
+  const r=plainReasons();
+  if(w==='This is because'&&r.length) return {t:w+' '+lc1(rnd(r))};
+  if((w==='Since'||w==='Because')&&r.length) return {lead:w,t:noDot(lc1(rnd(r)))};
+  return null;
+}
+function leadHTML(e){
+  return '<p class="para"><span class="cl sec newest"><span class="cl k-l">'+esc(e.lead)+'</span> '+esc(e.t)+',</span> <span class="cl spine">'+esc(lc1(base()))+'</span></p>';
 }
 function drawExplore(){
-  const groups=Object.keys(LK).map(k=>'<div class="round"><p class="ask">'+T[k]+'</p><div class="opool">'+LK[k].map(w=>'<button class="piece" type="button" data-k="'+k+'" data-w="'+esc(w)+'">'+esc(w)+'</button>').join('')+'</div></div>').join('');
+  const groups=Object.keys(LK).map(k=>{ const ws=LK[k].filter(w=>expansion(k,w)); return !ws.length?'':'<div class="round"><p class="ask">'+T[k]+'</p><div class="opool">'+ws.map(w=>'<button class="piece" type="button" data-k="'+k+'" data-w="'+esc(w)+'">'+esc(w)+'</button>').join('')+'</div></div>'; }).join('');
   pm.innerHTML=HEAD('Explore','Try a linking word')+
     '<div class="stick"><div class="para-wrap" id="pmPrev">'+paraHTML(null,true)+'</div></div>'+
     '<p class="sub" style="padding-top:10px">Tap a linking word to see where it sends the paragraph.</p>'+groups+
@@ -219,7 +234,7 @@ function drawExplore(){
   pm.querySelectorAll('.piece').forEach(b=>b.onclick=()=>{
     pm.querySelectorAll('.piece').forEach(x=>x.classList.toggle('act',x===b));
     const e=expansion(b.dataset.k,b.dataset.w);
-    $('pmPrev').innerHTML=e?paraHTML(e,true):paraHTML(null,true)+'<p class="sub">No example for this one yet.</p>';
+    $('pmPrev').innerHTML=!e?paraHTML(null,true):e.lead?leadHTML(e):paraHTML(e.t,true);
   });
   $('pmNew').onclick=()=>{ reset(); draw(); };
 }

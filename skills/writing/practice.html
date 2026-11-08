@@ -51,6 +51,28 @@ main{flex:1;display:flex;flex-direction:column;align-items:center;padding:calc(v
 .pr-card.in{opacity:0;transform:translateX(16px)}
 .pr-card{transition:opacity .16s ease,transform .16s ease}
 @media (prefers-reduced-motion:reduce){ .pr-card{transition:none} }
+/* SORT (8 Nov 2026, the teacher's idea): which task, which part? Two rows of
+   pills; the card checks itself once both are chosen. The topic is hidden, so
+   the phrase alone has to tell. */
+.pr-kindwrap{background:none!important;padding:0!important}
+.pr-kind{display:inline-flex;padding:2px;border-radius:999px;background:rgba(20,17,14,.06)}
+.pr-kind button{all:unset;cursor:pointer;padding:5px 10px;border-radius:999px;font:600 11.5px/1 'Geist',sans-serif;letter-spacing:0;text-transform:none;color:#8A8378}
+.pr-kind button[aria-checked=true]{background:#14110E;color:#F6F3EE}
+.pr-kind button:focus-visible{outline:2px solid var(--car);outline-offset:2px}
+body.sorting #tabs,body.sorting #seg,body.sorting #bEx{display:none}
+.so-p{display:block;margin:18px 0 6px;font-size:clamp(18px,4.8vw,20px);line-height:1.5;font-weight:500;color:var(--ink)}
+.so-p .fc-gap{color:#B4ADA2}
+.so-q{display:block;margin:16px 0 6px;font:500 10.5px/1.3 'Geist Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#9A948B}
+.so-row{display:flex;padding:3px;border-radius:999px;background:rgba(20,17,14,.06)}
+.so-row button{all:unset;cursor:pointer;flex:1;text-align:center;padding:10px 4px;border-radius:999px;font:600 14px/1 'Geist',sans-serif;color:#5C5852}
+.so-row button[aria-checked=true]{background:#14110E;color:#F6F3EE}
+.so-row button.ok{background:#4F6B61;color:#fff}
+.so-row button.no{background:rgba(176,134,92,.22);color:#7A5C3A;text-decoration:line-through}
+.so-row button:focus-visible{outline:2px solid var(--car);outline-offset:2px}
+.so-row.done button{cursor:default}
+.so-why{display:block;margin:16px 0 8px;padding-top:12px;border-top:1px dashed rgba(20,17,14,.14);font-size:14.5px;line-height:1.5;color:#5C5852}
+.so-why b{color:var(--ink)}
+.so-why[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -58,7 +80,7 @@ main{flex:1;display:flex;flex-direction:column;align-items:center;padding:calc(v
   <div class="header-top">
     <a class="back-link" href="/index.html?openModal=writing" target="_top">← Writing</a>
     <div class="header-title"><div class="app-title">INTUITY</div><div class="app-subtitle">Writing · Practice</div></div>
-    <span class="header-spacer">Level <b>B2</b></span>
+    <span class="header-spacer pr-kindwrap"><span class="pr-kind" id="kind" role="radiogroup" aria-label="Practice"><button type="button" role="radio" data-v="finish">Finish</button><button type="button" role="radio" data-v="sort">Sort</button></span></span>
   </div>
   <div class="pr-tabs" id="tabs" role="tablist" aria-label="Task"></div>
   <div class="pr-seg" id="seg" role="radiogroup" aria-label="Part"></div>
@@ -78,6 +100,10 @@ main{flex:1;display:flex;flex-direction:column;align-items:center;padding:calc(v
   let TASK=TASKS.includes(q.get('task'))?q.get('task'):TASKS.includes(mem('task'))?mem('task'):'essays';
   let MODE=MODES.some(m=>m[0]===q.get('mode'))?q.get('mode'):MODES.some(m=>m[0]===mem('mode'))?mem('mode'):'full';
   let N=0, CUR=null;
+  let KIND=q.get('kind')==='sort'?'sort':mem('kind')==='sort'?'sort':'finish', SORT=null, RIGHT=0, DONE=0;
+  const SORT_TASKS=['essays','reports','reviews'].filter(k=>D.tasks[k]), PARTS=[['intro','Introduction'],['body','Body'],['end','Conclusion']];
+  const WHY={essays:'An essay weighs up an issue in a neutral voice.',reports:'A report is formal: findings and recommendations about a place or an event.',reviews:'A review talks to the reader and gives an opinion of something.',
+    intro:'It sets the scene.',body:'It develops one point.',end:'It sums up or recommends.'};
   /* shuffled bags, so a phrase or topic does not come back until the others have */
   const bags={};
   const draw=(key,list)=>{ let b=bags[key]; if(!b||!b.length){ b=bags[key]=list.map((_,i)=>i).sort(()=>Math.random()-.5); } return list[b.pop()]; };
@@ -113,11 +139,43 @@ main{flex:1;display:flex;flex-direction:column;align-items:center;padding:calc(v
       `<span class="fc">${CUR.parts.map(sec).join('')}</span><span class="pr-turn">Finish it aloud or on paper: ${esc(T.what)}.</span>`;
     $('bEx').setAttribute('aria-expanded','false'); $('bEx').textContent='Example';
   }
+  function dealSort(){
+    const all=SORT_TASKS.flatMap(k=>D.tasks[k].prompts.map(P=>({k,P})));
+    SORT=draw('sort',all); SORT.pick={}; N++;
+  }
+  function paintSort(){
+    const {k,P}=SORT, txt=esc(P.p).replace(/\{T\}|\{t\}|\{k\}/g,'…').replace(/…(\s*…)+/g,'…').replace(/…/g,'<span class="fc-gap">…</span>');
+    const row=(name,list)=>`<span class="so-row" role="radiogroup" data-r="${name}">`+list.map(([v,l])=>`<button type="button" role="radio" aria-checked="false" data-v="${v}">${l}</button>`).join('')+`</span>`;
+    $('card').innerHTML=`<span class="fc-k">Sort${DONE?' · '+RIGHT+' of '+DONE+' right':''}</span><span class="fc-t">Sort <span class="fc-n">${N}</span></span><span class="fc-bar" aria-hidden="true"></span>`+
+      `<span class="so-p">${txt}</span>`+
+      `<span class="so-q">Which task?</span>`+row('task',SORT_TASKS.map(t=>[t,D.tasks[t].label]))+
+      `<span class="so-q">Which part?</span>`+row('part',PARTS)+
+      `<span class="so-why" id="soWhy" hidden></span>`;
+    $('card').querySelectorAll('.so-row').forEach(r=>r.onclick=e=>{ const b=e.target.closest('button'); if(!b||r.classList.contains('done')) return;
+      r.querySelectorAll('button').forEach(x=>x.setAttribute('aria-checked',String(x===b))); SORT.pick[r.dataset.r]=b.dataset.v;
+      if(SORT.pick.task&&SORT.pick.part) checkSort(); });
+  }
+  function checkSort(){
+    const {k,P}=SORT, okT=SORT.pick.task===k, okP=SORT.pick.part===P.s; DONE++; if(okT&&okP) RIGHT++;
+    $('card').querySelectorAll('.so-row').forEach(r=>{ r.classList.add('done'); const want=r.dataset.r==='task'?k:P.s;
+      r.querySelectorAll('button').forEach(b=>{ const v=b.dataset.v, mine=b.getAttribute('aria-checked')==='true';
+        b.classList.toggle('ok',v===want); b.classList.toggle('no',mine&&v!==want); }); });
+    const T=D.tasks[k].label, Pt=PARTS.find(x=>x[0]===P.s)[1];
+    const w=$('soWhy'); w.hidden=false;
+    w.innerHTML=(okT&&okP?'<b>Right.</b> ':'<b>It’s '+esc(T)+' · '+esc(Pt)+'.</b> ')+esc(okT?'':WHY[k]+' ')+esc(okP?'':WHY[P.s]+' ')+(okT&&okP?esc(WHY[k]):'');
+    try{ if(window.SFX&&SFX.isOn&&SFX.isOn()) (okT&&okP?SFX.good:SFX.bad)&&(okT&&okP?SFX.good():SFX.bad()); }catch(e){}
+  }
   function next(){
-    const c=$('card'), go=()=>{ deal(); paint(); };
+    const c=$('card'), go=()=>{ if(KIND==='sort'){ dealSort(); paintSort(); } else { deal(); paint(); } };
     if(matchMedia('(prefers-reduced-motion: reduce)').matches){ go(); return; }
     c.classList.add('out'); setTimeout(()=>{ go(); c.classList.remove('out'); c.classList.add('in'); requestAnimationFrame(()=>requestAnimationFrame(()=>c.classList.remove('in'))); },150);
   }
+  function kind(){
+    document.body.classList.toggle('sorting',KIND==='sort');
+    $('kind').querySelectorAll('button').forEach(b=>b.setAttribute('aria-checked',String(b.dataset.v===KIND)));
+  }
+  $('kind').onclick=e=>{ const b=e.target.closest('button'); if(!b||b.dataset.v===KIND) return; KIND=b.dataset.v; keep('kind',KIND); N=0; kind();
+    if(typeof room==='function') room(); if(KIND==='sort'){ dealSort(); paintSort(); } else { deal(); paint(); } };
   function chrome(){
     $('tabs').innerHTML=TASKS.map(k=>`<button type="button" class="pr-tab" role="tab" data-k="${k}" aria-selected="${k===TASK}">${esc(D.tasks[k].label)}</button>`).join('');
     $('seg').innerHTML=MODES.map(([m,l])=>`<button type="button" role="radio" data-m="${m}" aria-checked="${m===MODE}">${l}</button>`).join('');
@@ -135,7 +193,7 @@ main{flex:1;display:flex;flex-direction:column;align-items:center;padding:calc(v
   /* the shell's header is fixed: the card starts under it */
   const room=()=>{ const h=document.querySelector('.header'); if(h) document.documentElement.style.setProperty('--hh',Math.round(h.getBoundingClientRect().height)+'px'); };
   addEventListener('resize',room);
-  chrome(); room(); deal(); paint();
+  chrome(); kind(); room(); if(KIND==='sort'){ dealSort(); paintSort(); } else { deal(); paint(); }
 })();
 </script>
 </body>

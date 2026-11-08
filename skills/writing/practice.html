@@ -17,9 +17,9 @@
    a reason, a formal finding). One card at a time, as many as you like. */
 :root{--ink:#14110E;--grey:#8A8378;--car:#B0865C;--car2:#8E6238;--rule:rgba(20,17,14,.12)}
 body{background:#F2EFEA;color:var(--ink);margin:0;font-family:'Geist',system-ui,sans-serif;min-height:100dvh;display:flex;flex-direction:column}
-.pr-tabs{display:flex;justify-content:center;gap:4px;padding:4px 16px 0;overflow-x:auto;scrollbar-width:none}
+.pr-tabs{display:flex;justify-content:safe center;gap:0;padding:4px 16px 0;overflow-x:auto;scrollbar-width:none}
 .pr-tabs::-webkit-scrollbar{display:none}
-.pr-tab{all:unset;cursor:pointer;padding:8px 10px 7px;font:600 12px/1 'Geist Mono',ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase;color:#9A948B;border-bottom:2px solid transparent;white-space:nowrap}
+.pr-tab{all:unset;cursor:pointer;padding:8px 8px 7px;font:600 11.5px/1 'Geist Mono',ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;color:#9A948B;border-bottom:2px solid transparent;white-space:nowrap}
 .pr-tab[aria-selected=true]{color:var(--ink);border-bottom-color:#D8915C}
 .pr-tab:focus-visible{outline:2px solid var(--car);outline-offset:2px}
 .pr-seg{display:flex;justify-content:center;margin:10px auto 10px;padding:3px;border-radius:999px;background:rgba(20,17,14,.06);width:max-content;max-width:calc(100% - 32px)}
@@ -71,7 +71,7 @@ main{flex:1;display:flex;flex-direction:column;align-items:center;padding:calc(v
 (async function(){
   const $=id=>document.getElementById(id);
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  let D; try{ D=await fetch('/data/writing/practice.json?v=1',{cache:'no-cache'}).then(r=>r.json()); }
+  let D; try{ D=await fetch('/data/writing/practice.json?v=2',{cache:'no-cache'}).then(r=>r.json()); }
   catch(e){ $('card').textContent='Could not load the practice cards.'; return; }
   const TASKS=Object.keys(D.tasks), MODES=[['full','Full'],['intro','Introduction'],['body','Body'],['end','Conclusion']], ROLE={intro:'Intro',body:'Body',end:'End'};
   const q=new URLSearchParams(location.search), mem=k=>{ try{ return localStorage.getItem('intuity.practice.'+k); }catch(e){ return null; } }, keep=(k,v)=>{ try{ localStorage.setItem('intuity.practice.'+k,v); }catch(e){} };
@@ -95,16 +95,21 @@ main{flex:1;display:flex;flex-direction:column;align-items:center;padding:calc(v
     return `<span class="about">About ${esc(e.t)}</span>${s}${no}`;
   }
   function deal(){
-    const T=D.tasks[TASK], top=draw(TASK+':topic',T.topics), by=s=>T.prompts.filter(p=>p.s===s);
-    const pick=s=>draw(TASK+':'+s,by(s));
-    const parts=MODE==='full'?[['intro',[pick('intro')]],['body',[pick('body'),pick('body')]],['end',[pick('end')]]]:[[MODE,[pick(MODE)]]];
-    CUR={top,parts}; N++;
+    const T=D.tasks[TASK], top=draw(TASK+':topic',T.topics);
+    /* an email keeps one register: formal to an organisation, friendly to a friend */
+    const regs=[...new Set(T.prompts.map(p=>p.r).filter(Boolean))], reg=regs.length?regs[Math.floor(Math.random()*regs.length)]:null;
+    const by=s=>T.prompts.filter(p=>p.s===s&&(!reg||p.r===reg));
+    const pick=s=>draw(TASK+':'+s+':'+reg,by(s));
+    /* two different body lines, even when the shuffled pile runs out between them */
+    const two=()=>{ const a=pick('body'); let b=pick('body'), k=0; while(b===a&&k++<5) b=pick('body'); return [a,b]; };
+    const parts=MODE==='full'?[['intro',[pick('intro')]],['body',two()],['end',[pick('end')]]]:[[MODE,[pick(MODE)]]];
+    CUR={top,parts,reg}; N++;
   }
   function paint(){
     const T=D.tasks[TASK], [t,k]=CUR.top;
     const sec=([s,ps])=>`<span class="fc-sec"><span class="fc-role">${ROLE[s]}</span><span class="fc-in">`+
       ps.map(P=>`<span class="pr-p">${fill(P.p,t,k,'t')}</span><span class="pr-ex" hidden>${exHTML(P)}</span>`).join('')+`</span></span>`;
-    $('card').innerHTML=`<span class="fc-k">Practice · ${esc(T.label)}</span><span class="fc-t">${esc(T.label)} <span class="fc-n">${N}</span></span><span class="fc-bar" aria-hidden="true"></span>`+
+    $('card').innerHTML=`<span class="fc-k">Practice · ${esc(T.label)}${CUR.reg?' · '+esc(CUR.reg):''}</span><span class="fc-t">${esc(T.label)} <span class="fc-n">${N}</span></span><span class="fc-bar" aria-hidden="true"></span>`+
       `<span class="fc">${CUR.parts.map(sec).join('')}</span><span class="pr-turn">Finish it aloud or on paper: ${esc(T.what)}.</span>`;
     $('bEx').setAttribute('aria-expanded','false'); $('bEx').textContent='Example';
   }

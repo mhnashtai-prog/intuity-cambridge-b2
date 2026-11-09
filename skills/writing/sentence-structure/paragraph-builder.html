@@ -96,16 +96,35 @@
   .sheet.show .sheet-card{transform:none}
   @media (min-width:640px){.sheet{align-items:center}.sheet-card{transform:translateY(40px) scale(.96);opacity:0;transition:transform .5s var(--spring),opacity .25s}.sheet.show .sheet-card{transform:none;opacity:1}}
   .sheet-close{display:block;margin:12px auto 0;padding:8px 14px;font-size:14px;color:var(--faint)}
+  /* 9 Nov 2026 — ONE DOESN'T BELONG: every support choice hides a line about another topic */
+  .pb-hud{display:flex;flex-wrap:wrap;gap:4px 14px;padding:10px 0 0;font:500 11px/1.4 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .pb-hud b{font-size:13px;color:var(--poster-ink)}
+  .pb-hud .fire{opacity:0;transition:opacity .3s}.pb-hud .fire.on{opacity:1}
+  .pb-step{display:block;font-size:15px;line-height:1.4;color:var(--poster-ink);font-weight:600;margin:4px 0 2px}
+  .opt.out{color:#9A5A2C;text-decoration:line-through;text-decoration-color:#B0865C}
+  .opt.out .mk{box-shadow:none;background:#B0865C}
+  .opt.wrongpick{animation:pbShake .35s}
+  @keyframes pbShake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+  .opts .why{font-size:12.5px;line-height:1.4;font-weight:600;color:#9A5A2C;padding:6px 2px 10px;border-bottom:1px solid var(--poster-rule)}
+  .opt.out{border-bottom:none}
+  .pb-done{border-top:1px solid var(--poster-rule);margin-top:10px;padding:14px 0 4px}
+  .pb-big{font:400 clamp(44px,13vw,60px)/1 var(--f-poster);color:var(--poster-ink)}
+  .pb-best{font:500 11px/1.4 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-top:6px}
+  .pb-best.new{color:var(--caramel)}
   @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
 <script src="/tools/be2-brand.js?v=20261108"></script>
-<link rel="stylesheet" href="/tools/one-header.css?v=1">
+<script src="/skills/grammar-rules/intuity-sound.js"></script>
+<script src="/tools/intuity-cheer.js?v=2"></script>
+<script src="/tools/intuity-log.js?v=1"></script>
+<script src="/tools/be2-progress.js?v=20261105b"></script>
+<link rel="stylesheet" href="/tools/one-header.css?v=2">
 </head>
 <body>
 <div class="page">
 <header class="header">
   <div class="header-top">
-      <a class="back-link" id="backLink" href="/index.html?openModal=writing&amp;submenu=sentence" target="_top">&larr; Writing</a>
+      <a class="back-link" id="backLink" href="/index.html?openModal=writing&amp;submenu=sentence" target="_top">&larr; Sentence Structure</a>
     <div class="header-title">
       <div class="app-title">INTUITY</div>
       <div class="app-subtitle">Paragraph Builder</div>
@@ -156,6 +175,9 @@ const isDrawback=()=>!!(D.S[idx]&&D.S[idx].drawback);
 const startsThis=s=>/^this\b/i.test(String(s||'').trim());
 
 let mode='build',D=null,idx=0,opener='',order=[],used={},own='';
+/* the game: spotted / missed this paragraph, a run that carries across paragraphs, a best run kept on the phone */
+let SC={spot:0,miss:0}, RUN=0;
+const bestRun=()=>{ try{ return +localStorage.getItem('intuity.best.paragraph.run')||0; }catch(e){ return 0; } };
 const pm=$('pm');
 
 /* back link: from=essays returns to Essays */
@@ -186,7 +208,7 @@ function load(){
     if(!D.S.length) throw 0;
   });
 }
-function reset(){ idx=(Math.random()*D.S.length)|0; opener=''; order=[]; used={}; own=''; }
+function reset(){ idx=(Math.random()*D.S.length)|0; opener=''; order=[]; used={}; own=''; SC={spot:0,miss:0}; }
 const base=()=>D.S[idx].base;
 const seq=()=>order.filter(k=>k!=='contrast').concat(order.indexOf('contrast')>=0?['contrast']:[]);   // contrast always last
 const ownT=()=>own.trim().replace(/\s+/g,' ');
@@ -220,10 +242,10 @@ function drawBuild(){
   const rows=Object.keys(T).map(k=>{ const u=used[k]!=null, off=!u&&full;
     return '<button class="opt'+(u?' ok':'')+'" type="button" data-k="'+k+'"'+(off?' disabled':'')+'><span class="mk"></span><span>'+T[k]+'</span><span class="tag">'+(u?'Added · tap to remove':off?'Remove one first':esc(LK[k][0])+'…')+'</span></button>'; }).join('');
   const op='<button class="opt'+(opener?' ok':'')+'" type="button" data-k="opener"><span class="mk"></span><span>Opener</span><span class="tag">'+(opener?esc(opener)+'…':'Choose')+'</span></button>';
-  const strip='<div class="strip">'+[['opener','Opener']].concat(Object.entries(T)).map(([k,v])=>'<span class="chip'+((k==='opener'?opener:used[k]!=null)?' on':'')+'">'+v+'</span>').join('')+'</div>';
   pm.innerHTML=HEAD('Paragraph','Build a paragraph')+
-    '<div class="stick build"><div class="para-wrap" id="pmPara">'+paraHTML()+'</div></div>'+KEY+strip+'<div id="pmWarn">'+warnHTML()+'</div>'+
-    '<div class="round"><p class="ask">Add support to the topic sentence.</p><p class="sub">Choose up to '+MAX+' ('+order.length+' of '+MAX+'). A contrast always goes last. Tap an added one to remove it.</p><div class="opts">'+op+rows+'</div></div>'+
+    '<div class="stick build"><div class="para-wrap" id="pmPara">'+paraHTML()+'</div></div>'+KEY+hudHTML()+'<div id="pmWarn">'+warnHTML()+'</div>'+
+    (full?doneHTML():'')+
+    '<div class="round"><p class="ask">Add support to the topic sentence.</p><p class="sub">Choose up to '+MAX+' ('+order.length+' of '+MAX+'). Each time, one line hides that doesn’t belong: spot it first. A contrast always goes last.</p><div class="opts">'+op+rows+'</div></div>'+
     '<div class="round"><p class="ask">Now add a sentence of your own.</p><p class="sub">Start it with a linking word from your class cards. It appears underlined at the end.</p>'+
       '<textarea class="own-box" id="pmOwn" rows="3" placeholder="e.g. Despite this, …" aria-label="Your own sentence">'+esc(own)+'</textarea><p class="own-fb" id="pmOwnFb">'+ownFb()+'</p></div>'+
     '<div class="actions"><button class="btn quiet" id="pmCopy" type="button">Copy</button><button class="btn primary" id="pmNew" type="button">New sentence</button></div>';
@@ -238,6 +260,8 @@ function drawBuild(){
   $('pmCopy').onclick=e=>{ const b=e.currentTarget; navigator.clipboard.writeText(plain()).then(()=>{ b.textContent='Copied'; setTimeout(()=>b.textContent='Copy',1200); }).catch(()=>{}); };
   $('pmNew').onclick=()=>{ reset(); draw(); };
   scrollPara();
+  if(full&&!drawBuild.cheered&&window.Cheer){ drawBuild.cheered=true; const n=SC.spot+SC.miss; const big=pm.querySelector('.pb-big'); if(n&&SC.spot===n) Cheer.done(big); else Cheer.tick(big); }
+  if(!full) drawBuild.cheered=false;
 }
 function scrollPara(){ const w=$('pmPara'); if(w) w.scrollTop=w.scrollHeight; }
 /* light feedback on the student's sentence: did it open with a linking word? */
@@ -255,14 +279,67 @@ function withLinker(k,o){
   if(k!=='reason'||RX.test(o)) return o;
   return (thisCount()?'The reason is that ':'This is because ')+lc(o);
 }
-function sheetType(k){
-  const opts=(D.S[idx][k]||[]).map(o=>withLinker(k,o));
-  const thisUsed=thisCount()>0;
-  openSheet('<p class="kick">'+T[k]+'</p>'+(k==='contrast'?'<p class="sub">A contrast changes direction, so it goes at the end of your paragraph.</p>':'')+
-    '<div class="opts">'+(opts.length?opts.map((o,i)=>{ const again=thisUsed&&startsThis(o);
-      return '<button class="opt" type="button" data-i="'+i+'"><span class="mk"></span><span>'+hl(o)+'</span>'+(again?'<span class="tag again">Another “This…”</span>':'')+'</button>'; }).join(''):'<p class="sub" style="padding:12px 0">No options for this sentence.</p>')+'</div>');
-  $('shBody').querySelectorAll('.opt').forEach(b=>b.onclick=()=>{ used[k]=opts[+b.dataset.i]; order.push(k); closeSheet(); draw(); });
+/* ONE DOESN'T BELONG (9 Nov 2026): the three lines for this topic, plus one of the same
+   kind from the topic that shares the fewest words with this one. Spot the intruder
+   first (the Organisation skill: does every sentence serve the topic sentence?), then
+   choose your line from the three that fit. */
+const words=t=>new Set(String(t).toLowerCase().match(/[a-z]{4,}/g)||[]);
+const STOP=new Set(['this','that','they','them','their','with','from','more','have','because','which','when','about','often','many','some','people','helps','make','makes','also','what','there','these','those','other','into','than','much','very','well','such','example','instance','result','words','simply','short','reason','means','even','however','teenagers','students','young']);
+const content=t=>[...words(t)].filter(w=>!STOP.has(w));
+function intruder(k){
+  const me=new Set(content(base()+' '+(D.S[idx][k]||[]).join(' ')));
+  let bestS=null,bestO=1e9;
+  D.S.forEach((S,i)=>{ if(i===idx||!(S[k]||[]).length) return; const o=content(S.base).filter(w=>me.has(w)).length; if(o<bestO||(o===bestO&&Math.random()<.4)){ bestO=o; bestS=S; } });
+  if(!bestS) return null;
+  /* the line that most clearly carries its own topic */
+  const own=new Set(content(bestS.base)), lines=bestS[k].map(o=>({o,sc:content(o).filter(w=>own.has(w)).length-content(o).filter(w=>me.has(w)).length*3}));
+  lines.sort((x,y)=>y.sc-x.sc);
+  return {o:withLinker(k,lines[0].o),about:bestS.base};
 }
+function hudHTML(){
+  const n=SC.spot+SC.miss, b=bestRun();
+  if(!n&&!RUN) return '<div class="pb-hud" id="pbHud" hidden></div>';
+  return '<div class="pb-hud" id="pbHud"><span><b>'+SC.spot+'</b> spotted</span><span><b>'+SC.miss+'</b> missed</span><span class="fire'+(RUN>=2?' on':'')+'">🔥 <b>'+RUN+'</b></span>'+(b?'<span>best run <b>'+b+'</b></span>':'')+'</div>';
+}
+function doneHTML(){
+  const n=SC.spot+SC.miss, line=!n?'Paragraph built.':SC.spot===n?'Every intruder caught.':SC.spot>=n-1?'Sharp reading: nearly all caught.':'Some got in: read each line against the topic sentence.';
+  return '<div class="pb-done"><div class="kick">Paragraph done</div><div class="pb-big">'+SC.spot+' / '+n+'</div><p class="ask" style="margin-top:6px">'+line+'</p><p class="sub">Add your own sentence below, or start a new one. Your run carries on.</p></div>';
+}
+function sheetType(k){
+  const mine=(D.S[idx][k]||[]).map(o=>withLinker(k,o)), bad=intruder(k);
+  const list=mine.map(o=>({o,bad:false})); if(bad) list.splice((Math.random()*(list.length+1))|0,0,{o:bad.o,bad:true,about:bad.about});
+  const thisUsed=thisCount()>0;
+  let phase=bad?'spot':'pick';
+  const render=()=>{
+    openSheet('<p class="kick">'+T[k]+'</p>'+
+      '<p class="pb-step" id="pbStep">'+(phase==='spot'?'One of these doesn’t belong in this paragraph. Tap it.':'Now choose the one you want.')+'</p>'+
+      '<p class="sub" style="margin-bottom:4px">Topic: '+esc(base())+'</p>'+
+      (k==='contrast'?'<p class="sub">A contrast changes direction, so it goes at the end of your paragraph.</p>':'')+
+      '<div class="opts">'+list.map((x,i)=>{ const again=!x.bad&&thisUsed&&startsThis(x.o);
+        return '<button class="opt" type="button" data-i="'+i+'"><span class="mk"></span><span>'+hl(x.o)+'</span>'+(again?'<span class="tag again">Another “This…”</span>':'')+'</button>'; }).join('')+'</div>');
+    wire();
+  };
+  const mark=(why)=>{ const i=list.findIndex(x=>x.bad), b=$('shBody').querySelector('.opt[data-i="'+i+'"]'); if(!b) return;
+    b.classList.add('out'); b.disabled=true; const w=document.createElement('p'); w.className='why'; w.textContent=why; b.after(w); };
+  const toPick=()=>{ phase='pick'; $('pbStep').textContent='Now choose the one you want.'; };
+  const wire=()=>$('shBody').querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
+    const x=list[+b.dataset.i]; if(!x||b.disabled) return;
+    if(phase==='spot'){
+      const about='It’s about something else: “'+bad.about.replace(/\.$/,'')+'”.';
+      if(x.bad){ SC.spot++; RUN++; mark('Doesn’t belong · '+about);
+        if(window.Cheer){ Cheer.right(b,true); if(RUN>=3&&RUN%3===0) Cheer.streak(b); }
+        try{ if(RUN>bestRun()) localStorage.setItem('intuity.best.paragraph.run',String(RUN)); }catch(e){}
+        log(true,k); }
+      else { SC.miss++; RUN=0; b.classList.add('wrongpick'); mark('This one doesn’t belong · '+about);
+        if(window.Cheer) Cheer.soft(); log(false,k); }
+      toPick(); return;
+    }
+    if(x.bad) return;
+    used[k]=x.o; order.push(k); closeSheet(); draw();
+  });
+  render();
+}
+function log(ok,k){ try{ if(window.INTUITY) INTUITY.log('writing','para-'+D.S[idx].id+'-'+k,ok,{game:'paragraph',part:k}); }catch(e){} }
 function sheetOpeners(){
   const groups=D.O.map(c=>({t:c.t,o:isDrawback()?c.o:c.o.filter(o=>!PROBLEM.has(o))})).filter(c=>c.o.length);
   openSheet('<p class="sub" style="margin-bottom:4px">Each opener keeps the topic sentence a full sentence.</p>'+

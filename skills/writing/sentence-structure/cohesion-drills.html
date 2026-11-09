@@ -77,6 +77,15 @@
   .seg{display:grid;grid-template-columns:1fr 1fr;height:30px;width:220px;padding:2px;border-radius:10px;background:var(--poster-fill);margin:0 0 10px}
   .seg button{border-radius:8px;font-size:13px;font-weight:600;color:var(--dim)}
   .seg button.on{background:#fff;color:var(--poster-ink);box-shadow:0 1px 3px rgba(20,17,14,.12)}
+  /* 9 Nov 2026: the passage list folds into the task card - ‹ Shopping · 1 of 4 › */
+  .pnav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:-4px -6px 8px}
+  .pnav button{width:34px;height:34px;border-radius:50%;font-size:20px;line-height:1;color:var(--poster-ink)}
+  .pnav button:disabled{opacity:.25;cursor:default}
+  .pnav span{font-family:var(--f-mono);font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--poster-ink);text-align:center}
+  .pnav span small{font-weight:500;color:var(--poster-faint);letter-spacing:.06em}
+  .cbest{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--poster-faint);padding-top:8px}
+  .cbest.new{color:var(--caramel)}
+  .prun{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--poster-faint);opacity:0;transition:opacity .3s}.prun.on{opacity:1}
   .counter{display:flex;margin:12px 0 4px;border-top:1px solid var(--poster-rule);border-bottom:1px solid var(--poster-rule)}
   .counter div{flex:1;padding:8px 4px;text-align:center}
   .counter div+div{box-shadow:inset 1px 0 0 var(--poster-rule)}
@@ -123,7 +132,7 @@
  <link rel="stylesheet" href="/tools/intuity-pills.css?v=20261012">
  <script src="/tools/intuity-overflow.js?v=3"></script>
 <script src="/tools/be2-brand.js?v=20261108"></script>
-<link rel="stylesheet" href="/tools/one-header.css?v=1">
+<link rel="stylesheet" href="/tools/one-header.css?v=2">
 </head>
 <body>
 <div class="page">
@@ -146,6 +155,8 @@
 </div>
 
 <script src="/skills/grammar-rules/intuity-log.js"></script>
+<script src="/skills/grammar-rules/intuity-sound.js"></script>
+<script src="/tools/intuity-cheer.js?v=2"></script>
 <script>
 (function(){
 'use strict';
@@ -291,15 +302,21 @@ const pick=(p,n)=>{const r=res[n];return r&&r.st!=='x'?norm(ans[n]):p.b[n].ok[0]
 
 function tabs(){
   document.querySelectorAll('#modes .mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.m===mode));
-  const s=$('sets');
-  if(mode==='revisit'||mode==='patterns'){s.style.display='none';return;}
-  s.style.display='';
-  s.innerHTML=P.filter(p=>p.mode===mode).map((p,i)=>'<button class="tabitem'+(i===pi?' active':'')+'" type="button" data-i="'+i+'">'+esc(p.title)+'</button>').join('');
-  s.querySelectorAll('.tabitem').forEach(b=>b.onclick=()=>{pi=+b.dataset.i;reset();draw();});
+  $('sets').style.display='none';
 }
+function pnav(){
+  const list=P.filter(p=>p.mode===mode);
+  return '<div class="pnav"><button type="button" id="pPrev" aria-label="Previous passage"'+(pi>0?'':' disabled')+'>‹</button><span>'+esc(list[pi].title)+' <small>· '+(pi+1)+' of '+list.length+'</small></span><button type="button" id="pNext" aria-label="Next passage"'+(pi<list.length-1?'':' disabled')+'>›</button></div>';
+}
+document.addEventListener('click',e=>{ const b=e.target.closest('#pPrev,#pNext'); if(!b||b.disabled) return; pi+=b.id==='pNext'?1:-1; reset(); draw(); });
 
+const cbest=k=>{ try{ return +localStorage.getItem('intuity.best.cohesion.'+k)||0; }catch(e){ return 0; } };
+const cput=(k,v)=>{ try{ localStorage.setItem('intuity.best.cohesion.'+k,String(v)); }catch(e){} };
+const cheer=(f,...a)=>{ try{ if(window.Cheer) Cheer[f](...a); }catch(e){} };
+function bestLine(k,n,t){ const b=cbest(k), nb=n>b; if(nb) cput(k,n);
+  return {nb:nb&&b>0,html:'<p class="cbest'+(nb&&b?' new':'')+'">'+(nb?(b?'New best · beat '+b+' / '+t:'First score to beat'):'Your best · '+b+' / '+t)+'</p>'}; }
 function taskCard(p){
-  return '<div class="task"><div class="kick">Cambridge B2 First · Writing · '+p.kind+'</div><p>'+esc(p.task)+'</p>'+
+  return '<div class="task">'+pnav()+'<div class="kick">Cambridge B2 First · Writing · '+p.kind+'</div><p>'+esc(p.task)+'</p>'+
     '<div class="tags"><span>'+esc(p.from)+'</span><span>Marked under Organisation</span></div></div>';
 }
 function rail(p,S){
@@ -307,12 +324,12 @@ function rail(p,S){
 }
 
 /* PATTERNS: rounds of eight; each sentence has one linker whose grammar fits */
-let pq=[],pn=0,pick2=null,pok=0;
+let pq=[],pn=0,pick2=null,pok=0,prun=0;
 function newRound(){
   const miss=Object.keys(store.missed);
   /* items holding a linker the student has missed before come first, then the rest at random */
   const all=shuffle(Q).sort((a,b)=>(miss.indexOf(b.o[0].toLowerCase())>=0)-(miss.indexOf(a.o[0].toLowerCase())>=0));
-  pq=all.slice(0,ROUND).map(q=>({s:q.s,ok:q.o[0],o:shuffle(q.o)}));pn=0;pick2=null;pok=0;
+  pq=all.slice(0,ROUND).map(q=>({s:q.s,ok:q.o[0],o:shuffle(q.o)}));pn=0;pick2=null;pok=0;prun=0;
 }
 function patternKey(){
   return '<div class="pkey">'+Object.keys(PAT).map(k=>'<span class="pk pk-'+k+'"><i aria-hidden="true"></i>'+esc(PAT[k])+'</span>').join('')+'</div>';
@@ -323,6 +340,7 @@ function drawPatterns(){
     store.res.patterns={r:pok,h:0,t:pq.length,at:Date.now()};save();
     pm.innerHTML='<div class="stage"><div class="kick">Round complete</div><h1 class="title">What comes next?</h1>'+
       '<div class="counter"><div><b>'+pok+'</b><span>right</span></div><div><b>'+(pq.length-pok)+'</b><span>missed</span></div></div>'+
+      (()=>{ const bl=bestLine('patterns',pok,pq.length); setTimeout(()=>{ const big=pm.querySelector('.counter b'); if(pok===pq.length) cheer('finale'); else if(bl.nb) cheer('streak',big); else if(pok>=6) cheer('done',big); else cheer('tick',big); },200); return bl.html; })()+
       '<p class="instr" style="padding-top:12px">'+(pok===pq.length?'Every pattern right. Next round mixes in new sentences.':'The linkers you missed come back first in the next round, and wait in Revisit.')+'</p>'+patternKey()+'</div>'+
       '<div class="actions"><button class="btn primary" id="again" type="button">New round</button></div>';
     $('again').onclick=()=>{newRound();draw();};
@@ -330,7 +348,7 @@ function drawPatterns(){
   }
   const q=pq[pn],done=pick2!=null,right=done&&pick2===q.ok;
   const gap=done?'<span class="lk">'+esc(q.ok)+'</span>':'<span class="pgap">______</span>';
-  let h='<div class="stage"><div class="kick">'+(pn+1)+' of '+pq.length+'</div><h1 class="title">What comes next?</h1>'+
+  let h='<div class="stage"><div class="kick">'+(pn+1)+' of '+pq.length+' <span class="prun'+(prun>=2?' on':'')+'">· 🔥 '+prun+'</span></div><h1 class="title">What comes next?</h1>'+
     '<p class="instr">Only one linker fits the grammar of this sentence. Look at what comes after the gap.</p>'+
     '<div class="para-wrap"><p class="para">'+esc(q.s).replace('{}',gap)+'</p></div>'+
     '<div class="popts">'+q.o.map(w=>{const c=!done?'':w===q.ok?' ok':w===pick2?' no':'';
@@ -344,8 +362,9 @@ function drawPatterns(){
   pm.innerHTML=h+'<div class="actions">'+(done?'<button class="btn primary" id="pnx" type="button">'+(pn+1<pq.length?'Next':'See score')+'</button>':'')+'</div>';
   pm.querySelectorAll('.pbtn').forEach(b=>b.onclick=()=>{
     if(pick2!=null) return; pick2=b.dataset.w; const ok=pick2===q.ok;
-    if(ok) pok++; else store.missed[q.ok.toLowerCase()]=(store.missed[q.ok.toLowerCase()]||0)+1;
+    if(ok){ pok++; prun++; } else { prun=0; store.missed[q.ok.toLowerCase()]=(store.missed[q.ok.toLowerCase()]||0)+1; }
     save();log('patterns:'+q.ok.toLowerCase(),ok);draw();
+    const nb=pm.querySelector('.pbtn.ok'); if(ok){ cheer('right',nb,true); if(prun>=3&&prun%3===0) cheer('streak',pm.querySelector('.prun')); } else cheer('soft');
   });
   if($('pnx')) $('pnx').onclick=()=>{pn++;pick2=null;draw();};
 }
@@ -412,6 +431,10 @@ function bind(p,name){
         log(p.id+':'+n,ok);
       });
       checked=true;save();draw();
+      const ins=[...pm.querySelectorAll('.para input')], good=ins.filter(i=>i.classList.contains('ok'));
+      if(good.length===ins.length) cheer('done',pm.querySelector('.fb.yes')||ins[ins.length-1]);
+      else if(good.length){ good.forEach((i,k)=>setTimeout(()=>cheer('right',i,!hint),k*160)); }
+      else cheer('soft');
     };
   }
   if(name==='Compare') pm.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{view=b.dataset.v;draw();});
@@ -438,6 +461,7 @@ function drawDone(p,S){
   const list=P.filter(q=>q.mode===mode),next=list[pi+1];
   pm.innerHTML='<div class="stage"><div class="kick">Passage complete</div><h1 class="title">'+esc(p.title)+'</h1>'+
     '<div class="counter"><div><b>'+r+'</b><span>recalled</span></div><div><b>'+h+'</b><span>with a hint</span></div><div><b>'+x+'</b><span>missed</span></div></div>'+
+    (()=>{ const bl=bestLine(p.id,r,k.length); setTimeout(()=>{ const big=pm.querySelector('.counter b'); if(r===k.length) cheer('finale'); else if(bl.nb) cheer('streak',big); else cheer('tick',big); },200); return bl.html; })()+
     '<p class="instr" style="padding-top:12px">'+(x||h?'Words you missed or needed a hint for will wait in Revisit. Come back to them tomorrow.':'All recalled without help. Try the next passage, then return to this one in a few days.')+'</p></div>'+
     '<div class="actions"><button class="btn quiet" id="again" type="button">Try again</button>'+(next?'<button class="btn primary" id="nx" type="button">Next passage</button>':'<button class="btn primary" id="rv" type="button">Revisit</button>')+'</div>';
   $('again').onclick=()=>{reset();draw();};

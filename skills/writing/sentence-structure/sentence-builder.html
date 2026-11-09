@@ -434,6 +434,8 @@ text-decoration:none;font-weight:700;}
   .sum-score{display:flex;align-items:baseline;justify-content:center;gap:10px}
   .sum-score .n{font-family:var(--f-poster);font-size:60px;line-height:1;color:var(--poster-ink)}
   .sum-score .g{font-family:var(--f-poster);font-size:30px;color:var(--caramel)}
+  .sum-best{text-align:center;margin:10px 0 0;font:500 11px/1.4 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .sum-best.new{color:var(--caramel)}
   .sum-stats{display:grid;grid-template-columns:repeat(3,1fr);margin:16px 0 4px;border-top:1px solid var(--poster-rule);border-bottom:1px solid var(--poster-rule)}
   .sum-stats div{text-align:center;padding:12px 4px}
   .sum-stats div + div{box-shadow:inset 1px 0 0 var(--poster-rule)}
@@ -450,7 +452,7 @@ text-decoration:none;font-weight:700;}
   @media (prefers-reduced-motion:reduce){ *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important} }
 </style>
 <script src="/tools/be2-brand.js?v=20261108"></script>
-<link rel="stylesheet" href="/tools/one-header.css?v=1">
+<link rel="stylesheet" href="/tools/one-header.css?v=2">
 </head>
 <body>
 <div class="page">
@@ -524,6 +526,7 @@ text-decoration:none;font-weight:700;}
     <div class="sum-stars" id="sumStars"></div>
     <div class="sum-score"><span class="n" id="sumScore">0</span><span class="g" id="sumGrade">A</span></div>
     <div class="sum-stats" id="sumStats"></div>
+    <p class="sum-best" id="sumBest" hidden></p>
     <div class="sum-missed" id="sumMissed" hidden></div>
     <div class="sum-acts">
       <button class="btn quiet" id="sumAgain" type="button">Build it again</button>
@@ -739,7 +742,11 @@ text-decoration:none;font-weight:700;}
      poster cards and the dots. The centred card opens; a card at the side
      slides to the centre first. The opened card expands into its own
      screen, and the phone's back button closes it again. */
+  /* 9 Nov 2026: bests survive a reload - stars and score per sentence */
   const bestStars={};
+  const BK=id=>'intuity.best.sentence-builder.'+id;
+  const getBest=id=>{ try{ return JSON.parse(localStorage.getItem(BK(id))||'null'); }catch(e){ return null; } };
+  const putBest=(id,v)=>{ try{ localStorage.setItem(BK(id),JSON.stringify(v)); }catch(e){} };
   const plural=g=>g.tab+'s';
   function renderGenres(){
     const nav=$('genreTabs'); nav.innerHTML='';
@@ -767,6 +774,7 @@ text-decoration:none;font-weight:700;}
   const miniStars=n=>[0,1,2].map(k=>'<svg viewBox="0 0 24 24" class="'+(k<n?'':'off')+'">'+STAR+'</svg>').join('');
   function cardStatus(st){
     if(live&&G&&G.st===st&&G.phase!=='finished'&&G.phase!=='intro') return '<span class="pst paused">Paused · '+counts(curSegs()).t+' of '+G.target+'</span>';
+    if(bestStars[st.id]==null){ const b=getBest(st.id); if(b) bestStars[st.id]=b.stars; }
     if(bestStars[st.id]!=null) return '<span class="pst">'+miniStars(bestStars[st.id])+'</span>';
     return '<span class="pst"></span>';
   }
@@ -880,7 +888,9 @@ text-decoration:none;font-weight:700;}
   function startSet(){
     const g=DATA.genres[gi], st=g.sets[si];
     const maxC=counts(st.levels[st.levels.length-1]).t;
-    G={g,st,phase:'intro',lvl:0,target:maxC,linker:null,choices:{},stars:3,wrong:new Set(),structs:new Set(st.base||[]),newest:-1,fresh:false,order:null};
+    /* 9 Nov 2026: start at three clauses, not the longest; five is a choice, not the default */
+    const minC=counts(st.levels[1]).t;
+    G={g,st,phase:'intro',lvl:0,target:Math.max(minC,Math.min(3,maxC)),linker:null,choices:{},stars:3,wrong:new Set(),structs:new Set(st.base||[]),newest:-1,fresh:false,order:null};
     live=true; view='build'; setView(); resetScore(); render();
   }
   const curSegs=()=>level(G.st,G.lvl,G.choices);
@@ -892,8 +902,12 @@ text-decoration:none;font-weight:700;}
     paintStars(G.phase!=='intro');
     ({intro:renderIntro,link:renderRound,step:renderRound,added:renderAdded,order:renderOrder,finished:renderWhole})[G.phase]();
   }
-  function counterHTML(c,target,bumpKey){
+  /* 9 Nov 2026: while building, one number - clauses so far out of the target. The split into
+     independent · dependent · non-finite comes once the sentence is built, on a sentence the
+     pupil made, where the terms mean something. */
+  function counterHTML(c,target,bumpKey,full){
     const b=k=>bumpKey===k?' class="bump"':'';
+    if(!full) return '<div class="counter" aria-label="Clause counter"><div class="ct"><b'+(bumpKey?' class="bump"':'')+'>'+c.t+(target?'<small style="font-size:13px;color:var(--faint)">/'+target+'</small>':'')+'</b><span>clause'+(c.t===1?'':'s')+'</span></div></div>';
     return '<div class="counter" aria-label="Clause counter"><div class="ct"><b'+b('t')+'>'+c.t+(target?'<small style="font-size:13px;color:var(--faint)">/'+target+'</small>':'')+'</b><span>clauses</span></div>'+
       '<div class="ci"><b'+b('i')+'>'+c.i+'</b><span>independent</span></div><div class="cd"><b'+b('d')+'>'+c.d+'</b><span>dependent</span></div><div class="cn"><b'+b('n')+'>'+c.n+'</b><span>non-finite</span></div></div>';
   }
@@ -908,7 +922,7 @@ text-decoration:none;font-weight:700;}
     let nums=''; for(let n=min;n<=max;n++) nums+='<button class="num'+(n===G.target?' on':'')+'" type="button" data-n="'+n+'" aria-pressed="'+(n===G.target)+'">'+n+'</button>';
     $('body').innerHTML='<div class="para-wrap">'+paraHTML(st,sentenceHTML(st,st.levels[0],{}))+colourKey+
       counterHTML(counts(st.levels[0]))+'</div>'+
-      '<div class="target"><p class="ask">How many clauses will you build?</p><p class="sub">Independent, dependent and non-finite clauses all count.</p>'+
+      '<div class="target"><p class="ask">How many clauses will you build?</p><p class="sub">A clause is a part of the sentence with its own verb.</p>'+
       '<div class="nums" role="group" aria-label="Number of clauses">'+nums+'</div>'+
       '<p class="hint">'+(G.target>=5?'Five is a strong exam sentence. Use one like it per paragraph, not in every line.':G.target===4?'Four clauses: complex, and still easy to read.':'A good place to start. You can build it again with more.')+'</p></div>';
     document.querySelectorAll('.num').forEach(b=>b.onclick=()=>{ G.target=+b.dataset.n; renderIntro(); });
@@ -1051,7 +1065,7 @@ text-decoration:none;font-weight:700;}
   function renderWhole(){
     const st=G.st, segs=curSegs(), c=counts(segs);
     $('body').innerHTML='<div class="para-wrap">'+paraHTML(st,sentenceHTML(st,segs,{linker:G.linker,numbers:true,added:addedSet()}))+
-      counterHTML(c)+stripHTML()+'</div>'+legendHTML(st,segs);
+      counterHTML(c,null,null,true)+stripHTML()+'</div>'+legendHTML(st,segs);
     setActions('<button class="btn primary" id="again" type="button">Build it again</button>');
     $('again').onclick=startSet;
   }
@@ -1094,6 +1108,11 @@ text-decoration:none;font-weight:700;}
     if(missLog.length){ m.hidden=false; m.innerHTML='<h4>Worth another look</h4>'+missLog.slice(0,4).map(x=>'<p>'+esc(x)+'</p>').join(''); } else m.hidden=true;
     openSheet();
     try{ if(window.INTUITY) INTUITY.session('sentence-builder',G.g.id+':'+st.id,{clauses:c.t,stars:G.stars,score,hits,misses}); }catch(e){}
+    { const old=getBest(st.id), nb=!old||score>old.score, el=$('sumBest');
+      if(nb) putBest(st.id,{score,stars:Math.max(G.stars,old?old.stars:0)}); else if(G.stars>old.stars) putBest(st.id,{score:old.score,stars:G.stars});
+      el.hidden=false; el.classList.toggle('new',!!(nb&&old));
+      el.textContent=nb?(old?'New best · beat '+old.score:'First score to beat'):'Your best · '+old.score;
+      if(nb&&old) setTimeout(()=>{ try{ sfxWin(); }catch(e){} },1400); }
     await wait(RM?0:420);
     const svgs=$('sumStars').children;
     for(let i=0;i<G.stars;i++){ svgs[i].classList.add('drop'); sfxStar(i); await wait(RM?0:280); }

@@ -198,8 +198,13 @@ const UPRIGHT=['That’s B2!','Examiner-ready!','Clean and correct!','Nailed it!
 function newRound(g){
   const pool=g==='spot'?data.games.spot:data.games.up;
   const missed=JSON.parse(mem('miss.'+g)||'[]');
-  /* sentences missed last time come first, then the rest at random */
-  const order=shuffle(pool.map((_,i)=>i)).sort((a,b)=>(missed.indexOf(b)>=0)-(missed.indexOf(a)>=0)).slice(0,ROUND[g]);
+  /* 9 Nov 2026: up to half the round is sentences missed last time; the rest are the ones
+     seen longest ago (never seen first), so new items reach the pupil before old ones repeat */
+  const seen=JSON.parse(mem('seen.'+g)||'[]'), age=i=>{ const k=seen.indexOf(i); return k<0?-1:k; };
+  const back=shuffle(pool.map((_,i)=>i).filter(i=>missed.indexOf(i)>=0)).slice(0,Math.floor(ROUND[g]/2));
+  const rest=shuffle(pool.map((_,i)=>i).filter(i=>back.indexOf(i)<0)).sort((a,b)=>age(a)-age(b));
+  const order=shuffle(back.concat(rest.slice(0,ROUND[g]-back.length)));
+  keep('seen.'+g,JSON.stringify(seen.filter(i=>order.indexOf(i)<0).concat(order)));
   G={g,q:order.map(i=>({i,second:false})),pos:0,res:[],kept:0,missed:0,run:0,best:0,pick:null,opts:null,n:(G&&G.g===g?G.n:0)+1,missList:[]};
 }
 const item=()=>{const x=G.q[G.pos];return (G.g==='spot'?data.games.spot:data.games.up)[x.i];};
@@ -289,7 +294,7 @@ function end(){
 /* ═══ load ═══ */
 Promise.all([
   fetch('data/sentence-type.json').then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }),
-  fetch('data/sentence-type-games.json').then(r=>r.ok?r.json():{spot:[],upgrade:[]}).catch(()=>({spot:[],upgrade:[]}))
+  fetch('data/sentence-type-games.json?v=2').then(r=>r.ok?r.json():{spot:[],upgrade:[]}).catch(()=>({spot:[],upgrade:[]}))
 ]).then(([d,gm])=>{
   data=d; data.games={spot:gm.spot||[],up:gm.upgrade||[]};
   cat=(data.categories.find(c=>c.id==='grammatical')||data.categories[0]).id; tabs();

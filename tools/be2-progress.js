@@ -66,6 +66,50 @@
     if (r.rule) c.rule = String(r.rule).slice(0, 200);
     if (r.href) c.href = String(r.href);
     if (r.kind) c.kind = r.kind;
+    if (r.ask) c.ask = String(r.ask).slice(0, 160);
+  }
+
+  /* 10 Nov 2026: which skill a card belongs to - by the page it came from, else by its topic */
+  function skillOf(c) {
+    var h = String(c.href || ''), t = String(c.topic || '');
+    var m = /\/skills\/([a-z-]+)\//.exec(h);
+    if (m) {
+      if (/similar-words|vocab/.test(m[1])) return 'vocabulary';
+      if (/grammar/.test(m[1])) return 'grammar';
+      if (/use-of-english/.test(m[1])) return 'uoe';
+      if (/writing/.test(m[1])) return 'writing';
+      if (/speaking/.test(m[1])) return 'speaking';
+      if (/reading/.test(m[1])) return 'reading';
+    }
+    if (/^uoe|part4|full-test|word-(formation|transformation)|gap-fill/.test(t)) return 'uoe';
+    if (/^(phrases-|five-|which-task|writing|sentence)/.test(t)) return 'writing';
+    if (/^speaking/.test(t)) return 'speaking';
+    if (/phrasal|gerund|condition|tense|modal|passive|reported|relative|grammar|-rewrite/.test(t)) return 'grammar';
+    return 'vocabulary';
+  }
+  /* the day's cards, mixed: round by round, one from each skill, at most PER_SKILL from any
+     one; only if the other skills run dry does one skill fill the rest */
+  var PER_SKILL = 4;
+  function mixed(list, limit) {
+    var order = [], buckets = {}, out = [], taken = {}, used = {};
+    list.forEach(function (c, k) { var s = skillOf(c); if (!buckets[s]) { buckets[s] = []; order.push(s); } buckets[s].push(k); });
+    /* inside a skill, rotate its games too (Sort, Switch, Cohesion…), keeping each game's own order */
+    order.forEach(function (s) {
+      var by = {}, tops = [], out2 = [];
+      buckets[s].forEach(function (k) { var t = list[k].topic; if (!by[t]) { by[t] = []; tops.push(t); } by[t].push(k); });
+      for (var more2 = true; more2;) { more2 = false; tops.forEach(function (t) { if (by[t].length) { out2.push(by[t].shift()); more2 = true; } }); }
+      buckets[s] = out2;
+    });
+    var more = true;
+    while (out.length < limit && more) {
+      more = false;
+      order.forEach(function (s) {
+        if (out.length >= limit || (taken[s] || 0) >= PER_SKILL || !buckets[s].length) return;
+        var k = buckets[s].shift(); out.push(list[k]); used[k] = 1; taken[s] = (taken[s] || 0) + 1; more = true;
+      });
+    }
+    for (var k = 0; k < list.length && out.length < limit; k++) if (!used[k]) out.push(list[k]);
+    return out;
   }
 
   /* Human names for the places answers come from. */
@@ -77,6 +121,10 @@
     'uoe-part1': 'Use of English · Part 1', 'uoe-part2': 'Use of English · Part 2',
     'uoe-part3': 'Use of English · Part 3', 'uoe-part4': 'Use of English · Part 4',
     'which-task': 'Writing · Which task?', 'five-reviews': 'Your review in five',
+    'writing-sort': 'Writing · Sort it', 'writing-switch': 'Writing · Switch it', 'writing-finish': 'Writing · Finish it',
+    'sentence-spot': 'Sentence types · Spot it', 'sentence-upgrade': 'Sentence types · Upgrade',
+    'cohesion': 'Cohesion tools', 'cohesion-patterns': 'Cohesion · Patterns',
+    'speaking-p1': 'Speaking · Part 1', 'speaking-p2': 'Speaking · Part 2', 'speaking-p3': 'Speaking · Part 3', 'speaking-p4': 'Speaking · Part 4',
   };
   var SHEET = { fa: 'For & Against essay', ps: 'Problems & Solutions essay', ce: 'Cause & Effect essay', ad: 'Agree & Disagree essay',
     op: 'Opinion essay', st: 'Speculation & Trends essay', ar: 'Article', ef: 'Formal email', ei: 'Informal email', rv: 'Review', rp: 'Report', sy: 'Story' };
@@ -135,7 +183,7 @@
         .map(function (k) { var c = deck[k]; c.key = k; c.topicName = topicName(c.topic); return c; });
       /* the card waiting longest first, then the most missed */
       list.sort(function (a, b) { var da = a.due || '', db = b.due || ''; return (da < db ? -1 : da > db ? 1 : 0) || (b.misses - a.misses) || (a.last < b.last ? 1 : -1); });
-      return limit ? list.slice(0, limit) : list;
+      return limit ? mixed(list, limit) : list;
     },
     /* the 12 a day: how many the review page will still show today */
     dueToday: function () {
@@ -172,7 +220,8 @@
       return t.slice(st, en).replace(/\s+/g, ' ').trim();
     },
     practisedToday: function () { var days = read(DAYS, []); return days[days.length - 1] === today(); },
-    topicName: topicName
+    topicName: topicName,
+    skillOf: skillOf
   };
   window.Be2 = Be2;
 

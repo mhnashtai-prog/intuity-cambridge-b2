@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=20261105">
 <style>
 /* ═══════════════════════════════════════════════════════════════════════
-   PHRASE RECALL · think, then reveal  ·  v1 (5 Nov 2026)
+   PHRASE RECALL · write it, the app checks  ·  v2 (10 Nov 2026)
 
    From Michael's class: the students had SEEN every review phrase, but
    seeing is recognition. Pulling a phrase out of memory is what fixes it
@@ -18,8 +18,9 @@
    writing it (Smith, Roediger & Karpicke 2013). So:
 
      one phrase from the Quick revision sheet, one key word hidden, its
-     first letter as the cue  →  the student says it  →  Show it  →
-     Got it / Not yet
+     first letter as the cue  →  the student WRITES the word  →  the app
+     checks it (10 Nov 2026: writing it is the productive skill the exam
+     asks for, and nobody grades themselves). A run, a score and a best.
 
    Eight phrases a round, from the beginning, middle and end of the text.
    Every answer joins the review deck (Be2, keep: true), so each phrase
@@ -44,6 +45,17 @@ body{background:var(--bg,#F3EFE8)}
 .rc-cue{color:var(--car-d);font-weight:700;letter-spacing:.04em}
 .rc-phrase mark{background:none;color:inherit;box-shadow:inset 0 -.55em 0 rgba(194,149,110,.45);animation:rcIn .4s ease}
 @keyframes rcIn{from{box-shadow:inset 0 0 0 rgba(194,149,110,.45)}}
+.rc-in{font:inherit;font-weight:700;color:var(--ink);border:0;border-bottom:2px solid var(--ink);background:transparent;
+  padding:0 2px;margin:0;border-radius:0;outline:none;min-width:3ch}
+.rc-in:focus{border-bottom-color:var(--car-d);background:rgba(194,149,110,.1)}
+.rc-in.ok{color:var(--ok);border-bottom-color:var(--ok)}
+.rc-in.no{color:var(--dim);text-decoration:line-through;border-bottom-color:var(--car)}
+.rc-nw{white-space:nowrap}
+.rc-v{margin:.9rem 0 0;padding-top:.75rem;border-top:1px solid var(--line);font-size:.95rem;line-height:1.5}
+.rc-v b.ok{color:var(--ok)} .rc-v b.no{color:var(--car-d)}
+.rc-run{margin-left:.6rem;color:var(--dim)}
+.rc-best{color:var(--dim);font-size:.9rem;margin:.35rem 0 1rem}
+.rc-v mark{background:none;color:inherit;font-weight:700;box-shadow:inset 0 -.55em 0 rgba(194,149,110,.45)}
 .rc-task{color:var(--dim);font-size:.88rem;margin:0}
 .rc-row{display:grid;grid-template-columns:1fr 1fr;gap:.55rem;margin:1.1rem 0 0}
 .rc-row.rc-one{grid-template-columns:1fr}
@@ -69,6 +81,8 @@ body{background:var(--bg,#F3EFE8)}
 @media(prefers-reduced-motion:reduce){.rc-phrase mark{animation:none}}
 </style>
 <script src="/tools/be2-brand.js?v=20261110b"></script>
+<script src="/skills/grammar-rules/intuity-sound.js"></script>
+<script src="/tools/intuity-cheer.js?v=2"></script>
 </head>
 <body>
 <header class="header">
@@ -129,39 +143,57 @@ function draw(){
   for(let r=0;out.length<N&&r<40;r++){ const L=by[r%by.length]; if(L.length) out.push(L.shift()); }
   return out.sort((a,b)=>a.bi-b.bi);
 }
-function start(){ run=draw(); at=0; res=[]; show(); }
+function start(){ run=draw(); at=0; res=[]; streak=0; longest=0; show(); }
+let streak=0,longest=0,timer=0;
+const cheer=(f,...a)=>{ try{ if(window.Cheer) Cheer[f](...a); }catch(e){} };
+const norm=t=>String(t||'').toLowerCase().replace(/[’‘]/g,"'").replace(/[^a-z']/g,'');
 function dots(){ $('dots').innerHTML=run.map((_,k)=>'<i class="'+(res[k]===true?'rc-got':res[k]===false?'rc-not':k===at?'rc-here':'')+'"></i>').join(''); }
+function kick(x){ return '<div class="rc-kick"><span>'+esc(S.tab)+' · '+esc(x.band)+'</span><em>'+(at+1)+' / '+run.length+(streak>1?'<span class="rc-run">run '+streak+'</span>':'')+'</em></div>'; }
+/* the word that was hidden, and its first letter (the cue) */
+function word(x){ const m=x.text.split(' ')[x.k].match(/^([“"(‘']*)([A-Za-z]+)/); return m?m[2]:''; }
 function show(){
-  dots(); if(at>=run.length) return end();
-  const x=run[at];
-  $('out').innerHTML='<section class="rc-card"><div class="rc-kick"><span>'+esc(S.tab)+' · '+esc(x.band)+'</span><em>'+(at+1)+' / '+run.length+'</em></div>'+
-    '<p class="rc-phrase">'+esc(x.cue).replace(/(\S)___/,'<span class="rc-cue">$1___</span>')+'</p>'+
-    '<p class="rc-task">Say the missing word, out loud or in your head. Then check.</p>'+
-    '<div class="rc-row rc-one"><button class="rc-b rc-dark" type="button" id="see">Show it</button></div></section>';
-  $('see').onclick=reveal; $('see').focus({preventScroll:true});
+  clearTimeout(timer); dots(); if(at>=run.length) return end();
+  const x=run[at], w=word(x), cw=x.cue.split(' ');
+  const rest=cw[x.k].replace(/^([“"(‘']*)([A-Za-z])___(.*)$/,'$3'), pre=cw[x.k].match(/^([“"(‘']*)/)[1];
+  cw[x.k]='\u0000';
+  $('out').innerHTML='<section class="rc-card">'+kick(x)+
+    '<p class="rc-phrase">'+esc(cw.join(' ')).replace('\u0000','<span class="rc-nw">'+esc(pre)+'<span class="rc-cue">'+esc(w[0])+'</span>'+
+      '<input class="rc-in" id="in" style="width:'+Math.max(4,w.length)+'ch" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" aria-label="The missing word">'+esc(rest)+'</span>')+'</p>'+
+    '<p class="rc-task">Write the rest of the word.</p>'+
+    '<div class="rc-row rc-one" id="act"><button class="rc-b rc-dark" type="button" id="chk">Check</button></div><div id="v"></div></section>';
+  const inp=$('in');
+  $('chk').onclick=check; inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); check(); } });
+  setTimeout(()=>{ try{ inp.focus({preventScroll:true}); }catch(e){} },60);
 }
-function reveal(){
-  const x=run[at], w=x.text.split(' ');
-  $('out').innerHTML='<section class="rc-card"><div class="rc-kick"><span>'+esc(S.tab)+' · '+esc(x.band)+'</span><em>'+(at+1)+' / '+run.length+'</em></div>'+
-    '<p class="rc-phrase">'+w.map((y,j)=>j===x.k?'<mark>'+esc(y)+'</mark>':esc(y)).join(' ')+'</p>'+
-    '<p class="rc-task">Did you have it?</p>'+
-    '<div class="rc-row"><button class="rc-b" type="button" id="no">Not yet</button><button class="rc-b rc-dark" type="button" id="yes">Got it</button></div></section>';
-  $('no').onclick=()=>mark(false); $('yes').onclick=()=>mark(true);
-}
-function mark(ok){
-  const x=run[at]; res[at]=ok;
-  try{ Be2.answer('phrases-'+ID,{id:x.id,correct:ok,keep:true,kind:'recall',prompt:x.cue,answer:x.text,
+function check(){
+  const x=run[at], w=word(x), inp=$('in'), v=inp.value.trim();
+  if(!v){ inp.focus(); return; }
+  /* with or without the first letter that was already given */
+  const ok=norm(v)===norm(w)||norm(w[0]+v)===norm(w);
+  res[at]=ok; inp.disabled=true; inp.classList.add(ok?'ok':'no'); $('act').remove();
+  if(ok){ streak++; longest=Math.max(longest,streak); cheer('right',inp,true); if(streak%5===0) cheer('streak',inp); } else { streak=0; cheer('soft'); }
+  try{ Be2.answer('phrases-'+ID,{id:x.id,correct:ok,keep:true,kind:'recall',prompt:x.cue,answer:x.text,given:ok?'':v,
     href:'/skills/writing/recall.html?task='+TASK+'&s='+ID}); }catch(e){}
-  at++; show();
+  const words=x.text.split(' ');
+  $('v').innerHTML='<div class="rc-v">'+(ok?'<b class="ok">Right.</b> ':'<b class="no">Not this time.</b> ')+
+    words.map((y,j)=>j===x.k?'<mark>'+esc(y)+'</mark>':esc(y)).join(' ')+'</div>'+
+    '<div class="rc-row rc-one"><button class="rc-b rc-dark" type="button" id="nx">'+(at+1<run.length?'Next':'See my score')+'</button></div>';
+  dots(); $('nx').onclick=next;
+  if(ok) timer=setTimeout(next,1500);
 }
+function next(){ clearTimeout(timer); at++; show(); }
 function end(){
   const got=res.filter(Boolean).length, not=run.filter((_,k)=>!res[k]);
   const two=shuffle(not).concat(shuffle(run.filter((_,k)=>res[k]))).slice(0,2);
   const own=OWN[ID]||ESSAY, subj=own[Math.random()*own.length|0];
   const say=got===run.length?'All eight. They come back in a day, then 3, 7 and 21 days, to stay.':
-    'The “Not yet” ones are waiting in your review now. The rest come back in a day, then 3, 7 and 21 days.';
+    'The ones you missed are waiting in your review now. The rest come back in a day, then 3, 7 and 21 days.';
+  const bk='intuity.best.recall.'+ID; let best=0; try{ best=+localStorage.getItem(bk)||0; }catch(e){}
+  const nb=got>best; if(nb) try{ localStorage.setItem(bk,String(got)); }catch(e){}
+  setTimeout(()=>{ const h=document.querySelector('.rc-big'); if(got===run.length) cheer('finale'); else if(nb&&best) cheer('streak',h); else cheer('done',h); },250);
   $('out').innerHTML='<section class="rc-card rc-res"><div class="rc-kick" style="justify-content:center"><span>'+esc(S.tab)+' phrases</span></div>'+
-    '<div class="rc-big">'+got+'<small> / '+run.length+'</small></div><p class="rc-say">'+say+'</p>'+
+    '<div class="rc-big">'+got+'<small> / '+run.length+'</small></div>'+
+    '<p class="rc-best">Longest run '+longest+(nb&&best?' · <b>new best</b>':best?' · best '+Math.max(best,got)+' / '+run.length:'')+'</p><p class="rc-say">'+say+'</p>'+
     '<div class="rc-note"><h2>In your notebook</h2>'+
       '<p>Write <b>3 sentences</b> about '+(OWN[ID]?'<b>'+esc(subj)+'</b>':'this question: <b>'+esc(subj)+'</b>')+'. Use these 2 phrases:</p>'+
       '<ol>'+two.map(x=>'<li>'+esc(x.text)+'</li>').join('')+'</ol><small>On paper, not here. Show your teacher in class.</small></div>'+

@@ -284,37 +284,30 @@ window.placeToday = function (pt) {
 document.addEventListener('visibilitychange', function () { if (!document.hidden && window.todayPt) placeToday(window.todayPt); });
 </script>
 
-<!-- REVIEW IN THE CORNER (10 Nov 2026, from the teacher's sketch): a small REVIEW pill
-     drawn in dashes, quiet in the bottom corner. Its 24 dashes are the last 24 days:
-     each day the student practised turns one dash sage, filling clockwise, so the
-     outline closes as the app becomes a habit and drains back slowly if it stops. -->
-<a class="rv-corner" id="rvCorner" href="/review.html" aria-label="Review">
-  <svg class="rv-trace" viewBox="0 0 98 30" aria-hidden="true">
-    <path id="rvGrey" pathLength="48" fill="none" stroke="#C9C1B4" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="1 1"/>
-    <path id="rvGreen" pathLength="48" fill="none" stroke="#6E9585" stroke-width="2" stroke-linecap="round"/>
-  </svg>
-  <span>Review</span>
-</a>
+<!-- REVIEW IN THE CORNER (10 Nov 2026, the teacher's call): a small REVIEW pill in the
+     bottom corner, outlined by one thin line whose colour tells how much the app has been
+     used in the last 24 days:
+       never used yet   thin grey          (no one is greeted in red)
+       0-3 days         thin pale red      (you've been away)
+       4-11 days        light green, a little thicker
+       12+ days         strong lettuce green, thickest
+     The line thickens as it greens, so the change shows for colour-blind pupils too. -->
+<a class="rv-corner" id="rvCorner" href="/review.html" aria-label="Review">Review</a>
 <style>
   .rv-corner{position:fixed;z-index:5;right:14px;bottom:calc(12px + env(safe-area-inset-bottom,0px));
-    width:98px;height:30px;display:grid;place-items:center;text-decoration:none;color:#3A3530;
-    font:600 .62rem/1 'Geist Mono',ui-monospace,monospace;letter-spacing:.16em;text-transform:uppercase;-webkit-tap-highlight-color:transparent}
-  .rv-trace{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
-  .rv-corner span{position:relative;padding-left:.16em}
-  .rv-corner:focus-visible{outline:2px solid #C2956E;outline-offset:3px;border-radius:999px}
-  #rvGreen{transition:stroke-dashoffset .9s ease}
-  @media (prefers-reduced-motion:reduce){#rvGreen{transition:none}}
+    display:inline-flex;align-items:center;min-height:28px;padding:0 13px 0 calc(13px + .16em);box-sizing:border-box;
+    border-radius:999px;border:1px solid #C9C1B4;background:rgba(250,248,245,.92);text-decoration:none;color:#3A3530;
+    font:600 .62rem/1 'Geist Mono',ui-monospace,monospace;letter-spacing:.16em;text-transform:uppercase;
+    -webkit-tap-highlight-color:transparent;transition:border-color .6s ease,border-width .6s ease}
+  .rv-corner.lv-away{border-color:#E4A59B}
+  .rv-corner.lv-some{border-color:#A9D18E;border-width:1.5px}
+  .rv-corner.lv-strong{border-color:#5FA42B;border-width:2.2px}
+  .rv-corner:focus-visible{outline:2px solid #C2956E;outline-offset:3px}
 </style>
 <script>
 (function () {
   var N = 24;
-  /* the pill's outline, starting after the top-left curve and running clockwise */
-  var r = 14, w = 98, h = 30, x0 = 1, y0 = 1, x1 = w - 1, y1 = h - 1;
-  var d = 'M ' + (x0 + r) + ' ' + y0 + ' L ' + (x1 - r) + ' ' + y0 + ' A ' + r + ' ' + r + ' 0 0 1 ' + (x1 - r) + ' ' + y1 +
-          ' L ' + (x0 + r) + ' ' + y1 + ' A ' + r + ' ' + r + ' 0 0 1 ' + (x0 + r) + ' ' + y0;
-  document.getElementById('rvGrey').setAttribute('d', d);
-  document.getElementById('rvGreen').setAttribute('d', d);
-  function daysUsed() {
+  function read() {
     try {
       var days = JSON.parse(localStorage.getItem('be2.days.v1') || '[]'), seen = {}, n = 0, t = new Date();
       days.forEach(function (x) { seen[x] = 1; });
@@ -323,16 +316,15 @@ document.addEventListener('visibilitychange', function () { if (!document.hidden
             k = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
         if (seen[k]) n++;
       }
-      return n;
-    } catch (e) { return 0; }
+      return { ever: days.length > 0, n: n };
+    } catch (e) { return { ever: false, n: 0 }; }
   }
   function paint() {
-    var k = daysUsed(), g = document.getElementById('rvGreen');
-    /* k dashes in sage, the rest of the path left bare */
-    g.setAttribute('stroke-dasharray', k ? (new Array(k + 1).join('1 1 ') + '0 48') : '0 48');
-    g.style.display = k ? '' : 'none';   /* a zero-length dash would still draw a round dot */
+    var u = read(), el = document.getElementById('rvCorner');
+    var lv = !u.ever ? '' : u.n >= 12 ? 'lv-strong' : u.n >= 4 ? 'lv-some' : 'lv-away';
+    el.classList.remove('lv-away', 'lv-some', 'lv-strong'); if (lv) el.classList.add(lv);
     var due = 0; try { if (window.Be2) due = Be2.dueToday ? Be2.dueToday() : Be2.review().length; } catch (e) {}
-    document.getElementById('rvCorner').setAttribute('aria-label', 'Review' + (due ? ', ' + due + ' due today' : '') + ' · practised ' + k + ' of the last ' + N + ' days');
+    el.setAttribute('aria-label', 'Review' + (due ? ', ' + due + ' due today' : '') + (u.ever ? ' · practised ' + u.n + ' of the last ' + N + ' days' : ''));
   }
   paint();
   var c = 0, t = setInterval(function () { if (window.Be2 || ++c > 40) { clearInterval(t); paint(); } }, 150);

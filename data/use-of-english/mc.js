@@ -451,7 +451,8 @@ function submit() {
                        : String(q.q || '');
     var note = q.distractors && q.distractors[yours];
     Be2.answer('uoe-part1', { id: (CFG.scoreKey || 'mc') + '-' + si + '-' + k, prompt: prompt, answer: right, given: yours || '',
-      correct: isRight(q, i), rule: [q.why, note ? yours + ' \u2014 ' + note : ''].filter(Boolean).join(' '), href: location.pathname });
+      correct: isRight(q, i), opts: TEXTS ? q.options : optionsOf(q).map(function (o) { return o.word; }),
+      rule: [q.why, note ? yours + ' \u2014 ' + note : ''].filter(Boolean).join(' '), href: location.pathname });
   }); } catch (e) {}
   if (CFG.seg) paintTests();
   sfx(pct === 100 ? 'fanfare' : 'bowlLow');

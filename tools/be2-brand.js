@@ -135,7 +135,7 @@
   /* Progress: the streak and the review deck every activity reports to. */
   if (!window.Be2 && !document.querySelector('script[src*="/tools/be2-progress.js"]')) {
     var prog = document.createElement('script');
-    prog.src = '/tools/be2-progress.js?v=20261110';
+    prog.src = '/tools/be2-progress.js?v=20261110b';
     (document.head || document.documentElement).appendChild(prog);
   }
 

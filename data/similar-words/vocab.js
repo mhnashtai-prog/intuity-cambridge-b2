@@ -506,7 +506,7 @@ function checkAnswers() {
       if (ok) correct++;
       try {
         if (window.Be2 && Be2.answer) Be2.answer(CFG.data, {
-          id: 's' + set.setNumber + '-' + li, prompt: s.text, answer: want, given: got || '', correct: ok && !firstWrong[si + '-' + li],
+          id: 's' + set.setNumber + '-' + li, prompt: s.text, answer: want, given: got || '', correct: ok && !firstWrong[si + '-' + li], opts: set.words,
           meaning: MEANINGS && MEANINGS[String(set.setNumber)] ? MEANINGS[String(set.setNumber)][want] : '',
           href: location.pathname });
       } catch (e) {}

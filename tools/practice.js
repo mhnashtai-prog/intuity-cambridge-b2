@@ -419,11 +419,11 @@ function report(test) {
         var rightText = typeof right === 'number' ? opts[right] : right;
         var given = answers[i], givenText = typeof given === 'number' ? opts[given] : given;
         card = { id: id, prompt: item.sentence, answer: rightText, given: givenText || '',
-                 correct: given === right, rule: item.explanation || '' };
+                 correct: given === right, rule: item.explanation || '', opts: opts.map(String) };
       } else {
         card = { id: id, prompt: (item.original ? item.original + ' \u2192 ' : '') +
                    String(item.keyword || '').toUpperCase() + ': ' + (item.before || '') + '_____' + (item.after || ''),
-                 answer: item.answer, given: inp ? inp.value.trim() : '',
+                 answer: item.answer, given: inp ? inp.value.trim() : '', accept: [item.answer].concat(item.alternatives || []),
                  correct: !!(inp && inp.classList.contains('correct')) && !firstWrong[i] };
       }
       /* a blank is not an answer: checking a half-done set must not fill the deck */

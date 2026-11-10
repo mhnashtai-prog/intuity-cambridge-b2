@@ -723,7 +723,7 @@
           if (!ok && !String(userAnswers[idx] || '').replace(/[\s\/]/g, '')) throw 0;
           if (window.Be2 && Be2.answer) Be2.answer(window.QUIZ_DATA || 'grammar', {
             id: (item.id || ('t' + currentTest + '-' + idx)), prompt: item.text, answer: item.answer,
-            given: userAnswers[idx] || '', correct: ok && !firstWrong.has(idx), rule: item.rule || '',
+            given: userAnswers[idx] || '', correct: ok && !firstWrong.has(idx), rule: item.rule || '', accept: acceptedAnswers(item),
             href: (EMBEDDED ? document.referrer || location.pathname : location.pathname) });
         } catch (e) {}
       });

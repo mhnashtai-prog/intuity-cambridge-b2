@@ -290,7 +290,7 @@ function checkAnswers() {
         var k = it.example.toLowerCase().indexOf(it.surface.toLowerCase());
         var gapped = k < 0 ? it.example : it.example.slice(0, k) + '_____' + it.example.slice(k + it.surface.length);
         Be2.answer('collocations', { id: it.node + '|' + it.answer, prompt: gapped, answer: it.surface, given: got || '',
-          correct: ok, rule: (!ok && it.why[got]) ? got + ' \u2014 ' + it.why[got] : '', href: location.pathname });
+          correct: ok, opts: it.options, rule: (!ok && it.why[got]) ? got + ' \u2014 ' + it.why[got] : '', href: location.pathname });
       }
     } catch (e) {}
 

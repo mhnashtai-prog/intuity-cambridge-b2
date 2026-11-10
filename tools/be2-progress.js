@@ -67,6 +67,10 @@
     if (r.href) c.href = String(r.href);
     if (r.kind) c.kind = r.kind;
     if (r.ask) c.ask = String(r.ask).slice(0, 160);
+    /* 10 Nov 2026: the review is played, not flipped - a card keeps the game's own choices,
+       or the answers a typed box will accept */
+    if (r.opts && r.opts.length > 1) c.opts = r.opts.map(function (o) { return String(o).slice(0, 200); }).filter(Boolean).slice(0, 6);
+    if (r.accept && r.accept.length) c.accept = r.accept.map(function (o) { return String(o).slice(0, 120); }).filter(Boolean).slice(0, 10);
   }
 
   /* 10 Nov 2026: which skill a card belongs to - by the page it came from, else by its topic */

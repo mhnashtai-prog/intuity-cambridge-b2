@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@400..600&family=Space+Grotesk:wght@700&family=Anton&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=20261105">
 <link rel="stylesheet" href="/tools/five-card.css?v=6">
+<link rel="stylesheet" href="/tools/round-bar.css?v=1">
 <style>
 /* PRACTICE (8 Nov 2026, the teacher's idea): finish a sentence from the
    phrase bank about something you know - my phone, my city, homework, the
@@ -195,7 +196,7 @@ body.sorting #tabs,body.sorting #seg{display:none}
   const lineOf=(s,P)=>({s,P,ans:chunk(P.ex.end),tray:null,placed:[],lock:0,tries:0,state:''});
   function newFR(same){
     const deck=same&&FR?FR.deck:[];
-    FR={deck,card:0,kept:0,missed:0,run:0,best:0,n:(FR?FR.n:0)+(same?0:1),end:false,per:MODE==='full'?4:1};
+    FR={deck,res:[],card:0,kept:0,missed:0,run:0,best:0,n:(FR?FR.n:0)+(same?0:1),end:false,per:MODE==='full'?4:1};
   }
   function deal(){
     if(!FR||FR.end) newFR(false);
@@ -231,7 +232,7 @@ body.sorting #tabs,body.sorting #seg{display:none}
     const rows=CUR.lines.map((L,i)=>{ const role=L.s===prev?'':ROLE[L.s]; prev=L.s;
       return `<span class="fc-sec"><span class="fc-role">${role}</span><span class="fc-in"><span class="pr-p${i>CUR.at?' wait':''}">${head(L)}<span class="fi-slot" id="fs${i}">${slot(L,i)}</span></span></span></span>`; }).join('');
     $('card').innerHTML=`<span class="fc-k">Finish it · ${esc(T.label)}${CUR.reg?' · '+esc(CUR.reg):''} · Round ${FR.n}</span><span class="fc-t">${esc(T.label)} <span class="fc-n">${N}</span></span><span class="fc-bar" aria-hidden="true"></span>`+
-      fhud()+`<span class="fc">${rows}</span><span class="so-why" id="soWhy" hidden></span>`;
+      finBar()+fhud()+`<span class="fc">${rows}</span><span class="so-why" id="soWhy" hidden></span>`;
     tray();
   }
   function tray(){
@@ -276,6 +277,8 @@ body.sorting #tabs,body.sorting #seg{display:none}
     w.hidden=false;
     if(done) try{ if(window.INTUITY) INTUITY.log('writing','finish-'+TASK+'-'+idx,ok,{game:'finish',task:TASK,part:L.s}); }catch(e){}
     const h=$('card').querySelector('.so-hud'); if(h) h.outerHTML=fhud();
+    if(done) FR.res[FR.card*FR.per+CUR.at]=ok?'ok':'no';
+    rbarSet(finBar());
     reslot(); if(!done){ tray(); if(window.Cheer) Cheer.soft(); return; }
     $('bCheck').hidden=true; $('pick').hidden=true;
     if(window.Cheer){
@@ -336,7 +339,7 @@ body.sorting #tabs,body.sorting #seg{display:none}
     const {k,P}=SORT, txt=esc(P.p).replace(/\{T\}|\{t\}|\{k\}/g,'…').replace(/…(\s*…)+/g,'…').replace(/…/g,'<span class="fc-gap">…</span>');
     const row=(name,list)=>`<div class="so-row" role="radiogroup" aria-label="${name==='task'?'Which task':'Which part'}" data-r="${name}">`+list.map(([v,l])=>`<button type="button" role="radio" aria-checked="false" data-v="${v}"><span class="pl">${l}</span><span class="dot" aria-hidden="true"></span></button>`).join('')+`</div>`;
     $('card').innerHTML=`<span class="fc-k">Sort · Round ${RD.n}${SORT.tries?' · second go':''}</span><span class="fc-t">Sort <span class="fc-n">${RD.kept+RD.missed+1}</span></span><span class="fc-bar" aria-hidden="true"></span>`+
-      hud()+`<span class="so-p">${txt}</span>`+
+      sortBar()+hud()+`<span class="so-p">${txt}</span>`+
       `<span class="so-why" id="soWhy" hidden></span>`;
     /* 8 Nov 2026, from the teacher's sketch: the card holds only the phrase; the choices sit under it,
        a dot under each to fill, and Check when both are filled, so a pupil can change their mind first */
@@ -359,6 +362,7 @@ body.sorting #tabs,body.sorting #seg{display:none}
     if(ok){ x.state='kept'; RD.kept++; RD.run++; RD.best=Math.max(RD.best,RD.run); head=pickOf(RIGHT_LINES); }
     else if(first){ RD.run=0; head=pickOf(AGAIN_LINES); RD.q.splice(Math.min(RD.pos+4,RD.q.length),0,RD.q[RD.pos]); }   /* it comes back */
     else { x.state='missed'; RD.missed++; RD.run=0; head=pickOf(MISS_LINES); }
+    rbarSet(sortBar());
     RD.pos++;
     const T=D.tasks[k].label, Pt=PARTS.find(y=>y[0]===P.s)[1];
     const w=$('soWhy'); w.hidden=false;
@@ -394,10 +398,20 @@ body.sorting #tabs,body.sorting #seg{display:none}
      voice; one is still chatty; one is formal but holds a grammar slip. Rounds of eight,
      a miss comes back once, then the line that shows what changed. */
   const SWR=8; let SW=null, SWD=null, SWI=null;
+  /* THE ROUND BAR (10 Nov 2026, from Spot it): a segment per item; a slip shows clay at once
+     and turns sage if the second go puts it right */
+  const rbar=(st,now)=>'<span class="rbar'+(st.length>12?' tight':'')+'" aria-hidden="true">'+st.map((v,i)=>'<i class="'+(v||(i===now?'now':''))+'"></i>').join('')+'</span>';
+  const rbarSet=html=>{ const b=$('card').querySelector('.rbar'); if(b) b.outerHTML=html; };
+  const sortBar=()=>rbar(RD.items.map(x=>x.state==='kept'?'ok':x.state==='missed'||x.tries?'no':''),SORT&&!SORT.tries?RD.items.indexOf(SORT):-1);
+  const swBar=()=>rbar(SW.items.map((_,i)=>SW.res[i]||''),SWI&&!SW.tries[SWI.k]&&!SWI.done?SWI.k:-1);
+  function finBar(){ const st=[]; for(let c=0;c<FROUND;c++) for(let i=0;i<FR.per;i++){
+      const L=c===FR.card&&CUR?CUR.lines[i]:null, r=FR.res[c*FR.per+i];
+      st.push(L?(L.state==='kept'?'ok':L.state==='shown'||L.tries?'no':''):(r||'')); }
+    return rbar(st,CUR&&!CUR.lines[CUR.at].tries&&!CUR.lines[CUR.at].state?FR.card*FR.per+CUR.at:-1); }
   async function swData(){ if(SWD) return SWD; try{ SWD=(await fetch('/data/writing/switch.json?v=1',{cache:'no-cache'}).then(r=>r.json())).items; }catch(e){ SWD=[]; } return SWD; }
   function newSwitch(same){
     const items=same&&SW?SW.items:Array.from({length:Math.min(SWR,SWD.length)},()=>draw('switch',SWD.map((x,i)=>i)));
-    SW={items,q:items.map((_,i)=>i),pos:0,kept:0,missed:0,run:0,best:0,tries:{},n:(SW?SW.n:0)+(same?0:1),end:false};
+    SW={items,q:items.map((_,i)=>i),pos:0,kept:0,missed:0,run:0,best:0,tries:{},res:[],n:(SW?SW.n:0)+(same?0:1),end:false};
   }
   function dealSwitch(){ clearTimeout(AUTO); if(!SW||SW.end) newSwitch(false); if(SW.pos>=SW.q.length){ SW.end=true; SWI=null; return; }
     const k=SW.q[SW.pos], it=SWD[SW.items[k]];
@@ -409,7 +423,7 @@ body.sorting #tabs,body.sorting #seg{display:none}
     if(!SWI){ $('pick').hidden=true; $('bCheck').hidden=true; return paintSwitchEnd(); }
     const second=SW.tries[SWI.k];
     $('card').innerHTML=`<span class="fc-k">Switch it · Round ${SW.n}${second?' · second go':''}</span><span class="fc-t">Switch <span class="fc-n">${SW.kept+SW.missed+1}</span></span><span class="fc-bar" aria-hidden="true"></span>`+
-      swhud()+`<span class="sw-from">To a friend, in an email</span><span class="sw-e">${esc(SWI.it.e)}</span><span class="so-why" id="soWhy" hidden></span>`;
+      swBar()+swhud()+`<span class="sw-from">To a friend, in an email</span><span class="sw-e">${esc(SWI.it.e)}</span><span class="so-why" id="soWhy" hidden></span>`;
     $('pick').hidden=false;
     $('pick').innerHTML=`<span class="so-ask">Which is the same idea in an essay?</span><div class="sw-opts" role="radiogroup" aria-label="Essay versions">`+
       SWI.opts.map((o,i)=>`<button type="button" class="sw-o" role="radio" aria-checked="false" data-i="${i}"><span class="dot" aria-hidden="true"></span><span><span class="tx">${esc(o.t)}</span></span></button>`).join('')+`</div>`;
@@ -428,7 +442,7 @@ body.sorting #tabs,body.sorting #seg{display:none}
     if(ok){ SW.kept++; SW.run++; SW.best=Math.max(SW.best,SW.run); head=pickOf(RIGHT_LINES); }
     else if(first){ SW.run=0; head=pickOf(AGAIN_LINES); SW.q.splice(Math.min(SW.pos+4,SW.q.length),0,SW.q[SW.pos]); }
     else { SW.missed++; SW.run=0; head=pickOf(MISS_LINES); }
-    SW.pos++;
+    SW.pos++; SW.res[SWI.k]=ok?'ok':'no'; rbarSet(swBar());
     const w=$('soWhy'); w.hidden=false; w.innerHTML='<b>'+esc(head)+'</b><span class="sw-t">'+esc(SWI.it.t)+'</span>';
     const h=$('card').querySelector('.so-hud'); if(h) h.outerHTML=swhud();
     try{ if(window.INTUITY) INTUITY.log('writing','switch-'+SW.items[SWI.k],ok,{game:'switch'}); }catch(e){}

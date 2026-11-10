@@ -235,6 +235,9 @@ body:not(.parade) .sd-pill{display:none}
 <script src="/tools/be2-focus-drill.js?v=20261016c" defer></script>
 <script src="/tools/be2-moves-memory.js?v=2" defer></script>
 <script src="/tools/be2-recorder.js?v=20261012" defer></script>
+<script src="/skills/grammar-rules/intuity-sound.js"></script>
+<script src="/tools/intuity-cheer.js?v=2"></script>
+<script src="/tools/speak-quiz.js?v=1"></script>
 </head>
 <body>
 
@@ -375,7 +378,7 @@ function head(){
   $('modes').innerHTML=MK.length>1?seg(MK.map(function(k){ return {id:k,label:D.modes[k].label}; }),mode,'data-mode','sm'):'';
   $('alts').innerHTML=seg(D.voices.map(function(v,i){ return {id:String(i),label:v.tab}; }),String(ai),'data-alt','sm');
   var n=chapter().cards.length, d='';
-  for(var j=0;j<n;j++) d+='<button type="button" data-dot="'+j+'"'+(j===qi?' class="on" aria-current="true"':'')+
+  for(var j=0;j<n;j++) d+='<button type="button" data-dot="'+j+'" class="'+(j===qi?'on':'')+(stage==='quiz'&&window.SQ?SQ.cls(chapter().id+':'+j):'')+'"'+(j===qi?' aria-current="true"':'')+
     ' aria-label="Question '+(j+1)+': '+esc(chapter().cards[j].question)+'"></button>';
   $('dots').innerHTML=d;
   $('prev').disabled=!neighbour(-1); $('next').disabled=!neighbour(1);
@@ -515,7 +518,8 @@ function drill(){
     '<div class="dr-say" id="drSay">'+(dRun?'listen':'press play, then say it after them')+'</div><div class="bar"><i id="drBar"></i></div>'+
     '<div class="dr-foot"><button class="arrow" type="button" data-d="-1"'+(dIx<=0?' disabled':'')+' aria-label="Previous line">&larr;</button>'+
     '<span class="dr-n">line '+(dIx+1)+' of '+ss.length+'</span>'+
-    '<button class="arrow" type="button" data-d="1"'+(dIx>=ss.length-1?' disabled':'')+' aria-label="Next line">&rarr;</button></div>';
+    /* 10 Nov 2026: on the last line the way on is the Quiz, not a dead arrow */
+    (dIx>=ss.length-1?'<button class="tool on" type="button" data-sq="quiz">Now build it: Quiz →</button>':'<button class="arrow" type="button" data-d="1" aria-label="Next line">&rarr;</button>')+'</div>';
 }
 function drillGo(){
   if(!dRun) return;
@@ -535,7 +539,7 @@ function drillStop(){ dRun=false; if(dTmr){ clearTimeout(dTmr); dTmr=null; } }
 
 /* ═══ QUIZ — build it back ═════════════════════════════════════════════ */
 var qStep=0, plan=[], locked=false;
-function quiz(){ var ms=shapeOf(segs());
+function quiz(){ if(window.SQ) SQ.start(); var ms=shapeOf(segs());
   plan=ms.indexOf('a')>-1?['a'].concat(ms.indexOf('x')>-1?['x']:[],ms.filter(function(m){ return m!=='a'&&m!=='x'; })):ms.slice();
   qStep=0; qDraw(false,false); }
 function level(k){ var inc=plan.slice(0,k+1); return segs().filter(function(s){ return inc.indexOf(s.m)>-1; }); }
@@ -549,19 +553,20 @@ function qDraw(fresh,front){
     return '<span class="aseg'+(i===newIdx?' new':'')+'">'+mk(x.t,x.marks,false,'q')+'</span>'; }).join(' ')+'</p>';
   if(!r){
     $('body').innerHTML=html+'<div class="res"><h2>Built — '+tot+' seconds.</h2><p>Shape: '+esc(names(shapeOf(segs())))+'. '+esc(ans().why||'')+'</p>'+
-      '<button class="tool on" type="button" data-again="1">Build it again</button></div>';
+      (window.SQ?SQ.end({key:chapter().id+':'+qi,keys:chapter().cards.map(function(_,j){ return chapter().id+':'+j; }),part:'p4',topic:chapter().id,last:qi===chapter().cards.length-1,dot:document.querySelector('#dots [data-dot="'+qi+'"]')})
+        :'<button class="tool on" type="button" data-again="1">Build it again</button>')+'</div>';
     return;
   }
-  locked=false;
+  locked=false; if(window.SQ) SQ.step();
   $('body').innerHTML=html+'<p class="ask">'+esc(D.moves[r.m].ask)+'</p><div class="opts" id="opts"></div><div class="why" id="why" aria-live="polite"></div>';
   shuffle([{t:r.t,ok:true}].concat(r.wrong||[])).forEach(function(o){
     var b=document.createElement('button'); b.className='opt'; b.type='button'; b.textContent=o.t;
     b.addEventListener('click',function(){
       if(locked) return;
-      if(o.ok){ locked=true; b.classList.add('is-ok');
+      if(o.ok){ locked=true; b.classList.add('is-ok'); if(window.SQ) SQ.right(b);
         Array.prototype.forEach.call($('opts').children,function(x){ x.disabled=true; });
         setTimeout(function(){ qStep++; qDraw(true,r.m==='x'); },480); }
-      else { b.classList.add('is-no'); b.disabled=true; $('why').textContent=o.why; $('why').classList.add('show'); }
+      else { b.classList.add('is-no'); b.disabled=true; if(window.SQ) SQ.wrong(); $('why').textContent=o.why; $('why').classList.add('show'); }
     });
     $('opts').appendChild(b);
   });
@@ -595,7 +600,9 @@ function clockStop(reveal){
   if(cTmr){ clearInterval(cTmr); cTmr=null; }
   if(stage!=='talk'||!$('clk')) return;
   talkStrip(LIM-cLeft);
-  if(reveal) $('reveal').classList.add('show');
+  if(reveal){ $('reveal').classList.add('show');
+    /* 10 Nov 2026: after your answer and the model, the next question is one tap away */
+    if(!$('reveal').querySelector('.sq-acts')) $('reveal').insertAdjacentHTML('beforeend','<div class="sq-acts"><button class="tool on" type="button" data-sq="next">Next question →</button></div>'); }
 }
 
 /* ═══ PHRASE BANK ══════════════════════════════════════════════════════ */
@@ -699,6 +706,10 @@ document.addEventListener('click',function(e){
   if(t.dataset.cover){ stop(); cover=!cover; revealed={}; pref('cover',cover?'1':''); explore(); return; }
   if(t.dataset.d!==undefined){ drillStop(); hush(); dIx=Math.max(0,Math.min(segs().length-1,dIx+(+t.dataset.d))); drill(); return; }
   if(t.dataset.again){ quiz(); return; }
+  /* 10 Nov 2026: the Quiz's next steps - say it yourself, or the next question */
+  if(t.dataset.sq==='next'){ step(1); return; }
+  if(t.dataset.sq==='quiz'){ var qb=document.querySelector('#stages [data-s="quiz"]'); if(qb) qb.click(); return; }
+  if(t.dataset.sq==='talk'){ var tb=document.querySelector('#stages [data-s="talk"]'); if(tb) tb.click(); return; }
 });
 document.addEventListener('keydown',function(e){
   if(document.body.classList.contains('parade')) return;   /* the strip has its own keys */

@@ -124,7 +124,7 @@
   /* Human names for the places answers come from. */
   var NAMES = {
     'similar-words': 'Similar Words', 'topic-vocabulary': 'Topic Vocabulary',
-    'academic-vocabulary-sets': 'Academic Vocabulary', 'phrasal-verbs': 'Phrasal Verbs',
+    'academic-vocabulary-sets': 'Synonyms', 'phrasal-verbs': 'Phrasal Verbs',
     'gerunds-infinitives': 'Gerunds & Infinitives', 'conditionals': 'Conditionals',
     'master-part4': 'Use of English · Part 4', 'full-test': 'Full test',
     'uoe-part1': 'Use of English · Part 1', 'uoe-part2': 'Use of English · Part 2',

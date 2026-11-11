@@ -8,7 +8,7 @@ var AREAS = [
   { key:'grammar',    name:'Grammar',    tone:{bg:'#DD8E58', fg:'#FEFCF9'},
     what:'Tense maps, conditionals, modals, phrasal verbs' },
   { key:'vocabulary', name:'Vocabulary', tone:{bg:'#708A81', fg:'#FEFCF9'},
-    what:'Collocations, phrase banks, academic lists' },
+    what:'Collocations, phrase banks, synonyms' },
   { key:'english',    name:'Use of English', tone:{bg:'#E5D1B8', fg:'#2B2129'},
     what:'Parts 1–4, with key word transformation' },
   { key:'reading',    name:'Reading',    tone:{bg:'#C2956E', fg:'#2B2129'},
@@ -43,7 +43,7 @@ var SKILLS = {
     {name:"Prepositions", url:"skills/similar-words/prepositions.html"},
     {name:"Phrasal Verbs 1", url:"skills/grammar-rules/phrasal-verbs-quiz.html"},
     {name:"Phrasal Verbs 2", url:"skills/grammar-rules/phrasal-verbs-play.html"},
-    {name:"Academic Vocabulary", url:"skills/similar-words/academic-vocabulary.html"},
+    {name:"Synonyms", url:"skills/similar-words/academic-vocabulary.html", hint:"Better words for say, talk, think, walk and run"},
     {name:"Idiomatic Expressions", url:"skills/similar-words/proverbs-quiz.html"},
     {name:"Phrase Bank", url:"skills/similar-words/phrase-bank.html"},
     {name:"The Ultimate Challenge", url:"skills/challenge/challenge.html?section=vocabulary"}

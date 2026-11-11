@@ -135,7 +135,7 @@
   const VOCAB = {
     'similar-words':    { label:'Similar Words',          file:'similar-words.json',             home:'vocabulary.html',        nav:WORDBANK_TRIO },
     'topic-vocabulary': { label:'Topic Vocabulary',       file:'topic-vocabulary.json',          home:'topic-vocabulary.html',  nav:WORDBANK_TRIO },
-    'academic':         { label:'Academic Vocabulary',    file:'academic-vocabulary-sets.json',  home:'academic-vocabulary.html', nav:WORDBANK_TRIO },
+    'academic':         { label:'Synonyms',    file:'academic-vocabulary-sets.json',  home:'academic-vocabulary.html', nav:WORDBANK_TRIO },
     'collocations':     { label:'Collocations',           file:'data-collocations-gapfill.json', home:'collocations.html' },
     'collective':       { label:'Collective Expressions', file:'collective-expressions-data.json', home:'collective-expressions-master.html', kind:'questions' },
     /* Descriptive Words' (Expression Master's) own Practice questions, one tab per topic tab on

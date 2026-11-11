@@ -30,7 +30,7 @@ var SKILLS = {
     {name:"Linking Words", url:"skills/grammar-rules/linking-words-rules.html"},
     {name:"Inversion", url:"skills/grammar-rules/inversion-rules.html"},
     {name:"Gerunds & Infinitives", url:"skills/grammar-rules/gerunds-infinitives-rules.html"},
-    {name:"Miscellaneous", url:"skills/grammar-rules/miscellaneous-rules.html"},
+    {name:"Relative Pronouns & More", url:"skills/grammar-rules/miscellaneous-rules.html", hint:"Relative clauses, modals, quantifiers, negation, cleft sentences, fixed phrases"},
     /* every topic at once, as the exam mixes them (3 Nov 2026) */
     {name:"Mixed Board", url:"skills/challenge/challenge.html?board=1&topic=grammar-mixed"},
     {name:"The Ultimate Challenge", url:"skills/challenge/challenge.html"}

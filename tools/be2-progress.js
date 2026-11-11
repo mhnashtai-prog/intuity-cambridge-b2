@@ -126,6 +126,7 @@
     'similar-words': 'Similar Words', 'topic-vocabulary': 'Topic Vocabulary',
     'academic-vocabulary-sets': 'Synonyms', 'phrasal-verbs': 'Phrasal Verbs',
     'gerunds-infinitives': 'Gerunds & Infinitives', 'conditionals': 'Conditionals',
+    'miscellaneous': 'Relative Pronouns & More', 'phrase-bank': 'Phrase Bank', 'speaking-phrases': 'Useful expressions',
     'master-part4': 'Use of English · Part 4', 'full-test': 'Full test',
     'uoe-part1': 'Use of English · Part 1', 'uoe-part2': 'Use of English · Part 2',
     'uoe-part3': 'Use of English · Part 3', 'uoe-part4': 'Use of English · Part 4',
@@ -142,7 +143,9 @@
     var ph = /^phrases-(\w+)$/.exec(String(t || ''));
     if (ph) return 'Phrases · ' + (SHEET[ph[1]] || ph[1]);
     var rw = /-rewrite$/.test(String(t || ''));
-    var s = String(t || '').replace(/-rewrite$/, '').replace(/-(data|gapfill|complete|rules)$/, '').replace(/[-_]+/g, ' ');
+    var base = String(t || '').replace(/-rewrite$/, '').replace(/-(data|gapfill|complete|rules)$/, '');
+    if (NAMES[base]) return NAMES[base] + (rw ? ' · Rewrite' : '');
+    var s = base.replace(/[-_]+/g, ' ');
     return s.charAt(0).toUpperCase() + s.slice(1) + (rw ? ' · Rewrite' : '');
   }
 

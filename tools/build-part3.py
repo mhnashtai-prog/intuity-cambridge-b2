@@ -671,6 +671,56 @@ for tk in T:
             for e in ext: e["who"] = "b" if e["who"] == "a" else "a"
         alt["decide"] = alt["decide"][:-1] + ext + alt["decide"][-1:]
 
+# ── Retakes (11 Nov 2026): fewer, fuller turns, the way real B2 pairs talk ──
+# The first versions ran ten 9-second turns, almost every one closed by a stock
+# "What do you think?". Real candidates take longer turns: a view, then a reason
+# AND an example from their own life, and they hand over in many ways (a real
+# question about the partner, a tag, a move to the next prompt). A retake replaces
+# a whole version; it is written plain already, so no EDITS or OV pass touches it.
+# A version goes live (RETAKE_ON) only once its recordings are in audio/speaking,
+# so the page never falls back to the browser voice.
+RETAKE_ON = set()          # e.g. {("tech", 0)}
+RETAKE = {
+("tech", 0): {
+ "discuss": [
+  ("a", 0, [("i", "Shall we start with learning online?"), ("v", "I think it's really useful when you miss a lesson."),
+            ("d", "You can watch a video at home again and again. That's how I passed Physics last year."), ("t", "Do you ever use it like that?")]),
+  ("b", 0, [("i", "All the time, especially for Maths."), ("v", "The problem is that it's very easy to get distracted."),
+            ("d", "The lesson is on the same screen as your games. Twenty minutes later, I'm watching football clips instead of equations."),
+            ("t", "Keeping in touch is less complicated, isn't it?")]),
+  ("a", 1, [("i", "That's so true about football clips."), ("v", "But for keeping in touch, I'd say technology is brilliant."),
+            ("d", "My best friend moved to Lisbon two years ago. Without video calls, we'd probably have lost contact."),
+            ("t", "Has anyone close to you moved away?")]),
+  ("b", 1, [("i", "Yes, my cousins live in London."), ("v", "It's great for families, especially on an island like ours."),
+            ("d", "But a video call isn't the same as being together. When my cousins visit, we talk about completely different things."),
+            ("t", "Shall we move on to finding information?")]),
+  ("a", 2, [("i", "Good idea."), ("v", "It's useful, but not everything online is true."),
+            ("d", "Our teacher once showed us a news story that looked completely real. Somebody had invented the whole thing."),
+            ("t", "Do you check things before you share them?")]),
+  ("b", 3, [("i", "Not always, to be honest."), ("v", "That connects to being creative, which for me is the most exciting one."),
+            ("d", "You can make music or short films on your phone for free. It also shows you how easy faking a video is."),
+            ("t", "Would you put it near the top?")]),
+  ("a", 4, [("i", "Definitely, and to add to that, it's great for shy people."), ("v", "I'm less sure about staying healthy, though."),
+            ("d", "Fitness apps sound great, but most people forget them after a week. And phones in bed ruin your sleep."),
+            ("t", "Or do you think apps can really help?")])],
+ "decide": [
+  ("a", -1, [("i", "So, which one shall we choose?"), ("v", "For me, it's keeping in touch with friends."),
+             ("d", "Feeling close to people matters a lot at our age, especially when someone moves away."), ("t", "Does that work for you?")]),
+  ("b", -1, [("i", "I see what you mean, but"), ("v", "I'd go for learning online."),
+             ("d", "It helps everyone, not only people with friends far away. And it's useful for school now and for jobs later."),
+             ("t", "Isn't that more important in the end?")]),
+  ("a", -1, [("i", "That's a fair point."), ("v", "It probably helps more people, and that's what the question asks."),
+             ("d", "Keeping in touch matters, but most of us manage that anyway."), ("t", "Shall we go for learning online, then?")]),
+  ("b", -1, [("z", "Yes, let's go for learning online. Keeping in touch can come second, because both are really about people.")])]},
+}
+import os as _os
+if _os.environ.get("RETAKE_PREVIEW"): RETAKE_ON = set(RETAKE)      # build a preview with every retake on
+for tk in T:
+    for i, alt in enumerate(tk["alts"]):
+        if (tk["id"], i) in RETAKE_ON:
+            alt["discuss"], alt["decide"] = D(*RETAKE[(tk["id"], i)]["discuss"]), D(*RETAKE[(tk["id"], i)]["decide"])
+            alt["_retake"] = True
+
 # ── The school's eight functions. Each segment gets one: f 1–8. ──
 FN = {1: ("Move on", "start a point, or move the discussion to a new prompt"),
       2: ("Opinion", "say what you think"),
@@ -764,7 +814,7 @@ for tk in T:
     for i, alt in enumerate(tk["alts"]):
         for part, lo, hi in (("discuss", 100, 125), ("decide", 45, 65)):
             turns = alt[part]; tot = 0; covered = set()
-            apply_edits(tk["id"], i, part, turns); plain_turns(tk["id"], i, part, turns)
+            if not alt.get("_retake"): apply_edits(tk["id"], i, part, turns); plain_turns(tk["id"], i, part, turns)
             builds = sum(1 for tn in turns for s in tn["segs"] if re.search(BUILD, s["t"])) if part == "discuss" else 0
             for n, tn in enumerate(turns):
                 for s in tn["segs"]:
@@ -805,6 +855,7 @@ SETUP = {
             "Thank you. Now you have about a minute to decide which one would bring a family closer together."),
 }
 for t in T:
+    for alt in t["alts"]: alt.pop("_retake", None)
     sc, talk, dec = SETUP[t["id"]]
     t["scenario"], t["talkLine"], t["decideLine"] = sc, talk, dec
 

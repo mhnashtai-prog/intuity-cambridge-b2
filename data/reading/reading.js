@@ -515,6 +515,8 @@ function submit() {
   marked = true;
   var got = idx.filter(function (i) { return answers[i] === rightFor(i); }).length;
   var w = CFG.marksPerQuestion || 1;
+  /* 11 Nov 2026: every checked question feeds the Reading bar on the review's data screen */
+  try { if (window.Be2 && Be2.score) idx.forEach(function (i) { Be2.score('reading', answers[i] === rightFor(i)); }); } catch (e) {}
   render();
 
   var pct = Math.round(got / n * 100);

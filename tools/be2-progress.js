@@ -38,6 +38,10 @@
   if (window.Be2 && window.Be2.answer) return;
 
   var REVIEW = 'be2.review.v1', DAYS = 'be2.days.v1', DONE = 'be2.reviewed.v1', MAX_CARDS = 300;
+  /* 11 Nov 2026, the data screen: which pages a pupil has opened, and their
+     recent answers per skill (the last 60; the bar reads the last 30, so it
+     moves when they improve, instead of carrying October's slips forever) */
+  var VISITS = 'be2.visits.v1', LOG = 'be2.log.v1', LOG_KEEP = 60, RECENT = 30;
   var GAPS = [1, 3, 7, 21], DAILY = 12;
 
   function read(k, f) { try { var r = localStorage.getItem(k); return r ? JSON.parse(r) : f; } catch (e) { return f; } }
@@ -77,6 +81,7 @@
   function skillOf(c) {
     var h = String(c.href || ''), t = String(c.topic || '');
     var m = /\/skills\/([a-z-]+)\//.exec(h);
+    if (/phrasal-verbs-(quiz|play)/.test(h)) return 'vocabulary';   /* on the Vocabulary menu, in the grammar folder */
     if (m) {
       if (/similar-words|vocab/.test(m[1])) return 'vocabulary';
       if (/grammar/.test(m[1])) return 'grammar';
@@ -146,10 +151,71 @@
     if (days[days.length - 1] !== t) { days.push(t); write(DAYS, days.slice(-400)); }
   }
 
+  /* ── the data screen's two numbers ── */
+  var SKILL_OF_AREA = { grammar: 'grammar', vocabulary: 'vocabulary', english: 'uoe', reading: 'reading', writing: 'writing', speaking: 'speaking' };
+  function score(skill, ok) {
+    if (!skill) return;
+    var L = read(LOG, {}), a = L[skill] || (L[skill] = []);
+    a.push([today(), ok ? 1 : 0]); if (a.length > LOG_KEEP) a.splice(0, a.length - LOG_KEEP);
+    write(LOG, L);
+  }
+  function pageKey(href) {
+    if (window.BE2_MAP) return BE2_MAP.keyOf(href);
+    var u; try { u = new URL(href, location.href); } catch (e) { return String(href); }
+    var q = []; ['task', 'section', 'topic', 'type', 'from'].forEach(function (k) { var v = u.searchParams.get(k); if (v) q.push(k + '=' + v); });
+    return u.pathname + (q.length ? '?' + q.join('&') : '');
+  }
+  function visit() {
+    try {
+      var V = read(VISITS, null), seeded = !!V; V = V || {};
+      /* the first time: pages the deck already knows the pupil worked on count as opened */
+      if (!seeded) { var d = read(REVIEW, {}); Object.keys(d).forEach(function (k) { if (d[k].href) { var pk = pageKey(d[k].href); V[pk] = V[pk] || [d[k].first || today(), d[k].last || today(), 1]; } }); }
+      var k = pageKey(location.href), t = today(), v = V[k];
+      if (/^\/(index\.html)?$|^\/review\.html/.test(k)) { if (!seeded) write(VISITS, V); return; }
+      if (v) { if (v[1] !== t) { v[1] = t; v[2]++; } } else V[k] = [t, t, 1];
+      write(VISITS, V);
+    } catch (e) {}
+  }
+  /* is a menu item explored? its own page, or any page it leads to: a grammar topic's
+     practice pages (tenses-*.html beside tenses-rules.html), a writing task's sheet,
+     recall or builder (any writing page with task= or type= the task) */
+  function explored(item, V) {
+    if (V[item.key]) return true;
+    var m = /^(.*\/)([a-z-]+)-rules\.html$/.exec(item.key);
+    if (m) return Object.keys(V).some(function (k) { return k.indexOf(m[1] + m[2] + '-') === 0; });
+    var w = /^\/skills\/writing\/gate\.html\?task=([a-z]+)$/.exec(item.key);
+    if (w) return Object.keys(V).some(function (k) { return /^\/skills\/writing\//.test(k) && (k.indexOf('task=' + w[1]) > 0 || k.indexOf('type=' + w[1]) > 0); });
+    return false;
+  }
+  function weekAgo(n) { var d = today(); for (var i = 0; i < n; i++) d = dayBefore(d); return d; }
+
   var Be2 = {
+    /* a checked answer that makes no review card (a Reading question needs its whole text) */
+    score: function (skill, ok) { markDay(); score(skill, ok); },
+    /* the data screen: for each of the six skills, how much of its menu has been
+       explored, and how the recent answers went (with this week against before) */
+    board: function () {
+      var V = read(VISITS, {}), L = read(LOG, {}), out = [], wk = weekAgo(7);
+      var areas = window.BE2_MAP ? BE2_MAP.areas : [];
+      areas.forEach(function (a) {
+        var items = BE2_MAP.itemsOf(a.key), seen = {}, list = [];
+        items.forEach(function (it) { if (!seen[it.key]) { seen[it.key] = 1; list.push(it); } });
+        var done = list.filter(function (it) { return explored(it, V); });
+        var log = (L[SKILL_OF_AREA[a.key]] || []).slice(-RECENT);
+        var pct = function (x) { return x.length ? Math.round(100 * x.filter(function (e) { return e[1]; }).length / x.length) : null; };
+        var now = log.filter(function (e) { return e[0] > wk; }), before = log.filter(function (e) { return e[0] <= wk; });
+        out.push({ key: a.key, name: a.name, tone: a.tone, total: list.length, done: done.length,
+          todo: list.filter(function (it) { return !explored(it, V); }),
+          answers: log.length, acc: pct(log),
+          trend: (now.length >= 5 && before.length >= 5) ? pct(now) - pct(before) : null,
+          week: now.length });
+      });
+      return out;
+    },
     answer: function (topic, r) {
       if (!topic || !r || r.id == null) return;
       markDay();
+      score(skillOf({ href: r.href || location.pathname, topic: topic }), !!r.correct);
       var deck = read(REVIEW, {}), key = topic + '::' + r.id, c = deck[key];
       if (r.correct) {
         if (c) {
@@ -228,6 +294,7 @@
     skillOf: skillOf
   };
   window.Be2 = Be2;
+  visit();
 
   /* ── Feed from intuity-log.js, without touching any game ──
      Its items are ids chosen by each game. Only ids that read as language
@@ -241,7 +308,7 @@
       try {
         var words = /^[A-Za-z][A-Za-z' ,.\-]{1,40}$/.test(String(item)) && !/^(q|t|s|item|test)\d/i.test(String(item));
         if (words) Be2.answer(topic, { id: item, prompt: String(item), kind: 'phrase', correct: !!correct, href: location.pathname });
-        else markDay();
+        else { markDay(); score(skillOf({ href: location.pathname, topic: topic }), !!correct); }
       } catch (e) {}
       return orig.apply(this, arguments);
     };

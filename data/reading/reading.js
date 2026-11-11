@@ -1,3 +1,5 @@
+/* the results card's reward (11 Nov 2026): loads /tools/check-reward.js */
+(function(){ if(window.CheckReward) return; var s=document.createElement('script'); s.src='/tools/check-reward.js?v=1'; (document.head||document.documentElement).appendChild(s); })();
 /* ═══════════════════════════════════════════════════════════════════════
    READING — THE ENGINE
 
@@ -560,8 +562,21 @@ function submit() {
    list and then needs exactly this. */
 function finishScore(got, n, pct) {
   saveScore(pct);
-  sfx(pct === 100 ? 'fanfare' : 'bowlLow');
   $('ov').classList.add('show');
+  /* 11 Nov 2026 (the four-way report): the results card plays out. Each bar
+     lights up in turn with a tick, then the longest run of right answers and
+     a best per text kept on the phone; a perfect text gets the fireworks. */
+  var line = '';
+  try {
+    if (window.CheckReward) {
+      var bars = [].slice.call(document.querySelectorAll('#ovBars .ov-bar')), ok = [];
+      for (var i = 0; i < n; i++) ok.push(answers[i] === rightFor(i));
+      line = CheckReward.play({ els: bars, ok: ok, first: ok.map(function () { return true; }), dots: null,
+        score: got, total: n, key: 'reading.p' + (CFG.part || 0) + '.' + bi, at: $('ovScore') });
+    } else sfx(pct === 100 ? 'fanfare' : 'bowlLow');
+  } catch (e) { sfx(pct === 100 ? 'fanfare' : 'bowlLow'); }
+  var el = $('ovBest'); if (!el) { el = document.createElement('div'); el.id = 'ovBest'; el.className = 'cr-line'; el.style.textAlign = 'center'; $('ovScore').insertAdjacentElement('afterend', el); }
+  el.innerHTML = line;
 }
 
 /* ── A MISSED TEXT COMES BACK (3 Nov 2026, from the audit) ──────────────

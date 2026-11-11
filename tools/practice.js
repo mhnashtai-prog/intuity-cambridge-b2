@@ -1,3 +1,5 @@
+/* the Check moment's reward (11 Nov 2026): loads /tools/check-reward.js */
+(function(){ if(window.CheckReward) return; var s=document.createElement('script'); s.src='/tools/check-reward.js?v=1'; (document.head||document.documentElement).appendChild(s); })();
 /* ═══════════════════════════════════════════════════════════════════════
    INTUITY — PRACTICE ENGINE
    One engine, twelve topics. Each page is a thin shell that sets
@@ -451,6 +453,7 @@ function checkAnswers() {
         else if (transformOk(item, i)) { inp.classList.add('correct'); inp.readOnly = true; }
       });
       retryNote(wrong.length);
+      try { if (window.CheckReward) CheckReward.ticks(test.items.map(function (_, i) { return !firstWrong[i] && transformOk(test.items[i], i) ? $('in-' + i) : null; })); } catch (e) {}
       $('checkBtn').textContent = 'Check again';
       var first = document.querySelector('.answer-input.retry');
       if (first) { first.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(function () { try { first.focus({ preventScroll: true }); } catch (e) {} }, 350); }
@@ -458,7 +461,8 @@ function checkAnswers() {
     }
   }
   retryNote(0);
-  test.items.forEach(function (_, i) { if (mark(i, false)) correct++; });
+  var okArr = [];
+  test.items.forEach(function (_, i) { var ok = !!mark(i, false); okArr.push(ok); if (ok) correct++; });
   report(test);
 
   isChecked = true;
@@ -469,9 +473,18 @@ function checkAnswers() {
   saveScores();
   renderTestSelector();
 
+  /* 11 Nov 2026: the Check is the reward (tools/check-reward.js) */
+  var crLine = '';
+  try { if (window.CheckReward) crLine = CheckReward.play({
+    els: test.items.map(function (_, i) { return $('in-' + i) || $('slot-' + i); }),
+    ok: okArr,
+    first: test.items.map(function (_, i) { return !firstWrong[i]; }),
+    dots: $('practiceDots'), score: correct, total: total,
+    key: 'practice.' + (SCORE_KEY || location.pathname) + '.' + currentTest, at: null }); } catch (e) {}
+
   $('contentContainer').insertAdjacentHTML('afterbegin',
     '<div class="score-banner"><div class="score-text">' + correct + '/' + total + '</div>' +
-    '<div class="score-label">' + percentage + '% correct</div></div>');
+    '<div class="score-label">' + percentage + '% correct</div>' + (crLine ? '<span class="cr-line">' + crLine + '</span>' : '') + '</div>');
 
   $('clearBtn').textContent = 'Try again';
   $('checkBtn').textContent = 'Show answers';

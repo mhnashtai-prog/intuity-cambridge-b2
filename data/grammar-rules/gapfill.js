@@ -1,3 +1,5 @@
+/* the Check moment's reward (11 Nov 2026): loads /tools/check-reward.js */
+(function(){ if(window.CheckReward) return; var s=document.createElement('script'); s.src='/tools/check-reward.js?v=1'; (document.head||document.documentElement).appendChild(s); })();
 /* INTUITY — shared gap-fill engine.
 
    Each quiz page is a thin shell: it sets window.QUIZ_DATA to the name of its
@@ -708,6 +710,7 @@
             });
           });
           retryNote(wrong.length);
+          try { if (window.CheckReward) CheckReward.ticks(test.sentences.map(function (item, idx) { return !firstWrong.has(idx) && isAnswerCorrect(item, userAnswers[idx]) ? document.getElementById('input-' + idx + '-1') : null; })); } catch (e) {}
           const first = document.querySelector('.answer-input.retry');
           if (first) { first.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(function () { try { first.focus({ preventScroll: true }); first.select(); } catch (e) {} }, 350); }
           return;
@@ -731,11 +734,24 @@
       isChecked = true;
       renderTest();
 
+      /* 11 Nov 2026: the Check is the reward (tools/check-reward.js) */
+      var crLine = '';
+      try { if (window.CheckReward) crLine = CheckReward.play({
+        els: test.sentences.map(function (_, i) { return document.getElementById('input-' + i + '-1') || document.getElementById('input-' + i); }),
+        ok: test.sentences.map(function (it, i) { return isAnswerCorrect(it, userAnswers[i]); }),
+        first: test.sentences.map(function (_, i) { return !firstWrong.has(i); }),
+        dots: document.querySelector('.progress-dots, #progressDots, .dots'),
+        score: correct, total: total, key: 'gapfill.' + (window.QUIZ_DATA || location.pathname) + '.' + currentTest,
+        at: document.getElementById('scoreNumber') }); } catch (e) {}
+
       document.getElementById('modalSubtitle').textContent = test.title;
       document.getElementById('scoreNumber').textContent = correct + '/' + total;
       document.getElementById('scoreLabel').textContent =
         Math.round((correct / total) * 100) + '% Correct' +
         (firstWrong.size ? ' \u00b7 ' + (total - firstWrong.size - test.sentences.filter(function (it, i) { return !firstWrong.has(i) && !isAnswerCorrect(it, userAnswers[i]); }).length) + ' right first time' : '');
+      var crEl = document.getElementById('crLine');
+      if (!crEl) { crEl = document.createElement('span'); crEl.id = 'crLine'; crEl.className = 'cr-line'; document.getElementById('scoreLabel').insertAdjacentElement('afterend', crEl); }
+      crEl.innerHTML = crLine;
 
       document.getElementById('nextTestBtn').style.display =
         currentTest < allTests.length - 1 ? 'block' : 'none';

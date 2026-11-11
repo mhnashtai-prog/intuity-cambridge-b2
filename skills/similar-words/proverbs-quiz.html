@@ -258,6 +258,9 @@
   .ov-btn.ghost{background:rgba(255,255,255,.12);color:var(--card);}
   @media(hover:hover){ .ov-btn:hover{filter:brightness(1.08);} }
   .header .strip{position:static;padding:.55rem var(--gutter,1rem) .5rem;margin:0;}
+.set-row{display:flex;justify-content:center;gap:6px;margin:6px 0 2px}
+.set-row button{all:unset;cursor:pointer;padding:7px 14px;border-radius:999px;border:1px solid #C9C1B4;font:600 10.5px/1 'Geist Mono',ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;color:#3A3530;background:rgba(250,248,245,.92)}
+.set-row button[aria-pressed=true]{background:#14110E;border-color:#14110E;color:#F6F3EE}
 </style>
   <link rel="stylesheet" href="/tools/intuity-pills.css?v=20261012">
   <script src="/tools/intuity-overflow.js?v=3"></script>
@@ -308,7 +311,7 @@
 
       <!-- LIST MODE -->
       <div class="list-panel show" id="listPanel">
-        <div class="list-heading">Proverbs · B2</div>
+        <div class="list-heading" id="listHeading">Fixed phrases · B2</div>
         <div id="listBody"></div>
       </div>
 
@@ -386,6 +389,17 @@ const PAL = ['var(--accent-ink)'];
    STATE
 ═══════════════════════════════════════════ */
 let slides=[], TOTAL=0;
+/* TWO SETS (11 Nov 2026, from the school's open-cloze list, area 12): the
+   fixed expressions the exam builds its gaps on come first; the proverbs
+   stay as a bonus set. Same three modes for both. */
+const SETS={fixed:{file:'./data/fixed-expressions.json',label:'Fixed phrases'},proverbs:{file:'./data/proverbs-quiz.json',label:'Proverbs'}};
+let SET=(()=>{ try{ const v=localStorage.getItem('intuity.idioms.set'); return SETS[v]?v:'fixed'; }catch(e){ return 'fixed'; } })();
+function drawSets(){
+  let row=document.getElementById('setRow');
+  if(!row){ row=document.createElement('div'); row.id='setRow'; row.className='set-row'; const strip=document.querySelector('header .strip'); strip.parentNode.insertBefore(row,strip); }
+  row.innerHTML=Object.keys(SETS).map(k=>'<button type="button" data-set="'+k+'" aria-pressed="'+(k===SET)+'">'+SETS[k].label+'</button>').join('');
+  row.querySelectorAll('button').forEach(b=>b.onclick=()=>{ if(b.dataset.set===SET) return; SET=b.dataset.set; try{ localStorage.setItem('intuity.idioms.set',SET); }catch(e){} drawSets(); loadData().then(()=>setMode(appMode)); });
+}
 let order=[], results={}, shuffledOpts={}, correctTexts={};
 let buildWords={}, buildChecked={};
 let buildSlots={}, buildPool={};
@@ -402,7 +416,7 @@ let bTouchEl=null, bTouchIdx=null, bTouchSlide=null;
 async function loadData(){
   document.getElementById('card').style.opacity='.4';
   try{
-    const res  = await fetch('./data/proverbs-quiz.json');
+    const res  = await fetch(SETS[SET].file);
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data = await res.json();
     slides = data.slides;
@@ -477,7 +491,7 @@ function setMode(m){
   document.getElementById('btnNext').style.display = 'none';
   // poster tag
   document.getElementById('posterTag').textContent =
-    m==='quiz' ? 'Which proverb fits?' : 'Order the words';
+    m==='quiz' ? (SET==='fixed' ? 'Which expression fits?' : 'Which proverb fits?') : 'Order the words';
   // render
   if(m==='list')  renderList();
   else            renderSlide('in');
@@ -488,6 +502,7 @@ function setMode(m){
 ═══════════════════════════════════════════ */
 function renderList(){
   if(!slides.length) return;
+  const lh=document.getElementById('listHeading'); if(lh) lh.textContent=SETS[SET].label+' · B2';
   document.getElementById('listBody').innerHTML = slides.map((s,i)=>`
     <div class="list-item">
       <span class="list-num">${i+1}</span>
@@ -902,7 +917,7 @@ function showComplete(){
     if(window.CheckReward){
       const okA=order.map((_,i)=>results[order[i]]==='correct');
       line=CheckReward.play({els:[...bars.children],ok:okA,first:okA.map(()=>true),dots:null,score:ok,total:TOTAL,
-        key:'idioms.'+(document.querySelector('.mode-btn.active')||{}).textContent,at:document.getElementById('ovScore')});
+        key:'idioms.'+SET+'.'+(document.querySelector('.mode-btn.active')||{}).textContent,at:document.getElementById('ovScore')});
     } else sfx('fanfare');
   }catch(e){ sfx('fanfare'); }
   let el=document.getElementById('ovBest');
@@ -969,7 +984,7 @@ document.addEventListener('touchend',e=>{
 });
 
 /* ── START ── */
-loadData();
+drawSets(); loadData();
 </script>
 <script>
 function syncHeader(){

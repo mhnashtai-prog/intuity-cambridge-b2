@@ -58,10 +58,21 @@ main{flex:1;display:flex;flex-direction:column;align-items:center;padding:calc(v
    the phrase alone has to tell. */
 .pr-kindrow{display:flex;justify-content:center;margin:6px 0 4px}
 .pr-kind{display:inline-flex;padding:4px;border-radius:999px;background:rgba(20,17,14,.07)}
-.pr-kind button{all:unset;position:relative;cursor:pointer;padding:10px clamp(12px,4vw,22px);border-radius:999px;font:700 13px/1 'Geist',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8A8378}
+.pr-kind button{all:unset;position:relative;cursor:pointer;padding:10px clamp(9px,2.8vw,20px);border-radius:999px;font:700 clamp(11px,3.1vw,13px)/1 'Geist',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#8A8378;white-space:nowrap}
 .pr-kind button[aria-checked=true]{background:#14110E;color:#F6F3EE}
 .pr-kind button:focus-visible{outline:2px solid var(--car);outline-offset:2px}
 body.sorting #tabs,body.sorting #seg{display:none}
+/* RECALL IT (11 Nov 2026): the task tabs stay, the part row goes (a round takes phrases from every part) */
+body.recalling #tabs{display:flex}
+.rc-ph{display:block;margin:16px 0 6px;font:500 clamp(18px,5vw,20px)/1.55 'Geist',sans-serif;color:var(--ink)}
+.rc-cue{color:#9A5A2C;font-weight:700}
+.rc-nw{white-space:nowrap}
+.rc-in{font:inherit;font-weight:700;color:var(--ink);border:0;border-bottom:2px solid var(--ink);background:transparent;padding:0 2px;margin:0;border-radius:0;outline:none;min-width:3ch}
+.rc-in:focus{border-bottom-color:#9A5A2C;background:rgba(194,149,110,.1)}
+.rc-in.ok{color:#4F6B61;border-bottom-color:#4F6B61}
+.rc-in.no{color:#8A8378;text-decoration:line-through;border-bottom-color:#C9A57F}
+.rc-from{display:block;font:500 10.5px/1.3 'Geist Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8A8378;margin-top:12px}
+.so-why mark,.rc-ph mark{background:none;color:inherit;font-weight:700;box-shadow:inset 0 -.5em 0 rgba(194,149,110,.42)}
 /* SWITCH IT (9 Nov 2026): the same idea, from an email to a friend to an essay */
 .sw-from{display:block;margin:16px 0 4px;font:500 10.5px/1.3 'Geist Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#9A948B}
 .sw-e{display:block;padding:10px 14px;border-left:3px solid #8AA79C;background:rgba(138,167,156,.10);font-size:clamp(17px,4.6vw,19px);line-height:1.45;color:var(--ink);font-weight:500}
@@ -141,7 +152,7 @@ body.sorting #tabs,body.sorting #seg{display:none}
     <span class="header-spacer">Level <b>B2</b></span>
   </div>
   <!-- 8 Nov 2026: the two activities sit where Learn · Practise · Play sit on the grammar pages, named for what they do -->
-  <div class="pr-kindrow"><span class="pr-kind" id="kind" role="radiogroup" aria-label="Choose an activity"><button type="button" role="radio" data-v="finish">Finish it</button><button type="button" role="radio" data-v="sort">Sort it</button><button type="button" role="radio" data-v="switch">Switch it</button></span></div>
+  <div class="pr-kindrow"><span class="pr-kind" id="kind" role="radiogroup" aria-label="Choose an activity"><button type="button" role="radio" data-v="finish">Finish it</button><button type="button" role="radio" data-v="sort">Sort it</button><button type="button" role="radio" data-v="switch">Switch it</button><button type="button" role="radio" data-v="recall">Recall it</button></span></div>
   <div class="pr-tabs" id="tabs" role="tablist" aria-label="Task"></div>
   <div class="pr-seg" id="seg" role="radiogroup" aria-label="Part"></div>
 </header>
@@ -165,7 +176,7 @@ body.sorting #tabs,body.sorting #seg{display:none}
   let TASK=TASKS.includes(q.get('task'))?q.get('task'):TASKS.includes(mem('task'))?mem('task'):'essays';
   let MODE=MODES.some(m=>m[0]===q.get('mode'))?q.get('mode'):MODES.some(m=>m[0]===mem('mode'))?mem('mode'):'full';
   let N=0, CUR=null;
-  const KINDS=['finish','sort','switch'];
+  const KINDS=['finish','sort','switch','recall'];
   let KIND=KINDS.includes(q.get('kind'))?q.get('kind'):KINDS.includes(mem('kind'))?mem('kind'):'finish', SORT=null;
   const SORT_TASKS=['essays','reports','reviews'].filter(k=>D.tasks[k]), PARTS=[['intro','Introduction'],['body','Body'],['end','Conclusion']];
   const WHY={essays:'An essay weighs up an issue in a neutral voice.',reports:'A report is formal: findings and recommendations about a place or an event.',reviews:'A review talks to the reader and gives an opinion of something.',
@@ -479,16 +490,94 @@ body.sorting #tabs,body.sorting #seg{display:none}
     $('soNext').onclick=()=>{ newSwitch(false); dealSwitch(); paintSwitch(); };
     if(window.Cheer){ const big=$('card').querySelector('.so-big'); if(SW.kept===tot) Cheer.finale(); else if(newBest&&best) Cheer.streak(big); else if(f>=.75) Cheer.done(big); else Cheer.tick(big); }
   }
-  async function start(){ if(KIND==='sort'){ dealSort(); paintSort(); } else if(KIND==='switch'){ await swData(); dealSwitch(); paintSwitch(); } else { deal(); paint(); } }
+  /* RECALL IT (11 Nov 2026, the teacher's point that the phrases must be written, not just seen):
+     a phrase from the task's Quick revision sheets with its key word hidden after the first
+     letter; the pupil writes the rest, the app checks it. Eight a round, from every part of
+     the text, the ones not yet in the review deck first. A slip shows the word; every answer
+     joins the review deck (keep), so each phrase comes back after 1, 3, 7 and 21 days. */
+  const RCR=8; let RC=null, RCD=null, RCI=null;
+  const RC_STOP=new Set('about above after again also although among another because been before being below between both could does doing during each either every from further have having here into itself just more most much must neither other ought over same should since some such than that their theirs them then there these they this those through under until very were what when where whether which while whom whose will with within without would your yours'.split(' '));
+  function rcCue(t){ const w=t.split(' '); let best=-1,len=0;
+    w.forEach((x,i)=>{ const core=x.replace(/^[“"(‘']+|[”"),.;:!?’']+$/g,'');
+      if(!/^[A-Za-z]{4,}$/.test(core)||RC_STOP.has(core.toLowerCase())) return;
+      if(w[i-1]==='/'||w[i+1]==='/'||/\//.test(x)) return;
+      if(core.length>len){ len=core.length; best=i; } });
+    return best<0?null:best; }
+  const rcClean=t=>String(t).replace(/\*\*/g,'').replace(/^[>#=!]+\s*/,'').replace(/\s+/g,' ').trim();
+  const rcHash=s=>{ let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0; return (h>>>0).toString(36); };
+  async function rcData(){ if(RCD) return RCD; try{ RCD=await fetch('/data/writing/portfolio.json?v=recall1',{cache:'no-cache'}).then(r=>r.json()); }catch(e){ RCD={tasks:{},sheets:{}}; } return RCD; }
+  function rcPool(){ const out=[];
+    (RCD.tasks[TASK]||[]).forEach(id=>{ const S=RCD.sheets[id]; if(!S) return;
+      S.bands.forEach((b,bi)=>b.cols.forEach(col=>col.forEach(it=>{ const t=rcClean(it), k=rcCue(t);
+        if(k!=null&&t.length<=170) out.push({id:rcHash(id+'|'+t),sheet:id,tab:S.tab,band:b.label,bi,text:t,k}); }))); });
+    return out; }
+  function newRecall(same){
+    let items=same&&RC?RC.items:null;
+    if(!items){ const pool=rcPool(); let deck={}; try{ deck=JSON.parse(localStorage.getItem('be2.review.v1')||'{}'); }catch(e){}
+      const fresh=x=>!deck['phrases-'+x.sheet+'::'+x.id];
+      const bands=[...new Set(pool.map(x=>x.sheet+'#'+x.bi))].sort(()=>Math.random()-.5);
+      const by=bands.map(b=>pool.filter(x=>x.sheet+'#'+x.bi===b).sort(()=>Math.random()-.5).sort((a,c)=>fresh(c)-fresh(a)));
+      items=[]; for(let r=0;items.length<RCR&&r<80;r++){ const L=by[r%by.length]; if(L&&L.length) items.push(L.shift()); } }
+    RC={items,pos:0,kept:0,missed:0,run:0,best:0,res:[],n:(RC?RC.n:0)+(same?0:1),end:false};
+  }
+  function dealRecall(){ clearTimeout(AUTO); if(!RC||RC.end||RC.task!==TASK){ newRecall(false); RC.task=TASK; }
+    if(RC.pos>=RC.items.length){ RC.end=true; RCI=null; return; } RCI={x:RC.items[RC.pos],done:false}; }
+  const rchud=()=>{ const n=RC.kept+RC.missed; return n===0?'<span class="so-hud" hidden></span>':
+    `<span class="so-hud"><span><b>${RC.kept}</b> right</span><span><b>${RC.missed}</b> missed</span><span><b>${RC.items.length-n}</b> to go</span><span class="so-fire${RC.run>=2?' on':''}">🔥 <b>${RC.run}</b></span></span>`; };
+  const rcBar=()=>rbar(RC.items.map((_,i)=>RC.res[i]||''),RCI&&!RCI.done?RC.pos:-1);
+  const rcWord=x=>{ const m=x.text.split(' ')[x.k].match(/^([“"(‘']*)([A-Za-z]+)(.*)$/); return m?{pre:m[1],w:m[2],post:m[3]}:{pre:'',w:'',post:''}; };
+  function paintRecall(){
+    $('bNext').hidden=true; $('pick').hidden=true;
+    if(!RCI){ $('bCheck').hidden=true; return paintRecallEnd(); }
+    if(!RC.items.length){ $('card').innerHTML='<span class="fc-k">Recall it</span><span class="so-why">No phrases for this task yet.</span>'; $('bCheck').hidden=true; return; }
+    const x=RCI.x, W=rcWord(x), words=x.text.split(' ');
+    const ph=words.map((y,j)=>j!==x.k?esc(y):`<span class="rc-nw">${esc(W.pre)}<span class="rc-cue">${esc(W.w[0])}</span><input class="rc-in" id="rcIn" style="width:${Math.max(4,W.w.length)}ch" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" aria-label="The rest of the missing word">${esc(W.post)}</span>`).join(' ');
+    $('card').innerHTML=`<span class="fc-k">Recall it · ${esc(D.tasks[TASK].label)} · Round ${RC.n}</span><span class="fc-t">Recall <span class="fc-n">${RC.pos+1}</span></span><span class="fc-bar" aria-hidden="true"></span>`+
+      rcBar()+rchud()+`<span class="rc-from">${esc(x.tab)} · ${esc(x.band)}</span><span class="rc-ph">${ph}</span><span class="so-why" id="soWhy" hidden></span>`;
+    $('bCheck').hidden=false; $('bCheck').disabled=false;
+    const inp=$('rcIn'); inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); checkRecall(); } });
+    setTimeout(()=>{ try{ inp.focus({preventScroll:true}); }catch(e){} },80);
+  }
+  const rcNorm=t=>String(t||'').toLowerCase().replace(/[’‘]/g,"'").replace(/[^a-z']/g,'');
+  function checkRecall(){
+    if(!RCI||RCI.done) return; const inp=$('rcIn'), v=inp.value.trim(); if(!v){ inp.focus(); return; }
+    const x=RCI.x, W=rcWord(x), ok=rcNorm(v)===rcNorm(W.w)||rcNorm(W.w[0]+v)===rcNorm(W.w);
+    RCI.done=true; inp.disabled=true; inp.classList.add(ok?'ok':'no'); $('bCheck').hidden=true;
+    if(ok){ RC.kept++; RC.run++; RC.best=Math.max(RC.best,RC.run); } else { RC.missed++; RC.run=0; }
+    RC.res[RC.pos]=ok?'ok':'no'; RC.pos++; rbarSet(rcBar());
+    const h=$('card').querySelector('.so-hud'); if(h) h.outerHTML=rchud();
+    const w=$('soWhy'); w.hidden=false;
+    w.innerHTML='<b>'+esc(ok?pickOf(RIGHT_LINES):'The word was')+'</b> '+x.text.split(' ').map((y,j)=>j===x.k?'<mark>'+esc(y)+'</mark>':esc(y)).join(' ');
+    try{ if(window.Be2&&Be2.answer) Be2.answer('phrases-'+x.sheet,{id:x.id,correct:ok,keep:true,kind:'recall',
+      prompt:x.text.split(' ').map((y,j)=>j===x.k?W.pre+W.w[0]+'___'+W.post:y).join(' '),answer:x.text,given:ok?'':v,
+      href:'/skills/writing/recall.html?task='+TASK+'&s='+x.sheet}); }catch(e){}
+    if(window.Cheer){ if(ok){ Cheer.right(inp,true); if(RC.run>=3&&RC.run%3===0) Cheer.streak($('card').querySelector('.so-fire')); } else Cheer.soft(); }
+    $('bNext').hidden=false; clearTimeout(AUTO); if(ok) AUTO=setTimeout(next,1800);
+  }
+  function paintRecallEnd(){
+    const tot=RC.items.length, bk='intuity.best.recall.practice.'+TASK;
+    let best=0; try{ best=+localStorage.getItem(bk)||0; }catch(e){}
+    const newBest=RC.kept>best; if(newBest) try{ localStorage.setItem(bk,String(RC.kept)); }catch(e){}
+    const f=RC.kept/tot, line=f===1?'Every word, from memory.':f>=.75?'Great recall: these are yours now.':f>=.5?'Good work. The ones you missed come back in your review.':'Tough set: they will come back in your review.';
+    $('card').innerHTML=`<span class="fc-k">Recall it · Round ${RC.n} done</span><span class="so-big">${RC.kept} / ${tot}</span><span class="so-praise">${esc(line)}</span>`+
+      `<span class="so-sub">${RC.missed?RC.missed+' missed':'none missed'}${RC.best>=3?' · best run '+RC.best:''}</span>`+
+      (newBest||best?`<span class="so-best${newBest&&best?' new':''}">${newBest?(best?'New best · beat '+best+' / '+tot:'First score to beat'):'Your best · '+best+' / '+tot}</span>`:'')+
+      `<span class="so-acts"><button type="button" id="soAgain">↻ These again</button><button type="button" class="go" id="soNext">Next eight →</button></span>`;
+    $('soAgain').onclick=()=>{ newRecall(true); RC.task=TASK; dealRecall(); paintRecall(); };
+    $('soNext').onclick=()=>{ newRecall(false); RC.task=TASK; dealRecall(); paintRecall(); };
+    if(window.Cheer){ const big=$('card').querySelector('.so-big'); if(RC.kept===tot) Cheer.finale(); else if(newBest&&best) Cheer.streak(big); else if(f>=.75) Cheer.done(big); else Cheer.tick(big); }
+  }
+  async function start(){ if(KIND==='sort'){ dealSort(); paintSort(); } else if(KIND==='switch'){ await swData(); dealSwitch(); paintSwitch(); } else if(KIND==='recall'){ await rcData(); dealRecall(); paintRecall(); } else { deal(); paint(); } }
   function next(){
     /* finishing cards is its own run: every fifth card, a jingle */
-    clearTimeout(AUTO); if(KIND==='sort'&&RD&&RD.end) return; if(KIND==='finish'&&(!CUR||FR.end)) return; if(KIND==='switch'&&(!SW||SW.end)) return;
+    clearTimeout(AUTO); if(KIND==='sort'&&RD&&RD.end) return; if(KIND==='finish'&&(!CUR||FR.end)) return; if(KIND==='switch'&&(!SW||SW.end)) return; if(KIND==='recall'&&(!RC||RC.end)) return;
     const c=$('card'), go=start;
     if(matchMedia('(prefers-reduced-motion: reduce)').matches){ go(); return; }
     c.classList.add('out'); setTimeout(()=>{ go(); c.classList.remove('out'); c.classList.add('in'); requestAnimationFrame(()=>requestAnimationFrame(()=>c.classList.remove('in'))); },150);
   }
   function kind(){
     document.body.classList.toggle('sorting',KIND!=='finish');
+    document.body.classList.toggle('recalling',KIND==='recall');
     $('kind').querySelectorAll('button').forEach(b=>b.setAttribute('aria-checked',String(b.dataset.v===KIND)));
   }
   $('kind').onclick=e=>{ const b=e.target.closest('button'); if(!b||b.dataset.v===KIND) return; KIND=b.dataset.v; keep('kind',KIND); clearTimeout(AUTO); FR=null; kind();
@@ -497,10 +586,10 @@ body.sorting #tabs,body.sorting #seg{display:none}
     $('tabs').innerHTML=TASKS.map(k=>`<button type="button" class="pr-tab" role="tab" data-k="${k}" aria-selected="${k===TASK}">${esc(D.tasks[k].label)}</button>`).join('');
     $('seg').innerHTML=MODES.map(([m,l])=>`<button type="button" role="radio" data-m="${m}" aria-checked="${m===MODE}">${l}</button>`).join('');
   }
-  $('tabs').onclick=e=>{ const b=e.target.closest('.pr-tab'); if(!b||b.dataset.k===TASK) return; TASK=b.dataset.k; keep('task',TASK); clearTimeout(AUTO); FR=null; chrome(); deal(); paint(); };
+  $('tabs').onclick=e=>{ const b=e.target.closest('.pr-tab'); if(!b||b.dataset.k===TASK) return; TASK=b.dataset.k; keep('task',TASK); clearTimeout(AUTO); FR=null; RC=null; chrome(); if(KIND==='recall') start(); else { deal(); paint(); } };
   $('seg').onclick=e=>{ const b=e.target.closest('button'); if(!b||b.dataset.m===MODE) return; MODE=b.dataset.m; keep('mode',MODE); clearTimeout(AUTO); FR=null; chrome(); deal(); paint(); };
   $('bNext').onclick=next;
-  $('bCheck').onclick=()=>KIND==='sort'?checkSort():KIND==='switch'?checkSwitch():checkFinish();
+  $('bCheck').onclick=()=>KIND==='sort'?checkSort():KIND==='switch'?checkSwitch():KIND==='recall'?checkRecall():checkFinish();
   /* no swipe: both games are answered first, and a swipe skipped the card unscored */
   /* the shell's header is fixed: the card starts under it */
   const room=()=>{ const h=document.querySelector('.header'); if(h) document.documentElement.style.setProperty('--hh',Math.round(h.getBoundingClientRect().height)+'px'); };

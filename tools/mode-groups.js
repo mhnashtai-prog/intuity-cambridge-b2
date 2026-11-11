@@ -107,6 +107,14 @@
   function gate(row, its, gs, shown, act) {
     var g = document.getElementById('mgGate');
     var need = !act || groupOf(act) !== shown;
+    /* 11 Nov 2026: a group with ONE mode (Learn = Explore) never shows a
+       pendulum with a single choice in it: that mode simply opens. */
+    var only = its.filter(function (_, i) { return gs[i] === shown; });
+    if (need && only.length === 1 && only[0].tagName === 'BUTTON') {
+      if (g) g.classList.remove('open'); document.documentElement.classList.remove('mg-gated');
+      setTimeout(function () { if (!isActive(only[0])) only[0].click(); }, 0);
+      return;
+    }
     if (!need) { if (g) g.classList.remove('open'); document.documentElement.classList.remove('mg-gated'); return; }
     if (!g) { g = document.createElement('div'); g.id = 'mgGate'; g.className = 'sheet-gate gate-standalone mg-gate'; document.body.appendChild(g); }
     var members = its.filter(function (_, i) { return gs[i] === shown; });

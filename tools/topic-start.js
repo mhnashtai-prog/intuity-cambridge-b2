@@ -33,5 +33,8 @@
   set('.seen', 1);
   if (seen && !P.get('mode') && document.querySelector('.mode-btn[data-mode="quiz"]') && typeof window.switchMode === 'function') {
     try { if (typeof window.mountFrames === 'function') window.mountFrames(); window.switchMode('quiz'); } catch (e) {}
+    /* the header's Learn / Practise / Play switch follows the mode now open */
+    setTimeout(function () { var row = document.querySelector('.mode-selector'); if (!row) return;
+      row.__mgShown = null; row.classList.add('mg-sync'); row.classList.remove('mg-sync'); }, 250);
   }
 })();

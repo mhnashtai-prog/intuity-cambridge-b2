@@ -68,6 +68,41 @@ var BANKS = [];   /* one per text; null where a file is missing */
 var bi = 0;       /* which text */
 var qi = 0;       /* which question, in the per-question view */
 var answers = {}; /* question index -> option index */
+/* SHOW ANSWER (12 Nov 2026, the teacher's request): a question the pupil asks to see is
+   answered for them and its link to the text fills green: the evidence sentence in
+   Part 5, the words that lock the sentence into the gap in Part 6 (data: clues), the
+   words that match the statement in Part 7 (data: evidence). A shown question scores
+   no mark, so the score stays honest. After marking, every miss shows its link too. */
+var shown = {};
+function isRight(i) { return answers[i] === rightFor(i) && !shown[i]; }
+function lit(i) { return !!shown[i] || (marked && answers[i] !== rightFor(i)); }
+/* wrap each phrase (raw text) in an already-escaped string, longest first, once each */
+function fill(html, phrases, cls) {
+  (phrases || []).slice().sort(function (a, b) { return b.length - a.length; }).forEach(function (ph) {
+    var e = esc(ph); if (!e) return; var at = html.indexOf(e); if (at < 0) return;
+    html = html.slice(0, at) + '<span class="' + (cls || 'rd-evi') + '">' + e + '</span>' + html.slice(at + e.length);
+  });
+  return html;
+}
+(function () {
+  var st = document.createElement('style');
+  st.textContent = '.rd-evi{background:rgba(95,164,43,.24)!important;box-shadow:inset 0 -2px 0 #5FA42B!important;border-radius:2px;padding:0 1px}' +
+    '.rd-show{display:inline-flex;align-items:center;min-height:30px;margin:.55rem 0 0;padding:0 .9rem;border-radius:999px;border:1.5px solid #5FA42B;background:#F2F8EC;color:#3B6D1A;' +
+      'font:700 .62rem/1 "Geist Mono",ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase;cursor:pointer}' +
+    '.rd-show:active{transform:scale(.97)}' +
+    '.rd-link{margin:.4rem 0 .2rem;padding:.5rem .7rem;border-left:3px solid #5FA42B;background:#F2F8EC;font-size:.84rem;line-height:1.45;color:#2E3B26}' +
+    '.rd-link b{font:700 .6rem/1 "Geist Mono",ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:#3B6D1A;display:block;margin-bottom:.25rem}' +
+    '.rd-slot.shown,.rd-gap.shown{border-color:#5FA42B!important}html body .rd-picks .rd-pick.chosen.shown:not(.ok):not(.no){background:#5FA42B!important;color:#fff!important;border-color:#5FA42B!important}';
+  (document.head || document.documentElement).appendChild(st);
+})();
+function showAnswer(i) {
+  if (marked || shown[i]) return;
+  var k = rightFor(i);
+  if (GAPPED) for (var g in answers) if (answers[g] === k) delete answers[g];
+  answers[i] = k; shown[i] = true; sfx('tick'); closeSheet(); render();
+  setTimeout(function () { var e = document.querySelector('[data-lit="' + i + '"] .rd-evi, [data-lit="' + i + '"].rd-evi, .rd-evi[data-for="' + i + '"]') || document.querySelector('[data-lit="' + i + '"]');
+    if (e) try { e.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (x) {} }, 60);
+}
 var marked = false;
 var view = 'one'; /* 'one' | 'full' */
 
@@ -160,7 +195,7 @@ function paintTexts() {
 
 function openText(i) {
   if (!BANKS[i]) return;
-  bi = i; qi = 0; answers = {}; marked = false;
+  bi = i; qi = 0; answers = {}; shown = {}; marked = false;
   paintTexts(); render();
 }
 
@@ -218,11 +253,11 @@ function passageHTML(card, i) {
      it as a reason rather than a quotation. Better a missing mark than a
      mangled passage — and better than pretending a paraphrase is a
      sentence in the text. */
-  if (marked && card.highlight) {
+  if ((marked || shown[i]) && card.highlight) {
     var h = esc(card.highlight);
-    if (t.indexOf(h) > -1) t = t.split(h).join('<span class="rd-evi">' + h + '</span>');
+    if (t.indexOf(h) > -1) t = t.split(h).join('<span class="rd-evi" data-for="' + i + '">' + h + '</span>');
   }
-  return '<div class="rd-passage"><p>' + t + '</p></div>';
+  return '<div class="rd-passage"' + (shown[i] ? ' data-lit="' + i + '"' : '') + '><p>' + t + '</p></div>';
 }
 
 function slotHTML(card, i) {
@@ -232,9 +267,10 @@ function slotHTML(card, i) {
   var body = has
     ? '<span class="let">' + LETTER[a] + '</span><span>' + esc(card.choices[a]) + '</span>'
     : '<span class="let">?</span><span>Choose an answer</span>';
-  return '<button class="rd-slot' + (has ? ' filled' : '') + (ok ? ' ok' : '') +
+  return '<button class="rd-slot' + (has ? ' filled' : '') + (ok && !shown[i] ? ' ok' : '') + (shown[i] ? ' shown' : '') +
          (bad ? ' no' : '') + '" type="button" data-i="' + i + '"' +
-         (marked ? ' disabled' : '') + '>' + body + '</button>' +
+         (marked || shown[i] ? ' disabled' : '') + '>' + body + '</button>' +
+         (!marked && !shown[i] ? '<button class="rd-show" type="button" data-s="' + i + '">Show answer</button>' : '') +
          (bad ? '<div class="rd-fix"><span class="let">' + LETTER[card.answer] +
                 '</span><span>' + esc(card.choices[card.answer]) + '</span></div>' : '');
 }
@@ -268,12 +304,16 @@ function gapHTML(i) {
   var a = answers[i], has = a !== undefined;
   var ok = marked && has && a === T().answers[i];
   var bad = marked && has && !ok;
-  var cls = 'rd-gap' + (has ? ' filled' : ' empty') + (ok ? ' ok' : '') + (bad ? ' no' : '');
+  var cls = 'rd-gap' + (has ? ' filled' : ' empty') + (ok && !shown[i] ? ' ok' : '') + (shown[i] ? ' shown' : '') + (bad ? ' no' : '');
+  var cl = (T().clues || [])[i], on = lit(i) && cl;
+  var sen = has ? esc(T().sentences[a]) : '';
+  if (on && has && a === T().answers[i]) sen = fill(sen, cl.sentence);
   var inner = '<span class="let">' + (i + 1) + '</span>' +
-              (has ? '<span class="sen">' + esc(T().sentences[a]) + '</span>'
+              (has ? '<span class="sen">' + sen + '</span>'
                    : '<span class="rule"></span>');
-  return '<button class="' + cls + '" type="button" data-i="' + i + '"' +
-    (marked ? ' disabled' : '') + '>' + inner + '</button>' +
+  return '<button class="' + cls + '" type="button" data-i="' + i + '"' + (shown[i] ? ' data-lit="' + i + '"' : '') +
+    (marked || shown[i] ? ' disabled' : '') + '>' + inner + '</button>' +
+    (on ? '<span class="rd-link" style="display:block"><b>The link</b>' + esc(cl.why) + '</span>' : '') +
     (bad ? '<div class="rd-fix"><span class="let">' + (i + 1) + '</span><span>' +
            esc(T().sentences[T().answers[i]]) + '</span></div>' : '');
 }
@@ -282,7 +322,14 @@ function gappedHTML() {
   var t = T();
   var paras = view === 'full' ? t.text : [t.text[paraOf(qi + 1)]];
   return paras.map(function (p) {
-    return '<p>' + esc(p).replace(/\{(\d+)\}/g, function (_, n) {
+    /* the green link: phrases of each lit gap in its own paragraph and the next */
+    var pi = t.text.indexOf(p), ph = [];
+    (t.clues || []).forEach(function (c, g) {
+      if (!c || !lit(g)) return;
+      var gp = -1; t.text.forEach(function (x, k) { if (x.indexOf('{' + (g + 1) + '}') > -1) gp = k; });
+      if (pi === gp || pi === gp + 1) ph = ph.concat(c.text || []);
+    });
+    return '<p>' + fill(esc(p), ph).replace(/\{(\d+)\}/g, function (_, n) {
       n = +n;
       /* {0} IS THE WORKED EXAMPLE, not a gap.
          The schema numbers the example 0 and the gaps 1-6, exactly as the
@@ -313,21 +360,34 @@ function statementHTML(q, i) {
     '<div class="rd-st-q">' + esc(q.question) + '</div>' +
     '<div class="rd-picks">' + letters().map(function (L) {
       var cls = 'rd-pick' + (a === L ? ' chosen' : '');
-      if (marked && a === L) cls += ok ? ' ok' : ' no';
+      if (shown[i] && a === L) cls += ' shown';
+      else if (marked && a === L) cls += ok ? ' ok' : ' no';
       if (marked && !ok && L === rightFor(i)) cls += ' key';
       return '<button class="' + cls + '" type="button" data-i="' + i +
-             '" data-l="' + L + '"' + (marked ? ' disabled' : '') + '>' + L + '</button>';
+             '" data-l="' + L + '"' + (marked || shown[i] ? ' disabled' : '') + '>' + L + '</button>';
     }).join('') + '</div>' +
+    (!marked && !shown[i] ? '<button class="rd-show" type="button" data-s="' + i + '">Show answer</button>' : '') +
     (bad ? '<div class="rd-st-fix">The answer is ' + esc(rightFor(i)) + '</div>' : '') +
+    (lit(i) ? excerpt(q, i) : '') +
   '</div>';
+}
+
+/* the sentences of the right section that hold the evidence, the evidence filled green */
+function excerpt(q, i) {
+  var sec = T().sections[q.answer] || '', ev = q.evidence || [];
+  var ss = sec.match(/[^.!?]+[.!?]+['’”]?(\s|$)/g) || [sec];
+  var keep = ss.filter(function (s) { return ev.some(function (e) { return s.indexOf(e) > -1; }); });
+  if (!keep.length) return q.why ? '<div class="rd-link" data-lit="' + i + '"><b>' + esc(q.answer) + '</b>' + esc(q.why) + '</div>' : '';
+  return '<div class="rd-link" data-lit="' + i + '"><b>In ' + esc(q.answer) + '</b>' + keep.map(function (s) { return fill(esc(s.trim()), ev); }).join(' \u2026 ') + '</div>';
 }
 
 function sectionsHTML() {
   var t = T();
   return letters().map(function (L) {
+    var ev = []; t.questions.forEach(function (q, k) { if (lit(k) && q.answer === L) ev = ev.concat(q.evidence || []); });
     return '<div class="rd-sec">' +
       '<div class="rd-sec-l">' + L + '</div>' +
-      '<div class="rd-sec-t">' + esc(t.sections[L]) + '</div>' +
+      '<div class="rd-sec-t">' + fill(esc(t.sections[L]), ev) + '</div>' +
     '</div>';
   }).join('');
 }
@@ -408,7 +468,13 @@ function render() {
   paintDots(); paintBar();
 }
 
+function wireShow() {
+  $('board').querySelectorAll('.rd-show[data-s]').forEach(function (b) {
+    b.onclick = function (e) { e.stopPropagation(); showAnswer(+b.dataset.s); };
+  });
+}
 function paintBar() {
+  wireShow();
   var n = count();
   var all = true;
   for (var z = 0; z < n; z++) if (answers[z] === undefined) all = false;
@@ -477,6 +543,8 @@ function openBank(i) {
   $('rdOpts').querySelectorAll('.rd-opt:not([disabled])').forEach(function (b) {
     b.onclick = function () { choose(i, +b.dataset.k); };
   });
+  var sb = document.createElement('button'); sb.type = 'button'; sb.className = 'rd-show'; sb.textContent = 'Show answer';
+  sb.onclick = function () { showAnswer(i); }; $('rdOpts').appendChild(sb);
   $('rdSheet').classList.add('show');
 }
 
@@ -515,7 +583,7 @@ function submit() {
   var idx = []; for (var z = 0; z < n; z++) idx.push(z);
   if (marked || !idx.every(function (i) { return answers[i] !== undefined; })) return;
   marked = true;
-  var got = idx.filter(function (i) { return answers[i] === rightFor(i); }).length;
+  var got = idx.filter(isRight).length;
   var w = CFG.marksPerQuestion || 1;
   /* 11 Nov 2026: every checked question feeds the Reading bar on the review's data screen */
   /* 12 Nov 2026: a Part 5 question also becomes a review card that trains the
@@ -525,10 +593,10 @@ function submit() {
   try { if (window.Be2 && Be2.answer && !GAPPED && !MATCH) idx.forEach(function (i) {
     var c = cards()[i]; if (!c || !c.highlight || !c.choices) return;
     Be2.answer('reading-part5', { id: 'p5-' + bi + '-' + i, prompt: c.highlight, ask: c.question + ' The words above give the answer.',
-      opts: c.choices.map(String), answer: c.choices[c.answer], given: c.choices[answers[i]] || '', correct: answers[i] === rightFor(i),
+      opts: c.choices.map(String), answer: c.choices[c.answer], given: c.choices[answers[i]] || '', correct: isRight(i),
       rule: c.why || '', href: location.pathname });
     logged = true; }); } catch (e) {}
-  try { if (!logged && window.Be2 && Be2.score) idx.forEach(function (i) { Be2.score('reading', answers[i] === rightFor(i)); }); } catch (e) {}
+  try { if (!logged && window.Be2 && Be2.score) idx.forEach(function (i) { Be2.score('reading', isRight(i)); }); } catch (e) {}
   render();
 
   var pct = Math.round(got / n * 100);
@@ -536,16 +604,16 @@ function submit() {
   $('ovTitle').textContent = pct === 100 ? 'Perfect' : pct >= 75 ? 'Strong' : pct >= 50 ? 'Getting there' : 'Keep going';
   $('ovScore').textContent = (got * w) + ' / ' + (n * w) + ' marks \u00b7 ' + pct + '%';
   $('ovBars').innerHTML = idx.map(function (i) {
-    return '<div class="ov-bar ' + (answers[i] === rightFor(i) ? 'ok' : 'no') + '"></div>';
+    return '<div class="ov-bar ' + (isRight(i) ? 'ok' : 'no') + '"></div>';
   }).join('');
 
-  var missed = idx.filter(function (i) { return answers[i] !== rightFor(i); });
+  var missed = idx.filter(function (i) { return !isRight(i); });
   if (MATCH) {
     $('ovMiss').innerHTML = missed.length
       ? '<div class="ov-miss-h">Worth another look</div>' + missed.map(function (i) {
           var q = T().questions[i];
           return '<div class="ov-miss-i">' + (q.number != null ? q.number : i + 1) +
-            ' \u00b7 <s>' + esc(answers[i]) + '</s> \u2192 <b>' + esc(rightFor(i)) + '</b>' +
+            ' \u00b7 ' + (shown[i] ? 'shown' : '<s>' + esc(answers[i]) + '</s>') + ' \u2192 <b>' + esc(rightFor(i)) + '</b>' +
             '<span class="ov-miss-w">' + esc(q.question) + '</span>' +
             /* the evidence was in all 150 questions' data and never shown (3 Nov 2026) */
             (q.why ? '<span class="ov-miss-w">Evidence: ' + esc(q.why) + '</span>' : '') + '</div>';
@@ -557,8 +625,8 @@ function submit() {
   $('ovMiss').innerHTML = missed.length
     ? '<div class="ov-miss-h">Worth another look</div>' + missed.map(function (i) {
         var o = { i:i, c: GAPPED ? {} : cards()[i] };
-        return '<div class="ov-miss-i">' + String(i + 1).padStart(2, '0') + ' \u00b7 <s>' +
-          esc(opts(i)[answers[i]]) + '</s> \u2192 <b>' + esc(opts(i)[rightFor(i)]) + '</b>' +
+        return '<div class="ov-miss-i">' + String(i + 1).padStart(2, '0') + ' \u00b7 ' + (shown[i] ? 'shown' : '<s>' +
+          esc(opts(i)[answers[i]]) + '</s>') + ' \u2192 <b>' + esc(opts(i)[rightFor(i)]) + '</b>' +
           /* Neutral label, because half of these are glosses rather than
              quotations and "the text says" would be false for those. */
           (o.c.highlight ? '<span class="ov-miss-w">Evidence: ' + esc(o.c.highlight) + '</span>' : '') +
@@ -580,7 +648,7 @@ function finishScore(got, n, pct) {
   try {
     if (window.CheckReward) {
       var bars = [].slice.call(document.querySelectorAll('#ovBars .ov-bar')), ok = [];
-      for (var i = 0; i < n; i++) ok.push(answers[i] === rightFor(i));
+      for (var i = 0; i < n; i++) ok.push(isRight(i));
       line = CheckReward.play({ els: bars, ok: ok, first: ok.map(function () { return true; }), dots: null,
         score: got, total: n, key: 'reading.p' + (CFG.part || 0) + '.' + bi, at: $('ovScore') });
     } else sfx(pct === 100 ? 'fanfare' : 'bowlLow');
@@ -630,7 +698,7 @@ addEventListener('keydown', function (e) { if (e.key === 'Escape') closeSheet();
 
 $('ovClose').onclick = function () { $('ov').classList.remove('show'); };
 $('ovAgain').onclick = function () {
-  $('ov').classList.remove('show'); answers = {}; marked = false; qi = 0; render();
+  $('ov').classList.remove('show'); answers = {}; shown = {}; marked = false; qi = 0; render();
 };
 $('ovNext').onclick = function () {
   $('ov').classList.remove('show');

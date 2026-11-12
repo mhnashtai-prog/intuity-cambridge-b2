@@ -133,6 +133,7 @@ Promise.all(wanted.map(function (n) {
     })
     .catch(function () { return null; });
 })).then(function (list) {
+  if (DRILL) { BANKS = [drillBank(list)]; paintTexts(); openText(0); return; }
   BANKS = list;
   var first = BANKS.findIndex(function (b) { return b; });
   if (first < 0) throw new Error('no texts available');
@@ -147,6 +148,77 @@ Promise.all(wanted.map(function (n) {
 });
 
 var T = function () { return BANKS[bi]; };
+
+/* ── THE SKILL PROFILE (12 Nov 2026) ─────────────────────────────────────
+   Every Part 5 question and every Part 6 gap carries the skill it tests
+   (data: card.skill, clue.skill). Each checked answer is kept per skill on
+   the phone, the last 20 of each; the results card shows the bars and names
+   the weakest as the next target. In Part 5 the target opens a drill: five
+   questions of that skill from different texts (?skill=…). */
+var SKILLS = GAPPED ? {
+    reference: ['Pronoun links', 'this, they, such, another'],
+    linker: ['Linking words', 'however, also, by contrast'],
+    sequence: ['Time and order', 'first, then, by the end'],
+    topic: ['Topic links', 'the same idea in other words'] }
+  : MATCH ? null : {
+    detail: ['Detail', 'a fact the text states'],
+    attitude: ['Attitude', 'how someone feels or thinks'],
+    inference: ['Inference', 'what the text suggests'],
+    reference: ['Reference', "what 'it' or 'this' points to"],
+    meaning: ['Meaning in context', 'what a phrase means here'],
+    purpose: ['Purpose', 'why the writer includes something'],
+    gist: ['Main idea', 'the point of a paragraph or the ending'] };
+var SKKEY = 'intuity.reading.skills.v1', SKPRE = 'p' + (CFG.part || 0) + '.';
+var DRILL = !GAPPED && !MATCH ? new URLSearchParams(location.search).get('skill') : null;
+if (DRILL && !(SKILLS && SKILLS[DRILL])) DRILL = null;
+function skillOfQ(i) { return GAPPED ? ((T().clues || [])[i] || {}).skill : MATCH ? null : (cards()[i] || {}).skill; }
+function skRead() { try { return JSON.parse(localStorage.getItem(SKKEY) || '{}') || {}; } catch (e) { return {}; } }
+function skRecord(idx) {
+  if (!SKILLS) return; var s = skRead();
+  idx.forEach(function (i) { var k = skillOfQ(i); if (!k) return; var a = s[SKPRE + k] || []; a.push(isRight(i) ? 1 : 0); s[SKPRE + k] = a.slice(-20); });
+  try { localStorage.setItem(SKKEY, JSON.stringify(s)); } catch (e) {}
+}
+function skPanel() {
+  if (!SKILLS) return '';
+  var s = skRead(), rows = [], target = null;
+  Object.keys(SKILLS).forEach(function (k) {
+    var a = s[SKPRE + k] || []; if (!a.length) return;
+    var pct = Math.round(100 * a.reduce(function (x, y) { return x + y; }, 0) / a.length);
+    rows.push({ k: k, n: a.length, pct: pct });
+    if (a.length >= 3 && pct < 100 && (!target || pct < target.pct)) target = { k: k, pct: pct };
+  });
+  if (!rows.length) return '';
+  return '<div class="sk"><div class="sk-h">Your reading skills</div>' + rows.map(function (r) {
+      return '<div class="sk-r' + (target && target.k === r.k ? ' t' : '') + '"><span class="sk-n">' + esc(SKILLS[r.k][0]) + '<small>' + esc(SKILLS[r.k][1]) + '</small></span>' +
+        '<span class="sk-b"><i style="width:' + r.pct + '%"></i></span><span class="sk-p">' + r.pct + '%</span></div>';
+    }).join('') +
+    (target ? '<div class="sk-go">Next target: <b>' + esc(SKILLS[target.k][0]) + '</b>' +
+      (!GAPPED ? ' <a class="rd-show" href="?skill=' + target.k + '">Practise 5 \u2192</a>' : ' \u00b7 watch for it in the next text') + '</div>' :
+      '<div class="sk-go">' + (rows.some(function (r) { return r.n < 3; }) ? 'A target appears after three questions of a kind.' : 'No weak spot yet. Keep going.') + '</div>') + '</div>';
+}
+(function () {
+  var st = document.createElement('style');
+  st.textContent = '.sk{margin:.9rem 0 .2rem;text-align:left;border-top:1px solid rgba(20,17,14,.1);padding-top:.7rem}' +
+    '.sk-h{font:700 .6rem/1 "Geist Mono",ui-monospace,monospace;letter-spacing:.16em;text-transform:uppercase;color:#6B655C;margin:0 0 .5rem}' +
+    '.sk-r{display:grid;grid-template-columns:minmax(0,1fr) 34% 2.6rem;align-items:center;gap:.5rem;margin:.32rem 0}' +
+    '.sk-n{font-size:.8rem;font-weight:600;line-height:1.15}.sk-n small{display:block;font-weight:400;font-size:.68rem;color:#8A847C}' +
+    '.sk-b{height:8px;border-radius:4px;background:rgba(20,17,14,.08);overflow:hidden}.sk-b i{display:block;height:100%;background:#5FA42B;border-radius:4px}' +
+    '.sk-r.t .sk-b i{background:#C2956E}.sk-r.t .sk-n{color:#9A5A2C}' +
+    '.sk-p{font:600 .72rem/1 "Geist Mono",ui-monospace,monospace;text-align:right}' +
+    '.sk-go{font-size:.8rem;margin:.5rem 0 0;color:#4A443D}.sk-go .rd-show{margin:0 0 0 .3rem;text-decoration:none;vertical-align:middle}';
+  (document.head || document.documentElement).appendChild(st);
+})();
+/* five questions of one skill, from different texts; each keeps its own chunk */
+function drillBank(list) {
+  var pool = [];
+  list.forEach(function (b, n) { if (b && b.cards) b.cards.forEach(function (c, k) { if (c.skill === DRILL) pool.push({ c: c, n: n, k: k }); }); });
+  for (var z = pool.length - 1; z > 0; z--) { var j = Math.floor(Math.random() * (z + 1)), x = pool[z]; pool[z] = pool[j]; pool[j] = x; }
+  var seen = {}, pick = [];
+  pool.forEach(function (p) { if (pick.length < 5 && !seen[p.n]) { seen[p.n] = 1; pick.push(p); } });
+  pool.forEach(function (p) { if (pick.length < 5 && pick.indexOf(p) < 0) pick.push(p); });
+  return { title: SKILLS[DRILL][0] + ' questions', subtitle: 'Five ' + SKILLS[DRILL][1].replace(/^a |^the /, '') + ' questions from different texts',
+    cards: pick.map(function (p) { var c = JSON.parse(JSON.stringify(p.c)); c._rid = 'p5-' + p.n + '-' + p.k; return c; }) };
+}
 
 /* ONE OF THE THREE. A unit is what the dots count and what the paged view
    shows one of: a question card in Part 5, a gap in Part 6. */
@@ -185,7 +257,7 @@ function paintTexts() {
   $('setTabs').innerHTML = BANKS.map(function (b, i) {
     return '<button class="vtab' + (i === bi ? ' active' : '') + (b && isDue(i) ? ' due' : '') + '" type="button" data-i="' + i + '"'
       + (b ? (isDue(i) ? ' title="Missed last time: read it again"' : '') : ' disabled aria-disabled="true" title="Not written yet"') + '>'
-      + 'Text ' + (i + 1) + (b && isDue(i) ? '<i class="due-dot" aria-hidden="true"></i>' : '') + '</button>';
+      + (DRILL ? esc(SKILLS[DRILL][0]) : 'Text ' + (i + 1)) + (b && isDue(i) ? '<i class="due-dot" aria-hidden="true"></i>' : '') + '</button>';
   }).join('');
   $('setTabs').querySelectorAll('.vtab').forEach(function (b) {
     b.onclick = function () { if (!b.disabled && +b.dataset.i !== bi) openText(+b.dataset.i); };
@@ -584,6 +656,7 @@ function submit() {
   if (marked || !idx.every(function (i) { return answers[i] !== undefined; })) return;
   marked = true;
   var got = idx.filter(isRight).length;
+  skRecord(idx);
   var w = CFG.marksPerQuestion || 1;
   /* 11 Nov 2026: every checked question feeds the Reading bar on the review's data screen */
   /* 12 Nov 2026: a Part 5 question also becomes a review card that trains the
@@ -592,7 +665,7 @@ function submit() {
   var logged = false;
   try { if (window.Be2 && Be2.answer && !GAPPED && !MATCH) idx.forEach(function (i) {
     var c = cards()[i]; if (!c || !c.highlight || !c.choices) return;
-    Be2.answer('reading-part5', { id: 'p5-' + bi + '-' + i, prompt: c.highlight, ask: c.question + ' The words above give the answer.',
+    Be2.answer('reading-part5', { id: c._rid || ('p5-' + bi + '-' + i), prompt: c.highlight, ask: c.question + ' The words above give the answer.',
       opts: c.choices.map(String), answer: c.choices[c.answer], given: c.choices[answers[i]] || '', correct: isRight(i),
       rule: c.why || '', href: location.pathname });
     logged = true; }); } catch (e) {}
@@ -666,7 +739,7 @@ var DUEKEY = 'be2.reading.due.p' + (CFG.part || 0);
 function day(off) { var d = new Date(); d.setDate(d.getDate() + (off || 0));
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 function dueMap() { try { return JSON.parse(localStorage.getItem(DUEKEY) || '{}') || {}; } catch (e) { return {}; } }
-function isDue(i) { var d = dueMap()[i]; return !!d && d <= day(0); }
+function isDue(i) { if (DRILL) return false; var d = dueMap()[i]; return !!d && d <= day(0); }
 function setDue(pct) {
   try { var m = dueMap(); if (pct < 100) m[bi] = day(1); else delete m[bi]; localStorage.setItem(DUEKEY, JSON.stringify(m)); } catch (e) {}
 }
@@ -676,6 +749,8 @@ function setDue(pct) {
   document.head.appendChild(st); } catch (e) {} })();
 
 function saveScore(pct) {
+  try { var sk = skPanel(); if (sk) $('ovMiss').insertAdjacentHTML('afterbegin', sk); } catch (e) {}
+  if (DRILL) return;
   setDue(pct);
   if (pct < 100) { try { $('ovMiss').insertAdjacentHTML('beforeend', '<p class="ov-again">This text comes back tomorrow: read it again then.</p>'); } catch (e) {} }
   if (!CFG.scoreKey) return;
@@ -701,6 +776,7 @@ $('ovAgain').onclick = function () {
   $('ov').classList.remove('show'); answers = {}; shown = {}; marked = false; qi = 0; render();
 };
 $('ovNext').onclick = function () {
+  if (DRILL) { location.href = location.pathname; return; }
   $('ov').classList.remove('show');
   var next = BANKS.findIndex(function (b, i) { return b && i > bi; });
   openText(next > -1 ? next : BANKS.findIndex(function (b) { return b; }));

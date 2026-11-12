@@ -194,7 +194,7 @@
 
   var Be2 = {
     /* a checked answer that makes no review card (a Reading question needs its whole text) */
-    score: function (skill, ok) { markDay(); score(skill, ok); },
+    score: function (skill, ok) { markDay(); score(skill, ok); if (!ok) missed({ topic: skill }); },
     /* the data screen: for each of the six skills, how much of its menu has been
        explored, and how the recent answers went (with this week against before) */
     board: function () {
@@ -238,6 +238,7 @@
         c = deck[key] = c || { topic: topic, id: String(r.id), misses: 0, rights: 0, first: today() };
         c.misses++; c.rights = c.step = 0; c.rday = null; c.due = today(); c.last = today();
         fill(c, r);
+        missed({ topic: topic, id: r.id, prompt: r.ask ? r.prompt + ' \u2014 ' + r.ask : r.prompt, answer: r.answer, given: r.given });
       }
       /* keep the deck small: the oldest, least-missed cards go first */
       var keys = Object.keys(deck);
@@ -298,11 +299,15 @@
   };
   window.Be2 = Be2;
   visit();
+  /* TELL US (12 Nov 2026): every page that marks answers also lets a pupil report a mark (tools/report-it.js) */
+  try { if (!window.ReportIt && !document.querySelector('script[src*="/tools/report-it.js"]')) { var ri = document.createElement('script'); ri.src = '/tools/report-it.js?v=1'; (document.head || document.documentElement).appendChild(ri); } } catch (e) {}
 
   /* ── Feed from intuity-log.js, without touching any game ──
      Its items are ids chosen by each game. Only ids that read as language
      ("take off", "afford") become review cards; a bare id like "q12" still
      counts towards the streak but would make a meaningless card. */
+  /* a wrong answer is announced, so tools/report-it.js can offer "Marked wrong? Tell us" */
+  function missed(d) { try { dispatchEvent(new CustomEvent('be2:miss', { detail: d })); } catch (e) {} }
   function wrapLog() {
     var L = window.INTUITY;
     if (!L || !L.log || L.log.__be2) return !!(L && L.log && L.log.__be2);
@@ -314,7 +319,7 @@
       try {
         var words = /^[A-Za-z][A-Za-z' ,.\-]{1,40}$/.test(String(item)) && !/^(q|t|s|item|test)\d/i.test(String(item));
         if (words) Be2.answer(topic, { id: item, prompt: String(item), kind: 'phrase', correct: !!correct, href: location.pathname });
-        else { markDay(); score(skillOf({ href: location.pathname, topic: topic }), !!correct); }
+        else { markDay(); score(skillOf({ href: location.pathname, topic: topic }), !!correct); if (!correct) missed({ topic: topic, id: item }); }
       } catch (e) {}
       return orig.apply(this, arguments);
     };

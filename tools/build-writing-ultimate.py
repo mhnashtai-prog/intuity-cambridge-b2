@@ -74,7 +74,12 @@ def lead(p): return p['sents'][0] if okS(p['sents'][0]) else next((s for s in p[
 # introductions and conclusions follow a template with the aim line in an odd place, a report's
 # findings can be listed in any order, and one story opens on the action before the scene
 NOORDER={('essay','intro'),('essay','concl'),('report','body'),('story','intro')}
-def okOrder(p): return 3<=len(p['sents'])<=5 and all(len(s)<=260 for s in p['sents']) and (p['task'],p['part']) not in NOORDER
+# 12 Nov 2026 (a pupil's report): most review conclusions are one template, "I would highly
+# recommend… / For anyone who…, this is a must. / I can assure you…", and any order of those
+# three reads well, so a pupil who put the recommendation last was marked wrong. Only the
+# conclusions written some other way stay as order rounds.
+def template(p): return p['task']=='review' and p['part']=='concl' and any(s.startswith('For anyone who') for s in p['sents'])
+def okOrder(p): return 3<=len(p['sents'])<=5 and all(len(s)<=260 for s in p['sents']) and (p['task'],p['part']) not in NOORDER and not template(p)
 
 def build(tasks,R,key,cap):
   P=[p for p in PARTS if p['task'] in tasks]; rounds=[]; n={}

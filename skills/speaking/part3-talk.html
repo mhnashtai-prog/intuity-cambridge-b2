@@ -268,6 +268,11 @@ body:not(.parade) #parade{display:none}
 .sd-pill i::after{content:"";margin-left:2px;border-left:6px solid #fff;border-top:4px solid transparent;border-bottom:4px solid transparent}
 @media(hover:hover){.sd-pill:hover{color:#14110E;border-color:rgba(20,17,14,.3)}}
 body:not(.parade) .sd-pill{display:none}
+/* Talk: you on tape (12 Nov 2026) */
+.rec-on{color:#B3261E;font-weight:600}
+#tdlg .tn.now{outline:2px solid #5FA42B;outline-offset:3px;border-radius:10px}
+/* in Talk every turn of yours is recorded, so the single-answer recorder bar steps aside */
+body.talking .be2rec{display:none!important}
 </style>
 <script src="/tools/be2-brand.js?v=20261112b"></script>
 <link rel="stylesheet" href="/tools/parade.css?v=4">
@@ -626,8 +631,38 @@ function qDraw(){
    Choose to be A or B. The page speaks your partner's turns; on yours it
    hides the model, gives you the seconds the model took, and moves on. */
 var tK=-1, tRun=false, tTmr=null, tClk=null, tLeft=0;
+/* YOUR PARTNER, AND YOU ON TAPE (12 Nov 2026): the partner's turns are spoken, and each of
+   yours is recorded (if the microphone is allowed) and ends when you tap Done or the time
+   runs out. Afterwards "Hear our conversation" plays the whole discussion back in order:
+   your partner's voice and yours. Nothing leaves the phone; the takes go when the page closes. */
+var tMic=null, tRec=null, tTakes={}, tPlay=false;
+function micOn(then){
+  if(tMic||!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder)){ then(); return; }
+  navigator.mediaDevices.getUserMedia({audio:true}).then(function(s){ tMic=s; then(); },function(){ then(); });
+}
+function recStart(k){
+  if(!tMic) return; var ch=[];
+  try{ tRec=new MediaRecorder(tMic); }catch(e){ tRec=null; return; }
+  tRec.ondataavailable=function(e){ if(e.data&&e.data.size) ch.push(e.data); };
+  tRec.onstop=function(){ if(ch.length){ if(tTakes[k]) URL.revokeObjectURL(tTakes[k]); tTakes[k]=URL.createObjectURL(new Blob(ch,{type:ch[0].type||'audio/webm'})); } };
+  tRec.start();
+}
+function recStop(){ if(tRec&&tRec.state!=='inactive'){ try{ tRec.stop(); }catch(e){} } tRec=null; }
+function hearAll(btn){
+  if(tPlay){ tPlay=false; hush(); btn.textContent='\u25B6 Hear our conversation'; return; }
+  tPlay=true; btn.textContent='\u25A0 Stop'; var ts=turns(), k=0, last=Math.min(tK,ts.length-1);
+  (function next(){
+    if(!tPlay) return;
+    document.querySelectorAll('#tdlg .tn.now').forEach(function(x){ x.classList.remove('now'); });
+    if(k>last){ tPlay=false; btn.textContent='\u25B6 Hear our conversation'; return; }
+    var tn=ts[k], el=$('tt'+k); if(el){ el.classList.add('now'); if(el.scrollIntoView) el.scrollIntoView({block:'nearest',behavior:'smooth'}); }
+    var me=tn.who===role, i=k++;
+    if(me){ if(!tTakes[i]){ setTimeout(next,300); return; } var a=new Audio(tTakes[i]); a.onended=function(){ setTimeout(next,300); }; a.onerror=function(){ next(); }; a.play().catch(function(){ next(); }); }
+    else speakTurn(tn,function(){ setTimeout(next,300); });
+  })();
+}
 function talk(){
-  tK=-1; tRun=false; tLeft=LIM;
+  tK=-1; tRun=false; tLeft=LIM; document.body.classList.add('talking');
   $('body').innerHTML='<div class="role">'+seg([{id:'a',label:'I\'m '+V().a},{id:'b',label:'I\'m '+V().b}],role,'data-role','sm')+'</div>'+
     '<div class="clock" id="clk">'+fmt(LIM)+'</div>'+
     '<p class="talk-lead" id="lead">Press play. The examiner starts the task, your partner speaks their lines — and on yours, the model is hidden. '+
@@ -637,6 +672,10 @@ function talk(){
 }
 function talkGo(){
   if(tRun) return; tRun=true; setHub('stop'); $('lead').style.display='none';
+  Object.keys(tTakes).forEach(function(k){ URL.revokeObjectURL(tTakes[k]); }); tTakes={};
+  micOn(function(){ if(tRun) talkGo2(); });
+}
+function talkGo2(){
   tClk=setInterval(function(){ tLeft--; $('clk').textContent=fmt(tLeft); $('clk').classList.toggle('low',tLeft<=10);
     timeline([{phase:4,s:LIM-tLeft}],{limit:LIM,band:BAND,scale:LIM,left:'you are '+nameOf(role),right:''}); if(tLeft<=0) talkStop(true); },1000);
   exSay(exLines(),function(){ tK=-1; talkNext(); });
@@ -648,23 +687,28 @@ function talkNext(){
   lightPrompts(tn.p,[]);
   var box=$('tdlg'), mine=tn.who===role, id='tt'+tK;
   box.insertAdjacentHTML('beforeend', mine
-    ? '<div class="tn '+tn.who+'" id="'+id+'"><div class="who">'+esc(nameOf(tn.who))+' — your turn</div><p class="mine-hidden">Say it now…</p><div class="turn-clock" id="tc'+tK+'"></div>'+
-      '<button class="tool" type="button" data-show="'+tK+'">Show the model</button></div>'
+    ? '<div class="tn '+tn.who+'" id="'+id+'"><div class="who">'+esc(nameOf(tn.who))+' — your turn'+(tMic?' · <span class="rec-on">● recording</span>':'')+'</div><p class="mine-hidden">Say it now…</p><div class="turn-clock" id="tc'+tK+'"></div>'+
+      '<button class="tool on" type="button" data-tdone="'+tK+'">Done \u2713</button> <button class="tool" type="button" data-show="'+tK+'">Show the model</button></div>'
     : turnHTML(tn,tK).replace('class="tn ','id="'+id+'" class="tn '));
   var el=$(id); if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest',behavior:'smooth'});
   var txt=tn.segs.map(function(s){ return s.t; }).join(' ');
   if(mine){
-    var left=Math.ceil(tsecs(tn)+2), c=$('tc'+tK);
-    (function tick(){ if(!tRun) return; c.textContent=left+'s'; if(left--<=0){ talkNext(); return; } tTmr=setTimeout(tick,1000); })();
+    /* room to develop the idea: half as long again as the model, never under 10 seconds */
+    var left=Math.max(10,Math.ceil(tsecs(tn)*1.5+2)), c=$('tc'+tK);
+    recStart(tK);
+    (function tick(){ if(!tRun) return; c.textContent=left+'s'; if(left--<=0){ recStop(); talkNext(); return; } tTmr=setTimeout(tick,1000); })();
   } else speakTurn(tn,function(){ tTmr=setTimeout(talkNext,400); });
 }
 function talkStop(end){
+  recStop(); tPlay=false;
   if(tClk){ clearInterval(tClk); tClk=null; } if(tTmr){ clearTimeout(tTmr); tTmr=null; }
   var was=tRun; tRun=false; hush();
   if(stage==='talk'&&$('tdlg')){ setHub('play'); if(end||was){ /* reveal every hidden line */
     Array.prototype.forEach.call(document.querySelectorAll('[data-show]'),function(b){ reveal(+b.dataset.show); });
     /* 10 Nov 2026: after the role-play, the next step is one tap away */
-    if(!document.querySelector('#body .sq-acts')) $('tdlg').insertAdjacentHTML('afterend','<div class="sq-acts"><button class="tool on" type="button" data-sq="next">'+(mode==='discuss'?'Next: Decide →':'Next task →')+'</button></div>'); } }
+    if(!document.querySelector('#body .sq-acts')) $('tdlg').insertAdjacentHTML('afterend','<div class="sq-acts">'+
+      (tMic?'<button class="tool on" type="button" data-hear="1">\u25B6 Hear our conversation</button> ':'')+
+      '<button class="tool'+(tMic?'':' on')+'" type="button" data-sq="next">'+(mode==='discuss'?'Next: Decide →':'Next task →')+'</button></div>'); } }
 }
 function reveal(k){
   var tn=turns()[k], el=$('tt'+k); if(!el) return;
@@ -726,7 +770,7 @@ function paradeFind(id){ D.tasks.forEach(function(t,i){ if(t.id===id) ti=i; }); 
 
 /* ═══ ROUTING ══════════════════════════════════════════════════════════ */
 function draw(){ head(); if(stage==='explore') explore(); else if(stage==='practice') practice(); else if(stage==='quiz') quiz(); else talk(); }
-function setStage(s){ stop(); stage=s; pref('stage',s);
+function setStage(s){ stop(); stage=s; pref('stage',s); document.body.classList.toggle('talking',s==='talk');
   Array.prototype.forEach.call($('stages').children,function(b){ b.setAttribute('aria-selected',String(b.dataset.s===s)); }); draw(); }
 Array.prototype.forEach.call($('stages').children,function(b){ b.addEventListener('click',function(){ if(b.dataset.s!==stage) setStage(b.dataset.s); }); });
 $('prev').addEventListener('click',function(){ if(ti>0) go(ti-1,-1); });
@@ -750,6 +794,8 @@ document.addEventListener('click',function(e){
   if(t.dataset.alt!==undefined){ stop(); ai=+t.dataset.alt; revealed={}; pref('alt',V().id); draw(); return; }
   if(t.dataset.role!==undefined){ stop(); role=t.dataset.role; pref('role',role); talk(); return; }
   if(t.dataset.show!==undefined){ reveal(+t.dataset.show); return; }
+  if(t.dataset.tdone!==undefined){ if(tRun&&+t.dataset.tdone===tK){ if(tTmr){ clearTimeout(tTmr); tTmr=null; } recStop(); setTimeout(talkNext,250); } return; }
+  if(t.dataset.hear){ setTimeout(function(){ hearAll(t); },300); return; }
   if(t.dataset.xray){ xray=!xray; pref('xray',xray?'1':''); $('card').classList.toggle('xray',xray); t.classList.toggle('on',xray); t.setAttribute('aria-pressed',String(xray)); return; }
   if(t.dataset.cover){ stop(); cover=!cover; revealed={}; pref('cover',cover?'1':''); explore(); return; }
   if(t.dataset.d!==undefined){ drillStop(); hush(); dIx=Math.max(0,Math.min(turns().length-1,dIx+(+t.dataset.d))); drill(); return; }

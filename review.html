@@ -175,7 +175,12 @@ body{margin:0;color:var(--ink);font-family:'Geist',system-ui,sans-serif;-webkit-
 <script>
 (function () {
   /* at most 12 a day (5 Nov): the oldest-due first, the rest wait for tomorrow */
-  var deck = Be2.review(Be2.dueToday ? Be2.dueToday() : 10), i = 0, results = [], run = 0, bestRun = 0, timer = 0, pend = null;
+  /* TODAY (12 Nov 2026): /review.html?today=1 is the five-minute session the landing's
+     corner ring opens. The same player, a different deck: up to 6 cards due, one exam
+     bite (a Use of English or Reading Part 5 item, a different paper each day) and one
+     writing phrase to recall. Fresh items go into the deck like any other answer. */
+  var TODAY = /[?&]today=1/.test(location.search);
+  var deck = Be2.review(TODAY ? Math.min(6, Be2.dueToday ? Be2.dueToday() : 6) : (Be2.dueToday ? Be2.dueToday() : 10)), i = 0, results = [], run = 0, bestRun = 0, timer = 0, pend = null;
   var lead = document.getElementById('lead'), stage = document.getElementById('stage');
   var ALL = (function () { try { var d = JSON.parse(localStorage.getItem('be2.review.v1') || '{}'); return Object.keys(d).map(function (k) { return d[k]; }); } catch (e) { return []; } })();
   /* games played by picking: an old card from them (sent before options were kept) gets options from its neighbours */
@@ -194,7 +199,7 @@ body{margin:0;color:var(--ink);font-family:'Geist',system-ui,sans-serif;-webkit-
       '</div>' : '');
   }
   function from(c) {
-    return '<div class="from"><i></i>' + esc(c.topicName) + '<span class="misses">' + (c.misses ? 'missed ' + c.misses + '×' : 'check-in') + '</span></div>';
+    return '<div class="from"><i></i>' + esc(c.topicName) + '<span class="misses">' + (c.misses ? 'missed ' + c.misses + '×' : c.tag || 'check-in') + '</span></div>';
   }
 
   /* how the card is played: 'pick' (options), 'type' (the gap), 'done' (a phrase to use) */
@@ -338,7 +343,7 @@ body{margin:0;color:var(--ink);font-family:'Geist',system-ui,sans-serif;-webkit-
     var bk = 'intuity.best.review.run', best = 0; try { best = +localStorage.getItem(bk) || 0; } catch (e) {}
     var nb = bestRun > best && best > 0; if (bestRun > best) try { localStorage.setItem(bk, String(bestRun)); } catch (e) {}
     window.scrollTo(0, 0);
-    board({ got: got, of: deck.length, run: bestRun, best: Math.max(best, bestRun), newBest: nb });
+    (TODAY ? todayFront : board)({ got: got, of: deck.length, run: bestRun, best: Math.max(best, bestRun), newBest: nb });
   }
 
   /* ═══ THE BOARD: the review's front door (11 Nov 2026) ═══ */
@@ -399,10 +404,91 @@ body{margin:0;color:var(--ink);font-family:'Geist',system-ui,sans-serif;-webkit-
     if (fin) setTimeout(function () { var h = document.getElementById('sc'); if (fin.got === fin.of) cheer('finale'); else if (fin.newBest) cheer('streak', h); else cheer('done', h); }, 400);
   }
 
+
+  /* ═══ TODAY: the deck's extra cards, the front and the finish ═══ */
+  function dayKey() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function dayNo() { var d = new Date(); return Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 864e5); }
+  function pickOne(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function getJSON(u) { return fetch(u, { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); }
+  function inDeck(topic, id) { return ALL.some(function (o) { return o.topic === topic && String(o.id) === String(id); }); }
+  function fresh(list, topic, idOf) { var f = list.filter(function (x) { return !inDeck(topic, idOf(x)); }); return f.length ? f : list; }
+  var BITES = {
+    p1: function () { return getJSON('/data/use-of-english/multiple-choice/master-part1.json').then(function (d) { if (!d) return null;
+      var x = pickOne(fresh(d.items, 'uoe-part1', function (y) { return y.id; }));
+      return { topic: 'uoe-part1', id: x.id, prompt: x.s.replace('___', '_____'), answer: x.a, opts: [x.a].concat(x.o || []), rule: x.why || '', href: '/skills/use-of-english/multiple-choice/master-part1.html' }; }); },
+    p2: function () { return getJSON('/data/use-of-english/gapfill/master-part2.json').then(function (d) { if (!d) return null;
+      var x = pickOne(fresh(d.items, 'uoe-part2', function (y) { return y.id; }));
+      return { topic: 'uoe-part2', id: x.id, prompt: x.s.replace('___', '_____'), answer: x.a, accept: [x.a].concat(x.alt || []), rule: x.why || '', href: '/skills/use-of-english/gap-fill/master-part2.html' }; }); },
+    p3: function () { return getJSON('/data/use-of-english/word-formation/word-families.json').then(function (d) { if (!d) return null;
+      var all = []; d.nodes.forEach(function (n) { n.forms.forEach(function (f) { var s = String(f.teen || f.ex || ''), at = s.toLowerCase().indexOf(String(f.w).toLowerCase());
+        if (at >= 0) all.push({ f: f, base: f.from || n.base, s: s, at: at }); }); });
+      var x = pickOne(fresh(all, 'uoe-part3', function (y) { return y.f.id; })), f = x.f;
+      return { topic: 'uoe-part3', id: f.id, prompt: x.s.slice(0, x.at) + '_____' + x.s.slice(x.at + f.w.length) + ' (' + String(x.base).toUpperCase() + ')', answer: f.w, accept: [f.w],
+        rule: f.gloss ? f.w + ': ' + f.gloss : '', href: '/skills/use-of-english/word-formation/word-families.html' }; }); },
+    p4: function () { return getJSON('/data/use-of-english/word-transformation/master-part4.json').then(function (d) { if (!d) return null;
+      var x = pickOne(fresh(d.items, 'uoe-part4', function (y) { return y.id; })), acc = (x.a || []).map(function (y) { return String(y).replace('|', ' '); });
+      return { topic: 'uoe-part4', id: x.id, prompt: x.s + ' → ' + x.k + ': ' + x.b + ' _____ ' + x.e, answer: acc[0], accept: acc, rule: x.why || '', href: '/skills/use-of-english/word-transformation/master-part4.html' }; }); },
+    r5: function () { var n = 1 + Math.floor(Math.random() * 18);
+      return getJSON('/data/reading/multiple-choice-folder/multiple-choice' + n + '.json').then(function (d) { if (!d || !d.cards) return null;
+        var ok = d.cards.map(function (c, k) { return { c: c, k: k }; }).filter(function (y) { return y.c.highlight && y.c.choices; }); if (!ok.length) return null;
+        var y = pickOne(ok), c = y.c;
+        return { topic: 'reading-part5', id: 'today-t' + n + '-' + y.k, prompt: c.highlight, ask: c.question + ' The words above give the answer.', opts: c.choices.map(String),
+          answer: c.choices[c.answer], rule: c.why || '', href: '/skills/reading/multiple-choice-menu/reading-part5.html' }; }); }
+  };
+  var RC_STOP = new Set('about above after again also although among another because been before being below between both could does doing during each either every from further have having here into itself just more most much must neither other ought over same should since some such than that their theirs them then there these they this those through under until very were what when where whether which while whom whose will with within without would your yours'.split(' '));
+  function rcHash(s) { var h = 0; for (var k = 0; k < s.length; k++) h = (h * 31 + s.charCodeAt(k)) | 0; return (h >>> 0).toString(36); }
+  function phrase() { return getJSON('/data/writing/portfolio.json?v=recall1').then(function (d) { if (!d) return null;
+    var tasks = Object.keys(d.tasks || {}), task = tasks[dayNo() % tasks.length], pool = [];
+    (d.tasks[task] || []).forEach(function (sid) { var S = d.sheets[sid]; if (!S) return;
+      S.bands.forEach(function (b) { b.cols.forEach(function (col) { col.forEach(function (it) {
+        var tx = String(it).replace(/\*\*/g, '').replace(/^[>#=!]+\s*/, '').replace(/\s+/g, ' ').trim(), w = tx.split(' '), best = -1, len = 0;
+        w.forEach(function (x, k) { var core = x.replace(/^[“"(‘']+|[”"),.;:!?’']+$/g, '');
+          if (!/^[A-Za-z]{4,}$/.test(core) || RC_STOP.has(core.toLowerCase()) || w[k - 1] === '/' || w[k + 1] === '/' || /\//.test(x)) return;
+          if (core.length > len) { len = core.length; best = k; } });
+        if (best >= 0 && tx.length <= 170) pool.push({ id: rcHash(sid + '|' + tx), sheet: sid, text: tx, k: best }); }); }); }); });
+    if (!pool.length) return null;
+    var fr = pool.filter(function (y) { return !inDeck('phrases-' + y.sheet, y.id); }), x = pickOne(fr.length ? fr : pool);
+    var m = x.text.split(' ')[x.k].match(/^([“"(‘']*)([A-Za-z]+)(.*)$/);
+    return { topic: 'phrases-' + x.sheet, id: x.id, kind: 'recall', keep: true, answer: x.text,
+      prompt: x.text.split(' ').map(function (y, j) { return j === x.k ? m[1] + m[2][0] + '___' + m[3] : y; }).join(' '),
+      href: '/skills/writing/recall.html?task=' + task + '&s=' + x.sheet, tag: 'phrase' }; }); }
+
+  function todayInit() {
+    document.title = 'INTUITY — Today';
+    var sub = document.querySelector('.app-subtitle'); if (sub) sub.textContent = 'Today';
+    stage.innerHTML = '<div class="rv-go" style="padding-top:18vh"><div class="static"><div class="pend-dial"><span>5</span><small>MIN</small></div></div></div>';
+    var order = ['p1', 'p2', 'r5', 'p3', 'p4'], first = dayNo() % order.length;
+    var want = [BITES[order[first]]()];
+    if (deck.length < 3) want.push(BITES[order[(first + 1) % order.length]](), BITES[order[(first + 2) % order.length]]());
+    want.push(phrase());
+    Promise.all(want).then(function (extra) {
+      extra.forEach(function (c) { if (!c) return; c.topicName = Be2.topicName ? Be2.topicName(c.topic) : c.topic; if (!c.tag) c.tag = 'exam bite'; deck.push(c); });
+      todayFront();
+    });
+  }
+  function todayFront(fin) {
+    var n = Be2.streak(), done = false; try { done = localStorage.getItem('intuity.today.done') === dayKey(); } catch (e) {}
+    if (fin) { try { localStorage.setItem('intuity.today.done', dayKey()); } catch (e) {} }
+    lead.innerHTML = n ? '<span class="streak">🔥 <b>' + n + '</b> day' + (n === 1 ? '' : 's') + ' in a row</span>' : '';
+    var due = deck.filter(function (c) { return !c.tag; }).length, bites = deck.filter(function (c) { return c.tag === 'exam bite'; }).length, ph = deck.length - due - bites;
+    var parts = [due ? due + ' to bring back' : '', bites ? bites + ' exam bite' + (bites === 1 ? '' : 's') : '', ph ? ph + ' phrase' : ''].filter(Boolean).join(' · ');
+    var foot = fin ?
+      '<div class="rv-go"><div class="static"><div class="pend-dial score"><span id="sc">' + fin.got + '/' + fin.of + '</span><small>DONE</small></div></div>' +
+        '<p class="rv-say">' + (fin.run ? 'Longest run ' + fin.run + (fin.newBest ? ' · new best' : '') + ' · ' : '') + 'See you tomorrow</p></div>' :
+      '<div class="rv-go"><button type="button" id="startRv" aria-label="Start today’s five minutes: ' + deck.length + ' cards">' +
+        '<div class="pend-dial"><span>' + deck.length + '</span><small>START</small></div></button>' +
+        '<p class="rv-say">' + (done ? 'Done today · one more round' : 'Today’s five minutes') + '</p><p class="rv-say" style="margin-top:4px;opacity:.8">' + parts + '</p></div>';
+    stage.innerHTML = '<section class="board" style="text-align:center;padding-top:12vh">' + foot +
+      '<p style="margin:28px 0 0"><a class="bd-pill" href="/review.html">Your board</a></p></section>';
+    var go = document.getElementById('startRv');
+    if (go) go.onclick = function () { cheer('tick'); setTimeout(function () { window.scrollTo(0, 0); show(); }, 320); };
+    if (fin) setTimeout(function () { var h = document.getElementById('sc'); if (fin.got === fin.of) cheer('finale'); else if (fin.newBest) cheer('streak', h); else cheer('done', h); }, 400);
+  }
+
   /* The shell header is fixed; measure it so the deck starts below it. */
   function fit() { var h = document.querySelector('.header'); if (h) document.documentElement.style.setProperty('--rv-head', h.offsetHeight + 'px'); }
   fit(); window.addEventListener('resize', fit); setTimeout(fit, 300);
-  board();
+  if (TODAY) todayInit(); else board();
 })();
 </script>
 </body>

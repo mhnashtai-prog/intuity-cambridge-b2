@@ -99,7 +99,7 @@ var SKILLS = {
     {group:"Practise", rule:true},
     /* PRACTICE (8 Nov 2026): finish a bank phrase about something you know */
     {name:"Practice", glyph:"…", hint:"Finish the sentence", url:"skills/writing/practice.html"},
-    {name:"Games", glyph:"▶\uFE0E", hint:"Beat your streak", url:"skills/writing/games/essay-games-staged.html"},
+    {name:"Games", glyph:"▶\uFE0E", hint:"Put a text in order", url:"skills/writing/games/essay-games-staged.html"},
     {name:"Sentence Structure", glyph:"›", hint:"Better sentences", sub:"sentence"},
     /* 8 Nov 2026: the old generator became Build your own; this tile opens its Ready view, on the same Essay 1 */
     {name:"Model answers", glyph:"◧", hint:"Read a ready one", url:"skills/writing/build.html?type=essays&view=models"},
@@ -121,10 +121,10 @@ var SKILLS = {
 var SUB = {
   /* Writing tasks open the portfolio sheet now; Sentence Structure is the one sub-menu left */
   sentence:{ title:"Sentence Structure", items:[
-    {name:"Sentence Builder", url:"skills/writing/sentence-structure/sentence-builder.html"},
-    {name:"Paragraph Builder", url:"skills/writing/sentence-structure/paragraph-builder.html"},
-    {name:"Cohesion Tools", url:"skills/writing/sentence-structure/cohesion-drills.html"},
-    {name:"Sentence Types", url:"skills/writing/sentence-structure/sentence-type.html"}
+    {name:"Sentence Builder", hint:"Join two ideas", url:"skills/writing/sentence-structure/sentence-builder.html"},
+    {name:"Paragraph Builder", hint:"Topic, reasons, link", url:"skills/writing/sentence-structure/paragraph-builder.html"},
+    {name:"Cohesion Tools", hint:"Link, refer, replace", url:"skills/writing/sentence-structure/cohesion-drills.html"},
+    {name:"Sentence Types", hint:"Simple to complex", url:"skills/writing/sentence-structure/sentence-type.html"}
   ]}
 };
 

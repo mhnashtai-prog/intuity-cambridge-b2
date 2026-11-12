@@ -518,7 +518,17 @@ function submit() {
   var got = idx.filter(function (i) { return answers[i] === rightFor(i); }).length;
   var w = CFG.marksPerQuestion || 1;
   /* 11 Nov 2026: every checked question feeds the Reading bar on the review's data screen */
-  try { if (window.Be2 && Be2.score) idx.forEach(function (i) { Be2.score('reading', answers[i] === rightFor(i)); }); } catch (e) {}
+  /* 12 Nov 2026: a Part 5 question also becomes a review card that trains the
+     skill itself: the sentence that proves the answer, and which option it proves.
+     (Parts 6 and 7 need their whole text, so they only score.) */
+  var logged = false;
+  try { if (window.Be2 && Be2.answer && !GAPPED && !MATCH) idx.forEach(function (i) {
+    var c = cards()[i]; if (!c || !c.highlight || !c.choices) return;
+    Be2.answer('reading-part5', { id: 'p5-' + bi + '-' + i, prompt: c.highlight, ask: c.question + ' The words above give the answer.',
+      opts: c.choices.map(String), answer: c.choices[c.answer], given: c.choices[answers[i]] || '', correct: answers[i] === rightFor(i),
+      rule: c.why || '', href: location.pathname });
+    logged = true; }); } catch (e) {}
+  try { if (!logged && window.Be2 && Be2.score) idx.forEach(function (i) { Be2.score('reading', answers[i] === rightFor(i)); }); } catch (e) {}
   render();
 
   var pct = Math.round(got / n * 100);

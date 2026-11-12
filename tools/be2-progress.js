@@ -127,7 +127,7 @@
     'academic-vocabulary-sets': 'Synonyms', 'phrasal-verbs': 'Phrasal Verbs',
     'gerunds-infinitives': 'Gerunds & Infinitives', 'conditionals': 'Conditionals',
     'miscellaneous': 'Relative Pronouns & More', 'phrase-bank': 'Phrase Bank', 'speaking-phrases': 'Useful expressions',
-    'master-part4': 'Use of English · Part 4', 'full-test': 'Full test',
+    'master-part4': 'Use of English · Part 4', 'full-test': 'Full test', 'reading-part5': 'Reading · Part 5',
     'uoe-part1': 'Use of English · Part 1', 'uoe-part2': 'Use of English · Part 2',
     'uoe-part3': 'Use of English · Part 3', 'uoe-part4': 'Use of English · Part 4',
     'which-task': 'Writing · Which task?', 'five-reviews': 'Your review in five',
@@ -308,6 +308,9 @@
     if (!L || !L.log || L.log.__be2) return !!(L && L.log && L.log.__be2);
     var orig = L.log;
     L.log = function (topic, item, correct, extra) {
+      /* 12 Nov 2026: a page that reports to Be2 itself (the Master pages, the full test)
+         says so with window.__be2Direct; its old log is then not counted twice */
+      if (window.__be2Direct) return orig.apply(this, arguments);
       try {
         var words = /^[A-Za-z][A-Za-z' ,.\-]{1,40}$/.test(String(item)) && !/^(q|t|s|item|test)\d/i.test(String(item));
         if (words) Be2.answer(topic, { id: item, prompt: String(item), kind: 'phrase', correct: !!correct, href: location.pathname });

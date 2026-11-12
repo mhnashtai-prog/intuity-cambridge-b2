@@ -34,6 +34,7 @@
     color:rgba(20,17,14,.45);font-variant-numeric:tabular-nums}
   .text-content p.wf-sent.wf-ex{opacity:.72}
   .text-content p.wf-sent.wf-ex .wf-n{text-transform:uppercase}
+.area-tip{font-size:.8rem;line-height:1.45;color:var(--poster-body,#4a4440);margin:-.15rem 0 .55rem;padding:.45rem .65rem;border-left:3px solid var(--tile-ok-ink,#3d7a55);background:rgba(0,0,0,.03);border-radius:0 6px 6px 0;text-align:left}
 </style>
 <style>
 /* one flat pill, the quiet palette, the tap-target radius */
@@ -69,7 +70,7 @@
   </style>
   <link rel="stylesheet" href="/tools/intuity-pills.css?v=20261012">
   <script src="/tools/intuity-overflow.js?v=3"></script>
-<script src="/tools/be2-brand.js?v=20261111d"></script>
+<script src="/tools/be2-brand.js?v=20261112"></script>
 </head>
 <body data-uoe-modes="All|One at a time">
   <header class="header">
@@ -1143,7 +1144,8 @@
       try { if (window.Be2 && Be2.answer) {
         const put = (num, prompt, ans) => { const ua = userAnswers[num] || ''; if (!ua.trim()) return;
           Be2.answer('uoe-part3', { id: (test.id || ('t' + currentTest)) + '-' + num, prompt, answer: String(ans).split('/')[0],
-            given: ua, correct: answersMatch(ua, ans), accept: String(ans).split('/'), href: location.pathname }); };
+            given: ua, correct: answersMatch(ua, ans), accept: String(ans).split('/'), rule: wfWhy(stemOf(prompt), ans).replace(/<[^>]+>/g, ''), href: location.pathname }); };
+        const stemOf = p => (/\(([A-Z]{2,})\)|\b([A-Z]{3,})\b/.exec(p) || []).slice(1).find(Boolean) || '';
         const stemGap = (t, stem) => String(t).replace(new RegExp('\\b' + stem + '\\s*\\.{3,}'), '_____ (' + stem + ')').replace(/\(\d+\)\s*/g, '');
         if (isSentenceFormat && test.sentences) test.sentences.filter(x => !x.isExample).forEach(x => put(x.number, stemGap(x.text, x.prompt), x.answer || ''));
         else Object.keys(test.gaps || {}).filter(n => n !== '0').forEach(num => { const g = test.gaps[num]; if (!g || !g.prompt) return;
@@ -1221,7 +1223,7 @@
             <div class="answer-item ${isCorrect ? 'correct' : 'incorrect'}" style="animation-delay: ${idx * 50}ms">
               <span>${num}. <strong>${sanitizeText(userAns) || '(empty)'}</strong></span>
               ${!isCorrect ? `<span style="color: var(--tile-ok-ink);">→ ${sanitizeText(correctAns)}</span>` : '<span style="color: var(--tile-ok-ink);">✓</span>'}
-            </div>
+            </div>${!isCorrect ? wfWhy(sentence.prompt, correctAns) : ''}
           `;
         });
       } else {
@@ -1235,7 +1237,7 @@
             <div class="answer-item ${isCorrect ? 'correct' : 'incorrect'}" style="animation-delay: ${idx * 50}ms">
               <span>Gap ${num}: <strong>${sanitizeText(userAns) || '(empty)'}</strong></span>
               ${!isCorrect ? `<span style="color: var(--tile-ok-ink);">→ ${sanitizeText(correctAns)}</span>` : '<span style="color: var(--tile-ok-ink);">✓</span>'}
-            </div>
+            </div>${!isCorrect && gapObj ? wfWhy(gapObj.prompt, correctAns) : ''}
           `;
         });
       }
@@ -1244,6 +1246,38 @@
       if (correct < total) html += '<a class="to-master" href="/skills/use-of-english/word-formation/word-families.html">Practise Part 3 item by item, by word family \u2192</a>';
       answersDisplay.innerHTML = html;
       document.getElementById('scoreModal').classList.add('active');
+    }
+
+    /* WHY IT WAS WRONG (12 Nov 2026, from the menu audit): a miss now names the
+       kind of word the gap needs, the prefix or ending that makes it, and the
+       word's family from Master · Part 3 when it is there. */
+    let WF_FAM = null;
+    fetch('/data/use-of-english/word-formation/word-families.json').then(r => r.ok ? r.json() : null).then(d => {
+      if (!d) return; WF_FAM = {};
+      d.nodes.forEach(n => { WF_FAM[n.base.toLowerCase()] = [n.base].concat(n.forms.map(x => x.w)); n.forms.forEach(x => { if (x.from) WF_FAM[String(x.from).toLowerCase()] = WF_FAM[n.base.toLowerCase()]; }); });
+    }).catch(() => {});
+    function wfWhy(stem, ans) {
+      const s = String(stem || '').toLowerCase().trim(), a = String(ans || '').split('/')[0].toLowerCase().trim();
+      if (!s || !a) return '';
+      const bits = [];
+      const pre = /^(un|in|im|il|ir|dis|mis|non|over|under|re|out)/.exec(a);
+      if (pre && !s.startsWith(pre[1]) && a.length > s.length - 2) bits.push(`<b>${pre[1]}-</b> at the front: ${/^(over|under|out|re)$/.test(pre[1]) ? 'it changes the meaning (too much, too little, more, again)' : 'the sentence needs the opposite meaning'}.`);
+      const core = a.replace(/(s|es)$/, '');
+      const END = [
+        [/(tion|sion|ment|ness|ity|ance|ence|ship|hood|dom|ism|ure|age|ery|ory)s?$/, 'a noun', 'it names a thing or an idea: look for a, the, his or an adjective before the gap'],
+        [/(er|or|ist|ian|ee)s$/, 'a noun for people', 'it names people who do something'],
+        [/(er|or|ist|ian|ee)$/, 'a noun for a person', 'it names someone who does something'],
+        [/ly$/, 'an adverb', 'it tells you how, how much or how often: it describes a verb or an adjective'],
+        [/(ful|less|ous|ive|able|ible|ical|ic|ish|ent|ant|al|ary|ly|ty|ny|sy|ky|py|dy)$/, 'an adjective', 'it describes a noun, or follows be, seem or become'],
+        [/(ed|ing)$/, 'an -ed or -ing form', 'as an adjective, -ing describes the thing that causes a feeling and -ed how a person feels; after be or have it can also be a verb form'],
+        [/(ise|ize|en|ify|ate)$/, 'a verb', 'there is a subject or to before the gap']
+      ];
+      const e = END.find(x => x[0].test(a));
+      if (e) bits.push(`The gap needs <b>${e[1]}</b>: ${e[2]}.`);
+      if (/s$/.test(a) && !/ss$|ous$|ness$|less$|ics$/.test(a) && !/ly$/.test(a)) bits.push('It is <b>plural</b>: check the verb or the word before it (many, several, these).');
+      const fam = WF_FAM && (WF_FAM[s] || WF_FAM[core]);
+      if (fam && fam.length > 1) bits.push('The family: ' + fam.slice(0, 7).map(w => w.toLowerCase() === a ? `<b>${w}</b>` : w).join(', ') + '.');
+      return bits.length ? `<div class="area-tip">${stem.toUpperCase()} → ${a}. ${bits.join(' ')}</div>` : '';
     }
 
     function closeModal() {

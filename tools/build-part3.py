@@ -679,7 +679,7 @@ for tk in T:
 # a whole version; it is written plain already, so no EDITS or OV pass touches it.
 # A version goes live (RETAKE_ON) only once its recordings are in audio/speaking,
 # so the page never falls back to the browser voice.
-RETAKE_ON = set()          # e.g. {("tech", 0)}
+RETAKE_ON = {("tech", 0)}   # 13 Nov 2026: recorded (Georgia K as Beatriz, Christopher as Tomás)
 RETAKE = {
 ("tech", 0): {
  "discuss": [
@@ -706,7 +706,7 @@ RETAKE = {
  "decide": [
   ("a", -1, [("i", "So, which one shall we choose?"), ("v", "For me, it's keeping in touch with friends."),
              ("d", "Feeling close to people matters a lot at our age, especially when someone moves away."), ("t", "Does that work for you?")]),
-  ("b", -1, [("i", "I see what you mean, but"), ("v", "I'd go for learning online."),
+  ("b", -1, [("i", "I see what you mean,"), ("v", "but I'd go for learning online."),
              ("d", "It helps everyone, not only people with friends far away. And it's useful for school now and for jobs later."),
              ("t", "Isn't that more important in the end?")]),
   ("a", -1, [("i", "That's a fair point."), ("v", "It probably helps more people, and that's what the question asks."),

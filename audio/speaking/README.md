@@ -26,3 +26,20 @@ Suggested order: the 85 examiner lines first (they set the tone of every task), 
 
 File names come from the words. If a line's words change in the data, it becomes a new
 line with a new file name, and the old recording simply stops being used.
+
+## The voices (ElevenLabs, Multilingual v2)
+
+Written down on 13 Nov 2026, so nobody has to search the history again.
+
+| Who | ElevenLabs voice | Settings |
+| --- | --- | --- |
+| Beatriz (Parts 3–4, default) | Georgia K · Warm, Engaging Customer Care | speed 1.00 · stability 50 · similarity 75 · style 0 · speaker boost |
+| Tomás (Parts 3–4, default) | Christopher · Smooth, calm and very English | speed 1.00 · stability 50 · similarity 75 · style 0 · speaker boost |
+| Maya (drills, Phrase Bank) | Samara X | speed 0.91 · style exaggeration 0 |
+| Drill partner | Julian | |
+| Examiner | not written down; by pitch and voice colour it matches Samara X (Maya), although LINES.csv says "male" | |
+
+A line's file is named from its words alone, so two speakers who say the same words share one
+recording. A retake recorded in one take per speaker (Part 3 Technology, 13 Nov) is cut into its
+pieces and joined into its own `turn-*.mp3` files directly, so it never overwrites a shared line.
+

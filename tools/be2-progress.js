@@ -131,7 +131,7 @@
     'uoe-part1': 'Use of English · Part 1', 'uoe-part2': 'Use of English · Part 2',
     'uoe-part3': 'Use of English · Part 3', 'uoe-part4': 'Use of English · Part 4',
     'which-task': 'Writing · Which task?', 'five-reviews': 'Your review in five',
-    'writing-sort': 'Writing · Sort it', 'writing-switch': 'Writing · Switch it', 'writing-finish': 'Writing · Finish it',
+    'writing-hear': 'Writing · Hear the phrases', 'writing-sort': 'Writing · Sort it', 'writing-switch': 'Writing · Switch it', 'writing-finish': 'Writing · Finish it',
     'sentence-spot': 'Sentence types · Spot it', 'sentence-upgrade': 'Sentence types · Upgrade',
     'cohesion': 'Cohesion tools', 'cohesion-patterns': 'Cohesion · Patterns',
     'speaking-p1': 'Speaking · Part 1', 'speaking-p2': 'Speaking · Part 2', 'speaking-p3': 'Speaking · Part 3', 'speaking-p4': 'Speaking · Part 4',

@@ -35,7 +35,7 @@ Written down on 13 Nov 2026, so nobody has to search the history again.
 | --- | --- | --- |
 | Beatriz (Parts 3–4, default) | Georgia K · Warm, Engaging Customer Care | speed 1.00 · stability 50 · similarity 75 · style 0 · speaker boost |
 | Tomás (Parts 3–4, default) | Christopher · Smooth, calm and very English | speed 1.00 · stability 50 · similarity 75 · style 0 · speaker boost |
-| Maya (drills, Phrase Bank) | Samara X | speed 0.91 · style exaggeration 0 |
+| Maya (drills, Phrase Bank) | Samara X · Warm, Trustworthy and Clear | speed 0.91 (the four Part 2 drills of 13 Nov: 0.80) · stability 50 · similarity 75 · style 0 · speaker boost |
 | Drill partner | Julian | |
 | Examiner | not written down; by pitch and voice colour it matches Samara X (Maya), although LINES.csv says "male" | |
 

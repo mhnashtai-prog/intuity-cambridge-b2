@@ -59,6 +59,29 @@ body{background:var(--bg,#F3EFE8)}
 .row.on{color:var(--h-ink)}
 .row b{font-weight:650;color:var(--h-ink);text-decoration:underline;text-decoration-color:var(--h-car);text-decoration-thickness:2px;text-underline-offset:3px}
 .gap{color:#B4ADA2;letter-spacing:.06em}
+.hp-bar{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
+.peek{min-height:44px;margin:.9rem 0 .2rem;padding:0 .6rem;border:0;background:none;color:#8E6238;font:650 .84rem/1 var(--f-body,'Geist',sans-serif);cursor:pointer}
+/* a row waiting for its phrase: a faint line where the words will land */
+.row.ghost{cursor:default;pointer-events:none}
+.row.ghost .tx{opacity:0}
+.row.ghost .ic{opacity:.25}
+.row .tx{transition:opacity .35s}
+.row.ghost{background:linear-gradient(rgba(20,17,14,.07),rgba(20,17,14,.07)) no-repeat 2.4rem 50%/62% 9px}
+.row.land{animation:land .9s ease-out}
+@keyframes land{0%{background-color:rgba(176,134,92,.22)}100%{background-color:transparent}}
+/* the poster that flies */
+.fly{position:fixed;left:50%;top:44%;z-index:950;width:min(30rem,calc(100% - 2rem));transform:translate(-50%,-50%) scale(.92);opacity:0;pointer-events:none;
+  transition:transform .38s cubic-bezier(.2,1.25,.4,1),opacity .3s}
+.fly.in{opacity:1;transform:translate(-50%,-50%)}
+.fly .fc-card{border:0;padding:18px 18px 16px;box-shadow:0 26px 60px -18px rgba(20,17,14,.42),0 6px 16px rgba(20,17,14,.14)}
+.fly .fc-k{justify-content:flex-start}
+.fly-n{margin-left:auto;letter-spacing:.1em}
+.fly .fc-t.ph{font-size:clamp(26px,8vw,34px);line-height:1.04}
+.fly .fc-t.ph .k{color:var(--h-car)} .fly .fc-t.ph .g{color:#C9C1B4}
+.fly .fc-study em{color:#5C5852}
+/* in flight the card drops its centring and its own transition, then glides */
+.fly.flying{transition:transform .62s cubic-bezier(.55,0,.25,1),opacity .62s cubic-bezier(.8,0,1,1);opacity:0}
+.fly.gone{opacity:0}
 .cta{display:flex;justify-content:center;margin:1.2rem 0 0}
 .cta button{min-height:48px;padding:0 1.5rem;border:0;border-radius:999px;background:var(--h-ink);color:var(--h-paper);font:700 .94rem/1 var(--f-body,'Geist',sans-serif);cursor:pointer;box-shadow:0 0 0 3px var(--bg,#F3EFE8),0 0 0 6px var(--h-car)}
 
@@ -199,7 +222,7 @@ function tts(text,done){
   const u=new SpeechSynthesisUtterance(text), v=voice(); if(v) u.voice=v;
   u.lang='en-GB'; u.rate=.86; u.onend=done; u.onerror=done; speechSynthesis.speak(u);
 }
-function hush(){ tok.dead=true; A.pause(); try{ speechSynthesis.cancel(); }catch(e){} document.querySelectorAll('.talk,.row.on').forEach(e=>e.classList.remove('talk','on')); }
+function hush(){ tok.dead=true; A.pause(); document.querySelectorAll('.fly').forEach(x=>x.remove()); try{ speechSynthesis.cancel(); }catch(e){} document.querySelectorAll('.talk,.row.on').forEach(e=>e.classList.remove('talk','on')); }
 async function say(p,btn){ hush(); const t=tok={dead:false}; if(btn) btn.classList.add('talk'); await speak(p,t); if(btn) btn.classList.remove('talk'); }
 
 /* the phrase as HTML: the key word marked, every gap a soft … */
@@ -229,27 +252,81 @@ function show(){
   window.scrollTo({top:0});
 }
 
-/* ═══ HEAR: the section as a study card, grouped by question where it has them ═══ */
+/* ═══ HEAR: the section as a study card, grouped by question where it has them.
+   HEAR THEM ALL (13 Nov 2026, the owner's design): the list starts empty, its
+   question labels already in place. Maya says the phrases without a break;
+   each one appears as a poster card while she says it, then flies down into
+   its place in the list, and the next one comes. At the end the whole section
+   is on the screen: the poster for attention, the list for the overview. ═══ */
+let HI=0;   /* the next phrase to fly in */
 function hear(){
   const groups=[]; S.items.forEach((it,i)=>{ const g=groups[groups.length-1]; if(it.q&&g&&g.q===it.q) g.items.push(i); else groups.push({q:it.q,type:it.type,items:[i]}); });
-  const row=i=>'<button type="button" class="row" data-i="'+i+'"><span class="ic">▶</span><span>'+phraseHTML(S.items[i])+'</span></button>';
+  const row=i=>'<button type="button" class="row ghost" data-i="'+i+'" tabindex="-1"><span class="ic">▶</span><span class="tx">'+phraseHTML(S.items[i])+'</span></button>';
+  HI=0;
   $('stage').innerHTML='<div class="fc-card list"><span class="fc-k">'+esc(T.name+' · '+T.kick)+'</span><span class="fc-t">'+esc(S.name)+'</span><span class="fc-bar" aria-hidden="true"></span>'+
-    '<span class="fc-study">'+S.items.length+' phrases'+(hasWhich()?', three for each kind of question':'')+'. Tap one for its card.</span>'+
-    '<button type="button" class="hp-all" id="all"><span class="pl">▶</span><span>Hear them all</span></button>'+
+    '<span class="fc-study" id="hint">'+S.items.length+' phrases'+(hasWhich()?', three for each kind of question':'')+'. Maya says them all; watch each one land.</span>'+
+    '<span class="hp-bar"><button type="button" class="hp-all" id="all"><span class="pl">▶</span><span>Hear them all</span></button><button type="button" class="peek" id="peek">Just show them</button></span>'+
     groups.map(g=>'<div class="grp">'+(g.q?'<div class="grp-t">'+esc(g.type)+'</div><p class="grp-q">'+esc(g.q)+'</p>':'')+g.items.map(row).join('')+'</div>').join('')+
     '</div><div class="cta"><button type="button" data-view="sort">Sort them from memory →</button></div>';
   $('all').onclick=playAll;
-  document.querySelectorAll('.row').forEach(b=>b.onclick=()=>{ card(+b.dataset.i); });
+  $('peek').onclick=()=>{ hush(); for(let i=HI;i<S.items.length;i++) land(i,true); HI=S.items.length; ended(); };
+  document.querySelectorAll('.row').forEach(b=>b.onclick=()=>{ if(!b.classList.contains('ghost')) card(+b.dataset.i); });
 }
+/* a phrase reaches the list: the row shows, can be tapped for its card */
+function land(i,quiet){
+  const r=document.querySelector('.row[data-i="'+i+'"]'); if(!r) return;
+  r.classList.remove('ghost'); r.removeAttribute('tabindex');
+  if(!quiet){ r.classList.add('land'); setTimeout(()=>r.classList.remove('land'),900); }
+}
+function ended(){
+  const b=$('all'); if(!b) return; delete b.dataset.on;
+  b.lastChild.textContent=HI>=S.items.length?'Hear them again':'Go on';
+  $('peek').hidden=HI>=S.items.length;
+  if(HI>=S.items.length) $('hint').textContent='All '+S.items.length+' are here. Tap one for its card: the key word, the traps, why.';
+}
+const pause=ms=>new Promise(r=>setTimeout(r,ms));
+const calm=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
 async function playAll(){
-  const b=$('all'); if(b.dataset.on){ hush(); delete b.dataset.on; b.lastChild.textContent='Hear them all'; return; }
-  hush(); const t=tok={dead:false}; b.dataset.on=1; b.lastChild.textContent='Stop';
-  for(let i=0;i<S.items.length&&!t.dead;i++){
-    const r=document.querySelector('.row[data-i="'+i+'"]'); document.querySelectorAll('.row.on').forEach(x=>x.classList.remove('on'));
-    if(r){ r.classList.add('on'); r.scrollIntoView({block:'nearest',behavior:'smooth'}); }
-    await speak(S.items[i].p,t); if(t.dead) break; await new Promise(r=>setTimeout(r,900));
+  const b=$('all');
+  if(b.dataset.on){ hush(); ended(); return; }                 /* Stop: what has landed stays */
+  if(HI>=S.items.length){ HI=0; document.querySelectorAll('.row').forEach(r=>{ r.classList.add('ghost'); r.setAttribute('tabindex','-1'); }); }
+  hush(); const t=tok={dead:false}; b.dataset.on=1; b.lastChild.textContent='Stop'; $('peek').hidden=true;
+  for(;HI<S.items.length&&!t.dead;HI++){
+    const i=HI, it=S.items[i], r=document.querySelector('.row[data-i="'+i+'"]');
+    if(r){ const y=r.getBoundingClientRect().top; if(y<innerHeight*.35||y>innerHeight*.8){ scrollBy({top:y-innerHeight*.62,behavior:calm?'auto':'smooth'}); await pause(380); } }
+    if(t.dead) break;
+    const f=flyCard(it,i);
+    await pause(60); f.classList.add('in');
+    await speak(it.p,t); if(t.dead) break;
+    await pause(420); if(t.dead) break;
+    await flyTo(f,r); land(i);
+    await pause(260);
   }
-  if(!t.dead){ document.querySelectorAll('.row.on').forEach(x=>x.classList.remove('on')); delete b.dataset.on; b.lastChild.textContent='Hear them all'; }
+  if(!t.dead){ HI=S.items.length; ended(); if(window.Cheer){ try{ Cheer.tick(b); }catch(e){} } }
+}
+/* the poster: FiveCard's hallmark, the phrase as its headline */
+function flyCard(it,i){
+  document.querySelectorAll('.fly').forEach(x=>x.remove());
+  const f=document.createElement('div'); f.className='fly'; f.setAttribute('aria-live','polite');
+  f.innerHTML='<span class="fc-card"><span class="fc-k">'+esc(T.name+' · '+S.name)+'<span class="fly-n">'+(i+1)+' / '+S.items.length+'</span></span>'+
+    '<span class="fc-t ph">'+phraseHTML(it,true)+'</span><span class="fc-bar" aria-hidden="true"></span>'+
+    (it.q?'<span class="fc-study"><em>'+esc(it.q)+'</em></span>':'')+'</span>';
+  document.body.appendChild(f);
+  return f;
+}
+/* the flight: the card shrinks onto its row's words, then hands over to them */
+function flyTo(f,r){
+  return new Promise(res=>{
+    const tx=r&&r.querySelector('.tx');
+    if(!tx||calm){ f.classList.add('gone'); setTimeout(()=>{ f.remove(); res(); },calm?250:300); return; }
+    const a=f.getBoundingClientRect(), z=tx.getBoundingClientRect(), k=Math.max(.12,z.width/a.width);
+    /* pin the card where it is, without its centring, then glide from there */
+    f.style.transition='none'; f.style.left=a.left+'px'; f.style.top=a.top+'px'; f.style.transform='none'; f.style.transformOrigin='0 0';
+    void f.offsetWidth;
+    f.classList.add('flying'); f.style.transition='';
+    f.style.transform='translate('+(z.left-a.left)+'px,'+(z.top-a.top)+'px) scale('+k+')';
+    setTimeout(()=>{ f.remove(); res(); },640);
+  });
 }
 
 /* ── THE PHRASE CARD: FiveCard's study card, the phrase as its headline ── */

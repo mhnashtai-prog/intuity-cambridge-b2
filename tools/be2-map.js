@@ -148,8 +148,8 @@ var TASKROOFS = {
   ]},
   practise:{ name:"Practise it", items:[
     {name:"Game", url:"skills/challenge/challenge.html?board=1&section=writing&topic=writing-{topic}"},
-    /* "Rounds", not "Practice": the door is Practise it (14 Nov 2026) */
-    {name:"Rounds", url:"skills/writing/practice.html?task={k}"},
+    /* "Exercises", not "Practice" or "Rounds": the door is Practise it (14 Nov 2026) */
+    {name:"Exercises", url:"skills/writing/practice.html?task={k}"},
     {name:"Recall", url:"skills/writing/recall.html?task={k}"}
   ]}
 };

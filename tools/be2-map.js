@@ -130,7 +130,7 @@ var ROOFS = {
   practise:{ name:"Practise", items:[
     {name:"Finish it", url:"skills/writing/practice.html"},
     {name:"Games", url:"skills/writing/games/essay-games-staged.html"},
-    {name:"Sentences", url:"index.html?openModal=writing&submenu=sentence",
+    {name:"Sentences", url:"index.html?openModal=writing&submenu=sentence&from=practise",
       match:["skills/writing/sentence-structure/sentence-builder.html","skills/writing/sentence-structure/paragraph-builder.html","skills/writing/sentence-structure/cohesion-drills.html","skills/writing/sentence-structure/sentence-type.html"]}
   ]},
   test:{ name:"Test yourself", items:[

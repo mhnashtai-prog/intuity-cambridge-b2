@@ -11,7 +11,7 @@
   function ready(fn) { if (document.readyState !== 'loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
   function withMap(fn) {
     if (window.BE2_MAP && BE2_MAP.roofOf) return fn();
-    var s = document.createElement('script'); s.src = '/tools/be2-map.js?v=5'; s.onload = fn; document.head.appendChild(s);
+    var s = document.createElement('script'); s.src = '/tools/be2-map.js?v=6'; s.onload = fn; document.head.appendChild(s);
   }
   var CSS = '.roof{display:flex;justify-content:center;gap:.8em;margin:3px 0 0;white-space:nowrap}' +
     '.roof a{position:relative;display:inline-block;padding:7px 0 6px;font:600 .58rem/1 "Geist Mono",ui-monospace,monospace;letter-spacing:.1em;' +

@@ -109,15 +109,7 @@ var SKILLS = {
   ]
 };
   
-var SUB = {
-  /* Writing tasks open the portfolio sheet now; Sentence Structure is the one sub-menu left */
-  sentence:{ title:"Sentence Structure", items:[
-    {name:"Sentence Builder", hint:"Join two ideas", url:"skills/writing/sentence-structure/sentence-builder.html"},
-    {name:"Paragraph Builder", hint:"Topic, reasons, link", url:"skills/writing/sentence-structure/paragraph-builder.html"},
-    {name:"Cohesion Tools", hint:"Link, refer, replace", url:"skills/writing/sentence-structure/cohesion-drills.html"},
-    {name:"Sentence Types", hint:"Simple to complex", url:"skills/writing/sentence-structure/sentence-type.html"}
-  ]}
-};
+var SUB = {};   /* 14 Nov 2026: Writing's last sub-menu (Sentence Structure) became two Practise tabs */
 
 /* THE ROOFS (14 Nov 2026): a menu tile opens the first page; the others are its tabs.
    match: other pages that light the same tab (the four Sentence Structure pages). */
@@ -130,8 +122,11 @@ var ROOFS = {
   practise:{ name:"Practise", items:[
     {name:"Finish it", url:"skills/writing/practice.html"},
     {name:"Games", url:"skills/writing/games/essay-games-staged.html"},
-    {name:"Sentences", url:"index.html?openModal=writing&submenu=sentence&from=practise",
-      match:["skills/writing/sentence-structure/sentence-builder.html","skills/writing/sentence-structure/paragraph-builder.html","skills/writing/sentence-structure/cohesion-drills.html","skills/writing/sentence-structure/sentence-type.html"]}
+    /* 14 Nov 2026: the Sentence Structure sub-menu is gone. Paragraph Builder and
+       Cohesion Tools retired (their useful parts moved to Games · Builder, Part 2
+       Master and Sentence Types · Upgrade); the two that stay are tabs of their own. */
+    {name:"Sentences", url:"skills/writing/sentence-structure/sentence-builder.html"},
+    {name:"Types", url:"skills/writing/sentence-structure/sentence-type.html"}
   ]},
   test:{ name:"Test yourself", items:[
     {name:"Revision", url:"skills/writing/the-question.html"},

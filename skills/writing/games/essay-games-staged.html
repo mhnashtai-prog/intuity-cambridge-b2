@@ -613,6 +613,10 @@
     font-size:16px;line-height:1.45;color:var(--poster-ink);margin-bottom:8px;transition:background .15s,transform .15s}
   .opt:active{transform:scale(.98)}
   .opt.chosen{background:var(--poster-ink);color:#161513}
+  #pickOpts .opt.slip{color:#B4532F;text-decoration:line-through;text-decoration-thickness:1.5px;animation:slipShake .35s}
+  #pickOpts .opt.slip .slip-why{display:block;margin-top:6px;font-size:.8rem;color:#8A847C;text-decoration:none;font-style:italic}
+  @keyframes slipShake{20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}
+  @media (prefers-reduced-motion:reduce){#pickOpts .opt.slip{animation:none}}
   .opt.chosen .frame{color:var(--star)}
   .opt.remove{background:none;color:var(--bad);text-align:center;font-weight:600}
 
@@ -1847,8 +1851,8 @@ body:not(.card-open) #hud{display:none}
   /* ═══ BUILDER — a paragraph from moves ═══ */
   const BD_MOVES=[{k:'reason',label:'Reason',hint:'Why it is so'},{k:'example',label:'Example',hint:'Show it happening'},
     {k:'result',label:'Result',hint:'What follows'},{k:'compare',label:'Compare',hint:'Set it beside something'},{k:'contrast',label:'Contrast',hint:'The other side'}];
-  let bdData=null, bdTopic=0, bdPick={}, bdOpen='', bdLast=null;
-  const bdStars=n=>n>=4?3:n>=3?2:n>=2?1:0;
+  let bdData=null, bdTopic=0, bdPick={}, bdOpen='', bdLast=null, bdDecoy={}, bdSlips=0;
+  const bdStars=n=>Math.max(0,(n>=4?3:n>=3?2:n>=2?1:0)-(bdSlips?1:0));
   function renderBuilder(){
     setHead('Build a paragraph','Builder');
     if(!bdData){
@@ -1863,7 +1867,7 @@ body:not(.card-open) #hud{display:none}
   }
   function bdNewTopic(advance){
     if(advance){ let n=bdTopic; while(n===bdTopic&&bdData.topics.length>1) n=Math.floor(Math.random()*bdData.topics.length); bdTopic=n; }
-    bdPick={}; bdLast=null;
+    bdPick={}; bdLast=null; bdDecoy={}; bdSlips=0;
     const pool=[]; Object.values(bdData.openers||{}).forEach(a=>pool.push(...a));
     bdOpen=pool.length?pool[Math.floor(Math.random()*pool.length)]:'';
   }
@@ -1874,7 +1878,8 @@ body:not(.card-open) #hud{display:none}
   }
   function bdBase(){
     let base=bdData.topics[bdTopic].base||'';
-    if(/that\s*$/i.test(bdOpen)) base=base.charAt(0).toLowerCase()+base.slice(1);
+    /* lower-case the topic sentence after "…that" or "Currently," (not I, not an acronym) */
+    if(/(that|,)\s*$/i.test(bdOpen) && !/^(I\b|[A-Z]{2})/.test(base)) base=base.charAt(0).toLowerCase()+base.slice(1);
     return {open:bdOpen,base};
   }
   function paintBuilder(){
@@ -1887,7 +1892,7 @@ body:not(.card-open) #hud{display:none}
         chosen.map(m=>' <span class="'+(m.k===bdLast?'add':'')+'">'+bdLight(t[m.k][bdPick[m.k]])+'</span>').join('')+'</div>'+
       '<div class="gauge"><div class="tk">'+BD_MOVES.map((m,i)=>'<i class="'+(i<chosen.length?'on':'')+(bdLast&&i===chosen.length-1?' new':'')+'"></i>').join('')+'</div>'+
         '<span>'+chosen.length+' of 5 moves</span></div>'+
-      '<p class="hint">Develop the idea. Two moves earn a star, three earn two, four or more earn all three.</p>'+
+      '<p class="hint">Develop the idea. Two moves earn a star, three earn two, four or more earn all three. Each list hides a line about another topic: picking it costs a star.</p>'+
       '<div class="group">'+BD_MOVES.map(m=>{
         const on=bdPick[m.k]!=null;
         return '<button class="row'+(on?' on':'')+'" type="button" data-m="'+m.k+'"><span class="k">'+m.label+'</span>'+
@@ -1900,11 +1905,34 @@ body:not(.card-open) #hud{display:none}
     $('bdNew').onclick=()=>{ bdNewTopic(true); stars=0; startStage(1); paintBuilder(); };
     $('bdDone').onclick=finishBuilder;
   }
+  /* ONE DOESN'T BELONG (14 Nov 2026, from the retired Paragraph Builder): every
+     sheet hides one line from another topic's same move. Spotting it is the
+     check the Builder lacked: picking it is a slip (the streak breaks, the line
+     goes to "Worth another look"); the stars are for the moves, less one a slip. */
+  function decoyFor(k){
+    if(bdDecoy[k]) return bdDecoy[k];
+    const others=bdData.topics.map((t,i)=>i).filter(i=>i!==bdTopic&&(bdData.topics[i][k]||[]).length);
+    if(!others.length) return null;
+    const ti=others[Math.floor(Math.random()*others.length)], arr=bdData.topics[ti][k];
+    return bdDecoy[k]={text:arr[Math.floor(Math.random()*arr.length)],from:bdData.topics[ti].title,at:Math.floor(Math.random()*((bdData.topics[bdTopic][k]||[]).length+1))};
+  }
   function openPick(k){
     const m=BD_MOVES.find(x=>x.k===k), opts=bdData.topics[bdTopic][k]||[];
-    $('pickTitle').textContent=m.label; $('pickHint').textContent=m.hint+'. Choose one.';
+    $('pickTitle').textContent=m.label; $('pickHint').textContent=m.hint+'. One line here is about another topic: choose one that fits.';
     const box=$('pickOpts'); box.innerHTML='';
+    const dec=bdPick[k]==null?decoyFor(k):null;
+    const addDecoy=()=>{
+      const b=document.createElement('button'); b.type='button'; b.className='opt'; b.innerHTML=bdLight(dec.text);
+      b.onclick=()=>{
+        if(b.classList.contains('slip')) return;
+        b.classList.add('slip'); b.setAttribute('aria-disabled','true');
+        b.insertAdjacentHTML('beforeend','<span class="slip-why">This one is about '+esc(dec.from)+', not '+esc(bdData.topics[bdTopic].title)+'.</span>');
+        bdSlips++; registerMiss(m.label+': “'+dec.text+'” belongs to '+dec.from+'.');
+      };
+      box.appendChild(b);
+    };
     opts.forEach((o,i)=>{
+      if(dec&&i===dec.at) addDecoy();
       const b=document.createElement('button'); b.type='button';
       b.className='opt'+(bdPick[k]===i?' chosen':''); b.innerHTML=bdLight(o);
       b.onclick=()=>{
@@ -1913,6 +1941,7 @@ body:not(.card-open) #hud{display:none}
       };
       box.appendChild(b);
     });
+    if(dec&&dec.at>=opts.length) addDecoy();
     if(bdPick[k]!=null){
       const r=document.createElement('button'); r.type='button'; r.className='opt remove'; r.textContent='Remove this move';
       r.onclick=()=>{ delete bdPick[k]; bdLast=null; closeSheet('pickSheet'); setTimeout(paintBuilder,220); };
@@ -2109,6 +2138,6 @@ body:not(.card-open) #hud{display:none}
   chooseType((urlType&&DATA[urlType])?urlType:'essays');
 })();
 </script>
-<script src="/tools/writing-roof.js?v=4" defer></script>
+<script src="/tools/writing-roof.js?v=6" defer></script>
 </body>
 </html>

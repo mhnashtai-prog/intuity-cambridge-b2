@@ -11,12 +11,12 @@
   function ready(fn) { if (document.readyState !== 'loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
   function withMap(fn) {
     if (window.BE2_MAP && BE2_MAP.roofOf) return fn();
-    var s = document.createElement('script'); s.src = '/tools/be2-map.js?v=6'; s.onload = fn; document.head.appendChild(s);
+    var s = document.createElement('script'); s.src = '/tools/be2-map.js?v=7'; s.onload = fn; document.head.appendChild(s);
   }
   /* THE WRITING TAB (14 Nov 2026): the section tab every Writing page already
      uses (Games, the Sentence pages, How it's marked): mono, 11px, bold, a
      caramel underline on the chosen one, no fill. */
-  var CSS = '.roof{display:flex;justify-content:center;gap:.25rem;margin:3px 0 0;white-space:nowrap}' +
+  var CSS = '.roof{display:flex;justify-content:center;gap:.25rem;margin:-.55rem 0 .35rem;white-space:nowrap;flex-wrap:wrap}' +
     '.roof a{position:relative;display:inline-block;padding:.5rem .4rem .35rem;font:700 .6875rem/1 "Geist Mono",ui-monospace,monospace;letter-spacing:.1em;' +
     'text-transform:uppercase;text-decoration:none;color:#9A948B;-webkit-tap-highlight-color:transparent}' +
     '.roof a.on{color:#14110E;box-shadow:inset 0 -2px 0 #C2956E}' +
@@ -36,7 +36,10 @@
     nav.innerHTML = hit.roof.items.map(function (x, i) {
       return '<a href="/' + x.url + '"' + (i === hit.i ? ' class="on" aria-current="page"' : '') + ' target="_top">' + x.name + '</a>';
     }).join('');
-    sub.parentNode.insertBefore(nav, sub.nextSibling);
+    /* the full width under the title line (four tabs do not fit beside the back
+       link); where a page has no title row, just under its subtitle */
+    var top = sub.closest('.header-top');
+    if (top) top.parentNode.insertBefore(nav, top.nextSibling); else sub.parentNode.insertBefore(nav, sub.nextSibling);
     document.documentElement.classList.add('roofed');
     return true;
   }

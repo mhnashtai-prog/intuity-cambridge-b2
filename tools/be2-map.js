@@ -159,7 +159,10 @@ var TASKVARS = {
 };
 /* A menu's round pill in its footer, apart from the tiles, as DAILY 5 is on the home page */
 var PILLS = {
-  writing:{ label:"Marking", aria:"How it's marked", url:"skills/writing/sentence-structure/band-descriptors.html" }
+  /* left: a second pill on the footer's left, not an activity (it is not counted):
+     the "How to use" clips, Maya's why and how of the whole Writing area (14 Nov 2026) */
+  writing:{ label:"Marking", aria:"How it's marked", url:"skills/writing/sentence-structure/band-descriptors.html",
+    left:{ label:"How to use", aria:"How to use Writing: two short clips", url:"skills/writing/how.html" } }
 };
 
   /* a page's identity for "explored": its path, plus the one query that picks

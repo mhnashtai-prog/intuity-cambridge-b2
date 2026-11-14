@@ -94,7 +94,10 @@ var SKILLS = {
        The Phrase Bank lives in Vocabulary only now (a different purpose), and
        How it's marked is the round pill in the menu's footer (PILLS below). */
     {group:"Help yourself", rule:true},
-    {name:"Look it up", glyph:"“", hint:"Models, study cards, compare", roof:"look"},
+    /* 14 Nov 2026 (evening): ONE HOME PER PAGE. Models and Study cards belong to a
+       task, so they live behind each task's "Learn it" door; Compare is what is left
+       of Look it up, and it is a tile of its own. */
+    {name:"Compare", glyph:"⇄", hint:"Formal or informal?", url:"skills/writing/compare.html"},
     {name:"Practise", glyph:"…", hint:"Finish it, games, sentences", roof:"practise"},
     {name:"Test yourself", glyph:"◆", hint:"Revision Round, Challenge", roof:"test"}
   ],
@@ -114,11 +117,6 @@ var SUB = {};   /* 14 Nov 2026: Writing's last sub-menu (Sentence Structure) bec
 /* THE ROOFS (14 Nov 2026): a menu tile opens the first page; the others are its tabs.
    match: other pages that light the same tab (the four Sentence Structure pages). */
 var ROOFS = {
-  look:{ name:"Look it up", items:[
-    {name:"Models", url:"skills/writing/build.html?type=essays&view=models", match:["skills/writing/build.html"]},
-    {name:"Study cards", url:"skills/writing/cue-cards-print.html?type=fa,op,ad,ps,ce,st", match:["skills/writing/cue-cards-print.html"]},
-    {name:"Compare", url:"skills/writing/compare.html"}
-  ]},
   practise:{ name:"Practise", items:[
     {name:"Finish it", url:"skills/writing/practice.html"},
     {name:"Games", url:"skills/writing/games/essay-games-staged.html"},
@@ -132,6 +130,26 @@ var ROOFS = {
     {name:"Revision", url:"skills/writing/the-question.html"},
     {name:"Challenge", url:"skills/challenge/challenge.html?section=writing"}
   ]}
+};
+/* THE TASK ROOFS (14 Nov 2026): a writing task's page has four doors; two of them
+   are roofs whose pages share tabs, as the menu's roofs do. {k} is the task
+   (essays, reviews…), {print} its study-card types, {topic} its Phrase game.
+   only: the tab exists for those tasks (Hear the phrases: essay, review, report). */
+var TASKROOFS = {
+  learn:{ name:"Learn it", items:[
+    {name:"In five", url:"skills/writing/five.html?task={k}"},
+    {name:"Models", url:"skills/writing/build.html?type={k}&view=models"},
+    {name:"Cards", url:"skills/writing/cue-cards-print.html?type={print}"}
+  ]},
+  phrases:{ name:"Phrases", items:[
+    {name:"Hear", url:"skills/writing/hear.html?task={k}", only:["essays","reviews","reports"]},
+    {name:"Game", url:"skills/challenge/challenge.html?board=1&section=writing&topic=writing-{topic}"},
+    {name:"Essentials", url:"skills/writing/sheet.html?task={k}"}
+  ]}
+};
+var TASKVARS = {
+  essays:{print:"fa,op,ad,ps,ce,st", topic:"essay"}, emails:{print:"ef-app,ef-req,ei-news,ei-advice", topic:"email"},
+  articles:{print:"ar", topic:"article"}, reviews:{print:"rv", topic:"review"}, reports:{print:"rp", topic:"report"}, story:{print:"sy", topic:"story"}
 };
 /* A menu's round pill in its footer, apart from the tiles, as DAILY 5 is on the home page */
 var PILLS = {
@@ -173,5 +191,25 @@ var PILLS = {
   }
   /* a roof's tile opens its first page */
   Object.keys(SKILLS).forEach(function (k) { SKILLS[k].forEach(function (it) { if (it.roof && !it.url && ROOFS[it.roof]) it.url = ROOFS[it.roof].items[0].url; }); });
-  g.BE2_MAP = { areas: AREAS, skills: SKILLS, sub: SUB, roofs: ROOFS, pills: PILLS, keyOf: keyOf, itemsOf: itemsOf, roofOf: roofOf };
+  /* the task a page is about, whatever its address calls it */
+  function taskOf(u) {
+    var p = u.pathname, q = u.searchParams, t = q.get('task') || q.get('type'), m;
+    if (/cue-cards-print/.test(p) && t) { var hit = null; Object.keys(TASKVARS).forEach(function (k) { if (TASKVARS[k].print.split(',').indexOf(t.split(',')[0]) >= 0) hit = k; }); return hit; }
+    if (/challenge\.html$/.test(p) && q.get('board') && (m = /^writing-(\w+)/.exec(q.get('topic') || ''))) {
+      var hit2 = null; Object.keys(TASKVARS).forEach(function (k) { if (TASKVARS[k].topic === m[1]) hit2 = k; }); return hit2; }
+    return TASKVARS[t] ? t : null;
+  }
+  function taskRoofOf(url) {
+    var u; try { u = new URL(url, location.origin + '/'); } catch (e) { return null; }
+    var k = taskOf(u); if (!k) return null;
+    var fill = function (s) { return s.replace(/\{k\}/g, k).replace(/\{print\}/g, TASKVARS[k].print).replace(/\{topic\}/g, TASKVARS[k].topic); };
+    var found = null;
+    Object.keys(TASKROOFS).forEach(function (r) {
+      var items = TASKROOFS[r].items.filter(function (x) { return !x.only || x.only.indexOf(k) >= 0; })
+        .map(function (x) { return { name: x.name, url: fill(x.url) }; });
+      items.forEach(function (x, i) { if (!found && new URL('/' + x.url, location.origin).pathname === u.pathname) found = { key: r, task: k, roof: { name: TASKROOFS[r].name, items: items }, i: i }; });
+    });
+    return found;
+  }
+  g.BE2_MAP = { areas: AREAS, skills: SKILLS, sub: SUB, roofs: ROOFS, taskRoofs: TASKROOFS, taskVars: TASKVARS, taskRoofOf: taskRoofOf, pills: PILLS, keyOf: keyOf, itemsOf: itemsOf, roofOf: roofOf };
 })(window);

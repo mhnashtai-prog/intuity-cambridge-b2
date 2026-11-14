@@ -11,7 +11,7 @@
   function ready(fn) { if (document.readyState !== 'loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
   function withMap(fn) {
     if (window.BE2_MAP && BE2_MAP.roofOf) return fn();
-    var s = document.createElement('script'); s.src = '/tools/be2-map.js?v=7'; s.onload = fn; document.head.appendChild(s);
+    var s = document.createElement('script'); s.src = '/tools/be2-map.js?v=8'; s.onload = fn; document.head.appendChild(s);
   }
   /* THE WRITING TAB (14 Nov 2026): the section tab every Writing page already
      uses (Games, the Sentence pages, How it's marked): mono, 11px, bold, a
@@ -26,9 +26,10 @@
     '.roofed .header-spacer:not(:has(button,a,svg)){visibility:hidden}' +
     '.roofed .app-subtitle,.roofed #ccSub{display:none!important}';
   function build() {
-    var hit = BE2_MAP.roofOf(location.pathname + location.search); if (!hit) return true;
+    var here = location.pathname + location.search;
+    var hit = (BE2_MAP.taskRoofOf && BE2_MAP.taskRoofOf(here)) || BE2_MAP.roofOf(here); if (!hit) return true;
     /* under the subtitle's place, or under INTUITY where a page has no subtitle (Models) */
-    var sub = document.querySelector('.app-subtitle, #ccSub') || document.querySelector('.header-title .app-title');
+    var sub = document.querySelector('.app-subtitle, #ccSub') || document.querySelector('.header-title .app-title') || document.querySelector('.topbar .brand');
     if (!sub) return false;   /* some pages draw their header late */
     if (document.querySelector('nav.roof')) return true;
     var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
@@ -38,7 +39,7 @@
     }).join('');
     /* the full width under the title line (four tabs do not fit beside the back
        link); where a page has no title row, just under its subtitle */
-    var top = sub.closest('.header-top');
+    var top = sub.closest('.header-top, .topbar');
     if (top) top.parentNode.insertBefore(nav, top.nextSibling); else sub.parentNode.insertBefore(nav, sub.nextSibling);
     document.documentElement.classList.add('roofed');
     return true;

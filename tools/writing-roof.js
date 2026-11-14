@@ -13,13 +13,17 @@
     if (window.BE2_MAP && BE2_MAP.roofOf) return fn();
     var s = document.createElement('script'); s.src = '/tools/be2-map.js?v=6'; s.onload = fn; document.head.appendChild(s);
   }
-  var CSS = '.roof{display:flex;justify-content:center;gap:.8em;margin:3px 0 0;white-space:nowrap}' +
-    '.roof a{position:relative;display:inline-block;padding:7px 0 6px;font:600 .58rem/1 "Geist Mono",ui-monospace,monospace;letter-spacing:.1em;' +
-    'text-transform:uppercase;text-decoration:none;color:#8A847C;-webkit-tap-highlight-color:transparent}' +
-    '.roof a::before{content:"";position:absolute;inset:-8px -6px}' +           /* a 44px-tall target without a taller line */
+  /* THE WRITING TAB (14 Nov 2026): the section tab every Writing page already
+     uses (Games, the Sentence pages, How it's marked): mono, 11px, bold, a
+     caramel underline on the chosen one, no fill. */
+  var CSS = '.roof{display:flex;justify-content:center;gap:.25rem;margin:3px 0 0;white-space:nowrap}' +
+    '.roof a{position:relative;display:inline-block;padding:.5rem .4rem .35rem;font:700 .6875rem/1 "Geist Mono",ui-monospace,monospace;letter-spacing:.1em;' +
+    'text-transform:uppercase;text-decoration:none;color:#9A948B;-webkit-tap-highlight-color:transparent}' +
     '.roof a.on{color:#14110E;box-shadow:inset 0 -2px 0 #C2956E}' +
-    '.roof a:focus-visible{outline:2px solid #C2956E;outline-offset:3px}' +
+    '.roof a:focus-visible{outline:2px solid #C2956E;outline-offset:2px}' +
     '.roofed .back-link{white-space:nowrap}' +
+    /* the Level badge makes way for the tabs (it said the same on every page) */
+    '.roofed .header-spacer:not(:has(button,a,svg)){visibility:hidden}' +
     '.roofed .app-subtitle,.roofed #ccSub{display:none!important}';
   function build() {
     var hit = BE2_MAP.roofOf(location.pathname + location.search); if (!hit) return true;

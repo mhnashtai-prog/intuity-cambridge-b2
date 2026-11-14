@@ -98,7 +98,9 @@ var SKILLS = {
        task, so they live behind each task's "Learn it" door; Compare is what is left
        of Look it up, and it is a tile of its own. */
     {name:"Compare", glyph:"⇄", hint:"Formal or informal?", url:"skills/writing/compare.html"},
-    {name:"Practise", glyph:"…", hint:"Finish it, games, sentences", roof:"practise"},
+    /* 14 Nov 2026: Practice (Finish it…) moved into each task's Practise it, so this
+       tile keeps what belongs to no one task, and a name that is not "Practise" twice */
+    {name:"Skills", glyph:"…", hint:"Games, sentences, sentence types", roof:"practise"},
     {name:"Test yourself", glyph:"◆", hint:"Revision Round, Challenge", roof:"test"}
   ],
   speaking:[
@@ -117,8 +119,7 @@ var SUB = {};   /* 14 Nov 2026: Writing's last sub-menu (Sentence Structure) bec
 /* THE ROOFS (14 Nov 2026): a menu tile opens the first page; the others are its tabs.
    match: other pages that light the same tab (the four Sentence Structure pages). */
 var ROOFS = {
-  practise:{ name:"Practise", items:[
-    {name:"Finish it", url:"skills/writing/practice.html"},
+  practise:{ name:"Skills", items:[
     {name:"Games", url:"skills/writing/games/essay-games-staged.html"},
     /* 14 Nov 2026: the Sentence Structure sub-menu is gone. Paragraph Builder and
        Cohesion Tools retired (their useful parts moved to Games · Builder, Part 2
@@ -136,15 +137,19 @@ var ROOFS = {
    (essays, reviews…), {print} its study-card types, {topic} its Phrase game.
    only: the tab exists for those tasks (Hear the phrases: essay, review, report). */
 var TASKROOFS = {
+  /* 14 Nov 2026 (night), the owner: Hear the phrases overwhelmed and is no longer
+     needed (its Sort and Write rounds repeated the Game and Recall); Essentials is
+     read and kept, so it joins Learn it; the doing goes behind Practise it. */
   learn:{ name:"Learn it", items:[
     {name:"In five", url:"skills/writing/five.html?task={k}"},
     {name:"Models", url:"skills/writing/build.html?type={k}&view=models"},
-    {name:"Cards", url:"skills/writing/cue-cards-print.html?type={print}"}
-  ]},
-  phrases:{ name:"Phrases", items:[
-    {name:"Hear", url:"skills/writing/hear.html?task={k}", only:["essays","reviews","reports"]},
-    {name:"Game", url:"skills/challenge/challenge.html?board=1&section=writing&topic=writing-{topic}"},
+    {name:"Cards", url:"skills/writing/cue-cards-print.html?type={print}"},
     {name:"Essentials", url:"skills/writing/sheet.html?task={k}"}
+  ]},
+  practise:{ name:"Practise it", items:[
+    {name:"Game", url:"skills/challenge/challenge.html?board=1&section=writing&topic=writing-{topic}"},
+    {name:"Practice", url:"skills/writing/practice.html?task={k}"},
+    {name:"Recall", url:"skills/writing/recall.html?task={k}"}
   ]}
 };
 var TASKVARS = {

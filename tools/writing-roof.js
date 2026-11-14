@@ -11,7 +11,7 @@
   function ready(fn) { if (document.readyState !== 'loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
   function withMap(fn) {
     if (window.BE2_MAP && BE2_MAP.roofOf) return fn();
-    var s = document.createElement('script'); s.src = '/tools/be2-map.js?v=8'; s.onload = fn; document.head.appendChild(s);
+    var s = document.createElement('script'); s.src = '/tools/be2-map.js?v=9'; s.onload = fn; document.head.appendChild(s);
   }
   /* THE WRITING TAB (14 Nov 2026): the section tab every Writing page already
      uses (Games, the Sentence pages, How it's marked): mono, 11px, bold, a
@@ -59,7 +59,13 @@
         /* the house header is there: back to the task, and its second line names the
            task (kept so, since some pages rewrite it after loading); a picker already does */
         var bl = own.querySelector('.back-link');
-        if (bl) { bl.href = '/skills/writing/gate.html?task=' + hit.task; bl.textContent = '← ' + NAME[hit.task].replace(' / Letter', ''); bl.onclick = null; }
+        if (bl) {
+          var home = '/skills/writing/gate.html?task=' + hit.task, word = '← ' + NAME[hit.task].replace(' / Letter', '');
+          var hold = function () { if (bl.getAttribute('href') !== home) bl.setAttribute('href', home); if (bl.textContent !== word) bl.textContent = word; };
+          bl.onclick = null; hold();
+          /* some pages set their own back link after loading (Recall): the task stays home */
+          new MutationObserver(hold).observe(bl, { attributes: true, attributeFilter: ['href'], childList: true, characterData: true, subtree: true });
+        }
         var s2 = own.querySelector('.app-subtitle');
         if (s2 && !s2.querySelector('button')) {
           var keep = function () { if (s2.textContent !== label) s2.textContent = label; };

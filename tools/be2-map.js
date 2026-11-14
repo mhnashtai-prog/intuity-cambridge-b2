@@ -87,25 +87,16 @@ var SKILLS = {
     {name:"Review", glyph:"★", url:"skills/writing/gate.html?task=reviews"},
     {name:"Story", glyph:"✎", exam:"schools", url:"skills/writing/gate.html?task=story"},
     {name:"Report", glyph:"≡", exam:"standard", url:"skills/writing/gate.html?task=reports"},
-    /* A STUDY REFERENCE (7 Nov 2026). The exam is on paper and the teacher
-       marks it, so this menu is where a student looks things up before and
-       after writing. Look it up → practise → test, each ring with a short
-       promise under its name; the Challenge is the finale, and the one
-       caramel ring on the menu. */
-    {group:"Look it up", rule:true},
-    {name:"Phrase Bank", glyph:"“", hint:"Find a phrase", url:"skills/writing/phrase-bank.html"},
-    {name:"Compare", glyph:"⇄", hint:"Formal or informal?", url:"skills/writing/compare.html"},
-    {name:"How it's marked", glyph:"✓", hint:"Bands & paper tips", url:"skills/writing/sentence-structure/band-descriptors.html"},
-    {group:"Practise", rule:true},
-    /* PRACTICE (8 Nov 2026): finish a bank phrase about something you know */
-    {name:"Practice", glyph:"…", hint:"Finish the sentence", url:"skills/writing/practice.html"},
-    {name:"Games", glyph:"▶\uFE0E", hint:"Put a text in order", url:"skills/writing/games/essay-games-staged.html"},
-    {name:"Sentence Structure", glyph:"›", hint:"Better sentences", sub:"sentence"},
-    /* 8 Nov 2026: the old generator became Build your own; this tile opens its Ready view, on the same Essay 1 */
-    {name:"Model answers", glyph:"◧", hint:"Read a ready one", url:"skills/writing/build.html?type=essays&view=models"},
-    {group:"Test yourself", rule:true},
-    {name:"Revision Round", glyph:"?", hint:"14 rounds, scored", url:"skills/writing/the-question.html"},
-    {name:"The Ultimate Challenge", glyph:"◆", banner:"Every introduction, body and conclusion, all six tasks", url:"skills/challenge/challenge.html?section=writing"}
+    /* ONE SCREEN, NINE TILES (14 Nov 2026, the owner: fifteen tiles overwhelmed
+       pupils). The six tasks stay; everything else lives under three roofs,
+       one tile each. A roof's pages share a row of tabs in their title line
+       (tools/writing-roof.js), so moving between them feels like one page.
+       The Phrase Bank lives in Vocabulary only now (a different purpose), and
+       How it's marked is the round pill in the menu's footer (PILLS below). */
+    {group:"Help yourself", rule:true},
+    {name:"Look it up", glyph:"“", hint:"Models, study cards, compare", roof:"look"},
+    {name:"Practise", glyph:"…", hint:"Finish it, games, sentences", roof:"practise"},
+    {name:"Test yourself", glyph:"◆", hint:"Revision Round, Challenge", roof:"test"}
   ],
   speaking:[
     {name:"Practice Hub", noNum:true, url:"skills/speaking/speaking-format.html"},
@@ -128,6 +119,30 @@ var SUB = {
   ]}
 };
 
+/* THE ROOFS (14 Nov 2026): a menu tile opens the first page; the others are its tabs.
+   match: other pages that light the same tab (the four Sentence Structure pages). */
+var ROOFS = {
+  look:{ name:"Look it up", items:[
+    {name:"Models", url:"skills/writing/build.html?type=essays&view=models", match:["skills/writing/build.html"]},
+    {name:"Study cards", url:"skills/writing/cue-cards-print.html?type=fa,op,ad,ps,ce,st", match:["skills/writing/cue-cards-print.html"]},
+    {name:"Compare", url:"skills/writing/compare.html"}
+  ]},
+  practise:{ name:"Practise", items:[
+    {name:"Finish it", url:"skills/writing/practice.html"},
+    {name:"Games", url:"skills/writing/games/essay-games-staged.html"},
+    {name:"Sentences", url:"index.html?openModal=writing&submenu=sentence",
+      match:["skills/writing/sentence-structure/sentence-builder.html","skills/writing/sentence-structure/paragraph-builder.html","skills/writing/sentence-structure/cohesion-drills.html","skills/writing/sentence-structure/sentence-type.html"]}
+  ]},
+  test:{ name:"Test yourself", items:[
+    {name:"Revision", url:"skills/writing/the-question.html"},
+    {name:"Challenge", url:"skills/challenge/challenge.html?section=writing"}
+  ]}
+};
+/* A menu's round pill in its footer, apart from the tiles, as DAILY 5 is on the home page */
+var PILLS = {
+  writing:{ label:"Marking", aria:"How it's marked", url:"skills/writing/sentence-structure/band-descriptors.html" }
+};
+
   /* a page's identity for "explored": its path, plus the one query that picks
      a different page out of the same file (a writing task, a challenge board…) */
   var KEEP = ['task', 'section', 'topic', 'type', 'from'];
@@ -142,9 +157,26 @@ var SUB = {
     var out = [];
     (SKILLS[key] || []).forEach(function (it) {
       if (it.sub && SUB[it.sub]) SUB[it.sub].items.forEach(function (x) { out.push({ name: x.name, url: '/' + x.url, key: keyOf('/' + x.url) }); });
+      else if (it.roof && ROOFS[it.roof]) ROOFS[it.roof].items.forEach(function (x) {
+        if (x.match && x.url.indexOf('index.html') === 0) x.match.forEach(function (u) { out.push({ name: x.name, url: '/' + u, key: keyOf('/' + u) }); });
+        else out.push({ name: x.name, url: '/' + x.url, key: keyOf('/' + x.url) }); });
       else if (it.url) out.push({ name: it.name, url: '/' + it.url, key: keyOf('/' + it.url) });
     });
+    if (PILLS[key]) out.push({ name: PILLS[key].aria, url: '/' + PILLS[key].url, key: keyOf('/' + PILLS[key].url) });
     return out;
   }
-  g.BE2_MAP = { areas: AREAS, skills: SKILLS, sub: SUB, keyOf: keyOf, itemsOf: itemsOf };
+  /* the roof a page sits under, and which of its tabs it is: the tab's own
+     address, or any page in its match list (whatever the query) */
+  function roofOf(url) {
+    var k = keyOf(url), path = k.split('?')[0], hit = null;
+    Object.keys(ROOFS).forEach(function (r) { ROOFS[r].items.forEach(function (x, i) {
+      if (hit) return;
+      var mine = keyOf('/' + x.url) === k || (x.match || []).some(function (u) { return keyOf('/' + u).split('?')[0] === path; });
+      if (mine) hit = { key: r, roof: ROOFS[r], i: i };
+    }); });
+    return hit;
+  }
+  /* a roof's tile opens its first page */
+  Object.keys(SKILLS).forEach(function (k) { SKILLS[k].forEach(function (it) { if (it.roof && !it.url && ROOFS[it.roof]) it.url = ROOFS[it.roof].items[0].url; }); });
+  g.BE2_MAP = { areas: AREAS, skills: SKILLS, sub: SUB, roofs: ROOFS, pills: PILLS, keyOf: keyOf, itemsOf: itemsOf, roofOf: roofOf };
 })(window);

@@ -196,7 +196,7 @@ const STOP=new Set('about after again against because before being between could
 const WEAK=new Set('good nice bad big very lots get got'.split(' '));   /* short words a B2 writer leans on */
 function repeats(t){ const c={}; (t.toLowerCase().match(/[a-z']+/g)||[]).forEach(w=>{ if(w.length>=5&&!STOP.has(w)||WEAK.has(w)) c[w]=(c[w]||0)+1; }); return Object.entries(c).filter(e=>e[1]>=3).sort((a,b)=>b[1]-a[1]).slice(0,2); }
 /* 's after a pronoun is always a contraction (it's, there's); after a name it may be a possessive (Maria's), so those are left alone */
-function contractions(t){ const m=t.match(/\b(?:\w+(?:n't|n’t|'re|’re|'ve|’ve|'ll|’ll|'m|’m|'d|’d)|(?:it|there|that|what|let|he|she|who|here|where)(?:'s|’s))\b/gi)||[]; return [...new Set(m.map(x=>x.toLowerCase()))].slice(0,2); }
+function contractions(t){ const m=t.match(/\b(?:\w+(?:n't|n’t|'re|’re|'ve|’ve|'ll|’ll|'m|’m|'d|’d)|(?:it|there|that|what|let|he|she|who|here|where)(?:'s|’s))\b/gi)||[]; return [...new Set(m.map(x=>x.toLowerCase()))]; }
 function covers(t,note){ const low=t.toLowerCase(); return String(note).toLowerCase().replace(/[^a-z ]/g,' ').split(/\s+/).filter(w=>w.length>=4).some(w=>low.indexOf(w.slice(0,Math.max(4,w.length-2)))>=0); }
 /* ACCURACY (15 Nov 2026, a learner's review: "the feedback stops before grammar").
    Only errors a pattern can catch without false alarms, the ones B2 writers make
@@ -216,7 +216,10 @@ function grammar(t){
     add('there','<em>'+esc(m[0])+'</em>: with a plural, write <em>there are</em> (or <em>there were</em>).'); });
   R("\\bthere(?:'s|’s| is| was)\\s+(many|several)\\b",m=>add('there','<em>'+esc(m[0])+'</em>: with a plural, write <em>there are</em> (or <em>there were</em>).'));
   /* more + a short adjective, then than or the end of the phrase */
-  R("\\bmore\\s+("+SHORT+")(?=\\s+than\\b|\\s*[.,;:!?]|\\s+and\\b|\\s+or\\b)",m=>add('more '+m[1].toLowerCase(),'<em>'+esc(m[0])+'</em>: short adjectives take -er: <em>'+cmp(m[1].toLowerCase())+'</em>.'));
+  /* the word after the adjective decides: "more simple in the past" is a slip, "more good things" is
+     right, and "do more good in the world" uses good as a noun, so good/bad skip in and for */
+  R("\\bmore\\s+("+SHORT+")(?=\\s+(?:than|and|or|to|now|today|nowadays|these days|because|at|in|for)\\b|\\s*[.,;:!?]|\\s*$)",m=>{
+    if(/^(good|bad)$/i.test(m[1])&&/^\s+(in|for|at)\b/i.test(t.slice(m.index+m[0].length))) return;add('more '+m[1].toLowerCase(),'<em>'+esc(m[0])+'</em>: short adjectives take -er: <em>'+cmp(m[1].toLowerCase())+'</em>.'); });
   R("\\b(more better|more worse|most best|the most good|the most bad)\\b",m=>add(m[1].toLowerCase(),'<em>'+esc(m[0])+'</em>: say <em>'+({'more better':'better','more worse':'worse','most best':'best','the most good':'the best','the most bad':'the worst'})[m[1].toLowerCase()]+'</em>.'));
   /* a linker that opens a sentence wants a comma */
   const cm=[]; R("(?:^|[.!?]\\s+|\\n\\s*)("+LINK+")\\s+(?=[A-Za-z])",m=>{ if(cm.indexOf(m[1])<0) cm.push(m[1]); });
@@ -230,7 +233,7 @@ function lookHTML(t){
   const out=[];
   if(K==='essays') (Q.list||[]).filter(x=>!/own idea/i.test(x)&&!covers(t,x)).forEach(x=>out.push('Did you write about <em>'+esc(x)+'</em>?'));
   grammar(t).forEach(x=>out.push(x));
-  if(FORMAL(K)||K==='emails'&&!Q.informal) contractions(t).forEach(x=>out.push('<em>'+esc(x)+'</em>: write it in full in formal writing.'));
+  if(FORMAL(K)||K==='emails'&&!Q.informal) { const c=contractions(t); if(c.length) out.push(c.slice(0,3).map(x=>'<em>'+esc(x)+'</em>').join(', ')+(c.length>3?' and '+(c.length-3)+' more':'')+': write '+(c.length>1?'them':'it')+' in full in formal writing.'); }
   repeats(t).forEach(([w,c])=>out.push('<em>'+esc(w)+'</em> used '+c+' times: try another word once.'));
   return out.length?'<div class="look"><b class="h">Look again</b>'+out.slice(0,8).map(x=>'<p>'+x+'</p>').join('')+'</div>':'';
 }

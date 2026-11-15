@@ -120,6 +120,11 @@ body{background:var(--bg,#F3EFE8)}
 .look b.h{display:block;font:600 .6rem/1 'Geist Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--w-dim);margin-bottom:.45rem}
 .look p{margin:.25rem 0;font-size:.9rem;line-height:1.4}
 .look p em{font-style:normal;font-weight:650}
+.five5{margin:.4rem 6px 0;padding:.75rem .9rem;text-align:left}
+.five5 b.h{display:block;font:600 .6rem/1 'Geist Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--w-dim);margin-bottom:.45rem}
+.five5 p{margin:.25rem 0;font-size:.9rem;line-height:1.4}
+.five5 .got{color:#4F7A63}.five5 .miss{color:#8A847C}
+.five5 a{display:inline-block;margin-top:.35rem;padding:.4rem 0;font:700 .6875rem/1 'Geist Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#5C5852;text-decoration:none}
 .chk{margin:1.6rem 6px 0;text-align:left}
 .chk h2{font-family:'Anton',Impact,sans-serif;font-weight:400;font-size:1.5rem;text-transform:uppercase;margin:0 0 .25rem;display:flex;align-items:center;gap:.6rem}
 .chk h2::before{content:'';width:26px;height:10px;background:var(--w-car);flex:none}
@@ -227,7 +232,35 @@ function grammar(t){
   /* people is / everyone are */
   R("\\bpeople\\s+(is|was|has)\\b",m=>add('people','<em>'+esc(m[0])+'</em>: <em>people</em> takes a plural verb: <em>people '+({is:'are',was:'were',has:'have'})[m[1].toLowerCase()]+'</em>.'));
   R("\\b(everyone|everybody|someone|somebody|nobody|no one)\\s+(are|were|have)\\b",m=>add('everyone','<em>'+esc(m[0])+'</em>: <em>'+esc(m[1].toLowerCase())+'</em> takes a singular verb: <em>'+m[1].toLowerCase()+' '+({are:'is',were:'was',have:'has'})[m[2].toLowerCase()]+'</em>.'));
+  /* fixed forms a first language bends (15 Nov 2026): each is wrong wherever it appears */
+  [["\\bI am agree\\b","I agree"],["\\bI'm agree\\b","I agree"],["\\bdepends? of\\b","depend on"],["\\bdiscuss about\\b","discuss"],["\\bIn the other hand\\b","On the other hand"],
+   ["\\bOn my opinion\\b","In my opinion"],["\\bAccording to me\\b","In my opinion"],["\\bmore easier\\b","easier"],["\\bmore cheaper\\b","cheaper"],["\\ban useful\\b","a useful"],
+   ["\\bexplain me\\b","explain to me"],["\\bpeople (thinks|says|wants|likes|needs|believes)\\b","people + verb without -s"],["\\bthe most of\\b","most of"],["\\bsince (two|three|four|five|many|several|\\d+) (years|months|weeks|days)\\b","for … years"]]
+   .forEach(([re,fix])=>R(re,m=>add('l1 '+fix,'<em>'+esc(m[0])+'</em>: say <em>'+(fix==='depend on'?m[0].replace(/of$/i,'on'):fix==='people + verb without -s'?'people '+m[1].replace(/s$/,'').replace(/ie$/,'ie'):fix==='for … years'?'for '+m[1]+' '+m[2]:fix)+'</em>.')));
   return o;
+}
+/* YOUR FIVE, RECALLED (15 Nov 2026, the owner: a study app, so Write it is where the study
+   is tested). The pupil's own five from In five (step 1): which of them came back from
+   memory in this answer, and which to practise again. Only the fixed part of each frame
+   is looked for (the topic and the pupil's ideas change), in order, ignoring case and
+   punctuation. Nothing shows until the pupil has started In five. */
+let FIVE=null;
+const norm5=x=>' '+String(x).toLowerCase().replace(/[’']/g,"'").replace(/[^a-z' ]+/g,' ').replace(/\s+/g,' ').trim()+' ';
+function fiveLoad(){
+  try{ const st=JSON.parse(localStorage.getItem('be2.five.'+K)||'null'); if(!st||!st.slots||!st.slots.some(x=>x&&(x.rung>1||x.own))) return;
+    fetch('/data/writing/five/'+K+'.json').then(r=>r.ok?r.json():null).then(d=>{ if(!d) return;
+      FIVE=d.slots.map((sl,i)=>{ const x=st.slots[i]||{}; if(x.pick==='own') return null;
+        const w=sl.ways[typeof x.pick==='number'?x.pick:0]; if(!w) return null;
+        const parts=w.t.replace(/…|\.\.\./g,'|').split(/\{[^}]*\}|\|/).map(p=>norm5(p).trim()).filter(p=>p.split(' ').length>=2);
+        return parts.length?{label:sl.label||sl.part,show:w.t.replace(/\{[^}]*\}/g,'…').replace(/\s*…\s*$/,' …'),parts}:null; }).filter(Boolean);
+    }).catch(()=>{}); }catch(e){}
+}
+function fiveHTML(t){
+  if(!FIVE||!FIVE.length) return '';
+  const T=norm5(t), got=[], miss=[];
+  FIVE.forEach(f=>{ let at=0, ok=true; for(const p of f.parts){ const i=T.indexOf(' '+p+' ',at); if(i<0){ ok=false; break; } at=i+p.length; } (ok?got:miss).push(f); });
+  return '<div class="five5"><b class="h">Your five</b><p class="'+(miss.length?'':'got')+'">'+got.length+' of '+FIVE.length+' from memory'+(got.length===FIVE.length?' ✓':'')+'</p>'+
+    (miss.length?'<p class="miss">To practise: '+miss.map(f=>'<em>'+esc(f.show)+'</em>').join(' · ')+'</p><a href="/skills/writing/five.html?task='+K+'">Back to In five →</a>':'')+'</div>';
 }
 function lookHTML(t){
   const out=[];
@@ -239,6 +272,7 @@ function lookHTML(t){
 }
 const SHEET_OF={'for-against':'fa',opinion:'op','agree-disagree':'ad','problem-solution':'ps','cause-effect':'ce','speculation-trends':'st'};
 const K=TASKS[P.get('task')]?P.get('task'):'essays', T=TASKS[K];
+setTimeout(fiveLoad,0);
 $('back').textContent='← '+T.name.replace(' / Letter',''); $('back').href='/skills/writing/gate.html?task='+K;
 document.title='INTUITY — Write it · '+T.name;
 const store={get(k,d){ try{ const v=localStorage.getItem(k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
@@ -368,7 +402,7 @@ function finish(){
   const ticks=new Set(D.ticks||[]);
   $('stage').innerHTML='<section class="res"><p class="n" id="num">'+n+'</p><p class="u">words</p>'+
     '<div class="facts"><span class="'+(inRange?'ok':'no')+'">'+(inRange?'✓ In range':n<MIN?(MIN-n)+' short':(n-MAX)+' over')+'</span>'+
-    '<span class="'+(pc>=needP?'ok':'no')+'">'+pc+' paragraph'+(pc===1?'':'s')+'</span></div>'+lookHTML(t)+'</section>'+
+    '<span class="'+(pc>=needP?'ok':'no')+'">'+pc+' paragraph'+(pc===1?'':'s')+'</span></div>'+lookHTML(t)+fiveHTML(t)+'</section>'+
     '<section class="chk"><h2>Check it</h2><p class="how">Read your '+esc(T.word)+' once more, then tick each line that is true. Be honest: the one you can’t tick is where to start next time.</p>'+
       T.checks.map((c,i)=>'<button type="button" class="tick'+(ticks.has(i)?' on':'')+'" data-i="'+i+'" role="checkbox" aria-checked="'+ticks.has(i)+'"><i class="mk"></i><span><b>'+esc(c[0])+'</b>'+esc(c[1])+'</span></button>').join('')+
       '<div class="next" id="next"></div></section>'+

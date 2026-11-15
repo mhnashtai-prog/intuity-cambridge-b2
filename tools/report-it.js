@@ -84,6 +84,13 @@
     }
     pill.hidden = false; requestAnimationFrame(function () { pill.classList.add('on'); });
     clearTimeout(pillT); pillT = setTimeout(hidePill, SHOW_MS);
+    /* it never sits over the page the pupil is reading (15 Nov 2026, a learner's review):
+       a scroll, or a tap anywhere else, sends it away */
+    setTimeout(function () {
+      var off = function (e) { if (e && e.target === pill) return; hidePill();
+        removeEventListener('scroll', off, true); removeEventListener('pointerdown', off, true); };
+      addEventListener('scroll', off, { capture: true, passive: true }); addEventListener('pointerdown', off, true);
+    }, 400);
   }
   function hidePill() { if (!pill) return; pill.classList.remove('on'); setTimeout(function () { if (pill && !pill.classList.contains('on')) pill.hidden = true; }, 260); }
 

@@ -193,6 +193,14 @@
     let inputDebounceTimers = {};
     let hintsUsed = new Set();
 
+    /* EXAM NUMBERS (16 Nov 2026, a learner's review): an 8-gap text is the
+       exam's Part 2, questions 9-16, so its gaps carry those numbers; longer
+       practice texts keep 1, 2, 3. Display only: the data keys are unchanged. */
+    function shownNo(num) {
+      const t = allTests[currentTest]; if (!t || String(num) === '0') return num;
+      const n = Object.keys(t.gaps).filter(k => !t.gaps[k].isExample).length;
+      return n === 8 ? 8 + (+num) : num;
+    }
     function sanitizeText(text) {
       const div = document.createElement('div');
       div.textContent = text;
@@ -454,7 +462,7 @@
             }
             
             if (hintsUsed.has(num)) cls += ' hint-active';
-            const wrapper = `<span class="gap-wrapper"><span class="gap-number">(${num})</span><input type="text" class="${cls}" data-gap="${num}" value="${displayValue}" ${isReadonly ? 'readonly' : ''} autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Gap ${num}"></span>`;
+            const wrapper = `<span class="gap-wrapper"><span class="gap-number">(${shownNo(num)})</span><input type="text" class="${cls}" data-gap="${num}" value="${displayValue}" ${isReadonly ? 'readonly' : ''} autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Gap ${num}"></span>`;
             html = html.replace(`{{${num}}}`, wrapper);
           });
         }
@@ -560,7 +568,7 @@
         }
         
         if (hintsUsed.has(num.toString())) cls += ' hint-active';
-        const wrapper = `<span class="gap-wrapper"><span class="gap-number">(${num})</span><input type="text" class="${cls}" data-gap="${num}" value="${displayValue}" ${isReadonly ? 'readonly' : ''} autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></span>`;
+        const wrapper = `<span class="gap-wrapper"><span class="gap-number">(${shownNo(num)})</span><input type="text" class="${cls}" data-gap="${num}" value="${displayValue}" ${isReadonly ? 'readonly' : ''} autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></span>`;
         sectionHtml = sectionHtml.replace(`{{${num}}}`, wrapper);
       });
       const label = document.createElement('div');
@@ -720,7 +728,7 @@
       if (input) {
         input.classList.add('hint-active');
         input.focus();
-        showToast(`Gap ${randomGap}: Starts with "${hint.toUpperCase()}"`, 3500);
+        showToast(`Gap ${shownNo(randomGap)}: Starts with "${hint.toUpperCase()}"`, 3500);
       }
     }
 
@@ -775,8 +783,11 @@
       }
     }
 
+    /* PRACTISED TEXTS (16 Nov 2026): the full tests share their texts with the practice pages, so a text marked here is noted, and the full test can say its score will read high. */
+    function seenMark(file, idx){ try { var k=String(file||'').split('/').pop()+'#'+idx, s=JSON.parse(localStorage.getItem('intuity.seen.v1')||'{}')||{}; s[k]=Date.now(); localStorage.setItem('intuity.seen.v1', JSON.stringify(s)); } catch (e) {} }
     function submitAndScore() {
       const test = allTests[currentTest];
+      seenMark(currentDataset, currentTest);
       let correct = 0;
       const completableGaps = Object.keys(test.gaps).filter(num => !test.gaps[num].isExample);
       const total = completableGaps.length;
@@ -794,7 +805,7 @@
         const g = test.gaps[num], m = '{{' + num + '}}';
         const prompt = Be2.around(test.text, m).replace(m, '_____').replace(/\{\{\d+\}\}/g, '\u2026');
         Be2.answer('uoe-part2', { id: (test.id || ('t' + currentTest)) + '-' + num, prompt, answer: String(g.answer).split('/')[0],
-          given: ua, correct: answersMatch(ua, g.answer), accept: String(g.answer).split('/'), rule: AREA_TIP[g.area] ? AREA_TIP[g.area][0] + '. ' + AREA_TIP[g.area][1] : (g.area ? 'What the gap needs: ' + g.area : ''), href: location.pathname });
+          given: ua, correct: answersMatch(ua, g.answer), accept: String(g.answer).split('/'), rule: g.why ? g.why : (AREA_TIP[g.area] ? AREA_TIP[g.area][0] + '. ' + AREA_TIP[g.area][1] : (g.area ? 'What the gap needs: ' + g.area : '')), href: location.pathname });
       }); } catch (e) {}
       const percentage = Math.round((correct / total) * 100);
       const existingScore = testScores[`test${currentTest}`];
@@ -840,6 +851,43 @@
       structure: ['A grammar pattern', 'The gap completes a structure: it, there, so \u2026 that, too, enough, what (as in What I need is\u2026).', 'phrase'],
       'gerund-infinitive': ['Part of a verb pattern', 'The verb before the gap decides the pattern: to + verb or -ing (decide to, avoid -ing, look forward to -ing).', 'phrase']
     };
+    /* THIS GAP'S OWN REASON (16 Nov 2026, from a learner's review): a category
+       alone ("A preposition") did not say reunite someone WITH. A gap that
+       carries a why now says it first; and a near miss (the key's own word in
+       the wrong form, or one letter out) is named as such, so "makes" for
+       "make" reads as agreement, not as the wrong collocation. */
+    function nearMiss(given, key) {
+      const g = normalizeAnswer(given), alts = String(key || '').split('/').map(x => normalizeAnswer(x)).filter(Boolean);
+      if (!g) return '';
+      for (const k of alts) {
+        if (g === k + 's' || g === k + 'es' || k === g + 's' || k === g + 'es')
+          return 'Right word, wrong form: check what it agrees with, singular or plural.';
+        if (g === k + 'ed' || g === k + 'd' || g === k + 'ing' || g === k.replace(/e$/, '') + 'ing')
+          return 'Right word, wrong form: the gap needs the word exactly as it is.';
+      }
+      for (const k of alts) {
+        if (k.length > 3 && Math.abs(k.length - g.length) <= 1) {
+          let i = 0; while (i < g.length && g[i] === k[i]) i++;
+          let a = g.length - 1, b = k.length - 1; while (a >= i && b >= i && g[a] === k[b]) { a--; b--; }
+          if (a - i < 1 && b - i < 1) return 'Nearly: check the spelling. In Part 2 every letter counts.';
+        }
+      }
+      return '';
+    }
+    function whyTip(g, given) {
+      const near = nearMiss(given, g.answer);
+      if (!g.why && !near) return '';
+      return `<div class="area-tip">${near ? `<b>${sanitizeText(near)}</b> ` : ''}${g.why ? sanitizeText(g.why) : ''}</div>`;
+    }
+    /* With the gap's own reason on screen, the category shrinks to its name
+       and the practice link; after a near miss (the right word in the wrong
+       form) the category is left out, since it is not what went wrong. */
+    function gapTips(g, given) {
+      if (nearMiss(given, g.answer)) return whyTip(g, given);
+      if (g.why) { const a = AREA_TIP[g.area];
+        return whyTip(g, given) + (a ? `<div class="area-tip"><b>${a[0]}.</b> <a href="/skills/use-of-english/gap-fill/master-part2.html?set=${a[2]}">Practise these \u2192</a></div>` : ''); }
+      return areaTip(g.area);
+    }
     function areaTip(area) {
       const a = AREA_TIP[area]; if (!a) return '';
       return `<div class="area-tip"><b>${a[0]}.</b> ${a[1]} <a href="/skills/use-of-english/gap-fill/master-part2.html?set=${a[2]}">Practise these \u2192</a></div>`;
@@ -886,9 +934,9 @@
           const isCorrect = answersMatch(userAns, correctAns);
           html += `
             <div class="answer-item ${isCorrect ? 'correct' : 'incorrect'}" style="animation-delay: ${idx * 50}ms">
-              <span>Gap ${num}: <strong>${sanitizeText(userAns) || '(empty)'}</strong></span>
+              <span>Gap ${shownNo(num)}: <strong>${sanitizeText(userAns) || '(empty)'}</strong></span>
               ${!isCorrect ? `<span style="color: var(--tile-ok-ink);">→ ${sanitizeText(correctAns)}</span>` : '<span style="color: var(--tile-ok-ink);">✓</span>'}
-            </div>${!isCorrect ? areaTip(gapData.area) : ''}
+            </div>${!isCorrect ? gapTips(gapData, userAns) : ''}
           `;
         });
       /* the way to fix it, from the result (3 Nov 2026): the Master teaches this Part item by item, with a reason for each */

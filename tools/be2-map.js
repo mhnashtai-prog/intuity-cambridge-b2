@@ -51,7 +51,7 @@ var SKILLS = {
   /* each Part has its exam ring; a Part's learning ring sits beside it and
      shares its number, so both Part 3 rings read 03 and Part 4 stays 04 */
   english:[
-    {name:"Part 1 \u00b7 Multiple Choice Cloze", part:1, url:"skills/use-of-english/multiple-choice/multiple-choice.html"},
+    {name:"Part 1 \u00b7 Multiple Choice Cloze", part:1, url:"skills/use-of-english/multiple-choice/multiple-choice-texts.html"},
     /* the Master rings go live one by one as each page ships — a ring that opens a
        missing page loses a student's trust. Switch each on by removing its comment. */
     {name:"Master \u00b7 Part 1", part:1, url:"skills/use-of-english/multiple-choice/master-part1.html", fix:"p1-"},
@@ -162,7 +162,11 @@ var PILLS = {
   /* left: a second pill on the footer's left, not an activity (it is not counted):
      the "How to use" clips, Maya's why and how of the whole Writing area (14 Nov 2026) */
   writing:{ label:"Marking", aria:"How it's marked", url:"skills/writing/sentence-structure/band-descriptors.html",
-    left:{ label:"How to use", aria:"How to use Writing: three short clips", url:"skills/writing/how.html" } }
+    left:{ label:"How to use", aria:"How to use Writing: three short clips", url:"skills/writing/how.html" } },
+  /* Full tests on the title's line (16 Nov 2026, a learner's review): below the
+     eight rings it sat under the fold, with nothing to say it was there. It
+     stays in the list too. No footer pill, no play mark. */
+  english:{ left:{ label:"Full tests", aria:"Full tests: the whole Reading and Use of English paper, 75 minutes", url:"skills/full-test/full-test.html", play:false } }
 };
 
   /* a page's identity for "explored": its path, plus the one query that picks
@@ -184,7 +188,7 @@ var PILLS = {
         else out.push({ name: x.name, url: '/' + x.url, key: keyOf('/' + x.url) }); });
       else if (it.url) out.push({ name: it.name, url: '/' + it.url, key: keyOf('/' + it.url) });
     });
-    if (PILLS[key]) out.push({ name: PILLS[key].aria, url: '/' + PILLS[key].url, key: keyOf('/' + PILLS[key].url) });
+    if (PILLS[key] && PILLS[key].url) out.push({ name: PILLS[key].aria, url: '/' + PILLS[key].url, key: keyOf('/' + PILLS[key].url) });
     return out;
   }
   /* the roof a page sits under, and which of its tabs it is: the tab's own

@@ -265,7 +265,7 @@ function build(n,cfg,d){
   if(n===2){
     const e=d.exercises[cfg.index]; part.title=e.title;
     part.paras=e.text.split(/\n\s*\n/);
-    Object.entries(e.gaps).forEach(([k,g])=>{ if(g.isExample) part.example={k,answer:g.answer}; else part.qs.push({num:8+(+k),k,answers:String(g.answer).split('/').map(s=>s.trim())}); });
+    Object.entries(e.gaps).forEach(([k,g])=>{ if(g.isExample) part.example={k,answer:g.answer}; else part.qs.push({num:8+(+k),k,answers:String(g.answer).split('/').map(s=>s.trim()),why:g.why||''}); });
   }
   if(n===3){
     const e=d.exercises[cfg.index]; part.title=e.title; part.raw=e.text; part.gaps=e.gaps; part.use=cfg.use;
@@ -343,6 +343,26 @@ function testTabs(){
     return `<a class="vtab${on?' active':''}" role="tab" aria-selected="${on}" href="${testUrl(t.id)}">${esc(t.title)}${b?`<span class="pct">${b}</span>`:''}</a>`; }).join('');
 }
 
+/* ── PRACTISED TEXTS (16 Nov 2026, from a learner's review) ─────────────
+   The tests share their texts with the practice pages. A text the pupil has
+   already marked there (see seenMark on those pages) makes the estimate read
+   high, so the gate says which parts, and points to a paper with none. */
+function seenParts(t){
+  let s={}; try{ s=JSON.parse(localStorage.getItem('intuity.seen.v1')||'{}')||{}; }catch(e){}
+  const base=x=>String(x||'').split('?')[0].split('/').pop();
+  return Object.entries(t.parts).filter(([n,c])=>{
+    if(n==='4') return false;
+    const k=base(c.src)+'#'+(n==='1'?'n'+c.test:(n==='2'||n==='3')?c.index:'');
+    return !!s[k];
+  }).map(([n])=>+n);
+}
+function seenNote(){
+  const mine=seenParts(T); if(!mine.length) return '';
+  const names=mine.map(n=>{ const p=PARTS.find(x=>x.n===n); return 'Part '+n+(p&&p.title?' ('+esc(p.title)+')':''); });
+  const fresh=M.tests.find(t=>t.id!==T.id&&!seenParts(t).length);
+  return `<p class="best">You have already practised ${names.join(', ')}. Your score on this paper will read higher than on an unseen one.${fresh?` For the truest estimate, take <a href="${testUrl(fresh.id)}">${esc(fresh.title)}</a>: you haven't practised any of its texts.`:''}</p>`;
+}
+
 /* ── THE GATE ────────────────────────────────────────────────────────── */
 function gate(){
   stop(); $('bar').classList.add('hidden'); testTabs(); $('clock').textContent=M.minutes+':00'; $('clock').classList.remove('low');
@@ -362,6 +382,7 @@ function gate(){
       <li>Nothing is marked until you finish. Flag any question you want to come back to.</li>
       <li>You get two scores, as Cambridge reports them: Reading (Parts 1, 5, 6 and 7) and Use of English (Parts 2, 3 and 4).</li>
     </ul>
+    ${seenNote()}
     ${best?`<p class="best">Your best on this paper: <b>Reading ${best.r}</b> · <b>Use of English ${best.u}</b>${hist.length>1?` · ${hist.length} attempts`:''}</p>`:''}
     <div class="go-row">${live&&left>0?`<button class="pill dark" type="button" id="resume">Continue · ${fmt(left)} left</button><button class="pill" type="button" id="fresh">Start again</button>`
       :`<button class="pill dark" type="button" id="startBtn">Start the clock</button>`}</div>
@@ -434,7 +455,8 @@ function p2(p){
   return `<p class="ttl">${esc(p.title)}</p><div class="txt">${p.paras.map(par=>'<p>'+esc(par).replace(/\{\{(\d+)\}\}/g,(m,k)=>{
     if(p.example&&k===p.example.k) return `<span class="n">0</span><span class="ex">${esc(p.example.answer)}</span>`;
     const q=p.qs.find(x=>x.k===k); let h=fld(p,q);
-    if(reviewing&&markQ(p,q)===0) h+=fix(q.answers[0]); return h; })+'</p>').join('')}</div>`;
+    if(reviewing&&markQ(p,q)===0) h+=fix(q.answers[0]); return h; })+'</p>').join('')}</div>`+
+    (reviewing?(()=>{ const w=p.qs.filter(q=>q.why&&markQ(p,q)===0); return w.length?`<div class="flags-row" style="display:block">${w.map(q=>`<p class="why"><b>${q.num}</b> ${esc(q.answers[0])}: ${esc(q.why)}</p>`).join('')}</div>`:''; })():'');
 }
 function p3(p){
   let t=esc(p.raw).replace(/\((\d+)\)\s+([A-Z][A-Za-z'-]*)\s+(\.{3,}|[a-z][a-z'-]*)/g,(m,k,word,ans)=>{
@@ -575,7 +597,7 @@ function results(animate){
   </div>`;
   $('rev').onclick=()=>{ reviewing=true; $('bar').classList.remove('hidden'); $('finish').textContent='Scores'; show(1); };
   $('again').onclick=()=>{ S=null; store.set(KEY,null); gate(); };
-  const fill=()=>{ document.querySelectorAll('.prow .tr i').forEach(i=>i.style.width=i.dataset.w+'%');
+  const fill=()=>{ if(!$('pR')) return; /* the pupil may already have moved on to the review */ document.querySelectorAll('.prow .tr i').forEach(i=>i.style.width=i.dataset.w+'%');
     $('pR').style.left=pos(t.r)+'%'; $('pU').style.left=pos(t.u)+'%';
     /* two scores in the same place share one label instead of printing over each other */
     if(Math.abs(pos(t.r)-pos(t.u))<6){ $('pR').querySelector('b').textContent='R · U'; $('pU').querySelector('b').textContent=''; } };

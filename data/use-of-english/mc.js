@@ -406,10 +406,13 @@ function advance() {
    lists what was missed and what it should have been — and, where the data
    carries them, WHY. Part 1 turns on collocation and fixed phrase far more
    often than on meaning, so the reason is the transferable part. */
+/* PRACTISED TEXTS (16 Nov 2026): the full tests share their texts with the practice pages, so a text marked here is noted, and the full test can say its score will read high. */
+function seenMark(file, idx){ try { var k=String(file||'').split('/').pop()+'#'+idx, s=JSON.parse(localStorage.getItem('intuity.seen.v1')||'{}')||{}; s[k]=Date.now(); localStorage.setItem('intuity.seen.v1', JSON.stringify(s)); } catch (e) {} }
 function submit() {
   var qs = questions();
   if (marked || !qs.every(function (q, i) { return answers[keyOf(q, i)] !== undefined; })) return;
   marked = true;
+  if (TEXTS) seenMark((CFG.datasets[bi] || {}).path, 'n' + (T().testNumber || (si + 1)));
   var got = qs.filter(function (q, i) { return isRight(q, i); }).length;
   if (view === 'one') qi = 0;
   render();

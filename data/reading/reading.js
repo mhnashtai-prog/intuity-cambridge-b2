@@ -650,11 +650,14 @@ function choose(i, k) {
    Part 7 is worth one. Scoring every part out of one makes a Reading
    percentage mean something Cambridge does not mean by it, so the weight
    comes from the config rather than being assumed. */
+/* PRACTISED TEXTS (16 Nov 2026): the full tests share their texts with the practice pages, so a text marked here is noted, and the full test can say its score will read high. */
+function seenMark(file, idx){ try { var k=String(file||'').split('/').pop()+'#'+idx, s=JSON.parse(localStorage.getItem('intuity.seen.v1')||'{}')||{}; s[k]=Date.now(); localStorage.setItem('intuity.seen.v1', JSON.stringify(s)); } catch (e) {} }
 function submit() {
   var n = count();
   var idx = []; for (var z = 0; z < n; z++) idx.push(z);
   if (marked || !idx.every(function (i) { return answers[i] !== undefined; })) return;
   marked = true;
+  if (!DRILL && CFG.path) seenMark(CFG.path(bi + 1), '');
   var got = idx.filter(isRight).length;
   skRecord(idx);
   var w = CFG.marksPerQuestion || 1;

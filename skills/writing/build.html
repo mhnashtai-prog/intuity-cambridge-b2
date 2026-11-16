@@ -98,6 +98,14 @@ html.calm #vm,html.calm .pa-go,html.calm .pm-new,html.calm #cAct{display:none!im
 html.buildonly #vm,html.buildonly #aWrite,html.buildonly #aSave{display:none!important}
 html.buildonly #cAct .next{display:inline-flex;align-items:center;padding:.7rem .4rem;font:700 .6875rem/1 'Geist Mono',ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;color:#5C5852;text-decoration:none}
 html.buildonly #cAct .next:focus-visible{outline:2px solid #C2956E;outline-offset:2px}
+html.buildonly #cMain .gp.tp,html.buildonly #cMain .fc-gap.tp{color:#7A5C3A;font-style:normal;letter-spacing:0}
+.qs-bg{position:fixed;inset:0;z-index:9000;background:rgba(20,17,14,.32);display:flex;align-items:flex-end;justify-content:center}
+.qs{width:min(100%,34rem);max-height:78vh;overflow:auto;background:#FAF8F5;border-radius:18px 18px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom,0px))}
+.qs h3{margin:0 0 10px;font:600 .6875rem/1 'Geist Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#7A7068}
+.qs button{all:unset;cursor:pointer;display:block;box-sizing:border-box;width:100%;padding:12px 4px;border-top:1px solid rgba(20,17,14,.1);font:400 .95rem/1.4 Geist,system-ui,sans-serif;color:#14110E}
+.qs button.on{font-weight:650}.qs button.on::before{content:'✓ ';color:#4F7A63}
+.qs button.none{color:#7A7068;font-size:.85rem}
+.qs button:focus-visible{outline:2px solid #C2956E;outline-offset:-2px}
 html.buildonly body.wheel-mode .cbody{display:flex;flex-direction:column}
 html.buildonly body.wheel-mode .ccol{flex:1;display:flex;flex-direction:column;min-height:100%}
 html.buildonly body.wheel-mode #cMain{flex:1;display:flex;flex-direction:column}
@@ -1335,6 +1343,51 @@ function keepNow(){ if(!BUILDONLY||!OPEN||OPEN.saved) return;
 function restoreKept(m){ if(!BUILDONLY) return; let k=null; try{ k=JSON.parse(localStorage.getItem(KKEY(m))||'null'); }catch(e){} if(!k) return;
   m.secs.forEach((S,si)=>S.lines.forEach((L,li)=>{ const h=k[si]&&k[si][li]; if(!h) return;
     let j=L.h.findIndex(o=>o&&o.html===h); if(j<0){ L.h.push({html:h}); j=L.h.length-1; } L.i=j; })); }
+/* YOUR QUESTION IN THE FRAME (16 Nov 2026, a learner's review: "I was hoping the frame would
+   turn into the beginning of my essay"). On Models, "Choose a question" opens the task's
+   questions here, for the essay type on screen; the chosen topic fills the topic gaps
+   (after "of", "to", "about"…, or the subject before "has / is / outweigh"), while the
+   gaps for the pupil's own ideas stay "…". Essays first; other tasks keep the old link. */
+const QSRC={essays:'/skills/writing/essays/data/essay-questions.json'};
+let QLIST=null;
+/* a comparison ("money versus job satisfaction") does not read as one topic in a frame: the
+   question is still shown, but its gaps stay "…" */
+const ONE_TOPIC=q=>q&&q.topicShort&&!/\b(versus|vs|compared|or)\b/i.test(q.topicShort);
+function curQ(){ try{ const q=JSON.parse(sessionStorage.getItem('currentQuestion')||'null'); return q&&q.topicShort&&(!q.essayType||!OPEN||!OPEN.rec||q.essayType===OPEN.rec.key)?q:null; }catch(e){ return null; } }
+const TOPIC_BEFORE=/\b(of|about|to|towards|regarding|concerning|on|with|consider|analyse|whether)\s*$/i, SUBJ_AFTER=/^\s*(has|have|is|are|can|outweighs?|plays?|offers?|brings?|makes?)\b/i;
+function fillTopic(){
+  if(!BUILDONLY) return; const q0=curQ(), q=ONE_TOPIC(q0)?q0:null, box=$('cMain'); if(!box) return;
+  box.querySelectorAll('.gp,.fc-gap').forEach(g=>{
+    if(!g.dataset.orig) g.dataset.orig=g.textContent;
+    const before=(g.previousSibling&&g.previousSibling.textContent||'')+'', after=(g.nextSibling&&g.nextSibling.textContent||'')+'';
+    /* as a subject ("… has become"), only a topic that takes "has": no "and", no plural ("friends and family has" would teach an error) */
+    const oneThing=q&&!/\band\b/i.test(q.topicShort)&&!/s$/i.test(q.topicShort.trim());
+    const topic=q&&(TOPIC_BEFORE.test(before)||(oneThing&&((/\bthat\s*$/i.test(before)||!before.trim())&&SUBJ_AFTER.test(after))));
+    /* a topic that ends its line still needs the pupil's words after it: "A major benefit of X …" */
+    const secs=[...box.querySelectorAll('.fc-sec')], si=secs.indexOf(g.closest('.fc-sec')), body=si>0&&si<secs.length-1;
+    const tail=topic&&!/[a-z]/i.test(after.replace(/[\s.,…]/g,''))&&!/^\s*[.]/.test(after);
+    const want=topic?q.topicShort+(tail?(body?' …':'.'):''):g.dataset.orig;   /* a body key goes on; an opening sentence ends */
+    if(g.textContent!==want){ g.textContent=want; g.classList.toggle('tp',!!topic); } });
+}
+function qSheet(){
+  const src=QSRC[TYPE]; if(!src) return false;
+  const go=list=>{ QLIST=list; const k=OPEN&&OPEN.rec&&OPEN.rec.key, mine=list.filter(q=>!k||q.essayType===k), cur=curQ();
+    const bg=document.createElement('div'); bg.className='qs-bg';
+    bg.innerHTML='<div class="qs" role="dialog" aria-label="Choose a question"><h3>Choose a question</h3>'+(mine.length?'':'<p>No questions of this type yet.</p>')+
+      mine.map((q,i)=>'<button type="button" data-i="'+i+'" class="'+(cur&&cur.id===q.id?'on':'')+'">'+esc(q.mainQuestion)+'</button>').join('')+
+      (cur?'<button type="button" class="none" data-i="-1">No question: show the gaps</button>':'')+'</div>';
+    bg.onclick=e=>{ const b=e.target.closest('button'); if(e.target===bg||b){ if(b){ const i=+b.dataset.i;
+        try{ if(i<0) sessionStorage.removeItem('currentQuestion'); else sessionStorage.setItem('currentQuestion',JSON.stringify(mine[i])); }catch(x){}
+        qLine(); fillTopic(); try{ if(window.SFX&&SFX.isOn()) (SFX.soft||SFX.pop)(); }catch(x){} } bg.remove(); } };
+    document.body.appendChild(bg); };
+  if(QLIST) go(QLIST); else fetch(src).then(r=>r.json()).then(d=>go(Array.isArray(d)?d:(d.questions||Object.values(d).find(Array.isArray)||[]))).catch(()=>{});
+  return true;
+}
+function qLine(){ const ql=document.querySelector('.wr-q'); if(!ql||!BUILDONLY||!QSRC[TYPE]) return;
+  const q=curQ(); ql.removeAttribute('href'); ql.setAttribute('role','button'); ql.tabIndex=0;
+  ql.innerHTML='<b>Q</b>'+esc(q?q.mainQuestion:'Choose a question \u203A');
+  ql.onclick=e=>{ e.preventDefault(); qSheet(); }; ql.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); qSheet(); } }; }
+(function waitQ(n){ if(document.querySelector('.wr-q')&&OPEN) { qLine(); new MutationObserver(()=>fillTopic()).observe($('cMain'),{childList:true,subtree:true}); fillTopic(); } else if(n<60) setTimeout(()=>waitQ(n+1),100); })(0);
 function showWheels(i){
   let m=MODELS[i]; if(!m) return;
   /* every wheel opens on the safe line: the first phrase of each pool, which
@@ -1344,7 +1397,7 @@ function showWheels(i){
   if(OPEN){ clearInterval(TICK); if(OPEN.draft) saveDraft(OPEN.draft,true); }
   OPEN=m; TYPE=m.type; SUBJ=m.rec.key; RECIPES=ALL[TYPE]||RECIPES; m.tag=ABBR(m.rec.label)+'-'+m.n; MODE='card';
   document.body.classList.add('wheel-mode','cin-open'); $('cin').setAttribute('aria-hidden','false'); $('stage').inert=true;
-  placeWheels(); paint(); $('cbody').scrollTop=0;
+  placeWheels(); paint(); $('cbody').scrollTop=0; qLine(); fillTopic();
 }
 function hideWheels(){
   if(!WM()) return;

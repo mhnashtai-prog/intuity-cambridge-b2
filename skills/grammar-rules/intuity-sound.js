@@ -141,6 +141,13 @@
       note(1200, 0.06, 'sine', 0.09);
     },
 
+    /* Soft (16 Nov 2026, the owner: "almost so soft and gentle"): a page turning, not a
+       game. One low, short sine at a whisper, for taps made many times in a row
+       (the arrows on Models). */
+    soft: function () {
+      note(560, 0.07, 'sine', 0.035);
+    },
+
     /* Tension: a rising sweep under something about to happen. */
     rise: function () {
       note(300, 0.50, 'sawtooth', 0.09, 0, 900);

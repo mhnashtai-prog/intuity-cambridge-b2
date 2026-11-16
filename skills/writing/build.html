@@ -95,7 +95,9 @@ html.embed #vm,html.embed .pa-go,html.embed .pm-new,html.embed #cAct{display:non
    To retreat, set CALM=false in the script below; nothing else was taken out. */
 html.calm #vm,html.calm .pa-go,html.calm .pm-new,html.calm #cAct{display:none!important}
 /* BUILD ONLY (16 Nov 2026): the three sections share the whole screen between the header and Save */
-html.buildonly #vm,html.buildonly #aWrite{display:none!important}
+html.buildonly #vm,html.buildonly #aWrite,html.buildonly #aSave{display:none!important}
+html.buildonly #cAct .next{display:inline-flex;align-items:center;padding:.7rem .4rem;font:700 .6875rem/1 'Geist Mono',ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;color:#5C5852;text-decoration:none}
+html.buildonly #cAct .next:focus-visible{outline:2px solid #C2956E;outline-offset:2px}
 html.buildonly body.wheel-mode .cbody{display:flex;flex-direction:column}
 html.buildonly body.wheel-mode .ccol{flex:1;display:flex;flex-direction:column;min-height:100%}
 html.buildonly body.wheel-mode #cMain{flex:1;display:flex;flex-direction:column}
@@ -985,7 +987,8 @@ function paint(){
     `<p class="tip">No key expressions this time: you know the moves. Write it in your own words.</p>`;
   if(SUPPORT==='moves') WH.mount($('cMain'));
   $('cAct').innerHTML=(build?`<button class="btn" type="button" id="aSave">Save</button>`:`<button class="btn" type="button" id="aDel">Delete</button>`)+
-    `<button class="btn go" type="button" id="aWrite">Write it</button>`;
+    `<button class="btn go" type="button" id="aWrite">Write it</button>`+
+    (BUILDONLY&&!m.saved?`<a class="next" href="/skills/challenge/challenge.html?board=1&section=writing&topic=writing-${({essays:'essay',emails:'email',articles:'article',reviews:'review',reports:'report',story:'story'})[TYPE]||'essay'}" target="_top">Next: Practise it →</a>`:'');
   if($('aSave')) $('aSave').onclick=()=>{ saveMine(m); $('aSave').textContent='Saved ✓'; $('aSave').disabled=true; if(window.Cheer) Cheer.tick($('aSave')); };
   if($('aDel')) $('aDel').onclick=()=>{ delMine(m.savedId); $('cClose').onclick(); };
   /* 14 Nov 2026: one Write it in the app. This button used to turn the built model into
@@ -1229,6 +1232,7 @@ function turnSec(si,dir){
     const k=si===0?0:si===m.secs.length-1?all.length-1:1; return all[k]?all[k].querySelector('.fc-in').innerHTML:''; };
   const sv=$('aSave'); if(sv){ sv.textContent='Save'; sv.disabled=false; }
   try{ if(window.SFX&&SFX.isOn()) (SFX.soft||SFX.pop)(); }catch(e){}   /* the arrow: a whisper, not a game sound */
+  keepNow();
   if(matchMedia('(prefers-reduced-motion: reduce)').matches){ box.innerHTML=fresh(); fitCin(); return; }
   box.style.setProperty('--dx',(dir>0?-14:14)+'px'); box.classList.add('out');
   setTimeout(()=>{ box.innerHTML=fresh(); box.style.setProperty('--dx',(dir>0?14:-14)+'px'); box.classList.remove('out'); box.classList.add('in');
@@ -1273,7 +1277,7 @@ const WH=(function(){
       el.style.setProperty('--ih',w.ih+'px'); el.style.setProperty('--pk',pk+'px'); el.style.setProperty('--h',(w.ih+2*pk)+'px'); };
     w.change=function(n){ const L=OPEN&&OPEN.secs[si]&&OPEN.secs[si].lines[li]; if(!L) return; L.i=+items[n].dataset.k;
       const sv=$('aSave'); if(sv){ sv.textContent='Save'; sv.disabled=false; }   /* changed again: save again */
-      try{ if(window.SFX&&SFX.isOn()) (SFX.soft||SFX.pop)(); }catch(e){} };
+      try{ if(window.SFX&&SFX.isOn()) (SFX.soft||SFX.pop)(); }catch(e){} keepNow(); };
     w.paint=function(){ const st=sc.scrollTop, ih=w.ih;
       items.forEach((x,i)=>{ const d=i-st/ih, a=Math.min(1,Math.abs(d));
         if(Math.abs(d)>2.5){ x.style.transform=''; x.style.opacity='0'; return; }
@@ -1322,11 +1326,21 @@ let VIEW=BUILDONLY?'wheels':CALM?'models':(()=>{ try{ const q=new URLSearchParam
 const WM=()=>document.body.classList.contains('wheel-mode');
 function placeWheels(){ const hd=document.querySelector('.header')||$('subjects'); if(!hd) return; const y=Math.round(hd.getBoundingClientRect().bottom)+'px';
   $('cin').style.setProperty('--wtop',y); document.documentElement.style.setProperty('--wtop',y); }
+/* THE CARD REMEMBERS (16 Nov 2026, the owner, after a learner's review): every arrow tap is
+   kept on this phone, per task and type, so the pupil's own version is waiting next time.
+   No Save button to forget. */
+const KKEY=m=>'intuity.models.keep.'+m.type+'.'+(m.rec&&m.rec.key)+'.'+m.n;
+function keepNow(){ if(!BUILDONLY||!OPEN||OPEN.saved) return;
+  try{ localStorage.setItem(KKEY(OPEN),JSON.stringify(OPEN.secs.map(S=>S.lines.map(L=>L.h[L.i]&&L.h[L.i].html)))); }catch(e){} }
+function restoreKept(m){ if(!BUILDONLY) return; let k=null; try{ k=JSON.parse(localStorage.getItem(KKEY(m))||'null'); }catch(e){} if(!k) return;
+  m.secs.forEach((S,si)=>S.lines.forEach((L,li)=>{ const h=k[si]&&k[si][li]; if(!h) return;
+    let j=L.h.findIndex(o=>o&&o.html===h); if(j<0){ L.h.push({html:h}); j=L.h.length-1; } L.i=j; })); }
 function showWheels(i){
   let m=MODELS[i]; if(!m) return;
   /* every wheel opens on the safe line: the first phrase of each pool, which
      the essay bank sets to the starred choice; the other versions are random */
   if(!m.safe){ MODELS[i]=m=safeOf(m); }
+  if(!m.restored){ restoreKept(m); m.restored=true; }
   if(OPEN){ clearInterval(TICK); if(OPEN.draft) saveDraft(OPEN.draft,true); }
   OPEN=m; TYPE=m.type; SUBJ=m.rec.key; RECIPES=ALL[TYPE]||RECIPES; m.tag=ABBR(m.rec.label)+'-'+m.n; MODE='card';
   document.body.classList.add('wheel-mode','cin-open'); $('cin').setAttribute('aria-hidden','false'); $('stage').inert=true;

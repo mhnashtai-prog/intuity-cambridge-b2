@@ -27,6 +27,10 @@
      renaming them half-way would break the frames that talk to each other.
      File names (intuity-shell.css …) — same reason.
    ═══════════════════════════════════════════════════════════════════════ */
+/* ONE LOOK ON EVERY PHONE (16 Nov 2026, pupils' Android phones in class): a phone set to large text
+   enlarges words but not the layout, so headers wrapped into three lines and collided with the back
+   link. Every page keeps its own text size, as the home page does. */
+(function () { try { var st = document.createElement('style'); st.textContent = 'html{-webkit-text-size-adjust:100%;text-size-adjust:100%}'; (document.head || document.documentElement).appendChild(st); } catch (e) {} })();
 (function () {
   var OLD_NAME = /INTUITY/g;
   var NEW_NAME = 'Be2FIRST';

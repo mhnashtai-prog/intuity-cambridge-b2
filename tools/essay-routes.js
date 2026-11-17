@@ -7,7 +7,7 @@
      (For & Against) · Problems · Causes · The future
    The data keeps its own names (other code looks them up), so this script only changes
    what the pupil reads: the strip items, the kickers, and one line above the strip.
-   Include on a page:  <script src="/tools/essay-routes.js?v=1" defer></script> */
+   Include on a page:  <script src="/tools/essay-routes.js?v=3" defer></script> */
 (function () {
   'use strict';
   var MAP = {
@@ -17,9 +17,13 @@
   };
   var HIDE = 'agree & disagree';            /* a second "Your view" in a strip would only confuse */
   var KICK = /(^|·\s*|\s)(For & Against|Opinion|Agree & Disagree|Problems & Solutions|Cause & Effect|Speculation, Generalisation & Trends|Speculation & Trends)(?=\s*(·|$))/;
-  var NOTE = 'Every essay gives your view, with reasons. Choose a route; add the extras your question needs.';
+  /* 17 Nov 2026 (the owner, after a real paper): the question does not pick the extras, the pupil
+     does; the link opens Maya's clip, one real question answered five ways */
+  var NOTE = 'Every essay gives your view, with reasons. Choose a route; borrow any extras you like.';
+  var CLIP = '<a class="routes-clip" href="/skills/writing/how-essay.html">▶ One question, five ways</a>';
   var CSS = '.routes-note{margin:.2rem auto .55rem;max-width:34rem;padding:0 16px;text-align:center;font:400 .8125rem/1.4 Geist,system-ui,sans-serif;color:#7A7068}' +
-    '.routes-x{display:none!important}';
+    '.routes-x{display:none!important}' +
+    '.routes-clip{display:inline-block;margin-left:.35em;color:#7A5C3A;font-weight:600;text-decoration:none;border-bottom:1px solid rgba(169,135,95,.5);white-space:nowrap}';
   function norm(s) { return String(s || '').replace(/\s+/g, ' ').replace(/&amp;/g, '&').trim().toLowerCase(); }
 
   function pass() {
@@ -51,7 +55,7 @@
       if (strip) {
         var row = strip.closest('nav, .tabs, .filter-bar, .wr-types, .subjects, [role="tablist"]') || strip;
         if (row.parentNode && getComputedStyle(row.parentNode).display.indexOf('flex') >= 0 && getComputedStyle(row.parentNode).flexDirection !== 'column') row = row.parentNode;
-        var note = document.createElement('p'); note.className = 'routes-note'; note.textContent = NOTE;
+        var note = document.createElement('p'); note.className = 'routes-note'; note.textContent = NOTE + ' '; note.insertAdjacentHTML('beforeend', CLIP);
         row.parentNode.insertBefore(note, row);
       }
     }

@@ -640,4 +640,4 @@ Array.prototype.forEach.call(document.querySelectorAll('.wr-filters'), function 
 /* ESSAY ROUTES (17 Nov 2026): on the essay pages, the six types read as two routes and three extras */
 (function () { try { if (!/essay|[?&](type|task)=essays|[?&]type=fa/i.test(location.pathname + location.search)) return;
   if (document.querySelector('script[src*="essay-routes.js"]')) return;
-  var s = document.createElement('script'); s.src = '/tools/essay-routes.js?v=2'; s.defer = true; (document.head || document.documentElement).appendChild(s); } catch (e) {} })();
+  var s = document.createElement('script'); s.src = '/tools/essay-routes.js?v=3'; s.defer = true; (document.head || document.documentElement).appendChild(s); } catch (e) {} })();

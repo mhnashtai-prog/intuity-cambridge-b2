@@ -11,7 +11,7 @@
   function ready(fn) { if (document.readyState !== 'loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
   function withMap(fn) {
     if (window.BE2_MAP && BE2_MAP.roofOf) return fn();
-    var s = document.createElement('script'); s.src = '/tools/be2-map.js?v=14'; s.onload = fn; document.head.appendChild(s);
+    var s = document.createElement('script'); s.src = '/tools/be2-map.js?v=16'; s.onload = fn; document.head.appendChild(s);
   }
   /* THE WRITING TAB (14 Nov 2026): the section tab every Writing page already
      uses (Games, the Sentence pages, How it's marked): mono, 11px, bold, a
@@ -133,3 +133,8 @@
     var n = 0; (function go() { if (!build() && ++n < 30) setTimeout(go, 100); })();
   }); });
 })();
+
+/* ESSAY ROUTES (17 Nov 2026): on the essay pages, the six types read as two routes and three extras */
+(function () { try { if (!/essay|[?&](type|task)=essays|[?&]type=fa/i.test(location.pathname + location.search)) return;
+  if (document.querySelector('script[src*="essay-routes.js"]')) return;
+  var s = document.createElement('script'); s.src = '/tools/essay-routes.js?v=2'; s.defer = true; (document.head || document.documentElement).appendChild(s); } catch (e) {} })();

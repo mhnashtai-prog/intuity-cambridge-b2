@@ -97,7 +97,7 @@ var SKILLS = {
     /* 14 Nov 2026 (evening): ONE HOME PER PAGE. Models and Study cards belong to a
        task, so they live behind each task's "Learn it" door; Compare is what is left
        of Look it up, and it is a tile of its own. */
-    {name:"Compare", glyph:"⇄", hint:"Formal or informal?", url:"skills/writing/compare.html"},
+    {name:"Compare", glyph:"⇄", hint:"Same topic, two tasks", url:"skills/writing/compare.html"},
     /* 14 Nov 2026: Practice (Finish it…) moved into each task's Practise it, so this
        tile keeps what belongs to no one task, and a name that is not "Practise" twice */
     {name:"Skills", glyph:"…", hint:"Games, sentences, sentence types", roof:"practise"},
@@ -142,7 +142,7 @@ var TASKROOFS = {
      read and kept, so it joins Learn it; the doing goes behind Practise it. */
   learn:{ name:"Learn it", items:[
     {name:"In five", url:"skills/writing/five.html?task={k}"},
-    {name:"Models", url:"skills/writing/build.html?type={k}&view=models"},
+    {name:"Build", url:"skills/writing/build.html?type={k}&view=models"},   /* 17 Nov: a frame you build, not model essays (those are in door 3) */
     {name:"Cards", url:"skills/writing/cue-cards-print.html?type={print}"},
     {name:"Essentials", url:"skills/writing/sheet.html?task={k}"}
   ]},
@@ -154,7 +154,7 @@ var TASKROOFS = {
   ]}
 };
 var TASKVARS = {
-  essays:{print:"fa,op,ad,ps,ce,st", topic:"essay"}, emails:{print:"ef-app,ef-req,ei-news,ei-advice", topic:"email"},
+  essays:{print:"fa,op,ps,ce,st", topic:"essay"}   /* 17 Nov: Agree & Disagree folds into Your view (tools/essay-routes.js) */, emails:{print:"ef-app,ef-req,ei-news,ei-advice", topic:"email"},
   articles:{print:"ar", topic:"article"}, reviews:{print:"rv", topic:"review"}, reports:{print:"rp", topic:"report"}, story:{print:"sy", topic:"story"}
 };
 /* A menu's round pill in its footer, apart from the tiles, as DAILY 5 is on the home page */

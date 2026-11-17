@@ -143,8 +143,9 @@ var TASKROOFS = {
   learn:{ name:"Learn it", items:[
     {name:"In five", url:"skills/writing/five.html?task={k}"},
     {name:"Build", url:"skills/writing/build.html?type={k}&view=models"},   /* 17 Nov: a frame you build, not model essays (those are in door 3) */
-    {name:"Cards", url:"skills/writing/cue-cards-print.html?type={print}"},
-    {name:"Essentials", url:"skills/writing/sheet.html?task={k}"}
+    {name:"Cards", url:"skills/writing/cue-cards-print.html?type={print}"}
+    /* 17 Nov 2026 (the owner, after a teen's review): Essentials left Learn it. It opened on the same
+       phrases as Build and Cards; the page stays (sheet.html) but no menu leads to it */
   ]},
   practise:{ name:"Practise it", items:[
     {name:"Game", url:"skills/challenge/challenge.html?board=1&section=writing&topic=writing-{topic}"},

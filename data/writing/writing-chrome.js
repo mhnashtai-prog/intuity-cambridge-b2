@@ -214,6 +214,11 @@ function leanHeader() {
     '.wr-q b{font-weight:500;color:#9A5A2C;font-family:"Geist Mono",ui-monospace,monospace;font-size:.6875rem;letter-spacing:.12em;margin-right:6px}' +
     '.wr-q.open{white-space:normal}' +
     '.wr-q.hint{color:#8A8378}' +
+    '.wr-qrow{display:flex;align-items:center;gap:10px;margin-top:4px}.wr-qrow .wr-q{flex:1;min-width:0;width:auto;margin-top:0;white-space:normal;line-height:1.3}' +
+    '.wr-how{flex:none;display:inline-flex;padding:2.5px;border:1.2px solid #C9C1B5;border-radius:999px;text-decoration:none;-webkit-tap-highlight-color:transparent}' +
+    '.wr-how span{display:inline-flex;align-items:center;gap:5px;height:30px;box-sizing:border-box;padding:0 12px 0 8px;border:1.5px solid #1E1B18;border-radius:999px;background:#FAF8F5}' +
+    '.wr-how b{font:700 .625rem/1 "Geist",system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#14110E}' +
+    '.wr-how:active span{transform:scale(.96)}.wr-how:focus-visible{outline:2px solid #C2956E;outline-offset:2px}' +
     '.wr-done{font-style:normal;font-weight:500;color:#3F6B4E;margin-right:6px}' +
     'a.wr-q{text-decoration:none}' +
     '.wr-typerow a.ttab{text-decoration:none}' +
@@ -308,7 +313,17 @@ function leanHeader() {
     ql.href = G.stages.question; ql.classList.add('hint');
     ql.appendChild(document.createTextNode('Choose a question \u203A'));
   }
-  h.appendChild(ql);
+  /* 17 Nov 2026 (the owner): on the essay's Question step the "One question, five ways" clip sits
+     on the right of this row, above the hairline: the phrase bank's PLAY pill (outer ring, sage and
+     black play mark), small, with its instruction as the label */
+  if (STAGE === 'question' && GENRE === 'essays') {
+    var qr = el('div', 'wr-qrow'); qr.appendChild(ql);
+    var hw = el('a', 'wr-how'); hw.href = '/skills/writing/how-essay.html';
+    hw.setAttribute('aria-label', 'Watch: how to answer any question, five ways');
+    hw.innerHTML = '<span><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><polygon points="6,4 20,12 6,20" fill="#8AA79C" stroke="#8AA79C" stroke-width="1" stroke-linejoin="round"/>' +
+      '<line x1="6" y1="4" x2="6" y2="20" stroke="#14110E" stroke-width="2" stroke-linecap="round"/><polygon points="6,7.4 14.2,12 6,16.6" fill="#14110E"/></svg><b>How to answer</b></span>';
+    qr.appendChild(hw); h.appendChild(qr);
+  } else h.appendChild(ql);
 
   function close() {
     var a = document.querySelector('.wr-sheet'), b = document.querySelector('.wr-sheet-bg');
@@ -640,4 +655,4 @@ Array.prototype.forEach.call(document.querySelectorAll('.wr-filters'), function 
 /* ESSAY ROUTES (17 Nov 2026): on the essay pages, the six types read as two routes and three extras */
 (function () { try { if (!/essay|[?&](type|task)=essays|[?&]type=fa/i.test(location.pathname + location.search)) return;
   if (document.querySelector('script[src*="essay-routes.js"]')) return;
-  var s = document.createElement('script'); s.src = '/tools/essay-routes.js?v=4'; s.defer = true; (document.head || document.documentElement).appendChild(s); } catch (e) {} })();
+  var s = document.createElement('script'); s.src = '/tools/essay-routes.js?v=5'; s.defer = true; (document.head || document.documentElement).appendChild(s); } catch (e) {} })();

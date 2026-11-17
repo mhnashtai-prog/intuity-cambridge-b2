@@ -61,7 +61,9 @@
     /* one line above the first strip that shows the routes */
     /* the line goes where the pupil chooses a type (Essentials, the question list), not on Build,
        which stays one calm card */
-    if (!document.querySelector('.routes-note') && !/build\.html/.test(location.pathname)) {
+    /* 17 Nov 2026 (the owner): the header is decluttered, so no line here any more; the clip
+       lives on the question row (writing-chrome.js) and on Write it */
+    if (false) {
       var strip = seen.filter(function (s) { return s.querySelectorAll('button, a, [role="tab"]').length >= 3; })[0];
       if (strip) {
         var row = strip.closest('nav, .tabs, .filter-bar, .wr-types, .subjects, [role="tablist"]') || strip;

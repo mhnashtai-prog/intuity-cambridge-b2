@@ -7,7 +7,7 @@
      (For & Against) · Problems · Causes · The future
    The data keeps its own names (other code looks them up), so this script only changes
    what the pupil reads: the strip items, the kickers, and one line above the strip.
-   Include on a page:  <script src="/tools/essay-routes.js?v=3" defer></script> */
+   Include on a page:  <script src="/tools/essay-routes.js?v=4" defer></script> */
 (function () {
   'use strict';
   var MAP = {
@@ -20,10 +20,21 @@
   /* 17 Nov 2026 (the owner, after a real paper): the question does not pick the extras, the pupil
      does; the link opens Maya's clip, one real question answered five ways */
   var NOTE = 'Every essay gives your view, with reasons. Choose a route; borrow any extras you like.';
-  var CLIP = '<a class="routes-clip" href="/skills/writing/how-essay.html">▶ One question, five ways</a>';
+  /* the clip as a ring, the Daily 5 ring of the landing page (12 Nov 2026): dark, rimmed, "5 WAYS",
+     with a caramel play mark on its edge, so it reads as something to watch */
+  var CLIP = '<a class="routes-clip" href="/skills/writing/how-essay.html" aria-label="Watch: one question, five ways"><b>5</b><small>WAYS</small></a>';
   var CSS = '.routes-note{margin:.2rem auto .55rem;max-width:34rem;padding:0 16px;text-align:center;font:400 .8125rem/1.4 Geist,system-ui,sans-serif;color:#7A7068}' +
     '.routes-x{display:none!important}' +
-    '.routes-clip{display:inline-block;margin-left:.35em;color:#7A5C3A;font-weight:600;text-decoration:none;border-bottom:1px solid rgba(169,135,95,.5);white-space:nowrap}';
+    '.routes-note.has-clip{display:flex;align-items:center;gap:14px;text-align:left}' +
+    '.routes-note .rn-t{flex:1}' +
+    '.routes-clip{position:relative;flex:none;width:58px;height:58px;border-radius:50%;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;' +
+      'border:1.5px solid #C9C1B4;background:#14110E;color:#F7F5F1;text-decoration:none;box-shadow:0 0 0 3px rgba(250,248,245,.95),0 8px 18px -10px rgba(20,17,14,.6);-webkit-tap-highlight-color:transparent;transition:transform .18s}' +
+    '.routes-clip b{font:400 1.35rem/1 Anton,Impact,sans-serif}' +
+    '.routes-clip small{font:600 .5rem/1 "Geist Mono",ui-monospace,monospace;letter-spacing:.18em;padding-left:.18em;color:#E5D1B8}' +
+    '.routes-clip::after{content:"";position:absolute;right:-5px;bottom:-3px;width:20px;height:20px;border-radius:50%;background:#C2956E;box-shadow:0 0 0 2px #FAF8F5;' +
+      'background-image:linear-gradient(transparent,transparent);-webkit-mask:none}' +
+    '.routes-clip::before{content:"";position:absolute;right:2px;bottom:3.5px;z-index:1;border-left:7px solid #fff;border-top:4.5px solid transparent;border-bottom:4.5px solid transparent}' +
+    '.routes-clip:active{transform:scale(.95)}.routes-clip:focus-visible{outline:2px solid #C2956E;outline-offset:3px}';
   function norm(s) { return String(s || '').replace(/\s+/g, ' ').replace(/&amp;/g, '&').trim().toLowerCase(); }
 
   function pass() {
@@ -55,7 +66,7 @@
       if (strip) {
         var row = strip.closest('nav, .tabs, .filter-bar, .wr-types, .subjects, [role="tablist"]') || strip;
         if (row.parentNode && getComputedStyle(row.parentNode).display.indexOf('flex') >= 0 && getComputedStyle(row.parentNode).flexDirection !== 'column') row = row.parentNode;
-        var note = document.createElement('p'); note.className = 'routes-note'; note.textContent = NOTE + ' '; note.insertAdjacentHTML('beforeend', CLIP);
+        var note = document.createElement('p'); note.className = 'routes-note has-clip'; var tx = document.createElement('span'); tx.className = 'rn-t'; tx.textContent = NOTE; note.appendChild(tx); note.insertAdjacentHTML('beforeend', CLIP);
         row.parentNode.insertBefore(note, row);
       }
     }

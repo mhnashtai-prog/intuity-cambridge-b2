@@ -81,7 +81,8 @@ var SKILLS = {
        belongs to the home screen's own "to review" link, not to a task menu. */
     {group:"Part 1 · Everyone writes"},
     {name:"Essay", glyph:"¶", url:"skills/writing/gate.html?task=essays"},
-    {group:"Part 2 · Choose one", rule:true},
+    /* 19 Nov 2026 (a learner: "confusing if you don't know which version you're sitting") */
+    {group:"Part 2 · Choose one", rule:true, note:"Story: only in B2 First for Schools. Report: only in B2 First."},
     {name:"Email / Letter", glyph:"@", url:"skills/writing/gate.html?task=emails"},
     {name:"Article", glyph:"A", url:"skills/writing/gate.html?task=articles"},
     {name:"Review", glyph:"★", url:"skills/writing/gate.html?task=reviews"},

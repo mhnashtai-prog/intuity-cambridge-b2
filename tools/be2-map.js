@@ -97,6 +97,9 @@ var SKILLS = {
     /* 14 Nov 2026 (evening): ONE HOME PER PAGE. Models and Study cards belong to a
        task, so they live behind each task's "Learn it" door; Compare is what is left
        of Look it up, and it is a tile of its own. */
+    /* 19 Nov 2026 (a learner: "my question is How do I give my opinion?"): the one
+       cross-task reference, phrases by what you want to say; it keeps Essentials' grouping */
+    {name:"Phrases", glyph:"❝", hint:"By what you want to say", url:"skills/writing/phrases.html"},
     {name:"Compare", glyph:"⇄", hint:"Same topic, two tasks", url:"skills/writing/compare.html"},
     /* 14 Nov 2026: Practice (Finish it…) moved into each task's Practise it, so this
        tile keeps what belongs to no one task, and a name that is not "Practise" twice */

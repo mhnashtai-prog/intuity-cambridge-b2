@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@400..600&family=Space+Grotesk:wght@700&family=Anton&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=20261105">
 <link rel="stylesheet" href="/tools/five-card.css?v=7">
+<script src="/tools/intuity-overflow.js?v=3"></script>
 <style>
 /* ═════════════════════════════════════════════════════════════════════════
    PHRASES · by what you want to say  (19 Nov 2026, a learner's review: "my
@@ -24,10 +25,8 @@
 .header{position:sticky;top:0;z-index:20;max-width:100vw;overflow:hidden}
 .wrap{max-width:720px;margin:0 auto;padding:1.1rem var(--gutter,16px) 4rem;color:var(--ink)}
 /* the task filter: the page's second header row */
-.set-tabs{display:flex;flex-wrap:nowrap!important;width:100%;max-width:100vw;box-sizing:border-box;gap:6px;overflow-x:auto;scrollbar-width:none;padding:2px var(--gutter,16px) 10px;justify-content:flex-start}
-.set-tabs::-webkit-scrollbar{display:none}
-@media (min-width:560px){.set-tabs{justify-content:center}}
-.set-tabs .chip{flex:none}
+/* 19 Nov 2026 (a learner: "the active chip is an underline while the others are pills"):
+   plain tabs and the one sliding pill, from tools/intuity-overflow.js, as on every other page */
 /* THE ENTRY (19 Nov 2026, the owner: "no noise, simple, an option", then
    "unity among all pages, lists and modal cards"). The list sits on the
    shell's poster, the same paper, kicker and inks as a Vocabulary card:
@@ -79,6 +78,7 @@
 /* the key word: the caramel underline a strong collocation partner carries, the same mark meaning the same thing */
 .ph .t .g{color:#B4ADA2;letter-spacing:.06em}
 .ph .t mark{background:none;color:inherit;font-weight:700;box-shadow:inset 0 -2px 0 var(--caramel)}
+.ph .gr{display:block;margin-top:4px;font:400 14px/1.35 'Geist',system-ui,sans-serif;color:#6B655C}
 .ph .tg{display:block;margin-top:5px;font:600 9.5px/1 'Geist Mono',ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
 .ph.more .t{font-size:16px;font-weight:400}
 .morebtn{display:block;margin:10px auto 0;border:none;background:none;font:600 13px/1 'Geist',sans-serif;color:var(--car2);padding:10px;cursor:pointer}
@@ -148,11 +148,12 @@ const bestOf=id=>+(store.get('be2.phrases.best.'+id+'.'+F)||0);
 function tabs(){
   /* 19 Nov 2026, the owner: no 'All tasks'; a pupil writes one task at a time, Essay first */
   const T=Object.keys(D.tasks).map(k=>[k,D.tasks[k]]);
-  $('tabs').innerHTML=T.map(([k,n])=>`<button type="button" class="vtab chip${k===F?' active':''}" role="tab" aria-selected="${k===F}" data-f="${k}">${esc(n)}</button>`).join('');
+  $('tabs').innerHTML=T.map(([k,n])=>`<button type="button" class="vtab${k===F?' active':''}" role="tab" aria-selected="${k===F}" data-f="${k}">${esc(n)}</button>`).join('');
   $('tabs').querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ F=b.dataset.f; store.set('be2.phrases.for',F); tabs(); grid(); });
 }
 function grid(){
-  $('kickT').textContent='Phrases · '+(D.tasks[F]||'');
+  /* the kicker asks the page's question; the header and the tab already say Phrases and the task */
+  $('kickT').textContent='What do you want to do?';
   JOBS=D.jobs.map(j=>Object.assign({},j,{list:j.phrases.filter(fits)})).filter(j=>j.list.length);
   /* a row: the job, and the first phrase it gives you, so the choice explains itself */
   const eg=t=>esc(t.replace(/\[([^\]]+)\]/,'$1')).replace(/…/g,'<span class="g">…</span>');
@@ -172,7 +173,8 @@ function head(j){ return `<button type="button" class="x" id="cX" aria-label="Cl
 const frame=(j,body,foot)=>`<div class="fc-card">${head(j)}<div class="bd">${body}</div>${foot?`<div class="ft">${foot}</div>`:''}</div>`;
 function card(){
   const j=JOBS[OPEN], top=j.list.slice(0,3), rest=j.list.slice(3), b=bestOf(j.id);
-  const li=p=>`<li><span class="t">${show(p.t)}</span>${F==='all'?`<span class="tg">${esc(tags(p))}</span>`:''}</li>`;
+  /* the grammar that follows the phrase, one grey line (a learner: "the most useful part of Essentials") */
+  const li=p=>`<li><span class="t">${show(p.t)}</span>${p.g?`<span class="gr">${esc(p.g)}</span>`:''}${F==='all'?`<span class="tg">${esc(tags(p))}</span>`:''}</li>`;
   $('sheet').innerHTML=frame(j,`<ul class="ph">${top.map(li).join('')}</ul>`+
     (rest.length?(MORE?`<ul class="ph more">${rest.map(li).join('')}</ul>`:`<button type="button" class="morebtn" id="cMore">+ ${rest.length} more</button>`):''),
     `<div class="acts"><button type="button" class="go" id="cGo">Learn ${top.length>1?'these '+top.length:'this one'}${b?' · ★ '+b:''}</button>`+
@@ -243,7 +245,7 @@ addEventListener('keydown',e=>{ if(e.key==='Escape'&&OPEN>=0) close(); });
   $('sheet').addEventListener('touchend',e=>{ if(!$('cGo')) return; const dx=e.changedTouches[0].clientX-sx, dy=e.changedTouches[0].clientY-sy;
     if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.4){ const t=dx<0?$('cNext'):$('cPrev'); if(t&&!t.disabled) t.click(); } },{passive:true}); }
 
-fetch('/data/writing/phrases-by-job.json?v=1').then(r=>r.json()).then(d=>{ D=d; if(!D.tasks[F]) F='essay'; tabs(); grid(); })
+fetch('/data/writing/phrases-by-job.json?v=2').then(r=>r.json()).then(d=>{ D=d; if(!D.tasks[F]) F='essay'; tabs(); grid(); })
   .catch(()=>{ $('jobs').innerHTML='<p class="empty">The phrases didn’t load. Check your connection and try again.</p>'; });
 })();
 </script>

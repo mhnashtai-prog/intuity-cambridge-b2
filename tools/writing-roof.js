@@ -93,7 +93,7 @@
           '<button type="button" class="rf-snd" aria-label="Sound"></button></div>';
         native.parentNode.insertBefore(hd, native); native.classList.add('rf-hide');
         wirePick(hd.querySelector('.rf-pick'), hit); wireSound(hd.querySelector('.rf-snd'));
-        document.body.style.background = '#F3F1EC';   /* the page colour of the others */
+        document.body.style.background = '#F3F1ED';   /* the page colour of the others (the landing page's ground) */
       } else {
         /* the house header is there: back to the task, and its second line names the
            task (kept so, since some pages rewrite it after loading); a picker already does */

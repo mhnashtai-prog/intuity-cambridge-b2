@@ -47,9 +47,13 @@
 .job .eg .g{color:#B4ADA2;letter-spacing:.06em}
 .job .chev{flex:none;width:18px;height:18px;color:var(--poster-faint);transition:transform .15s}
 .job:active .chev{transform:translateX(2px)}
-.reg{display:inline-block;margin-left:8px;padding:2px 6px;border-radius:999px;font:600 9.5px/1.2 'Geist Mono',ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;vertical-align:2px;background:rgba(20,17,14,.07);color:#5C5852}
-.reg.informal{background:rgba(176,134,92,.16);color:#7A5230}
 .job .bst{flex:none;font-family:var(--f-mono);font-size:.6875rem;letter-spacing:.08em;color:#4A6B5C}
+/* Email's Formal | Informal switch sits in the card's kicker, which asks the question it answers */
+.wrap .poster-kick #kickT{flex:1;min-width:0}
+.regseg{flex:none;margin-left:auto;letter-spacing:0;text-transform:none}
+.regseg[hidden]{display:none}
+.regseg button{min-height:30px;padding:.25rem .85rem;font-size:.75rem;letter-spacing:.02em}
+.wrap .poster-kick:has(.regseg:not([hidden])){margin-bottom:0;margin-top:-6px}
 .empty{text-align:center;color:var(--dim);margin:2rem 0}
 /* THE CARD: the FiveCard look. On a phone it takes the whole screen (close at
    the top, the button pinned at the bottom, the phrases scroll between), so
@@ -123,7 +127,9 @@
 </header>
 <main class="wrap">
   <section class="poster" aria-labelledby="kick">
-    <p class="poster-kick" id="kick"><i></i><span id="kickT">Phrases</span></p>
+    <div class="poster-kick" id="kick"><i></i><span id="kickT">Phrases</span>
+      <span class="seg regseg" id="regRow" role="tablist" aria-label="Who are you writing to?" hidden><button type="button" role="tab" data-r="formal">Formal</button><button type="button" role="tab" data-r="informal">Informal</button></span>
+    </div>
     <ul class="jobs" id="jobs"></ul>
   </section>
 </main>
@@ -139,16 +145,20 @@
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const store={get(k){try{return localStorage.getItem(k);}catch(e){return null;}},set(k,v){try{localStorage.setItem(k,v);}catch(e){}}};
+let R=store.get('be2.phrases.reg')==='informal'?'informal':'formal';
 let D=null, F=store.get('be2.phrases.for')||'essay', JOBS=[], OPEN=-1, MORE=false, RUN=0;
 
 /* a phrase on screen: the key word marked, every … grey */
 const show=(t,gap)=>esc(t).replace(/…/g,'<span class="g">…</span>').replace(/\[([^\]]+)\]/,(m,k)=>gap?'<span class="gslot" id="slot">'+esc(k)+'</span>':'<mark>'+k+'</mark>');
 const keyOf=p=>(/\[([^\]]+)\]/.exec(p.t)||[])[1]||'';
-const fits=p=>F==='all'||p.for.indexOf(F)>=0;
+/* Email: the Formal | Informal switch keeps the phrases for that letter, and those that suit both */
+const fits=p=>(F==='all'||p.for.indexOf(F)>=0)&&(F!=='email'||!p.reg||p.reg===R||p.reg==='both');
 /* formal / informal matters in one task only: the email or letter */
-const reg=p=>F==='email'&&p.reg?`<span class="reg ${p.reg}">${p.reg}</span>`:'';
+/* the switch carries the register now (a learner: thirteen tagged rows was too long), so no tags */
+const reg=p=>'';
 const tags=p=>p.for.map(k=>D.tasks[k]).join(' · ');
-const bestOf=id=>+(store.get('be2.phrases.best.'+id+'.'+F)||0);
+const FK=()=>F==='email'?'email-'+R:F;
+const bestOf=id=>+(store.get('be2.phrases.best.'+id+'.'+FK())||0);
 
 function tabs(){
   /* 19 Nov 2026, the owner: no 'All tasks'; a pupil writes one task at a time, Essay first */
@@ -156,11 +166,17 @@ function tabs(){
   $('tabs').innerHTML=T.map(([k,n])=>`<button type="button" class="vtab${k===F?' active':''}" role="tab" aria-selected="${k===F}" data-f="${k}">${esc(n)}</button>`).join('');
   $('tabs').querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ F=b.dataset.f; store.set('be2.phrases.for',F); tabs(); grid(); });
 }
+function regRow(){
+  $('regRow').hidden=F!=='email';
+  $('regRow').querySelectorAll('[data-r]').forEach(b=>{ const on=b.dataset.r===R; b.classList.toggle('on',on); b.setAttribute('aria-selected',on);
+    b.onclick=()=>{ if(R===b.dataset.r) return; R=b.dataset.r; store.set('be2.phrases.reg',R); grid(); }; });
+}
 function grid(){
+  regRow();
   /* the kicker asks the page's question; the header and the tab already say Phrases and the task */
-  $('kickT').textContent='What do you want to do?';
+  $('kickT').textContent=F==='email'?'Who is it to?':'What do you want to do?';
   /* a phrase that leads for this task comes first (Article's hook, Report's aim, Email's opening) */
-  const lead=p=>p.lead&&p.lead.indexOf(F)>=0?0:1;
+  const lead=p=>(p.lead&&p.lead.indexOf(F)>=0?0:2)+(F==='email'&&p.reg==='both'?1:0);
   JOBS=D.jobs.map(j=>Object.assign({},j,{list:j.phrases.filter(fits).sort((a,b)=>lead(a)-lead(b))})).filter(j=>j.list.length);
   /* a row: the job, and the first phrase it gives you, so the choice explains itself */
   const eg=t=>esc(t.replace(/\[([^\]]+)\]/,'$1')).replace(/…/g,'<span class="g">…</span>');
@@ -175,7 +191,7 @@ function grid(){
 function open(i){ OPEN=i; MORE=false; card(); $('scrim').classList.add('open'); $('sheet').classList.add('open'); }
 function close(){ $('scrim').classList.remove('open'); $('sheet').classList.remove('open'); OPEN=-1; grid(); }
 function head(j){ return `<button type="button" class="x" id="cX" aria-label="Close">✕</button>`+
-  `<span class="fc-k">Phrases · ${esc(F==='all'?j.sub:D.tasks[F])}</span><span class="fc-t" id="cT">${esc(j.name)}</span><span class="fc-bar" aria-hidden="true"></span>`; }
+  `<span class="fc-k">Phrases · ${esc(F==='all'?j.sub:F==='email'?(R==='formal'?'Formal email':'Informal email'):D.tasks[F])}</span><span class="fc-t" id="cT">${esc(j.name)}</span><span class="fc-bar" aria-hidden="true"></span>`; }
 /* one frame for every view of the card: head, a scrolling body, a pinned foot */
 const frame=(j,body,foot)=>`<div class="fc-card">${head(j)}<div class="bd">${body}</div>${foot?`<div class="ft">${foot}</div>`:''}</div>`;
 function card(){
@@ -234,7 +250,7 @@ function pick(b){
 }
 function end(){
   const j=L.j, n=L.items.length, was=bestOf(j.id), nb=L.score>was;
-  if(nb) store.set('be2.phrases.best.'+j.id+'.'+F,String(L.score));
+  if(nb) store.set('be2.phrases.best.'+j.id+'.'+FK(),String(L.score));
   const nx=OPEN<JOBS.length-1?JOBS[OPEN+1]:null;
   $('sheet').innerHTML=frame(j,`<span class="big" id="bigS">${L.score}/${n}</span>`+
     `<p class="cap">${L.score===n?'All three, first time.':L.score?'Have another go: the gaps you missed come back.':'They come back next time. Read them once more, then try again.'}${nb&&was?' <b>New best!</b>':''}</p>`+
@@ -254,7 +270,7 @@ addEventListener('keydown',e=>{ if(e.key==='Escape'&&OPEN>=0) close(); });
   $('sheet').addEventListener('touchend',e=>{ if(!$('cGo')) return; const dx=e.changedTouches[0].clientX-sx, dy=e.changedTouches[0].clientY-sy;
     if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.4){ const t=dx<0?$('cNext'):$('cPrev'); if(t&&!t.disabled) t.click(); } },{passive:true}); }
 
-fetch('/data/writing/phrases-by-job.json?v=4').then(r=>r.json()).then(d=>{ D=d; if(!D.tasks[F]) F='essay'; tabs(); grid(); })
+fetch('/data/writing/phrases-by-job.json?v=5').then(r=>r.json()).then(d=>{ D=d; if(!D.tasks[F]) F='essay'; tabs(); grid(); })
   .catch(()=>{ $('jobs').innerHTML='<p class="empty">The phrases didn’t load. Check your connection and try again.</p>'; });
 })();
 </script>

@@ -30,7 +30,7 @@
   function cut(s, n) { s = plain(s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 
   if (!document.querySelector('link[href*="/tools/five-card.css"]')) {
-    var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = '/tools/five-card.css?v=6';
+    var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = '/tools/five-card.css?v=7';
     (document.head || document.documentElement).appendChild(l);
   }
   var css =

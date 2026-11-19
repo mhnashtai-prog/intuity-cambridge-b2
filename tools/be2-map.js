@@ -104,7 +104,8 @@ var SKILLS = {
     {name:"Compare", glyph:"⇄", hint:"Same topic, two tasks", url:"skills/writing/compare.html"},
     /* 14 Nov 2026: Practice (Finish it…) moved into each task's Practise it, so this
        tile keeps what belongs to no one task, and a name that is not "Practise" twice */
-    {name:"Skills", glyph:"…", hint:"Games, sentences, sentence types", roof:"practise"},
+    /* 19 Nov 2026 (a learner: "every tile is a skill… Games is what it really is") */
+    {name:"Games", glyph:"…", hint:"Puzzles, sentences, sentence types", roof:"practise"},
     {name:"Test yourself", glyph:"◆", hint:"Revision Round, Challenge", roof:"test"}
   ],
   speaking:[
@@ -123,7 +124,7 @@ var SUB = {};   /* 14 Nov 2026: Writing's last sub-menu (Sentence Structure) bec
 /* THE ROOFS (14 Nov 2026): a menu tile opens the first page; the others are its tabs.
    match: other pages that light the same tab (the four Sentence Structure pages). */
 var ROOFS = {
-  practise:{ name:"Skills", items:[
+  practise:{ name:"Games", items:[
     {name:"Games", url:"skills/writing/games/essay-games-staged.html"},
     /* 14 Nov 2026: the Sentence Structure sub-menu is gone. Paragraph Builder and
        Cohesion Tools retired (their useful parts moved to Games · Builder, Part 2

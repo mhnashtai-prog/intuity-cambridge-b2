@@ -116,7 +116,16 @@
     '.be2-row>[data-be2] .be2{font-size:1.3rem}' +
     '@media(max-width:420px){.be2-row{gap:.5rem!important}.be2-row>[data-be2]{padding-right:.5rem}' +
       '.be2-row>[data-be2] .be2{font-size:1.1rem}}' +
-    '.be2-row>.be2-text{display:flex;flex-direction:column;gap:1px}';
+    '.be2-row>.be2-text{display:flex;flex-direction:column;gap:1px}' +
+    /* ONE SMOOTH STEP BETWEEN SCREENS (19 Nov 2026, the owner: "smooth transition
+       and consistency between screens"). intuity-shell.css already asks for a
+       cross-document fade, but a fade needs BOTH pages to ask, and the home menu
+       and six Writing pages do not load the shell, so every step to and from the
+       menu was a hard cut. Every page loads this file, so the request lives here
+       too. Same timing as the shell's. */
+    '@view-transition{navigation:auto}' +
+    '::view-transition-group(root){animation-duration:.22s;animation-timing-function:cubic-bezier(.2,.8,.2,1)}' +
+    '@media (prefers-reduced-motion:reduce){@view-transition{navigation:none}}';
 
   /* The mark is drawn in Space Grotesk. A page that doesn't load it would
      draw the mark in a fallback face, so fetch it here when it's missing. */

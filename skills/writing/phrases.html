@@ -47,6 +47,8 @@
 .job .eg .g{color:#B4ADA2;letter-spacing:.06em}
 .job .chev{flex:none;width:18px;height:18px;color:var(--poster-faint);transition:transform .15s}
 .job:active .chev{transform:translateX(2px)}
+.reg{display:inline-block;margin-left:8px;padding:2px 6px;border-radius:999px;font:600 9.5px/1.2 'Geist Mono',ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;vertical-align:2px;background:rgba(20,17,14,.07);color:#5C5852}
+.reg.informal{background:rgba(176,134,92,.16);color:#7A5230}
 .job .bst{flex:none;font-family:var(--f-mono);font-size:.6875rem;letter-spacing:.08em;color:#4A6B5C}
 .empty{text-align:center;color:var(--dim);margin:2rem 0}
 /* THE CARD: the FiveCard look. On a phone it takes the whole screen (close at
@@ -78,6 +80,7 @@
 /* the key word: the caramel underline a strong collocation partner carries, the same mark meaning the same thing */
 .ph .t .g{color:#B4ADA2;letter-spacing:.06em}
 .ph .t mark{background:none;color:inherit;font-weight:700;box-shadow:inset 0 -2px 0 var(--caramel)}
+.gr1{margin:14px 0 -6px;font:400 14px/1.35 'Geist',system-ui,sans-serif;color:#6B655C}
 .ph .gr{display:block;margin-top:4px;font:400 14px/1.35 'Geist',system-ui,sans-serif;color:#6B655C}
 .ph .tg{display:block;margin-top:5px;font:600 9.5px/1 'Geist Mono',ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
 .ph.more .t{font-size:16px;font-weight:400}
@@ -142,6 +145,8 @@ let D=null, F=store.get('be2.phrases.for')||'essay', JOBS=[], OPEN=-1, MORE=fals
 const show=(t,gap)=>esc(t).replace(/…/g,'<span class="g">…</span>').replace(/\[([^\]]+)\]/,(m,k)=>gap?'<span class="gslot" id="slot">'+esc(k)+'</span>':'<mark>'+k+'</mark>');
 const keyOf=p=>(/\[([^\]]+)\]/.exec(p.t)||[])[1]||'';
 const fits=p=>F==='all'||p.for.indexOf(F)>=0;
+/* formal / informal matters in one task only: the email or letter */
+const reg=p=>F==='email'&&p.reg?`<span class="reg ${p.reg}">${p.reg}</span>`:'';
 const tags=p=>p.for.map(k=>D.tasks[k]).join(' · ');
 const bestOf=id=>+(store.get('be2.phrases.best.'+id+'.'+F)||0);
 
@@ -154,11 +159,13 @@ function tabs(){
 function grid(){
   /* the kicker asks the page's question; the header and the tab already say Phrases and the task */
   $('kickT').textContent='What do you want to do?';
-  JOBS=D.jobs.map(j=>Object.assign({},j,{list:j.phrases.filter(fits)})).filter(j=>j.list.length);
+  /* a phrase that leads for this task comes first (Article's hook, Report's aim, Email's opening) */
+  const lead=p=>p.lead&&p.lead.indexOf(F)>=0?0:1;
+  JOBS=D.jobs.map(j=>Object.assign({},j,{list:j.phrases.filter(fits).sort((a,b)=>lead(a)-lead(b))})).filter(j=>j.list.length);
   /* a row: the job, and the first phrase it gives you, so the choice explains itself */
   const eg=t=>esc(t.replace(/\[([^\]]+)\]/,'$1')).replace(/…/g,'<span class="g">…</span>');
   $('jobs').innerHTML=JOBS.length?JOBS.map((j,i)=>{ const b=bestOf(j.id), n=Math.min(3,j.list.length);
-    return `<li><button type="button" class="job" data-i="${i}"><span class="tx"><span class="nm">${esc(j.name)}</span><span class="eg">${eg(j.list[0].t)}</span></span>`+
+    return `<li><button type="button" class="job" data-i="${i}"><span class="tx"><span class="nm">${esc(j.name)}${reg(j.list[0])}</span><span class="eg">${eg(j.list[0].t)}</span></span>`+
       `${b?`<span class="bst" aria-label="Best ${b} of ${n}">★ ${b}/${n}</span>`:''}<svg class="chev" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4l5 5-5 5"/></svg></button></li>`; }).join('')
     :'<li class="empty">No phrases for this task yet.</li>';
   $('jobs').querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>open(+b.dataset.i));
@@ -174,8 +181,10 @@ const frame=(j,body,foot)=>`<div class="fc-card">${head(j)}<div class="bd">${bod
 function card(){
   const j=JOBS[OPEN], top=j.list.slice(0,3), rest=j.list.slice(3), b=bestOf(j.id);
   /* the grammar that follows the phrase, one grey line (a learner: "the most useful part of Essentials") */
-  const li=p=>`<li><span class="t">${show(p.t)}</span>${p.g?`<span class="gr">${esc(p.g)}</span>`:''}${F==='all'?`<span class="tg">${esc(tags(p))}</span>`:''}</li>`;
-  $('sheet').innerHTML=frame(j,`<ul class="ph">${top.map(li).join('')}</ul>`+
+  /* when every phrase on show takes the same grammar, it is said once, above them (a learner) */
+  const shown=MORE?j.list:top, gs=shown.map(p=>p.g||''), one=gs[0]&&gs.every(g=>g===gs[0])&&shown.length>1?gs[0]:'';
+  const li=p=>`<li><span class="t">${show(p.t)}${reg(p)}</span>${p.g&&!one?`<span class="gr">${esc(p.g)}</span>`:''}${F==='all'?`<span class="tg">${esc(tags(p))}</span>`:''}</li>`;
+  $('sheet').innerHTML=frame(j,(one?`<p class="gr1">All ${shown.length}: ${esc(one)}</p>`:'')+`<ul class="ph">${top.map(li).join('')}</ul>`+
     (rest.length?(MORE?`<ul class="ph more">${rest.map(li).join('')}</ul>`:`<button type="button" class="morebtn" id="cMore">+ ${rest.length} more</button>`):''),
     `<div class="acts"><button type="button" class="go" id="cGo">Learn ${top.length>1?'these '+top.length:'this one'}${b?' · ★ '+b:''}</button>`+
     `<span class="nav"><button type="button" id="cPrev" aria-label="Previous"${OPEN?'':' disabled'}>‹</button>${OPEN+1}/${JOBS.length}<button type="button" id="cNext" aria-label="Next"${OPEN<JOBS.length-1?'':' disabled'}>›</button></span></div>`);
@@ -245,7 +254,7 @@ addEventListener('keydown',e=>{ if(e.key==='Escape'&&OPEN>=0) close(); });
   $('sheet').addEventListener('touchend',e=>{ if(!$('cGo')) return; const dx=e.changedTouches[0].clientX-sx, dy=e.changedTouches[0].clientY-sy;
     if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.4){ const t=dx<0?$('cNext'):$('cPrev'); if(t&&!t.disabled) t.click(); } },{passive:true}); }
 
-fetch('/data/writing/phrases-by-job.json?v=2').then(r=>r.json()).then(d=>{ D=d; if(!D.tasks[F]) F='essay'; tabs(); grid(); })
+fetch('/data/writing/phrases-by-job.json?v=3').then(r=>r.json()).then(d=>{ D=d; if(!D.tasks[F]) F='essay'; tabs(); grid(); })
   .catch(()=>{ $('jobs').innerHTML='<p class="empty">The phrases didn’t load. Check your connection and try again.</p>'; });
 })();
 </script>

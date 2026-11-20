@@ -297,7 +297,7 @@ const STEP=[null,
   {k:'match', name:'Match',how:'Tap the end that fits.'},
   {k:'sort',  name:'Sort', how:'Tap the pieces in the right order.'},
   {k:'fill',  name:'Fill the gaps',how:'Type the missing words. The first letter is your clue.',howTap:'Tap the missing words in order. The first letter is your clue.'},
-  {k:'memory',name:'From memory',how:'Write the whole sentence. Only its job is shown.',howTap:'Build the whole sentence. Two pieces don’t belong.'}];
+  {k:'memory',name:'From memory',how:'Write the sentence you have been learning, from memory. Only its job is shown.',howTap:'Build the whole sentence. Two pieces don’t belong.'}];
 /* NO KEYBOARD (v4, 5 Nov): for students who won't type on a phone, Fill and
    From memory are tapped, still checked by the app: Fill offers three words
    for each gap (same first letter where it can), From memory builds the
@@ -548,7 +548,13 @@ function memory(w,r){
     const ok=L[0][0]/want.length>=.85;
     $('mem').readOnly=true; $('chk').parentNode.remove();
     const shownW=body(fill(w)).split(' ');
-    result(ok,w,r,ok&&hit.filter(Boolean).length===want.length?null:shownW.map((x,i)=>hit[i]?esc(x):'<mark>'+esc(x)+'</mark>').join(' '));
+    /* 20 Nov 2026 (the owner wrote "It is widely believed that…", a good opener, and was told "Not yet"):
+       another wording of the same sentence is not a mistake. It earns no step, but loses none either */
+    const lcs=(a,b)=>{ const M=Array(a.length+1).fill(0).map(()=>Array(b.length+1).fill(0));
+      for(let i=a.length-1;i>=0;i--) for(let j=b.length-1;j>=0;j--) M[i][j]=near(b[j],a[i])?1+M[i+1][j+1]:Math.max(M[i+1][j],M[i][j+1]); return M[0][0]; };
+    const frames=D.slots[at].ways.filter(o=>o!==w).map(o=>body(fill(o)).split(/…/)[0]).concat(bankFrames(D.slots[at].label||D.slots[at].part));
+    const alt=!ok&&frames.some(f=>{ const fr=norm(f).split(' ').filter(Boolean); return fr.length>=3&&lcs(fr,got)/fr.length>=.85; });
+    result(ok,w,r,ok&&hit.filter(Boolean).length===want.length?null:shownW.map((x,i)=>hit[i]?esc(x):'<mark>'+esc(x)+'</mark>').join(' '),alt);
   };
 }
 /* his own sentence (a slot he chose to write his own way) */
@@ -560,7 +566,18 @@ function ownSentence(){
 }
 
 /* ── the result of a card: climb or drop, then his own idea ── */
-function result(ok,w,r,diff){
+/* the Phrases bank's openers for the job this sentence does (20 Nov 2026): a pupil who writes one of
+   those has written a good sentence, just not the one he is learning */
+let BANKJ=null; try{ fetch('/data/writing/phrases-by-job.json?v=8').then(r=>r.ok?r.json():null).then(d=>{ BANKJ=d; }).catch(()=>{}); }catch(e){}
+function bankFrames(label){
+  if(!BANKJ) return [];
+  const T={essays:'essay',emails:'email',articles:'article',reviews:'review',reports:'report',story:'story'}[TASK];
+  const MAP=[[/intro|open|start|scene|greet|hook/i,['start','open-email','opinion','reader']],[/reason|feature|point|detail|body|idea|request|first|second/i,['reason','add','opinion','good','example','ask','people']],
+    [/other side|drawback|against|problem|downside/i,['contrast','bad']],[/conclu|recommend|verdict|ending|sign|close|finish/i,['finish','recommend','signoff']]];
+  const ids=[...new Set(MAP.filter(m=>m[0].test(label)).map(m=>m[1]).flat())];
+  return BANKJ.jobs.filter(j=>ids.indexOf(j.id)>=0).map(j=>j.phrases.filter(p=>p.for.indexOf(T)>=0).map(p=>p.t.replace(/\[|\]/g,'').split('…')[0])).flat();
+}
+function result(ok,w,r,diff,alt){
   const s=slot(at), t=today(); let line;
   const r0=s.rung, rd0=s.rday, own0=s.own;   /* restored after a practice round */
   (ST.seen=ST.seen||{})[STEP[r].k]=1;
@@ -568,6 +585,8 @@ function result(ok,w,r,diff){
     if(r===5&&!s.own&&s.rday!==t){ s.own=true; s.rday=t; line='<b class="yes">It’s yours ✓</b> You wrote it from memory.'; sfx('fanfare'); cheer('big'); }
     else if(!s.own&&s.rday!==t&&s.rung<5){ s.rung++; s.rday=t; line='<b class="yes">Yes!</b> Up to step '+s.rung+': '+esc(STEP[s.rung].name.toLowerCase())+', tomorrow.'; sfx('correct'); cheer('right','.yes'); }
     else { line='<b class="yes">Yes!</b> '+(s.own?'Still yours.':r===5?'Do it again on another day and it’s yours.':'Already climbed today. Tomorrow it goes up.'); sfx('correct'); cheer('right','.yes'); }
+  } else if(alt){
+    line='<b class="yes">Good sentence.</b> That one works too, but it isn’t the one you’re learning, so your step stays. Yours is:<span class="full">'+(diff||html(fill(w)))+'</span>'; sfx('pop');
   } else {
     const drop=!s.own&&s.rung>1; if(drop) s.rung--;
     /* Select and Match already show the right one in green */

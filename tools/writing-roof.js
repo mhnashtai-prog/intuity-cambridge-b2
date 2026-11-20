@@ -78,6 +78,8 @@
   function build() {
     var here = location.pathname + location.search;
     var hit = (BE2_MAP.taskRoofOf && BE2_MAP.taskRoofOf(here)) || BE2_MAP.roofOf(here); if (!hit) return true;
+    /* 20 Nov 2026: the Writing menu's Continue (index.html) reopens the last page a pupil was on */
+    try { var it = hit.roof.items[hit.i]; localStorage.setItem('be2.writing.last', JSON.stringify({ u: here, l: (hit.task ? NAME[hit.task].replace(' / Letter', '') + ' · ' : (it && it.name !== hit.roof.name ? hit.roof.name + ' · ' : '')) + (it ? it.name : hit.roof.name), t: Date.now() })); } catch (e) {}
     if (document.querySelector('nav.roof')) return true;
     /* behind a task door: one header everywhere (see THE TASK HEADER above) */
     if (hit.task) {

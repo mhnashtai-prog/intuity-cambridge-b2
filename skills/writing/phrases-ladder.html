@@ -223,6 +223,15 @@ h1.t{margin:.8rem 0 .2rem;font:800 clamp(2.1rem,10vw,3rem)/1 'Geist',sans-serif;
 .hear:active svg{transform:scale(.93)}
 .vfade2{opacity:0;animation:slin .45s 2s forwards}
 @media (prefers-reduced-motion:reduce){.vfade2{animation:none;opacity:1}}
+
+/* a practice step in context: the model sentence, phrase in bold */
+.csent{margin:1rem 0 0;font:500 clamp(1.35rem,6vw,1.8rem)/1.35 'Geist',sans-serif;color:var(--dim);letter-spacing:-.01em}
+.csent .ph{font-weight:800;color:var(--ink)}
+.csent .gapw{display:inline-block;min-width:3.4em;border-bottom:4px solid var(--ink);color:transparent;line-height:1}
+.csent .gapw.ok{color:#2F4D42;border-color:var(--sage)}
+.csent .gapw.no{color:var(--car2);border-color:var(--car)}
+.csent .blank{display:inline-flex;gap:.25em;vertical-align:-.1em}
+.csent .blank i{display:inline-block;height:.9em;border-radius:3px;background:#E2DCD2}
 @media (prefers-reduced-motion:reduce){.big .w{animation:none;opacity:1;transform:none}}
 </style>
 <script src="/tools/be2-brand.js?v=20261119b"></script>
@@ -578,13 +587,13 @@ function ask(){
   if(r===1){ body=`<p class="big">${landT(t)}</p>${x.p.g?`<p class="gram">${esc(x.p.g)}</p>`:''}${modelHTML(modelOf(x),'vfade2')}${slipHTML(x.id)}${x.p.tip?`<p class="fb" style="border-left:3px solid var(--car);padding-left:10px;color:#7A5C3A">${esc(x.p.tip)}</p>`:''}
       <p class="ask" style="margin-top:1.2rem">Say it out loud twice. Tomorrow you choose its key word.</p>
       <div class="row"><button type="button" class="go" id="ok">Got it</button></div>`; }
-  else if(r===2){ const k=keyOf(t), opts=decoys(k); body=`<p class="ask">Which word is missing?</p><p class="big">${showT(t,'gap')}</p>
+  else if(r===2){ const k=keyOf(t), opts=decoys(k), c=ctx(x,'gap'); body=`<p class="ask">Which word is missing?</p>${c?`<p class="csent">${c}</p>`:`<p class="big">${showT(t,'gap')}</p>`}
       <div class="opts" id="opts">${opts.map(o=>`<button type="button" data-o="${esc(o)}">${esc(o)}</button>`).join('')}</div><div id="fb"></div>`; }
-  else if(r===3){ body=`<p class="ask">Type the missing word.</p><p class="big">${showT(t,'gap')}</p>
+  else if(r===3){ const c=ctx(x,'gap'); body=`<p class="ask">Type the missing word.</p>${c?`<p class="csent">${c}</p>`:`<p class="big">${showT(t,'gap')}</p>`}
       <form class="field" id="f"><input id="in" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="the missing word"><button class="go">Check</button></form><div id="fb"></div>`; }
-  else if(r===4){ body=`<p class="ask">Only the first letters. Type the whole phrase.</p><p class="hintl">${esc(letters(t))}</p>
+  else if(r===4){ const c=ctx(x,'letters'); body=`<p class="ask">Only the first letters. Type the phrase${c?' in bold':''}.</p>${c?`<p class="csent">${c}</p>`:`<p class="hintl">${esc(letters(t))}</p>`}
       <form class="field" id="f"><textarea id="in" rows="2" autocomplete="off" spellcheck="false"></textarea><button class="go">Check</button></form><div id="fb"></div>`; }
-  else if(r===5){ body=`<p class="ask">Write the phrase you learnt for this job, from memory.${x.p.g?` It is followed by <b>${esc(x.p.g)}</b>.`:''}</p>
+  else if(r===5){ const c=ctx(x,'blank'); body=`<p class="ask">Write the missing phrase from memory.${c?'':x.p.g?` It is followed by <b>${esc(x.p.g)}</b>.`:''}</p>${c?`<p class="csent">${c}</p>`:''}
       <form class="field" id="f"><textarea id="in" rows="2" autocomplete="off" spellcheck="false"></textarea><button class="go">Check</button></form><div id="fb"></div>`; }
   else { const tp=topic(); body=`<p class="ask">Use it in a sentence of your own${tp?` about <b>${esc(tp)}</b>`:''}.</p><p class="big" style="font-size:clamp(1.3rem,6vw,1.8rem)">${showT(t,'k')}</p>
       <form class="field" id="f"><textarea id="in" rows="3" autocomplete="off" spellcheck="true" placeholder="Your sentence"></textarea><button class="go">Check</button></form><div id="fb"></div>`; }
@@ -602,17 +611,35 @@ function ask(){
     $('f').onsubmit=e=>{ e.preventDefault(); const v=inp.value.trim(); if(!v) return; inp.disabled=true; $('f').querySelector('button').remove(); check(x,r,v); }; }
 }
 function fill(ok){ const sl=$('slot'); if(sl){ sl.classList.add(ok?'ok':'no'); } }
+
+/* 21 Nov 2026 (the owner: "some slides have no context"): every practice step shows the phrase inside its
+   model sentence, so the gap, the first letters and the blank always sit in a real sentence about one
+   topic. The {…} parts are the phrase: mode 'gap' hides the key word, 'letters' shows first letters,
+   'blank' hides the whole phrase. Without a model sentence, the bare phrase is shown as before. */
+function ctx(x,mode){
+  const m=modelOf(x); if(!m) return null;
+  const key=keyOf(x.p.t); let keyDone=false;
+  return esc(m).replace(/\{([^}]*)\}/g,(all,seg)=>{
+    if(mode==='letters') return '<b class="ph">'+seg.split(' ').map(w=>w.replace(/^([A-Za-z])[A-Za-z’']*/,(q,c)=>c+'_'.repeat(Math.min(q.length-1,6)))).join(' ')+'</b>';
+    if(mode==='blank') return '<span class="blank">'+seg.split(' ').map(w=>'<i style="width:'+Math.max(1.4,w.length*.52).toFixed(1)+'em"></i>').join('')+'</span>';
+    if(mode==='gap'&&!keyDone&&key&&new RegExp('\\b'+key+'\\b').test(seg)){ keyDone=true; return '<b class="ph">'+seg.replace(new RegExp('\\b'+key+'\\b'),'<span class="gapw" id="slot">'+key+'</span>')+'</b>'; }
+    return '<b class="ph">'+seg+'</b>';
+  });
+}
 function decoys(k){
   const kk=k.toLowerCase(), shape=w=>[w.split(' ').length,/s$/.test(w)&&!/ss$/.test(w),/ly$/.test(w),/ing$/.test(w),/ed$/.test(w)].join();
-  const all=[...new Set(D.jobs.flatMap(j=>j.phrases.map(p=>keyOf(p.t).toLowerCase())))].filter(w=>w&&w!==kk);
+  const all=[...new Set(POOL.flatMap(x=>[x.p].concat(x.alts).map(p=>keyOf(p.t).toLowerCase())))].filter(w=>w&&w!==kk&&!/\s/.test(w)===!/\s/.test(kk));
   const pick=all.map(w=>[w,(shape(w)===shape(kk)?0:2)+Math.abs(w.length-kk.length)/20+Math.random()*.7]).sort((a,b)=>a[1]-b[1]).slice(0,2).map(a=>a[0]);
   return [k].concat(pick).sort(()=>Math.random()-.5);
 }
+/* the phrase typed as its parts (One benefit of … is that), or as the whole model sentence */
+function phraseIn(x,v){ const m=modelOf(x); if(!m) return false; const parts=(m.match(/\{([^}]*)\}/g)||[]).map(q=>q.slice(1,-1)).join(' ');
+  return sim(v,parts)>=.88||sim(v,m.replace(/[{}]/g,''))>=.85; }
 function check(x,r,v){
   const t=x.p.t; let ok=false, alt=false, note='';
   if(r===3){ ok=norm(v)===norm(keyOf(t))||(norm(keyOf(t)).length>5&&sim(v,keyOf(t))>=.84); fill(ok); }
-  else if(r===4){ ok=sim(v,bare(t))>=.9; }
-  else if(r===5){ ok=sim(v,bare(t))>=.86||within(v,bare(t))>=.9;
+  else if(r===4){ ok=sim(v,bare(t))>=.9||phraseIn(x,v); }
+  else if(r===5){ ok=sim(v,bare(t))>=.86||within(v,bare(t))>=.9||phraseIn(x,v);
     if(!ok&&x.alts.some(a=>sim(v,bare(a.t))>=.88||within(v,bare(a.t))>=.9)) alt=true; 
     /* 21 Nov (the owner): a phrase the pupil learnt for ANOTHER job is real recall, not a miss.
        Name its job, show the one for this job, and keep the step */

@@ -144,9 +144,9 @@ h1.t{margin:.8rem 0 .2rem;font:800 clamp(2.1rem,10vw,3rem)/1 'Geist',sans-serif;
 .mode button{position:relative;z-index:1;min-height:38px;border:none;background:none;font:700 .8rem/1 'Geist',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);cursor:pointer}
 .mode button[aria-selected="true"]{color:var(--ink)}
 /* view slides */
-.vs{margin-top:1.2rem;touch-action:pan-y}
+.vs{margin-top:1rem;touch-action:pan-y}
 .vk{display:flex;align-items:baseline;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
-.vk span{font:400 1.3rem/1 'Anton',Impact,sans-serif;color:var(--car2)}
+.vk span{font:400 1.6rem/1 'Anton',Impact,sans-serif;color:var(--car2)}
 .vk b{font:600 .75rem/1 'Geist Mono',monospace;letter-spacing:.16em;text-transform:uppercase}
 .vj{padding:1.1rem 0 1.2rem;border-bottom:1px solid var(--line)}
 .vj h3{margin:0;font:800 1.15rem/1.2 'Geist',sans-serif;color:var(--sage);letter-spacing:-.01em}
@@ -261,27 +261,52 @@ const TICK='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5
 /* 21 Nov (the owner): "this is not a game page". An iOS switch splits it: VIEW the phrases, a
    paragraph per slide, back and forth as you like; PRACTISE them on the ladder. A pupil can always
    leave a practice (← Back) or ask to see the answer (Show me), so nobody gets stuck. */
-let MODE=store.get('be2.ladder.mode')==='practise'?'practise':'view', VI=0;
+/* 21 Nov 2026 (the owner): the ladder is the page in BOTH modes, and the page always opens on View.
+   View: a tile opens that paragraph's phrases to look at. Practise: a tile starts its practice. */
+let MODE='view', VI=0;
 function modeHTML(){ return `<div class="mode" role="tablist" aria-label="View or practise">
   <span class="thumb${MODE==='practise'?' r':''}" aria-hidden="true"></span>
   <button type="button" role="tab" data-m="view" aria-selected="${MODE==='view'}">View</button>
   <button type="button" role="tab" data-m="practise" aria-selected="${MODE==='practise'}">Practise</button></div>`; }
 function home(){
-  const word=D.tasks[F].toLowerCase();
+  const word=D.tasks[F].toLowerCase(), R=rungs(), n=POOL.filter(due).length, owned=POOL.filter(x=>st(x.id).rung>=TOP).length,
+    STEPS=['Meet','Choose','Type','Rebuild','Recall','Use'], P=MODE==='practise';
   $('app').innerHTML=`${FREE?'<div class="kick"><span class="sp"></span><span class="test">TEST · NO WAIT</span></div>':''}
     <h1 class="why">${POOL.length} phrases for your ${esc(word)}</h1>
-    <p class="why2">One for each job a paragraph does. ${MODE==='view'?'Look through them first.':'Learn them here, use them in the exam.'}</p>
-    ${modeHTML()}<div id="pane"></div>
+    <p class="why2">One for each job a paragraph does. ${P?'Learn them here, use them in the exam.':'Look at them first, then practise.'}</p>
+    ${modeHTML()}
+    ${P?`<ol class="six" aria-label="How you learn each phrase">${STEPS.map((t,k)=>`<li><b>${k+1}</b>${t}</li>`).join('')}</ol>
+    <p class="six-cap">Every phrase climbs these six steps, <b>one a day</b>. A miss drops it one step.</p>
+    <div class="meter"><span>Yours<b>${owned}</b></span><span>Today<b>${n}</b></span></div>`:''}
+    <p class="pick">${P?'Tap a paragraph to practise it':'Tap a paragraph to see its phrases'}</p>
+    <div class="ladder${P?'':' viewing'}" role="list">
+      <span class="cap top" aria-hidden="true"></span>
+      ${R.map((g,i)=>{ const left=g.list.filter(due).length, fresh=g.list.every(x=>!st(x.id).rung), mine=g.list.every(x=>st(x.id).rung>=TOP), off=P&&!left;
+        return `<button type="button" class="rg${off?' done':''}${mine?' mine':''}" role="listitem" data-g="${i}"${off?' aria-disabled="true"':''}>
+          <span class="cell"><span class="no">${String(i+1).padStart(2,'0')}</span><span class="fm">${esc(g.name)}</span>
+            <span class="pr">${g.list.map(x=>{ const s=st(x.id); return stepsHTML(s.rung,s.rung>=TOP); }).join('')}</span>
+            ${fresh?'<em class="nw">New</em>':(!left?`<span class="tk">${TICK}</span>`:'')}</span>
+        </button>`; }).join('')}
+      <span class="cap bot" aria-hidden="true"></span>
+    </div>
+    ${P?`<div class="row" style="justify-content:center"><button type="button" class="go" id="go"${n?'':' disabled'}>${n?`Or mix today’s ${Math.min(PER,n)}`:'All done today'}</button></div>`:''}
     <a class="look" href="/skills/writing/phrases.html">☰ Look a phrase up in the list</a>`;
-  $('app').querySelectorAll('.mode [data-m]').forEach(b=>b.onclick=()=>{ if(MODE===b.dataset.m) return; MODE=b.dataset.m; store.set('be2.ladder.mode',MODE); sfx('pop'); home(); });
-  if(MODE==='view') view(); else ladder();
+  $('app').querySelectorAll('.mode [data-m]').forEach(b=>b.onclick=()=>{ if(MODE===b.dataset.m) return; MODE=b.dataset.m; sfx('pop'); home(); });
+  $('app').querySelectorAll('.rg').forEach(b=>b.onclick=()=>{ const i=+b.dataset.g, g=R[i];
+    if(!P){ VI=i; sfx('pop'); view(); return; }
+    const list=g.list.filter(due);
+    if(!list.length){ sfx('bowlLow'); b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); return; }
+    start(list.sort((a,c)=>st(a.id).rung-st(c.id).rung), g.name); });
+  if($('go')) $('go').onclick=()=>start();
   scrollTo(0,0);
 }
-/* VIEW: one paragraph per slide, its phrases landing word by word, the other ways underneath */
+/* VIEW of one paragraph: its phrases landing word by word, the other ways underneath.
+   Back to the ladder, or on to the next paragraph, or straight into practising this one. */
 function view(){
   const R=rungs(); VI=Math.max(0,Math.min(VI,R.length-1)); const g=R[VI];
-  $('pane').innerHTML=`<div class="vs" id="vs">
-      <div class="vk"><span>${String(VI+1).padStart(2,'0')} / ${String(R.length).padStart(2,'0')}</span><b>${esc(g.name)}</b></div>
+  $('app').innerHTML=`<div class="sbar"><button type="button" class="back" id="back">‹ Ladder</button><span>View · <b>${String(VI+1).padStart(2,'0')}</b> / ${String(R.length).padStart(2,'0')}</span></div>
+    <div class="vs" id="vs">
+      <div class="vk"><span>${String(VI+1).padStart(2,'0')}</span><b>${esc(g.name)}</b></div>
       ${g.list.map(x=>`<section class="vj"><h3>${esc(x.job)}</h3><p class="big vb">${landT(x.p.t)}</p>
         ${x.p.g?`<p class="gram">${esc(x.p.g)}</p>`:''}${x.p.tip?`<p class="vtip">${esc(x.p.tip)}</p>`:''}
         ${x.alts.length?`<div class="vor"><span>Or</span>${x.alts.slice(0,2).map(a=>`<p>${showT(a.t,'k').replace('class="k"','class="kw"')}</p>`).join('')}</div>`:''}</section>`).join('')}
@@ -290,38 +315,17 @@ function view(){
       <span class="dots">${R.map((_,i)=>`<button type="button" data-v="${i}" class="${i===VI?'on':''}" aria-label="Paragraph ${i+1}"></button>`).join('')}</span>
       <button type="button" class="arw" id="vn" aria-label="Next paragraph"${VI<R.length-1?'':' disabled'}>›</button></div>
     <div class="row" style="justify-content:center"><button type="button" class="go" id="vgo">Practise ${esc(g.name.toLowerCase())} ›</button></div>`;
-  const go=i=>{ VI=i; sfx('pop'); view(); const m=document.querySelector('.mode'); if(m) scrollTo({top:Math.max(0,m.getBoundingClientRect().top+scrollY-$('hdr').offsetHeight-12)}); };
+  scrollTo(0,0);
+  const go=i=>{ VI=i; sfx('pop'); view(); };
+  $('back').onclick=()=>{ sfx('pop'); home(); };
   $('vp').onclick=()=>VI&&go(VI-1); $('vn').onclick=()=>VI<R.length-1&&go(VI+1);
-  $('pane').querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>go(+b.dataset.v));
+  $('app').querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>go(+b.dataset.v));
   let x0=null; const vs=$('vs');
   vs.addEventListener('touchstart',e=>{ x0=e.touches[0].clientX; },{passive:true});
   vs.addEventListener('touchend',e=>{ if(x0==null) return; const dx=e.changedTouches[0].clientX-x0; x0=null;
     if(dx<-50&&VI<R.length-1) go(VI+1); else if(dx>50&&VI) go(VI-1); },{passive:true});
-  $('vgo').onclick=()=>{ MODE='practise'; store.set('be2.ladder.mode',MODE); const list=g.list.filter(due);
+  $('vgo').onclick=()=>{ MODE='practise'; const list=g.list.filter(due);
     if(list.length) start(list.sort((a,c)=>st(a.id).rung-st(c.id).rung),g.name); else home(); };
-}
-/* PRACTISE: the ladder */
-function ladder(){
-  const R=rungs(), n=POOL.filter(due).length, owned=POOL.filter(x=>st(x.id).rung>=TOP).length, STEPS=['Meet','Choose','Type','Rebuild','Recall','Use'];
-  $('pane').innerHTML=`<ol class="six" aria-label="How you learn each phrase">${STEPS.map((t,k)=>`<li><b>${k+1}</b>${t}</li>`).join('')}</ol>
-    <p class="six-cap">Every phrase climbs these six steps, <b>one a day</b>. A miss drops it one step.</p>
-    <div class="meter"><span>Yours<b>${owned}</b></span><span>Today<b>${n}</b></span></div>
-    <p class="pick">Tap a paragraph</p>
-    <div class="ladder" role="list">
-      <span class="cap top" aria-hidden="true"></span>
-      ${R.map((g,i)=>{ const left=g.list.filter(due).length, fresh=g.list.every(x=>!st(x.id).rung), mine=g.list.every(x=>st(x.id).rung>=TOP);
-        return `<button type="button" class="rg${left?'':' done'}${mine?' mine':''}" role="listitem" data-g="${i}"${left?'':' aria-disabled="true"'}>
-          <span class="cell"><span class="no">${String(i+1).padStart(2,'0')}</span><span class="fm">${esc(g.name)}</span>
-            <span class="pr">${g.list.map(x=>{ const s=st(x.id); return stepsHTML(s.rung,s.rung>=TOP); }).join('')}</span>
-            ${left?(fresh?'<em class="nw">New</em>':''):`<span class="tk">${TICK}</span>`}</span>
-        </button>`; }).join('')}
-      <span class="cap bot" aria-hidden="true"></span>
-    </div>
-    <div class="row" style="justify-content:center"><button type="button" class="go" id="go"${n?'':' disabled'}>${n?`Or mix today’s ${Math.min(PER,n)}`:'All done today'}</button></div>`;
-  $('pane').querySelectorAll('.rg').forEach(b=>b.onclick=()=>{ const g=R[+b.dataset.g], list=g.list.filter(due);
-    if(!list.length){ sfx('bowlLow'); b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); return; }
-    start(list.sort((a,c)=>st(a.id).rung-st(c.id).rung), g.name); });
-  $('go').onclick=()=>start();
 }
 
 /* ---------- a session ---------- */

@@ -196,7 +196,7 @@ h1.t{margin:.8rem 0 .2rem;font:800 clamp(2.1rem,10vw,3rem)/1 'Geist',sans-serif;
 .vbar{display:flex;gap:4px;margin:1rem 0 0}
 .vbar i{flex:1;height:4px;border-radius:2px;background:#E2DCD2}
 .vbar i.d{background:#8AA79C}.vbar i.on{background:#201E1C}
-.vstage{min-height:46vh;display:flex;flex-direction:column;justify-content:flex-start;padding:2.2rem 0 1.2rem;touch-action:pan-y}
+.vstage{min-height:46vh;display:flex;flex-direction:column;justify-content:flex-start;padding:1.4rem 0 1.2rem;touch-action:pan-y}
 .vlab{margin:0 0 .6rem;font:800 1.15rem/1.2 'Geist',sans-serif;color:var(--sage)}
 .vfade{opacity:0;animation:slin .4s 1.4s forwards}
 .vx{margin:.2rem 0 0;font:600 clamp(1.4rem,6.4vw,1.9rem)/1.25 'Geist',sans-serif;color:#9A6A3C}
@@ -237,6 +237,14 @@ h1.t{margin:.8rem 0 .2rem;font:800 clamp(2.1rem,10vw,3rem)/1 'Geist',sans-serif;
 .learn{background:#201E1C;color:#E5D1B8}
 .recog{background:#E3DED6;color:var(--dim)}
 .mixb{width:100%;max-width:320px}
+
+/* the rhythm of every job, the same each time: 1 Learn · 2 Avoid · 3 Other ways */
+.rhythm{display:flex;gap:6px;margin:.9rem 0 0}
+.rhythm span{padding:6px 10px;border-radius:999px;background:#E3DED6;font:600 .66rem/1 'Geist',sans-serif;color:var(--faint)}
+.rhythm span.on{background:#201E1C;color:#E5D1B8}
+.vbar i.gs{margin-left:8px}
+.valt.vin{font-weight:500;color:var(--dim)}
+.valt.vin b{font-weight:800;color:var(--ink)}
 @media (prefers-reduced-motion:reduce){.big .w{animation:none;opacity:1;transform:none}}
 </style>
 <script src="/tools/be2-brand.js?v=20261121"></script>
@@ -486,9 +494,24 @@ function say(text,id){
     u.lang='en-GB'; u.rate=.92; speechSynthesis.speak(u); }catch(e){}
 }
 document.addEventListener('click',e=>{ const h=e.target.closest('[data-hear]'); if(!h) return; sfx('pop'); say(h.dataset.hear,h.dataset.id); });
+
+/* 21 Nov 2026 (the owner): an "Or say" phrase is shown in the main phrase's own sentence, swapped in, so
+   the pupil sees what changes and what stays. Only where it fits: same essay type, and the phrase ends
+   the way the main phrase's first part ends (that … / of … / , …). Otherwise the bare phrase. */
+function swapIn(x,a){
+  const m=modelOf(x); if(!m||(a.tag&&a.tag!==x.p.tag)) return null;
+  const seg=(/\{([^}]*)\}/.exec(m)||[])[1]; if(!seg) return null;
+  /* a clause follows both 'that' and a comma opener, so they swap; 'of …' takes a noun */
+  const end=w=>{ const e=/,\s*$/.test(w)?',':(w.trim().split(/\s+/).pop()||'').toLowerCase(); return e===','||e==='that'?'clause':e; };
+  const at=plain(a.t).replace(/\s*…\s*$/,''); if(at===plain(a.t)||/…/.test(at)) return null;
+  if(end(at)!==end(seg)) return null;
+  const rest=m.replace(/\{[^}]*\}/,'').replace(/[{}]/g,'');
+  return {lead:at.replace(/,\s*$/,','),rest};
+}
 let VS=0;
 /* the introduction's two jobs have names pupils know from class: the hook and the thesis */
 const role=x=>x.id==='hook'||(x.id==='start'&&F!=='story')?'Hook · ':x.id==='aim'?'Thesis · ':'';
+const jobName=x=>x.id==='hook'?'Hook':x.id==='aim'?'Thesis':x.job;
 function stagesOf(g){
   const out=[];
   g.list.forEach(x=>{
@@ -506,15 +529,16 @@ function view(){
   const R=rungs(); VI=Math.max(0,Math.min(VI,R.length-1)); const g=R[VI], SS=stagesOf(g); VS=Math.max(0,Math.min(VS,SS.length-1));
   const c=SS[VS], x=c.x, last=VS===SS.length-1;
   let body='';
-  if(c.k==='phrase') body=`<p class="vlab">${esc(role(x))}${esc(x.job)} <span class="learn">Learn this one</span></p>${x.p.tag?`<small class="vtag">${esc(x.p.tag)}</small>`:''}<p class="big vb">${landT(x.p.t)}</p>${x.p.g?`<p class="gram vfade">${esc(x.p.g)}</p>`:''}${modelHTML(modelOf(x),'vfade2')}`;
-  else if(c.k==='slip') body=`<p class="vlab">Avoid</p>
+  if(c.k==='phrase') body=`<p class="vlab">${esc(jobName(x))} <span class="learn">Learn this one</span></p>${x.p.tag?`<small class="vtag">${esc(x.p.tag)}</small>`:''}<p class="big vb">${landT(x.p.t)}</p>${x.p.g?`<p class="gram vfade">${esc(x.p.g)}</p>`:''}${modelHTML(modelOf(x),'vfade2')}`;
+  else if(c.k==='slip') body=`<p class="vlab">${esc(jobName(x))} · avoid</p>
       ${c.w?`<p class="vx"><span>${esc(c.w)}</span></p>`:''}${c.r?`<p class="vok">${esc(c.r)}</p>`:''}<p class="vwhy">${esc(c.why)}</p>`;
-  else body=`<p class="vlab">${esc(role(x))}Or say <span class="recog">to recognise</span></p>${c.a.map((a,i)=>`<p class="valt" style="animation-delay:${(.15+i*.6).toFixed(2)}s">${a.tag?`<small class="vtag">${esc(a.tag)}</small>`:''}${showT(a.t,'k').replace(/class="k"/g,'class="kw"')}</p>`).join('')}`;
+  else body=`<p class="vlab">${esc(jobName(x))} · other ways <span class="recog">to recognise</span></p>${c.a.map((a,i)=>{ const w=swapIn(x,a); return `<p class="valt${w?' vin':''}" style="animation-delay:${(.15+i*.6).toFixed(2)}s">${a.tag?`<small class="vtag">${esc(a.tag)}</small>`:''}${w?`<b>${esc(w.lead)}</b>${esc(w.rest)}`:showT(a.t,'k').replace(/class="k"/g,'class="kw"')}</p>`; }).join('')}`;
   $('app').innerHTML=`<div class="sbar"><button type="button" class="back" id="back">‹ Ladder</button><span><b>${String(VI+1).padStart(2,'0')}</b> ${esc(g.name)}</span></div>
-    <div class="vbar" aria-hidden="true">${SS.map((_,i)=>`<i class="${i<VS?'d':i===VS?'on':''}"></i>`).join('')}</div>
+    <div class="vbar" aria-hidden="true">${SS.map((q,i)=>`<i class="${i<VS?'d':i===VS?'on':''}${i&&q.x!==SS[i-1].x?' gs':''}"></i>`).join('')}</div>
+    <div class="rhythm" aria-label="Every phrase: learn it, avoid the slip, see other ways">${['phrase','slip','or'].filter(k=>SS.some(q=>q.x===x&&q.k===k)).map((k,i)=>`<span class="${k===c.k?'on':''}">${i+1} ${k==='phrase'?'Learn':k==='slip'?'Avoid':'Other ways'}</span>`).join('')}</div>
     <div class="vstage" id="vs">${body}</div>
     <div class="vnext"><button type="button" class="arw" id="vp" aria-label="Back"${VS?'':' disabled'}>‹</button>
-      <button type="button" class="go" id="vn">${last?`Practise ${esc(g.name.toLowerCase())} ›`:'Next ›'}</button></div>
+      <button type="button" class="go" id="vn">${last?`Practise ${esc(g.name.toLowerCase())} ›`:(n=>n.k==='phrase'?`Next: ${esc(jobName(n.x))} ›`:n.k==='slip'?'Next: Avoid ›':c.k==='or'?'More ways ›':'Next: other ways ›')(SS[VS+1])}</button></div>
     ${last?`<button type="button" class="showme" id="vgo">Back to the ladder</button>`:''}`;
   scrollTo(0,0);
   const to=(i,j)=>{ VI=i; VS=j; sfx('pop'); view(); };

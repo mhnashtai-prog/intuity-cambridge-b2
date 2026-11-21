@@ -190,6 +190,26 @@ h1.t{margin:.8rem 0 .2rem;font:800 clamp(2.1rem,10vw,3rem)/1 'Geist',sans-serif;
 .rb{min-height:54px;border-radius:14px;border:1.5px solid var(--line);background:#fff;font:700 1rem/1 'Geist',sans-serif;color:var(--ink);cursor:pointer}
 .rb.no{color:#9A6A3C}.rb.yes{color:#2F4D42}
 @media (prefers-reduced-motion:reduce){.sl-x::after{animation:none;transform:none}.sl-ok,.sl-why{animation:none;opacity:1;transform:none}}
+
+/* staged View: one thing at a time */
+.vbar{display:flex;gap:4px;margin:1rem 0 0}
+.vbar i{flex:1;height:4px;border-radius:2px;background:#E2DCD2}
+.vbar i.d{background:#8AA79C}.vbar i.on{background:#201E1C}
+.vstage{min-height:46vh;display:flex;flex-direction:column;justify-content:center;padding:1.2rem 0;touch-action:pan-y}
+.vlab{margin:0 0 .6rem;font:800 1.15rem/1.2 'Geist',sans-serif;color:var(--sage)}
+.vfade{opacity:0;animation:slin .4s 1.4s forwards}
+.vx{margin:.2rem 0 0;font:600 clamp(1.4rem,6.4vw,1.9rem)/1.25 'Geist',sans-serif;color:#9A6A3C}
+.vx span{background:linear-gradient(#B5502E,#B5502E) 0 58%/0% 3px no-repeat;-webkit-box-decoration-break:clone;box-decoration-break:clone;animation:strike2 .6s .7s forwards}
+@keyframes strike2{to{background-size:100% 3px}}
+.vok{margin:.7rem 0 0;font:800 clamp(1.5rem,6.8vw,2rem)/1.2 'Geist',sans-serif;color:#2F4D42;opacity:0;transform:translateX(-8px);animation:slin .45s 1.4s forwards}
+.vok::before{content:"✓ ";color:#708A81}
+.vwhy{margin:1rem 0 0;font:400 1.02rem/1.45 'Geist',sans-serif;color:var(--dim);opacity:0;animation:slin .45s 2s forwards}
+.valt{margin:.2rem 0 .8rem;font:700 clamp(1.4rem,6.4vw,1.9rem)/1.2 'Geist',sans-serif;letter-spacing:-.02em;color:var(--ink);opacity:0;transform:translateY(8px);animation:slin .45s forwards}
+.valt .kw{box-shadow:inset 0 -.28em 0 rgba(194,149,110,.55)}
+.valt .el{color:#B4ADA2}
+.vnext{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:.6rem}
+.vnext .go{flex:1;max-width:260px;margin-left:auto}
+@media (prefers-reduced-motion:reduce){.vfade,.vok,.vwhy,.valt{animation:none;opacity:1;transform:none}.vx span{animation:none;background-size:100% 3px}}
 @media (prefers-reduced-motion:reduce){.big .w{animation:none;opacity:1;transform:none}}
 </style>
 <script src="/tools/be2-brand.js?v=20261119b"></script>
@@ -337,7 +357,7 @@ function home(){
     <a class="look" href="/skills/writing/phrases.html">☰ Look a phrase up in the list</a>`;
   $('app').querySelectorAll('.mode [data-m]').forEach(b=>b.onclick=()=>{ if(MODE===b.dataset.m) return; MODE=b.dataset.m; sfx('pop'); home(); });
   $('app').querySelectorAll('.rg').forEach(b=>b.onclick=()=>{ const i=+b.dataset.g, g=R[i];
-    if(!P){ VI=i; sfx('pop'); view(); return; }
+    if(!P){ VI=i; VS=0; sfx('pop'); view(); return; }
     const list=g.list.filter(due);
     if(!list.length){ sfx('bowlLow'); b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); return; }
     start(list.sort((a,c)=>st(a.id).rung-st(c.id).rung), g.name); });
@@ -347,30 +367,48 @@ function home(){
 }
 /* VIEW of one paragraph: its phrases landing word by word, the other ways underneath.
    Back to the ladder, or on to the next paragraph, or straight into practising this one. */
+/* 21 Nov 2026 (the owner: "screen cluttering, too much reading for a kid"): View comes in stages,
+   one thing on the screen at a time. For each job: 1 the phrase lands, 2 the slip to avoid,
+   3 two other ways to say it. Next / Back (or swipe) step through; the bar on top shows where you are. */
+let VS=0;
+function stagesOf(g){
+  const out=[];
+  g.list.forEach(x=>{
+    out.push({x,k:'phrase'});
+    const l=F==='story'?null:L1[x.id], t=x.p.tip&&/^Not:\s*([^.]+)\.\s*(.*)$/.exec(x.p.tip);
+    if(l) out.push({x,k:'slip',w:l[0],r:l[1],why:l[2]});
+    else if(t) out.push({x,k:'slip',w:t[1],r:'',why:t[2]});
+    else if(x.p.tip) out.push({x,k:'slip',w:'',r:'',why:x.p.tip});
+    if(x.alts.length) out.push({x,k:'or'});
+  });
+  return out;
+}
 function view(){
-  const R=rungs(); VI=Math.max(0,Math.min(VI,R.length-1)); const g=R[VI];
-  $('app').innerHTML=`<div class="sbar"><button type="button" class="back" id="back">‹ Ladder</button><span>View · <b>${String(VI+1).padStart(2,'0')}</b> / ${String(R.length).padStart(2,'0')}</span></div>
-    <div class="vs" id="vs">
-      <div class="vk"><span>${String(VI+1).padStart(2,'0')}</span><b>${esc(g.name)}</b></div>
-      ${g.list.map(x=>`<section class="vj"><h3>${esc(x.job)}</h3><p class="big vb">${landT(x.p.t)}</p>
-        ${x.p.g?`<p class="gram">${esc(x.p.g)}</p>`:''}${x.p.tip?`<p class="vtip">${esc(x.p.tip)}</p>`:''}${slipHTML(x.id)}
-        ${x.alts.length?`<div class="vor"><span>Or</span>${x.alts.slice(0,2).map(a=>`<p>${showT(a.t,'k').replace('class="k"','class="kw"')}</p>`).join('')}</div>`:''}</section>`).join('')}
-    </div>
-    <div class="vnav"><button type="button" class="arw" id="vp" aria-label="Previous paragraph"${VI?'':' disabled'}>‹</button>
-      <span class="dots">${R.map((_,i)=>`<button type="button" data-v="${i}" class="${i===VI?'on':''}" aria-label="Paragraph ${i+1}"></button>`).join('')}</span>
-      <button type="button" class="arw" id="vn" aria-label="Next paragraph"${VI<R.length-1?'':' disabled'}>›</button></div>
-    <div class="row" style="justify-content:center"><button type="button" class="go" id="vgo">Practise ${esc(g.name.toLowerCase())} ›</button></div>`;
+  const R=rungs(); VI=Math.max(0,Math.min(VI,R.length-1)); const g=R[VI], SS=stagesOf(g); VS=Math.max(0,Math.min(VS,SS.length-1));
+  const c=SS[VS], x=c.x, last=VS===SS.length-1;
+  let body='';
+  if(c.k==='phrase') body=`<p class="vlab">${esc(x.job)}</p><p class="big vb">${landT(x.p.t)}</p>${x.p.g?`<p class="gram vfade">${esc(x.p.g)}</p>`:''}`;
+  else if(c.k==='slip') body=`<p class="vlab">Watch out</p>
+      ${c.w?`<p class="vx"><span>${esc(c.w)}</span></p>`:''}${c.r?`<p class="vok">${esc(c.r)}</p>`:''}<p class="vwhy">${esc(c.why)}</p>`;
+  else body=`<p class="vlab">Or say</p>${x.alts.slice(0,2).map((a,i)=>`<p class="valt" style="animation-delay:${(.15+i*.6).toFixed(2)}s">${showT(a.t,'k').replace(/class="k"/g,'class="kw"')}</p>`).join('')}`;
+  $('app').innerHTML=`<div class="sbar"><button type="button" class="back" id="back">‹ Ladder</button><span><b>${String(VI+1).padStart(2,'0')}</b> ${esc(g.name)}</span></div>
+    <div class="vbar" aria-hidden="true">${SS.map((_,i)=>`<i class="${i<VS?'d':i===VS?'on':''}"></i>`).join('')}</div>
+    <div class="vstage" id="vs">${body}</div>
+    <div class="vnext"><button type="button" class="arw" id="vp" aria-label="Back"${VS||VI?'':' disabled'}>‹</button>
+      <button type="button" class="go" id="vn">${last?(VI<R.length-1?'Next paragraph ›':'Practise it ›'):'Next ›'}</button></div>
+    ${last&&VI<R.length-1?`<button type="button" class="showme" id="vgo">Practise ${esc(g.name.toLowerCase())} now</button>`:''}`;
   scrollTo(0,0);
-  const go=i=>{ VI=i; sfx('pop'); view(); };
-  $('back').onclick=()=>{ sfx('pop'); home(); };
-  $('vp').onclick=()=>VI&&go(VI-1); $('vn').onclick=()=>VI<R.length-1&&go(VI+1);
-  $('app').querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>go(+b.dataset.v));
+  const to=(i,j)=>{ VI=i; VS=j; sfx('pop'); view(); };
+  const fwd=()=>{ if(!last) to(VI,VS+1); else if(VI<R.length-1) to(VI+1,0); else practiseIt(); };
+  const bwd=()=>{ if(VS) to(VI,VS-1); else if(VI){ const p=stagesOf(R[VI-1]); to(VI-1,p.length-1); } };
+  const practiseIt=()=>{ MODE='practise'; const list=g.list.filter(due);
+    if(list.length) start(list.sort((a,c)=>st(a.id).rung-st(c.id).rung),g.name); else home(); };
+  $('back').onclick=()=>{ sfx('pop'); VS=0; home(); };
+  $('vn').onclick=fwd; $('vp').onclick=bwd; if($('vgo')) $('vgo').onclick=practiseIt;
   let x0=null; const vs=$('vs');
   vs.addEventListener('touchstart',e=>{ x0=e.touches[0].clientX; },{passive:true});
   vs.addEventListener('touchend',e=>{ if(x0==null) return; const dx=e.changedTouches[0].clientX-x0; x0=null;
-    if(dx<-50&&VI<R.length-1) go(VI+1); else if(dx>50&&VI) go(VI-1); },{passive:true});
-  $('vgo').onclick=()=>{ MODE='practise'; const list=g.list.filter(due);
-    if(list.length) start(list.sort((a,c)=>st(a.id).rung-st(c.id).rung),g.name); else home(); };
+    if(dx<-50) fwd(); else if(dx>50) bwd(); },{passive:true});
 }
 
 

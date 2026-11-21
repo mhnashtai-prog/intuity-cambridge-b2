@@ -371,6 +371,8 @@ function home(){
    one thing on the screen at a time. For each job: 1 the phrase lands, 2 the slip to avoid,
    3 two other ways to say it. Next / Back (or swipe) step through; the bar on top shows where you are. */
 let VS=0;
+/* the introduction's two jobs have names pupils know from class: the hook and the thesis */
+const role=x=>x.id==='start'?'Hook · ':x.id==='opinion'&&F!=='email'?'Thesis · ':'';
 function stagesOf(g){
   const out=[];
   g.list.forEach(x=>{
@@ -379,7 +381,8 @@ function stagesOf(g){
     if(l) out.push({x,k:'slip',w:l[0],r:l[1],why:l[2]});
     else if(t) out.push({x,k:'slip',w:t[1],r:'',why:t[2]});
     else if(x.p.tip) out.push({x,k:'slip',w:'',r:'',why:x.p.tip});
-    if(x.alts.length) out.push({x,k:'or'});
+    /* 21 Nov 2026 (the owner): a tile shows ALL its expressions, two to a screen */
+    for(let i=0;i<x.alts.length;i+=2) out.push({x,k:'or',a:x.alts.slice(i,i+2),n:i});
   });
   return out;
 }
@@ -387,24 +390,25 @@ function view(){
   const R=rungs(); VI=Math.max(0,Math.min(VI,R.length-1)); const g=R[VI], SS=stagesOf(g); VS=Math.max(0,Math.min(VS,SS.length-1));
   const c=SS[VS], x=c.x, last=VS===SS.length-1;
   let body='';
-  if(c.k==='phrase') body=`<p class="vlab">${esc(x.job)}</p><p class="big vb">${landT(x.p.t)}</p>${x.p.g?`<p class="gram vfade">${esc(x.p.g)}</p>`:''}`;
+  if(c.k==='phrase') body=`<p class="vlab">${esc(role(x))}${esc(x.job)}</p><p class="big vb">${landT(x.p.t)}</p>${x.p.g?`<p class="gram vfade">${esc(x.p.g)}</p>`:''}`;
   else if(c.k==='slip') body=`<p class="vlab">Watch out</p>
       ${c.w?`<p class="vx"><span>${esc(c.w)}</span></p>`:''}${c.r?`<p class="vok">${esc(c.r)}</p>`:''}<p class="vwhy">${esc(c.why)}</p>`;
-  else body=`<p class="vlab">Or say</p>${x.alts.slice(0,2).map((a,i)=>`<p class="valt" style="animation-delay:${(.15+i*.6).toFixed(2)}s">${showT(a.t,'k').replace(/class="k"/g,'class="kw"')}</p>`).join('')}`;
+  else body=`<p class="vlab">${esc(role(x))}Or say</p>${c.a.map((a,i)=>`<p class="valt" style="animation-delay:${(.15+i*.6).toFixed(2)}s">${showT(a.t,'k').replace(/class="k"/g,'class="kw"')}</p>`).join('')}`;
   $('app').innerHTML=`<div class="sbar"><button type="button" class="back" id="back">‹ Ladder</button><span><b>${String(VI+1).padStart(2,'0')}</b> ${esc(g.name)}</span></div>
     <div class="vbar" aria-hidden="true">${SS.map((_,i)=>`<i class="${i<VS?'d':i===VS?'on':''}"></i>`).join('')}</div>
     <div class="vstage" id="vs">${body}</div>
-    <div class="vnext"><button type="button" class="arw" id="vp" aria-label="Back"${VS||VI?'':' disabled'}>‹</button>
-      <button type="button" class="go" id="vn">${last?(VI<R.length-1?'Next paragraph ›':'Practise it ›'):'Next ›'}</button></div>
-    ${last&&VI<R.length-1?`<button type="button" class="showme" id="vgo">Practise ${esc(g.name.toLowerCase())} now</button>`:''}`;
+    <div class="vnext"><button type="button" class="arw" id="vp" aria-label="Back"${VS?'':' disabled'}>‹</button>
+      <button type="button" class="go" id="vn">${last?`Practise ${esc(g.name.toLowerCase())} ›`:'Next ›'}</button></div>
+    ${last?`<button type="button" class="showme" id="vgo">Back to the ladder</button>`:''}`;
   scrollTo(0,0);
   const to=(i,j)=>{ VI=i; VS=j; sfx('pop'); view(); };
-  const fwd=()=>{ if(!last) to(VI,VS+1); else if(VI<R.length-1) to(VI+1,0); else practiseIt(); };
-  const bwd=()=>{ if(VS) to(VI,VS-1); else if(VI){ const p=stagesOf(R[VI-1]); to(VI-1,p.length-1); } };
+  /* a tile is self-contained (the owner): Next stays inside this paragraph */
+  const fwd=()=>{ if(!last) to(VI,VS+1); else practiseIt(); };
+  const bwd=()=>{ if(VS) to(VI,VS-1); };
   const practiseIt=()=>{ MODE='practise'; const list=g.list.filter(due);
     if(list.length) start(list.sort((a,c)=>st(a.id).rung-st(c.id).rung),g.name); else home(); };
   $('back').onclick=()=>{ sfx('pop'); VS=0; home(); };
-  $('vn').onclick=fwd; $('vp').onclick=bwd; if($('vgo')) $('vgo').onclick=practiseIt;
+  $('vn').onclick=fwd; $('vp').onclick=bwd; if($('vgo')) $('vgo').onclick=()=>{ sfx('pop'); VS=0; home(); };
   let x0=null; const vs=$('vs');
   vs.addEventListener('touchstart',e=>{ x0=e.touches[0].clientX; },{passive:true});
   vs.addEventListener('touchend',e=>{ if(x0==null) return; const dx=e.changedTouches[0].clientX-x0; x0=null;

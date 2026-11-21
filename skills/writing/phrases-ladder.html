@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Phrase Ladder · INTUITY</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@400..600&family=Space+Grotesk:wght@700&family=Anton&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/data/grammar-rules/intuity-shell.css?v=20261105">
+<script src="/tools/intuity-overflow.js?v=3"></script>
+<style>
+/* ════════════════════════════════════════════════════════════════════════
+   PHRASE LADDER  (21 Nov 2026, an experiment, not yet on the menu).
+   The owner: "how are we helping kids to recall phrases and aid retention?"
+   Watching is not remembering. Each phrase climbs six rungs, one a day:
+     1 Meet it   2 Choose it   3 Type the key word   4 Rebuild from first
+     letters   5 Write it from the job alone   6 Use it about your topic
+   A miss drops it one rung (as in Basics). Five a day: the ones due first,
+   then new ones. Recognition -> recall -> production -> use, spaced.
+   ?free=1 lifts the one-rung-a-day wait, for trying it out.
+   Data: data/writing/phrases-by-job.json (each job's lead phrase).
+   ════════════════════════════════════════════════════════════════════════ */
+:root{--ink:#14110E;--car:#C2956E;--car2:#9A6A3C;--sage:#708A81;--sage2:#8AA79C;--dim:#5C5852;--faint:#8A8378;--ground:#F3F1ED;--line:rgba(20,17,14,.12)}
+html,body{background:var(--ground)}
+.wrap{max-width:560px;margin:0 auto;padding:clamp(16px,3.5vh,30px) 22px calc(env(safe-area-inset-bottom,0px) + 28px);color:var(--ink)}
+.kick{display:flex;align-items:center;gap:10px;font:600 .6875rem/1 'Geist Mono',ui-monospace,monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--dim)}
+.kick i{width:26px;height:9px;background:var(--car);flex:none}
+.kick .sp{flex:1}
+.kick b{color:var(--ink);font-weight:600}
+h1.t{margin:.8rem 0 .2rem;font:800 clamp(2.1rem,10vw,3rem)/1 'Geist',sans-serif;letter-spacing:-.03em}
+.lede{margin:.6rem 0 1.2rem;font:400 1.02rem/1.5 'Geist',sans-serif;color:var(--dim)}
+/* the ladder: one row per phrase, six steps */
+.lad{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.lad li{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+.lad .nm{flex:1;min-width:0}
+.lad .nm b{display:block;font:700 .95rem/1.25 'Geist',sans-serif}
+.lad .nm span{display:block;font:400 .9rem/1.35 'Geist',sans-serif;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.steps{display:flex;gap:3px;flex:none}
+.steps i{width:7px;height:16px;border-radius:2px;background:#E2DCD2}
+.steps i.on{background:var(--sage)}
+.steps.own i{background:var(--car)}
+.legend{margin:.9rem 0 0;font:400 .85rem/1.5 'Geist',sans-serif;color:var(--faint)}
+.go{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:0 30px;border:none;border-radius:999px;background:var(--ink);color:#fff;font:700 1rem/1 'Geist',sans-serif;cursor:pointer;text-decoration:none}
+.go:active{transform:scale(.97)}
+.go[disabled]{opacity:.35}
+.ghost{border:none;background:none;font:600 .9rem/1 'Geist',sans-serif;color:var(--car2);padding:12px;cursor:pointer}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:1.4rem}
+/* a question */
+.meter{display:flex;justify-content:space-between;align-items:baseline;margin:.2rem 0 0;padding:10px 0;border-bottom:1px solid var(--line);
+  font:600 .625rem/1 'Geist Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+.meter b{font:400 1.35rem/1 'Anton',Impact,sans-serif;color:var(--ink);letter-spacing:0;margin-left:6px}
+.rung{display:inline-flex;align-items:center;gap:8px;margin:1.3rem 0 0;font:700 .6875rem/1 'Geist Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--sage)}
+.rung .steps i{height:10px;width:6px}
+.job{margin:.55rem 0 0;font:800 clamp(1.25rem,5.6vw,1.6rem)/1.15 'Geist',sans-serif;letter-spacing:-.015em;color:var(--sage)}
+.ask{margin:.35rem 0 0;font:400 .98rem/1.45 'Geist',sans-serif;color:var(--dim)}
+.big{margin:1.1rem 0 0;font:800 clamp(1.75rem,8vw,2.6rem)/1.12 'Geist',sans-serif;letter-spacing:-.025em}
+.big .el{color:#B4ADA2}
+.big .k{position:relative;z-index:0}
+.big .k::after{content:"";position:absolute;z-index:-1;left:-.05em;right:-.05em;bottom:.06em;height:.3em;background:var(--car);opacity:.55}
+.big .slot{display:inline-block;min-width:3.6em;border-bottom:4px solid var(--ink);color:transparent;line-height:1}
+.big .slot.ok{color:#2F4D42;border-color:var(--sage)}
+.big .slot.no{color:var(--car2);border-color:var(--car)}
+.big .w{display:inline-block;opacity:0;transform:translateY(.35em);animation:land .45s cubic-bezier(.2,.8,.2,1) forwards}
+@keyframes land{to{opacity:1;transform:none}}
+.hintl{margin:1.1rem 0 0;font:600 clamp(1.25rem,6vw,1.7rem)/1.3 'Geist Mono',ui-monospace,monospace;letter-spacing:.04em;color:var(--ink);word-spacing:.15em}
+.gram{margin:.8rem 0 0;font:600 .9rem/1.3 'Geist Mono',monospace;color:var(--dim)}
+.opts{display:flex;flex-direction:column;gap:8px;margin-top:1.3rem}
+.opts button{min-height:54px;border-radius:14px;border:1.5px solid var(--line);background:#fff;font:600 1.1rem/1 'Geist',sans-serif;color:var(--ink);cursor:pointer}
+.opts button.ok{border-color:var(--sage);background:#EAF1EE;color:#2F4D42}
+.opts button.no{border-color:var(--car);background:#FBF1E8;color:var(--car2)}
+.field{display:flex;flex-direction:column;gap:10px;margin-top:1.3rem}
+.field textarea,.field input{font:500 1.1rem/1.4 'Geist',sans-serif;padding:14px 16px;border:1.5px solid var(--line);border-radius:14px;background:#fff;color:var(--ink);resize:none;width:100%;box-sizing:border-box}
+.field textarea:focus,.field input:focus{outline:none;border-color:var(--ink)}
+.fb{margin:1rem 0 0;font:400 1rem/1.5 'Geist',sans-serif;color:var(--dim)}
+.fb .yes{color:#2F4D42} .fb .no{color:var(--car2)}
+.fb .ans{display:block;margin-top:.4rem;font-weight:700;color:var(--ink)}
+.fb .ans mark{background:none;box-shadow:inset 0 -3px 0 var(--car);color:inherit}
+/* the end */
+.score{display:block;margin:.6rem 0 0;font:400 5rem/1 'Anton',Impact,sans-serif}
+.cap{font:400 1rem/1.5 'Geist',sans-serif;color:var(--dim);margin:.3rem 0 1.2rem}
+.test{display:inline-block;margin-left:auto;padding:4px 8px;border-radius:999px;background:#EDE3D6;color:var(--car2);font:700 .6rem/1 'Geist Mono',monospace;letter-spacing:.12em}
+@media (prefers-reduced-motion:reduce){.big .w{animation:none;opacity:1;transform:none}}
+</style>
+<script src="/tools/be2-brand.js?v=20261119b"></script>
+</head>
+<body>
+<header class="header" id="hdr">
+  <div class="header-top">
+    <a class="back-link" href="/skills/writing/phrases.html" target="_top">← Phrases</a>
+    <div class="header-title"><div class="app-title">INTUITY</div><div class="app-subtitle">Phrase ladder</div></div>
+    <span class="header-spacer">Level <b>B2</b></span>
+  </div>
+  <div class="set-tabs" role="tablist" aria-label="Phrases for" id="tabs"></div>
+</header>
+<main class="wrap" id="app" aria-live="polite"></main>
+<script src="/skills/grammar-rules/intuity-sound.js?v=2"></script>
+<script src="/tools/intuity-cheer.js?v=2"></script>
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const store={get(k){try{return localStorage.getItem(k);}catch(e){return null;}},set(k,v){try{localStorage.setItem(k,v);}catch(e){}}};
+const FREE=/[?&]free=1/.test(location.search);
+const today=()=>{ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const sfx=k=>{ try{ if(window.SFX&&SFX[k]) SFX[k](); }catch(e){} };
+const cheer=(f,...a)=>{ try{ if(window.Cheer&&Cheer[f]) return Cheer[f](...a); }catch(e){} };
+let D=null, F=new URLSearchParams(location.search).get('task')||store.get('be2.phrases.for')||'essay', POOL=[], ST=null, S=null;
+const PER=5, TOP=6;
+const STEP=['','Meet it','Choose it','Type the key word','Rebuild it','From the job alone','Use it'];
+
+/* ---------- text helpers ---------- */
+const keyOf=t=>(/\[([^\]]+)\]/.exec(t)||[])[1]||'';
+const plain=t=>t.replace(/\[([^\]]+)\]/g,'$1');
+/* what a pupil types: the phrase without the … gaps */
+const bare=t=>plain(t).replace(/…/g,' ').replace(/\s+([,.])/g,'$1').replace(/^[\s,]+|[\s,]+$/g,'').replace(/\s+/g,' ').trim();
+const norm=s=>String(s).toLowerCase().replace(/[’']/g,"'").replace(/[^a-z0-9' ]+/g,' ').replace(/\s+/g,' ').trim();
+function lev(a,b){ const m=a.length,n=b.length; if(!m) return n; if(!n) return m; let p=Array.from({length:n+1},(_,j)=>j);
+  for(let i=1;i<=m;i++){ const c=[i]; for(let j=1;j<=n;j++) c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1)); p=c; } return p[n]; }
+const sim=(a,b)=>{ a=norm(a); b=norm(b); return 1-lev(a,b)/Math.max(a.length,b.length,1); };
+/* is the phrase inside a longer sentence? the best window of the same length */
+function within(sent,ph){ const w=norm(sent).split(' '), p=norm(ph).split(' '), n=p.length; let best=0;
+  for(let L=Math.max(1,n-1);L<=n+1;L++) for(let i=0;i+L<=w.length;i++) best=Math.max(best,sim(w.slice(i,i+L).join(' '),p.join(' ')));
+  return best; }
+const showT=(t,mode)=>{ /* mode: 'k' marks the key, 'gap' hides it */
+  let h=esc(t.replace(/ +…/g,' …')).replace(/…/g,'<span class="el">…</span>');
+  return h.replace(/\[([^\]]+)\]/,(m,k)=>mode==='gap'?'<span class="slot" id="slot">'+k+'</span>':'<span class="k">'+k+'</span>'); };
+const landT=t=>{ let i=0; return t.replace(/ +…/g,' …').split(/ +/).map(tok=>{
+  const h=esc(tok).replace(/…/g,'<span class="el">…</span>').replace(/\[([^\]]+)\]/,'<span class="k">$1</span>');
+  return '<span class="w" style="animation-delay:'+(i++*.16).toFixed(2)+'s">'+h+'</span>'; }).join(' '); };
+const letters=t=>bare(t).split(' ').map(w=>w.replace(/^([A-Za-z])[A-Za-z’']*/,(m,c)=>c+'_'.repeat(Math.min(m.length-1,6)))).join(' ');
+const topic=()=>{ try{ const f=JSON.parse(store.get('be2.five.essays')||'null'); return f&&f.names&&f.names[f.key]||''; }catch(e){ return ''; } };
+
+/* ---------- state ---------- */
+const KEY=()=>'be2.ladder.'+F;
+function load(){ try{ ST=JSON.parse(store.get(KEY())||'null'); }catch(e){ ST=null; } if(!ST||!ST.p) ST={p:{},best:0}; }
+const save=()=>store.set(KEY(),JSON.stringify(ST));
+const st=id=>ST.p[id]||{rung:0,rday:null};
+const due=x=>{ const s=st(x.id); return s.rung<TOP&&(FREE||s.rday!==today()); };
+
+function tabs(){
+  $('tabs').innerHTML=Object.keys(D.tasks).map(k=>`<button type="button" class="vtab${k===F?' active':''}" role="tab" aria-selected="${k===F}" data-f="${k}">${esc(D.tasks[k])}</button>`).join('');
+  $('tabs').querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ if(F===b.dataset.f) return; F=b.dataset.f; store.set('be2.phrases.for',F); tabs(); pool(); home(); });
+}
+function pool(){
+  const fits=p=>p.for.indexOf(F)>=0&&(F!=='email'||!p.reg||p.reg==='formal'||p.reg==='both');
+  const lead=p=>(p.lead&&p.lead.indexOf(F)>=0?0:2);
+  /* each job's lead phrase: the one to learn first; its other phrases count as good alternatives */
+  POOL=D.jobs.map(j=>{ const l=j.phrases.filter(fits).sort((a,b)=>lead(a)-lead(b)); return l.length?{id:j.id,job:j.name,p:l[0],alts:l.slice(1)}:null; }).filter(Boolean);
+  load();
+}
+const stepsHTML=(r,own)=>'<span class="steps'+(own?' own':'')+'">'+Array.from({length:TOP},(_,k)=>'<i class="'+(k<r?'on':'')+'"></i>').join('')+'</span>';
+
+/* ---------- home: the ladder at a glance ---------- */
+function home(){
+  const n=POOL.filter(due).length, owned=POOL.filter(x=>st(x.id).rung>=TOP).length;
+  $('app').innerHTML=`<div class="kick"><i></i><span>${esc(D.tasks[F])} · ${POOL.length} phrases</span>${FREE?'<span class="test">TEST · NO WAIT</span>':''}</div>
+    <h1 class="t">Phrase ladder</h1>
+    <p class="lede">Each phrase climbs six steps, one a day: meet it, choose it, type it, rebuild it, write it from memory, use it. A miss drops it one step.</p>
+    <ul class="lad">${POOL.map(x=>{ const s=st(x.id); return `<li><span class="nm"><b>${esc(x.job)}</b><span>${esc(plain(x.p.t))}</span></span>${stepsHTML(s.rung,s.rung>=TOP)}</li>`; }).join('')}</ul>
+    <p class="legend">${owned?`<b style="color:var(--car2)">${owned} yours</b> · `:''}${n?`Today: ${Math.min(PER,n)} to climb`:'All done for today. Come back tomorrow.'}${ST.best?` · Best ${ST.best}`:''}</p>
+    <div class="row"><button type="button" class="go" id="go"${n?'':' disabled'}>Climb today’s ${Math.min(PER,n)||''}</button></div>`;
+  $('go').onclick=start; scrollTo(0,0);
+}
+
+/* ---------- a session ---------- */
+function start(){
+  /* the lowest rungs first (they need it most), new phrases last */
+  const list=POOL.filter(due).sort((a,b)=>{ const ra=st(a.id).rung, rb=st(b.id).rung; return (ra===0)-(rb===0)||ra-rb; }).slice(0,PER);
+  S={list,at:0,score:0,run:0,res:[]}; sfx('unlock'); ask();
+}
+function head(x,s){ return `<div class="kick"><i></i><span><b>${S.at+1}</b> / ${S.list.length}</span><span class="sp"></span>${FREE?'<span class="test">TEST</span>':''}</div>
+  <div class="meter"><span>Score<b>${S.score}</b></span><span>Run<b>${S.run}</b></span></div>
+  <div class="rung">${stepsHTML(s.rung+1)} Step ${s.rung+1} · ${esc(STEP[s.rung+1])}</div>
+  <h2 class="job">${esc(x.job)}</h2>`; }
+function ask(){
+  const x=S.list[S.at], s=st(x.id), r=s.rung+1, t=x.p.t;
+  let body='';
+  if(r===1){ body=`<p class="big">${landT(t)}</p>${x.p.g?`<p class="gram">${esc(x.p.g)}</p>`:''}${x.p.tip?`<p class="fb" style="border-left:3px solid var(--car);padding-left:10px;color:#7A5C3A">${esc(x.p.tip)}</p>`:''}
+      <p class="ask" style="margin-top:1.2rem">Say it out loud twice. Tomorrow you choose its key word.</p>
+      <div class="row"><button type="button" class="go" id="ok">Got it</button></div>`; }
+  else if(r===2){ const k=keyOf(t), opts=decoys(k); body=`<p class="ask">Which word is missing?</p><p class="big">${showT(t,'gap')}</p>
+      <div class="opts" id="opts">${opts.map(o=>`<button type="button" data-o="${esc(o)}">${esc(o)}</button>`).join('')}</div><div id="fb"></div>`; }
+  else if(r===3){ body=`<p class="ask">Type the missing word.</p><p class="big">${showT(t,'gap')}</p>
+      <form class="field" id="f"><input id="in" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="the missing word"><button class="go">Check</button></form><div id="fb"></div>`; }
+  else if(r===4){ body=`<p class="ask">Only the first letters. Type the whole phrase.</p><p class="hintl">${esc(letters(t))}</p>
+      <form class="field" id="f"><textarea id="in" rows="2" autocomplete="off" spellcheck="false"></textarea><button class="go">Check</button></form><div id="fb"></div>`; }
+  else if(r===5){ body=`<p class="ask">Write the phrase you learnt for this job, from memory.${x.p.g?` It is followed by <b>${esc(x.p.g)}</b>.`:''}</p>
+      <form class="field" id="f"><textarea id="in" rows="2" autocomplete="off" spellcheck="false"></textarea><button class="go">Check</button></form><div id="fb"></div>`; }
+  else { const tp=topic(); body=`<p class="ask">Use it in a sentence of your own${tp?` about <b>${esc(tp)}</b>`:''}.</p><p class="big" style="font-size:clamp(1.3rem,6vw,1.8rem)">${showT(t,'k')}</p>
+      <form class="field" id="f"><textarea id="in" rows="3" autocomplete="off" spellcheck="true" placeholder="Your sentence"></textarea><button class="go">Check</button></form><div id="fb"></div>`; }
+  $('app').innerHTML=head(x,s)+body; scrollTo(0,0);
+  if(r===1) $('ok').onclick=()=>result(true,'');
+  if(r===2) $('opts').querySelectorAll('button').forEach(b=>b.onclick=()=>{ const ok=b.dataset.o.toLowerCase()===keyOf(t).toLowerCase();
+      $('opts').querySelectorAll('button').forEach(y=>{ y.disabled=true; if(y.dataset.o.toLowerCase()===keyOf(t).toLowerCase()) y.classList.add('ok'); }); if(!ok) b.classList.add('no');
+      fill(ok); result(ok,''); });
+  if($('f')){ const inp=$('in'); setTimeout(()=>{ try{ inp.focus({preventScroll:true}); }catch(e){} },60);
+    if(inp.tagName==='TEXTAREA') inp.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); $('f').requestSubmit(); } });
+    $('f').onsubmit=e=>{ e.preventDefault(); const v=inp.value.trim(); if(!v) return; inp.disabled=true; $('f').querySelector('button').remove(); check(x,r,v); }; }
+}
+function fill(ok){ const sl=$('slot'); if(sl){ sl.classList.add(ok?'ok':'no'); } }
+function decoys(k){
+  const kk=k.toLowerCase(), shape=w=>[w.split(' ').length,/s$/.test(w)&&!/ss$/.test(w),/ly$/.test(w),/ing$/.test(w),/ed$/.test(w)].join();
+  const all=[...new Set(D.jobs.flatMap(j=>j.phrases.map(p=>keyOf(p.t).toLowerCase())))].filter(w=>w&&w!==kk);
+  const pick=all.map(w=>[w,(shape(w)===shape(kk)?0:2)+Math.abs(w.length-kk.length)/20+Math.random()*.7]).sort((a,b)=>a[1]-b[1]).slice(0,2).map(a=>a[0]);
+  return [k].concat(pick).sort(()=>Math.random()-.5);
+}
+function check(x,r,v){
+  const t=x.p.t; let ok=false, alt=false, note='';
+  if(r===3){ ok=norm(v)===norm(keyOf(t))||(norm(keyOf(t)).length>5&&sim(v,keyOf(t))>=.84); fill(ok); }
+  else if(r===4){ ok=sim(v,bare(t))>=.9; }
+  else if(r===5){ ok=sim(v,bare(t))>=.86||within(v,bare(t))>=.9;
+    if(!ok&&x.alts.some(a=>sim(v,bare(a.t))>=.88||within(v,bare(a.t))>=.9)) alt=true; }
+  else { const words=norm(v).split(' ').length, n=norm(bare(t)).split(' ').length; ok=within(v,bare(t))>=.86&&words>=n+4;
+    if(!ok&&within(v,bare(t))>=.86) note='Nearly. Add your own idea to the phrase: at least four more words.'; }
+  result(ok,v,alt,note);
+}
+function result(ok,v,alt,note){
+  const x=S.list[S.at], s=Object.assign({},st(x.id)), r=s.rung+1, ans=`<span class="ans">${showT(x.p.t,'k').replace(/class="k"/,'') .replace(/<span >([^<]+)<\/span>/,'<mark>$1</mark>')}</span>`;
+  let line='';
+  if(alt){ line=`<b class="yes">Good phrase.</b> It does this job too, but it isn't the one you're learning, so your step stays.${ans}`; sfx('pop'); S.res.push(null); }
+  else if(note){ line=`<b class="no">${esc(note)}</b>`; sfx('bowlLow'); S.res.push(null); }   /* nearly: the step stays */
+  else if(ok){ s.rung=Math.min(TOP,r); s.rday=today(); S.run++; S.score+=r; S.res.push(true);
+    line=r===TOP?`<b class="yes">It’s yours ✓</b> You used it in your own sentence.`:r===1?`<b class="yes">Met.</b> Step 2 tomorrow: choose its key word.`:`<b class="yes">Yes!</b> Up to step ${r}. Step ${r+1}, ${STEP[r+1].toLowerCase()}, ${FREE?'next':'tomorrow'}.`;
+    if(r===TOP) cheer('done',$('app')); else cheer('right',$('app').querySelector('.big,.hintl,.job'),true); cheer('run',S.run,$('app')); }
+  else { s.rung=Math.max(1,s.rung-1); s.rday=today(); S.run=0; S.res.push(false); cheer('soft');
+    line=`<b class="no">Not yet.</b> It drops to step ${s.rung+1}. The phrase is:${ans}`; }
+  ST.p[x.id]=s; save();
+  const fb=$('fb')||$('app').appendChild(Object.assign(document.createElement('div'),{id:'fb'}));
+  if(r===1){ next(); return; }
+  fb.innerHTML=`<p class="fb">${line}</p><div class="row"><button type="button" class="go" id="nx">${S.at<S.list.length-1?'Next':'Finish'}</button></div>`;
+  $('nx').onclick=next; setTimeout(()=>{ try{ $('nx').focus({preventScroll:true}); }catch(e){} },50);
+}
+function next(){ S.at++; if(S.at<S.list.length) ask(); else end(); }
+function end(){
+  const best=ST.best||0, nb=S.score>best; if(nb){ ST.best=S.score; save(); }
+  $('app').innerHTML=`<div class="kick"><i></i><span>${esc(D.tasks[F])} · today</span></div>
+    <span class="score">${S.score}</span><p class="cap">${nb&&best?'<b style="color:var(--car2)">New best!</b> ':''}${S.res.filter(r=>r===true).length} climbed of ${S.list.length}. Best ${Math.max(best,S.score)}.</p>
+    <ul class="lad">${S.list.map(x=>{ const s=st(x.id); return `<li><span class="nm"><b>${esc(x.job)}</b><span>${esc(plain(x.p.t))}</span></span>${stepsHTML(s.rung,s.rung>=TOP)}</li>`; }).join('')}</ul>
+    <div class="row"><button type="button" class="go" id="h">Back to the ladder</button></div>`;
+  if(S.score) cheer('done',$('app').querySelector('.score'));
+  $('h').onclick=home;
+}
+fetch('/data/writing/phrases-by-job.json?v=8').then(r=>r.json()).then(d=>{ D=d; if(!D.tasks[F]) F='essay'; tabs(); pool(); home(); });
+})();
+</script>
+</body>
+</html>

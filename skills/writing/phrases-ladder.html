@@ -207,6 +207,7 @@ h1.t{margin:.8rem 0 .2rem;font:800 clamp(2.1rem,10vw,3rem)/1 'Geist',sans-serif;
 .valt{margin:.2rem 0 .8rem;font:700 clamp(1.4rem,6.4vw,1.9rem)/1.2 'Geist',sans-serif;letter-spacing:-.02em;color:var(--ink);opacity:0;transform:translateY(8px);animation:slin .45s forwards}
 .valt .kw{box-shadow:inset 0 -.28em 0 rgba(194,149,110,.55)}
 .valt .el{color:#B4ADA2}
+.vtag{display:block;margin:0 0 .3rem;font:600 .6rem/1 'Geist Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--car2)}
 .vnext{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:.6rem}
 .vnext .go{flex:1;max-width:260px;margin-left:auto}
 @media (prefers-reduced-motion:reduce){.vfade,.vok,.vwhy,.valt{animation:none;opacity:1;transform:none}.vx span{animation:none;background-size:100% 3px}}
@@ -265,6 +266,8 @@ const topic=()=>{ try{ const f=JSON.parse(store.get('be2.five.essays')||'null');
 
 /* 21 Nov 2026: the slips Portuguese speakers make for each job. Shown struck out, then the right form */
 const L1={
+  hook:['Actually, the technology is everywhere.','These days, technology is everywhere.','Actually = na verdade, not atualmente. And no "the" before technology in general.'],
+  aim:['This essay will discuss about …','This essay will discuss …','Discuss has no about: discuss the topic (discutir sobre).'],
   start:['Actually, the technology is everywhere.','These days, technology is everywhere.','Actually = na verdade, not atualmente. And no "the" before technology in general.'],
   opinion:['According to me, … / I am agree …','I firmly believe that … / I agree …','Agree is a verb: I agree, not I am agree.'],
   add:['In addiction, …','In addition, …','Addiction is a dependency (vício). Addition is what you mean.'],
@@ -295,11 +298,32 @@ function tabs(){
   $('tabs').innerHTML=Object.keys(D.tasks).map(k=>`<button type="button" class="vtab${k===F?' active':''}" role="tab" aria-selected="${k===F}" data-f="${k}">${esc(D.tasks[k])}</button>`).join('');
   $('tabs').querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ if(F===b.dataset.f) return; F=b.dataset.f; store.set('be2.phrases.for',F); tabs(); pool(); home(); });
 }
+
+/* 21 Nov 2026 (the owner): an essay introduction is a HOOK (a background statement, no view) and a
+   THESIS (what the essay will do), as in Build, Cards and Maya's clip. Both come from the cards model,
+   so the ladder teaches the same introduction as the rest of the app. The view moves to the conclusion. */
+let CM=null;
+const STOPK=new Set(['that','there','their','these','those','which','about','between','before','other','people','often','widely','years','recent','therefore','essay','this','will','with','have','been','most','into','what','where','would','should','could','about','from','than']);
+const dots=t=>t.replace(/\.\.\./g,'…').replace(/\s*…/g,' …').trim();
+const keyed=(t,k)=>{ t=dots(t); if(k) return t.replace(new RegExp('\\b'+k+'\\b'),'['+k+']');
+  const w=t.replace(/[^A-Za-z\- ]/g,' ').split(/\s+/).filter(x=>x.length>3&&!STOPK.has(x.toLowerCase())).sort((a,b)=>b.length-a.length)[0];
+  return w?t.replace(new RegExp('\\b'+w+'\\b'),'['+w+']'):t; };
+const bareAim=a=>dots(a).replace(/^(Therefore|Hence|Consequently),\s*/,'').replace(/^It is therefore /,'It is ').replace(/^(.)/,c=>c.toUpperCase());
+function introJobs(){
+  const bg=CM.shared.background.filter(t=>!/^Few people would deny/.test(t)).map(t=>({t:keyed(t),g:/\.\.\.$/.test(t)&&/that \.\.\.$/.test(t)?'+ subject + verb':''}));
+  const hook={id:'hook',job:'Start with a hook',p:{t:'Few people would [deny] that …',g:'+ subject + verb'},alts:bg};
+  const T=CM.types, order=['for-against','problem-solution','agree-disagree','opinion','cause-effect','speculation-trends'];
+  const alts=[];
+  order.forEach(k=>{ if(!T[k]) return; T[k].open.aim.slice(0,k==='for-against'?1:2).forEach(a=>alts.push({t:keyed(bareAim(a)),tag:T[k].label})); });
+  const thesis={id:'aim',job:'Say what the essay will do',p:{t:'It is worth [weighing] up the advantages and disadvantages of …',g:'+ the topic',tag:'For & Against'},alts:alts.filter(a=>!/weighing up the benefits/.test(a.t))};
+  return [hook,thesis];
+}
 function pool(){
   const fits=p=>p.for.indexOf(F)>=0&&(F!=='email'||!p.reg||p.reg==='formal'||p.reg==='both');
   const lead=p=>(p.lead&&p.lead.indexOf(F)>=0?0:2);
   /* each job's lead phrase: the one to learn first; its other phrases count as good alternatives */
   POOL=D.jobs.map(j=>{ const l=j.phrases.filter(fits).sort((a,b)=>lead(a)-lead(b)); return l.length?{id:j.id,job:j.name,p:l[0],alts:l.slice(1)}:null; }).filter(Boolean);
+  if(F==='essay'&&CM) POOL=POOL.filter(x=>x.id!=='start').concat(introJobs());
   load();
 }
 const stepsHTML=(r,own)=>'<span class="steps'+(own?' own':'')+'">'+Array.from({length:TOP},(_,k)=>'<i class="'+(k<r?'on':'')+'"></i>').join('')+'</span>';
@@ -307,7 +331,7 @@ const stepsHTML=(r,own)=>'<span class="steps'+(own?' own':'')+'">'+Array.from({l
 /* ---------- home: a real ladder, one rung per paragraph (the owner's sketch, 21 Nov) ----------
    Like The Question: every option is in view, tap any rung in any order. */
 const PARAS={
-  essay:  [['Introduction',['start','opinion']],['Paragraph 2',['reason','example']],['Paragraph 3',['add','result']],['Paragraph 4',['contrast','bad']],['Conclusion',['finish']]],
+  essay:  [['Introduction',['hook','aim']],['Paragraph 2',['reason','example']],['Paragraph 3',['add','result']],['Paragraph 4',['contrast','bad']],['Conclusion',['finish','opinion']]],
   article:[['Introduction',['start','reader']],['Paragraph 2',['opinion','reason']],['Paragraph 3',['add','example']],['Paragraph 4',['contrast']],['Conclusion',['recommend','finish']]],
   review: [['Introduction',['start']],['Paragraph 2',['good','example']],['Paragraph 3',['bad','contrast']],['Paragraph 4',['opinion','add']],['Conclusion',['recommend','finish']]],
   report: [['Introduction',['start']],['Paragraph 2',['people','reason']],['Paragraph 3',['good','bad']],['Paragraph 4',['contrast','result']],['Conclusion',['recommend','finish']]],
@@ -372,7 +396,7 @@ function home(){
    3 two other ways to say it. Next / Back (or swipe) step through; the bar on top shows where you are. */
 let VS=0;
 /* the introduction's two jobs have names pupils know from class: the hook and the thesis */
-const role=x=>x.id==='start'?'Hook · ':x.id==='opinion'&&F!=='email'?'Thesis · ':'';
+const role=x=>x.id==='hook'||(x.id==='start'&&F!=='story')?'Hook · ':x.id==='aim'?'Thesis · ':'';
 function stagesOf(g){
   const out=[];
   g.list.forEach(x=>{
@@ -390,10 +414,10 @@ function view(){
   const R=rungs(); VI=Math.max(0,Math.min(VI,R.length-1)); const g=R[VI], SS=stagesOf(g); VS=Math.max(0,Math.min(VS,SS.length-1));
   const c=SS[VS], x=c.x, last=VS===SS.length-1;
   let body='';
-  if(c.k==='phrase') body=`<p class="vlab">${esc(role(x))}${esc(x.job)}</p><p class="big vb">${landT(x.p.t)}</p>${x.p.g?`<p class="gram vfade">${esc(x.p.g)}</p>`:''}`;
+  if(c.k==='phrase') body=`<p class="vlab">${esc(role(x))}${esc(x.job)}</p>${x.p.tag?`<small class="vtag">${esc(x.p.tag)}</small>`:''}<p class="big vb">${landT(x.p.t)}</p>${x.p.g?`<p class="gram vfade">${esc(x.p.g)}</p>`:''}`;
   else if(c.k==='slip') body=`<p class="vlab">Avoid</p>
       ${c.w?`<p class="vx"><span>${esc(c.w)}</span></p>`:''}${c.r?`<p class="vok">${esc(c.r)}</p>`:''}<p class="vwhy">${esc(c.why)}</p>`;
-  else body=`<p class="vlab">${esc(role(x))}Or say</p>${c.a.map((a,i)=>`<p class="valt" style="animation-delay:${(.15+i*.6).toFixed(2)}s">${showT(a.t,'k').replace(/class="k"/g,'class="kw"')}</p>`).join('')}`;
+  else body=`<p class="vlab">${esc(role(x))}Or say</p>${c.a.map((a,i)=>`<p class="valt" style="animation-delay:${(.15+i*.6).toFixed(2)}s">${a.tag?`<small class="vtag">${esc(a.tag)}</small>`:''}${showT(a.t,'k').replace(/class="k"/g,'class="kw"')}</p>`).join('')}`;
   $('app').innerHTML=`<div class="sbar"><button type="button" class="back" id="back">‹ Ladder</button><span><b>${String(VI+1).padStart(2,'0')}</b> ${esc(g.name)}</span></div>
     <div class="vbar" aria-hidden="true">${SS.map((_,i)=>`<i class="${i<VS?'d':i===VS?'on':''}"></i>`).join('')}</div>
     <div class="vstage" id="vs">${body}</div>
@@ -550,7 +574,10 @@ function end(){
 /* the shell's header is fixed: keep the page clear of it */
 function size(){ const h=$('hdr'); if(getComputedStyle(h).position==='fixed'||getComputedStyle(h).position==='sticky') $('app').style.marginTop=(getComputedStyle(h).position==='fixed'?h.offsetHeight:0)+'px'; }
 addEventListener('resize',size);
-fetch('/data/writing/phrases-by-job.json?v=8').then(r=>r.json()).then(d=>{ D=d; if(!D.tasks[F]) F='essay'; tabs(); size(); pool(); home(); });
+/* the essay introduction comes from the same source as Build and Cards (essay-cards-models.json) */
+Promise.all([fetch('/data/writing/phrases-by-job.json?v=8').then(r=>r.json()),
+  fetch('/skills/writing/essays/data/essay-cards-models.json').then(r=>r.ok?r.json():null).catch(()=>null)])
+.then(([d,cm])=>{ D=d; CM=cm; if(!D.tasks[F]) F='essay'; tabs(); size(); pool(); home(); });
 })();
 </script>
 </body>

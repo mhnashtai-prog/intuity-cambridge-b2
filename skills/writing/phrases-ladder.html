@@ -266,6 +266,14 @@ const topic=()=>{ try{ const f=JSON.parse(store.get('be2.five.essays')||'null');
 
 /* 21 Nov 2026: the slips Portuguese speakers make for each job. Shown struck out, then the right form */
 const L1={
+  first:['In first place, …','In the first place, … / Firstly, …','English needs "the": in the first place.'],
+  addition:['In addiction, …','In addition, … / Moreover, …','Addiction is a dependency (vício). Addition is what you mean.'],
+  keyopen:['One of the advantage of … is …','One of the advantages of … is that …','One of the + plural: advantages.'],
+  keymore:['Other reason is that …','Another reason is that …','One more = another (outra razão), not other.'],
+  turn:['In the other side, …','On the other hand, …','Not in, not side: on the other hand.'],
+  against:['The principal disadvantage is …','The main disadvantage is …','Principal is a head teacher. Say main or key.'],
+  summary:['Resuming, …','To sum up, … / All in all, …','Resuming means starting again.'],
+  stance:['According to me, …','In my view, … / I firmly believe that …','According to is for other people: according to experts.'],
   hook:['Actually, the technology is everywhere.','These days, technology is everywhere.','Actually = na verdade, not atualmente. And no "the" before technology in general.'],
   aim:['This essay will discuss about …','This essay will discuss …','Discuss has no about: discuss the topic (discutir sobre).'],
   start:['Actually, the technology is everywhere.','These days, technology is everywhere.','Actually = na verdade, not atualmente. And no "the" before technology in general.'],
@@ -309,21 +317,47 @@ const keyed=(t,k)=>{ t=dots(t); if(k) return t.replace(new RegExp('\\b'+k+'\\b')
   const w=t.replace(/[^A-Za-z\- ]/g,' ').split(/\s+/).filter(x=>x.length>3&&!STOPK.has(x.toLowerCase())).sort((a,b)=>b.length-a.length)[0];
   return w?t.replace(new RegExp('\\b'+w+'\\b'),'['+w+']'):t; };
 const bareAim=a=>dots(a).replace(/^(Therefore|Hence|Consequently),\s*/,'').replace(/^It is therefore /,'It is ').replace(/^(.)/,c=>c.toUpperCase());
-function introJobs(){
-  const bg=CM.shared.background.filter(t=>!/^Few people would deny/.test(t)).map(t=>({t:keyed(t),g:/\.\.\.$/.test(t)&&/that \.\.\.$/.test(t)?'+ subject + verb':''}));
-  const hook={id:'hook',job:'Start with a hook',p:{t:'Few people would [deny] that …',g:'+ subject + verb'},alts:bg};
-  const T=CM.types, order=['for-against','problem-solution','agree-disagree','opinion','cause-effect','speculation-trends'];
-  const alts=[];
-  order.forEach(k=>{ if(!T[k]) return; T[k].open.aim.slice(0,k==='for-against'?1:2).forEach(a=>alts.push({t:keyed(bareAim(a)),tag:T[k].label})); });
-  const thesis={id:'aim',job:'Say what the essay will do',p:{t:'It is worth [weighing] up the advantages and disadvantages of …',g:'+ the topic',tag:'For & Against'},alts:alts.filter(a=>!/weighing up the benefits/.test(a.t))};
-  return [hook,thesis];
+/* Build's essay, job by job (essay-cards-models.json): intro = background + aim; each body paragraph =
+   a signpost + a key phrase; the conclusion = summary + stance + verdict. Key phrases come from every
+   essay type, each labelled with its type, so a pupil sees which question each one answers. */
+const cap=t=>/^\s*(\.\.\.|…)/.test(t)?t:t.replace(/^(\W*)(\w)/,(m,a,c)=>a+c.toUpperCase());
+const TYPES=['for-against','problem-solution','agree-disagree','opinion','cause-effect','speculation-trends'];
+function fromTypes(pick,n,skip){ const out=[], T=CM.types;
+  TYPES.forEach(k=>{ if(!T[k]) return; (pick(T[k])||[]).filter(t=>!/^\s*(\.\.\.|…)\s*$/.test(t)&&!(skip&&skip.test(dots(t)))).slice(0,n).forEach(t=>out.push({t:keyed(cap(t)),tag:T[k].label})); });
+  return out; }
+function essayJobs(){
+  const SH=CM.shared, T=CM.types, FA=T['for-against'];
+  const bg=SH.background.filter(t=>!/^Few people would deny/.test(t)).map(t=>({t:keyed(t),g:/that \.\.\.$/.test(t)?'+ subject + verb':''}));
+  const aims=[]; TYPES.forEach(k=>{ if(!T[k]) return; T[k].open.aim.slice(0,k==='for-against'?1:2).forEach(a=>aims.push({t:keyed(bareAim(a)),tag:T[k].label})); });
+  const sp=(k,lead)=>SH.signpost[k].filter(w=>w!==lead).map(w=>({t:keyed(w+', …',w.split(' ').slice(-1)[0]),g:'+ a full sentence'}));
+  const J=(id,job,p,alts)=>({id,job,p,alts});
+  return [
+    J('hook','Start with a hook',{t:'Few people would [deny] that …',g:'+ subject + verb'},bg),
+    J('aim','Say what the essay will do',{t:'It is worth [weighing] up the advantages and disadvantages of …',g:'+ the topic',tag:'For & Against'},aims.filter(a=>!/weighing up the benefits/.test(a.t))),
+    J('first','Signpost your first point',{t:'[Firstly], …',g:'+ a full sentence'},sp('first','Firstly')),
+    J('keyopen','Make your first point',{t:'One [benefit] of … is that …',g:'+ noun, then is that + subject + verb',tag:'For & Against'},
+      fromTypes(t=>t.argue.keyFor||t.argue.keyOpen,2,/^one benefit of …$/i)),
+    J('addition','Signpost the next point',{t:'[Moreover], …',g:'+ a full sentence'},sp('addition','Moreover')),
+    J('keymore','Add another point',{t:'A [further] reason is that …',g:'+ subject + verb',tag:'Opinion'},
+      fromTypes(t=>t.argue.keyMore||(t.argue.keyFor||[]).slice(2),2,/^a further reason is that …$/i)),
+    J('turn','Turn to the other side',{t:'On the other [hand], …',g:'+ a full sentence'},sp('turn','On the other hand')),
+    J('against','Name a drawback',{t:'One serious [drawback] of … is that …',g:'+ noun, then is that + subject + verb',tag:'For & Against'},
+      (FA.argue.keyAgainst||[]).filter(t=>!/one serious drawback/i.test(t)).map(t=>({t:keyed(cap(t))}))),
+    J('summary','Sum up',{t:'All things [considered], …',g:'+ a full sentence'},
+      [...new Set(TYPES.flatMap(k=>T[k]?T[k].close.summary:[]))].filter(w=>!/considered/.test(w)).map(w=>({t:keyed(w.replace(/,?$/,', …'))}))),
+    J('stance','Give your view',{t:'I firmly [believe] that …',g:'+ subject + verb'},
+      [...new Set(TYPES.flatMap(k=>T[k]?T[k].close.stance:[]))].filter(w=>!/firmly believe/.test(w)).slice(0,8).map(w=>({t:keyed(cap(w)+' …')}))),
+    J('verdict','Give your verdict',{t:'The benefits of … [outweigh] the drawbacks.',tag:'For & Against'},
+      fromTypes(t=>t.close.verdict,1,/^the benefits of … outweigh the drawbacks\.$/i))
+  ];
 }
 function pool(){
   const fits=p=>p.for.indexOf(F)>=0&&(F!=='email'||!p.reg||p.reg==='formal'||p.reg==='both');
   const lead=p=>(p.lead&&p.lead.indexOf(F)>=0?0:2);
   /* each job's lead phrase: the one to learn first; its other phrases count as good alternatives */
   POOL=D.jobs.map(j=>{ const l=j.phrases.filter(fits).sort((a,b)=>lead(a)-lead(b)); return l.length?{id:j.id,job:j.name,p:l[0],alts:l.slice(1)}:null; }).filter(Boolean);
-  if(F==='essay'&&CM) POOL=POOL.filter(x=>x.id!=='start').concat(introJobs());
+  if(F==='essay'&&CM) POOL=essayJobs();
+  window.LADDER={pool:()=>POOL};   /* for tests */
   load();
 }
 const stepsHTML=(r,own)=>'<span class="steps'+(own?' own':'')+'">'+Array.from({length:TOP},(_,k)=>'<i class="'+(k<r?'on':'')+'"></i>').join('')+'</span>';
@@ -331,7 +365,7 @@ const stepsHTML=(r,own)=>'<span class="steps'+(own?' own':'')+'">'+Array.from({l
 /* ---------- home: a real ladder, one rung per paragraph (the owner's sketch, 21 Nov) ----------
    Like The Question: every option is in view, tap any rung in any order. */
 const PARAS={
-  essay:  [['Introduction',['hook','aim']],['Paragraph 2',['reason','example']],['Paragraph 3',['add','result']],['Paragraph 4',['contrast','bad']],['Conclusion',['finish','opinion']]],
+  essay:  [['Introduction',['hook','aim']],['Paragraph 2',['first','keyopen']],['Paragraph 3',['addition','keymore']],['Paragraph 4',['turn','against']],['Conclusion',['summary','stance','verdict']]],
   article:[['Introduction',['start','reader']],['Paragraph 2',['opinion','reason']],['Paragraph 3',['add','example']],['Paragraph 4',['contrast']],['Conclusion',['recommend','finish']]],
   review: [['Introduction',['start']],['Paragraph 2',['good','example']],['Paragraph 3',['bad','contrast']],['Paragraph 4',['opinion','add']],['Conclusion',['recommend','finish']]],
   report: [['Introduction',['start']],['Paragraph 2',['people','reason']],['Paragraph 3',['good','bad']],['Paragraph 4',['contrast','result']],['Conclusion',['recommend','finish']]],

@@ -105,7 +105,7 @@ var SKILLS = {
     /* 14 Nov 2026: Practice (Finish it…) moved into each task's Practise it, so this
        tile keeps what belongs to no one task, and a name that is not "Practise" twice */
     /* 19 Nov 2026 (a learner: "every tile is a skill… Games is what it really is") */
-    {name:"Games", glyph:"…", hint:"Puzzles, sentences, sentence types", roof:"practise"},
+    /* 21 Nov 2026 (the owner): the Games tile moved to the menu footer, a ringed pill (index.html, contHTML) */
     {name:"Test yourself", glyph:"◆", hint:"Revision Round, Challenge", roof:"test"}
   ],
   speaking:[

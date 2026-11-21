@@ -126,7 +126,7 @@
     'similar-words': 'Similar Words', 'topic-vocabulary': 'Topic Vocabulary',
     'academic-vocabulary-sets': 'Synonyms', 'phrasal-verbs': 'Phrasal Verbs',
     'gerunds-infinitives': 'Gerunds & Infinitives', 'conditionals': 'Conditionals',
-    'miscellaneous': 'Relative Pronouns & More', 'phrase-bank': 'Phrase Bank', 'speaking-phrases': 'Useful expressions',
+    'miscellaneous': 'Relative Pronouns & More', 'phrase-bank': 'Phrase Bank', 'phrase-ladder': 'Writing · Phrase ladder', 'speaking-phrases': 'Useful expressions',
     'master-part4': 'Use of English · Part 4', 'full-test': 'Full test', 'reading-part5': 'Reading · Part 5',
     'uoe-part1': 'Use of English · Part 1', 'uoe-part2': 'Use of English · Part 2',
     'uoe-part3': 'Use of English · Part 3', 'uoe-part4': 'Use of English · Part 4',

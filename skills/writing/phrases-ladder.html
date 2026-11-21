@@ -110,7 +110,7 @@ h1.t{margin:.8rem 0 .2rem;font:800 clamp(2.1rem,10vw,3rem)/1 'Geist',sans-serif;
 .rg .pr{display:flex;flex-direction:column;gap:4px;margin-top:8px}
 .rg .steps i{width:7px;height:8px}
 .rg.done .no{opacity:.4}
-.rg.done .cell{cursor:default}
+.rg.done .cell{cursor:pointer}
 .rg.mine .no{color:#C2956E}
 .rg.nope .cell{animation:nope .35s}
 @keyframes nope{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
@@ -411,7 +411,7 @@ function home(){
     ${P?`<ol class="six" aria-label="How you learn each phrase">${STEPS.map((t,k)=>`<li><b>${k+1}</b>${t}</li>`).join('')}</ol>
     <p class="six-cap">Every phrase climbs these six steps. <b>Each wait is longer</b>: 1, 1, 3, 7, 14 days. A miss drops it one step.</p>
     <div class="meter"><span>Yours<b>${owned}</b></span><span>Today<b>${n}</b></span></div>`:''}
-    <p class="pick">${P?'Tap a paragraph to practise it':'Tap a paragraph to see its phrases'}</p>
+    <p class="pick">${P?'Tap a paragraph to practise it · ticked ones for extra practice':'Tap a paragraph to see its phrases'}</p>
     <div class="ladder${P?'':' viewing'}" role="list">
       <span class="cap top" aria-hidden="true"></span>
       ${R.map((g,i)=>{ const left=g.list.filter(due).length, fresh=g.list.every(x=>!st(x.id).rung), mine=g.list.every(x=>st(x.id).rung>=TOP), off=P&&!left;
@@ -429,7 +429,8 @@ function home(){
   $('app').querySelectorAll('.rg').forEach(b=>b.onclick=()=>{ const i=+b.dataset.g, g=R[i];
     if(!P){ VI=i; VS=0; sfx('pop'); view(); return; }
     const list=g.list.filter(due);
-    if(!list.length){ sfx('bowlLow'); b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); return; }
+    if(!list.length){ const met=g.list.filter(x=>st(x.id).rung>0); if(!met.length){ sfx('bowlLow'); b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); return; }
+      start(met,g.name,true); return; }
     start(list.sort((a,c)=>st(a.id).rung-st(c.id).rung), g.name); });
   if($('go')) $('go').onclick=()=>start();
   if($('reg')) $('reg').onclick=()=>{ sfx('unlock'); regStart(); };
@@ -560,16 +561,19 @@ function regEnd(){
   $('back').onclick=$('h').onclick=()=>{ RC=null; home(); }; $('again').onclick=regStart; scrollTo(0,0);
 }
 /* ---------- a session ---------- */
-function start(only,label){
+/* 21 Nov 2026 (the owner): a paragraph done for today can be practised again. Extra practice asks the
+   step each phrase has already reached and never moves it: the spacing stays honest, the pupil is free. */
+const rOf=s=>S&&S.extra?Math.max(2,Math.min(TOP,s.rung)):s.rung+1;
+function start(only,label,extra){
   /* mixed: the lowest rungs first (they need it most), new phrases last */
   const list=only||POOL.filter(due).sort((a,b)=>{ const ra=st(a.id).rung, rb=st(b.id).rung; return (ra===0)-(rb===0)||ra-rb; }).slice(0,PER);
-  S={list,at:0,score:0,run:0,res:[],label:label||'Mixed'}; sfx('unlock'); ask();
+  S={list,at:0,score:0,run:0,res:[],label:(extra?'Extra · ':'')+(label||'Mixed'),extra:!!extra}; sfx('unlock'); ask();
 }
 function head(x,s){ return `<div class="sbar"><button type="button" class="back" id="back">‹ Back</button><span>${esc(S.label)} · <b>${S.at+1}</b> / ${S.list.length}</span>${FREE?'<span class="test">TEST</span>':''}</div>
-  <div class="rung">${stepsHTML(s.rung+1)} Step ${s.rung+1} · ${esc(STEP[s.rung+1])}</div>
+  <div class="rung">${stepsHTML(rOf(s))} Step ${rOf(s)} · ${esc(STEP[rOf(s)])}${S.extra?' · extra practice':''}</div>
   <h2 class="job">${esc(x.job)}</h2>`; }
 function ask(){
-  const x=S.list[S.at], s=st(x.id), r=s.rung+1, t=x.p.t;
+  const x=S.list[S.at], s=st(x.id), r=rOf(s), t=x.p.t;
   let body='';
   if(r===1){ body=`<p class="big">${landT(t)}</p>${x.p.g?`<p class="gram">${esc(x.p.g)}</p>`:''}${modelHTML(modelOf(x),'vfade2')}${slipHTML(x.id)}${x.p.tip?`<p class="fb" style="border-left:3px solid var(--car);padding-left:10px;color:#7A5C3A">${esc(x.p.tip)}</p>`:''}
       <p class="ask" style="margin-top:1.2rem">Say it out loud twice. Tomorrow you choose its key word.</p>
@@ -619,7 +623,7 @@ function check(x,r,v){
 }
 function result(ok,v,alt,note,shown){
   if($('show')) $('show').remove();
-  const x=S.list[S.at], s=Object.assign({},st(x.id)), r=s.rung+1, ans=`<span class="ans">${showT(x.p.t,'k').replace(/class="k"/,'') .replace(/<span >([^<]+)<\/span>/,'<mark>$1</mark>')}</span>`;
+  const x=S.list[S.at], s=Object.assign({},st(x.id)), r=rOf(s), ans=`<span class="ans">${showT(x.p.t,'k').replace(/class="k"/,'') .replace(/<span >([^<]+)<\/span>/,'<mark>$1</mark>')}</span>`;
   let line='';
   if(shown){ line=`Here it is. <b>Your step stays</b>; it comes back next time.${ans}`; S.res.push(null); }
   else if(alt&&typeof alt==='string'){ line=`<b class="yes">Good phrase, wrong job.</b> That one is for <b>${esc(alt.toLowerCase())}</b>. Your step stays. For <b>${esc(x.job.toLowerCase())}</b> you are learning:${ans}`; sfx('pop'); S.res.push(null); }
@@ -630,7 +634,10 @@ function result(ok,v,alt,note,shown){
     if(r===TOP) cheer('done',$('app')); else cheer('right',$('app').querySelector('.big,.hintl,.job'),true); cheer('run',S.run,$('app')); }
   else { s.rung=Math.max(1,s.rung-1); s.rday=today(); s.next=addDays(today(),1); S.run=0; S.res.push(false); cheer('soft');
     line=`<b class="no">Not yet.</b> It drops to step ${s.rung+1}. The phrase is:${ans}`; }
-  ST.p[x.id]=s; save();
+  if(S.extra){ /* extra practice: say how it went, keep the step */
+    line=shown?`Here it is.${ans}`:(ok||alt)?`<b class="yes">Right.</b> Extra practice, so your step stays. It climbs when it is due.`:`<b class="no">Not quite.</b> The phrase is:${ans}<br><span style="color:var(--faint)">Extra practice, so nothing drops.</span>`;
+    S.res[S.res.length-1]=ok?'x':null; }
+  else { ST.p[x.id]=s; save(); }
   const fb=$('fb')||$('app').appendChild(Object.assign(document.createElement('div'),{id:'fb'}));
   if(r===1){ next(); return; }
   fb.innerHTML=`<p class="fb">${line}</p><div class="row"><button type="button" class="go" id="nx">${S.at<S.list.length-1?'Next':'Finish'}</button></div>`;
@@ -640,8 +647,8 @@ function next(){ S.at++; if(S.at<S.list.length) ask(); else end(); }
 function end(){
   const up=S.res.filter(r=>r===true).length;
   $('app').innerHTML=`<div class="kick"><i></i><span>${esc(D.tasks[F])} · ${esc(S.label)}</span></div>
-    <h2 class="why" style="margin-top:.8rem">${up?`${up} climbed a step`:'Done for now'}</h2>
-    <p class="why2">Each phrase comes back when it is due: the higher the step, the longer the wait.</p>
+    <h2 class="why" style="margin-top:.8rem">${S.extra?`${S.res.filter(r=>r==='x').length} of ${S.list.length} right`:up?`${up} climbed a step`:'Done for now'}</h2>
+    <p class="why2">${S.extra?'Extra practice never moves a step. Each phrase climbs when it is due.':'Each phrase comes back when it is due: the higher the step, the longer the wait.'}</p>
     <ul class="lad" style="margin-top:1rem">${S.list.map(x=>{ const s=st(x.id); return `<li><span class="nm"><b>${esc(x.job)}</b><span>${esc(plain(x.p.t))}</span></span>${stepsHTML(s.rung,s.rung>=TOP)}</li>`; }).join('')}</ul>
     <div class="row"><button type="button" class="go" id="h">Back to the ladder</button></div>`;
   if(up) cheer('done',$('app').querySelector('.why'));

@@ -86,11 +86,14 @@ for n in (1, 2, 3, 4):
     if not f.exists(): continue
     d = json.load(open(f))
     for sub in d['subjects']:
-        for x in sub['picks']:
+        # 22 Nov 2026 (the owner: save credits): a line with the pupil's answer in it is recorded
+        # for each topic's FIRST answer only, the one START takes; other answers keep the phone's voice
+        for pi, x in enumerate(sub['picks']):
             q = sub['q'].replace('{X}', x)
-            add(q, 'examiner', n, 'Examiner · male', 'in five · ' + sub['label'])
+            if pi == 0 or '{X}' not in sub['q']: add(q, 'examiner', n, 'Examiner · male', 'in five · ' + sub['label'])
             for sl in d['slots']:
                 for w in sl['ways']:
+                    if pi and '{X}' in w['t']: continue
                     t = w['t'].replace('{X}', x).replace('{a}', sub['a']).replace('{plural}', sub['plural'])
                     add(t, 'maya', n, MAYA, 'in five · ' + sl['label'])
 GATE = (ROOT / 'skills' / 'speaking' / 'gate.html').read_text(encoding='utf-8')

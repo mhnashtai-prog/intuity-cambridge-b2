@@ -379,8 +379,8 @@ const howOf=(st,r)=>ST.tap&&st.howTap?st.howTap:st.how;
    first time a step appears. Before, a card said "3 · REASON / SELECT",
    two different "of 5" bars, and the same instruction twice. */
 const LB=i=>D.slots[i].label||D.slots[i].part;
-const STEPT={select:null,match:'Which end fits?',sort:'Put it in order',fill:'Fill the gaps',memory:'From memory'};
-const STEPV={select:'pick it',match:'match it',sort:'order it',fill:'fill it',memory:'from memory'};
+const STEPT={select:null,match:'Which end fits?',sort:'Put it in order',fill:'Fill the gaps',memory:'Say it from memory'};
+const STEPV={select:'pick it',match:'match it',sort:'order it',fill:'fill it',memory:'say it from memory'};
 let PRACTICE=false;   /* "Practise anyway": a round that does not move the steps */
 
 /* ── state ── */
@@ -447,11 +447,13 @@ function how(){
   card('<div class="kick">How it works</div><h2 id="fTitle">5 moves, 5 steps</h2>'+
     '<p class="aim">'+(D.how?esc(D.how):'A review in five sentences: one to open it, two features, one drawback, one to recommend it. All about your own '+esc(SUB().a.replace(/^an? /,''))+'.')+'</p>'+
     '<p class="aim">Each sentence climbs five steps: select it, match its halves, sort its pieces, fill its gaps, then build it from memory. The app checks each one.</p>'+
-    '<p class="aim">After each card, ▶ to hear Maya say it, 🎙 to say it yourself. Only you hear it: nothing is kept.</p>'+
-    '<p class="aim">One step a day: come back tomorrow and it climbs again. Build it from memory on a new day, and it’s yours ✓.</p>'+
+    '<p class="aim">After each card: ▶ to hear it, ● to say it yourself and hear the two side by side. Nothing is kept.</p>'+
+    '<p class="aim">The last step is said, not tapped: your phone’s dictation listens and shows the words you got. Say it from memory on a new day, and it’s yours ✓.</p>'+
     '<label class="kb"><input type="checkbox" id="kb"'+(ST.tap?'':' checked')+'> Type my answers <small>(off: tap only)</small></label>'+
+    (SR?'<label class="kb"><input type="checkbox" id="vc"'+(ST.voice===false?'':' checked')+'> Say the last step <small>(off: build it)</small></label>':'')+
     '<div class="cta"><button type="button" class="btn fill" id="ok">Got it</button></div>');
   $('kb').onchange=()=>{ ST.tap=!$('kb').checked; save(); };
+  if($('vc')) $('vc').onchange=()=>{ ST.voice=$('vc').checked; save(); };
   $('ok').onclick=close;
 }
 
@@ -508,14 +510,20 @@ function wireVoice(text,max,onTick){
   s.onclick=()=>{
     if(on){ recStop(); return; }
     on=true; s.classList.add('rec'); s.querySelector('span').textContent='Stop'; h.disabled=true; n.textContent='Say it out loud, then tap Stop.';
-    recStart(onTick,max||12).then(url=>{ on=false; s.classList.remove('rec'); s.querySelector('span').textContent='Say it again'; n.textContent='You… then Maya.';
+    recStart(onTick,max||12).then(url=>{ on=false; s.classList.remove('rec'); s.querySelector('span').textContent='Say it again'; n.textContent='You… then the model.';
       play(url,()=>say(text(),()=>{ h.disabled=false; n.textContent='Hear the difference? Again, or go on.'; })); })
     .catch(()=>{ on=false; s.classList.remove('rec'); s.querySelector('span').textContent='Say it'; h.disabled=false; n.textContent='The microphone is off. Say it aloud anyway, then tap Hear it.'; });
   };
 }
 
 /* ── a session: his thing's name first (once), then one card per slot ── */
-function start(practice){ PRACTICE=!!practice; sfx('unlock'); at=0; res=[]; if(!name()) return askName(); next(); }
+/* FEWER TAPS (22 Nov 2026, the owner): START goes straight to the first card. The topic's first
+   answer is taken until he changes it (the pill on the gate); the "Here it is" preview shows once,
+   ever; and the examiner asks the question aloud as the card opens: he hears the exam first. */
+function start(practice){ PRACTICE=!!practice; sfx('unlock'); at=0; res=[];
+  if(!name()){ ST.names=ST.names||{}; ST.names[ST.key]=SUB().picks[0]; save(); }
+  if(!ST.pvAny){ ST.pvAny=1; save(); return preview(true); }
+  say(qText()); next(); }
 function askName(){
   const s=SUB();
   const NA=D.nameAsk||{};
@@ -530,10 +538,10 @@ function askName(){
   $('ownIn').onkeydown=e=>{ if(e.key==='Enter'&&$('ownIn').value.trim()) setName($('ownIn').value); };
   $('ownGo').onclick=()=>setName($('ownIn').value);
 }
-function setName(n){ ST.names=ST.names||{}; ST.names[ST.key]=n.trim().replace(/\s+/g,' ').slice(0,40); save(); sfx('pop'); preview(); }
+function setName(n){ ST.names=ST.names||{}; ST.names[ST.key]=n.trim().replace(/\s+/g,' ').slice(0,40); save(); sfx('pop'); close(); }
 /* SHAPE FIRST (7 Nov 2026): the whole five, once per topic, before sentence 1 */
-function preview(){
-  ST.pv=ST.pv||{}; if(ST.pv[ST.key]) return next();
+function preview(force){
+  ST.pv=ST.pv||{}; if(ST.pv[ST.key]&&!force) return next();
   ST.pv[ST.key]=1; save();
   card('<div class="kick">Your answer · '+esc(X())+'</div><h2 id="fTitle">Here it is</h2>'+
     exq()+'<p class="aim">Five sentences make your answer. Hear it once, then learn them one at a time.</p>'+
@@ -645,8 +653,67 @@ function gapsTap(w,r){
     }); };
   draw();
 }
-/* 5 · MEMORY: only the job; he writes the whole phrase */
+/* 5 · SAY IT FROM MEMORY (22 Nov 2026): Speaking's ladder ends in the mouth, not the thumb.
+   Only the job is shown; he says the sentence; the phone's dictation listens and each word he got
+   right appears in its place, the rest stay as blanks. Checked like the written step (85% of the
+   words, in order); a missed word is shown, never scored beyond the step. No dictation on this
+   phone (or "tap instead"): the written step, as in Writing. */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let SAID=false;   /* the last step was said, not built */
+const CONTR={"i'd":"i would","i'm":"i am","it's":"it is","that's":"that is","let's":"let us","what's":"what is","don't":"do not","isn't":"is not","can't":"cannot","there's":"there is","they're":"they are","we're":"we are","you're":"you are","i've":"i have","doesn't":"does not","couldn't":"could not","shouldn't":"should not","won't":"will not"};
+const expand=a=>a.map(x=>CONTR[x]||x).join(' ').split(' ').filter(Boolean);
 function memory(w,r){
+  if(SR&&ST.voice!==false) return memorySay(w,r);
+  return memoryWrite(w,r);
+}
+function memorySay(w,r){
+  const words=body(fill(w)).split(' '), want=expand(norm(body(fill(w))).split(' '));
+  card(head(at,r).replace(esc(howOf(STEP[r],r)),'Say the sentence you have been learning. Only its job is shown.')+
+    '<p class="job">'+esc(D.slots[at].pick||D.slots[at].job)+'</p>'+
+    '<p class="line" id="heard">'+words.map(x=>'<span class="gap" style="min-width:'+Math.max(1.2,x.length*.45)+'em"></span>').join(' ')+'</p>'+
+    '<div class="voice"><button type="button" class="vb rec0" id="mic"><i class="d"></i><span>Say it</span></button>'+
+    '<button type="button" class="vb hear" id="tapIn"><span>Tap instead</span></button>'+
+    '<p class="vnote" id="vNote">Your phone’s dictation listens, like the microphone on your keyboard. Nothing is kept here.</p></div><div id="after"></div>');
+  $('tapIn').onclick=()=>{ $('tapIn').disabled=true; memoryWrite(w,r); };
+  let live=null, best='';
+  const show=got=>{ const g=expand(norm(got).split(' ').filter(Boolean)), hit=lcsHits(want,g), map=[];
+    /* the shown words map onto the expanded ones: a contraction counts when its first part is heard */
+    let k=0; words.forEach(x=>{ const n=expand(norm(x).split(' ').filter(Boolean)).length||1; map.push(hit.slice(k,k+n).some(Boolean)); k+=n; });
+    $('heard').innerHTML=words.map((x,i)=>map[i]?'<b style="color:var(--f5-ok)">'+esc(x)+'</b>':'<span class="gap" style="min-width:'+Math.max(1.2,x.length*.45)+'em"></span>').join(' ');
+    show.map=map; return hit.filter(Boolean).length/want.length; };
+  let tries=0;
+  const finish=()=>{ SAID=true; const sc=show(best); const ok=sc>=.85, m=show.map; tries++;
+    /* ONE FREE TRY (22 Nov 2026): dictation mishears accents; a first miss is a second go, not a drop */
+    if(!ok&&tries<2){ const got=m.filter(Boolean).length;
+      $('mic').classList.remove('rec'); $('mic').querySelector('span').textContent='Say it again';
+      $('vNote').textContent='I heard: “'+best+'”. That’s '+got+' of '+words.length+' words. Once more?'; best=''; return; }
+    $('mic').remove(); $('tapIn').remove();
+    $('vNote').textContent=best?'I heard: “'+best+'”':'I didn’t catch anything.';
+    /* the sentence, with the words he didn't say marked */
+    result(ok,w,r,ok?null:words.map((x,i)=>m[i]?esc(x):'<mark>'+esc(x)+'</mark>').join(' ')); };
+  $('mic').onclick=()=>{
+    if(live){ try{ live.stop(); }catch(e){} return; }
+    hush(); live=new SR(); live.lang='en-GB'; live.interimResults=true; live.maxAlternatives=3; live.continuous=false;
+    $('mic').classList.add('rec'); $('mic').querySelector('span').textContent='Listening… tap to stop';
+    live.onresult=e=>{ let t=''; for(let i=0;i<e.results.length;i++){
+        /* of the phone's guesses, the one closest to the sentence */
+        let pick=e.results[i][0].transcript, top=-1;
+        for(let a=0;a<e.results[i].length;a++){ const c=e.results[i][a].transcript, sc=lcsHits(want,expand(norm(c).split(' '))).filter(Boolean).length; if(sc>top){ top=sc; pick=c; } }
+        t+=' '+pick; }
+      best=t.trim(); show(best); };
+    live.onerror=e=>{ live=null; if(e.error==='not-allowed'||e.error==='service-not-allowed'){ ST.voice=false; save(); $('vNote').textContent='The microphone is off, so here is the written step.'; memoryWrite(w,r); } };
+    live.onend=()=>{ live=null; if(!$('mic')) return; if(best) finish(); else { $('mic').classList.remove('rec'); $('mic').querySelector('span').textContent='Say it'; $('vNote').textContent='I didn’t catch that. Tap and say it again.'; } };
+    try{ live.start(); }catch(e){ live=null; memoryWrite(w,r); }
+  };
+}
+/* the words of want he said, in order (a slip of one letter counts) */
+function lcsHits(want,got){
+  const L=Array(want.length+1).fill(0).map(()=>Array(got.length+1).fill(0));
+  for(let i=want.length-1;i>=0;i--) for(let j=got.length-1;j>=0;j--) L[i][j]=near(got[j],want[i])?1+L[i+1][j+1]:Math.max(L[i+1][j],L[i][j+1]);
+  const hit=Array(want.length).fill(0); for(let i=0,j=0;i<want.length&&j<got.length;){ if(near(got[j],want[i])){ hit[i]=1; i++; j++; } else if(L[i+1][j]>=L[i][j+1]) i++; else j++; }
+  return hit; }
+/* 5 · MEMORY, written: only the job; he writes the whole phrase */
+function memoryWrite(w,r){ SAID=false;
   if(ST.tap){ /* two pieces that don't belong, from the other sentences */
     const mine=pieces(fill(w)), ex=[]; shuffle(others(at).map(o=>pieces(fill(o))).flat()).forEach(p=>{ if(ex.length<2&&mine.indexOf(p)<0&&ex.indexOf(p)<0&&p!==X()) ex.push(p); });
     return sort(w,r,ex); }
@@ -697,7 +764,7 @@ function result(ok,w,r,diff,alt){
   const r0=s.rung, rd0=s.rday, own0=s.own;   /* restored after a practice round */
   (ST.seen=ST.seen||{})[STEP[r].k]=1;
   if(ok){
-    if(r===5&&!s.own&&s.rday!==t){ s.own=true; s.rday=t; line='<b class="yes">It’s yours ✓</b> You wrote it from memory.'; sfx('fanfare'); cheer('big'); }
+    if(r===5&&!s.own&&s.rday!==t){ s.own=true; s.rday=t; line='<b class="yes">It’s yours ✓</b> You '+(SAID?'said':'wrote')+' it from memory.'; sfx('fanfare'); cheer('big'); }
     else if(!s.own&&s.rday!==t&&s.rung<5){ s.rung++; s.rday=t; line='<b class="yes">Yes!</b> Up to step '+s.rung+': '+esc(STEP[s.rung].name.toLowerCase())+', tomorrow.'; sfx('correct'); cheer('right','.yes'); }
     else { line='<b class="yes">Yes!</b> '+(s.own?'Still yours.':r===5?'Do it again on another day and it’s yours.':'Already climbed today. Tomorrow it goes up.'); sfx('correct'); cheer('right','.yes'); }
   } else if(alt){
@@ -819,7 +886,6 @@ function mine(){
   const tick=t=>{ const k=Math.floor(t); $('clk').textContent=Math.floor(k/60)+':'+String(k%60).padStart(2,'0'); $('bar').style.width=Math.min(100,t/max*100)+'%';
     $('clkL').textContent=t<sec[0]?'aim '+sec[0]+'–'+sec[1]+' s':t<=sec[1]?'about right':'a little long'; };
   wireVoice(full,max,tick);
-  { const h=$('vHear'); if(h) h.lastChild.textContent='Hear Maya'; }
   $('stage').querySelectorAll('.chg').forEach(b=>b.onclick=()=>choose(+b.dataset.i));
 }
 /* a slot that is his: another wording, or his own sentence */

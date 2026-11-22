@@ -3,16 +3,17 @@
    selected, a tap anywhere in a box drops it there; with nothing selected,
    tapping a placed item sends it back.
    Round: { prompt, bins: ["A","B"], items: [["item",0],["item",1]…], note }
+   An item may name two boxes, ["item",[0,1]]: either box is right (22 Nov 2026).
    Agreement: see choose.js.
    ═══════════════════════════════════════════════════════════════════════ */
 (window.ChallengeGames=window.ChallengeGames||{}).sort={
   title:'Sort it', kind:'exam', skill:'receptive',
-  solution:r=>r.bins.map((b,k)=>b+': '+r.items.filter(x=>x[1]===k).map(x=>x[0]).join(', ')).join(' · '),
+  solution:r=>r.bins.map((b,k)=>b+': '+r.items.filter(x=>[].concat(x[1]).includes(k)).map(x=>x[0]).join(', ')).join(' · '),
   render(host,r,ctx){
     let pick=null;
     host.innerHTML=`<p class="cg-prompt">${ctx.esc(r.prompt)} Tap an item, then its box.</p>
-      <div class="cg-chips" id="cgPool">${ctx.shuffle(r.items).map(([w,b])=>`<button class="cg-chip" type="button" data-w="${ctx.esc(w)}" data-b="${b}">${ctx.esc(w)}</button>`).join('')}</div>
-      <div class="cg-bins">${r.bins.map((b,k)=>`<div class="cg-bin" data-bin="${k}"><h4>${ctx.esc(b)}</h4></div>`).join('')}</div>
+      <div class="cg-chips" id="cgPool">${ctx.shuffle(r.items).map(([w,b])=>`<button class="cg-chip" type="button" data-w="${ctx.esc(w)}" data-b="${[].concat(b).join(',')}">${ctx.esc(w)}</button>`).join('')}</div>
+      <div class="cg-bins"${r.bins.length>2?' style="grid-template-columns:1fr"':''}>${r.bins.map((b,k)=>`<div class="cg-bin" data-bin="${k}"><h4>${ctx.esc(b)}</h4></div>`).join('')}</div>
       <div class="cg-row"><button class="cg-btn" type="button" id="cgCheck" disabled>Check</button></div>`;
     const pool=host.querySelector('#cgPool'), check=host.querySelector('#cgCheck');
     const ready=()=>host.querySelectorAll('.cg-bin').forEach(b=>b.classList.toggle('cg-ready',!!pick));
@@ -26,8 +27,8 @@
       pick.classList.remove('cg-sel'); b.appendChild(pick); pick.dataset.in=b.dataset.bin; pick=null; ready(); can(); });
     check.onclick=()=>{
       if(host.dataset.locked||host.dataset.wait) return;
-      const placed=[...host.querySelectorAll('.cg-bin .cg-chip')], bad=placed.filter(c=>c.dataset.in!==c.dataset.b);
-      if(!ctx.exam) placed.forEach(c=>{ const ok=c.dataset.in===c.dataset.b; c.classList.toggle('cg-ok',ok); c.classList.toggle('cg-no',!ok); });
+      const placed=[...host.querySelectorAll('.cg-bin .cg-chip')], bad=placed.filter(c=>!c.dataset.b.split(',').includes(c.dataset.in));
+      if(!ctx.exam) placed.forEach(c=>{ const ok=c.dataset.b.split(',').includes(c.dataset.in); c.classList.toggle('cg-ok',ok); c.classList.toggle('cg-no',!ok); });
       const given=r.bins.map((b,k)=>b+': '+placed.filter(c=>c.dataset.in==k).map(c=>c.dataset.w).join(', ')).join(' · ');
       const again=ctx.answer(!bad.length,given);
       if(!again){ host.dataset.locked='1'; return; }

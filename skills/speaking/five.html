@@ -484,6 +484,8 @@ function say(t,then){ try{ const S=window.speechSynthesis; if(!S){ then&&then();
   const v=(S.getVoices()||[]).filter(x=>/en-GB/i.test(x.lang)); const f=v.find(x=>/female|libby|sonia|serena|kate|martha/i.test(x.name))||v[0]; if(f) u.voice=f;
   let fired=false; const fin=()=>{ if(fired) return; fired=true; then&&then(); }; u.onend=fin; u.onerror=fin; S.speak(u);
   setTimeout(()=>{ if(!S.speaking) fin(); },Math.max(2500,String(t).split(' ').length*520)); }catch(e){ then&&then(); } }
+/* several sentences, one after another, so each plays its own recording (audio/speaking, maya-*.mp3) */
+function sayList(list,then){ const L=list.filter(Boolean); let i=0; const go=()=>{ if(i>=L.length){ then&&then(); return; } say(L[i++],go); }; go(); }
 function hush(){ try{ window.speechSynthesis&&speechSynthesis.cancel(); }catch(e){} }
 document.addEventListener('click',e=>{ const b=e.target.closest('[data-say="q"]'); if(b) say(qText()); });
 /* the recorder: asked for only on the first Say it, kept in this tab only, never uploaded */
@@ -504,14 +506,15 @@ function voiceRow(){
 }
 function wireVoice(text,max,onTick){
   const h=$('vHear'), s=$('vSay'), n=$('vNote'); if(!h) return;
-  h.onclick=()=>say(text());
+  const speak=(then)=>{ const t=text(); return Array.isArray(t)?sayList(t,then):say(t,then); };
+  h.onclick=()=>speak();
   if(!s) return;
   let on=false;
   s.onclick=()=>{
     if(on){ recStop(); return; }
     on=true; s.classList.add('rec'); s.querySelector('span').textContent='Stop'; h.disabled=true; n.textContent='Say it out loud, then tap Stop.';
     recStart(onTick,max||12).then(url=>{ on=false; s.classList.remove('rec'); s.querySelector('span').textContent='Say it again'; n.textContent='You… then the model.';
-      play(url,()=>say(text(),()=>{ h.disabled=false; n.textContent='Hear the difference? Again, or go on.'; })); })
+      play(url,()=>speak(()=>{ h.disabled=false; n.textContent='Hear the difference? Again, or go on.'; })); })
     .catch(()=>{ on=false; s.classList.remove('rec'); s.querySelector('span').textContent='Say it'; h.disabled=false; n.textContent='The microphone is off. Say it aloud anyway, then tap Hear it.'; });
   };
 }
@@ -548,7 +551,7 @@ function preview(force){
     '<ol class="pv">'+D.slots.map((sl,i)=>{ const w=way(i)||sl.ways[0]; return '<li><small>'+esc(LB(i))+'</small><span>'+html(fill(w))+'</span></li>'; }).join('')+'</ol>'+
     '<div class="cta"><button type="button" class="btn fill" id="pvGo">Start</button><button type="button" class="btn" id="pvHear">▶ Hear it</button></div>');
   $('pvGo').onclick=()=>{ hush(); next(); };
-  $('pvHear').onclick=()=>say(D.slots.map((sl,i)=>fill(way(i)||sl.ways[0])).join(' '));
+  $('pvHear').onclick=()=>sayList(D.slots.map((sl,i)=>fill(way(i)||sl.ways[0])));
 }
 function next(){
   if(at>=D.slots.length) return done();
@@ -882,7 +885,7 @@ function mine(){
     '<div class="note"><div class="kick">Three times</div><p>Once reading the card, once glancing at it, once without it. Then the real thing.</p></div>'+
     '<nav class="onward"><a href="/skills/speaking/'+PAGE+'?stage=practice">Step 3 · Work on a question →</a>'+
       '<a href="/skills/speaking/'+PAGE+'?stage=talk">Step 4 · Say it, timed →</a></nav></section>';
-  const full=()=>D.slots.map((sl,i)=>{ const w=way(i); if(!w) return id['own'+i]||''; const b=body(fill(w)); return open(w.t)?(id[i]?b+' '+id[i]:b+'…'):fill(w); }).filter(Boolean).join(' ');
+  const full=()=>D.slots.map((sl,i)=>{ const w=way(i); if(!w) return id['own'+i]||''; const b=body(fill(w)); return open(w.t)?(id[i]?b+' '+id[i]:b+'…'):fill(w); }).filter(Boolean);
   const tick=t=>{ const k=Math.floor(t); $('clk').textContent=Math.floor(k/60)+':'+String(k%60).padStart(2,'0'); $('bar').style.width=Math.min(100,t/max*100)+'%';
     $('clkL').textContent=t<sec[0]?'aim '+sec[0]+'–'+sec[1]+' s':t<=sec[1]?'about right':'a little long'; };
   wireVoice(full,max,tick);

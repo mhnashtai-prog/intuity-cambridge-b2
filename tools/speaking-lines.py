@@ -75,6 +75,31 @@ for part, name in ((1, 'part1-answers'), (2, 'part2-turn'), (3, 'part3-talk'), (
     for k, line in (d.get('script') or {}).items(): add(line, 'examiner', part, 'Examiner · male', k)
     walk({k: v for k, v in d.items() if k not in ('script',)}, part, V)
 
+# SPEAKING IN FIVE (22 Nov 2026): what skills/speaking/five.html and gate.html say aloud.
+# Maya says each wording with each answer a pupil can pick (an open end is recorded with its
+# "…", so her voice trails off as if to go on; the app matches it without the dots). The
+# examiner asks each subject's question. Start here is Maya's thirty seconds for each Part.
+FIVE = ROOT / 'data' / 'speaking' / 'five'
+MAYA = 'Maya · Samara X'
+for n in (1, 2, 3, 4):
+    f = FIVE / f'part{n}.json'
+    if not f.exists(): continue
+    d = json.load(open(f))
+    for sub in d['subjects']:
+        for x in sub['picks']:
+            q = sub['q'].replace('{X}', x)
+            add(q, 'examiner', n, 'Examiner · male', 'in five · ' + sub['label'])
+            for sl in d['slots']:
+                for w in sl['ways']:
+                    t = w['t'].replace('{X}', x).replace('{a}', sub['a']).replace('{plural}', sub['plural'])
+                    add(t, 'maya', n, MAYA, 'in five · ' + sl['label'])
+GATE = (ROOT / 'skills' / 'speaking' / 'gate.html').read_text(encoding='utf-8')
+for m in re.finditer(r"(\d):\{name:'[^']*',min:'[^']*',share:\d+,page:'[^']*',\s*what:'([^']*)',\s*five:\[([^\]]*)\],\s*tip:'([^']*)'\}", GATE):
+    n, what, five, tip = m.group(1), m.group(2), m.group(3), m.group(4)
+    moves = [x.strip().strip("'") for x in five.split(',')]
+    # the exact words gate.html's script() says
+    add(f"Part {n}. {what} {tip} Five moves: {', '.join(moves)}.", 'maya', int(n), MAYA, 'Start here')
+
 OUT.mkdir(parents=True, exist_ok=True)
 rows = sorted(lines.values(), key=lambda r: (r['part'], r['role'] != 'examiner', r['voice'], r['where']))
 with open(OUT / 'LINES.csv', 'w', newline='', encoding='utf-8') as f:

@@ -148,6 +148,9 @@ var TASKROOFS = {
   learn:{ name:"Learn it", items:[
     /* 19 Nov 2026 (the owner): "Basics" on trial; a class poll against "5 Sentences" decides */
     {name:"Basics", url:"skills/writing/five.html?task={k}"},
+    /* 22 Nov 2026 (the owner): the Guided essay straight after Basics, essays only: the core
+       phrases of Basics seen at once in a whole essay (introduce, then the model, then variety) */
+    {name:"Guided", url:"skills/writing/essays/essay-sample.html?task={k}", only:["essays"]},
     {name:"Build", url:"skills/writing/build.html?type={k}&view=models"},   /* 17 Nov: a frame you build, not model essays (those are in door 3) */
     {name:"Cards", url:"skills/writing/cue-cards-print.html?type={print}"}
     /* 17 Nov 2026 (the owner, after a teen's review): Essentials left Learn it. It opened on the same

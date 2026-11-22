@@ -37,7 +37,7 @@ Written down on 13 Nov 2026, so nobody has to search the history again.
 | Tomás (Parts 3–4, default) | Christopher · Smooth, calm and very English | speed 1.00 · stability 50 · similarity 75 · style 0 · speaker boost |
 | Maya (drills, Phrase Bank, Speaking in five) | **Maya** in ElevenLabs (renamed from Samara X · Warm, Trustworthy and Clear, 22 Nov 2026). Speaking in five (maya-*.mp3): speed 0.78 | speed 0.91 (the four Part 2 drills of 13 Nov: 0.80; Phrase Bank v2: 0.80, then slowed to 85% with ffmpeg atempo=0.85 after cutting) · stability 50 · similarity 75 · style 0 · speaker boost |
 | Drill partner | Julian | |
-| Examiner | not written down; by pitch and voice colour it matches Samara X (Maya), although LINES.csv says "male" | |
+| Examiner | **Daniel** · Steady Broadcaster (all 136 lines re-recorded 22 Nov 2026; before that the examiner was Samara X/Maya). Also the examiner in Maya's drills (q*.mp3) | speed 0.85 · stability 50 · similarity 75 · style 0 · speaker boost |
 
 A line's file is named from its words alone, so two speakers who say the same words share one
 recording. A retake recorded in one take per speaker (Part 3 Technology, 13 Nov) is cut into its

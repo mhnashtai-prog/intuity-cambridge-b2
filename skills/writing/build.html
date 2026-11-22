@@ -532,7 +532,7 @@ const TAG={essays:'Essay',reviews:'Review',reports:'Report',emails:'Email',artic
 
 function recipesEssays(D){
   const SH=D.shared;
-  const KEY_SIGN=/^(?:\W*)(?:another|a further|an additional|a second|one (?:strong|compelling|key|major|clear)|the (?:main|strongest|first|primary|key)|what (?:convinces|matters)|a (?:major|key|significant)|my (?:first|main|second))\b/i;
+  const KEY_SIGN=/^(?:\W*)(?:another|a further|an additional|a second|one (?:strong|compelling|key|major|clear|benefit|advantage|reason|drawback|disadvantage|limitation|possible|practical|negative|positive)|the (?:main|strongest|first|primary|key)|what (?:convinces|matters)|a (?:major|key|significant)|my (?:first|main|second))\b/i;
   const KEY_VIEW=/\b(?:my view|my position|my opinion|I hold|I take|I agree|convinces me|matters most to me|I believe)\b/i;
   /* a key that says "another" cannot open the first body paragraph, nor "the first" a later one (16 Nov 2026) */
   const posKeys=(pool,i)=>{ const f=pool.filter(k=>i===0?!/^\W*(another|a further|an additional|a second|one more)\b/i.test(k):!/^\W*(the first|my first|firstly)\b/i.test(k)); return f.length?f:pool; };
@@ -540,13 +540,20 @@ function recipesEssays(D){
     const T=D.types[k], A=T.argue;
     const VIEW=SH.view[T.viewFlavour]||SH.view.generalisation||Object.values(SH.view)[0];
     const plan=A.bodyPlan||['keyFor','keyFor','keyAgainst'], sp=A.signpostPlan||['first','addition','turn'];
-    const body=[0,1,2].map(i=>av=>{ const s=pickAvoid(SH.signpost[sp[i]]||SH.signpost.addition,av.s), v=pickAvoid(VIEW,av.v), y=pickAvoid(posKeys(A[plan[i]]||['…'],i),av.k);
+    const body=[0,1,2].map(i=>av=>{ let s=pickAvoid((SH.signpost[sp[i]]||SH.signpost.addition).filter(w=>i<2||!/^Secondly/i.test(w)),av.s),   /* 22 Nov 2026: never "Secondly" in the third body paragraph */ v=pickAvoid(VIEW,av.v), y=pickAvoid(posKeys(A[plan[i]]||['…'],i),av.k);
+      if(/^For one thing/i.test(s)&&/^\W*one\b/i.test(y)) s='Firstly';   /* never "For one thing, one …" */
       /* one signpost a sentence (15 Nov 2026, as essay-cards.html): a key that signals its place drops the
          signpost; a key that gives the writer's view drops the view too */
-      const ks=KEY_SIGN.test(y), kv=ks||KEY_VIEW.test(y)||/,\s*$/.test(v),   /* an adverb view ('by and large,') after a signpost is two openers: the view goes */ yy=ks?fmt(y).replace(/^(\s*(?:<[^>]+>)*\s*)(\w)/,(a,b,c)=>b+c.toUpperCase()):fmt(y);
+      /* 22 Nov 2026 (audit): ONE opener per sentence. A signpost and a view before the key phrase stacked
+         fillers ("First of all, it is often argued that a sensible solution…") or broke the grammar
+         ("…it is important to acknowledge that equally important is the fact that…"), so the view goes */
+      const ks=KEY_SIGN.test(y), kv=true||ks||KEY_VIEW.test(y)||/,\s*$/.test(v),   /* an adverb view ('by and large,') after a signpost is two openers: the view goes */ yy=ks?fmt(y).replace(/^(\s*(?:<[^>]+>)*\s*)(\w)/,(a,b,c)=>b+c.toUpperCase()):fmt(y);
       return {html:(ks?'':`<span class="sg">${esc(comma(s))}</span> `)+(kv?'':`<span class="vw">${esc(v)}</span> `)+`<span class="k">${yy}</span>`,used:{s,v,k:y},against:plan[i]==='keyAgainst'}; });
     return {key:k,label:T.label||k,sections:[
-      {word:'Introduction',sub:'Background · your aim',lines:[()=>({html:`<span class="k">${fmt(pick(SH.background))}</span> <span class="vw">${esc(pick(T.open.hinge))} <span class="gp">…</span>.</span> <span class="k">${fmt(pick(T.open.aim))}</span>`})]},
+      /* 22 Nov 2026 (audit): two sentences, set the scene then say what you will do. A random hinge glued
+         between two gaps ("These days, … as a result …") could not be filled with anything sensible */
+      {word:'Introduction',sub:'Set the scene · say what you will do',lines:[()=>{ const bg=fmt(pick(SH.background));
+        return {html:`<span class="k">${bg}</span>${/…\s*(<\/span>)?\s*$/.test(bg)?'':' <span class="gp">…</span>'}. <span class="k">${fmt(pick(T.open.aim))}</span>`}; }]},
       {word:'Body',sub:'Three points, each signposted',lines:body},
       {word:'Conclusion',sub:'Sum up · your verdict',lines:[()=>({html:`<span class="k">${esc(pick(T.close.summary))}</span> <span class="vw">${esc(pick(T.close.stance))}</span> ${fmt(pick(T.close.verdict))}`})]}
     ]};
@@ -659,7 +666,8 @@ function cueOne(D){ const out={};
       pa.steps.forEach(st=>{ if(st.support||!st.items||!st.items.length) return; const x=go(st); if(x&&!sec[k].includes(x)) sec[k].push(x); }); });
     out[t.id]=sec; });
   return out; }
-const tail=t=>/[.?!…,]$/.test(t)||/…/.test(t.slice(-3))?t:t+' …';
+/* a frame that stops on a comma ("If current patterns persist,") keeps its gap (22 Nov 2026) */
+const tail=t=>/[.?!…]$/.test(t)||/…/.test(t.slice(-3))?t:t+' …';
 function safeOf(m){
   const was=R; R=()=>0; const s2=runRecipe(m.rec,m.n); R=was;
   s2.type=m.type; s2.title=m.title; s2.num=m.num; s2.safe=true;

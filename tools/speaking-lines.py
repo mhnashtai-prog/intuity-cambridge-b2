@@ -80,7 +80,7 @@ for part, name in ((1, 'part1-answers'), (2, 'part2-turn'), (3, 'part3-talk'), (
 # "…", so her voice trails off as if to go on; the app matches it without the dots). The
 # examiner asks each subject's question. Start here is Maya's thirty seconds for each Part.
 FIVE = ROOT / 'data' / 'speaking' / 'five'
-MAYA = 'Maya · Samara X'
+MAYA = 'Maya'
 for n in (1, 2, 3, 4):
     f = FIVE / f'part{n}.json'
     if not f.exists(): continue

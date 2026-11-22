@@ -19,7 +19,7 @@ done = set(json.load(open(OUT / 'manifest.json'))['lines'].values())
 rows = [r for r in csv.DictReader(open(OUT / 'LINES.csv', encoding='utf-8'))
         if r['file'] not in done and (r['role'] == 'maya' or r['where'].startswith('in five'))]
 BR = ' <break time="2s" />'
-SET = {'maya': 'Samara X · Multilingual v2 · Speed 0.91 · Stability 50 · Similarity 75 · Style 0 · Speaker boost on',
+SET = {'maya': 'Maya (the ElevenLabs voice once called Samara X) · Multilingual v2 · Speed 0.91 · Stability 50 · Similarity 75 · Style 0 · Speaker boost on',
        'examiner': 'the examiner voice of the earlier examiner lines · Multilingual v2'}
 sections = []
 for role in ('maya', 'examiner'):
@@ -47,6 +47,8 @@ for k, (role, part, chunk) in enumerate(sections, 1):
             'Voice: ' + SET[role], '']
     txt += [r['text'] + BR for r in chunk]
     txt += ['', '']
+# all of Maya's lines as one take too, for ElevenLabs Studio (five-maya-all.mp3)
+plan['five-maya-all.mp3'] = [f for n, fs in plan.items() if n.startswith('five-maya-p') for f in fs]
 (OUT / 'FIVE-TAKES.txt').write_text('\n'.join(txt), encoding='utf-8')
 (OUT / 'five-takes.json').write_text(json.dumps(plan, indent=1), encoding='utf-8')
 print(len(rows), 'lines in', len(sections), 'sections')

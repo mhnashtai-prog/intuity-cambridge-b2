@@ -333,6 +333,9 @@ html.deck-open,html.deck-open body{overflow:hidden}
 .yours b{color:var(--dim);font-weight:700}
 /* 22 Nov 2026 (the owner): the coursebook's own words, small and grey, so the ladder still leads */
 .ht3{margin:0 0 .9rem;text-align:center;font:500 1.05rem/1.25 'Geist',sans-serif;letter-spacing:-.005em;color:#6B655C}
+/* Maya's play-through button, beside × */
+.dx.play{font-size:.85rem;color:#2F4D42;border-color:#8AA79C}
+.dx.play.on{background:#201E1C;color:#E5D1B8;border-color:#201E1C;font-size:.7rem;letter-spacing:-.1em}
 </style>
 <script src="/tools/be2-brand.js?v=20261121"></script>
 </head>
@@ -624,62 +627,30 @@ function home(){
    one thing on the screen at a time. For each job: 1 the phrase lands, 2 the slip to avoid,
    3 two other ways to say it. Next / Back (or swipe) step through; the bar on top shows where you are. */
 
-/* 21 Nov 2026 (the owner's comparison with the Phrase Bank): a phrase is first met INSIDE a sentence,
-   with a voice. One short model essay (smartphones at school) carries every main essay phrase, so the
-   eleven sentences also read as one essay. {…} marks the phrase. The phone's voice reads until Maya
-   records them: drop each mp3 into AUDIO below (job id → file) and it plays instead. */
-const MODEL={
-  hook:'{Few people would deny that} smartphones have changed the way teenagers learn.',
-  aim:'{In this essay I will explain why I believe that} phones belong in the classroom.',
-  first:'{Firstly,} phones give students instant access to information.',
-  keyopen:'{One reason why I believe this is that} pupils can check facts in seconds.',
-  addition:'{Moreover,} many apps make revision more enjoyable.',
-  keymore:'{A further reason is that} parents can contact their children easily.',
-  own:'{Another key point is that} pupils need to learn to use technology responsibly.',
-  concede:'{Admittedly,} phones can be a distraction, {but} clear rules solve this.',
-  summary:'{All things considered,} phones are a useful tool if they are used wisely.',
-  stance:'{I firmly believe that} schools should teach pupils to use them sensibly.'
-};
-/* two more essays with the same phrases, so practice moves the phrase to new topics: step 1 uses the
-   smartphones sentence (met in View), step 2 online learning (for), step 3 tourism (against). Each
-   essay takes one side, as a B2 First essay may. */
-const MODEL2={
-  hook:'{Few people would deny that} online courses have become part of everyday life.',
-  aim:'{In this essay I will explain why I believe that} they are good for students.',
-  first:'{Firstly,} students can learn at their own pace.',
-  keyopen:'{One reason why I believe this is that} nobody has to travel to school.',
-  addition:'{Moreover,} recorded classes can be watched again before an exam.',
-  keymore:'{A further reason is that} online courses are often cheaper.',
-  own:'{Another key point is that} students in small villages get the same chances.',
-  concede:'{Admittedly,} some learners miss their friends, {but} they can still meet at weekends.',
-  summary:'{All things considered,} online learning gives students more freedom.',
-  stance:'{I firmly believe that} every school should offer it.'
-};
-const MODEL3={
-  hook:'{Few people would deny that} tourism has changed many small towns.',
-  aim:'{In this essay I will explain why I believe that} it does more harm than good.',
-  first:'{Firstly,} crowds make daily life difficult for residents.',
-  keyopen:'{One reason why I believe this is that} rents go up when flats become holiday homes.',
-  addition:'{Moreover,} local shops are replaced by souvenir stalls.',
-  keymore:'{A further reason is that} traffic and noise increase every summer.',
-  own:'{Another key point is that} historic buildings are damaged by so many visitors.',
-  concede:'{Admittedly,} tourism creates jobs, {but} most of them are badly paid.',
-  summary:'{All things considered,} mass tourism causes more problems than it solves.',
-  stance:'{I firmly believe that} councils should limit the number of visitors.'
-};
-const MODELS=[MODEL,MODEL2,MODEL3];
+/* 22 Nov 2026: the sentences live in /data/writing/phrase-ladder.json (Phrase Bank marks: {…} the
+   expression, […] its key word). belt = the View cards for a job, one expression each, one topic;
+   practice = the lead phrase on three topics, one per practice step. */
+let LD=null;
+const jobData=x=>LD&&LD.tasks&&LD.tasks[F]&&LD.tasks[F].jobs&&LD.tasks[F].jobs[x.id]||null;
+const beltOf=x=>{ const j=jobData(x); return j&&j.belt&&j.belt.length?j.belt:null; };
 /* topics for step 5 when the pupil has not chosen one in Learn it */
 const TOPICS=['school uniforms','living in a big city','social media','learning a language abroad','homework','fast food'];
 const AUDIO={};
-const modelOf=(x,v)=>F==='essay'?MODELS[v||0][x.id]:null;
+const modelOf=(x,v)=>{ const j=jobData(x); return j&&j.practice&&j.practice[v||0]?j.practice[v||0].replace(/[\[\]]/g,''):null; };
 const modelHTML=(m,cls)=>m?`<div class="fc-card model ${cls||''}"><span class="fc-k">In a sentence</span><span class="fc-bar"></span><p>${esc(m).replace(/\{([^}]*)\}/g,'<b>$1</b>')}</p><button type="button" class="hear" data-hear="${esc(m.replace(/[{}]/g,''))}" aria-label="Hear it"><svg viewBox="0 0 46 46" aria-hidden="true"><circle cx="23" cy="23" r="21" fill="#fff" stroke="#8AA79C" stroke-width="3"/><circle cx="23" cy="23" r="15.5" fill="#201E1C"/><path d="M20 17.5v11l9-5.5z" fill="#E5D1B8"/></svg>Hear it</button></div>`:'';
 let AU=null;
-function say(text,id){
-  try{ if(AU){ AU.pause(); AU=null; } speechSynthesis.cancel(); }catch(e){}
-  if(id&&AUDIO[id]){ AU=new Audio(AUDIO[id]); AU.play().catch(()=>{}); return; }
+/* say(text, id, done): done runs when the voice ends (Maya's mp3 or the phone's voice), or after a guard
+   time, so a silent voice never stops the play-through. A newer say() cancels an older one's done. */
+let SAYN=0;
+function hush(){ SAYN++; try{ if(AU){ AU.pause(); AU=null; } speechSynthesis.cancel(); }catch(e){} }
+function say(text,id,done){
+  hush(); const n=SAYN; let fired=false;
+  const end=()=>{ if(fired||n!==SAYN) return; fired=true; clearTimeout(g); if(done) done(); };
+  const g=setTimeout(end,1500+text.split(' ').length*520);
+  if(id&&AUDIO[id]){ AU=new Audio(AUDIO[id]); AU.onended=end; AU.play().catch(()=>{}); return; }
   try{ const u=new SpeechSynthesisUtterance(text), v=speechSynthesis.getVoices();
     u.voice=v.find(x=>/en-GB/i.test(x.lang)&&/female|serena|kate|libby|sonia|martha/i.test(x.name))||v.find(x=>/en-GB/i.test(x.lang))||v.find(x=>/^en/i.test(x.lang))||null;
-    u.lang='en-GB'; u.rate=.92; speechSynthesis.speak(u); }catch(e){}
+    u.lang='en-GB'; u.rate=.92; u.onend=end; speechSynthesis.speak(u); }catch(e){}
 }
 document.addEventListener('click',e=>{ const h=e.target.closest('[data-hear]'); if(!h) return; sfx('pop'); say(h.dataset.hear,h.dataset.id); });
 
@@ -700,19 +671,26 @@ let VS=0;
 /* the introduction's two jobs have names pupils know from class: the hook and the thesis */
 const role=x=>x.id==='hook'||(x.id==='start'&&F!=='story')?'Hook · ':x.id==='aim'?'Thesis · ':'';
 const jobName=x=>x.id==='hook'?'Hook':x.id==='aim'?'Thesis':x.id==='concede'?'The other side':x.job;
+/* 22 Nov 2026 (the owner: "10 slides with full context … and no more distractors"): a job with sentences
+   in phrase-ladder.json shows one full card per expression, all on one topic: the phrase to learn first,
+   then the other ways, each in its sentence. No Avoid slides (the slip shows in Practise, when a pupil
+   writes it) and no lists. A job without sentences keeps its single card. */
 function stagesOf(g){
   const out=[];
-  g.list.forEach(x=>{
-    out.push({x,k:'phrase'});
-    const l=slipOf(x.id), t=x.p.tip&&/^Not:\s*([^.]+)\.\s*(.*)$/.exec(x.p.tip);
-    if(l) out.push({x,k:'slip',w:l[0],r:l[1],why:l[2]});
-    else if(t) out.push({x,k:'slip',w:t[1],r:'',why:t[2]});
-    else if(x.p.tip) out.push({x,k:'slip',w:'',r:'',why:x.p.tip});
-    /* 22 Nov 2026: the other ways no longer get slides of their own (97 of them made the deck 71
-       slides long). They fold away on the phrase's card, to open when a pupil wants them. */
-  });
+  g.list.forEach(x=>{ const b=beltOf(x);
+    if(b) b.forEach((src,i)=>out.push({x,k:'card',src,i}));
+    else out.push({x,k:'phrase'}); });
   return out;
 }
+/* the card's title: the expression alone, the sentence's own words as … ("Although …") */
+function frameOf(src){
+  const out=[]; src.split(/(\{[^}]*\})/).forEach(part=>{ if(!part) return;
+    if(part[0]==='{') out.push(part.slice(1,-1).trim()); else if(part.trim()&&out[out.length-1]!=='…') out.push('…'); });
+  return out.join(' ').replace(/ ([,.])/g,'$1');
+}
+const sentHTML=src=>esc(src.replace(/[\[\]]/g,'')).replace(/\{([^}]*)\}/g,'<b>$1</b>');
+const plainS=src=>src.replace(/[{}\[\]]/g,'');
+let AUTO=false;
 /* 21 Nov 2026 (the owner: "your How to Use presentation is more catchy"): View is a full-screen deck in the
    clip's language (skills/writing/how.html): story bars on top, one bar per job; a house card rising off a
    stack, its role in a caramel margin, an Anton title, a counter in the corner; × back to the ladder. */
@@ -726,7 +704,12 @@ function view(){
     return `<i><b style="width:${i<ji?100:i>ji?0:Math.round(done/mine.length*100)}%"></b></i>`; }).join('');
   const beat=c.k==='phrase'?'Learn this one':c.k==='slip'?'Avoid':'Other ways · to recognise';
   let title='', secs='';
-  if(c.k==='phrase'){
+  if(c.k==='card'){
+    title=`<div class="mt dw">${landT(frameOf(c.src))}</div>`;
+    secs=`<div class="os"><small>In a sentence</small><p>${sentHTML(c.src)}</p>
+        <button type="button" class="hear" data-hear="${esc(plainS(c.src))}" aria-label="Hear it"><svg viewBox="0 0 46 46" aria-hidden="true"><circle cx="23" cy="23" r="21" fill="#fff" stroke="#8AA79C" stroke-width="3"/><circle cx="23" cy="23" r="15.5" fill="#201E1C"/><path d="M20 17.5v11l9-5.5z" fill="#E5D1B8"/></svg>Hear it</button></div>`+
+      (c.i===0&&x.p.g?`<div class="os"><small>Then</small><p class="gr">${esc(x.p.g)}</p></div>`:'');
+  } else if(c.k==='phrase'){
     title=`<div class="mt dw">${landT(x.p.t)}</div>`;
     const m=modelOf(x);
     secs=(m?`<div class="os"><small>In a sentence</small><p>${esc(m).replace(/\{([^}]*)\}/g,'<b>$1</b>')}</p>
@@ -741,25 +724,33 @@ function view(){
       `<div class="os ui2"><small>Why</small><p>${esc(c.why)}</p></div>`;
   }
   /* the sections arrive one after another */
-  { let k=0; const base=c.k==='phrase'?.9:.15, step=c.k==='slip'?.75:.6; secs=secs.replace(/<div class="os/g,()=>`<div style="animation-delay:${(base+step*(k++)).toFixed(2)}s" class="os`); }
-  const nextLbl=last?'To the ladder ›':(n=>n.k==='phrase'?(jobName(n.x).length<=14?`Next: ${esc(jobName(n.x))} ›`:'Next phrase ›'):'Next: Avoid ›')(SS[VS+1]);
+  { let k=0; const base=c.k==='slip'?.15:.9, step=c.k==='slip'?.75:.6; secs=secs.replace(/<div class="os/g,()=>`<div style="animation-delay:${(base+step*(k++)).toFixed(2)}s" class="os`); }
+  const nextLbl=last?'To the ladder ›':(n=>n.x===x?'Next ›':jobName(n.x).length<=14?`Next: ${esc(jobName(n.x))} ›`:'Next phrase ›')(SS[VS+1]);
+  const lab=c.k==='card'?(c.i===0?(x.id==='concede'?' · optional':' · learn this one'):' · or say'):c.k==='phrase'?(x.id==='concede'?' · optional':' · learn this one'):'';
   const d=deckEl(); d.classList.add('on'); document.documentElement.classList.add('deck-open');
-  d.innerHTML=`<div class="dv-top"><div class="bars">${bars}</div><button type="button" class="dx" id="back" aria-label="Back to the ladder">×</button></div>
+  d.innerHTML=`<div class="dv-top"><div class="bars">${bars}</div>${SS.some(q=>q.k==='card')?`<button type="button" class="dx play${AUTO?' on':''}" id="auto" aria-pressed="${AUTO}" aria-label="${AUTO?'Pause Maya':'Maya reads them all'}">${AUTO?'❚❚':'▶'}</button>`:''}<button type="button" class="dx" id="back" aria-label="Back to the ladder">×</button></div>
     <div class="dv-k"><b>${String(VI+1).padStart(2,'0')}</b> · ${esc(g.name)}</div>
     <div class="dv-stack" id="vs"><span class="ghost g2"></span><span class="ghost g1"></span>
-      <article class="oc k-${c.k}"><div class="ml">${esc(jobName(x))}${c.k==='phrase'?(x.id==='concede'?' · optional':' · learn this one'):''}</div>${title}<span class="mb"></span>${x.p.tag&&c.k==='phrase'?`<div class="tagl">${esc(x.p.tag)}</div>`:''}${secs}
+      <article class="oc k-${c.k}"><div class="ml">${esc(jobName(x))}${lab}</div>${title}<span class="mb"></span>${x.p.tag&&c.k==='phrase'?`<div class="tagl">${esc(x.p.tag)}</div>`:''}${secs}
         <div class="of">${VS+1} / ${SS.length}</div></article></div>
     <div class="dv-foot"><button type="button" class="arw" id="vp" aria-label="Back"${VS?'':' disabled'}>‹</button>
       <button type="button" class="go" id="vn">${nextLbl}</button></div>
     ${last?`<button type="button" class="showme" id="vgo">or practise ${esc(g.name.toLowerCase())} now</button>`:''}`;
   const to=(i,j)=>{ VI=i; VS=j; sfx('pop'); view(); };
-  const out=()=>{ sfx('pop'); VS=0; closeDeck(); home(); };
+  const out=()=>{ AUTO=false; hush(); sfx('pop'); VS=0; closeDeck(); home(); };
   /* the end of a paragraph returns to the ladder; the pupil chooses what next */
   const fwd=()=>{ if(!last) to(VI,VS+1); else out(); };
   const bwd=()=>{ if(VS) to(VI,VS-1); };
-  const practiseIt=()=>{ closeDeck(); MODE='practise'; const list=g.list.filter(due);
+  const practiseIt=()=>{ AUTO=false; hush(); closeDeck(); MODE='practise'; const list=g.list.filter(due);
     if(list.length) start(list.sort((a,c)=>st(a.id).rung-st(c.id).rung),g.name); else home(); };
   $('back').onclick=out; $('vn').onclick=fwd; $('vp').onclick=bwd; if($('vgo')) $('vgo').onclick=practiseIt;
+  /* Maya reads every card of this paragraph, one after another; she stops at its last card */
+  const readOn=()=>{ if(!AUTO||c.k!=='card') return; say(plainS(c.src),null,()=>{ if(!AUTO) return;
+    if(last){ AUTO=false; const a=$('auto'); if(a){ a.classList.remove('on'); a.textContent='▶'; a.setAttribute('aria-pressed','false'); } return; }
+    setTimeout(()=>{ if(AUTO&&$('deck')&&$('deck').classList.contains('on')) to(VI,VS+1); },700); }); };
+  if($('auto')) $('auto').onclick=()=>{ AUTO=!AUTO; if(!AUTO){ hush(); } sfx('pop');
+    const a=$('auto'); a.classList.toggle('on',AUTO); a.textContent=AUTO?'❚❚':'▶'; a.setAttribute('aria-pressed',String(AUTO)); readOn(); };
+  if(AUTO) setTimeout(readOn,900);
   if($('more')) $('more').onclick=()=>{ const o=$('alts').hidden; $('alts').hidden=!o; $('more').setAttribute('aria-expanded',String(o));
     $('more').querySelector('span').textContent=o?'−':'+'; sfx('pop'); };
   let x0=null; const vs=$('vs');
@@ -897,6 +888,10 @@ function check(x,r,v){
   else { const words=norm(v).split(' ').length, n=norm(bare(t)).split(' ').length; ok=within(v,bare(t))>=.86&&words>=n+4;
     if(!ok&&within(v,bare(t))>=.86) note='Nearly. Add your own idea to the phrase: at least four more words.'; }
   if(r>=4&&!ok&&!alt&&!note&&within(v,bare(t))>=.75) note='Nearly. Compare it with the phrase:';
+  /* 22 Nov 2026: the Portuguese-speaker slip, shown only when the pupil writes it (it left View) */
+  /* closer to the slip than to the phrase = the slip, even when it is only one word away */
+  const sl=slipOf(x.id); if(r>=3&&sl&&!alt){ const w=bare(sl[0]), sw=Math.max(sim(v,w),within(v,w)), sp=Math.max(sim(v,bare(t)),within(v,bare(t)));
+    if(w&&sw>=.85&&sw>sp){ ok=false; note=`Careful: “${sl[0]}” is a common slip. ${sl[2]} Use:`; } }
   result(ok,v,alt,note);
 }
 function result(ok,v,alt,note,shown){
@@ -906,7 +901,7 @@ function result(ok,v,alt,note,shown){
   if(shown){ line=`Here it is. <b>Your step stays</b>; it comes back next time.${ans}`; S.res.push(null); }
   else if(alt&&typeof alt==='string'){ line=`<b class="yes">Good phrase, wrong job.</b> That one is for <b>${esc(alt.toLowerCase())}</b>. Your step stays. For <b>${esc(x.job.toLowerCase())}</b> you are learning:${ans}`; sfx('pop'); S.res.push(null); }
   else if(alt){ line=`<b class="yes">Good phrase.</b> It does this job too, but it isn't the one you're learning, so your step stays.${ans}`; sfx('pop'); S.res.push(null); }
-  else if(note){ line=`<b class="no">${esc(note)}</b> Your step stays.${/:$/.test(note)?ans:''}`; sfx('bowlLow'); S.res.push(null); }   /* nearly: the step stays */
+  else if(note){ line=`<b class="no">${esc(note)}</b>${/:$/.test(note)?ans:''}<span style="display:block;margin-top:.5rem;color:var(--faint)">Your step stays.</span>`; sfx('bowlLow'); S.res.push(null); }   /* nearly: the step stays */
   else if(ok){ s.rung=Math.min(TOP,r); s.rday=today(); s.next=addDays(today(),GAP[r]||1); S.run++; S.score+=r; S.res.push(true);
     const nx=FREE?'now':backIn(s);
     line=r===TOP?`<b class="yes">It’s yours ✓</b> You used it in your own sentence.`:`<b class="yes">Yes!</b> Step ${r} done. Step ${r+1}, ${STEP[r+1].toLowerCase()}: <b>${nx}</b>.`;
@@ -951,8 +946,9 @@ try{ new ResizeObserver(size).observe($('hdr')); }catch(e){}
 if(document.fonts&&document.fonts.ready) document.fonts.ready.then(size);
 /* the essay introduction comes from the same source as Build and Cards (essay-cards-models.json) */
 Promise.all([fetch('/data/writing/phrases-by-job.json?v=8').then(r=>r.json()),
+  fetch('/data/writing/phrase-ladder.json?v=1').then(r=>r.ok?r.json():null).catch(()=>null).then(j=>{ LD=j; }),
   fetch('/skills/writing/essays/data/essay-cards-models.json').then(r=>r.ok?r.json():null).catch(()=>null)])
-.then(([d,cm])=>{ D=d; CM=cm; if(!D.tasks[F]) F='essay'; tabs(); size(); pool(); home(); });
+.then(([d,,cm])=>{ D=d; CM=cm; if(!D.tasks[F]) F='essay'; tabs(); size(); pool(); home(); });
 })();
 </script>
 </body>

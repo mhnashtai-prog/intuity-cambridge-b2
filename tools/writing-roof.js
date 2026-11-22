@@ -137,6 +137,6 @@
 })();
 
 /* ESSAY ROUTES (17 Nov 2026): on the essay pages, the six types read as two routes and three extras */
-(function () { try { if (!/essay|[?&](type|task)=essays|[?&]type=fa/i.test(location.pathname + location.search)) return;
+(function () { try { if (!/essay|[?&](type|task)=essays|[?&]type=(fa|op|ad|ps|ce|st)\b/i.test(location.pathname + location.search)) return;   /* 22 Nov 2026: a single type's cards too (type=op read 'Opinion') */
   if (document.querySelector('script[src*="essay-routes.js"]')) return;
   var s = document.createElement('script'); s.src = '/tools/essay-routes.js?v=5'; s.defer = true; (document.head || document.documentElement).appendChild(s); } catch (e) {} })();

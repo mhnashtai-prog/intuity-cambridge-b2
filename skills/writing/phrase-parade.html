@@ -65,6 +65,15 @@ body{margin:0;font-family:'Geist',system-ui,sans-serif;color:var(--ink);-webkit-
 .list{position:absolute;left:0;right:0;top:300px;display:flex;flex-direction:column;gap:6px}
 .list div{font:600 15px/1.25 'Geist',sans-serif;color:var(--ink);padding-left:12px;border-left:3px solid var(--sage)}
 .list .k{border:0;padding:0;margin-bottom:2px}
+/* hooks as a fan (the owner, 22 Nov 2026: "a context and nothing more", as in How to use's Openings) */
+.fan{position:absolute;left:0;right:0;top:40px;height:420px}
+.fc{position:absolute;left:7%;right:7%;top:130px;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:18px 18px 20px;
+  box-shadow:0 1px 0 rgba(20,17,14,.05),0 26px 44px -28px rgba(20,17,14,.55);transform-origin:50% 140%;opacity:0;will-change:transform}
+.fc i{display:block;width:26px;height:8px;background:#B0865C;margin-bottom:12px}
+.fc small{display:block;font:500 10px/1 'Geist Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:var(--faint);margin-bottom:10px}
+.fc p{margin:0;font:400 21px/1.42 'Geist',sans-serif;color:#7A746B}
+.fc p b{color:var(--ink);font-weight:650}
+.fcount{position:absolute;right:0;top:0;font:500 10px/1 'Geist Mono',monospace;letter-spacing:.2em;color:var(--faint)}
 /* the end */
 .end{position:absolute;inset:0;overflow:auto}
 .end ol{list-style:none;padding:0;margin:10px 0 0;display:flex;flex-direction:column;gap:9px}
@@ -159,9 +168,9 @@ const TABS=[['hooks','Hooks'],['first','First reason'],['second','Second reason'
 
 /* ── the clock: one t, paused by a tap; every frame is drawn from t ── */
 let TAB=(new URLSearchParams(location.search).get('p'))||'hooks', T=0, last=0, paused=false, PLAN=null, built='';
-const SPIN=10.5, HOOK=5.6, RUN=2.2;
+const SPIN=10.5, HOOK=4.8;
 function plan(){
-  if(TAB==='hooks'){ const ev=[]; let t=0; HOOKS.forEach((r,ri)=>{ ev.push({k:'run',ri,a:t,b:t+RUN}); t+=RUN; r[2].forEach((h,hi)=>{ ev.push({k:'hook',ri,hi,a:t,b:t+HOOK}); t+=HOOK; }); }); return {ev,end:t}; }
+  if(TAB==='hooks'){ const ev=[]; let t=0.3; HOOKS.forEach((r,ri)=>r[2].forEach((h,hi)=>{ ev.push({k:'hook',ri,hi,n:ev.length,a:t,b:t+HOOK}); t+=HOOK; })); return {ev,end:t+0.6}; }
   const L=ARGS[TAB][1]; return {ev:L.map((s,i)=>({k:'spin',i,a:i*SPIN,b:(i+1)*SPIN})),end:L.length*SPIN};
 }
 function tabs(){
@@ -184,23 +193,29 @@ function pos(n,from,to,p){ const L=COL[n].length; let a=COL[n].indexOf(from), b=
   const x=a+(b-a)*ease(p); return ((x%L)+L)%L+L; }
 
 function draw(){
-  const ev=PLAN.ev, t=T; let e=ev.find(x=>t>=x.a&&t<x.b);
+  const ev=PLAN.ev, t=T; let e=ev.find(x=>t>=x.a&&t<x.b)||(t<ev[0].a?ev[0]:(t<PLAN.end-0.6+0.6&&t<ev[ev.length-1].b+0.6?ev[ev.length-1]:null));
   const bs=[...$('bars').children]; let bi=0;
   ev.forEach(x=>{ if(x.k==='run') return; const b=bs[bi++]; if(b) b.firstChild.style.width=(cl((t-x.a)/(x.b-x.a))*100)+'%'; });
   if(!e){ if(built!=='end'){ built='end'; endScreen(); } return; }
   const u=t-e.a, L=$('layer');
-  if(e.k==='run'){ const r=HOOKS[e.ri], id='run'+e.ri;
-    if(built!==id){ built=id; L.innerHTML=`<div class="run"><div class="k">Hooks · ${e.ri+1} of 3</div><div class="big">${r[0]}</div><div class="sub">${r[1]}</div></div>`; }
-    const p=ease(cl(u/0.5)), o=cl((e.b-t)/0.35); L.firstChild.style.opacity=Math.min(p,o); L.firstChild.style.transform='translateY('+((1-p)*14)+'px)'; return; }
-  if(e.k==='hook'){ const r=HOOKS[e.ri], h=r[2][e.hi], id='h'+e.ri+'.'+e.hi;
-    if(built!==id){ built=id;
-      const prev=r[2].slice(0,e.hi);
-      L.innerHTML=`<div class="poster"><div class="ml">Hook · ${r[0]}</div><div class="q">${esc(h[0])}</div><p>${hookHTML(h)}</p></div>
-        <div class="list"><div class="k">${r[0]} · the list so far</div>${prev.map(x=>'<div>'+esc(hookExpr(x))+'</div>').join('')}<div class="nw">${esc(hookExpr(h))}</div></div>`; }
-    const p=RM?1:cl(u/0.6), card=L.querySelector('.poster'); card.style.opacity=cl(p*3); card.style.transform='translateY('+(-90*(1-back(p))).toFixed(1)+'px)';
-    const o=cl((e.b-t)/0.4); card.style.opacity=Math.min(cl(p*3),o);
-    const nw=L.querySelector('.nw'); const q=ease(cl((u-3.4)/0.5)); nw.style.opacity=q; nw.style.transform='translateX('+((1-q)*-12)+'px)';
-    L.querySelector('.list').style.top=(card.offsetHeight+70)+'px'; return; }
+  if(e.k==='hook'){
+    const all=HOOKS.flatMap(r=>r[2].map(h=>[r[0],h]));
+    if(built!=='fan'){ built='fan';
+      L.innerHTML='<div class="fan">'+all.map(([kind,h],j)=>'<div class="fc"><i></i><small>'+kind+'</small><p>'+hookHTML(h)+'</p></div>').join('')+'</div><div class="fcount" id="fcount"></div>'; }
+    const cards=[...L.querySelectorAll('.fc')], at=PLAN.ev.filter(x=>x.k==='hook').map(x=>x.a);
+    cards.forEach((c,j)=>{
+      const p=RM?1:cl((t-at[j])/0.6); if(t<at[j]-0.05){ c.style.opacity=0; return; }
+      /* how far this card has been pushed back by the ones dealt after it */
+      let d=0; for(let k=j+1;k<at.length;k++) d+=ease(cl((t-at[k])/0.5));
+      const side=j%2?1:-1, dd=Math.min(d,4);
+      c.style.zIndex=j+1;
+      c.style.opacity=(cl(p*3)*(d>3.2?Math.max(0,4.2-d):1)).toFixed(2);
+      c.style.transform='translate('+(side*dd*10).toFixed(1)+'px,'+((-110*(1-back(p)))-dd*4).toFixed(1)+'px) rotate('+(side*dd*3.4).toFixed(2)+'deg) scale('+(1-dd*0.03).toFixed(3)+')';
+      /* a card behind shows its top edge and label, not its words */
+      c.querySelector('p').style.opacity=(1-cl(d)).toFixed(2);
+    });
+    $('fcount').textContent=(e.n+1)+' / '+all.length;
+    return; }
   /* a spin */
   const S=ARGS[TAB][1], s=S[e.i], pr=S[(e.i+S.length-1)%S.length], id='s'+TAB+e.i;
   if(built!==id){ built=id;

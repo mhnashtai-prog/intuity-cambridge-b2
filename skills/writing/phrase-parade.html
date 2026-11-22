@@ -74,6 +74,9 @@ body{margin:0;font-family:'Geist',system-ui,sans-serif;color:var(--ink);-webkit-
 .fc p{margin:0;font:400 21px/1.42 'Geist',sans-serif;color:#7A746B}
 .fc p b{color:var(--ink);font-weight:650}
 .fcount{position:absolute;right:0;top:0;font:500 10px/1 'Geist Mono',monospace;letter-spacing:.2em;color:var(--faint)}
+.embed #hdr,.embed .proto{display:none}
+.embed .wrap{padding-top:58px}
+.embed .stage{height:calc(100svh - 86px);min-height:480px}
 /* the end */
 .end{position:absolute;inset:0;overflow:auto}
 .end ol{list-style:none;padding:0;margin:10px 0 0;display:flex;flex-direction:column;gap:9px}
@@ -133,6 +136,16 @@ const HOOKS=[
     ['Is it important to be rich?','We can all accept the fact that','money cannot buy everything.']]]
 ];
 
+/* ── page 3 · Conclusion: open the last paragraph, then give the verdict ── */
+const CONCL=[
+  ['Verdict','{On balance, I believe that} the benefits of phones in class outweigh the drawbacks.'],
+  ['Verdict','{All things considered, I firmly believe that} tourism does more good than harm.'],
+  ['Despite the challenges','{To sum up, it seems that in spite of the challenges regarding} online learning, {it is clear that} it gives students more freedom.'],
+  ['Despite the challenges','{In conclusion, as far as I can judge, despite some of the views expressed, it is clear that} homework still has a place in school.'],
+  ['Despite the challenges','{On the whole, even though there are concerns about} screen time, {I am convinced that} phones should not be banned.'],
+  ['Verdict','{All in all, it seems to me that} city life has more to offer than it takes away.']
+];
+const FANS={hooks:['Hooks',HOOKS.flatMap(r=>r[2].map(h=>[r[0],h]))],conclusion:['Conclusion',CONCL.map(([k,t])=>[k,['','',t]])]};
 /* ── page 3 · Introducing the arguments: the columns, as reels ── */
 const COL={
   1:['Firstly,','To begin with,','First of all,','In the first place,','For one thing,','Secondly,','Apart from that,','Moreover,','Furthermore,','In addition,','On the other hand,','However,'],
@@ -164,13 +177,16 @@ const ARGS={
     ['On the other hand,','it is beyond doubt that','the key disadvantage of','school uniforms is that they can be expensive.',['In particular,','blazers cost far more than ordinary jackets.']],
     ['However,','it appears that','the argument against','banning cars is that shops in the centre may lose customers.',['This is largely due to the fact that','many people do their shopping by car.']]]]
 };
-const TABS=[['hooks','Hooks'],['first','First reason'],['second','Second reason'],['other','The other side']];
+const TABS=[['hooks','Hooks'],['first','First reason'],['second','Second reason'],['other','The other side'],['conclusion','Conclusion']];
 
 /* ── the clock: one t, paused by a tap; every frame is drawn from t ── */
-let TAB=(new URLSearchParams(location.search).get('p'))||'hooks', T=0, last=0, paused=false, PLAN=null, built='';
+const QS=new URLSearchParams(location.search), EMBED=QS.has('embed');
+/* EMBED: inside the ladder's Watch (View · Watch · Practise): no header, no tabs, just the parade */
+if(EMBED) document.documentElement.classList.add('embed');
+let TAB=QS.get('p')||'hooks', T=0, last=0, paused=false, PLAN=null, built='';
 const SPIN=10.5, HOOK=4.8;
 function plan(){
-  if(TAB==='hooks'){ const ev=[]; let t=0.3; HOOKS.forEach((r,ri)=>r[2].forEach((h,hi)=>{ ev.push({k:'hook',ri,hi,n:ev.length,a:t,b:t+HOOK}); t+=HOOK; })); return {ev,end:t+0.6}; }
+  if(FANS[TAB]){ const ev=[]; let t=0.3; FANS[TAB][1].forEach(()=>{ ev.push({k:'hook',n:ev.length,a:t,b:t+HOOK}); t+=HOOK; }); return {ev,end:t+0.6}; }
   const L=ARGS[TAB][1]; return {ev:L.map((s,i)=>({k:'spin',i,a:i*SPIN,b:(i+1)*SPIN})),end:L.length*SPIN};
 }
 function tabs(){
@@ -178,7 +194,7 @@ function tabs(){
   $('tabs').querySelectorAll('[data-p]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); TAB=b.dataset.p; start(); });
 }
 function start(){ tabs(); PLAN=plan(); T=0; built=''; paused=false; $('stage').classList.remove('paused'); $('hint').textContent='Tap to pause';
-  const n=TAB==='hooks'?HOOKS.reduce((a,r)=>a+r[2].length,0):ARGS[TAB][1].length;
+  const n=FANS[TAB]?FANS[TAB][1].length:ARGS[TAB][1].length;
   $('bars').innerHTML=Array.from({length:n},()=>'<i><b></b></i>').join(''); }
 
 const P=(n,s)=>'<span class="p'+n+'">'+esc(s)+'</span>';
@@ -199,8 +215,8 @@ function draw(){
   if(!e){ if(built!=='end'){ built='end'; endScreen(); } return; }
   const u=t-e.a, L=$('layer');
   if(e.k==='hook'){
-    const all=HOOKS.flatMap(r=>r[2].map(h=>[r[0],h]));
-    if(built!=='fan'){ built='fan';
+    const all=FANS[TAB][1];
+    if(built!=='fan'+TAB){ built='fan'+TAB;
       L.innerHTML='<div class="fan">'+all.map(([kind,h],j)=>'<div class="fc"><i></i><small>'+kind+'</small><p>'+hookHTML(h)+'</p></div>').join('')+'</div><div class="fcount" id="fcount"></div>'; }
     const cards=[...L.querySelectorAll('.fc')], at=PLAN.ev.filter(x=>x.k==='hook').map(x=>x.a);
     cards.forEach((c,j)=>{
@@ -231,11 +247,12 @@ function draw(){
   const out=cl((e.b-t)/0.35); sent.style.opacity=Math.min(sp,out); dev.style.opacity=Math.min(dp,out);
 }
 function endScreen(){
-  const L=$('layer'), hooks=TAB==='hooks';
-  const items=hooks?HOOKS.flatMap(r=>r[2].map(h=>'<li><span class="k">'+r[0]+'</span><br>'+hookHTML(h)+'</li>')):ARGS[TAB][1].map(s=>'<li>'+spinHTML(s)+' <b>'+esc(s[4][0])+'</b> '+esc(s[4][1])+'</li>');
-  L.innerHTML=`<div class="end"><div class="k">${hooks?'Hooks · all '+items.length:esc(ARGS[TAB][0])+' · six sentences, one pattern'}</div><ol>${items.join('')}</ol>
-    <div class="row"><button type="button" class="btn" id="again">↻ Again</button><a class="btn" href="/skills/writing/phrases-ladder.html?task=essay">Practise <i>›</i></a></div></div>`;
+  const L=$('layer'), hooks=!!FANS[TAB];
+  const items=hooks?FANS[TAB][1].map(([k,h])=>'<li><span class="k">'+esc(k)+'</span><br>'+hookHTML(h)+'</li>'):ARGS[TAB][1].map(s=>'<li>'+spinHTML(s)+' <b>'+esc(s[4][0])+'</b> '+esc(s[4][1])+'</li>');
+  L.innerHTML=`<div class="end"><div class="k">${hooks?FANS[TAB][0]+' · all '+items.length:esc(ARGS[TAB][0])+' · six sentences, one pattern'}</div><ol>${items.join('')}</ol>
+    <div class="row"><button type="button" class="btn" id="again">↻ Again</button><a class="btn" id="prac" href="/skills/writing/phrases-ladder.html?task=essay">Practise <i>›</i></a></div></div>`;
   $('again').onclick=e=>{ e.stopPropagation(); start(); };
+  if(EMBED) $('prac').onclick=e=>{ e.preventDefault(); e.stopPropagation(); parent.postMessage({parade:'practise',p:TAB},location.origin); };
   $('hint').textContent='';
 }
 function loop(ts){ const dt=last?Math.min(0.1,(ts-last)/1000):0; last=ts; if(!paused&&PLAN&&T<PLAN.end+0.01) T+=dt; if(PLAN) draw(); requestAnimationFrame(loop); }
@@ -246,7 +263,7 @@ $('stage').addEventListener('touchend',e=>{ const dx=e.changedTouches[0].clientX
   const st=PLAN.ev.filter(x=>x.k!=='run').map(x=>x.a); const cur=st.filter(a=>a<=T+0.01).length-1;
   const j=dx<0?Math.min(st.length,cur+1):Math.max(0,cur-1); T=j>=st.length?PLAN.end:st[j]; built=''; },{passive:true});
 window.PARADE={seek:t=>{ T=t; built=''; draw(); }, tab:k=>{ TAB=k; start(); }, plan:()=>PLAN};
-function size(){ const h=$('hdr'), H=getComputedStyle(h).position==='fixed'?h.offsetHeight:0;
+function size(){ const h=$('hdr'), H=!EMBED&&getComputedStyle(h).position==='fixed'?h.offsetHeight:0;
   $('app').style.marginTop=H+'px'; document.documentElement.style.setProperty('--hh',H+'px'); }
 addEventListener('resize',size); try{ new ResizeObserver(size).observe($('hdr')); }catch(e){}
 size(); start(); requestAnimationFrame(loop);

@@ -98,6 +98,8 @@ var LEAN = /^(essays|reviews|reports|emails|articles|story)$/.test(GENRE);   /* 
    generator's own task tabs use it.) */
 var ORDER = ['question','plan','model','sample'];
 var NAMES = { question:'Question', plan:'Plan', model:'Model', generate:'Generate', sample:'Sample' };
+/* 22 Nov 2026 (the owner): in the essay, step 4 is the Guided essay; the samples are its options */
+if (GENRE === 'essays') NAMES.sample = 'Guided';
 
 function el(tag, cls, text) {
   var n = document.createElement(tag);

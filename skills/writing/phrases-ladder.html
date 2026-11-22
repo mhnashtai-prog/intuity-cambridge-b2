@@ -336,6 +336,10 @@ html.deck-open,html.deck-open body{overflow:hidden}
 /* Maya's play-through button, beside × */
 .dx.play{font-size:.85rem;color:#2F4D42;border-color:#8AA79C}
 .dx.play.on{background:#201E1C;color:#E5D1B8;border-color:#201E1C;font-size:.7rem;letter-spacing:-.1em}
+/* a pair card: two expressions, the second arriving after the first */
+.oc .mt.pairt{font-size:clamp(21px,5.8vw,26px)}
+.oc .mt .mt2{display:block;margin-top:8px}
+.csent .pair-s{color:#A8A196;font-weight:400}
 </style>
 <script src="/tools/be2-brand.js?v=20261121"></script>
 </head>
@@ -527,8 +531,8 @@ function essayJobs(){
   const sp=(k,lead)=>SH.signpost[k].filter(w=>w!==lead).map(w=>({t:/\s/.test(w)?keyed(w+', …'):keyed(w+', …',w),g:'+ a full sentence'}));
   const J=(id,job,p,alts)=>({id,job,p,alts});
   return [
-    J('hook','Start with a hook',{t:'Few people would [deny] that …',g:'+ subject + verb'},bg),
-    J('aim','Say what you think',{t:'In this essay I will [explain] why I believe that …',g:'+ your view'},aims),
+    J('hook','Set the scene',{t:'Few people would [deny] that …',g:'+ subject + verb'},bg),
+    J('aim','Say what you will do',{t:'In this essay I will [explain] why I believe that …',g:'+ your view'},aims),
     J('first','Signpost point 1',{t:'[Firstly], …',g:'+ a full sentence'},sp('first','Firstly')),
     J('keyopen','Give your first reason',{t:'One [reason] why I believe this is that …',g:'+ subject + verb'},
       fromTypes(t=>t.argue.keyOpen||t.argue.keyFor,2)),
@@ -669,16 +673,21 @@ function swapIn(x,a){
 }
 let VS=0;
 /* the introduction's two jobs have names pupils know from class: the hook and the thesis */
-const role=x=>x.id==='hook'||(x.id==='start'&&F!=='story')?'Hook · ':x.id==='aim'?'Thesis · ':'';
-const jobName=x=>x.id==='hook'?'Hook':x.id==='aim'?'Thesis':x.id==='concede'?'The other side':x.job;
+/* 22 Nov 2026 (the owner): no "hook" or "thesis" for a pupil; the Cards' own words instead */
+const jobName=x=>x.id==='concede'?'The other side':x.job;
+/* an introduction is ONE move in two sentences, and so is a conclusion: they are shown, heard and
+   practised together, so a pupil sees the step from the general to their own view */
+const PAIRS={essay:[['hook','aim'],['summary','stance']]};
+const pairOf=x=>{ for(const [a,b] of (PAIRS[F]||[])){ if(x.id===a) return {first:true,id:b}; if(x.id===b) return {first:false,id:a}; } return null; };
 /* 22 Nov 2026 (the owner: "10 slides with full context … and no more distractors"): a job with sentences
    in phrase-ladder.json shows one full card per expression, all on one topic: the phrase to learn first,
    then the other ways, each in its sentence. No Avoid slides (the slip shows in Practise, when a pupil
    writes it) and no lists. A job without sentences keeps its single card. */
 function stagesOf(g){
-  const out=[];
-  g.list.forEach(x=>{ const b=beltOf(x);
-    if(b) b.forEach((src,i)=>out.push({x,k:'card',src,i}));
+  const out=[], done=new Set();
+  g.list.forEach(x=>{ if(done.has(x.id)) return; const b=beltOf(x), pr=pairOf(x), y=pr&&pr.first?g.list.find(z=>z.id===pr.id):null, yb=y&&beltOf(y);
+    if(b&&yb){ done.add(y.id); for(let i=0;i<Math.min(b.length,yb.length);i++) out.push({x,y,k:'pair',a:b[i],b:yb[i],src:b[i]+' '+yb[i],i}); }
+    else if(b) b.forEach((src,i)=>out.push({x,k:'card',src,i}));
     else out.push({x,k:'phrase'}); });
   return out;
 }
@@ -704,7 +713,12 @@ function view(){
     return `<i><b style="width:${i<ji?100:i>ji?0:Math.round(done/mine.length*100)}%"></b></i>`; }).join('');
   const beat=c.k==='phrase'?'Learn this one':c.k==='slip'?'Avoid':'Other ways · to recognise';
   let title='', secs='';
-  if(c.k==='card'){
+  if(c.k==='pair'){
+    const later=h=>h.replace(/animation-delay:([\d.]+)s/g,(m,t)=>'animation-delay:'+(+t+1.1).toFixed(2)+'s');
+    title=`<div class="mt dw pairt">${landT(frameOf(c.a))}<span class="mt2">${later(landT(frameOf(c.b)))}</span></div>`;
+    secs=`<div class="os"><small>${esc(c.x.job)}</small><p>${sentHTML(c.a)}</p></div><div class="os"><small>${esc(c.y.job)}</small><p>${sentHTML(c.b)}</p></div>
+      <div class="os"><button type="button" class="hear" data-hear="${esc(plainS(c.a)+' '+plainS(c.b))}" aria-label="Hear it"><svg viewBox="0 0 46 46" aria-hidden="true"><circle cx="23" cy="23" r="21" fill="#fff" stroke="#8AA79C" stroke-width="3"/><circle cx="23" cy="23" r="15.5" fill="#201E1C"/><path d="M20 17.5v11l9-5.5z" fill="#E5D1B8"/></svg>Hear it</button></div>`;
+  } else if(c.k==='card'){
     title=`<div class="mt dw">${landT(frameOf(c.src))}</div>`;
     secs=`<div class="os"><small>In a sentence</small><p>${sentHTML(c.src)}</p>
         <button type="button" class="hear" data-hear="${esc(plainS(c.src))}" aria-label="Hear it"><svg viewBox="0 0 46 46" aria-hidden="true"><circle cx="23" cy="23" r="21" fill="#fff" stroke="#8AA79C" stroke-width="3"/><circle cx="23" cy="23" r="15.5" fill="#201E1C"/><path d="M20 17.5v11l9-5.5z" fill="#E5D1B8"/></svg>Hear it</button></div>`+
@@ -724,14 +738,14 @@ function view(){
       `<div class="os ui2"><small>Why</small><p>${esc(c.why)}</p></div>`;
   }
   /* the sections arrive one after another */
-  { let k=0; const base=c.k==='slip'?.15:.9, step=c.k==='slip'?.75:.6; secs=secs.replace(/<div class="os/g,()=>`<div style="animation-delay:${(base+step*(k++)).toFixed(2)}s" class="os`); }
+  { let k=0; const base=c.k==='slip'?.15:.9, step=c.k==='slip'?.75:c.k==='pair'?1.1:.6; secs=secs.replace(/<div class="os/g,()=>`<div style="animation-delay:${(base+step*(k++)).toFixed(2)}s" class="os`); }
   const nextLbl=last?'To the ladder ›':(n=>n.x===x?'Next ›':jobName(n.x).length<=14?`Next: ${esc(jobName(n.x))} ›`:'Next phrase ›')(SS[VS+1]);
-  const lab=c.k==='card'?(c.i===0?(x.id==='concede'?' · optional':' · learn this one'):' · or say'):c.k==='phrase'?(x.id==='concede'?' · optional':' · learn this one'):'';
+  const lab=c.k==='pair'?(c.i===0?' · learn these':' · or say'):c.k==='card'?(c.i===0?(x.id==='concede'?' · optional':' · learn this one'):' · or say'):c.k==='phrase'?(x.id==='concede'?' · optional':' · learn this one'):'';
   const d=deckEl(); d.classList.add('on'); document.documentElement.classList.add('deck-open');
-  d.innerHTML=`<div class="dv-top"><div class="bars">${bars}</div>${SS.some(q=>q.k==='card')?`<button type="button" class="dx play${AUTO?' on':''}" id="auto" aria-pressed="${AUTO}" aria-label="${AUTO?'Pause Maya':'Maya reads them all'}">${AUTO?'❚❚':'▶'}</button>`:''}<button type="button" class="dx" id="back" aria-label="Back to the ladder">×</button></div>
+  d.innerHTML=`<div class="dv-top"><div class="bars">${bars}</div>${SS.some(q=>q.k==='card'||q.k==='pair')?`<button type="button" class="dx play${AUTO?' on':''}" id="auto" aria-pressed="${AUTO}" aria-label="${AUTO?'Pause Maya':'Maya reads them all'}">${AUTO?'❚❚':'▶'}</button>`:''}<button type="button" class="dx" id="back" aria-label="Back to the ladder">×</button></div>
     <div class="dv-k"><b>${String(VI+1).padStart(2,'0')}</b> · ${esc(g.name)}</div>
     <div class="dv-stack" id="vs"><span class="ghost g2"></span><span class="ghost g1"></span>
-      <article class="oc k-${c.k}"><div class="ml">${esc(jobName(x))}${lab}</div>${title}<span class="mb"></span>${x.p.tag&&c.k==='phrase'?`<div class="tagl">${esc(x.p.tag)}</div>`:''}${secs}
+      <article class="oc k-${c.k}"><div class="ml">${esc(c.k==='pair'?g.name:jobName(x))}${lab}</div>${title}<span class="mb"></span>${x.p.tag&&c.k==='phrase'?`<div class="tagl">${esc(x.p.tag)}</div>`:''}${secs}
         <div class="of">${VS+1} / ${SS.length}</div></article></div>
     <div class="dv-foot"><button type="button" class="arw" id="vp" aria-label="Back"${VS?'':' disabled'}>‹</button>
       <button type="button" class="go" id="vn">${nextLbl}</button></div>
@@ -745,7 +759,7 @@ function view(){
     if(list.length) start(list.sort((a,c)=>st(a.id).rung-st(c.id).rung),g.name); else home(); };
   $('back').onclick=out; $('vn').onclick=fwd; $('vp').onclick=bwd; if($('vgo')) $('vgo').onclick=practiseIt;
   /* Maya reads every card of this paragraph, one after another; she stops at its last card */
-  const readOn=()=>{ if(!AUTO||c.k!=='card') return; say(plainS(c.src),null,()=>{ if(!AUTO) return;
+  const readOn=()=>{ if(!AUTO||(c.k!=='card'&&c.k!=='pair')) return; say(plainS(c.src),null,()=>{ if(!AUTO) return;
     if(last){ AUTO=false; const a=$('auto'); if(a){ a.classList.remove('on'); a.textContent='▶'; a.setAttribute('aria-pressed','false'); } return; }
     setTimeout(()=>{ if(AUTO&&$('deck')&&$('deck').classList.contains('on')) to(VI,VS+1); },700); }); };
   if($('auto')) $('auto').onclick=()=>{ AUTO=!AUTO; if(!AUTO){ hush(); } sfx('pop');
@@ -851,13 +865,15 @@ function fill(ok){ const sl=$('slot'); if(sl){ sl.classList.add(ok?'ok':'no'); }
    'blank' hides the whole phrase. Without a model sentence, the bare phrase is shown as before. */
 function ctx(x,mode,v){
   const m=modelOf(x,v); if(!m) return null;
+  const pr=pairOf(x), pm=pr&&modelOf({id:pr.id},v), side=pm?'<span class="pair-s">'+esc(pm.replace(/[{}]/g,''))+'</span>':'';
   const key=keyOf(x.p.t); let keyDone=false;
-  return esc(m).replace(/\{([^}]*)\}/g,(all,seg)=>{
+  const core=esc(m).replace(/\{([^}]*)\}/g,(all,seg)=>{
     if(mode==='letters') return '<b class="ph">'+seg.split(' ').map(w=>w.replace(/^([A-Za-z])[A-Za-z’']*/,(q,c)=>c+'_'.repeat(Math.min(q.length-1,6)))).join(' ')+'</b>';
     if(mode==='blank') return '<span class="blank">'+seg.split(' ').map(w=>'<i style="width:'+Math.max(1.4,w.length*.52).toFixed(1)+'em"></i>').join('')+'</span>';
     if(mode==='gap'&&!keyDone&&key&&new RegExp('\\b'+key+'\\b').test(seg)){ keyDone=true; return '<b class="ph">'+seg.replace(new RegExp('\\b'+key+'\\b'),'<span class="gapw" id="slot">'+key+'</span>')+'</b>'; }
     return '<b class="ph">'+seg+'</b>';
   });
+  return pm?(pr.first?core+' '+side:side+' '+core):core;
 }
 function decoys(k){
   const kk=k.toLowerCase(), up=/^[A-Z]/.test(k), cs=w=>up?w.charAt(0).toUpperCase()+w.slice(1):w;

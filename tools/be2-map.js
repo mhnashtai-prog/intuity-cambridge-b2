@@ -16,7 +16,7 @@ var AREAS = [
   { key:'writing',    name:'Writing',    tone:{bg:'#484641', fg:'#EBE7DE'},
     what:'Essays, reviews, reports, emails, articles' },
   { key:'speaking',   name:'Speaking',   tone:{bg:'#DD8E58', fg:'#FEFCF9'},
-    what:'Practice hub, picture tasks, dialogue work' }
+    what:'Four Parts, each in five moves, said aloud' }
 ];
 
 var SKILLS = {
@@ -108,14 +108,19 @@ var SKILLS = {
     /* 21 Nov 2026 (the owner): the Games tile moved to the menu footer, a ringed pill (index.html, contHTML) */
     {name:"Test yourself", glyph:"◆", hint:"Revision Round, Challenge", roof:"test"}
   ],
+  /* SPEAKING ON WRITING'S PATTERN (22 Nov 2026): each Part is a gate with four doors
+     (skills/speaking/gate.html?part=N), as each writing task is; what helps any Part sits
+     under Help yourself, with the Hub (the test's shape, 14 minutes) */
   speaking:[
-    {name:"Practice Hub", noNum:true, url:"skills/speaking/speaking-format.html"},
-    {name:"Personal questions", part:1, url:"skills/speaking/part1.html"},
-    {name:"Comparing photos",   part:2, url:"skills/speaking/part2-turn.html"},
-    {name:"Collaborate",        part:3, url:"skills/speaking/part3-talk.html"},
-    {name:"Discussion",         part:4, url:"skills/speaking/part4-views.html"},
-    {name:"Useful expressions", noNum:true, url:"skills/speaking/useful-expressions.html"},
-    {name:"Drills with Maya", noNum:true, url:"skills/speaking/drills.html"}
+    {group:"The four Parts"},
+    {name:"Interview",   part:1, url:"skills/speaking/gate.html?part=1"},
+    {name:"Long turn",   part:2, url:"skills/speaking/gate.html?part=2"},
+    {name:"Collaborate", part:3, url:"skills/speaking/gate.html?part=3"},
+    {name:"Discuss",     part:4, url:"skills/speaking/gate.html?part=4"},
+    {group:"Help yourself", rule:true},
+    {name:"Phrases", glyph:"\u275D", hint:"Every useful expression, by Part", url:"skills/speaking/useful-expressions.html"},
+    {name:"Drills with Maya", glyph:"\u25B8", hint:"Say it after her, hear yourself", url:"skills/speaking/drills.html"},
+    {name:"The test", glyph:"14", hint:"Who is in the room, minute by minute", url:"skills/speaking/speaking-format.html"}
   ]
 };
   
@@ -176,7 +181,7 @@ var PILLS = {
   /* Full tests on the title's line (16 Nov 2026, a learner's review): below the
      eight rings it sat under the fold, with nothing to say it was there. It
      stays in the list too. No footer pill, no play mark. */
-  english:{ left:{ label:"Full tests", aria:"Full tests: the whole Reading and Use of English paper, 75 minutes", url:"skills/full-test/full-test.html", play:false } }
+    english:{ left:{ label:"Full tests", aria:"Full tests: the whole Reading and Use of English paper, 75 minutes", url:"skills/full-test/full-test.html", play:false } }
 };
 
   /* a page's identity for "explored": its path, plus the one query that picks

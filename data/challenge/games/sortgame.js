@@ -10,8 +10,8 @@
    Keys: 1, 2, 3 for the piles.
    Round: { prompt, bins: ["A","B"], items: [["item",0],…], note }
    22 Nov 2026 (the owner: "the clock is ticking away"):
-   · THE CLOCK. Each card burns its own fuse, Defuse's ring: about five
-     seconds for a short card, up to ten for a long one. Burning out counts
+   · THE CLOCK. Each card burns its own fuse, Defuse's ring: five seconds
+     a card (the owner's choice), whatever its length. Burning out counts
      as a wrong pile. The fuse pauses while the card is closed.
    · IT COMES BACK. A missed card still goes to its own pile, marked, and
      then returns once at the end of the deck. Sorted right the second time,
@@ -83,7 +83,7 @@
       const deck = ctx.shuffle(r.items).map(it => ({ w: it[0], bins: binsOf(it), again: false }));
       const life = K.slips(ctx), placed = r.bins.map(() => []), names = r.bins;
       let at = 0, busy = false, secs = 6, left = 6, tm = null, last = 0;
-      const fuseFor = w => Math.max(5, Math.min(10, Math.round(3.5 + w.length * 0.06)));
+      const fuseFor = () => 5;   /* the owner, 22 Nov 2026: five seconds a card, whatever its length */
       host.innerHTML = `<p class="cg-prompt">${ctx.esc(r.prompt)} Send each card to its pile before the ring burns out.</p>
         <div class="sg-deck" id="sgDeck"><div class="sg-top"><span class="sg-fuse" id="sgFuse" role="timer" aria-label="Seconds left"><svg viewBox="0 0 64 64" aria-hidden="true"><circle class="c" cx="32" cy="32" r="${R - 4}"/><circle class="t" cx="32" cy="32" r="${R}"/><circle class="b" id="sgBurn" cx="32" cy="32" r="${R}" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="0"/></svg><b id="sgSecs"></b></span><span class="gk-hint sg-count" id="sgCount"></span></div>
           <div class="sg-card" id="sgCard"></div></div><div class="sg-both" id="sgBoth" aria-live="polite"></div>

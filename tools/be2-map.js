@@ -16,7 +16,7 @@ var AREAS = [
   { key:'writing',    name:'Writing',    tone:{bg:'#484641', fg:'#EBE7DE'},
     what:'Essays, reviews, reports, emails, articles' },
   { key:'speaking',   name:'Speaking',   tone:{bg:'#DD8E58', fg:'#FEFCF9'},
-    what:'Four Parts, each in five moves, said aloud' }
+    what:'A full test, now: Daniel asks, you answer' }
 ];
 
 var SKILLS = {

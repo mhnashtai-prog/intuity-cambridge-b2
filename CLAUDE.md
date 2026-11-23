@@ -14,6 +14,7 @@ The owner wants finished changes live without asking:
 
 - Change things only when they help pupils learn. Skip anything pedagogically counterproductive.
 - Every modal card shares one look: the FiveCard architecture (`tools/five-card.js`/`.css`).
+- Speaking opens straight into a test (`skills/speaking/test.html`): the owner's decision after the pupils' verdict (23 Nov 2026, "too many entry gates"): practice now is the main offer, everything else is secondary and one link down. Don't put a menu, gate or explanation back in front of it. If it proves itself with pupils, Writing follows the same way.
 - The two-row header of mode selectors and the pendulum gate are deliberate: once a pupil learns how one page works, every other page follows suit. Keep them; never count them as clutter in an audit.
 - Judge a page first by whether it delivers what it promises pedagogically: the B2 First papers the app covers (Reading, Use of English, Writing, Speaking), and general grammar and vocabulary learning for pupils who use the app beyond the exam.
 - Listening is not part of the app (owner's decision, 12 Nov 2026). Don't propose it, and don't claim the app covers all five skills or every paper.

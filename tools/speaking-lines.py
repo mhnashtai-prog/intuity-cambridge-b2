@@ -96,6 +96,12 @@ for n in (1, 2, 3, 4):
                     if pi and '{X}' in w['t']: continue
                     t = w['t'].replace('{X}', x).replace('{a}', sub['a']).replace('{plural}', sub['plural'])
                     add(t, 'maya', n, MAYA, 'in five · ' + sl['label'])
+# THE TEST (23 Nov 2026): the examiner's linking lines of skills/speaking/test.html; until
+# Daniel records them they are shown, not spoken (the page never reads the examiner by phone)
+for t, n in (("Good afternoon. My name's Daniel. First of all, we'd like to know something about you.", 1),
+             ("In this part of the test, I'm going to give each of you two photographs. I'd like you to talk about your photographs on your own for about a minute, and also to answer a short question about your partner's photographs.", 2),
+             ("Thank you.", 2), ("Thank you. That is the end of the test.", 4)):
+    add(t, 'examiner', n, 'Examiner · Daniel', 'the test')
 GATE = (ROOT / 'skills' / 'speaking' / 'gate.html').read_text(encoding='utf-8')
 for m in re.finditer(r"(\d):\{name:'[^']*',min:'[^']*',share:\d+,page:'[^']*',\s*what:'([^']*)',\s*five:\[([^\]]*)\],\s*tip:'([^']*)'\}", GATE):
     n, what, five, tip = m.group(1), m.group(2), m.group(3), m.group(4)

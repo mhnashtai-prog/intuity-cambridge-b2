@@ -16,7 +16,7 @@ var AREAS = [
   { key:'writing',    name:'Writing',    tone:{bg:'#484641', fg:'#EBE7DE'},
     what:'Essays, reviews, reports, emails, articles' },
   { key:'speaking',   name:'Speaking',   tone:{bg:'#DD8E58', fg:'#FEFCF9'},
-    what:'A full test, now: Daniel asks, you answer' }
+    what:'Four Parts: Daniel asks, you answer, now' }
 ];
 
 var SKILLS = {
@@ -111,16 +111,15 @@ var SKILLS = {
   /* SPEAKING ON WRITING'S PATTERN (22 Nov 2026): each Part is a gate with four doors
      (skills/speaking/gate.html?part=N), as each writing task is; what helps any Part sits
      under Help yourself, with the Hub (the test's shape, 14 minutes) */
+  /* 23 Nov 2026 (the owner, after the pupils' verdict): four rings, each Part practised NOW on
+     its own page (test.html?part=N); its structures, drills and games are that page's footer
+     pills, not more rings. The whole test is the panel's pill, as Use of English's Full tests. */
   speaking:[
     {group:"The four Parts"},
-    {name:"Interview",   part:1, url:"skills/speaking/gate.html?part=1"},
-    {name:"Long turn",   part:2, url:"skills/speaking/gate.html?part=2"},
-    {name:"Collaborate", part:3, url:"skills/speaking/gate.html?part=3"},
-    {name:"Discuss",     part:4, url:"skills/speaking/gate.html?part=4"},
-    {group:"Help yourself", rule:true},
-    {name:"Phrases", glyph:"\u275D", hint:"Every useful expression, by Part", url:"skills/speaking/useful-expressions.html"},
-    {name:"Drills with Maya", glyph:"\u25B8", hint:"Say it after her, hear yourself", url:"skills/speaking/drills.html"},
-    {name:"The test", glyph:"14", hint:"Who is in the room, minute by minute", url:"skills/speaking/speaking-format.html"}
+    {name:"Interview",   part:1, url:"skills/speaking/test.html?part=1"},
+    {name:"Long turn",   part:2, url:"skills/speaking/test.html?part=2"},
+    {name:"Collaborate", part:3, url:"skills/speaking/test.html?part=3"},
+    {name:"Discuss",     part:4, url:"skills/speaking/test.html?part=4"}
   ]
 };
   
@@ -181,6 +180,7 @@ var PILLS = {
   /* Full tests on the title's line (16 Nov 2026, a learner's review): below the
      eight rings it sat under the fold, with nothing to say it was there. It
      stays in the list too. No footer pill, no play mark. */
+    speaking:{ left:{ label:"Full test", aria:"Full test: all four Parts, about 14 minutes", url:"skills/speaking/test.html", play:false } },
     english:{ left:{ label:"Full tests", aria:"Full tests: the whole Reading and Use of English paper, 75 minutes", url:"skills/full-test/full-test.html", play:false } }
 };
 

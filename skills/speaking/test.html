@@ -237,9 +237,23 @@ const url=f=>'/audio/speaking/'+f+(VER[f]?'?v='+VER[f]:'');
 const PL=new Audio(); PL.preload='auto'; let AUD=null;
 function unlock(){ try{ PL.muted=true; PL.src=url(fileOf(SEQ[1]&&SEQ[1].t)||''); const p=PL.play(); if(p) p.then(()=>{ PL.pause(); PL.muted=false; }).catch(()=>{ PL.muted=false; }); else PL.muted=false; }catch(e){ PL.muted=false; } }
 let CUT=null;   /* stopping a line resolves it, so the listening loop never hangs */
+/* 24 Nov 2026 (the owner: Part 2 paused in the middle of a minute on the iPhone): a watchdog.
+   If the phone stops a line (a slow network, an interruption), it tries once to carry on,
+   and if the sound still does not move for 4 seconds, the run goes on to the next line. */
 function playText(t){ return new Promise(res=>{ const f=fileOf(t); if(!f) return res(false);
-  const done=v=>{ if(CUT===done) CUT=null; res(v); }; CUT=done;
-  AUD=PL; PL.muted=false; PL.onended=()=>done(true); PL.onerror=()=>done(false); PL.src=url(f); PL.play().catch(()=>done(false)); }); }
+  let last=-1, still=0, retried=false, dog=null;
+  const done=v=>{ clearInterval(dog); PL.onpause=null; if(CUT===done) CUT=null; res(v); }; CUT=done;
+  AUD=PL; PL.muted=false; PL.onended=()=>done(true); PL.onerror=()=>done(false);
+  PL.onpause=()=>{ if(CUT===done&&!PL.ended&&!retried){ retried=true; PL.play().catch(()=>{}); } };
+  dog=setInterval(()=>{ if(CUT!==done) return clearInterval(dog);
+    if(PL.currentTime!==last){ last=PL.currentTime; still=0; return; }
+    if(++still>=4){ if(!retried){ retried=true; still=0; PL.play().catch(()=>{}); } else done(false); } },1000);
+  PL.src=url(f); PL.play().catch(()=>done(false)); }); }
+/* the next lines are fetched while this one plays, so nothing waits for the network */
+const warmed=new Set();
+function warm(i){ for(let k=i+1;k<Math.min(SEQ.length,i+4);k++){ const s=SEQ[k]; if(!s) continue;
+  const list=s.k==='ex'?[s.t]:s.k==='pa'?(fileOf(s.t.join(' '))?[s.t.join(' ')]:s.t):s.k==='you'?(s.model||[]):[];
+  list.forEach(t=>{ const f=fileOf(t); if(f&&!warmed.has(f)){ warmed.add(f); fetch(url(f)).catch(()=>{}); } }); } }
 async function playList(list,alive){ for(const t of list){ if(alive&&!alive()) return; await playText(t); } }
 function hush(){ if(AUD){ try{ AUD.pause(); AUD.onended=null; }catch(e){} AUD=null; } if(CUT){ const c=CUT; CUT=null; c(false); } }
 
@@ -410,14 +424,16 @@ function idle(){ MODE=''; deck.lis.classList.remove('busy'); deck.spk.classList.
 const GAP=(prev,s)=>!prev||prev.k==='head'?0:s.k==='ex'?(prev.k==='ex'?700:1000):s.k==='pa'?(prev.k==='pa'?800:700):s.k==='you'?700:0;
 async function playStep(s,i,my){
   if(s.k==='ex'){ const ok=await playText(s.t); if(my!==run) return; if(!ok) await wait(Math.min(3500,1100+s.t.length*22),my); }
-  else if(s.k==='pa'){ let n=0; for(const t of s.t){ if(my!==run||SKIP===i) break; if(n++) await wait(250,my); await playText(t); } }
+  else if(s.k==='pa'){ const whole=s.t.join(' ');   /* the whole turn as one recording, when there is one */
+    if(s.t.length>1&&fileOf(whole)) await playText(whole);
+    else { let n=0; for(const t of s.t){ if(my!==run||SKIP===i) break; if(n++) await wait(250,my); await playText(t); } } }
   else if(s.k==='look') await wait(s.secs*1000,my);
 }
 async function listen(){
   if(FINISHED){ location.href=PART?'?part='+PART+'&topic='+nextTopic():'?test='+(TESTN+1); return; }
   if(MODE==='lis'){ stopAll(); idle(); lit('lis'); return; }   /* a second tap pauses */
   begin(); stopAll(); const my=run; MODE='lis'; deck.spk.classList.remove('busy'); label(deck.spk,'Speak'); deck.lis.classList.add('busy'); lit('lis'); label(deck.lis,'Pause');
-  for(let i=LAT>=SEQ.length?0:LAT;i<SEQ.length;i++){ const s=SEQ[i]; LAT=i; mark(i); SKIP=-1;
+  for(let i=LAT>=SEQ.length?0:LAT;i<SEQ.length;i++){ const s=SEQ[i]; LAT=i; mark(i); SKIP=-1; warm(i);
     if(s.k==='head') continue;
     await wait(GAP(SEQ[i-1],s),my); if(my!==run) return;
     if(s.k==='you'){ showModel(i,true);
@@ -452,7 +468,7 @@ async function speak(){
   if(FINISHED) return;
   begin(); stopAll(); const my=run; MODE='spk'; deck.lis.classList.remove('busy'); label(deck.lis,'Listen'); deck.spk.classList.add('busy'); lit('spk'); label(deck.spk,'Pause');
   SEQ.forEach((x,k)=>showModel(k,false)); const SAT0=SAT;
-  for(let i=SAT;i<SEQ.length;i++){ const s=SEQ[i]; SAT=i; mark(i); SKIP=-1;
+  for(let i=SAT;i<SEQ.length;i++){ const s=SEQ[i]; SAT=i; mark(i); SKIP=-1; warm(i);
     if(s.k==='head') continue;
     if(i>SAT0) await wait(GAP(SEQ[i-1],s),my); if(my!==run) return;
     if(isTurn(s)){ const ok=await record(i,my); if(my!==run||!ok) return; SAT=i+1; if(MODE==='spk') label(deck.spk,'Pause'); continue; }

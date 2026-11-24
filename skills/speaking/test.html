@@ -81,6 +81,9 @@ body:not(.one) #script{background:none;box-shadow:none;border-top:0;padding:0}
 .ln.next{opacity:1}
 body.running .ln.next{opacity:.6}
 .ln.you .took{display:inline;margin-left:.5rem;color:inherit}
+.stg i{display:inline-block;font:600 .5rem/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;font-style:normal;color:var(--caramel-ink);background:rgba(194,149,110,.14);border-radius:3px;padding:.18rem .3rem;margin-right:.3rem;vertical-align:.15em}
+.scaf{margin:-.2rem 0 .3rem 4.7rem;padding:.55rem .7rem;border-left:2px solid rgba(194,149,110,.5);font-size:.9rem;line-height:1.55;color:var(--dim)}
+.scaf .by{display:block;font:600 .56rem/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-bottom:.35rem}
 .ln .took{display:block;font:500 .66rem/1.3 var(--mono);letter-spacing:.06em;color:var(--sage);font-style:normal;margin-top:.15rem}
 .vis{margin:.3rem 0 .6rem 5.1rem}
 .photos{display:grid;grid-template-columns:1fr 1fr;gap:.4rem}
@@ -206,7 +209,7 @@ if(PART){
   $('parts').remove();   /* 23 Nov 2026 (the owner): one Part, one focus; the menu's rings switch Parts */
   $('tt').textContent='Part '+PART+' · '+NAMES[PART];
   $('sub').textContent='Speaking · Part '+PART;
-  document.querySelector('.test-sub').textContent={1:'4 questions · about 20 seconds each',2:'your photographs · 1 minute, then Beatriz’s',3:'with Beatriz · discuss, then decide',4:'3 questions · about 40 seconds each'}[PART]+' · set '+TESTN;
+  document.querySelector('.test-sub').textContent={1:TESTN===1?'6 questions · with Tomás · you answer after Maya':'4 questions · about 20 seconds each',2:'your photographs · 1 minute, then Beatriz’s',3:'with Beatriz · discuss, then decide',4:'3 questions · about 40 seconds each'}[PART]+' · set '+TESTN;
   document.querySelector('.back-link').href='/index.html?openModal=speaking'; document.querySelector('.back-link').textContent='← Speaking';
   document.querySelector('.more').hidden=true;
   /* the footer: this Part's practice, structures, drills and games (Writing's pill row) */
@@ -241,7 +244,7 @@ function pickN(a,n){ const b=a.slice(); for(let i=b.length-1;i>0;i--){ const j=M
 const segsOf=alt=>((alt&&(alt.turn||alt).segs)||[]).map(s=>s.t);
 
 /* ── the test, as the book's frames: lines in order ── */
-let SEQ=[];
+let SEQ=[], MODEL1=null;
 function build(D1,D2,D3,D4){
   const S=[], H=(n,name,mins)=>{ if(!PART) S.push({k:'head',part:n,name,mins}); };   /* one Part: the page title is its heading */
   const ex=(t,part,o)=>S.push(Object.assign({k:'ex',t,part},o||{}));
@@ -250,6 +253,14 @@ function build(D1,D2,D3,D4){
   if(!PART||PART===1){
   H(1,'Interview','2 minutes');
   ex("Good afternoon. My name's Maya. First of all, we'd like to know something about you.",1);
+  /* SET 1 IS THE MODEL INTERVIEW (24 Nov 2026, the owner): Maya asks; Tomás gives the stronger
+     answer (played); at Beatriz's turns the pupil speaks, her safe answer under the turn as the
+     scaffold, stage by stage (the school's pattern), and in the review as the model. */
+  if(MODEL1&&TESTN===1){
+    MODEL1.turns.forEach(tn=>{ ex(tn.q,1,{q:1});
+      if(tn.who==='tomas') S.push({k:'pa',t:tn.stages.map(x=>x.t),stages:tn.stages,label:'Tomás',part:1});
+      else you(25,'about 15 seconds',1,{q:tn.q,model:tn.stages.map(x=>x.t),stages:tn.stages,by:'Beatriz'}); });
+  } else
   pickN(D1.chapters,4).forEach(ch=>{ const c=pick(ch.cards); ex(c.question,1,{q:1});
     you(30,'about 20 seconds',1,{q:c.question,model:segsOf(c.alts&&c.alts[0])}); });
   }
@@ -306,14 +317,18 @@ function render(){
     if(s.k==='head') return '<div class="ph" id="L'+i+'" data-part="'+s.part+'"><b>Part '+s.part+'</b><span>'+esc(s.name)+' · '+esc(s.mins)+'</span></div>';
     if(s.k==='ex'){ const rec=!!fileOf(s.t);
       return '<div class="ln ex next'+(rec?'':' quiet')+'" id="L'+i+'"><span class="who">Maya'+(s.to?' → '+esc(s.to):'')+'</span><span class="tx">'+esc(s.t)+'</span></div>'+(s.vis?vis(s.vis):''); }
-    if(s.k==='pa') return '<div class="ln pa next" id="L'+i+'"><span class="who">'+esc(s.label.split(' ·')[0])+'</span><span class="tx">'+(s.long?'[1 minute] <button type="button" class="skipline" data-skip="'+i+'">skip</button>':esc(s.t.join(' ')))+'</span></div>';
+    if(s.k==='pa') return '<div class="ln pa next" id="L'+i+'"><span class="who">'+esc(s.label.split(' ·')[0])+'</span><span class="tx">'+(s.long?'[1 minute] <button type="button" class="skipline" data-skip="'+i+'">skip</button>':s.stages?staged(s.stages):esc(s.t.join(' ')))+'</span></div>';
     if(s.k==='look') return '<div class="ln quiet next" id="L'+i+'"><span class="who">You</span><span class="tx"><i>[a few seconds to look]</i></span></div>';
-    return '<div class="ln you next" id="L'+i+'"><span class="who">You</span><span class="tx">Your turn · '+esc(s.label)+'</span></div>';
+    return '<div class="ln you next" id="L'+i+'"><span class="who">You</span><span class="tx">Your turn · '+esc(s.label)+'</span></div>'+
+      (s.stages?'<div class="scaf"><span class="by">'+esc(s.by)+'</span>'+staged(s.stages)+'</div>':'');
   }).join('');
   if(!PART){ $('parts').innerHTML=[1,2,3,4].map(n=>'<button type="button" data-p="'+n+'">Part '+n+'</button>').join('');
     $('parts').querySelectorAll('button').forEach(b=>b.onclick=()=>jump(+b.dataset.p)); }
   $('script').querySelectorAll('[data-skip]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); SKIP=+b.dataset.skip; hush(); });
 }
+/* an answer, stage by stage: the school's pattern, named */
+const STAGE={react:'React',respond:'Respond',develop:'Develop',contrast:'Contrast'};
+function staged(st){ return st.map(x=>'<span class="stg"><i>'+(STAGE[x.stage]||x.stage)+'</i>'+esc(x.t)+'</span>').join(' '); }
 function vis(v){
   if(v.photos) return '<div class="vis"><div class="photos'+(v.small?' small':'')+'">'+v.photos.map((p,i)=>'<figure><img src="'+esc(p.src)+'" alt="'+esc(p.brief||p.title)+'" loading="lazy"><figcaption>'+(i?'B':'A')+'</figcaption></figure>').join('')+'</div>'+(v.small?'':'<div class="qcard">'+esc(v.q)+'</div>')+'</div>';
   return '<div class="vis"><div class="ideas"><p class="q">'+esc(v.q)+'</p><ul>'+v.ideas.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul></div></div>';
@@ -417,8 +432,8 @@ if(P.get('stats')==='1'){ const f=ST.first||[];
 
 /* ── load ── */
 const J=u=>fetch(u).then(r=>r.json());
-Promise.all([J('/audio/speaking/manifest.json'),J('/skills/speaking/data/part1-answers.json'),J('/skills/speaking/data/part2-turn.json'),J('/skills/speaking/data/part3-talk.json'),J('/skills/speaking/data/part4-views.json')])
-.then(([m,d1,d2,d3,d4])=>{ MAP=m.lines||{}; VER=m.v||{}; build(d1,d2,d3,d4); render(); mark(-1);
+Promise.all([J('/audio/speaking/manifest.json'),J('/skills/speaking/data/part1-answers.json'),J('/skills/speaking/data/part2-turn.json'),J('/skills/speaking/data/part3-talk.json'),J('/skills/speaking/data/part4-views.json'),J('/skills/speaking/data/part1-model.json').catch(()=>null)])
+.then(([m,d1,d2,d3,d4,pm])=>{ MAP=m.lines||{}; VER=m.v||{}; MODEL1=pm; build(d1,d2,d3,d4); render(); mark(-1);
   /* the first line is ready before the tap, so the examiner starts at once */
   const f=fileOf(SEQ[1]&&SEQ[1].t); if(f){ const a=new Audio(); a.preload='auto'; a.src=url(f); }
   if(!PART&&$('parts')) $('parts').querySelectorAll('button')[0].classList.add('on'); })

@@ -377,9 +377,11 @@ function showModel(i,on){ const s=SEQ[i], el=$('L'+i); if(!el||s.k!=='you') retu
   const m=on&&s.model&&s.model.length; tx.classList.toggle('model',!!m);
   tx.innerHTML=m?'<span class="mtag">Model</span>'+esc(s.model.join(' ')):tx.dataset.orig; }
 function idle(){ MODE=''; deck.lis.classList.remove('busy'); deck.spk.classList.remove('busy'); label(deck.lis,'Listen'); if(!ENDTURN) label(deck.spk,'Speak'); }
+/* 24 Nov 2026 (the owner: 'Maya is jumping'): a breath between speakers, as in a real room */
+const GAP=(prev,s)=>!prev||prev.k==='head'?0:s.k==='ex'?(prev.k==='ex'?700:1000):s.k==='pa'?(prev.k==='pa'?800:700):s.k==='you'?700:0;
 async function playStep(s,i,my){
   if(s.k==='ex'){ const ok=await playText(s.t); if(my!==run) return; if(!ok) await wait(Math.min(3500,1100+s.t.length*22),my); }
-  else if(s.k==='pa'){ for(const t of s.t){ if(my!==run||SKIP===i) break; await playText(t); } }
+  else if(s.k==='pa'){ let n=0; for(const t of s.t){ if(my!==run||SKIP===i) break; if(n++) await wait(250,my); await playText(t); } }
   else if(s.k==='look') await wait(s.secs*1000,my);
 }
 async function listen(){
@@ -388,6 +390,7 @@ async function listen(){
   begin(); stopAll(); const my=run; MODE='lis'; deck.spk.classList.remove('busy'); label(deck.spk,'Speak'); deck.lis.classList.add('busy'); lit('lis'); label(deck.lis,'Pause');
   for(let i=LAT>=SEQ.length?0:LAT;i<SEQ.length;i++){ const s=SEQ[i]; LAT=i; mark(i); SKIP=-1;
     if(s.k==='head') continue;
+    await wait(GAP(SEQ[i-1],s),my); if(my!==run) return;
     if(s.k==='you'){ showModel(i,true);
       if((s.model||[]).some(t=>fileOf(t))) await playList(s.model,()=>my===run&&SKIP!==i); else await wait(1500,my); }
     else await playStep(s,i,my);
@@ -419,9 +422,10 @@ async function speak(){
   if(MODE==='spk'){ stopAll(); idle(); lit('spk'); return; }          /* a tap while Maya talks pauses */
   if(FINISHED) return;
   begin(); stopAll(); const my=run; MODE='spk'; deck.lis.classList.remove('busy'); label(deck.lis,'Listen'); deck.spk.classList.add('busy'); lit('spk'); label(deck.spk,'Pause');
-  SEQ.forEach((x,k)=>showModel(k,false));
+  SEQ.forEach((x,k)=>showModel(k,false)); const SAT0=SAT;
   for(let i=SAT;i<SEQ.length;i++){ const s=SEQ[i]; SAT=i; mark(i); SKIP=-1;
     if(s.k==='head') continue;
+    if(i>SAT0) await wait(GAP(SEQ[i-1],s),my); if(my!==run) return;
     if(isTurn(s)){ const ok=await record(i,my); if(my!==run||!ok) return; SAT=i+1; if(MODE==='spk') label(deck.spk,'Pause'); continue; }
     await playStep(s,i,my); if(my!==run) return; }
   SAT=SEQ.length; idle(); finish();

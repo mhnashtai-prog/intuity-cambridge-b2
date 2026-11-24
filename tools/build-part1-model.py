@@ -27,11 +27,11 @@ txt = ['B2 FIRST SPEAKING · PART 1 · THE MODEL INTERVIEW (Funchal)', 'Examiner
 parts.append(gap(0.4))
 for it in D.get('intro', []):   # Maya introduces herself, the candidates give their names
     f = m.get(norm(it['t']))
-    if f: parts += [clip(f), gap(0.6)]
+    if f: parts += [clip(f), gap(0.9)]
     txt.append(('EXAMINER' if it['who'] == 'examiner' else D['cast'][it['who']]['name'].upper()) + ': ' + it['t'])
 txt.append('')
 for tn in D['turns']:
-    parts += [clip(m[norm(tn['q'])]), gap(0.7)]; txt.append('EXAMINER: ' + tn['q'])
+    parts += [clip(m[norm(tn['q'])]), gap(0.8)]; txt.append('EXAMINER: ' + tn['q'])
     for i, st in enumerate(tn['stages']):
         parts += [clip(m[norm(st['t'])]), gap(0.3 if i < len(tn['stages']) - 1 else 1.0)]
     txt.append(D['cast'][tn['who']]['name'].upper() + ': ' + ' '.join(st['t'] for st in tn['stages'])); txt.append('')

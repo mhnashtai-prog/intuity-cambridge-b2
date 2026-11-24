@@ -203,13 +203,13 @@ const T0=performance.now();
 const PART=Math.max(0,Math.min(4,+(P.get('part')||0)||0));
 const NAMES={1:'Interview',2:'Long turn',3:'Collaborate',4:'Discuss'};
 const CNT=PART?'p'+PART:'done';
-const TESTN=(+P.get('test'))||((ST[CNT]||0)+1);
+const TESTN=(+P.get('test'))||(PART===1?1:((ST[CNT]||0)+1));   /* Part 1 always opens on the model interview */
 if(PART){
   document.body.classList.add('one');
   $('parts').remove();   /* 23 Nov 2026 (the owner): one Part, one focus; the menu's rings switch Parts */
   $('tt').textContent='Part '+PART+' · '+NAMES[PART];
   $('sub').textContent='Speaking · Part '+PART;
-  document.querySelector('.test-sub').textContent={1:TESTN===1?'6 questions · with Tomás · you answer after Maya':'4 questions · about 20 seconds each',2:'your photographs · 1 minute, then Beatriz’s',3:'with Beatriz · discuss, then decide',4:'3 questions · about 40 seconds each'}[PART]+' · set '+TESTN;
+  document.querySelector('.test-sub').textContent={1:TESTN===1?'listen first · Maya, Tomás and Beatriz':'4 questions · about 20 seconds each',2:'your photographs · 1 minute, then Beatriz’s',3:'with Beatriz · discuss, then decide',4:'3 questions · about 40 seconds each'}[PART]+' · set '+TESTN;
   document.querySelector('.back-link').href='/index.html?openModal=speaking'; document.querySelector('.back-link').textContent='← Speaking';
   document.querySelector('.more').hidden=true;
   /* the footer: this Part's practice, structures, drills and games (Writing's pill row) */
@@ -244,7 +244,7 @@ function pickN(a,n){ const b=a.slice(); for(let i=b.length-1;i>0;i--){ const j=M
 const segsOf=alt=>((alt&&(alt.turn||alt).segs)||[]).map(s=>s.t);
 
 /* ── the test, as the book's frames: lines in order ── */
-let SEQ=[], MODEL1=null;
+let SEQ=[], MODEL1=null, LISTEN_ONLY=false;
 function build(D1,D2,D3,D4){
   const S=[], H=(n,name,mins)=>{ if(!PART) S.push({k:'head',part:n,name,mins}); };   /* one Part: the page title is its heading */
   const ex=(t,part,o)=>S.push(Object.assign({k:'ex',t,part},o||{}));
@@ -252,14 +252,16 @@ function build(D1,D2,D3,D4){
   /* PART 1: four questions from four different chapters */
   if(!PART||PART===1){
   H(1,'Interview','2 minutes');
-  ex("Good afternoon. My name's Maya. First of all, we'd like to know something about you.",1);
+  if(!(MODEL1&&TESTN===1)) ex("Good afternoon. My name's Maya. First of all, we'd like to know something about you.",1);
   /* SET 1 IS THE MODEL INTERVIEW (24 Nov 2026, the owner): Maya asks; Tomás gives the stronger
      answer (played); at Beatriz's turns the pupil speaks, her safe answer under the turn as the
      scaffold, stage by stage (the school's pattern), and in the review as the model. */
   if(MODEL1&&TESTN===1){
+    /* 24 Nov 2026 (the owner): the model plays straight through, no stops; then 'Now you' */
+    LISTEN_ONLY=true;
+    (MODEL1.intro||[]).forEach(it=>{ if(it.who==='examiner') ex(it.t,1); else S.push({k:'pa',t:[it.t],label:MODEL1.cast[it.who].name,part:1}); });
     MODEL1.turns.forEach(tn=>{ ex(tn.q,1,{q:1});
-      if(tn.who==='tomas') S.push({k:'pa',t:tn.stages.map(x=>x.t),stages:tn.stages,label:'Tomás',part:1});
-      else you(25,'about 15 seconds',1,{q:tn.q,model:tn.stages.map(x=>x.t),stages:tn.stages,by:'Beatriz'}); });
+      S.push({k:'pa',t:tn.stages.map(x=>x.t),stages:tn.stages,label:MODEL1.cast[tn.who].name,part:1}); });
   } else
   pickN(D1.chapters,4).forEach(ch=>{ const c=pick(ch.cards); ex(c.question,1,{q:1});
     you(30,'about 20 seconds',1,{q:c.question,model:segsOf(c.alts&&c.alts[0])}); });
@@ -407,7 +409,8 @@ const FIX={1:['Practise Part 1: answer, reason, example','/skills/speaking/five.
   3:['Practise Part 3: start, react, decide','/skills/speaking/five.html?part=3'],4:['Practise Part 4: opinion, reason, the other side','/skills/speaking/five.html?part=4']};
 const NAME={1:'Interview',2:'Long turn',3:'Collaborate',4:'Discuss'};
 function finish(){
-  stopAll(); FINISHED=true; deck.lis.classList.remove('busy'); label(deck.lis,PART?'Again':'Next'); lit('lis'); deck.spk.hidden=true;
+  stopAll(); FINISHED=true; deck.lis.classList.remove('busy'); label(deck.lis,LISTEN_ONLY?'Now you':PART?'Again':'Next'); lit('lis'); deck.spk.hidden=true;
+  if(LISTEN_ONLY) return;   /* the model: nothing to review; it stays the page's first set */
   ST[CNT]=Math.max(ST[CNT]||0,TESTN); save();
   $('review').innerHTML='<div class="ph"><b>'+(PART?'Your answers':'Your test')+'</b><span>listen back</span></div>'+[1,2,3,4].map(n=>{
     const A=ANS.filter(a=>a.part===n); if(!A.length) return '';
@@ -436,7 +439,8 @@ Promise.all([J('/audio/speaking/manifest.json'),J('/skills/speaking/data/part1-a
 .then(([m,d1,d2,d3,d4,pm])=>{ MAP=m.lines||{}; VER=m.v||{}; MODEL1=pm; build(d1,d2,d3,d4); render(); mark(-1);
   /* the first line is ready before the tap, so the examiner starts at once */
   const f=fileOf(SEQ[1]&&SEQ[1].t); if(f){ const a=new Audio(); a.preload='auto'; a.src=url(f); }
-  if(!PART&&$('parts')) $('parts').querySelectorAll('button')[0].classList.add('on'); })
+  if(!PART&&$('parts')) $('parts').querySelectorAll('button')[0].classList.add('on');
+  if(LISTEN_ONLY) deck.spk.hidden=true; })
 .catch(()=>{ $('script').innerHTML='<p>The test could not load. Check your connection and try again.</p>'; });
 })();
 </script>

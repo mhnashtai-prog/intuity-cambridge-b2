@@ -106,6 +106,9 @@ for t, n in (("Good afternoon. My name's Maya. First of all, we'd like to know s
 PM = ROOT / 'skills' / 'speaking' / 'data' / 'part1-model.json'
 if PM.exists():
     pm = json.load(open(PM, encoding='utf-8'))
+    for it in pm.get('intro', []):
+        if it['who'] == 'examiner': add(it['t'], 'examiner', 1, 'Examiner · Maya', 'model Part 1 · intro')
+        else: c = pm['cast'][it['who']]; add(it['t'], 'candidate', 1, c['name'] + ' · ' + c['voice'], 'model Part 1 · intro')
     for tn in pm['turns']:
         cast = pm['cast'][tn['who']]
         for st in tn['stages']:

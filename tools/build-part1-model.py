@@ -25,6 +25,11 @@ def gap(s):
     subprocess.run(['ffmpeg', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=mono', '-t', str(s), o], check=True); return o
 txt = ['B2 FIRST SPEAKING · PART 1 · THE MODEL INTERVIEW (Funchal)', 'Examiner: Maya · Beatriz: the safe answer · Tomás: the stronger answer', '']
 parts.append(gap(0.4))
+for it in D.get('intro', []):   # Maya introduces herself, the candidates give their names
+    f = m.get(norm(it['t']))
+    if f: parts += [clip(f), gap(0.6)]
+    txt.append(('EXAMINER' if it['who'] == 'examiner' else D['cast'][it['who']]['name'].upper()) + ': ' + it['t'])
+txt.append('')
 for tn in D['turns']:
     parts += [clip(m[norm(tn['q'])]), gap(0.7)]; txt.append('EXAMINER: ' + tn['q'])
     for i, st in enumerate(tn['stages']):

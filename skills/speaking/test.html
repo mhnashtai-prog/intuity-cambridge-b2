@@ -85,6 +85,10 @@ body:not(.one) #script{background:none;box-shadow:none;border-top:0;padding:0}
 .ln.next{opacity:1}
 body.running .ln.next{opacity:.6}
 .ln.you .took{display:inline;margin-left:.5rem;color:inherit}
+.stg .kp{font-weight:600;color:var(--ink);transition:font-size .25s,background-size .35s,font-weight .25s}
+/* 24 Nov 2026 (the owner): X-RAY. Each key phrase lights up as it is said: bolder, bigger, marked */
+.stg .kp.lit{font-weight:800;font-size:1.07em;background:linear-gradient(transparent 58%,rgba(194,149,110,.38) 0) no-repeat;background-size:100% 100%;border-radius:2px}
+.stg .kp{background:linear-gradient(transparent 58%,rgba(194,149,110,.38) 0) no-repeat;background-size:0 100%}
 .stg i{display:inline-block;font:600 .5rem/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;font-style:normal;color:var(--caramel-ink);background:rgba(194,149,110,.14);border-radius:3px;padding:.18rem .3rem;margin-right:.3rem;vertical-align:.15em}
 .scaf{margin:-.2rem 0 .3rem 4.7rem;padding:.55rem .7rem;border-left:2px solid rgba(194,149,110,.5);font-size:.9rem;line-height:1.55;color:var(--dim)}
 .scaf .by{display:block;font:600 .56rem/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-bottom:.35rem}
@@ -383,7 +387,25 @@ function render(){
 }
 /* an answer, stage by stage: the school's pattern, named */
 const STAGE={react:'React',respond:'Respond',develop:'Develop',contrast:'Contrast',similar:'Similar',differ:'Different',guess:'Guess',answer:'Answer',ask:'Ask'};
-function staged(st){ return st.map(x=>'<span class="stg"><i>'+(STAGE[x.stage]||x.stage)+'</i>'+esc(x.t)+'</span>').join(' '); }
+/* the key phrases of the school's frames: the X-ray picks them out of every answer */
+const KEYS=["What both photos have in common","What these photos have in common","Both photos show","in both cases","neither","Whereas","while","the second one shows","In the first photo","but in the second photo",
+ "Judging by","From the way","look as if","looks as if","seem to","seems to","might have","must have","might","must","could","probably","is more likely to","Maybe","than",
+ "Mainly because","because","For example","Especially","The thing is","So I'd say","although","Although","Even though","even though","However","But","On the other hand","The only problem is",
+ "I see what you mean, but","Really? I'm not so sure","I'm not so sure","I'm not sure","Yeah, that's true","That's true","I agree","Exactly","What about","Let's start with","What do you think","Would you agree","Do you","Shall we","let's go for","we don't agree",
+ "I think","I'd say","I'd rather","I'd prefer","I prefer","I'd go for","I'd choose","I love","I absolutely love","I find","To be honest","Honestly","Hmm, let me think","Oh, I love","I really"]
+  .sort((a,b)=>b.length-a.length);
+const KRX=new RegExp('(^|[^A-Za-z])('+KEYS.map(k=>k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|')+')(?![A-Za-z])','g');
+function xray(t,base,total){ let out='', at=0; t.replace(KRX,(m,pre,k,off)=>{ const st=off+pre.length;
+  out+=esc(t.slice(at,st))+'<b class="kp" data-at="'+((base+st)/total).toFixed(3)+'">'+esc(k)+'</b>'; at=st+k.length; return m; });
+  return out+esc(t.slice(at)); }
+function staged(st){ const total=st.reduce((n,x)=>n+x.t.length+1,0); let base=0;
+  return st.map(x=>{ const h='<span class="stg"><i>'+(STAGE[x.stage]||x.stage)+'</i>'+xray(x.t,base,total)+'</span>'; base+=x.t.length+1; return h; }).join(' '); }
+/* lighting them in time with the voice: the share of the turn already heard */
+let XR=null;
+function xrayRun(i,stageAt){ xrayStop(); const el=$('L'+i); if(!el) return; const kps=[...el.querySelectorAll('.kp')]; if(!kps.length) return;
+  XR=setInterval(()=>{ let f=stageAt!=null?stageAt():(PL.duration&&isFinite(PL.duration)?PL.currentTime/PL.duration:0);
+    kps.forEach(k=>{ if(+k.dataset.at<=f+0.03) k.classList.add('lit'); }); },80); }
+function xrayStop(i){ if(XR){ clearInterval(XR); XR=null; } if(i!=null){ const el=$('L'+i); if(el) el.querySelectorAll('.kp').forEach(k=>k.classList.add('lit')); } }
 function vis(v){
   if(v.photos) return '<div class="vis"><div class="photos'+(v.small?' small':'')+'">'+v.photos.map((p,i)=>'<figure><img src="'+esc(p.src)+'" alt="'+esc(p.brief||p.title)+'" loading="lazy"><figcaption>'+(i?'B':'A')+'</figcaption></figure>').join('')+'</div>'+(v.small?'':'<div class="qcard">'+esc(v.q)+'</div>')+'</div>';
   return '<div class="vis"><div class="ideas"><p class="q">'+esc(v.q)+'</p><ul>'+v.ideas.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul></div></div>';
@@ -425,8 +447,11 @@ const GAP=(prev,s)=>!prev||prev.k==='head'?0:s.k==='ex'?(prev.k==='ex'?700:1000)
 async function playStep(s,i,my){
   if(s.k==='ex'){ const ok=await playText(s.t); if(my!==run) return; if(!ok) await wait(Math.min(3500,1100+s.t.length*22),my); }
   else if(s.k==='pa'){ const whole=s.t.join(' ');   /* the whole turn as one recording, when there is one */
-    if(s.t.length>1&&fileOf(whole)) await playText(whole);
-    else { let n=0; for(const t of s.t){ if(my!==run||SKIP===i) break; if(n++) await wait(250,my); await playText(t); } } }
+    if(s.t.length>1&&fileOf(whole)){ xrayRun(i); await playText(whole); }
+    else { const tot=s.t.reduce((n,x)=>n+x.length+1,0); let n=0, base=0, cur=0;
+      xrayRun(i,()=>(base+(PL.duration&&isFinite(PL.duration)?PL.currentTime/PL.duration:0)*cur)/tot);
+      for(const t of s.t){ if(my!==run||SKIP===i) break; if(n++) await wait(250,my); cur=t.length+1; await playText(t); base+=cur; } }
+    if(my===run) xrayStop(i); else xrayStop(); }
   else if(s.k==='look') await wait(s.secs*1000,my);
 }
 async function listen(){

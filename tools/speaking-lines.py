@@ -132,6 +132,16 @@ if PD2.exists():
             c = pd2['cast'][who]
             for st in pr[key]:
                 add(st['t'], 'candidate', 2, c['name'] + ' · ' + c['voice'], 'Part 2 · ' + pr['id'] + ' · ' + key + ' · ' + st['stage'])
+# THE SIX PART 3 DISCUSSIONS (24 Nov 2026): as young people talk, Tomás and Beatriz
+PD3 = ROOT / 'skills' / 'speaking' / 'data' / 'part3-dialogues.json'
+if PD3.exists():
+    pd3 = json.load(open(PD3, encoding='utf-8'))
+    for tk in pd3['tasks']:
+        for ph in ('discuss', 'decide'):
+            for tn in tk[ph]:
+                c = pd3['cast'][tn['who']]
+                for st in tn['stages']:
+                    add(st['t'], 'candidate', 3, c['name'] + ' · ' + c['voice'], 'Part 3 · ' + tk['id'] + ' · ' + ph + ' · ' + st['stage'])
 GATE = (ROOT / 'skills' / 'speaking' / 'gate.html').read_text(encoding='utf-8')
 for m in re.finditer(r"(\d):\{name:'[^']*',min:'[^']*',share:\d+,page:'[^']*',\s*what:'([^']*)',\s*five:\[([^\]]*)\],\s*tip:'([^']*)'\}", GATE):
     n, what, five, tip = m.group(1), m.group(2), m.group(3), m.group(4)

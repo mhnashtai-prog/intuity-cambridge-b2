@@ -211,7 +211,8 @@ const CNT=PART?'p'+PART:'done';
 const TESTN=(+P.get('test'))||(PART===1?1:((ST[CNT]||0)+1));   /* Part 1 always opens on the model interview */
 /* 24 Nov 2026 (the owner): every topic of a Part stays one tap away in the header (?topic=id) */
 let TOPIC=P.get('topic')||'', TOPICS=[];
-const USE_MODEL=PART===1?(!TOPIC||TOPIC==='model'):(!PART&&TESTN===1);
+if(TOPIC==='model') TOPIC='city';   /* the Model is now the City interview */
+const USE_MODEL=!PART&&TESTN===1;
 function topicOf(list){ if(!PART) return null; const i=list.findIndex(x=>x.id===TOPIC);
   const k=i>=0?i:((TESTN-1)%list.length); TOPIC=list[k].id; return k; }
 if(PART){
@@ -250,7 +251,7 @@ function pickN(a,n){ const b=a.slice(); for(let i=b.length-1;i>0;i--){ const j=M
 const segsOf=alt=>((alt&&(alt.turn||alt).segs)||[]).map(s=>s.t);
 
 /* ── the test, as the book's frames: lines in order ── */
-let SEQ=[], MODEL1=null, LISTEN_ONLY=false;
+let SEQ=[], MODEL1=null, DLG=null, LISTEN_ONLY=false, INTERVIEW=false;
 function build(D1,D2,D3,D4){
   const S=[], H=(n,name,mins)=>{ if(!PART) S.push({k:'head',part:n,name,mins}); };   /* one Part: the page title is its heading */
   const ex=(t,part,o)=>S.push(Object.assign({k:'ex',t,part},o||{}));
@@ -258,7 +259,7 @@ function build(D1,D2,D3,D4){
   /* PART 1: four questions from four different chapters */
   if(!PART||PART===1){
   H(1,'Interview','2 minutes');
-  if(!(MODEL1&&USE_MODEL)) ex("Good afternoon. My name's Maya. First of all, we'd like to know something about you.",1);
+  const HELLO=()=>ex("Good afternoon. My name's Maya. First of all, we'd like to know something about you.",1);
   /* SET 1 IS THE MODEL INTERVIEW (24 Nov 2026, the owner): Maya asks; Tomás gives the stronger
      answer (played); at Beatriz's turns the pupil speaks, her safe answer under the turn as the
      scaffold, stage by stage (the school's pattern), and in the review as the model. */
@@ -268,12 +269,18 @@ function build(D1,D2,D3,D4){
     (MODEL1.intro||[]).forEach(it=>{ if(it.who==='examiner') ex(it.t,1); else S.push({k:'pa',t:[it.t],label:MODEL1.cast[it.who].name,part:1}); });
     MODEL1.turns.forEach(tn=>{ ex(tn.q,1,{q:1});
       S.push({k:'pa',t:tn.stages.map(x=>x.t),stages:tn.stages,label:MODEL1.cast[tn.who].name,part:1,asYou:30,q:tn.q}); });   /* in Speak, these are your turns */
-  } else if(PART===1){   /* one topic: four of its questions */
-    const ch=D1.chapters[topicOf(D1.chapters)];
-    pickN(ch.cards,4).forEach(c=>{ ex(c.question,1,{q:1}); you(30,'about 20 seconds',1,{q:c.question,model:segsOf(c.alts&&c.alts[0])}); });
-  } else
+  } else if(PART===1){
+    const ch=D1.chapters[topicOf(D1.chapters)], tp=DLG&&DLG.topics.find(x=>x.id===ch.id);
+    const ready=tp&&tp.turns.every(tn=>fileOf(tn.q)&&tn.stages.every(x=>fileOf(x.t)));
+    if(ready){   /* 24 Nov 2026 (the owner): every topic is an interview in the school's pattern */
+      INTERVIEW=true;
+      (DLG.intro||[]).forEach(it=>{ if(it.who==='examiner') ex(it.t,1); else S.push({k:'pa',t:[it.t],label:DLG.cast[it.who].name,part:1}); });
+      tp.turns.forEach(tn=>{ ex(tn.q,1,{q:1}); S.push({k:'pa',t:tn.stages.map(x=>x.t),stages:tn.stages,label:DLG.cast[tn.who].name,part:1,asYou:30,q:tn.q}); });
+    } else { HELLO();   /* not recorded yet: four of its questions */
+    pickN(ch.cards,4).forEach(c=>{ ex(c.question,1,{q:1}); you(30,'about 20 seconds',1,{q:c.question,model:segsOf(c.alts&&c.alts[0])}); }); }
+  } else { HELLO();
   pickN(D1.chapters,4).forEach(ch=>{ const c=pick(ch.cards); ex(c.question,1,{q:1});
-    you(30,'about 20 seconds',1,{q:c.question,model:segsOf(c.alts&&c.alts[0])}); });
+    you(30,'about 20 seconds',1,{q:c.question,model:segsOf(c.alts&&c.alts[0])}); }); }
   }
   /* PART 2: your photographs, Beatriz's, and a short question about hers */
   if(!PART||PART===2){
@@ -462,13 +469,13 @@ if(P.get('stats')==='1'){ const f=ST.first||[];
 
 /* ── load ── */
 const J=u=>fetch(u).then(r=>r.json());
-Promise.all([J('/audio/speaking/manifest.json'),J('/skills/speaking/data/part1-answers.json'),J('/skills/speaking/data/part2-turn.json'),J('/skills/speaking/data/part3-talk.json'),J('/skills/speaking/data/part4-views.json'),J('/skills/speaking/data/part1-model.json').catch(()=>null)])
-.then(([m,d1,d2,d3,d4,pm])=>{ MAP=m.lines||{}; VER=m.v||{}; MODEL1=pm; build(d1,d2,d3,d4); render(); mark(-1);
+Promise.all([J('/audio/speaking/manifest.json'),J('/skills/speaking/data/part1-answers.json'),J('/skills/speaking/data/part2-turn.json'),J('/skills/speaking/data/part3-talk.json'),J('/skills/speaking/data/part4-views.json'),J('/skills/speaking/data/part1-model.json').catch(()=>null),J('/skills/speaking/data/part1-dialogues.json').catch(()=>null)])
+.then(([m,d1,d2,d3,d4,pm,dl])=>{ MAP=m.lines||{}; VER=m.v||{}; MODEL1=pm; DLG=dl; build(d1,d2,d3,d4); render(); mark(-1);
   /* the first line is ready before the tap, so the examiner starts at once */
   const f=fileOf(SEQ[1]&&SEQ[1].t); if(f){ const a=new Audio(); a.preload='auto'; a.src=url(f); }
   if(!PART&&$('parts')) $('parts').querySelectorAll('button')[0].classList.add('on');
-  if(PART){ TOPICS=({1:(MODEL1?[{id:'model',tab:'Model'}]:[]).concat(d1.chapters),2:d2.tasks,3:d3.tasks,4:d4.chapters})[PART].map(x=>({id:x.id,tab:x.tab}));
-    if(PART===1&&USE_MODEL) TOPIC='model';
+  if(PART){ TOPICS=({1:d1.chapters,2:d2.tasks,3:d3.tasks,4:d4.chapters})[PART].map(x=>({id:x.id,tab:x.tab}));
+    if(INTERVIEW) document.querySelector('.test-sub').textContent='Maya, Tomás and Beatriz · 6 questions';
     $('parts').innerHTML=TOPICS.map(x=>'<a href="?part='+PART+'&topic='+x.id+'"'+(x.id===TOPIC?' class="on" aria-current="page"':'')+'>'+esc(x.tab)+'</a>').join('');
     const on=$('parts').querySelector('.on'); if(on) $('parts').scrollLeft=on.offsetLeft-$('parts').clientWidth/2+on.clientWidth/2; } })
 .catch(()=>{ $('script').innerHTML='<p>The test could not load. Check your connection and try again.</p>'; });

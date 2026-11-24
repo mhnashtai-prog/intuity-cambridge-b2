@@ -113,6 +113,16 @@ if PM.exists():
         cast = pm['cast'][tn['who']]
         for st in tn['stages']:
             add(st['t'], 'candidate', 1, cast['name'] + ' · ' + cast['voice'], 'model Part 1 · ' + st['stage'])
+# THE SEVEN PART 1 INTERVIEWS (24 Nov 2026): every topic in the school's pattern, Maya asking
+PD = ROOT / 'skills' / 'speaking' / 'data' / 'part1-dialogues.json'
+if PD.exists():
+    pd = json.load(open(PD, encoding='utf-8'))
+    for tp in pd['topics']:
+        for tn in tp['turns']:
+            add(tn['q'], 'examiner', 1, 'Examiner · Maya', 'Part 1 interview · ' + tp['id'])
+            cast = pd['cast'][tn['who']]
+            for st in tn['stages']:
+                add(st['t'], 'candidate', 1, cast['name'] + ' · ' + cast['voice'], 'Part 1 interview · ' + tp['id'] + ' · ' + st['stage'])
 GATE = (ROOT / 'skills' / 'speaking' / 'gate.html').read_text(encoding='utf-8')
 for m in re.finditer(r"(\d):\{name:'[^']*',min:'[^']*',share:\d+,page:'[^']*',\s*what:'([^']*)',\s*five:\[([^\]]*)\],\s*tip:'([^']*)'\}", GATE):
     n, what, five, tip = m.group(1), m.group(2), m.group(3), m.group(4)

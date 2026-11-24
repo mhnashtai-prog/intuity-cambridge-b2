@@ -123,6 +123,15 @@ if PD.exists():
             cast = pd['cast'][tn['who']]
             for st in tn['stages']:
                 add(st['t'], 'candidate', 1, cast['name'] + ' · ' + cast['voice'], 'Part 1 interview · ' + tp['id'] + ' · ' + st['stage'])
+# THE EIGHT PART 2 LONG TURNS (24 Nov 2026): similarities, differences, speculation
+PD2 = ROOT / 'skills' / 'speaking' / 'data' / 'part2-dialogues.json'
+if PD2.exists():
+    pd2 = json.load(open(PD2, encoding='utf-8'))
+    for pr in pd2['pairs']:
+        for key, who in (('tomas', 'tomas'), ('beatriz', 'beatriz'), ('tomasFollow', 'tomas'), ('beatrizFollow', 'beatriz')):
+            c = pd2['cast'][who]
+            for st in pr[key]:
+                add(st['t'], 'candidate', 2, c['name'] + ' · ' + c['voice'], 'Part 2 · ' + pr['id'] + ' · ' + key + ' · ' + st['stage'])
 GATE = (ROOT / 'skills' / 'speaking' / 'gate.html').read_text(encoding='utf-8')
 for m in re.finditer(r"(\d):\{name:'[^']*',min:'[^']*',share:\d+,page:'[^']*',\s*what:'([^']*)',\s*five:\[([^\]]*)\],\s*tip:'([^']*)'\}", GATE):
     n, what, five, tip = m.group(1), m.group(2), m.group(3), m.group(4)

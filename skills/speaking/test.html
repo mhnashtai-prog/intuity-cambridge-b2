@@ -251,7 +251,7 @@ function pickN(a,n){ const b=a.slice(); for(let i=b.length-1;i>0;i--){ const j=M
 const segsOf=alt=>((alt&&(alt.turn||alt).segs)||[]).map(s=>s.t);
 
 /* ── the test, as the book's frames: lines in order ── */
-let SEQ=[], MODEL1=null, DLG=null, LISTEN_ONLY=false, INTERVIEW=false;
+let SEQ=[], MODEL1=null, DLG=null, DLG2=null, LISTEN_ONLY=false, INTERVIEW=false;
 function build(D1,D2,D3,D4){
   const S=[], H=(n,name,mins)=>{ if(!PART) S.push({k:'head',part:n,name,mins}); };   /* one Part: the page title is its heading */
   const ex=(t,part,o)=>S.push(Object.assign({k:'ex',t,part},o||{}));
@@ -287,6 +287,19 @@ function build(D1,D2,D3,D4){
   H(2,'Long turn','4 minutes');
   let [t2,t2b]=pickN(D2.tasks,2);
   if(PART===2){ const k=topicOf(D2.tasks); t2=D2.tasks[k]; t2b=D2.tasks[(k+1)%D2.tasks.length]; }   /* yours, and the next pair for Beatriz */
+  /* 24 Nov 2026 (the owner): Part 2 as the exam runs it, Tomás and Beatriz (similarities, differences, speculation) */
+  const pA=PART===2&&DLG2&&DLG2.pairs.find(x=>x.id===t2.id), pB=PART===2&&DLG2&&DLG2.pairs.find(x=>x.id===t2b.id);
+  const rec=a=>a&&a.every(x=>fileOf(x.t));
+  if(pA&&pB&&rec(pA.tomas)&&rec(pA.beatrizFollow)&&rec(pB.beatriz)&&rec(pB.tomasFollow)){
+    INTERVIEW=true; const turn=(st,who,secs,q)=>S.push({k:'pa',t:st.map(x=>x.t),stages:st,label:DLG2.cast[who].name,part:2,asYou:secs,q});
+    ex("In this part of the test, I'm going to give each of you two photographs. I'd like you to talk about your photographs on your own for about a minute, and also to answer a short question about your partner's photographs.",2);
+    ex('Here are your photographs. '+t2.theme,2,{to:'Tomás',vis:{photos:t2.photos,q:t2.question}}); ex(t2.question,2,{q:1});
+    turn(pA.tomas,'tomas',60,t2.question); ex('Thank you.',2);
+    ex(t2.followUp,2,{to:'Beatriz',q:1}); turn(pA.beatrizFollow,'beatriz',30,t2.followUp); ex('Thank you.',2);
+    ex('Here are your photographs. '+t2b.theme,2,{to:'Beatriz',vis:{photos:t2b.photos,q:t2b.question}}); ex(t2b.question,2,{q:1});
+    turn(pB.beatriz,'beatriz',60,t2b.question); ex('Thank you.',2);
+    ex(t2b.followUp,2,{to:'Tomás',q:1}); turn(pB.tomasFollow,'tomas',30,t2b.followUp); ex('Thank you.',2);
+  } else {
   ex("In this part of the test, I'm going to give each of you two photographs. I'd like you to talk about your photographs on your own for about a minute, and also to answer a short question about your partner's photographs.",2);
   ex('Here are your photographs. '+t2.theme,2,{vis:{photos:t2.photos,q:t2.question}});
   ex(t2.question,2,{q:1});
@@ -297,7 +310,8 @@ function build(D1,D2,D3,D4){
   S.push({k:'pa',t:segsOf(t2b.alts&&t2b.alts[0]),label:'Beatriz · 1 minute',part:2,long:1});
   ex('Thank you.',2);
   ex(t2b.followUp,2,{q:1});
-  you(30,'about 20 seconds',2,{q:t2b.followUp,model:[]});
+  you(30,'about 20 seconds',2,{q:t2b.followUp,model:segsOf(t2b.alts&&t2b.alts[0]&&t2b.alts[0].follow)});   /* the follow-up's recorded model */
+  }
   }
   /* PART 3: the task, Beatriz opens, you answer her, then decide (Part 4 takes its topic) */
   const t3=PART===3?D3.tasks[topicOf(D3.tasks)]:pick(D3.tasks), alt3=t3.alts[0], turns=(alt3.discuss&&alt3.discuss.turns)||[], dec=(alt3.decide&&alt3.decide.turns)||[];
@@ -346,7 +360,7 @@ function render(){
   $('script').querySelectorAll('[data-skip]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); SKIP=+b.dataset.skip; hush(); });
 }
 /* an answer, stage by stage: the school's pattern, named */
-const STAGE={react:'React',respond:'Respond',develop:'Develop',contrast:'Contrast'};
+const STAGE={react:'React',respond:'Respond',develop:'Develop',contrast:'Contrast',similar:'Similar',differ:'Different',guess:'Guess',answer:'Answer'};
 function staged(st){ return st.map(x=>'<span class="stg"><i>'+(STAGE[x.stage]||x.stage)+'</i>'+esc(x.t)+'</span>').join(' '); }
 function vis(v){
   if(v.photos) return '<div class="vis"><div class="photos'+(v.small?' small':'')+'">'+v.photos.map((p,i)=>'<figure><img src="'+esc(p.src)+'" alt="'+esc(p.brief||p.title)+'" loading="lazy"><figcaption>'+(i?'B':'A')+'</figcaption></figure>').join('')+'</div>'+(v.small?'':'<div class="qcard">'+esc(v.q)+'</div>')+'</div>';
@@ -469,13 +483,13 @@ if(P.get('stats')==='1'){ const f=ST.first||[];
 
 /* ── load ── */
 const J=u=>fetch(u).then(r=>r.json());
-Promise.all([J('/audio/speaking/manifest.json'),J('/skills/speaking/data/part1-answers.json'),J('/skills/speaking/data/part2-turn.json'),J('/skills/speaking/data/part3-talk.json'),J('/skills/speaking/data/part4-views.json'),J('/skills/speaking/data/part1-model.json').catch(()=>null),J('/skills/speaking/data/part1-dialogues.json').catch(()=>null)])
-.then(([m,d1,d2,d3,d4,pm,dl])=>{ MAP=m.lines||{}; VER=m.v||{}; MODEL1=pm; DLG=dl; build(d1,d2,d3,d4); render(); mark(-1);
+Promise.all([J('/audio/speaking/manifest.json'),J('/skills/speaking/data/part1-answers.json'),J('/skills/speaking/data/part2-turn.json'),J('/skills/speaking/data/part3-talk.json'),J('/skills/speaking/data/part4-views.json'),J('/skills/speaking/data/part1-model.json').catch(()=>null),J('/skills/speaking/data/part1-dialogues.json').catch(()=>null),J('/skills/speaking/data/part2-dialogues.json').catch(()=>null)])
+.then(([m,d1,d2,d3,d4,pm,dl,dl2])=>{ MAP=m.lines||{}; VER=m.v||{}; MODEL1=pm; DLG=dl; DLG2=dl2; build(d1,d2,d3,d4); render(); mark(-1);
   /* the first line is ready before the tap, so the examiner starts at once */
   const f=fileOf(SEQ[1]&&SEQ[1].t); if(f){ const a=new Audio(); a.preload='auto'; a.src=url(f); }
   if(!PART&&$('parts')) $('parts').querySelectorAll('button')[0].classList.add('on');
   if(PART){ TOPICS=({1:d1.chapters,2:d2.tasks,3:d3.tasks,4:d4.chapters})[PART].map(x=>({id:x.id,tab:x.tab}));
-    if(INTERVIEW) document.querySelector('.test-sub').textContent='Maya, Tomás and Beatriz · 6 questions';
+    if(INTERVIEW) document.querySelector('.test-sub').textContent=PART===1?'Maya, Tomás and Beatriz · 6 questions':'Tomás and Beatriz · a minute each, then a short question';
     $('parts').innerHTML=TOPICS.map(x=>'<a href="?part='+PART+'&topic='+x.id+'"'+(x.id===TOPIC?' class="on" aria-current="page"':'')+'>'+esc(x.tab)+'</a>').join('');
     const on=$('parts').querySelector('.on'); if(on) $('parts').scrollLeft=on.offsetLeft-$('parts').clientWidth/2+on.clientWidth/2; } })
 .catch(()=>{ $('script').innerHTML='<p>The test could not load. Check your connection and try again.</p>'; });

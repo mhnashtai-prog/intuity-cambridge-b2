@@ -157,8 +157,9 @@ var TASKROOFS = {
     /* 22 Nov 2026 (the owner): the Guided essay straight after Basics, essays only: the core
        phrases of Basics seen at once in a whole essay (introduce, then the model, then variety) */
     /* 25 Nov 2026: Guided left these tabs; it is step 4 of the practice track */
-    {name:"Build", url:"skills/writing/build.html?type={k}&view=models"},   /* 17 Nov: a frame you build, not model essays (those are in door 3) */
-    {name:"Cards", url:"skills/writing/cue-cards-print.html?type={print}"}
+    {name:"Build", url:"skills/writing/build.html?type={k}&view=models"}   /* 17 Nov: a frame you build, not model essays (those are in door 3) */
+    /* 25 Nov 2026 (the owner: Basics must be immediately likeable): Cards left these tabs; the Model
+       page is the study card now */
     /* 17 Nov 2026 (the owner, after a teen's review): Essentials left Learn it. It opened on the same
        phrases as Build and Cards; the page stays (sheet.html) but no menu leads to it */
   ]},

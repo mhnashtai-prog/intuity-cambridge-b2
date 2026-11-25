@@ -468,7 +468,7 @@ function leanFoot() {
     '.wr-next{flex:none;display:inline-grid;place-items:center;width:40px;height:40px;border-radius:50%;background:#14110E;color:#FAF8F5;text-decoration:none;font:500 1.25rem/1 var(--f-body,"Geist",system-ui,sans-serif);padding-bottom:2px;box-sizing:border-box}' +
     '.wr-next:active{transform:scale(.95)}.wr-next:focus-visible{outline:2px solid #B0865C;outline-offset:2px}' +
     '.wr-steps .wr-stage{white-space:nowrap}' +
-    '@media(max-width:430px){.wr-row{gap:6px}.wr-steps .wr-stages{max-width:calc(100vw - 64px)}.wr-steps .wr-stage{padding:.45rem .42rem!important;font-size:.59rem!important;letter-spacing:.03em!important}.wr-next{width:36px!important;height:36px!important}.wr-steps .wr-stage::before{content:none!important}.wr-steps .wr-stage i{display:none!important}}' +
+    '@media(max-width:430px){.wr-row{gap:6px}.wr-steps .wr-stages{max-width:calc(100vw - 24px)}.wr-steps .wr-stage{padding:.5rem .6rem!important;font-size:.625rem!important;letter-spacing:.05em!important}.wr-next{width:36px!important;height:36px!important}.wr-steps .wr-stage::before{content:none!important}.wr-steps .wr-stage i{display:none!important}}' +
     '@media(max-width:400px){.wr-steps .wr-stage{padding:.45rem .5rem;letter-spacing:.04em}.wr-steps .wr-stage i{display:none}.wr-steps .wr-stage::before{content:attr(data-n);font-family:"Geist Mono",ui-monospace,monospace;font-weight:500;opacity:.6;margin-right:3px}}';
   document.head.appendChild(css);
   var f = el('div', 'wr-foot wr-steps');
@@ -489,7 +489,9 @@ function leanFoot() {
   var strip = turnStrip(); if (strip) f.appendChild(strip);
   f.appendChild(row);
   var i = list.indexOf(STAGE), nxt = i >= 0 && i < list.length - 1 ? list[i + 1] : null;
-  if (nxt) {
+  /* 25 Nov 2026 (the owner): no black Next circle; it was the only one of its kind, and the
+     steps themselves are the way through, as in Speaking */
+  if (false && nxt) {
     var a = el('a', 'wr-next be2-nohit', '\u203A'); a.href = G.stages[nxt];
     a.setAttribute('aria-label', 'Next: ' + NAMES[nxt]); a.title = 'Next: ' + NAMES[nxt];
     row.appendChild(a);

@@ -229,6 +229,13 @@ function leanHeader() {
     '.wr-how span{display:inline-flex;align-items:center;gap:5px;height:30px;box-sizing:border-box;padding:0 12px 0 8px;border:1.5px solid #1E1B18;border-radius:999px;background:#FAF8F5}' +
     '.wr-how b{font:700 .625rem/1 "Geist",system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#14110E}' +
     '.wr-how:active span{transform:scale(.96)}.wr-how:focus-visible{outline:2px solid #C2956E;outline-offset:2px}' +
+    '.wr-watch{display:flex;align-items:center;gap:12px;width:max-content;margin:10px auto 2px;text-decoration:none;-webkit-tap-highlight-color:transparent}' +
+    '.wr-watch i{flex:none;width:42px;height:42px;border-radius:50%;background:#1E1B18;box-shadow:0 0 0 3px #F3F1ED,0 0 0 5px #C2956E,0 6px 14px rgba(20,17,14,.18);display:grid;place-items:center}' +
+    '.wr-watch i::after{content:"";margin-left:4px;border-left:13px solid #FAF8F5;border-top:8px solid transparent;border-bottom:8px solid transparent}' +
+    '.wr-watch span{display:flex;flex-direction:column;gap:3px}' +
+    '.wr-watch b{font:700 .6875rem/1 Geist,system-ui,sans-serif;letter-spacing:.16em;text-transform:uppercase;color:#14110E}' +
+    '.wr-watch small{font:400 .8125rem/1.2 var(--f-body,"Geist",system-ui,sans-serif);color:#6B655C}' +
+    '.wr-watch:active i{transform:scale(.95)}.wr-watch:focus-visible{outline:2px solid #C2956E;outline-offset:4px;border-radius:999px}' +
     '.wr-done{font-style:normal;font-weight:500;color:#3F6B4E;margin-right:6px}' +
     'a.wr-q{text-decoration:none}' +
     '.wr-typerow a.ttab{text-decoration:none}' +
@@ -333,6 +340,14 @@ function leanHeader() {
     hw.innerHTML = '<span><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><polygon points="6,4 20,12 6,20" fill="#8AA79C" stroke="#8AA79C" stroke-width="1" stroke-linejoin="round"/>' +
       '<line x1="6" y1="4" x2="6" y2="20" stroke="#14110E" stroke-width="2" stroke-linecap="round"/><polygon points="6,7.4 14.2,12 6,16.6" fill="#14110E"/></svg><b>How to answer</b></span>';
     qr.appendChild(hw); h.appendChild(qr);
+  } else if (STAGE === 'model') {
+    /* 25 Nov 2026 (the owner): the Model is the lure, a page that needs no thinking. No question
+       above it; instead a ring to watch the task's full clip (it was 'Start here' on the old gate) */
+    var art = /^[aeiou]/i.test(G.label) ? 'an ' : 'a ';
+    var wr = el('a', 'wr-watch'); wr.href = '/skills/writing/watch.html?task=' + GENRE; wr.target = '_top';
+    wr.setAttribute('aria-label', 'Watch: what ' + art + G.label.toLowerCase() + ' is');
+    wr.innerHTML = '<i aria-hidden="true"></i><span><b>Watch</b><small>What ' + art + G.label.toLowerCase() + ' is</small></span>';
+    h.appendChild(wr);
   } else h.appendChild(ql);
 
   function close() {
@@ -372,7 +387,7 @@ function seenStages() {
    feedback; four checks, one per criterion, close the question. */
 var CMP_KEY = 'intuity.wr.compare.' + GENRE;
 function turnStrip() {
-  if (STAGE === 'model' && G.turn && G.stages.sample) {
+  if (false && STAGE === 'model' && G.turn && G.stages.sample) {   /* 25 Nov 2026 (the owner): no box under the Model */
     var d = el('div', 'wr-turn'), t = el('span');
     t.appendChild(el('b', null, 'Your turn')); t.appendChild(document.createTextNode(G.turn));
     var a = el('a', 'be2-nohit', 'Compare \u203A'); a.href = G.stages.sample;

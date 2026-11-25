@@ -75,7 +75,9 @@ var answers = {}; /* question index -> option index */
    no mark, so the score stays honest. After marking, every miss shows its link too. */
 var shown = {};
 function isRight(i) { return answers[i] === rightFor(i) && !shown[i]; }
-function lit(i) { return !!shown[i] || (marked && answers[i] !== rightFor(i)); }
+/* 25 Nov 2026 (the owner): after marking, EVERY answer shows its link to the text, right ones
+   too: a lucky guess and a found answer look alike until the pupil sees the evidence */
+function lit(i) { return !!shown[i] || marked; }
 /* wrap each phrase (raw text) in an already-escaped string, longest first, once each */
 function fill(html, phrases, cls) {
   (phrases || []).slice().sort(function (a, b) { return b.length - a.length; }).forEach(function (ph) {
@@ -94,6 +96,33 @@ function fill(html, phrases, cls) {
     '.rd-link b{font:700 .6rem/1 "Geist Mono",ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:#3B6D1A;display:block;margin-bottom:.25rem}' +
     '.rd-slot.shown,.rd-gap.shown{border-color:#5FA42B!important}html body .rd-picks .rd-pick.chosen.shown:not(.ok):not(.no){background:#5FA42B!important;color:#fff!important;border-color:#5FA42B!important}';
   (document.head || document.documentElement).appendChild(st);
+  /* 25 Nov 2026: the toggle pinned above the bar; the statement in hand; criticism-free */
+  var st2 = document.createElement('style');
+  st2.textContent =
+    '.viewrow{position:fixed!important;left:0;right:0;bottom:var(--rd-bar-h,64px);z-index:39;display:flex!important;flex-direction:column;align-items:center;gap:.45rem;margin:0!important;' +
+      'padding:.5rem 12px;background:#F3F1ED;border-top:1px solid rgba(20,17,14,.1);box-shadow:0 -6px 14px -10px rgba(20,17,14,.25)}' +
+    '.viewrow .viewtog{align-self:center}' +
+    'body{padding-bottom:calc(var(--rd-bar-h,64px) + var(--rd-pin-h,52px) + 18px)!important}' +
+    '.rd-carry{width:100%;max-width:40rem}.rd-carry[hidden]{display:none}' +
+    '.rd-carry-q{font-size:.9rem;line-height:1.35;color:#1E1A17;margin-bottom:.4rem}.rd-carry-q b{font:700 .7rem/1 "Geist Mono",ui-monospace,monospace;color:#8E6238;margin-right:.45rem}' +
+    '.rd-carry-l{display:flex;gap:.45rem}.rd-carry-l .rd-pick{min-width:40px;min-height:40px}' +
+    '.rd-st.inhand{box-shadow:inset 3px 0 0 #C2956E;background:rgba(194,149,110,.08);border-radius:6px}' +
+    '.rd-st-q{cursor:pointer}' +
+    /* criticism-free (as Writing and Use of English): what the pupil chose is grey, never rust or struck */
+    '.rd-slot.no,.rd-gap.no,.rd-gap.no .sen{color:#8C857B!important;text-decoration:none!important;border-color:rgba(20,17,14,.15)!important;background:rgba(20,17,14,.04)!important}' +
+    'html body .rd-picks .rd-pick.no{background:#E8E3DB!important;color:#8C857B!important;border-color:#D6CFC4!important;text-decoration:none!important}' +
+    '.tdot.no{background:#CFC8BD!important}.ov-bars .no,.ov-bar.no{background:#CFC8BD!important}' +
+    '.ov-was{color:#8C857B}' +
+    '.ri-pill{bottom:calc(var(--rd-bar-h,64px) + var(--rd-pin-h,52px) + 10px)!important}';
+  (document.head || document.documentElement).appendChild(st2);
+  function mountCarry() {
+    var vr = document.querySelector('.viewrow'); if (!vr || $('rdCarry')) return;
+    var c = document.createElement('div'); c.id = 'rdCarry'; c.className = 'rd-carry'; c.hidden = true;
+    vr.insertBefore(c, vr.firstChild);
+    if (window.ResizeObserver) { new ResizeObserver(fitPins).observe(vr); var b = $('bar'); if (b) new ResizeObserver(fitPins).observe(b); }
+    fitPins();
+  }
+  if (document.readyState !== 'loading') mountCarry(); else document.addEventListener('DOMContentLoaded', mountCarry);
 })();
 function showAnswer(i) {
   if (marked || shown[i]) return;
@@ -105,6 +134,8 @@ function showAnswer(i) {
 }
 var marked = false;
 var view = 'one'; /* 'one' | 'full' */
+var PLACE = {};   /* scroll position per view and text */
+var cur7 = 0;     /* Part 7: the statement in hand, carried onto the Sections page */
 
 function $(id) { return document.getElementById(id); }
 function esc(s) {
@@ -308,6 +339,8 @@ function paintDots() {
   });
   $('prevSet').disabled = view !== 'one' || qi === 0;
   $('nextSet').disabled = view !== 'one' || qi === n - 1;
+  /* 25 Nov 2026: no row of empty dots before the pupil has answered something */
+  var sr = document.querySelector('.setrow'); if (sr) sr.style.display = (Object.keys(answers).length || marked) ? '' : 'none';
 }
 
 /* ── THE CARD ───────────────────────────────────────────────────────────*/
@@ -342,7 +375,7 @@ function slotHTML(card, i) {
   return '<button class="rd-slot' + (has ? ' filled' : '') + (ok && !shown[i] ? ' ok' : '') + (shown[i] ? ' shown' : '') +
          (bad ? ' no' : '') + '" type="button" data-i="' + i + '"' +
          (marked || shown[i] ? ' disabled' : '') + '>' + body + '</button>' +
-         (!marked && !shown[i] ? '<button class="rd-show" type="button" data-s="' + i + '">Show answer</button>' : '') +
+         (!marked && !shown[i] && answers[i] !== undefined ? '<button class="rd-show" type="button" data-s="' + i + '">Show answer</button>' : '') +
          (bad ? '<div class="rd-fix"><span class="let">' + LETTER[card.answer] +
                 '</span><span>' + esc(card.choices[card.answer]) + '</span></div>' : '');
 }
@@ -438,7 +471,7 @@ function statementHTML(q, i) {
       return '<button class="' + cls + '" type="button" data-i="' + i +
              '" data-l="' + L + '"' + (marked || shown[i] ? ' disabled' : '') + '>' + L + '</button>';
     }).join('') + '</div>' +
-    (!marked && !shown[i] ? '<button class="rd-show" type="button" data-s="' + i + '">Show answer</button>' : '') +
+    (!marked && !shown[i] && answers[i] !== undefined ? '<button class="rd-show" type="button" data-s="' + i + '">Show answer</button>' : '') +
     (bad ? '<div class="rd-st-fix">The answer is ' + esc(rightFor(i)) + '</div>' : '') +
     (lit(i) ? excerpt(q, i) : '') +
   '</div>';
@@ -470,7 +503,7 @@ function render() {
   if (MATCH) {
     var head = '<div class="mc-kick">Part ' + esc(CFG.part) + ' &middot; ' +
       esc(t.title || ('Text ' + (bi + 1))) +
-      '<span class="right">' + done + ' / ' + count() + ' matched</span></div>';
+      '<span class="right">' + (done ? done + ' / ' + count() + ' matched' : count() + ' statements') + '</span></div>';
     /* SECTIONS FIRST BY DEFAULT is wrong for this part. In Part 7 the
        sections are reference — you skim them, then work the statements and
        go back. So the statements are the default view and the sections are
@@ -487,14 +520,17 @@ function render() {
     $('board').querySelectorAll('.rd-pick:not([disabled])').forEach(function (b) {
       b.addEventListener('click', function () { choose(+b.dataset.i, b.dataset.l); });
     });
-    paintDots(); paintBar();
+    $('board').querySelectorAll('.rd-st-q').forEach(function (q) {
+      q.addEventListener('click', function () { cur7 = +q.closest('.rd-st').dataset.i; sfx('tick'); render(); });
+    });
+    paintCarry(); paintDots(); paintBar();
     return;
   }
 
   if (GAPPED) {
     var head = '<div class="mc-kick">Part ' + esc(CFG.part) + ' &middot; ' +
       esc(t.title || ('Text ' + (bi + 1))) +
-      '<span class="right">' + done + ' / ' + count() + ' placed</span></div>';
+      '<span class="right">' + (done ? done + ' / ' + count() + ' placed' : count() + ' gaps') + '</span></div>';
     $('board').innerHTML = '<div class="mc-card">' + head +
       (view === 'full'
         ? '<div class="rd-title">' + esc(t.title || '') + '</div>' +
@@ -509,7 +545,7 @@ function render() {
   }
   var head = '<div class="mc-kick">Part ' + esc(CFG.part) + ' &middot; ' +
     esc(t.title || ('Text ' + (bi + 1))) +
-    '<span class="right">' + done + ' / ' + cards().length + ' answered</span></div>';
+    '<span class="right">' + (done ? done + ' / ' + cards().length + ' answered' : cards().length + ' questions') + '</span></div>';
 
   if (view === 'one') {
     var c = cards()[qi];
@@ -544,6 +580,28 @@ function wireShow() {
   $('board').querySelectorAll('.rd-show[data-s]').forEach(function (b) {
     b.onclick = function (e) { e.stopPropagation(); showAnswer(+b.dataset.s); };
   });
+}
+/* PART 7 · THE STATEMENT IN HAND (25 Nov 2026). On the Sections page the statement being
+   worked on stays in view with its letters, pinned above the toggle: read a section, tap its
+   letter, and the next open statement takes its place. On the Statements page the one in
+   hand is marked, and tapping any statement takes it in hand. */
+function paintCarry() {
+  var box = $('rdCarry'); if (!box) return;
+  document.querySelectorAll('.rd-st').forEach(function (r) { r.classList.toggle('inhand', +r.dataset.i === cur7 && !marked); });
+  if (!MATCH || view !== 'full' || marked) { box.hidden = true; box.innerHTML = ''; fitPins(); return; }
+  var q = T().questions[cur7]; if (!q) { box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = '<div class="rd-carry-q"><b>' + esc(q.number != null ? q.number : cur7 + 1) + '</b>' + esc(q.question) + '</div>' +
+    '<div class="rd-carry-l">' + letters().map(function (L) {
+      return '<button type="button" class="rd-pick' + (answers[cur7] === L ? ' chosen' : '') + '" data-l="' + L + '">' + L + '</button>'; }).join('') + '</div>';
+  box.querySelectorAll('[data-l]').forEach(function (b) { b.onclick = function () { choose(cur7, b.dataset.l); }; });
+  fitPins();
+}
+/* the toggle (and the statement in hand) are pinned just above the bar: one tap away, always */
+function fitPins() {
+  var bar = $('bar'), vr = document.querySelector('.viewrow');
+  if (bar) document.documentElement.style.setProperty('--rd-bar-h', bar.offsetHeight + 'px');
+  if (vr) document.documentElement.style.setProperty('--rd-pin-h', vr.offsetHeight + 'px');
 }
 function paintBar() {
   wireShow();
@@ -630,6 +688,7 @@ function choose(i, k) {
     for (var g in answers) if (answers[g] === k) delete answers[g];
   }
   answers[i] = k;
+  if (MATCH) { var nx = -1; for (var z = 1; z <= count(); z++) { var j = (i + z) % count(); if (answers[j] === undefined) { nx = j; break; } } cur7 = nx > -1 ? nx : i; }
   sfx('tick');
   closeSheet();
   render();
@@ -689,7 +748,7 @@ function submit() {
       ? '<div class="ov-miss-h">Worth another look</div>' + missed.map(function (i) {
           var q = T().questions[i];
           return '<div class="ov-miss-i">' + (q.number != null ? q.number : i + 1) +
-            ' \u00b7 ' + (shown[i] ? 'shown' : '<s>' + esc(answers[i]) + '</s>') + ' \u2192 <b>' + esc(rightFor(i)) + '</b>' +
+            ' \u00b7 ' + (shown[i] ? 'shown' : '<span class="ov-was">' + esc(answers[i]) + '</span>') + ' \u2192 <b>' + esc(rightFor(i)) + '</b>' +
             '<span class="ov-miss-w">' + esc(q.question) + '</span>' +
             /* the evidence was in all 150 questions' data and never shown (3 Nov 2026) */
             (q.why ? '<span class="ov-miss-w">Evidence: ' + esc(q.why) + '</span>' : '') + '</div>';
@@ -701,8 +760,8 @@ function submit() {
   $('ovMiss').innerHTML = missed.length
     ? '<div class="ov-miss-h">Worth another look</div>' + missed.map(function (i) {
         var o = { i:i, c: GAPPED ? {} : cards()[i] };
-        return '<div class="ov-miss-i">' + String(i + 1).padStart(2, '0') + ' \u00b7 ' + (shown[i] ? 'shown' : '<s>' +
-          esc(opts(i)[answers[i]]) + '</s>') + ' \u2192 <b>' + esc(opts(i)[rightFor(i)]) + '</b>' +
+        return '<div class="ov-miss-i">' + String(i + 1).padStart(2, '0') + ' \u00b7 ' + (shown[i] ? 'shown' : '<span class="ov-was">' +
+          esc(opts(i)[answers[i]]) + '</span>') + ' \u2192 <b>' + esc(opts(i)[rightFor(i)]) + '</b>' +
           /* Neutral label, because half of these are glosses rather than
              quotations and "the text says" would be false for those. */
           (o.c.highlight ? '<span class="ov-miss-w">Evidence: ' + esc(o.c.highlight) + '</span>' : '') +
@@ -790,8 +849,11 @@ document.querySelectorAll('.viewbtn').forEach(function (b) {
     if (b.classList.contains('active')) return;
     document.querySelectorAll('.viewbtn').forEach(function (x) { x.classList.remove('active'); });
     b.classList.add('active');
-    view = b.dataset.view; qi = 0; closeSheet(); render();
-    try { window.scrollTo({ top:0, behavior:'smooth' }); } catch (e) { window.scrollTo(0, 0); }
+    /* 25 Nov 2026 (the owner: the exam's two pages, one tap apart): each page keeps its place,
+       like a finger in a book; the question in hand is not reset */
+    PLACE[view + bi] = window.scrollY;
+    view = b.dataset.view; closeSheet(); render();
+    window.scrollTo(0, PLACE[view + bi] || 0);
   };
 });
 

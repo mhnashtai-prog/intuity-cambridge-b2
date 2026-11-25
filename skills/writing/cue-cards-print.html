@@ -166,6 +166,27 @@ function pick(step,k,shift,dup){
   return L[o[(k-1+shift+dup)%o.length]];
 }
 const real=p=>p.steps.filter(s=>!s.support&&s.items.length);
+/* THE BODY MAKES SENSE (25 Nov 2026, the owner: "are the body expressions logically produced?").
+   Each line is dealt from its own list, so a card could say the same phrase twice, open its body
+   on "I would also like to know…" or "On the other hand…", or say "Secondly" with no first point.
+   A dealt phrase that breaks one of these rules gives way to the next one in the pack's order. */
+const LATER=/^(Secondly|Thirdly|Finally|Another|A further|On the other hand|Last but not least|On top of this|Equally|An additional|In addition|Moreover|Furthermore|My second)\b|\balso\b(?! (presents|true))/i;
+const FIRSTISH=/^(Firstly|First of all|One |My first|The main|The first|The most|My strongest|What matters most|The primary|A major|One of the main)/i;
+function fits(it,i,used,prev){
+  if(!it) return false;
+  const t=String(it.t);
+  if(used.has(t.replace(/\[[^\]]*\]/g,'…'))) return false;   /* the same phrase with another gap name is the same phrase */
+  if(i===0&&LATER.test(t)) return false;
+  if(/^Secondly\b/.test(t)&&!FIRSTISH.test(prev||'')) return false;
+  return true;
+}
+function pickFit(step,k,shift,dup,i,used,prev){
+  const first=pick(step,k,shift,dup); if(fits(first,i,used,prev)) return first;
+  const L=step.items, o=ORDERS.get(step)||L.map((_,j)=>j), at=Math.max(0,L.indexOf(first));
+  const start=o.indexOf(at);
+  for(let j=1;j<=o.length;j++){ const it=L[o[(start+j)%o.length]]; if(fits(it,i,used,prev)) return it; }
+  return first;
+}
 
 function cardsFor(t){
   const P=t.paras.filter(p=>real(p).length);
@@ -184,11 +205,13 @@ function cardsFor(t){
     /* each step its own line: a sentence that ends on a grammar hint must
        not run straight into the next one */
     const one=real(first).map((s,i)=>'<p class="ln">'+phrase(pick(s,k,i))+'</p>').join('');
+    const used=new Set(); let prev='';
     const mid=bodySteps.slice(0,4).map(({s},i)=>{
       /* the emails ask the same step twice (two questions, two pieces of
          advice): the second line takes the next phrase, never the same one */
       const key=s.label; seen[key]=(seen[key]||0)+1;
-      return '<p class="ln">'+phrase(pick(s,k,i,seen[key]-1))+'</p>'; }).join('');
+      const it=pickFit(s,k,i,seen[key]-1,i,used,prev); used.add(String(it.t).replace(/\[[^\]]*\]/g,'…')); prev=String(it.t);
+      return '<p class="ln">'+phrase(it)+'</p>'; }).join('');
     /* a formal email signs off to match its greeting: Dear Sir or Madam →
        Yours faithfully, Dear Ms Lopes → Yours sincerely */
     const greet=String((pick(real(first)[0],k,0)||{}).t||'');

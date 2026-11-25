@@ -13,13 +13,13 @@
 (function(){
   'use strict';
   var P = new URLSearchParams(location.search), path = location.pathname;
-  var part = /\/mirror\.html$/.test(path) ? 1 : Math.max(0, Math.min(4, +(P.get('part') || 0) || 0));
+  var part = Math.max(0, Math.min(4, +(P.get('part') || 0) || 0)) || (/\/mirror\.html$/.test(path) ? 1 : 0);
   if (!part) return;
   var here = /\/test\.html$/.test(path) ? 'practise' : /\/five\.html$/.test(path) ? 'structures'
     : /\/(drills|mirror)\.html$/.test(path) ? 'drills' : /\/useful-expressions\.html$/.test(path) ? 'games' : '';
   if (!here) return;
-  var DRILL = {1:'/skills/speaking/mirror.html?back=' + encodeURIComponent('?part=1'), 2:'/skills/speaking/drills.html?part=2&area=longturn2',
-               3:'/skills/speaking/drills.html?part=3&area=discussion3', 4:'/skills/speaking/drills.html?part=4&area=opinion4'}[part];
+  /* 25 Nov 2026: the drill for every Part is Mirroring, built from Tomás's and Beatriz's turns */
+  var DRILL = '/skills/speaking/mirror.html?part=' + part;
   var ITEMS = [['practise','Practise','/skills/speaking/test.html?part=' + part],
                ['structures','Structures','/skills/speaking/five.html?part=' + part],
                ['drills','Drills',DRILL],

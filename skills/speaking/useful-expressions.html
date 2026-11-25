@@ -195,10 +195,15 @@ function blanks(f){ return esc(f).replace(/_{3,}/g,'<span class="blank"></span>'
 
 var URL_={1:'data/part1-answers.json',2:'data/part2-turn.json',3:'data/part3-talk.json',4:'data/part4-views.json'};
 var NAME={1:'Interview',2:'Long turn',3:'Collaborative task',4:'Discussion'};
-var P={}, part=+(pref('part')||0), view=pref('view')==='poster'?'poster':pref('view')==='list'?'list':'play';
+/* 25 Nov 2026 (the owner): Games teaches what Practise teaches. The jobs are the chunk families
+   pupils see on Tomás's and Beatriz's lines, the phrases their repertoire, the examples their lines. */
+var NEWURL={1:'data/part1-dialogues.json',2:'data/part2-dialogues.json',3:'data/part3-dialogues.json',4:'data/part4-dialogues.json'}, NEWL={};
+var LOCK=!!new URLSearchParams(location.search).get('part');   /* reached from a Part: that Part only, no way to wander */
+var P={}, part=LOCK?0:+(pref('part')||0), view=pref('view')==='poster'?'poster':pref('view')==='list'?'list':'play';
 
 /* ── THE CORPUS · every model line in a Part, with where it comes from ── */
 function lines(k){
+  if(NEWL[k]) return NEWL[k];
   var d=P[k], out=[]; if(!d) return out;
   function add(t,src){ out.push({t:t,src:src}); }
   if(k===1) d.chapters.forEach(function(ch){ ch.cards.forEach(function(c){ c.alts.forEach(function(a,i){
@@ -319,8 +324,10 @@ function renderPosters(){ $('posters').innerHTML=(part?[part]:[1,2,3,4]).map(pos
 
 /* ═══ ROUTING ═══════════════════════════════════════════════════════════ */
 function draw(){
+  if(LOCK) document.querySelector('.parts-row').hidden=true; else
   $('parts').innerHTML=seg([{id:0,label:'All'},{id:1,label:'Part 1'},{id:2,label:'Part 2'},{id:3,label:'Part 3'},{id:4,label:'Part 4'}],part,'data-part');
-  $('views').innerHTML=seg([{id:'play',label:'Play'},{id:'list',label:'List'},{id:'poster',label:'Poster'}],view,'data-view');
+  if(LOCK&&view==='poster') view='play';   /* the posters still show the old frames: not on a Part page */
+  $('views').innerHTML=seg([{id:'play',label:'Play'},{id:'list',label:'List'}].concat(LOCK?[]:[{id:'poster',label:'Poster'}]),view,'data-view');
   $('list').hidden=view!=='list'; $('posterView').hidden=view!=='poster'; $('playView').hidden=view!=='play';
   if(view==='play') renderPlay(); else if(view==='list') renderList(); else renderPosters();
 }
@@ -385,7 +392,7 @@ document.addEventListener('click',function(e){
   if(b.hasAttribute('data-uego')){ renderPlay(); return; }
   if(b.hasAttribute('data-ueagain')){ ueRound(true); renderPlay(); return; }
   if(b.hasAttribute('data-uenext')){ ueRound(false); renderPlay(); return; }
-  if(b.dataset.part!==undefined){ part=+b.dataset.part; pref('part',part); UE=null; draw(); scrollTo(0,0); return; }
+  if(b.dataset.part!==undefined){ if(LOCK) return; part=+b.dataset.part; pref('part',part); UE=null; draw(); scrollTo(0,0); return; }
   if(b.dataset.view){ view=b.dataset.view; pref('view',view); draw(); scrollTo(0,0); return; }
   if(b.dataset.ph){ toggle(b.dataset.ph); return; }
   if(b.id==='printBtn'){ window.print(); }
@@ -396,11 +403,22 @@ var p=new URLSearchParams(location.search);
 if(p.get('part')) part=Math.max(0,Math.min(4,+p.get('part')||0));
 if(part){ var bl=document.querySelector('.back-link'); if(bl){ bl.href='/skills/speaking/test.html?part='+part; bl.textContent='← Part '+part; bl.removeAttribute('target'); } }   /* 22 Nov 2026: reached from a Part's Learn it */
 if(p.get('view')==='poster'||p.get('view')==='list'||p.get('view')==='play') view=p.get('view');
-Promise.all([1,2,3,4].map(function(k){ return fetch(URL_[k]).then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; }); }))
-.then(function(r){ [1,2,3,4].forEach(function(k,i){ if(r[i]&&r[i].version>=3) P[k]=r[i]; }); draw(); });
+function get(u){ return fetch(u).then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; }); }
+Promise.all([1,2,3,4].map(function(k){ return get(URL_[k]); }).concat([1,2,3,4].map(function(k){ return get(NEWURL[k]); })))
+.then(function(r){ [1,2,3,4].forEach(function(k,i){ if(r[i]&&r[i].version>=3) P[k]=r[i];
+    var n=r[4+i]; if(!n||!n.bank) return;
+    var old=r[i]||{}, tabs={}; (old.chapters||old.tasks||[]).forEach(function(x){ tabs[x.id]=x.tab; });
+    var who=function(w){ return (n.cast&&n.cast[w]&&n.cast[w].name)||w; }, L=[], add=function(t,src){ L.push({t:t,src:src}); };
+    var turn=function(tn,src){ tn.stages.forEach(function(s){ add(s.t,src+' · '+who(tn.who)); }); };
+    if(k===1) n.topics.forEach(function(tp){ tp.turns.forEach(function(tn){ turn(tn,tabs[tp.id]||tp.id); }); });
+    if(k===2) n.pairs.forEach(function(pr){ [['tomas','tomas'],['beatriz','beatriz'],['tomasFollow','tomas'],['beatrizFollow','beatriz']].forEach(function(x){ turn({who:x[1],stages:pr[x[0]]},tabs[pr.id]||pr.id); }); });
+    if(k===3) n.tasks.forEach(function(tk){ tk.discuss.concat(tk.decide).forEach(function(tn){ turn(tn,tabs[tk.id]||tk.id); }); });
+    if(k===4) n.topics.forEach(function(tp){ tp.questions.forEach(function(q){ [q.answer].concat(q.join).forEach(function(tn){ turn(tn,tabs[tp.id]||tp.id); }); }); });
+    NEWL[k]=L; P[k]=Object.assign({},old,{phraseBank:Object.keys(n.bank).map(function(h){ return {heading:h,phrases:n.bank[h]}; })}); });
+  draw(); });
 </script>
 <script src="/skills/grammar-rules/intuity-sound.js"></script>
 <script src="/tools/intuity-cheer.js?v=2"></script>
-<script src="/tools/speaking-foot.js?v=1" defer></script>
+<script src="/tools/speaking-foot.js?v=2" defer></script>
 </body>
 </html>

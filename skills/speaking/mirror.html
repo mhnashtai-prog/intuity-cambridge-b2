@@ -31,7 +31,7 @@ main{flex:1;display:flex;justify-content:center;padding:0 16px 1.4rem}
 .in{width:min(560px,100%);display:flex;flex-direction:column;gap:1rem;padding-top:clamp(.6rem,2vh,1.2rem)}
 .top{display:flex;align-items:center;gap:.5rem;font:500 .7rem/1 'Geist Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
 .top .n{margin-left:auto}
-.legend{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:4px}
 .legend div{display:flex;flex-direction:column;gap:.35rem;font:500 .64rem/1.1 'Geist Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
 .legend div::before{content:"";height:4px;border-radius:2px;background:var(--rule)}
 .legend div.on{color:var(--ink)} .legend div.on::before{background:var(--car)}
@@ -74,6 +74,7 @@ main{flex:1;display:flex;justify-content:center;padding:0 16px 1.4rem}
 .start{display:flex;flex-direction:column;gap:1rem;padding-top:1rem}
 .start h1{font-family:Anton,Impact,sans-serif;font-weight:400;font-size:clamp(3rem,14vw,4.4rem);line-height:.98;margin:0}
 .start p{font:400 1.02rem/1.5 Geist,system-ui,sans-serif;color:var(--dim);margin:0}
+.ph2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:.6rem}.ph2 img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;background:#e8e4dc}
 .frame4{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}
 .frame4 div{background:var(--card);border-radius:6px;padding:.7rem .8rem;font:600 1rem/1.25 Geist,system-ui,sans-serif}
 .frame4 b{display:block;font:500 .62rem/1 'Geist Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--car-ink);margin-bottom:.35rem}
@@ -90,10 +91,10 @@ main{flex:1;display:flex;justify-content:center;padding:0 16px 1.4rem}
 <main><div class="in" id="app"></div></main>
 <script>
 /* back to the drill list that opened Mirroring (Part 1 list, or the full one) */
-const BACK = '/skills/speaking/drills.html' + (function(){ const b = new URLSearchParams(location.search).get('back');
-  return (b !== null && /^(\?[a-z0-9=&]*)?$/i.test(b)) ? b : '?part=1'; })();
-if (/\/skills\/speaking\/(gate|test)\.html/.test(document.referrer)){ document.getElementById('back').href = '/skills/speaking/test.html?part=1'; document.getElementById('back').textContent = '← Part 1'; }   /* 22 Nov 2026: opened from Part 1's Practise it */
-else document.getElementById('back').href = BACK;
+/* 25 Nov 2026 (the owner): from a Part's footer, back is always that Part, never another */
+const QS = new URLSearchParams(location.search), MPART = Math.max(1, Math.min(4, +QS.get('part') || 1));
+const BACK = '/skills/speaking/test.html?part=' + MPART;
+document.getElementById('back').href = BACK; document.getElementById('back').textContent = '← Part ' + MPART; document.getElementById('back').removeAttribute('target');
 </script>
 <script>
 (function(){
@@ -144,32 +145,34 @@ function startScreen(){
     '<div class="ctrl"><button class="btn dark" id="go"><i class="play-i"></i> Start with Maya</button></div></div>';
   $('#go').onclick = async () => { $('#go').disabled = true; await say(sUrl(D.intro.a), D.intro.t); show(0, 1, true); };
 }
+const partsOf = it => it.parts || D.parts;
 function segHTML(it, r){
   return it.segs.map((s, k) => {
-    const txt = r === 1 ? esc(s) : esc(D.parts[k][1].replace('…','')) + ' <span class="blank"></span>';
-    return '<div class="tpl" data-k="'+k+'"><b>'+esc(D.parts[k][0])+'</b><span>'+txt+'</span></div>';
+    const P_ = partsOf(it), txt = r === 1 ? esc(s) : esc(P_[k][1].replace('…','')) + ' <span class="blank"></span>';
+    return '<div class="tpl" data-k="'+k+'"><b>'+esc(P_[k][0])+'</b><span>'+txt+'</span></div>';
   }).join('');
 }
 function show(n, r, ask){
   hush(); i = n; round = r;
   const it = D.items[i], key = i+':'+r, have = !!mine[key];
   $('#app').innerHTML =
-    '<div class="top">Part 1 · Mirroring <span class="n">'+(i+1)+' / '+D.items.length+'</span></div>'+
-    '<div class="legend" id="legend">'+D.parts.map(p=>'<div>'+esc(p[0])+'</div>').join('')+'</div>'+
-    '<div class="ask" id="ask"><div class="who"><span class="wave"><i></i><i></i><i></i><i></i></span>Maya asks</div><p class="q">'+esc(it.q)+'</p></div>'+
+    '<div class="top">'+esc(D.title)+' <span class="n">'+(i+1)+' / '+D.items.length+'</span></div>'+
+    '<div class="legend" id="legend">'+partsOf(it).map(p=>'<div>'+esc(p[0])+'</div>').join('')+'</div>'+
+    '<div class="ask" id="ask"><div class="who"><span class="wave"><i></i><i></i><i></i><i></i></span>'+esc(it.asker || 'Maya asks')+'</div><p class="q">'+esc(it.q)+'</p>'+
+      (it.photos ? '<div class="ph2">'+it.photos.map(p=>'<img src="'+esc(p.src)+'" alt="'+esc(p.brief||'')+'" loading="lazy">').join('')+'</div>' : '')+'</div>'+
     '<p class="round">'+(r === 1 ? 'Round 1 · Read it out loud' : 'Round 2 · Your own answer')+'</p>'+
     '<div class="prompter" id="prompter">'+segHTML(it, r)+'</div>'+
     '<div class="ctrl" id="ctrl">'+
       '<button class="btn rec" id="rec"><span class="dot"></span><span>'+(have ? 'Record again' : 'Record')+'</span></button>'+
       '<button class="btn" id="me"'+(have?'':' hidden')+'><i class="play-i"></i> Me</button>'+
-      '<button class="btn sage" id="sam"'+(r===1 && !have ? ' hidden' : '')+'><i class="play-i"></i> '+(r===1?'Maya':'Maya\'s idea')+'</button>'+
+      '<button class="btn sage" id="sam"'+(r===1 && !have ? ' hidden' : '')+'><i class="play-i"></i> '+esc(r===1?(it.model||'Maya'):(it.model?it.model+'\'s idea':'Maya\'s idea'))+'</button>'+
     '</div>'+
-    '<p class="note" id="hint">'+(r === 1 ? 'Tap Record and read each line as it lights up. Tap the screen to move on faster.' : 'Same four steps, your own ideas. Fill each line as it lights up.')+'</p>'+
+    '<p class="note" id="hint">'+(r === 1 ? 'Tap Record and read each line as it lights up. Tap the screen to move on faster.' : 'Same shape, your own ideas. Fill each line as it lights up.')+'</p>'+
     '<div class="nav"><button class="btn" id="prev">← Back</button>'+
       (r === 1 ? '<button class="btn dark" id="next">Your own answer →</button>' : '<button class="btn dark" id="next">'+(i < D.items.length-1 ? 'Next question →' : 'Finish')+'</button>')+'</div>';
   $('#rec').onclick = record;
   $('#me').onclick = () => playMine(key);
-  $('#sam').onclick = () => { hush(); say(sUrl(it.a), it.segs.join(' ')); };
+  $('#sam').onclick = () => { hush(); say(it.aUrl || sUrl(it.a), it.segs.join(' ')); };
   $('#prev').onclick = () => r === 2 ? show(i, 1) : (i > 0 ? show(i-1, 2) : startScreen());
   $('#next').onclick = () => r === 1 ? show(i, 2) : (i < D.items.length-1 ? show(i+1, 1, true) : finish());
   $('#ask').onclick = () => askQ();
@@ -177,7 +180,7 @@ function show(n, r, ask){
 }
 async function askQ(){
   const it = D.items[i], a = $('#ask'); if (!a) return;
-  a.classList.add('talking'); await say(sUrl(it.qa), it.q); if (a) a.classList.remove('talking');
+  a.classList.add('talking'); await say(it.qUrl || sUrl(it.qa), it.q); if (a) a.classList.remove('talking');
 }
 function playMine(key){ hush(); if (!mine[key]) return; M = M || new Audio(); M.src = mine[key]; M.play().catch(()=>{}); }
 
@@ -217,15 +220,64 @@ async function record(){
 }
 async function finish(){
   hush();
-  $('#app').innerHTML = '<div class="start"><div class="top">Part 1 · Mirroring · done</div><h1>Well done.</h1><p>'+esc(D.close.t)+'</p>'+
-    '<div class="ctrl"><button class="btn dark" id="again">↺ From the top</button><a class="btn push" href="'+BACK+'">Other drills</a></div></div>';
+  $('#app').innerHTML = '<div class="start"><div class="top">'+esc(D.title)+' · done</div><h1>Well done.</h1><p>'+esc(D.close.t)+'</p>'+
+    '<div class="ctrl"><button class="btn dark" id="again">↺ From the top</button>'+(D.next ? '<a class="btn push" href="'+D.next+'">Next topic →</a>' : '<a class="btn push" href="'+BACK+'">Part '+MPART+'</a>')+'</div></div>';
   $('#again').onclick = () => show(0, 1, true);
-  await say(sUrl(D.close.a), D.close.t);
+  if (D.close.a) await say(sUrl(D.close.a), D.close.t);
 }
 
+/* 25 Nov 2026 (the owner): Drills teach what Practise teaches. For any Part, Mirroring is built from
+   Tomás's and Beatriz's turns (every line recorded): the cue (Maya's question, or the partner's line),
+   the turn stage by stage with Practise's labels, and in round 2 only each stage's chunk is left.
+   It opens on the first question: no explanation in front of the practice. */
+const STAGE={react:'React',respond:'Respond',develop:'Develop',contrast:'Contrast',similar:'Similar',differ:'Different',guess:'Guess',answer:'Answer',ask:'Ask',view:'Opinion',agree:'Agree',disagree:'Disagree',move:'Move on',reason:'Reason',example:'Example',decide:'Decide',concede:'Concede',maintain:'Maintain',add:'Add'};
+const norm = t => String(t).toLowerCase().replace(/[’‘]/g,"'").replace(/[^a-z0-9' ]+/g,' ').replace(/\s+/g,' ').trim();
+let MAP = {}, VER = {}, KEYRX = null;
+const fileUrl = t => { const f = MAP[norm(t)]; return f ? '/audio/speaking/'+f+(VER[f]?'?v='+VER[f]:'') : ''; };
+/* the chunk a stage begins with: kept in round 2, the rest is the pupil's */
+function starter(t){
+  const m = KEYRX && t.match(KEYRX); if (m && m.index <= 12) return t.slice(0, m.index + m[0].length).replace(/[,.!?]+$/,'') + '…';
+  return t.split(/\s+/).slice(0, 2).join(' ') + '…';
+}
+const J = u => fetch(u, {cache:'no-cache'}).then(r => r.ok ? r.json() : null).catch(() => null);
+function build(part, dl, old, man){
+  MAP = (man && man.lines) || {}; VER = (man && man.v) || {};
+  const keys = Object.values(dl.bank || {}).flat().map(k => k.replace(/…/g,'').replace(/[.,!?]+$/,'').trim()).filter(k => k.length > 3).sort((a,b) => b.length - a.length);
+  const more = ['Mainly because','Especially','For example','For instance','Although','Even though','However','The only problem is','On the other hand','Judging by','Whereas','So I\'d say','Maybe','I think','I believe','I\'d say','In my opinion'];
+  KEYRX = new RegExp('(^|\\b)('+keys.concat(more).map(k => k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|')+')', 'i');
+  const name = w => (dl.cast[w] || {}).name || w, tabs = {}, list = old.chapters || old.tasks || [];
+  list.forEach(x => tabs[x.id] = x);
+  const ids = (dl.topics || dl.pairs || dl.tasks).map(x => x.id);
+  let tid = QS.get('topic'); if (!ids.includes(tid)) tid = ids[0];
+  const k = ids.indexOf(tid), nxt = ids[(k+1) % ids.length];
+  const item = (asker, q, tn, extra) => Object.assign({ asker, q, qUrl: fileUrl(q), segs: tn.stages.map(s => s.t),
+    parts: tn.stages.map(s => [STAGE[s.stage] || s.stage, starter(s.t)]), aUrl: fileUrl(tn.stages.map(s => s.t).join(' ')) || fileUrl(tn.stages[0].t), model: name(tn.who) }, extra || {});
+  const said = tn => tn.stages.map(s => s.t).join(' '), items = [];
+  if (part === 1) dl.topics[k].turns.forEach(tn => items.push(item('Maya asks', tn.q, tn)));
+  if (part === 2){ const a = dl.pairs[k], b = dl.pairs[(k+1) % dl.pairs.length], ta = tabs[a.id], tb = tabs[b.id];
+    items.push(item('Maya asks', ta.question, {who:'tomas', stages:a.tomas}, {photos: ta.photos}));
+    items.push(item('Maya asks', ta.followUp, {who:'beatriz', stages:a.beatrizFollow}));
+    items.push(item('Maya asks', tb.question, {who:'beatriz', stages:b.beatriz}, {photos: tb.photos}));
+    items.push(item('Maya asks', tb.followUp, {who:'tomas', stages:b.tomasFollow})); }
+  if (part === 3){ const tk = dl.tasks[k], all = tk.discuss.concat(tk.decide);   /* you are Tomás: Beatriz cues you */
+    all.forEach((tn, j) => { if (tn.who === 'tomas' && j > 0) items.push(Object.assign(item('Beatriz says', said(all[j-1]), tn), { qUrl: fileUrl(said(all[j-1])) })); }); }
+  if (part === 4) dl.topics[k].questions.forEach(x => { const seq = [x.answer].concat(x.join);
+    seq.forEach((tn, j) => { if (tn.who !== 'tomas') return;
+      items.push(j === 0 ? item('Maya asks', x.question, tn) : item(name(seq[j-1].who)+' says', said(seq[j-1]), tn)); }); });
+  const tab = (tabs[tid] && tabs[tid].tab) || tid;
+  return { title: 'Part '+part+' · '+tab, items, parts: [], next: '?part='+part+'&topic='+nxt,
+    close: { t: 'Same shape, your own ideas: that is how the chunks become yours. Next topic, or the same again?' } };
+}
+if (QS.get('part')){
+  const P = MPART, NEW = {1:'part1-dialogues',2:'part2-dialogues',3:'part3-dialogues',4:'part4-dialogues'}[P],
+        OLD = {1:'part1-answers',2:'part2-turn',3:'part3-talk',4:'part4-views'}[P];
+  document.querySelector('.app-subtitle').textContent = 'Speaking · Part '+P+' · Drills';
+  Promise.all([J('/skills/speaking/data/'+NEW+'.json'), J('/skills/speaking/data/'+OLD+'.json'), J('/audio/speaking/manifest.json')])
+    .then(([dl, old, man]) => { D = build(P, dl, old || {}, man); show(0, 1, true); });
+} else
 fetch('/data/drills/speaking/mirror.json', {cache:'no-cache'}).then(r => r.json()).then(d => { D = d; startScreen(); });
 })();
 </script>
-<script src="/tools/speaking-foot.js?v=1" defer></script>
+<script src="/tools/speaking-foot.js?v=2" defer></script>
 </body>
 </html>

@@ -83,7 +83,7 @@ emails:   { label:'Email',   part:'Part 2', back:'/index.html?openModal=writing'
 var G = GENRES[GENRE];
 if (!G) return;
 /* 25 Nov 2026: the task's footer (Practise · Basics · Exercises · Game) under the step track */
-(function () { if (document.querySelector('script[src*="writing-foot.js"]')) return; var sc = document.createElement('script'); sc.src = '/tools/writing-foot.js?v=2'; document.head.appendChild(sc); })();
+(function () { if (document.querySelector('script[src*="writing-foot.js"]')) return; var sc = document.createElement('script'); sc.src = '/tools/writing-foot.js?v=3'; document.head.appendChild(sc); })();
 
 /* THE LEAN HEADER (7 Nov 2026), Essay first as the blueprint. A study
    screen, not a newspaper: one line for where you are (back · task and
@@ -104,7 +104,7 @@ var ORDER = ['model','question','plan','sample','write'];
 var NAMES = { question:'Question', plan:'Plan', model:'Model', generate:'Generate', sample:'Sample', write:'Write it' };
 /* 25 Nov 2026 (the owner): Write it is the track's last step, not a door of its own */
 Object.keys(GENRES).forEach(function (k) { GENRES[k].stages.write = '/skills/writing/write.html?task=' + k;
-  GENRES[k].back = '/skills/writing/five.html?task=' + k; });   /* 25 Nov 2026: a task's home is its Basics; back leads there */
+  GENRES[k].back = GENRES[k].stages.model; });   /* 25 Nov 2026 (the owner): a task's home is its Model; back leads there */
 /* 22 Nov 2026 (the owner): in the essay, step 4 is the Guided essay; the samples are its options */
 /* 25 Nov 2026 (the owner): 'Sample' on every task's track (it was 'Guided' on the essay's) */
 
@@ -173,8 +173,9 @@ function header() {
 }
 
 function backLink() {
-  var back = el('a', 'back-link', '\u2190 ' + G.label);
-  back.href = G.back; back.target = '_top';
+  var home = STAGE === 'model';   /* the Model is the entry: its back is the Writing menu */
+  var back = el('a', 'back-link', '\u2190 ' + (home ? 'Writing' : G.label));
+  back.href = home ? '/index.html?openModal=writing' : G.back; back.target = '_top';
   try {
     var ret = JSON.parse(sessionStorage.getItem('intuity.sheetReturn') || 'null');
     if (ret && ret.task === GENRE && /^\/skills\/writing\/(sheet|gate)\.html/.test(ret.url)) {

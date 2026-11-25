@@ -51,8 +51,8 @@
     if (/\/challenge\/challenge\.html$/.test(location.pathname) && P.get('section') !== 'writing') return true;
     var here = hereOf();
     var pills = [
+      ['practise', 'Practise', MODEL[k]],   /* 25 Nov 2026 (the owner): the Model is the entry; the rest are options */
       ['basics', 'Basics', '/skills/writing/five.html?task=' + k],
-      ['practise', 'Practise', MODEL[k]],
       ['exercises', 'Exercises', '/skills/writing/practice.html?task=' + k],
       ['game', 'Game', '/skills/challenge/challenge.html?board=1&section=writing&topic=writing-' + TOPIC[k]]
     ];
@@ -80,7 +80,7 @@
     /* Write it is the track's last step: its back goes to the question, never to the old gate */
     if (/\/writing\/write\.html$/.test(location.pathname)) {
       var bl = document.getElementById('back') || document.querySelector('.back-link');
-      if (bl) { bl.href = '/skills/writing/five.html?task=' + k; bl.textContent = '← ' + NAME[k]; }
+      if (bl) { bl.href = MODEL[k]; bl.textContent = '← ' + NAME[k]; }
     }
     return true;
   }

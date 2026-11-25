@@ -11,7 +11,7 @@
   function ready(fn) { if (document.readyState !== 'loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
   function withMap(fn) {
     if (window.BE2_MAP && BE2_MAP.roofOf) return fn();
-    var s = document.createElement('script'); s.src = '/tools/be2-map.js?v=29'; s.onload = fn; document.head.appendChild(s);
+    var s = document.createElement('script'); s.src = '/tools/be2-map.js?v=30'; s.onload = fn; document.head.appendChild(s);
   }
   /* THE WRITING TAB (14 Nov 2026): the section tab every Writing page already
      uses (Games, the Sentence pages, How it's marked): mono, 11px, bold, a
@@ -78,6 +78,7 @@
   /* 25 Nov 2026 (the owner): a task's home is its practice (the question page); no gate, no task switch */
   var QPAGE = { essays:'/skills/writing/essays/essay-question.html', emails:'/skills/writing/emails/email-question.html', articles:'/skills/writing/articles/article-question.html',
     reviews:'/skills/writing/reviews/review-question-selector.html', reports:'/skills/writing/reports/report-question-selector.html', story:'/skills/writing/narrative/narrative-question.html' };
+  var MODEL = {essays:'/skills/writing/essays/essay-model.html',emails:'/skills/writing/emails/email-model.html',articles:'/skills/writing/articles/article-model.html',reviews:'/skills/writing/reviews/reviews-cards.html',reports:'/skills/writing/reports/reports-cards.html',story:'/skills/writing/narrative/narrative-cards.html'};
   function build() {
     var here = location.pathname + location.search;
     var hit = (BE2_MAP.taskRoofOf && BE2_MAP.taskRoofOf(here)) || BE2_MAP.roofOf(here); if (!hit) return true;
@@ -92,7 +93,7 @@
         var native = document.querySelector('.topbar, .cc-top, header.ihead');
         if (!native) return false;   /* drawn late */
         var hd = document.createElement('header'); hd.className = 'rf-head';
-        var HOME = hit.key === 'learn' ? '/index.html?openModal=writing' : '/skills/writing/five.html?task=' + hit.task, HWORD = hit.key === 'learn' ? '← Writing' : '← ' + NAME[hit.task].replace(' / Letter', '');
+        var HOME = MODEL[hit.task], HWORD = '← ' + NAME[hit.task].replace(' / Letter', '');
         hd.innerHTML = '<div class="rf-top header-top"><a class="back-link" href="' + HOME + '" target="_top">' + HWORD + '</a>' +
           '<div class="rf-title"><div class="rf-word">INTUITY</div><div class="rf-pick rf-sub" style="cursor:default">' + label + '</div></div>' +
           '<button type="button" class="rf-snd" aria-label="Sound"></button></div>';
@@ -105,8 +106,7 @@
         var bl = own.querySelector('.back-link');
         if (bl) {
           /* 25 Nov 2026: Basics is the task's home (its tabs go back to the menu); every other page goes back to Basics */
-          var home = hit.key === 'learn' ? '/index.html?openModal=writing' : '/skills/writing/five.html?task=' + hit.task,
-              word = hit.key === 'learn' ? '← Writing' : '← ' + NAME[hit.task].replace(' / Letter', '');
+          var home = MODEL[hit.task], word = '← ' + NAME[hit.task].replace(' / Letter', '');   /* 25 Nov 2026: the task's home is its Model */
           var hold = function () { if (bl.getAttribute('href') !== home) bl.setAttribute('href', home); if (bl.textContent !== word) bl.textContent = word; };
           bl.onclick = null; hold();
           /* some pages set their own back link after loading (Recall): the task stays home */

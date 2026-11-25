@@ -3,15 +3,14 @@
    Every B2 First essay asks for the pupil's view with reasons ("…giving reasons for your
    point of view"). So the six coursebook types are shown as two ROUTES to that view and
    three sets of EXTRA phrases for what the question is about:
-     Your view (Opinion; Agree & Disagree is the same essay and is folded in) · Both sides
-     (For & Against) · Problems · Causes · The future
+     Your view (Opinion; Agree & Disagree is the same essay and is folded in) · For & against · Problems · Causes · The future
    The data keeps its own names (other code looks them up), so this script only changes
    what the pupil reads: the strip items, the kickers, and one line above the strip.
-   Include on a page:  <script src="/tools/essay-routes.js?v=4" defer></script> */
+   Include on a page:  <script src="/tools/essay-routes.js?v=6" defer></script> */
 (function () {
   'use strict';
   var MAP = {
-    'for & against': 'Both sides', 'opinion': 'Your view', 'agree & disagree': 'Your view',
+    'for & against': 'For & against',   /* 25 Nov 2026 (the owner): the coursebooks' term, the one pupils learn */ 'opinion': 'Your view', 'agree & disagree': 'Your view',
     'problems & solutions': 'Problems', 'problem & solution': 'Problems', 'cause & effect': 'Causes',
     'speculation & trends': 'The future', 'speculation, generalisation & trends': 'The future'
   };

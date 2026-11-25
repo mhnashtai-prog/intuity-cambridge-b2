@@ -173,7 +173,7 @@ var TASKROOFS = {
   ]}
 };
 var TASKVARS = {
-  essays:{print:"fa,op,ps,ce,st", topic:"essay"}   /* 17 Nov: Agree & Disagree folds into Your view (tools/essay-routes.js) */, emails:{print:"ef-app,ef-req,ei-news,ei-advice", topic:"email"},
+  essays:{print:"fa,op,ps,ce,st", topic:"essay"}   /* 17 Nov: Agree & Disagree folds into Your view (tools/essay-routes.js?v=6) */, emails:{print:"ef-app,ef-req,ei-news,ei-advice", topic:"email"},
   articles:{print:"ar", topic:"article"}, reviews:{print:"rv", topic:"review"}, reports:{print:"rp", topic:"report"}, story:{print:"sy", topic:"story"}
 };
 /* A menu's round pill in its footer, apart from the tiles, as DAILY 5 is on the home page */

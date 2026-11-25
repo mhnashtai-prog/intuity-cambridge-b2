@@ -20,6 +20,7 @@ def take(stages):
 for f, walk in (('part1-dialogues.json', lambda d: [tn['stages'] for tp in d['topics'] for tn in tp['turns']]),
                 ('part1-model.json', lambda d: [tn['stages'] for tn in d['turns']]),
                 ('part2-dialogues.json', lambda d: [p[k] for p in d['pairs'] for k in ('tomas', 'beatriz', 'tomasFollow', 'beatrizFollow')]),
+                ('part4-dialogues.json', lambda d: [tn['stages'] for tp in d['topics'] for x in tp['questions'] for tn in [x['answer']] + x['join']]),
                 ('part3-dialogues.json', lambda d: [tn['stages'] for tk in d['tasks'] for ph in ('discuss', 'decide') for tn in tk[ph]])):
     p = DATA / f
     if p.exists():

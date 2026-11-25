@@ -142,6 +142,17 @@ if PD3.exists():
                 c = pd3['cast'][tn['who']]
                 for st in tn['stages']:
                     add(st['t'], 'candidate', 3, c['name'] + ' · ' + c['voice'], 'Part 3 · ' + tk['id'] + ' · ' + ph + ' · ' + st['stage'])
+# THE SIX PART 4 DISCUSSIONS (25 Nov 2026): express, support and maintain a view
+PD4 = ROOT / 'skills' / 'speaking' / 'data' / 'part4-dialogues.json'
+if PD4.exists():
+    pd4 = json.load(open(PD4, encoding='utf-8'))
+    for tp in pd4['topics']:
+        for x in tp['questions']:
+            add(x['hand'], 'examiner', 4, 'Examiner · Maya', 'Part 4 · handing over')
+            for tn in [x['answer']] + x['join']:
+                c = pd4['cast'][tn['who']]
+                for st in tn['stages']:
+                    add(st['t'], 'candidate', 4, c['name'] + ' · ' + c['voice'], 'Part 4 · ' + tp['id'] + ' · ' + st['stage'])
 GATE = (ROOT / 'skills' / 'speaking' / 'gate.html').read_text(encoding='utf-8')
 for m in re.finditer(r"(\d):\{name:'[^']*',min:'[^']*',share:\d+,page:'[^']*',\s*what:'([^']*)',\s*five:\[([^\]]*)\],\s*tip:'([^']*)'\}", GATE):
     n, what, five, tip = m.group(1), m.group(2), m.group(3), m.group(4)

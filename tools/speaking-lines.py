@@ -90,12 +90,12 @@ for n in (1, 2, 3, 4):
         # for each topic's FIRST answer only, the one START takes; other answers keep the phone's voice
         for pi, x in enumerate(sub['picks']):
             q = sub['q'].replace('{X}', x)
-            if pi == 0 or '{X}' not in sub['q']: add(q, 'examiner', n, 'Examiner · male', 'in five · ' + sub['label'])
+            if pi == 0 or '{X}' not in sub['q']: add(q, 'examiner', n, 'Examiner · Maya', 'in five · ' + sub['label'])
             for sl in d['slots']:
                 for w in sl['ways']:
                     if pi and '{X}' in w['t']: continue
                     t = w['t'].replace('{X}', x).replace('{a}', sub['a']).replace('{plural}', sub['plural'])
-                    add(t, 'maya', n, MAYA, 'in five · ' + sl['label'])
+                    add(t, 'candidate', n, 'Beatriz · Georgia K', 'in five · ' + sl['label'])   # 25 Nov 2026: the pupil's own model voice
 # THE TEST (23 Nov 2026): the examiner's linking lines of skills/speaking/test.html; until
 # Daniel records them they are shown, not spoken (the page never reads the examiner by phone)
 for t, n in (("Good afternoon. My name's Maya. First of all, we'd like to know something about you.", 1),

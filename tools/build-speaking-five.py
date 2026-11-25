@@ -71,7 +71,7 @@ P[3]={"about":ABOUT,"task":"part3","n":3,"name":"Part 3","part":"Collaborate","s
   slot("Move on","move the discussion to an idea","move on","Which one moves the discussion to an idea?",
    [W("Let's start with {X}.","start"),W("Shall we talk about {X}?","talk"),W("What about {X}?","about")]),
   slot("Opinion","give your opinion on it","give your opinion","Which one gives your opinion?",
-   [W("In my opinion, it's …","opinion"),W("If you ask me, {X} is …","ask"),W("Personally, I believe it's …","believe")]),
+   [W("In my opinion, it's …","opinion"),W("If you ask me, it's a great idea, because …","ask"),W("Personally, I believe it's …","believe")]),
   slot("Disagree","disagree politely with your partner","disagree politely","Which one disagrees politely?",
    [W("Really? I'm not so sure.","sure"),W("I see your point, but …","point"),W("That's a good point, but …","good")],True),
   slot("Reason","support it with a reason","give a reason","Which one gives a reason?",
@@ -92,13 +92,18 @@ P[4]={"about":ABOUT,"task":"part4","n":4,"name":"Part 4","part":"Discuss","secs"
   slot("React","react: show where you stand","react","Which one shows where you stand?",
    [W("That's a tricky one.","tricky"),W("Good question.","question"),W("It's hard to say.","hard")]),
   slot("Opinion","give your view, about people in general","give your view","Which one gives your view?",
-   [W("As far as I'm concerned, {X} is …","concerned"),W("The way I see it, {X} …","way"),W("From my point of view, {X} is …","point")]),
+   [W("When it comes to {X}, I think …","comes"),W("The way I see it, …","way"),W("From my point of view, it depends on …","point")]),
   slot("Reason","support your view with a reason","support it","Which one supports your view?",
    [W("The main reason is that …","main"),W("The reason is that …","reason"),W("That's because …","because")]),
   slot("Concede","admit the other side","admit the other side","Which one admits the other side?",
    [W("It's true that …","true"),W("Of course, …","course"),W("Admittedly, …","admittedly")],True),
   slot("Maintain","hold your view: come back to it","hold your view","Which one holds your view?",
    [W("Even so, …","even"),W("But overall, …","overall"),W("All the same, …","same")])]}
+# the examiner's questions word for word as in Practise, so Maya's recordings are heard here too
+for n,f in ((2,'part2-turn'),(3,'part3-talk')):
+    src={t['id']:t['question'] for t in json.load(open(f'skills/speaking/data/{f}.json'))['tasks']}
+    for sb in P[n]['subjects']:
+        if sb['key'] in src: sb['q']=src[sb['key']]
 import re
 for n,d in P.items():
     d["version"]=2

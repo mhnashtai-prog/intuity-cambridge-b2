@@ -73,13 +73,15 @@
   }
   function send(r) { return post(r).catch(function () { var q = queue(); q.push(r); setQueue(q); }); }
 
+  /* 25 Nov 2026, criticism-free Writing: on a Writing page the pill invites, it never says 'wrong' */
+  var CALM = /\/skills\/writing\//.test(location.pathname) || /[?&]section=writing\b/.test(location.search);
   /* ── the pill ── */
   var pill = null;
   function showPill() {
     if (open) return;
     if (!pill) {
       pill = document.createElement('button'); pill.type = 'button'; pill.className = 'ri-pill';
-      pill.textContent = 'Marked wrong? Tell us';
+      pill.textContent = CALM ? 'Think yours works too? Tell us' : 'Marked wrong? Tell us';
       pill.onclick = openCard; document.body.appendChild(pill);
     }
     pill.hidden = false; requestAnimationFrame(function () { pill.classList.add('on'); });
@@ -101,7 +103,7 @@
     var list = misses.slice(-8).reverse(), pick = list.length === 1 ? 0 : -1, why = '';
     var v = document.createElement('div'); v.className = 'ri-veil';
     v.innerHTML = '<div class="fc-card" role="dialog" aria-modal="true" aria-label="Tell us">' +
-      '<span class="fc-k">Tell us</span><span class="fc-t">Marked wrong?</span><span class="fc-bar" aria-hidden="true"></span>' +
+      '<span class="fc-k">Tell us</span><span class="fc-t">' + (CALM ? 'Yours works too?' : 'Marked wrong?') + '</span><span class="fc-bar" aria-hidden="true"></span>' +
       '<span class="ri-sub">If you think the app got it wrong, say so. Your teacher reads every one. Your name isn’t sent.</span>' +
       (list.length > 1 ? '<span class="ri-lab">Which one?</span>' : '') +
       '<div class="ri-list">' + list.map(function (m, k) {

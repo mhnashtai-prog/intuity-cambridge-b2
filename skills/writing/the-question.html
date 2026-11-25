@@ -227,7 +227,7 @@ body.board-page .board-toggle .viewtog{margin:0}
 .board,.board *,.legend,.meters,.lives,.btn,.cg-btn,.cg-opt,.cg-chip,.cg-m,.cg-bin,.dial-b,.mode-btn,.viewbtn,
 .cg-wire,.pg-peg,.pg-row,.sg-pile,.sg-card,.ht-w,.ko-card,.fc-card,.gk-ring{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .kwt-why{display:block;margin-bottom:.45rem;color:var(--wrong)} .kwt-why b{color:inherit}
-.look{font-size:.95rem;margin:.2rem 0 0} .look.ok b{color:var(--right)} .look.no b{color:var(--wrong)}
+.look{font-size:.95rem;margin:.2rem 0 0} .look.ok b{color:var(--right)} .look.no b{color:var(--soft,#5C4E52)}
 .partno{font-size:.82rem;color:var(--soft,#5C4E52);margin:.15rem 0 .7rem}
 .grade{font-family:var(--f-display);font-size:.92rem;letter-spacing:0;color:var(--accent-ink)}
 /* what the run did to the learner's mistakes: plain sentence case, dark sage for the numbers */
@@ -265,7 +265,7 @@ body.board-page .board-toggle .viewtog{margin:0}
 </style>
   <link rel="stylesheet" href="/tools/intuity-pills.css?v=20261012">
   <script src="/tools/intuity-overflow.js?v=3"></script>
-<script src="/tools/be2-brand.js?v=20261121"></script>
+<script src="/tools/be2-brand.js?v=20261125"></script>
 <style>
 /* ═══ THE QUESTION — the writing board ══════════════════════════════════
    The Board's track, bent into a question mark: ten tiles from the curl to
@@ -308,7 +308,7 @@ body.board-page .board-toggle .viewtog{margin:0}
     <div class="meters" id="meters">
       <span>Score<b id="score">0</b></span>
       <span>Time<b id="clock">0:00</b></span>
-      <span style="display:flex;align-items:center">Lives<span class="lives" id="lives"></span></span>
+      <span style="display:none;align-items:center">Lives<span class="lives" id="lives"></span></span>
     </div>
     <div class="qboard" id="board"></div>
     <p class="hint" id="hint">Tap any tile to begin</p>
@@ -526,7 +526,8 @@ function paint(){
   const res={}; log.forEach(x=>{ res[x.i]=x.ok; });
   document.querySelectorAll('#marks g').forEach(g=>{ const i=+g.dataset.i, ok=res[i], missed=(triesAt[i]||0)>0, show=doneSet.has(i);
     g.querySelector('.tick').classList.toggle('on',show&&ok===true);
-    g.querySelector('.cross').classList.toggle('on',show&&(ok===false||(ok===true&&missed))); });
+    g.querySelector('.tick').style.opacity=ok===true&&missed?'.5':'';   /* 25 Nov 2026, criticism-free: another try is a lighter tick, never a cross */
+    g.querySelector('.cross').classList.toggle('on',false); });
   $('score').textContent=score;
   const dn=$('dotN'); if(dn) dn.textContent=doneSet.size?doneSet.size+'/'+N:'';
   $('lives').innerHTML=practice?'<span class="practice">Practice</span>':[0,1,2].map(i=>`<svg viewBox="0 0 24 24" class="${i<lives?'':'gone'}"><path d="M12 21s-7.5-4.6-9.6-9.3C.9 8.3 3 4.5 6.7 4.5c2.1 0 3.6 1.2 4.3 2.4.7-1.2 2.2-2.4 4.3-2.4 3.7 0 5.8 3.8 4.3 7.2C19.5 16.4 12 21 12 21z"/></svg>`).join('');
@@ -578,7 +579,19 @@ function answer(ok,given){
   }
   if(!tries) remember(cur.r,false);
   tries++; triesAt[cur.i]=tries;
-  if(practice){ paint(); fb.innerHTML='Not quite — try again.'; return true; }
+  /* CRITICISM-FREE (25 Nov 2026, the owner): no lives to lose. A miss is 'Not yet' and another try
+     (50 points instead of 100); after three tries, Show me gives the answer and the phrases come back
+     first next time. The tension is the score, the clock and the clean run. */
+  paint();
+  if(given==='(the fuse burnt out)'){ fb.innerHTML='The fuse burnt out. It relights for 90 seconds, and your paragraph is kept.'; return true; }
+  fb.innerHTML='<b>Not yet.</b> Try again.'+(tries>=3?' <button class="btn" type="button" id="showMe">Show me</button>':'');
+  const sm=$('showMe'); if(sm) sm.onclick=()=>{ if(settled) return; settled=true;
+    let sol=''; try{ sol=String(cur.g.solution(cur.r)||''); }catch(e){}
+    log.push({i:cur.i,r:cur.r,g:cur.g,ok:false,given:'(shown)'}); doneSet.add(cur.i);
+    const h=$('host'); if(h) h.querySelectorAll('input,button,textarea').forEach(x=>x.disabled=true); paint();
+    fb.innerHTML='Here it is: <b>'+esc(sol)+'</b>. '+esc(cur.r.note||'')+' It comes back first next time, so you can get it on your own.';
+    const last=doneSet.size>=N; showNext(last?()=>finish():()=>closeCard(), 4000); };
+  return true;
   lives--; paint();
   if(lives<=0){ settled=true; practice=true; log.push({i:cur.i,r:cur.r,g:cur.g,ok:false,given}); doneSet.add(cur.i); paint();
     let sol=''; try{ sol=String(cur.g.solution(cur.r)||''); }catch(e){}
@@ -591,7 +604,7 @@ function lookAgain(i){
   const missed=(triesAt[i]||0)>0; let sol=''; try{ sol=String(e.g.solution(e.r)||''); }catch(x){}
   cur=null;
   openCard(`<div class="kick">Tile ${String(i+1).padStart(2,'0')} · Look again</div><h2 id="fTitle">${esc(e.g.title)}</h2>
-    <p class="look ${e.ok?'ok':'no'}"><b>${e.ok&&!missed?'Right first time':e.ok?'Right, after a mistake':'Missed'}</b></p>
+    <p class="look ${e.ok?'ok':'no'}"><b>${e.ok&&!missed?'Right first time':e.ok?'Right, on another try':'One to learn'}</b></p>
     <p class="feedback">${e.r.game==='qFinale'&&e.ok?'Your paragraph: <i>'+esc(e.given)+'</i>':'The answer: <b>'+esc(sol)+'</b>'}. ${esc(e.r.note||'')}</p>
     ${missed||!e.ok?'<p class="ring-line">These phrases will come back first next time.</p>':''}
     <div class="cta"><button class="btn fill" type="button" id="lookClose">Back to the board</button></div>`);
@@ -655,7 +668,7 @@ function finish(){
 function paintMute(){ const m=$('mute'); if(!m||!window.SFX) return; const on=SFX.isOn(); m.classList.toggle('off',!on); m.setAttribute('aria-pressed',on); m.setAttribute('aria-label',on?'Sound on':'Sound off'); }
 if($('mute')) $('mute').onclick=()=>{ if(window.SFX){ SFX.toggle(); paintMute(); } };
 paintMute();
-$('legend').innerHTML='<span><svg viewBox="0 0 12 12"><path d="M2 6.4l2.8 3 5-5.8" fill="none" stroke="var(--mark-right)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Right</span><span><svg viewBox="0 0 12 12"><path d="M2 6.4l2.8 3 5-5.8" fill="none" stroke="var(--mark-right)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" fill="none" stroke="var(--mark-wrong)" stroke-width="2.2" stroke-linecap="round"/></svg>After a mistake</span><span><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" fill="none" stroke="var(--mark-wrong)" stroke-width="2.2" stroke-linecap="round"/></svg>Wrong</span>';
+$('legend').innerHTML='<span><svg viewBox="0 0 12 12"><path d="M2 6.4l2.8 3 5-5.8" fill="none" stroke="var(--mark-right)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>First try</span><span style="opacity:.55"><svg viewBox="0 0 12 12"><path d="M2 6.4l2.8 3 5-5.8" fill="none" stroke="var(--mark-right)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Another try</span>';
 $('again').onclick=()=>{ reset(); paint(); drawTasks(); };
 $('scrim').addEventListener('click',e=>{ if(e.target.id==='scrim') closeCard(); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!$('scrim').hidden) closeCard(); });

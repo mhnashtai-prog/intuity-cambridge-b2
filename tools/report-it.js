@@ -74,7 +74,8 @@
   function send(r) { return post(r).catch(function () { var q = queue(); q.push(r); setQueue(q); }); }
 
   /* 25 Nov 2026, criticism-free Writing: on a Writing page the pill invites, it never says 'wrong' */
-  var CALM = /\/skills\/writing\//.test(location.pathname) || /[?&]section=writing\b/.test(location.search);
+  var CALM = /\/skills\/(writing|use-of-english)\//.test(location.pathname) || /[?&]section=writing\b/.test(location.search) ||
+    /[?&]topic=(uoe-part\d|word-formation)\b/.test(location.search);   /* Use of English follows (25 Nov 2026) */
   /* ── the pill ── */
   var pill = null;
   function showPill() {

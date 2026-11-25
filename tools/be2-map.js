@@ -50,18 +50,16 @@ var SKILLS = {
   ],
   /* each Part has its exam ring; a Part's learning ring sits beside it and
      shares its number, so both Part 3 rings read 03 and Part 4 stays 04 */
+  /* 25 Nov 2026 (the owner: "the same trimming" as Speaking and Writing): four rings, one per
+     Part, each opening the Part as in the paper (its exam text); the Part's Learn, Drill and
+     Game are the page's footer pills (tools/english-foot.js), and nothing switches to another
+     Part. The whole paper is the menu's Full tests pill. */
   english:[
-    {name:"Part 1 \u00b7 Multiple Choice Cloze", part:1, url:"skills/use-of-english/multiple-choice/multiple-choice-texts.html"},
-    /* the Master rings go live one by one as each page ships — a ring that opens a
-       missing page loses a student's trust. Switch each on by removing its comment. */
-    {name:"Master \u00b7 Part 1", part:1, url:"skills/use-of-english/multiple-choice/master-part1.html", fix:"p1-"},
-    {name:"Part 2 \u00b7 Open Cloze", part:2, url:"skills/use-of-english/gap-fill/gap-fill.html"},
-    {name:"Master \u00b7 Part 2", part:2, url:"skills/use-of-english/gap-fill/master-part2.html", fix:"p2-"},
-    {name:"Part 3 \u00b7 Word Formation", part:3, url:"skills/use-of-english/word-formation/word-formation.html"},
-    {name:"Master \u00b7 Part 3", part:3, url:"skills/use-of-english/word-formation/word-families.html", fix:"wf-"},
-    {name:"Part 4 \u00b7 Key Word Transformation", part:4, url:"skills/use-of-english/word-transformation/word-transformation.html"},
-    {name:"Master \u00b7 Part 4", part:4, url:"skills/use-of-english/word-transformation/master-part4.html", fix:"p4-"},
-    {name:"Full tests", url:"skills/full-test/full-test.html"}
+    {group:"The four Parts"},
+    {name:"Multiple choice", part:1, url:"skills/use-of-english/multiple-choice/multiple-choice-texts.html"},
+    {name:"Open cloze", part:2, url:"skills/use-of-english/gap-fill/gap-fill.html"},
+    {name:"Word formation", part:3, url:"skills/use-of-english/word-formation/word-formation.html"},
+    {name:"Key word transformation", part:4, url:"skills/use-of-english/word-transformation/word-transformation.html"}
   ],
   reading:[
     {name:"Part 5 \u00b7 Multiple Choice", url:"skills/reading/multiple-choice-menu/reading-part5.html"},

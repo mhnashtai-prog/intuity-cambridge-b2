@@ -124,9 +124,10 @@
       return '<button class="' + cls + '" type="button" data-t="' + t + '">Test ' + (t + 1) + (r ? '<small>' + r.got + '/' + r.max + '</small>' : '') + '</button>';
     }).join('');
     var done = this.tests.filter(function (_, t) { return p[self.sig(t)]; }).length;
-    this.tDone = done + ' of ' + this.tests.length + ' tests done';   /* shown beside the All | One switch: one row, not two */
+    /* 25 Nov 2026 (the owner: no intimidating zeros): the count shows once there is one */
+    this.tDone = done ? done + ' of ' + this.tests.length + ' tests done' : '';   /* shown beside the All | One switch: one row, not two */
     return '<div class="mk-tests"><div class="mk-trow">' +
-      (nd ? '<button class="mk-t fix' + (this.test === 'fix' ? ' on' : '') + '" type="button" data-t="fix">To fix<small>' + nd + '</small></button>' : '') +
+      (nd ? '<button class="mk-t fix' + (this.test === 'fix' ? ' on' : '') + '" type="button" data-t="fix">To learn<small>' + nd + '</small></button>' : '') +
       pills + '</div></div>';
   };
 
@@ -176,7 +177,7 @@
     var n = this.qs.length, cfg = this.cfg;
     if (this.marked) { var s = this.score(); return cfg.label() + ' · ' + n + (cfg.unit || ' sentences') + ' · ' + s.got + '/' + s.max + (cfg.max > 1 ? ' marks' : ' right'); }
     var c = this.view === 'one' ? this.nChecked() : this.answered();
-    return cfg.label() + ' · ' + n + (cfg.unit || ' sentences') + ' · ' + c + '/' + n + ' done';
+    return cfg.label() + ' · ' + n + (cfg.unit || ' sentences') + (c ? ' · ' + c + '/' + n + ' done' : '');
   };
 
   /* The bar. ALL: Clear · Submit. ONE: Prev · Check (or Next once checked) · Next. */
@@ -201,8 +202,8 @@
     var self = this, cfg = this.cfg, qs = this.qs, n = qs.length, one = this.view === 'one';
     if (!n) { this.el.innerHTML = '<p class="mk-empty">Nothing to practise in this tab yet. Try another.</p>'; return; }
     var shown = one ? [this.qi] : qs.map(function (_, i) { return i; });
-    var kick = '<div class="mk-kick">' + esc((cfg.kick || 'Practice') + ' · ' + (this.test === 'fix' ? 'To fix' : 'Test ' + (this.test + 1))) + '<span class="right">' +
-      (one ? 'Sentence ' + (this.qi + 1) + ' of ' + n : this.answered() + ' / ' + n + ' answered') + '</span></div>';
+    var kick = '<div class="mk-kick">' + esc((cfg.kick || 'Practice') + ' · ' + (this.test === 'fix' ? 'To learn' : 'Test ' + (this.test + 1))) + '<span class="right">' +
+      (one ? 'Sentence ' + (this.qi + 1) + ' of ' + n : (this.answered() ? this.answered() + ' / ' + n + ' answered' : n + ' to do')) + '</span></div>';
     var rubric = cfg.rubric && (!one || this.qi === 0) && !this.marked ? '<p class="mk-rubric">' + esc(cfg.rubric) + '</p>' : '';
     var dots = qs.map(function (q, i) {
       var c = 'qdot';
@@ -217,7 +218,8 @@
           '<button class="mk-vb viewbtn' + (one ? '' : ' active') + '" type="button" data-v="full" aria-pressed="' + !one + '">All</button>' +
           '<button class="mk-vb viewbtn' + (one ? ' active' : '') + '" type="button" data-v="one" aria-pressed="' + one + '">One at a time</button>' +
         '</div></div>' +
-      '<div class="mk-dots">' + dots + '</div>' +
+      /* the dots appear with the first answer: a row of empty circles is the first thing a pupil saw */
+      (qs.some(function (q) { return self.checked[q.id] || filled(self.answers[q.id]); }) ? '<div class="mk-dots">' + dots + '</div>' : '') +
       '<div class="mk-card' + (one ? ' solo' : '') + (this.marked ? ' marked' : '') + '">' + kick + rubric +
         shown.map(function (i) { return self.lineHTML(qs[i], i); }).join('') + '</div>' +
       (this.marked && cfg.exam ? '<a class="mk-exam" href="' + esc(cfg.exam.href) + '">' + esc(cfg.exam.label) + ' &rsaquo;</a>' : '') +
@@ -230,7 +232,7 @@
   Kit.prototype.paintProgress = function () {
     var self = this, n = this.qs.length;
     var info = this.el.querySelector('.mk-info'); if (info) info.textContent = this.tDone || '';
-    var r = this.el.querySelector('.mk-kick .right'); if (r && this.view !== 'one') r.textContent = this.answered() + ' / ' + n + ' answered';
+    var r = this.el.querySelector('.mk-kick .right'); if (r && this.view !== 'one') r.textContent = this.answered() ? this.answered() + ' / ' + n + ' answered' : n + ' to do';
     var s = this.el.querySelector('[data-b="submit"]');
     if (s) { var left = n - this.answered(); s.disabled = !!left; s.textContent = left ? 'Submit — ' + left + ' to go' : 'Submit'; }
     var c = this.el.querySelector('[data-b="check"]');
@@ -371,7 +373,7 @@
     var r = btn.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
     var x = Math.max(8, Math.min(r.left + r.width / 2 - tw / 2, window.innerWidth - tw - 8));
     /* the fixed bar takes the bottom of the screen: flip above when the list would reach it */
-    var bar = this.el.querySelector('.mk-bar'), floor = window.innerHeight - (bar ? bar.offsetHeight : 0);
+    var bar = this.el.querySelector('.mk-bar'), ef = document.querySelector('.ef-foot'), floor = window.innerHeight - (bar ? bar.offsetHeight : 0) - (ef ? ef.offsetHeight : 0);   /* and the Part's footer under it (25 Nov 2026) */
     var y = (r.bottom + th + 8 > floor) ? r.top + window.scrollY - th - 8 : r.bottom + window.scrollY + 8;
     tip.style.left = x + 'px'; tip.style.top = y + 'px';
   };
@@ -404,7 +406,7 @@
     var fixed = this.qs.filter(function (q) { return self.ringBefore[q.id] && (self.marks[q.id] || 0) >= max; }).length;
     var lines = [];
     if (missed.length) lines.push('<b>' + missed.length + '</b> ' + (missed.length === 1 ? 'comes' : 'come') + ' back first in your next set');
-    if (fixed) lines.push('<b>' + fixed + '</b> old ' + (fixed === 1 ? 'mistake' : 'mistakes') + ' put right');
+    if (fixed) lines.push('<b>' + fixed + '</b> from before, now yours');
     this.ov.innerHTML = '<div class="mk-ov-card">' +
       '<div class="mk-ov-title">' + (pct === 100 ? 'Perfect' : pct >= 75 ? 'Strong' : pct >= 50 ? 'Getting there' : 'Keep going') + '</div>' +
       '<div class="mk-ov-sc">' + sc.got + ' / ' + sc.max + (max > 1 ? ' marks' : ' correct') + ' · ' + pct + '%</div>' +

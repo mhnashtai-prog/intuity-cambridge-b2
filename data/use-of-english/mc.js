@@ -269,7 +269,7 @@ function bankLabel() {
 }
 function progressLabel() {
   var qs = questions();
-  if (view === 'full') return answered() + ' / ' + qs.length + ' answered';
+  if (view === 'full') return answered() ? answered() + ' / ' + qs.length + ' answered' : qs.length + ' to do';   /* 25 Nov 2026: no zero counts */
   return (TEXTS ? 'Paragraph ' : 'Sentence ') + (qi + 1) + ' of ' + units().length;
 }
 
@@ -326,7 +326,7 @@ function paintBar() {
   if ($('testInfo')) {
     var nq = questions().length;
     $('testInfo').textContent = (TEXTS ? 'Text ' : 'Test ') + (si + 1) + ' · ' + nq
-      + (TEXTS ? ' gaps' : ' sentences') + ' · ' + answered() + '/' + nq + ' done';
+      + (TEXTS ? ' gaps' : ' sentences') + (answered() ? ' · ' + answered() + '/' + nq + ' done' : '');
   }
   $('btnSubmit').disabled = !all || marked;
   $('btnSubmit').textContent = marked ? 'Marked'

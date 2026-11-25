@@ -19,6 +19,15 @@
   /* 25 Nov 2026 (the owner): the ring opens Basics; Practise opens the track at its first step, the Model */
   var MODEL = { essays:'/skills/writing/essays/essay-model.html', emails:'/skills/writing/emails/email-model.html', articles:'/skills/writing/articles/article-model.html',
     reviews:'/skills/writing/reviews/reviews-cards.html', reports:'/skills/writing/reports/reports-cards.html', story:'/skills/writing/narrative/narrative-cards.html' };
+  /* the Practise track's steps, for Write it (the same as writing-chrome.js GENRES) */
+  var STEPS = {
+    essays:   [['model','/skills/writing/essays/essay-model.html'],['question','/skills/writing/essays/essay-question.html'],['plan','/skills/writing/essays/essay-plan.html'],['sample','/skills/writing/essays/essay-sample.html'],['write']],
+    emails:   [['model','/skills/writing/emails/email-model.html'],['question','/skills/writing/emails/email-question.html'],['plan','/skills/writing/emails/email-plan.html'],['sample','/skills/writing/emails/email-sample.html'],['write']],
+    articles: [['model','/skills/writing/articles/article-model.html'],['question','/skills/writing/articles/article-question.html'],['sample','/skills/writing/articles/article-sample.html'],['write']],
+    reviews:  [['model','/skills/writing/reviews/reviews-cards.html'],['question','/skills/writing/reviews/review-question-selector.html'],['plan','/skills/writing/reviews/review-plan.html'],['sample','/skills/writing/reviews/review-sample.html'],['write']],
+    reports:  [['model','/skills/writing/reports/reports-cards.html'],['question','/skills/writing/reports/report-question-selector.html'],['plan','/skills/writing/reports/report-plan.html'],['sample','/skills/writing/reports/report-sample.html'],['write']],
+    story:    [['model','/skills/writing/narrative/narrative-cards.html'],['question','/skills/writing/narrative/narrative-question.html'],['sample','/skills/writing/narrative/narrative-sample.html'],['write']]
+  };
   var TOPIC = { essays:'essay', emails:'email', articles:'article', reviews:'review', reports:'report', story:'story' };
   var NAME = { essays:'Essay', emails:'Email', articles:'Article', reviews:'Review', reports:'Report', story:'Story' };
   var PRINT = { fa:'essays', op:'essays', ad:'essays', ps:'essays', ce:'essays', st:'essays', ar:'articles', rv:'reviews', rp:'reports', sy:'story' };
@@ -67,6 +76,14 @@
       /* the step track (and any page's own bottom bar) stands just above the footer */
       '.wr-foot{bottom:var(--wf-h,58px)!important}' +
       'body.has-wf-foot{padding-bottom:calc(var(--wf-h,58px) + 76px)!important}' +
+      /* 25 Nov 2026 (the owner, on an iPhone: Question lost its track behind the footer): the step
+         track is docked INSIDE the footer, one fixed block, so the two rows can never come apart */
+      '.wf-foot.wf-two{flex-direction:column;align-items:stretch;padding-top:0}' +
+      '.wf-foot.wf-two>.wf-st{align-self:center}' +
+      '.wf-foot>.wr-foot{position:static!important;bottom:auto!important;left:auto!important;right:auto!important;z-index:auto!important;' +
+        'background:none!important;border:0!important;border-bottom:1px solid rgba(20,17,14,.1)!important;margin:0 -12px .55rem!important;padding:.55rem 12px!important}' +
+      '.wf-own{display:flex;justify-content:center}.wf-own .wf-s{padding:.5rem .6rem;font-size:.625rem;letter-spacing:.05em}' +
+      'body.has-wf-two{padding-bottom:calc(var(--wf-h,120px) + 12px)!important}' +
       '@media print{.wf-foot{display:none!important}}';
     document.head.appendChild(css);
     var f = document.createElement('nav'); f.className = 'wf-foot'; f.setAttribute('aria-label', NAME[k] + ': practise and help');
@@ -75,6 +92,25 @@
     }).join('') + '</div>';
     document.body.appendChild(f); document.body.classList.add('has-wf-foot');
     var fit = function () { document.documentElement.style.setProperty('--wf-h', f.offsetHeight + 'px'); };
+    /* Write it is the track's fifth step but has no writing-chrome: it gets the same track here,
+       Write it lit, so both rows stand on every step of every task (25 Nov 2026, the owner) */
+    if (/\/writing\/write\.html$/.test(location.pathname) && !document.querySelector('.wr-foot.wr-steps') && STEPS[k]) {
+      var tk = document.createElement('div'); tk.className = 'wr-foot wr-steps wf-own';
+      tk.innerHTML = '<div class="wr-row"><div class="wr-stages wf-st" role="group" aria-label="Stages">' + STEPS[k].map(function (x) {
+        return x[0] === 'write' ? '<span class="wr-stage wf-s on" aria-current="step">Write it</span>'
+          : '<a class="wr-stage wf-s be2-nohit" href="' + x[1] + '" target="_top">' + x[0].charAt(0).toUpperCase() + x[0].slice(1) + '</a>';
+      }).join('') + '</div></div>';
+      document.body.appendChild(tk);
+    }
+    var dock = function () {
+      var tr = document.querySelector('.wr-foot.wr-steps');
+      if (!tr || tr.parentNode === f) return;
+      f.insertBefore(tr, f.firstChild); f.classList.add('wf-two'); document.body.classList.add('has-wf-two'); fit();
+      try { window.dispatchEvent(new Event('wf-foot')); } catch (e) {}
+    };
+    dock();
+    if (window.MutationObserver) new MutationObserver(dock).observe(document.body, { childList: true, subtree: true });
+    if (window.ResizeObserver) new ResizeObserver(fit).observe(f);
     fit(); window.addEventListener('resize', fit);
     try { window.dispatchEvent(new Event('wf-foot')); } catch (e) {}   /* writing-chrome.js re-measures the room it keeps */
     /* Write it is the track's last step: its back goes to the question, never to the old gate */

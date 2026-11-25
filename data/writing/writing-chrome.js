@@ -83,7 +83,7 @@ emails:   { label:'Email',   part:'Part 2', back:'/index.html?openModal=writing'
 var G = GENRES[GENRE];
 if (!G) return;
 /* 25 Nov 2026: the task's footer (Practise · Basics · Exercises · Game) under the step track */
-(function () { if (document.querySelector('script[src*="writing-foot.js"]')) return; var sc = document.createElement('script'); sc.src = '/tools/writing-foot.js?v=1'; document.head.appendChild(sc); })();
+(function () { if (document.querySelector('script[src*="writing-foot.js"]')) return; var sc = document.createElement('script'); sc.src = '/tools/writing-foot.js?v=2'; document.head.appendChild(sc); })();
 
 /* THE LEAN HEADER (7 Nov 2026), Essay first as the blueprint. A study
    screen, not a newspaper: one line for where you are (back · task and
@@ -98,12 +98,15 @@ var LEAN = /^(essays|reviews|reports|emails|articles|story)$/.test(GENRE);   /* 
    things. The portfolio slide is the only place that leads to both, so the
    stage bar no longer offers Generate. (stages.generate stays: the
    generator's own task tabs use it.) */
-var ORDER = ['question','plan','model','sample','write'];
+/* 25 Nov 2026 (the owner): the track starts with the Model (see one first), then the question,
+   the plan, the sample and Write it */
+var ORDER = ['model','question','plan','sample','write'];
 var NAMES = { question:'Question', plan:'Plan', model:'Model', generate:'Generate', sample:'Sample', write:'Write it' };
 /* 25 Nov 2026 (the owner): Write it is the track's last step, not a door of its own */
-Object.keys(GENRES).forEach(function (k) { GENRES[k].stages.write = '/skills/writing/write.html?task=' + k; });
+Object.keys(GENRES).forEach(function (k) { GENRES[k].stages.write = '/skills/writing/write.html?task=' + k;
+  GENRES[k].back = '/skills/writing/five.html?task=' + k; });   /* 25 Nov 2026: a task's home is its Basics; back leads there */
 /* 22 Nov 2026 (the owner): in the essay, step 4 is the Guided essay; the samples are its options */
-if (GENRE === 'essays') NAMES.sample = 'Guided';
+/* 25 Nov 2026 (the owner): 'Sample' on every task's track (it was 'Guided' on the essay's) */
 
 function el(tag, cls, text) {
   var n = document.createElement(tag);
@@ -116,7 +119,7 @@ function header() {
   if (LEAN) return leanHeader();
   var h = el('header', 'header');
   var top = el('div', 'header-top');
-  var back = el('a', 'back-link', '\u2190 Writing');
+  var back = el('a', 'back-link', '\u2190 ' + G.label);   /* 25 Nov 2026: back to the task's Basics, so it names the task */
   back.href = G.back; back.target = '_top';
   /* Came here from a portfolio slide of this task? Go back to that slide. */
   try {
@@ -170,7 +173,7 @@ function header() {
 }
 
 function backLink() {
-  var back = el('a', 'back-link', '\u2190 Writing');
+  var back = el('a', 'back-link', '\u2190 ' + G.label);
   back.href = G.back; back.target = '_top';
   try {
     var ret = JSON.parse(sessionStorage.getItem('intuity.sheetReturn') || 'null');

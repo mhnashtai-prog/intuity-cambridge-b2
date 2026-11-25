@@ -16,6 +16,9 @@
     reports: '/skills/writing/reports/report-question-selector.html',
     story:   '/skills/writing/narrative/narrative-question.html'
   };
+  /* 25 Nov 2026 (the owner): the ring opens Basics; Practise opens the track at its first step, the Model */
+  var MODEL = { essays:'/skills/writing/essays/essay-model.html', emails:'/skills/writing/emails/email-model.html', articles:'/skills/writing/articles/article-model.html',
+    reviews:'/skills/writing/reviews/reviews-cards.html', reports:'/skills/writing/reports/reports-cards.html', story:'/skills/writing/narrative/narrative-cards.html' };
   var TOPIC = { essays:'essay', emails:'email', articles:'article', reviews:'review', reports:'report', story:'story' };
   var NAME = { essays:'Essay', emails:'Email', articles:'Article', reviews:'Review', reports:'Report', story:'Story' };
   var PRINT = { fa:'essays', op:'essays', ad:'essays', ps:'essays', ce:'essays', st:'essays', ar:'articles', rv:'reviews', rp:'reports', sy:'story' };
@@ -48,8 +51,8 @@
     if (/\/challenge\/challenge\.html$/.test(location.pathname) && P.get('section') !== 'writing') return true;
     var here = hereOf();
     var pills = [
-      ['practise', 'Practise', Q[k]],
       ['basics', 'Basics', '/skills/writing/five.html?task=' + k],
+      ['practise', 'Practise', MODEL[k]],
       ['exercises', 'Exercises', '/skills/writing/practice.html?task=' + k],
       ['game', 'Game', '/skills/challenge/challenge.html?board=1&section=writing&topic=writing-' + TOPIC[k]]
     ];
@@ -77,7 +80,7 @@
     /* Write it is the track's last step: its back goes to the question, never to the old gate */
     if (/\/writing\/write\.html$/.test(location.pathname)) {
       var bl = document.getElementById('back') || document.querySelector('.back-link');
-      if (bl) { bl.href = Q[k]; bl.textContent = '← ' + NAME[k]; }
+      if (bl) { bl.href = '/skills/writing/five.html?task=' + k; bl.textContent = '← ' + NAME[k]; }
     }
     return true;
   }

@@ -79,17 +79,17 @@ var SKILLS = {
        the compulsory Part 1; the rest are Part 2 choices, below a hairline.
        7 Nov 2026: the review deck no longer sits on top of Writing; it
        belongs to the home screen's own "to review" link, not to a task menu. */
-    /* 25 Nov 2026 (the owner, as Speaking): a task tile opens its practice at once, the question
-       page; the gate is gone. Its Basics, Exercises and Game are the page's footer pills (tools/writing-foot.js) */
+    /* 25 Nov 2026 (the owner): a task tile opens its Basics at once (the quick fix: the task in five
+       sentences); the gate is gone. Practise (Model, Question, Plan, Sample, Write it) is a footer pill. Its Basics, Exercises and Game are the page's footer pills (tools/writing-foot.js) */
     {group:"Part 1 · Everyone writes"},
-    {name:"Essay", glyph:"¶", url:"skills/writing/essays/essay-question.html"},
+    {name:"Essay", glyph:"¶", url:"skills/writing/five.html?task=essays"},
     /* 19 Nov 2026 (a learner: "confusing if you don't know which version you're sitting") */
     {group:"Part 2 · Choose one", rule:true, note:"Story: only in B2 First for Schools. Report: only in B2 First."},
-    {name:"Email / Letter", glyph:"@", url:"skills/writing/emails/email-question.html"},
-    {name:"Article", glyph:"A", url:"skills/writing/articles/article-question.html"},
-    {name:"Review", glyph:"★", url:"skills/writing/reviews/review-question-selector.html"},
-    {name:"Story", glyph:"✎", exam:"schools", url:"skills/writing/narrative/narrative-question.html"},
-    {name:"Report", glyph:"≡", exam:"standard", url:"skills/writing/reports/report-question-selector.html"},
+    {name:"Email / Letter", glyph:"@", url:"skills/writing/five.html?task=emails"},
+    {name:"Article", glyph:"A", url:"skills/writing/five.html?task=articles"},
+    {name:"Review", glyph:"★", url:"skills/writing/five.html?task=reviews"},
+    {name:"Story", glyph:"✎", exam:"schools", url:"skills/writing/five.html?task=story"},
+    {name:"Report", glyph:"≡", exam:"standard", url:"skills/writing/five.html?task=reports"},
     /* ONE SCREEN, NINE TILES (14 Nov 2026, the owner: fifteen tiles overwhelmed
        pupils). The six tasks stay; everything else lives under three roofs,
        one tile each. A roof's pages share a row of tabs in their title line

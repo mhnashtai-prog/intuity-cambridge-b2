@@ -11,7 +11,7 @@
   function ready(fn) { if (document.readyState !== 'loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
   function withMap(fn) {
     if (window.BE2_MAP && BE2_MAP.roofOf) return fn();
-    var s = document.createElement('script'); s.src = '/tools/be2-map.js?v=28'; s.onload = fn; document.head.appendChild(s);
+    var s = document.createElement('script'); s.src = '/tools/be2-map.js?v=29'; s.onload = fn; document.head.appendChild(s);
   }
   /* THE WRITING TAB (14 Nov 2026): the section tab every Writing page already
      uses (Games, the Sentence pages, How it's marked): mono, 11px, bold, a
@@ -92,7 +92,8 @@
         var native = document.querySelector('.topbar, .cc-top, header.ihead');
         if (!native) return false;   /* drawn late */
         var hd = document.createElement('header'); hd.className = 'rf-head';
-        hd.innerHTML = '<div class="rf-top header-top"><a class="back-link" href="' + QPAGE[hit.task] + '" target="_top">← ' + NAME[hit.task].replace(' / Letter', '') + '</a>' +
+        var HOME = hit.key === 'learn' ? '/index.html?openModal=writing' : '/skills/writing/five.html?task=' + hit.task, HWORD = hit.key === 'learn' ? '← Writing' : '← ' + NAME[hit.task].replace(' / Letter', '');
+        hd.innerHTML = '<div class="rf-top header-top"><a class="back-link" href="' + HOME + '" target="_top">' + HWORD + '</a>' +
           '<div class="rf-title"><div class="rf-word">INTUITY</div><div class="rf-pick rf-sub" style="cursor:default">' + label + '</div></div>' +
           '<button type="button" class="rf-snd" aria-label="Sound"></button></div>';
         native.parentNode.insertBefore(hd, native); native.classList.add('rf-hide');
@@ -103,7 +104,9 @@
            task (kept so, since some pages rewrite it after loading); a picker already does */
         var bl = own.querySelector('.back-link');
         if (bl) {
-          var home = QPAGE[hit.task], word = '← ' + NAME[hit.task].replace(' / Letter', '');
+          /* 25 Nov 2026: Basics is the task's home (its tabs go back to the menu); every other page goes back to Basics */
+          var home = hit.key === 'learn' ? '/index.html?openModal=writing' : '/skills/writing/five.html?task=' + hit.task,
+              word = hit.key === 'learn' ? '← Writing' : '← ' + NAME[hit.task].replace(' / Letter', '');
           var hold = function () { if (bl.getAttribute('href') !== home) bl.setAttribute('href', home); if (bl.textContent !== word) bl.textContent = word; };
           bl.onclick = null; hold();
           /* some pages set their own back link after loading (Recall): the task stays home */

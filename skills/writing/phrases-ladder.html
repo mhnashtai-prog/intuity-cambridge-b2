@@ -526,17 +526,25 @@ const frameT=src=>{ const out=[]; src.split(/(\{[^}]*\})/).forEach(part=>{ if(!p
   if(out[out.length-1]!=='…') out.push('…'); return out.join(' ').replace(/ ([,.])/g,'$1'); };
 const ESSAY_JOBS=[['hook','Set the scene','+ subject + verb'],['weigh','Say what the essay will do','+ the topic'],
   ['reason1','First reason','+ the topic + is that + your reason'],['reason2','Second reason','+ the topic + is that + your reason'],
-  ['otherside','The other side','+ the topic + is that + the problem'],['conclusion','Your view','+ subject + verb']];
+  ['otherside','The other side','+ the topic + is that + the problem'],['ownidea','Add your own idea','+ subject + verb'],['conclusion','Your view','+ subject + verb']];
 function essayJobs(){
   const J=LD.tasks.essay.jobs;
-  return ESSAY_JOBS.filter(([id])=>J[id]).map(([id,job,g])=>{ const b=J[id].belt;
-    return {id,job,p:{t:frameT(b[0]),g},alts:b.slice(1).map(x=>({t:frameT(x)}))}; });
+  return ESSAY_JOBS.filter(([id])=>J[id]).map(([id,job,g])=>{ const b=J[id].belt.map(x=>frameT(x)), k=firstNew(b);
+    return {id,job,p:{t:b[k],g},alts:b.filter((_,i)=>i!==k).map(t=>({t}))}; });
 }
+/* 25 Nov 2026 (the owner): one staircase. Basics is the first rung (the core phrase of each move);
+   the Ladder is the next rungs: the same moves under the same names, and its phrase to learn first is
+   one Basics has not taught. Basics' phrases still count as good answers (they stay among the others). */
+let BASICS={};   /* task → its Basics phrases */
+const pnorm=t=>String(t).toLowerCase().replace(/[’']/g,"'").replace(/\{x\}/g,' ').replace(/[^a-z' ]+/g,' ').replace(/\s+/g,' ').trim();
+const inBasics=t=>{ const h=pnorm(String(t).split('…')[0]); return h.split(' ').length>1&&[...(BASICS[F]||[])].some(b=>b===h||b.indexOf(h)===0||h.indexOf(b)===0); };
+function firstNew(list){ const i=list.findIndex(t=>!inBasics(t)); return i<0?0:i; }
 function pool(){
   const fits=p=>p.for.indexOf(F)>=0&&(F!=='email'||!p.reg||p.reg==='formal'||p.reg==='both');
   const lead=p=>(p.lead&&p.lead.indexOf(F)>=0?0:2);
   /* each job's lead phrase: the one to learn first; its other phrases count as good alternatives */
-  POOL=D.jobs.map(j=>{ const l=j.phrases.filter(fits).sort((a,b)=>lead(a)-lead(b)); return l.length?{id:j.id,job:j.name,p:l[0],alts:l.slice(1)}:null; }).filter(Boolean);
+  POOL=D.jobs.map(j=>{ const l=j.phrases.filter(fits).sort((a,b)=>lead(a)-lead(b)); if(!l.length) return null;
+    const k=firstNew(l.map(x=>x.t)); return {id:j.id,job:j.name,p:l[k],alts:l.filter((_,i)=>i!==k)}; }).filter(Boolean);
   if(F==='essay'&&LD&&LD.tasks&&LD.tasks.essay) POOL=essayJobs();
   window.LADDER={pool:()=>POOL};   /* for tests */
   load();
@@ -548,13 +556,14 @@ const stepsHTML=(r,own)=>'<span class="steps'+(own?' own':'')+'">'+Array.from({l
 /* ---------- home: a real ladder, one rung per paragraph (the owner's sketch, 21 Nov) ----------
    Like The Question: every option is in view, tap any rung in any order. */
 /* 22 Nov 2026: a tile is named by the job its paragraph does ("Paragraph 3" told a pupil nothing) */
+/* 25 Nov 2026 (the owner): the rungs carry Basics' names, task by task (data/writing/five/<task>.json) */
 const PARAS={
-  essay:  [['Introduction',['hook','weigh']],['First reason',['reason1']],['Second reason',['reason2']],['The other side',['otherside']],['Conclusion',['conclusion']]],
-  article:[['Introduction',['start','reader']],['Your view',['opinion','reason']],['More support',['add','example']],['The other side',['contrast']],['Conclusion',['recommend','finish']]],
-  review: [['Introduction',['start']],['What was good',['good','example']],['What was not',['bad','contrast']],['Your view',['opinion','add']],['Conclusion',['recommend','finish']]],
-  report: [['Introduction',['start']],['What people said',['people','reason']],['Best and worst',['good','bad']],['The effects',['contrast','result']],['Conclusion',['recommend','finish']]],
-  email:  [['Opening',['open-email','react']],['Your view',['opinion','reason']],['More details',['add','example','contrast']],['Ask and suggest',['ask','recommend']],['Ending',['signoff']]],
-  story:  [['Opening',['start']],['What happened',['time','happen']],['The tension',['tension']],['How it felt',['feel']],['Ending',['finish']]]
+  essay:  [['Introduction',['hook','weigh']],['First point',['reason1']],['Second point',['reason2','otherside']],['Your own idea',['ownidea']],['Conclusion',['conclusion']]],
+  article:[['Hook',['start','reader']],['Your view',['opinion','reason']],['A moment',['example']],['What makes it special',['add','contrast']],['Last thought',['recommend','finish']]],
+  review: [['Opening',['start']],['First feature',['good','example']],['Second feature',['add','bad','contrast']],['Recommendation',['recommend','opinion']],['Final push',['finish']]],
+  report: [['Aim',['start']],['What works',['people','good','reason']],['Concern',['bad','contrast']],['Recommendation',['recommend','result']],['Conclusion',['finish']]],
+  email:  [['Opening',['open-email','react']],['Main point',['opinion','reason']],['Details',['add','example']],['The other side',['contrast']],['Ending',['ask','recommend','signoff']]],
+  story:  [['Scene',['start']],['Something happens',['time','happen']],['Tension',['tension']],['The turn',['feel']],['Looking back',['finish']]]
 };
 function rungs(){
   const by={}; POOL.forEach(x=>by[x.id]=x); const used=new Set();
@@ -570,7 +579,7 @@ const TICK='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5
    View: a tile opens that paragraph's phrases to look at. Practise: a tile starts its practice. */
 /* 22 Nov 2026 (the owner): View · Watch · Practise. Watch plays each paragraph's phrases as a silent
    parade of cards (/skills/writing/phrase-parade.html); only on the tasks that have parades: essay, review, report */
-const PARADES={essay:['hooks','first','second','other','conclusion'],
+const PARADES={essay:['hooks','first','second',null,'conclusion'],
   review:['review-intro','review-good','review-bad','review-view','review-end'],
   report:['report-intro','report-people','report-best','report-effects','report-end']};
 const canWatch=()=>!!PARADES[F];
@@ -594,7 +603,7 @@ function home(){
   const word=D.tasks[F].toLowerCase(), R=rungs(), n=POOL.filter(due).length, owned=POOL.filter(x=>st(x.id).rung>=TOP).length,
     STEPS=['Choose','Type','Rebuild','Recall','Use'], P=MODE==='practise', k=Math.min(PER,n);
   $('app').innerHTML=`${FREE?'<div class="kick"><span class="sp"></span><span class="test">TEST · NO WAIT</span></div>':''}
-    <h1 class="ht3">Useful key expressions for ${esc({story:"stories"}[F]||word+"s")}</h1>
+    <h1 class="ht3">Basics gave you the core. Here are more ways for ${esc({story:"stories"}[F]||word+"s")}</h1>
     ${modeHTML()}
     ${P?`<ol class="six" aria-label="How you learn each phrase">${STEPS.map((t,j)=>`<li><b>${j+1}</b>${t}</li>`).join('')}</ol>
     <p class="six-cap">Each step comes back later: <b>today, then 1, 3, 7 days</b>.</p>
@@ -616,7 +625,8 @@ function home(){
     <a class="look" href="/skills/writing/phrases.html">☰ Look a phrase up in the list</a>`;
   $('app').querySelectorAll('.mode [data-m]').forEach(b=>b.onclick=()=>{ if(MODE===b.dataset.m) return; MODE=b.dataset.m; sfx('pop'); home(); });
   $('app').querySelectorAll('.rg').forEach(b=>b.onclick=()=>{ const i=+b.dataset.g, g=R[i];
-    if(MODE==='watch'){ parade(i); return; }
+    if(MODE==='watch'&&(PARADES[F]||[])[i]){ parade(i); return; }
+    if(MODE==='watch'){ VI=i; VS=0; sfx('pop'); view(); return; }
     if(!P){ VI=i; VS=0; sfx('pop'); view(); return; }
     const list=g.list.filter(due);
     if(!list.length){ const met=g.list.filter(x=>st(x.id).rung>0); if(!met.length){ sfx('bowlLow'); b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); return; }
@@ -952,8 +962,11 @@ addEventListener('resize',size);
 try{ new ResizeObserver(size).observe($('hdr')); }catch(e){}
 if(document.fonts&&document.fonts.ready) document.fonts.ready.then(size);
 /* the essay introduction comes from the same source as Build and Cards (essay-cards-models.json) */
+const FIVE={essay:'essays',email:'emails',article:'articles',review:'reviews',report:'reports',story:'story'};
 Promise.all([fetch('/data/writing/phrases-by-job.json?v=8').then(r=>r.json()),
-  fetch('/data/writing/phrase-ladder.json?v=2').then(r=>r.ok?r.json():null).catch(()=>null).then(j=>{ LD=j; })])
+  fetch('/data/writing/phrase-ladder.json?v=3').then(r=>r.ok?r.json():null).catch(()=>null).then(j=>{ LD=j; }),
+  Promise.all(Object.entries(FIVE).map(([k,f])=>fetch('/data/writing/five/'+f+'.json?v=10').then(r=>r.ok?r.json():null).catch(()=>null)
+    .then(j=>{ if(j){ BASICS[k]=new Set(); j.slots.forEach(sl=>sl.ways.forEach(w=>BASICS[k].add(pnorm(w.t.split('…')[0])))); } })))])
 .then(([d])=>{ D=d; if(!D.tasks[F]) F='essay'; tabs(); size(); pool(); home(); });
 })();
 </script>

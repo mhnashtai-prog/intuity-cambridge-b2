@@ -79,15 +79,17 @@ var SKILLS = {
        the compulsory Part 1; the rest are Part 2 choices, below a hairline.
        7 Nov 2026: the review deck no longer sits on top of Writing; it
        belongs to the home screen's own "to review" link, not to a task menu. */
+    /* 25 Nov 2026 (the owner, as Speaking): a task tile opens its practice at once, the question
+       page; the gate is gone. Its Basics, Exercises and Game are the page's footer pills (tools/writing-foot.js) */
     {group:"Part 1 · Everyone writes"},
-    {name:"Essay", glyph:"¶", url:"skills/writing/gate.html?task=essays"},
+    {name:"Essay", glyph:"¶", url:"skills/writing/essays/essay-question.html"},
     /* 19 Nov 2026 (a learner: "confusing if you don't know which version you're sitting") */
     {group:"Part 2 · Choose one", rule:true, note:"Story: only in B2 First for Schools. Report: only in B2 First."},
-    {name:"Email / Letter", glyph:"@", url:"skills/writing/gate.html?task=emails"},
-    {name:"Article", glyph:"A", url:"skills/writing/gate.html?task=articles"},
-    {name:"Review", glyph:"★", url:"skills/writing/gate.html?task=reviews"},
-    {name:"Story", glyph:"✎", exam:"schools", url:"skills/writing/gate.html?task=story"},
-    {name:"Report", glyph:"≡", exam:"standard", url:"skills/writing/gate.html?task=reports"},
+    {name:"Email / Letter", glyph:"@", url:"skills/writing/emails/email-question.html"},
+    {name:"Article", glyph:"A", url:"skills/writing/articles/article-question.html"},
+    {name:"Review", glyph:"★", url:"skills/writing/reviews/review-question-selector.html"},
+    {name:"Story", glyph:"✎", exam:"schools", url:"skills/writing/narrative/narrative-question.html"},
+    {name:"Report", glyph:"≡", exam:"standard", url:"skills/writing/reports/report-question-selector.html"},
     /* ONE SCREEN, NINE TILES (14 Nov 2026, the owner: fifteen tiles overwhelmed
        pupils). The six tasks stay; everything else lives under three roofs,
        one tile each. A roof's pages share a row of tabs in their title line
@@ -154,14 +156,16 @@ var TASKROOFS = {
     {name:"Basics", url:"skills/writing/five.html?task={k}"},
     /* 22 Nov 2026 (the owner): the Guided essay straight after Basics, essays only: the core
        phrases of Basics seen at once in a whole essay (introduce, then the model, then variety) */
-    {name:"Guided", url:"skills/writing/essays/essay-sample.html?task={k}", only:["essays"]},
+    /* 25 Nov 2026: Guided left these tabs; it is step 4 of the practice track */
     {name:"Build", url:"skills/writing/build.html?type={k}&view=models"},   /* 17 Nov: a frame you build, not model essays (those are in door 3) */
     {name:"Cards", url:"skills/writing/cue-cards-print.html?type={print}"}
     /* 17 Nov 2026 (the owner, after a teen's review): Essentials left Learn it. It opened on the same
        phrases as Build and Cards; the page stays (sheet.html) but no menu leads to it */
   ]},
-  practise:{ name:"Practise it", items:[
-    {name:"Game", url:"skills/challenge/challenge.html?board=1&section=writing&topic=writing-{topic}"},
+  /* 25 Nov 2026: the footer's Game is a page of its own; Exercises and Recall share a row */
+  game:{ name:"Game", items:[
+    {name:"Game", url:"skills/challenge/challenge.html?board=1&section=writing&topic=writing-{topic}"} ]},
+  practise:{ name:"Exercises", items:[
     /* "Exercises", not "Practice" or "Rounds": the door is Practise it (14 Nov 2026) */
     {name:"Exercises", url:"skills/writing/practice.html?task={k}"},
     {name:"Recall", url:"skills/writing/recall.html?task={k}"}

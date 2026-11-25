@@ -82,6 +82,8 @@ emails:   { label:'Email',   part:'Part 2', back:'/index.html?openModal=writing'
 
 var G = GENRES[GENRE];
 if (!G) return;
+/* 25 Nov 2026: the task's footer (Practise · Basics · Exercises · Game) under the step track */
+(function () { if (document.querySelector('script[src*="writing-foot.js"]')) return; var sc = document.createElement('script'); sc.src = '/tools/writing-foot.js?v=1'; document.head.appendChild(sc); })();
 
 /* THE LEAN HEADER (7 Nov 2026), Essay first as the blueprint. A study
    screen, not a newspaper: one line for where you are (back · task and
@@ -96,8 +98,10 @@ var LEAN = /^(essays|reviews|reports|emails|articles|story)$/.test(GENRE);   /* 
    things. The portfolio slide is the only place that leads to both, so the
    stage bar no longer offers Generate. (stages.generate stays: the
    generator's own task tabs use it.) */
-var ORDER = ['question','plan','model','sample'];
-var NAMES = { question:'Question', plan:'Plan', model:'Model', generate:'Generate', sample:'Sample' };
+var ORDER = ['question','plan','model','sample','write'];
+var NAMES = { question:'Question', plan:'Plan', model:'Model', generate:'Generate', sample:'Sample', write:'Write it' };
+/* 25 Nov 2026 (the owner): Write it is the track's last step, not a door of its own */
+Object.keys(GENRES).forEach(function (k) { GENRES[k].stages.write = '/skills/writing/write.html?task=' + k; });
 /* 22 Nov 2026 (the owner): in the essay, step 4 is the Guided essay; the samples are its options */
 if (GENRE === 'essays') NAMES.sample = 'Guided';
 
@@ -203,6 +207,7 @@ function leanHeader() {
     '.wr-lean .wr-right{display:flex;align-items:center;gap:4px;min-width:0}' +
     '.wr-pick{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-top:2px;padding:3px 6px 3px 8px;border-radius:8px;font:600 .6875rem/1.2 var(--f-display,"Geist",system-ui,sans-serif);letter-spacing:.2em;text-transform:uppercase;color:#4A443E}' +
     '.wr-pick span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+    '.wr-pick.wr-fixed{cursor:default}.wr-pick.wr-fixed::after{display:none}.wr-pick.wr-fixed:active{background:none}' +
     '.wr-pick::after{content:"";flex:none;width:5px;height:5px;margin:-3px 2px 0 0;border-right:1.5px solid #8A8378;border-bottom:1.5px solid #8A8378;transform:rotate(45deg)}' +
     '.wr-pick:active{background:rgba(20,17,14,.06)}.wr-pick:focus-visible{outline:2px solid #B0865C;outline-offset:2px}' +
     '.wr-lean .mute{padding:8px!important}' +
@@ -243,10 +248,10 @@ function leanHeader() {
   top.appendChild(backLink());
   var title = el('div', 'header-title');
   title.appendChild(el('div', 'app-title', 'INTUITY'));
-  var pick = el('button', 'wr-pick'); pick.type = 'button';
-  pick.setAttribute('aria-haspopup', 'dialog');
+  /* 25 Nov 2026 (the owner): one task, one focus. The title names the task; it no longer
+     switches to another (pupils got distracted), as Speaking's Parts do not */
+  var pick = el('div', 'wr-pick wr-fixed');
   var lab = el('span', null, G.label + ' \u00b7 ' + (G.part || '')); pick.appendChild(lab);
-  pick.setAttribute('aria-label', 'Change task: ' + G.label);
   title.appendChild(pick);
   top.appendChild(title);
   var right = el('div', 'wr-right');
@@ -331,7 +336,7 @@ function leanHeader() {
     var a = document.querySelector('.wr-sheet'), b = document.querySelector('.wr-sheet-bg');
     if (a) a.remove(); if (b) b.remove(); pick.focus();
   }
-  pick.onclick = function () {
+  if (false) pick.onclick = function () {   /* the task picker, retired 25 Nov 2026 */
     var bg = el('div', 'wr-sheet-bg'); bg.onclick = close;
     var sh = el('div', 'wr-sheet'); sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-label', 'Choose a task');
     sh.appendChild(el('h3', null, 'Task'));
@@ -443,6 +448,8 @@ function leanFoot() {
     '.wr-steps .wr-stage.active i{background:#14110E;border-color:#14110E;color:#FAF8F5;opacity:1}' +
     '.wr-next{flex:none;display:inline-grid;place-items:center;width:40px;height:40px;border-radius:50%;background:#14110E;color:#FAF8F5;text-decoration:none;font:500 1.25rem/1 var(--f-body,"Geist",system-ui,sans-serif);padding-bottom:2px;box-sizing:border-box}' +
     '.wr-next:active{transform:scale(.95)}.wr-next:focus-visible{outline:2px solid #B0865C;outline-offset:2px}' +
+    '.wr-steps .wr-stage{white-space:nowrap}' +
+    '@media(max-width:430px){.wr-row{gap:6px}.wr-steps .wr-stages{max-width:calc(100vw - 64px)}.wr-steps .wr-stage{padding:.45rem .42rem!important;font-size:.59rem!important;letter-spacing:.03em!important}.wr-next{width:36px!important;height:36px!important}.wr-steps .wr-stage::before{content:none!important}.wr-steps .wr-stage i{display:none!important}}' +
     '@media(max-width:400px){.wr-steps .wr-stage{padding:.45rem .5rem;letter-spacing:.04em}.wr-steps .wr-stage i{display:none}.wr-steps .wr-stage::before{content:attr(data-n);font-family:"Geist Mono",ui-monospace,monospace;font-weight:500;opacity:.6;margin-right:3px}}';
   document.head.appendChild(css);
   var f = el('div', 'wr-foot wr-steps');
@@ -544,8 +551,11 @@ else if (STAGE !== 'generate') {
 
 function sync() {
   document.documentElement.style.setProperty('--header-h', newTop.offsetHeight + 'px');
-  document.documentElement.style.setProperty('--foot-h', (newFoot ? newFoot.offsetHeight : 0) + 'px');
+  /* 25 Nov 2026: the task's footer (writing-foot.js) sits under the step track: the page keeps room for both */
+  var wf = document.querySelector('.wf-foot');
+  document.documentElement.style.setProperty('--foot-h', ((newFoot ? newFoot.offsetHeight : 0) + (wf ? wf.offsetHeight : 0)) + 'px');
 }
+window.addEventListener('wf-foot', function () { sync(); });
 sync();
 addEventListener('resize', sync);
 addEventListener('orientationchange', function () { setTimeout(sync, 120); });

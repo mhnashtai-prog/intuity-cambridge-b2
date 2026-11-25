@@ -11,7 +11,7 @@
   function ready(fn) { if (document.readyState !== 'loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
   function withMap(fn) {
     if (window.BE2_MAP && BE2_MAP.roofOf) return fn();
-    var s = document.createElement('script'); s.src = '/tools/be2-map.js?v=27'; s.onload = fn; document.head.appendChild(s);
+    var s = document.createElement('script'); s.src = '/tools/be2-map.js?v=28'; s.onload = fn; document.head.appendChild(s);
   }
   /* THE WRITING TAB (14 Nov 2026): the section tab every Writing page already
      uses (Games, the Sentence pages, How it's marked): mono, 11px, bold, a
@@ -75,6 +75,9 @@
     b.onclick = function () { if (window.SFX) SFX.toggle(); paint(); };
     paint();
   }
+  /* 25 Nov 2026 (the owner): a task's home is its practice (the question page); no gate, no task switch */
+  var QPAGE = { essays:'/skills/writing/essays/essay-question.html', emails:'/skills/writing/emails/email-question.html', articles:'/skills/writing/articles/article-question.html',
+    reviews:'/skills/writing/reviews/review-question-selector.html', reports:'/skills/writing/reports/report-question-selector.html', story:'/skills/writing/narrative/narrative-question.html' };
   function build() {
     var here = location.pathname + location.search;
     var hit = (BE2_MAP.taskRoofOf && BE2_MAP.taskRoofOf(here)) || BE2_MAP.roofOf(here); if (!hit) return true;
@@ -89,26 +92,25 @@
         var native = document.querySelector('.topbar, .cc-top, header.ihead');
         if (!native) return false;   /* drawn late */
         var hd = document.createElement('header'); hd.className = 'rf-head';
-        hd.innerHTML = '<div class="rf-top header-top"><a class="back-link" href="/skills/writing/gate.html?task=' + hit.task + '" target="_top">← ' + NAME[hit.task].replace(' / Letter', '') + '</a>' +
-          '<div class="rf-title"><div class="rf-word">INTUITY</div><button type="button" class="rf-pick rf-sub" aria-haspopup="dialog" aria-label="Change task: ' + NAME[hit.task] + '">' + label +
-          ' <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>' +
+        hd.innerHTML = '<div class="rf-top header-top"><a class="back-link" href="' + QPAGE[hit.task] + '" target="_top">← ' + NAME[hit.task].replace(' / Letter', '') + '</a>' +
+          '<div class="rf-title"><div class="rf-word">INTUITY</div><div class="rf-pick rf-sub" style="cursor:default">' + label + '</div></div>' +
           '<button type="button" class="rf-snd" aria-label="Sound"></button></div>';
         native.parentNode.insertBefore(hd, native); native.classList.add('rf-hide');
-        wirePick(hd.querySelector('.rf-pick'), hit); wireSound(hd.querySelector('.rf-snd'));
+        wireSound(hd.querySelector('.rf-snd'));
         document.body.style.background = '#F3F1ED';   /* the page colour of the others (the landing page's ground) */
       } else {
         /* the house header is there: back to the task, and its second line names the
            task (kept so, since some pages rewrite it after loading); a picker already does */
         var bl = own.querySelector('.back-link');
         if (bl) {
-          var home = '/skills/writing/gate.html?task=' + hit.task, word = '← ' + NAME[hit.task].replace(' / Letter', '');
+          var home = QPAGE[hit.task], word = '← ' + NAME[hit.task].replace(' / Letter', '');
           var hold = function () { if (bl.getAttribute('href') !== home) bl.setAttribute('href', home); if (bl.textContent !== word) bl.textContent = word; };
           bl.onclick = null; hold();
           /* some pages set their own back link after loading (Recall): the task stays home */
           new MutationObserver(hold).observe(bl, { attributes: true, attributeFilter: ['href'], childList: true, characterData: true, subtree: true });
         }
         var s2 = own.querySelector('.app-subtitle');
-        if (s2 && !s2.querySelector('button')) {
+        if (s2) {
           var keep = function () { if (s2.textContent !== label) s2.textContent = label; };
           keep(); new MutationObserver(keep).observe(s2, { childList: true, characterData: true, subtree: true });
         }
@@ -120,6 +122,7 @@
     if (!sub) return false;   /* some pages draw their header late */
     var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
     var nav = document.createElement('nav'); nav.className = 'roof'; nav.setAttribute('aria-label', hit.roof.name);
+    if (hit.roof.items.length < 2) nav.hidden = true;   /* one page is not a row of tabs */
     nav.innerHTML = hit.roof.items.map(function (x, i) {
       return '<a href="/' + x.url + '"' + (i === hit.i ? ' class="on" aria-current="page"' : '') + ' target="_top">' + x.name + '</a>';
     }).join('');

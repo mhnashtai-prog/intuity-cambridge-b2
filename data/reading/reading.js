@@ -550,20 +550,23 @@ function rubricHTML() {
     r = 'You are going to read <b>' + esc(t.rubric || 'an article') + '</b>. For questions 1–' + count() +
         ', choose the answer (A, B, C or D) which you think fits best according to the text.';
   }
-  /* the switch (26 Nov 2026, the owner: "simple iOS, not a full circle"): an iOS-style switch
-     named for the questions page. Off is the text, on is the questions; the knob slides, then
-     the page turns. */
-  var qb = document.querySelector('.viewbtn[data-view="one"]'), qname = qb ? qb.textContent.trim() : 'Questions', on = view === 'one';
-  return '<div class="rd-rubric"><p>' + r + '</p>' +
-    '<button class="rd-sw' + (on ? ' on' : '') + '" type="button" role="switch" aria-checked="' + on + '" aria-label="' + esc(qname) + '">' +
-      '<span class="rd-sw-l">' + esc(qname) + '</span><span class="rd-sw-t" aria-hidden="true"><span class="rd-sw-k"></span></span></button></div>';
+  return '<div class="rd-rubric"><p>' + r + '</p></div>';
+}
+/* THE TITLE ROW (26 Nov 2026, the owner: "next to the title of the text, more like PLAY &
+   LIST"): the text's title with the two pages beside it, the Phrase Bank's Play | List pill,
+   on both pages, so the pupil always sees which page is open and the other is one tap away. */
+function titleRow() {
+  var t = T(), v = document.querySelectorAll('.viewbtn');
+  var pages = [].map.call(v, function (b) { return [b.dataset.view, b.textContent.trim()]; });
+  if (!pages.length) pages = [['full', 'Text'], ['one', 'Questions']];
+  return '<div class="rd-titlerow"><div class="rd-title">' + esc(t.title || '') + '</div>' +
+    '<div class="rd-pages" role="radiogroup" aria-label="Text or questions"><span>' + pages.map(function (pg) {
+      return '<button type="button" role="radio" data-page="' + pg[0] + '" aria-checked="' + (view === pg[0]) + '">' + esc(pg[1]) + '</button>';
+    }).join('') + '</span></div></div>';
 }
 document.addEventListener('click', function (e) {
-  var g = e.target.closest && e.target.closest('.rd-sw'); if (!g) return;
-  var to = g.classList.contains('on') ? 'full' : 'one';
-  g.classList.toggle('on'); g.setAttribute('aria-checked', String(to === 'one'));
-  sfx('tick');
-  setTimeout(function () { setView(to); }, 190);
+  var g = e.target.closest && e.target.closest('[data-page]'); if (!g || g.dataset.page === view) return;
+  sfx('tick'); setView(g.dataset.page);
 });
 
 function render() {
@@ -577,11 +580,10 @@ function render() {
        one tap away, rather than 1,500 characters you must scroll past
        before reaching anything to do. */
     $('board').innerHTML = view === 'full'
-      ? '<div class="mc-card">' + head +
-        '<div class="rd-title">' + esc(t.title || '') + '</div>' +
+      ? '<div class="mc-card">' + head + titleRow() +
         (t.subtitle ? '<div class="rd-sub">' + esc(t.subtitle) + '</div>' : '') +
         sectionsHTML() + '</div>'
-      : '<div class="mc-card">' + head +
+      : '<div class="mc-card">' + head + titleRow() +
         t.questions.map(statementHTML).join('') + '</div>';
 
     $('board').querySelectorAll('.rd-pick:not([disabled])').forEach(function (b) {
@@ -596,9 +598,9 @@ function render() {
 
   if (GAPPED) {
     var head = rubricHTML();
-    $('board').innerHTML = '<div class="mc-card">' + head +
+    $('board').innerHTML = '<div class="mc-card">' + head + titleRow() +
       (view === 'full'
-        ? '<div class="rd-title">' + esc(t.title || '') + '</div>' +
+        ? '' +
           (t.subtitle ? '<div class="rd-sub">' + esc(t.subtitle) + '</div>' : '') +
           '<div class="rd-passage">' + gappedHTML() + '</div>'
         : sentencesHTML()) + '</div>';
@@ -621,11 +623,10 @@ function render() {
   if (view === 'one') {
     /* QUESTIONS: every question with its four options on the page; the text is one tap away */
     sawQs = true;
-    $('board').innerHTML = '<div class="mc-card">' + head + cards().map(q5HTML).join('') + '</div>';
+    $('board').innerHTML = '<div class="mc-card">' + head + titleRow() + cards().map(q5HTML).join('') + '</div>';
   } else {
     /* TEXT: the passage alone, as the paper's left-hand page; the question in hand is pinned */
-    $('board').innerHTML = '<div class="mc-card">' + head +
-      '<div class="rd-title">' + esc(t.title || '') + '</div>' +
+    $('board').innerHTML = '<div class="mc-card">' + head + titleRow() +
       (t.subtitle ? '<div class="rd-sub">' + esc(t.subtitle) + '</div>' : '') +
       '<div class="rd-passage">' +
         cards().map(function (c, i) {

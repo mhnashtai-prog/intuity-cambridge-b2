@@ -149,7 +149,15 @@ function esc(s) {
   });
 }
 function sfx(n) { try { if (window.SFX && SFX[n]) SFX[n](); } catch (e) {} }
-var LETTER = ['A','B','C','D','E','F'];
+var LETTER = ['A','B','C','D','E','F','G','H'];
+/* Part 6's letters (26 Nov 2026): the sentences a pupil can use are lettered A, B, C… in order,
+   the worked example's sentence skipped. LETTER[k] stopped at F, so every text's seventh
+   sentence read 'undefined', and where the example sat mid-list a letter was missing. */
+function L6(k) {
+  var t = T(), n = 0;
+  for (var j = 0; j < k; j++) if (!(t.example && t.example.sentence === j)) n++;
+  return LETTER[n] || '';
+}
 
 /* ── LOADING ────────────────────────────────────────────────────────────
    Every text is asked for at once. A miss is not an error — it is a text
@@ -438,7 +446,7 @@ function sentencesHTML() {
     var placed = at[k] !== undefined, cls = 'rd-o6' + (placed ? ' placed' : '') + (placed && at[k] === cur7 ? ' chosen' : '');
     if (marked) { var right = t.answers.indexOf(k); cls += right > -1 && answers[right] === k ? ' ok' : (placed ? ' no' : ''); }
     return '<button class="' + cls + '" type="button" data-k="' + k + '"' + (marked ? ' disabled' : '') + '>' +
-      '<span class="let">' + LETTER[k] + '</span><span>' + esc(sen) +
+      '<span class="let">' + L6(k) + '</span><span>' + esc(sen) +
       (placed ? '<small class="rd-in">in gap ' + (at[k] + 1) + '</small>' : '') + '</span></button>';
   }).join('') + '</div>';
 }
@@ -517,13 +525,48 @@ function sectionsHTML() {
   }).join('');
 }
 
+/* THE RUBRIC (26 Nov 2026, the owner). Above the text, the paper's own instructions, in
+   the words pupils will read on the day, in place of a label that repeated the header and
+   the title. Beside it, a ring to the other page: from the text to the questions, and back. */
+var NUMW = ['','one','two','three','four','five','six','seven','eight','nine','ten'];
+function rubricHTML() {
+  var t = T(), r;
+  if (MATCH) {
+    var qs = t.questions || [], a = qs[0] && qs[0].number != null ? qs[0].number : 1, z = qs.length ? (qs[qs.length - 1].number != null ? qs[qs.length - 1].number : qs.length) : 10;
+    var who = String(t.subtitle || 'Four people talk about their experiences.').replace(/\.\s*$/, '');
+    who = who.charAt(0).toLowerCase() + who.slice(1);
+    var L = letters();
+    r = 'You are going to read an article in which <b>' + esc(who) + '</b>. For questions ' + a + '–' + z +
+        ', choose from the people (' + L[0] + '–' + L[L.length - 1] + '). The people may be chosen more than once.';
+  } else if (GAPPED) {
+    var n = count(), ks = [];
+    t.sentences.forEach(function (_, k) { if (!(t.example && t.example.sentence === k)) ks.push(k); });
+    var extra = ks.length - n, N = NUMW[n] || String(n);
+    r = 'You are going to read <b>' + esc(t.rubric || 'an article') + '</b>. ' + N.charAt(0).toUpperCase() + N.slice(1) +
+        ' sentences have been removed from the article. Choose from the sentences ' + L6(ks[0]) + '–' + L6(ks[ks.length - 1]) +
+        ' the one which fits each gap (1–' + n + '). There ' + (extra === 1 ? 'is one extra sentence' : 'are ' + (NUMW[extra] || extra) + ' extra sentences') +
+        ' which you do not need to use.';
+  } else {
+    r = 'You are going to read <b>' + esc(t.rubric || 'an article') + '</b>. For questions 1–' + count() +
+        ', choose the answer (A, B, C or D) which you think fits best according to the text.';
+  }
+  var other = view === 'full' ? 'one' : 'full', ob = document.querySelector('.viewbtn[data-view="' + other + '"]');
+  var label = ob ? ob.textContent.trim() : (other === 'full' ? 'Text' : 'Questions');
+  return '<div class="rd-rubric"><p>' + r + '</p>' +
+    '<button class="rd-go" type="button" data-go="' + other + '" aria-label="Open the ' + esc(label) + '">' +
+      '<span class="rd-go-ring" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M7.5 4.5 13 10l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>' +
+      '<span class="rd-go-l">' + esc(label) + '</span></button></div>';
+}
+document.addEventListener('click', function (e) {
+  var g = e.target.closest && e.target.closest('.rd-go'); if (!g) return;
+  setView(g.dataset.go);
+});
+
 function render() {
   var t = T(), done = Object.keys(answers).length;
 
   if (MATCH) {
-    var head = '<div class="mc-kick">Part ' + esc(CFG.part) + ' &middot; ' +
-      esc(t.title || ('Text ' + (bi + 1))) +
-      '<span class="right">' + (done ? done + ' / ' + count() + ' matched' : count() + ' statements') + '</span></div>';
+    var head = rubricHTML();
     /* SECTIONS FIRST BY DEFAULT is wrong for this part. In Part 7 the
        sections are reference — you skim them, then work the statements and
        go back. So the statements are the default view and the sections are
@@ -548,9 +591,7 @@ function render() {
   }
 
   if (GAPPED) {
-    var head = '<div class="mc-kick">Part ' + esc(CFG.part) + ' &middot; ' +
-      esc(t.title || ('Text ' + (bi + 1))) +
-      '<span class="right">' + (done ? done + ' / ' + count() + ' placed' : count() + ' gaps') + '</span></div>';
+    var head = rubricHTML();
     $('board').innerHTML = '<div class="mc-card">' + head +
       (view === 'full'
         ? '<div class="rd-title">' + esc(t.title || '') + '</div>' +
@@ -571,9 +612,7 @@ function render() {
     paintCarry(); paintDots(); paintBar();
     return;
   }
-  var head = '<div class="mc-kick">Part ' + esc(CFG.part) + ' &middot; ' +
-    esc(t.title || ('Text ' + (bi + 1))) +
-    '<span class="right">' + (done ? done + ' / ' + cards().length + ' answered' : cards().length + ' questions') + '</span></div>';
+  var head = rubricHTML();
 
   if (view === 'one') {
     /* QUESTIONS: every question with its four options on the page; the text is one tap away */
@@ -725,7 +764,7 @@ function openBank(i) {
     return '<button class="rd-opt' + (answers[i] === k ? ' chosen' : '') +
       (used ? ' used' : '') + '" type="button" data-k="' + k + '"' +
       (used ? ' disabled' : '') + '>' +
-      '<span class="let">' + LETTER[k] + '</span><span>' + esc(sen) + '</span></button>';
+      '<span class="let">' + L6(k) + '</span><span>' + esc(sen) + '</span></button>';
   }).join('');
   $('rdOpts').querySelectorAll('.rd-opt:not([disabled])').forEach(function (b) {
     b.onclick = function () { choose(i, +b.dataset.k); };

@@ -30,6 +30,16 @@
 /* ONE LOOK ON EVERY PHONE (16 Nov 2026, pupils' Android phones in class): a phone set to large text
    enlarges words but not the layout, so headers wrapped into three lines and collided with the back
    link. Every page keeps its own text size, as the home page does. */
+/* ONE TONE FOR THE MODE SELECTORS (26 Nov 2026, the owner: "the grey is too faint or too
+   dark… it seems to be the same colour as the text; it should be slightly darker, not too
+   much"). Unselected tabs were four greys across the app (#756B6E, #8A8378, #9A948B, and the
+   body text's #5C5852). Now one: #4A4541, a step darker than the body text and well short of
+   the selected tab's black, which keeps its pill. */
+(function () { try { var st = document.createElement('style'); st.textContent =
+  '.vtab:not(.active),.ttab:not(.active),.ftab:not(.active),.mode-btn:not(.active),.viewbtn:not(.active),' +
+  '.parts a:not(.on),.roof a:not(.on),.mk-t:not(.on),.mg-b:not(.on),' +
+  '.pl-switch button[aria-checked=false],.rd-pages button[aria-checked=false]{color:#4A4541!important}';
+  (document.head || document.documentElement).appendChild(st); } catch (e) {} })();
 (function () { try { var st = document.createElement('style'); st.textContent = 'html{-webkit-text-size-adjust:100%;text-size-adjust:100%}'; (document.head || document.documentElement).appendChild(st); } catch (e) {} })();
 (function () {
   var OLD_NAME = /INTUITY/g;

@@ -17,8 +17,8 @@
      uses (Games, the Sentence pages, How it's marked): mono, 11px, bold, a
      caramel underline on the chosen one, no fill. */
   var CSS = '.roof{display:flex;justify-content:center;gap:.25rem;margin:-.55rem 0 .35rem;white-space:nowrap;flex-wrap:wrap}' +
-    '.roof a{position:relative;display:inline-block;padding:.5rem .4rem .35rem;font:700 .6875rem/1 "Geist Mono",ui-monospace,monospace;letter-spacing:.1em;' +
-    'text-transform:uppercase;text-decoration:none;color:#9A948B;-webkit-tap-highlight-color:transparent}' +
+    '.roof a{color:#4A4541;position:relative;display:inline-block;padding:.5rem .4rem .35rem;font:700 .6875rem/1 "Geist Mono",ui-monospace,monospace;letter-spacing:.1em;' +
+    'text-transform:uppercase;text-decoration:none;-webkit-tap-highlight-color:transparent}' +
     '.roof a.on{color:#14110E;box-shadow:inset 0 -2px 0 #C2956E}' +
     '.roof a:focus-visible{outline:2px solid #C2956E;outline-offset:2px}' +
     '.roofed .back-link{white-space:nowrap}' +

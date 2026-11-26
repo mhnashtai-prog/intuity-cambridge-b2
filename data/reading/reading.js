@@ -133,9 +133,13 @@ function showAnswer(i) {
     if (e) try { e.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (x) {} }, 60);
 }
 var marked = false;
-var view = 'one'; /* 'one' | 'full' */
+/* TWO PAGES, AS THE PAPER (26 Nov 2026, the owner: "a toggle that gives them two screens:
+   one for text and one for questions"). 'full' is the TEXT page in every Part; 'one' is the
+   other page: Part 5 Questions, Part 6 Sentences, Part 7 Statements. Part 6 opens on its
+   text (gist first); Parts 5 and 7 on their questions (read the question, then find it). */
+var view = GAPPED ? 'full' : 'one';
 var PLACE = {};   /* scroll position per view and text */
-var cur7 = 0;     /* Part 7: the statement in hand, carried onto the Sections page */
+var cur7 = 0;     /* the question, gap or statement in hand, carried onto the other page */
 
 function $(id) { return document.getElementById(id); }
 function esc(s) {
@@ -340,7 +344,7 @@ function paintDots() {
   $('prevSet').disabled = view !== 'one' || qi === 0;
   $('nextSet').disabled = view !== 'one' || qi === n - 1;
   /* 25 Nov 2026: no row of empty dots before the pupil has answered something */
-  var sr = document.querySelector('.setrow'); if (sr) sr.style.display = (Object.keys(answers).length || marked) ? '' : 'none';
+  var sr = document.querySelector('.setrow'); if (sr) sr.style.display = 'none';   /* each page shows every question: the dots were a second map of it */
 }
 
 /* ── THE CARD ───────────────────────────────────────────────────────────*/
@@ -423,9 +427,24 @@ function gapHTML(i) {
            esc(T().sentences[T().answers[i]]) + '</span></div>' : '');
 }
 
+/* Part 6, the Sentences page: the seven sentences, A to G. One placed elsewhere says where,
+   and stays where it is in the list, so the field visibly narrows; tapping it moves it. */
+function sentencesHTML() {
+  var t = T(), at = {};
+  for (var g in answers) at[answers[g]] = +g;
+  return '<div class="rd-o6s">' + t.sentences.map(function (sen, k) {
+    if (t.example && t.example.sentence === k) return '';
+    var placed = at[k] !== undefined, cls = 'rd-o6' + (placed ? ' placed' : '') + (placed && at[k] === cur7 ? ' chosen' : '');
+    if (marked) { var right = t.answers.indexOf(k); cls += right > -1 && answers[right] === k ? ' ok' : (placed ? ' no' : ''); }
+    return '<button class="' + cls + '" type="button" data-k="' + k + '"' + (marked ? ' disabled' : '') + '>' +
+      '<span class="let">' + LETTER[k] + '</span><span>' + esc(sen) +
+      (placed ? '<small class="rd-in">in gap ' + (at[k] + 1) + '</small>' : '') + '</span></button>';
+  }).join('') + '</div>';
+}
+
 function gappedHTML() {
   var t = T();
-  var paras = view === 'full' ? t.text : [t.text[paraOf(qi + 1)]];
+  var paras = t.text;
   return paras.map(function (p) {
     /* the green link: phrases of each lit gap in its own paragraph and the next */
     var pi = t.text.indexOf(p), ph = [];
@@ -534,13 +553,21 @@ function render() {
     $('board').innerHTML = '<div class="mc-card">' + head +
       (view === 'full'
         ? '<div class="rd-title">' + esc(t.title || '') + '</div>' +
-          (t.subtitle ? '<div class="rd-sub">' + esc(t.subtitle) + '</div>' : '')
-        : '') +
-      '<div class="rd-passage">' + gappedHTML() + '</div></div>';
+          (t.subtitle ? '<div class="rd-sub">' + esc(t.subtitle) + '</div>' : '') +
+          '<div class="rd-passage">' + gappedHTML() + '</div>'
+        : sentencesHTML()) + '</div>';
+    /* tap a gap: it is in hand, and the Sentences page opens with it pinned */
     $('board').querySelectorAll('.rd-gap:not([disabled])').forEach(function (b) {
-      b.addEventListener('click', function () { openBank(+b.dataset.i); });
+      b.addEventListener('click', function () { cur7 = +b.dataset.i; setView('one'); });
     });
-    paintDots(); paintBar();
+    /* tap a sentence: it goes into the gap in hand, and the text opens at that gap, so the
+       pupil reads the sentence before, the one placed, and the one after */
+    $('board').querySelectorAll('.rd-o6:not([disabled])').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var g = cur7; choose(g, +b.dataset.k); setView('full', g);
+      });
+    });
+    paintCarry(); paintDots(); paintBar();
     return;
   }
   var head = '<div class="mc-kick">Part ' + esc(CFG.part) + ' &middot; ' +
@@ -548,32 +575,45 @@ function render() {
     '<span class="right">' + (done ? done + ' / ' + cards().length + ' answered' : cards().length + ' questions') + '</span></div>';
 
   if (view === 'one') {
-    var c = cards()[qi];
-    $('board').innerHTML = '<div class="mc-card">' + head +
-      passageHTML(c, qi) + questionHTML(c, qi) + '</div>';
+    /* QUESTIONS: every question with its four options on the page; the text is one tap away */
+    $('board').innerHTML = '<div class="mc-card">' + head + cards().map(q5HTML).join('') + '</div>';
   } else {
-    /* Full text: the chunks ARE the passage — joined, they are the text
-       Cambridge prints. No extra data needed, which is why this view costs
-       nothing to offer. */
+    /* TEXT: the passage alone, as the paper's left-hand page; the question in hand is pinned */
     $('board').innerHTML = '<div class="mc-card">' + head +
       '<div class="rd-title">' + esc(t.title || '') + '</div>' +
       (t.subtitle ? '<div class="rd-sub">' + esc(t.subtitle) + '</div>' : '') +
       '<div class="rd-passage">' +
         cards().map(function (c, i) {
           var p = passageHTML(c, i);
-          return p.replace('<div class="rd-passage">', '').replace('</div>', '');
+          return p.replace(/^<div class="rd-passage"[^>]*>/, '').replace(/<\/div>$/, '');
         }).join('') +
-      '</div></div>' +
-      '<div class="mc-card" style="margin-top:1.1rem">' +
-        '<div class="mc-kick">The questions</div>' +
-        cards().map(questionHTML).join('') +
-      '</div>';
+      '</div></div>';
   }
-
-  $('board').querySelectorAll('.rd-slot:not([disabled])').forEach(function (b) {
-    b.addEventListener('click', function () { openSheet(+b.dataset.i); });
+  $('board').querySelectorAll('.rd-o5:not([disabled])').forEach(function (b) {
+    b.addEventListener('click', function () { choose(+b.dataset.i, +b.dataset.k); });
   });
-  paintDots(); paintBar();
+  $('board').querySelectorAll('.rd-q .rd-qt').forEach(function (q) {
+    q.addEventListener('click', function () { cur7 = +q.closest('.rd-q').dataset.i; render(); });
+  });
+  paintCarry(); paintDots(); paintBar();
+}
+
+/* Part 5, the Questions page: the question, then its options as the paper prints them.
+   After marking, the sentence in the text that settles it is quoted under it. */
+function q5HTML(c, i) {
+  var a = answers[i], has = a !== undefined;
+  return '<div class="rd-q' + (i === cur7 && !marked ? ' inhand' : '') + '" data-i="' + i + '">' +
+    '<div class="rd-qn">Question ' + (i + 1) + '</div>' +
+    '<div class="rd-qt">' + esc(c.question) + '</div>' +
+    '<div class="rd-o5s">' + c.choices.map(function (o, k) {
+      var cls = 'rd-o5' + (a === k ? ' chosen' : '');
+      if (marked || shown[i]) { if (k === c.answer) cls += ' ok'; else if (a === k) cls += ' no'; }
+      return '<button class="' + cls + '" type="button" data-i="' + i + '" data-k="' + k + '"' + (marked || shown[i] ? ' disabled' : '') + '>' +
+        '<span class="let">' + LETTER[k] + '</span><span>' + esc(o) + '</span></button>';
+    }).join('') + '</div>' +
+    (!marked && !shown[i] && has ? '<button class="rd-show" type="button" data-s="' + i + '">Show answer</button>' : '') +
+    (lit(i) && c.highlight ? '<div class="rd-link"><b>In the text</b>‘' + esc(c.highlight) + '’</div>' : '') +
+  '</div>';
 }
 
 function wireShow() {
@@ -588,13 +628,28 @@ function wireShow() {
 function paintCarry() {
   var box = $('rdCarry'); if (!box) return;
   document.querySelectorAll('.rd-st').forEach(function (r) { r.classList.toggle('inhand', +r.dataset.i === cur7 && !marked); });
-  if (!MATCH || view !== 'full' || marked) { box.hidden = true; box.innerHTML = ''; fitPins(); return; }
-  var q = T().questions[cur7]; if (!q) { box.hidden = true; return; }
+  /* what is pinned: Part 7 its statement and letters on the Sections page; Part 5 its question
+     on the Text page; Part 6 its gap, and the words just before it, on the Sentences page */
+  var where = MATCH ? 'full' : GAPPED ? 'one' : 'full';
+  if (view !== where || marked) { box.hidden = true; box.innerHTML = ''; fitPins(); return; }
   box.hidden = false;
-  box.innerHTML = '<div class="rd-carry-q"><b>' + esc(q.number != null ? q.number : cur7 + 1) + '</b>' + esc(q.question) + '</div>' +
-    '<div class="rd-carry-l">' + letters().map(function (L) {
-      return '<button type="button" class="rd-pick' + (answers[cur7] === L ? ' chosen' : '') + '" data-l="' + L + '">' + L + '</button>'; }).join('') + '</div>';
-  box.querySelectorAll('[data-l]').forEach(function (b) { b.onclick = function () { choose(cur7, b.dataset.l); }; });
+  if (MATCH) {
+    var q = T().questions[cur7]; if (!q) { box.hidden = true; return; }
+    box.innerHTML = '<div class="rd-carry-q"><b>' + esc(q.number != null ? q.number : cur7 + 1) + '</b>' + esc(q.question) + '</div>' +
+      '<div class="rd-carry-l">' + letters().map(function (L) {
+        return '<button type="button" class="rd-pick' + (answers[cur7] === L ? ' chosen' : '') + '" data-l="' + L + '">' + L + '</button>'; }).join('') + '</div>';
+    box.querySelectorAll('[data-l]').forEach(function (b) { b.onclick = function () { choose(cur7, b.dataset.l); }; });
+  } else if (GAPPED) {
+    var para = T().text.filter(function (x) { return x.indexOf('{' + (cur7 + 1) + '}') > -1; })[0] || '';
+    var before = para.split('{' + (cur7 + 1) + '}')[0].replace(/\{\d+\}/g, '').trim();
+    var tail = before.length > 90 ? '\u2026' + before.slice(-90).replace(/^\S*\s/, '') : before;
+    box.innerHTML = '<div class="rd-carry-q"><b>Gap ' + (cur7 + 1) + '</b>' + (tail ? esc(tail) + ' <span class="rd-carry-gap">___</span>' : 'Which sentence fits?') + '</div>' +
+      (answers[cur7] !== undefined && !shown[cur7] ? '<button class="rd-show" type="button" data-s="' + cur7 + '">Show answer</button>' : '');
+  } else {
+    var c = cards()[cur7]; if (!c) { box.hidden = true; return; }
+    box.innerHTML = '<div class="rd-carry-q"><b>Question ' + (cur7 + 1) + '</b>' + esc(c.question) + '</div>';
+  }
+  box.querySelectorAll('.rd-show[data-s]').forEach(function (b) { b.onclick = function () { showAnswer(+b.dataset.s); }; });
   fitPins();
 }
 /* the toggle (and the statement in hand) are pinned just above the bar: one tap away, always */
@@ -608,7 +663,7 @@ function paintBar() {
   var n = count();
   var all = true;
   for (var z = 0; z < n; z++) if (answers[z] === undefined) all = false;
-  var one = view === 'one' && !MATCH;
+  var one = false;   /* (26 Nov 2026) two pages, no question-by-question stepping */
   ['btnPrev','btnNext'].forEach(function (id) { $(id).style.display = one ? '' : 'none'; });
   $('btnPrev').disabled = qi === 0;
   $('btnNext').disabled = qi === n - 1;
@@ -688,7 +743,7 @@ function choose(i, k) {
     for (var g in answers) if (answers[g] === k) delete answers[g];
   }
   answers[i] = k;
-  if (MATCH) { var nx = -1; for (var z = 1; z <= count(); z++) { var j = (i + z) % count(); if (answers[j] === undefined) { nx = j; break; } } cur7 = nx > -1 ? nx : i; }
+  { var nx = -1; for (var z = 1; z <= count(); z++) { var j = (i + z) % count(); if (answers[j] === undefined) { nx = j; break; } } cur7 = nx > -1 ? nx : i; }
   sfx('tick');
   closeSheet();
   render();
@@ -699,9 +754,7 @@ function choose(i, k) {
   /* Per question, answering moves you on: each chunk is self-contained,
      so there is no context to take away — unlike a Use of English passage,
      where the gaps lean on each other and the card waits. */
-  if (view === 'one' && qi < count() - 1) {
-    setTimeout(function () { qi++; render(); }, 280);
-  }
+  /* (26 Nov 2026) no page moves under the pupil: the next open question is simply in hand */
 }
 
 /* ── MARKING ────────────────────────────────────────────────────────────
@@ -844,6 +897,16 @@ $('ovNext').onclick = function () {
   openText(next > -1 ? next : BANKS.findIndex(function (b) { return b; }));
 };
 
+/* switch page in code (Part 6's gap and sentence taps); `at` scrolls the text to a gap */
+function setView(v, at) {
+  if (v === view) { render(); return; }
+  PLACE[view + bi] = window.scrollY;
+  view = v; closeSheet();
+  document.querySelectorAll('.viewbtn').forEach(function (x) { x.classList.toggle('active', x.dataset.view === v); });
+  render();
+  var g = at != null ? document.querySelector('.rd-gap[data-i="' + at + '"]') : null;
+  if (g) { try { g.scrollIntoView({ block: 'center' }); } catch (e) {} } else window.scrollTo(0, PLACE[view + bi] || 0);
+}
 document.querySelectorAll('.viewbtn').forEach(function (b) {
   b.onclick = function () {
     if (b.classList.contains('active')) return;

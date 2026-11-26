@@ -105,7 +105,14 @@ function fill(html, phrases, cls) {
        text"): the pages are switched from the pill beside the title; the footer's toggle stays
        in the page only as the engine's record of the open page. The strip shows only when
        something is in hand, and otherwise gives its height back to the text. */
-    '.viewrow .viewtog{display:none!important}' +
+    /* (26 Nov 2026, later: "revert to the duplicate being present in the footer; merge two
+       footers into one") the toggle is back at the foot, ON the Submit bar: one row */
+    '#bar.rd-onebar{display:flex!important;align-items:center;justify-content:space-between;gap:.6rem;padding-left:14px!important;padding-right:14px!important}' +
+    '#bar.rd-onebar{flex-wrap:nowrap!important}' +
+    '#bar.rd-onebar .viewtog{margin:0!important;flex:none}' +
+    '#bar.rd-onebar .viewbtn{padding:.55rem .72rem!important;font-size:.68rem!important}' +
+    '#bar.rd-onebar #btnSubmit{padding-left:.9rem!important;padding-right:.9rem!important;font-size:.68rem!important;letter-spacing:.07em!important}' +
+    '#bar.rd-onebar #btnSubmit{flex:1 1 auto;min-width:0;max-width:15rem;margin:0!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
     '.viewrow:not(:has(.rd-carry:not([hidden]))){display:none!important}' +
     'body{padding-bottom:calc(var(--rd-bar-h,64px) + var(--rd-pin-h,52px) + 18px)!important}' +
     '.rd-carry{width:100%;max-width:40rem}.rd-carry[hidden]{display:none}' +
@@ -124,6 +131,9 @@ function fill(html, phrases, cls) {
     var vr = document.querySelector('.viewrow'); if (!vr || $('rdCarry')) return;
     var c = document.createElement('div'); c.id = 'rdCarry'; c.className = 'rd-carry'; c.hidden = true;
     vr.insertBefore(c, vr.firstChild);
+    /* one footer: the Text | Questions toggle joins the Submit bar */
+    var tg = vr.querySelector('.viewtog'), bar = $('bar');
+    if (tg && bar) { bar.insertBefore(tg, $('btnSubmit')); bar.classList.add('rd-onebar'); }
     if (window.ResizeObserver) { new ResizeObserver(fitPins).observe(vr); var b = $('bar'); if (b) new ResizeObserver(fitPins).observe(b); }
     fitPins();
   }
@@ -721,7 +731,7 @@ function paintBar() {
   var left = n - Object.keys(answers).length;
   $('btnSubmit').disabled = !all || marked;
   $('btnSubmit').textContent = marked ? 'Marked'
-    : (left > 0 ? 'Submit \u2014 ' + left + ' to go' : 'Submit');
+    : (left > 0 ? left + ' to go' : 'Submit');   /* one footer (26 Nov 2026): the count alone until it can be pressed */
 }
 
 /* ── THE CHOICE CARD ────────────────────────────────────────────────────

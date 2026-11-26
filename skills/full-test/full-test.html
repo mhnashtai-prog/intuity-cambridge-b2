@@ -26,6 +26,21 @@ body{color:var(--ink,#14110E);background:var(--screen,#F3F1ED);margin:0}
 .clock{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:.72rem;letter-spacing:.08em;
   color:var(--poster-ink);background:var(--tile-bg);padding:.3rem .65rem;border-radius:999px;justify-self:end}
 .clock.low{background:#F3D9D2;color:#8a2f22}
+#clock{visibility:hidden}   /* the clock lives in the switch now (26 Nov 2026) */
+/* START | INSTRUCTIONS (26 Nov 2026, the owner: "remove the instruction page"). The paper opens at
+   once; the instructions are one tap away. Start turns into the clock, counting up from 00:00. */
+.ft-sw{display:flex;justify-content:center;padding:.55rem 0 .15rem}
+.ft-sw[hidden]{display:none}
+.ft-sw span{display:inline-flex;padding:3px;border-radius:999px;background:rgba(20,17,14,.07)}
+.ft-sw button{all:unset;cursor:pointer;padding:9px 16px;border-radius:999px;font:700 10.5px/1 'Geist',system-ui,sans-serif;
+  letter-spacing:.11em;text-transform:uppercase;color:#4A4541;-webkit-tap-highlight-color:transparent;display:inline-flex;align-items:center;gap:7px}
+.ft-sw button[aria-checked=true]{background:#14110E;color:#F6F3EE}
+.ft-sw button:focus-visible{outline:2px solid #C2956E;outline-offset:2px}
+.ft-sw #go.run{font:600 13px/1 'Geist Mono',monospace;font-variant-numeric:tabular-nums;letter-spacing:.08em;padding:7px 16px;min-width:4.2em;justify-content:center}
+.ft-sw #go .dot{position:static;display:block;flex:none;width:7px;height:7px;border-radius:50%;background:#8FAE9F;animation:ftb 1s ease-in-out infinite}
+.ft-sw #go.low .dot{background:#C2956E}
+@keyframes ftb{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){ .ft-sw #go .dot{animation:none} }
 .vtab .pct{font-family:var(--f-mono);font-size:.82em;opacity:.65;margin-left:.3rem;font-variant-numeric:tabular-nums}
 .vtab.full .pct{opacity:1;color:var(--sage-ink,#527065)}
 .vtab .due{margin-left:.25rem}
@@ -197,6 +212,8 @@ h2.ptitle{font-family:var(--f-display);font-size:1.25rem;font-weight:700;margin:
   <!-- Part 1 … Part 7, each with how many answered. Built when the clock
        starts; intuity-overflow.js gives the row its pill and arrows. -->
   <div class="set-tabs" id="tabs" role="tablist" aria-label="Parts"></div>
+  <div class="ft-sw" id="sw" hidden><span role="radiogroup" aria-label="The paper or its instructions">
+    <button type="button" role="radio" id="go" aria-checked="true">Start</button><button type="button" role="radio" id="info" aria-checked="false">Instructions</button></span></div>
 </header>
 
 <main class="wrap" id="main"><div class="paper"><p class="kick">Loading the paper…</p></div></main>
@@ -262,7 +279,7 @@ async function load(){
   /* the clock kept running while the page was closed: hand the paper in
      at 75:00, as an invigilator would, rather than lose the attempt */
   if(S&&!S.done&&S.start&&Date.now()-S.start>=MIN()*60000){ submit(true); return; }
-  if(S&&S.done){ results(false); } else gate();
+  if(S&&S.done){ results(false); } else { if(!S) S=fresh(); openPaper(); }
 }
 
 /* Every part becomes {n, qs:[{num,...}], body} with question numbers 1–52. */
@@ -375,13 +392,33 @@ function seenNote(){
   return `<p class="best">You have already practised ${names.join(', ')}. Your score on this paper will read higher than on an unseen one.${fresh?` For the truest estimate, take <a href="${testUrl(fresh.id)}">${esc(fresh.title)}</a>: you haven't practised any of its texts.`:''}</p>`;
 }
 
-/* ── THE GATE ────────────────────────────────────────────────────────── */
-function gate(){
-  stop(); $('bar').classList.add('hidden'); testTabs(); $('clock').textContent=MIN()+':00'; $('clock').classList.remove('low');
+/* ── THE PAPER AT ONCE (26 Nov 2026, the owner: "every page starts with the test") ───────────
+   No instruction page in front: Part 1 is on screen as the page opens. The switch under the tabs
+   reads START | INSTRUCTIONS; Start (or a first answer) starts the clock and becomes it. Before the
+   clock runs, the tabs are the tests, so a pupil can still pick one; once it runs, the Parts. */
+let view='paper';
+const fresh=()=>({start:0,a:{},f:{},done:false});
+function openPaper(){
+  view='paper'; reviewing=false; cur=ONLY.includes(S.part)?S.part:ONLY[0];
+  $('sw').hidden=false; $('bar').classList.remove('hidden'); $('finish').textContent='Finish';
+  if(S.start) run(); paintSw(); show(cur); syncHeader();
+}
+function startClock(){
+  if(S.start) return; S.start=Date.now(); store.set(KEY,S); run(); paintSw(); tabs();
+}
+function paintSw(){
+  const g=$('go'); g.setAttribute('aria-checked',view==='paper'); $('info').setAttribute('aria-checked',view==='info');
+  g.classList.toggle('run',!!S.start); if(!S.start){ g.textContent='Start'; g.classList.remove('low'); }
+  g.setAttribute('aria-label',S.start?'Time so far':'Start the clock');
+  $('finish').classList.toggle('hidden',!S.start); $('left').classList.toggle('hidden',!S.start);
+}
+$('go').onclick=()=>{ const back=view!=='paper'; view='paper'; startClock(); paintSw();
+  if(back){ $('bar').classList.remove('hidden'); show(cur); } };
+$('info').onclick=()=>{ if(view==='info') return; view='info'; paintSw(); instructions(); };
+function instructions(){
+  $('bar').classList.add('hidden'); testTabs();
   const hist=store.get(HIST,[]).filter(h=>h.test===TEST_ID);
-  const best=hist.length?hist.reduce((b,h)=>(h.r+h.u>b.r+b.u?h:b)):null;
-  const live=S&&!S.done&&S.start;
-  const left=live?Math.max(0,MIN()*60-Math.floor((Date.now()-S.start)/1000)):0;
+  const best=hist.length?hist.reduce((b,h)=>((h.r||0)+(h.u||0)>(b.r||0)+(b.u||0)?h:b)):null;
   const rows=PARTS.map(p=>`<tr><td>Part ${p.n}</td><td>${esc(p.info.name)}<span class="tag ${p.info.skill}">${p.info.skill==='r'?'Reading':'Use of English'}</span></td><td>${p.qs.length} × ${p.info.per} = ${p.qs.length*p.info.per}</td></tr>`).join('');
   $('main').innerHTML=`<div class="paper">
     <p class="kick">${MODE==='english'?'Use of English · Parts 1–4':MODE==='reading'?'Reading · Parts 5–7':'Reading and Use of English'}<span class="r">Cambridge B2 First</span></p>
@@ -389,8 +426,8 @@ function gate(){
     <div class="facts"><div><b>${PARTS.length}</b>parts</div><div><b>${NQ()}</b>questions</div><div><b>${MIN()}</b>minutes</div><div><b>${MODE?1:2}</b>${MODE?'score':'scores'}</div></div>
     <table class="ptable">${rows}</table>
     <ul class="rules">
-      <li>One clock for the whole paper. Spend your time where you need it.</li>
-      <li>Move between parts freely, in any order.</li>
+      <li>The clock starts when you tap Start or answer your first question, and counts up. You have ${MIN()} minutes; at ${MIN()}:00 the paper is handed in for you.</li>
+      <li>Move between parts freely, in any order. Spend your time where you need it.</li>
       <li>Nothing is marked until you finish. Flag any question you want to come back to.</li>
       <li>${MODE==='english'?'You get your Use of English score, as Cambridge works it out from Parts 2, 3 and 4. On the real paper Part 1 counts towards Reading, so it shows here in marks.'
         :MODE==='reading'?'You get a Reading score, estimated from Parts 5, 6 and 7. On the real paper Part 1 counts towards Reading too.'
@@ -398,25 +435,22 @@ function gate(){
       ${MODE?'<li>The real exam is one paper, Reading and Use of English together, 75 minutes.</li>':''}
     </ul>
     ${seenNote()}
-    ${best?`<p class="best">Your best on this paper: <b>Reading ${best.r}</b> · <b>Use of English ${best.u}</b>${hist.length>1?` · ${hist.length} attempts`:''}</p>`:''}
-    <div class="go-row">${live&&left>0?`<button class="pill dark" type="button" id="resume">Continue · ${fmt(left)} left</button><button class="pill" type="button" id="fresh">Start again</button>`
-      :`<button class="pill dark" type="button" id="startBtn">Start the clock</button>`}</div>
+    ${best?`<p class="best">Your best on this paper: ${MODE!=='english'?`<b>Reading ${best.r||'<122'}</b>`:''}${!MODE?' · ':''}${MODE!=='reading'?`<b>Use of English ${best.u||'<122'}</b>`:''}${hist.length>1?` · ${hist.length} attempts`:''}</p>`:''}
+    ${S.start?`<div class="go-row"><button class="pill" type="button" id="freshBtn">Start again</button></div>`:''}
   </div>`;
-  const s=$('startBtn'), r=$('resume'), f=$('fresh');
-  if(s) s.onclick=()=>begin(true); if(r) r.onclick=()=>begin(false); if(f) f.onclick=()=>begin(true);
-}
-function begin(fresh){
-  if(fresh) S={start:Date.now(),a:{},f:{},done:false};
-  store.set(KEY,S); reviewing=false; cur=ONLY.includes(S.part)?S.part:ONLY[0];
-  $('bar').classList.remove('hidden'); run(); show(cur);
+  const f=$('freshBtn'); if(f) f.onclick=()=>{ stop(); S=fresh(); store.set(KEY,S); openPaper(); };
+  window.scrollTo(0,0);
 }
 
 /* ── THE CLOCK ───────────────────────────────────────────────────────── */
 const fmt=s=>Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+const fmt2=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
 function run(){
   stop();
-  const step=()=>{ const left=MIN()*60-Math.floor((Date.now()-S.start)/1000);
-    $('clock').textContent=fmt(Math.max(0,left)); $('clock').classList.toggle('low',left<=600);
+  /* counts up (26 Nov 2026, the owner: "a beautiful 00:01 counter clock"); its dot turns caramel in
+     the last five minutes, and the paper is handed in at the limit, as an invigilator would */
+  const step=()=>{ const used=Math.floor((Date.now()-S.start)/1000), left=MIN()*60-used;
+    const g=$('go'); g.innerHTML='<i class="dot"></i>'+fmt2(Math.min(used,MIN()*60)); g.classList.toggle('low',left<=300);
     if(left<=0){ stop(); submit(true); } };
   step(); tick=setInterval(step,1000);
 }
@@ -424,6 +458,7 @@ function stop(){ if(tick){ clearInterval(tick); tick=null; } }
 
 /* ── THE TABS ────────────────────────────────────────────────────────── */
 function tabs(){
+  if(!reviewing&&!S.start){ testTabs(); return; }
   $('tabs').setAttribute('aria-label','Parts');
   $('tabs').innerHTML=PARTS.map(p=>{
     const n=answered(p), all=n===p.qs.length, fl=p.qs.some(q=>S.f[q.num]);
@@ -519,7 +554,7 @@ function p7(p){
 /* ── ANSWERING ───────────────────────────────────────────────────────── */
 function wire(p){
   if(reviewing) return;
-  const save=()=>{ store.set(KEY,S); tabs(); };
+  const save=()=>{ startClock(); store.set(KEY,S); tabs(); };
   $('main').querySelectorAll('select[data-q]').forEach(s=>s.onchange=()=>{ S.a[s.dataset.q]=s.value; s.classList.toggle('has',!!s.value); save(); if(p.n===6) show(6); });
   $('main').querySelectorAll('input[data-q]').forEach(i=>i.oninput=()=>{ S.a[i.dataset.q]=i.value; i.classList.toggle('has',!!i.value.trim()); save(); });
   $('main').querySelectorAll('.ch[data-q],.let[data-q]').forEach(b=>b.onclick=()=>{ const q=b.dataset.q;
@@ -586,7 +621,7 @@ function submit(timeUp){
 
 /* ── THE REVEAL ──────────────────────────────────────────────────────── */
 function results(animate){
-  stop(); reviewing=false; $('bar').classList.add('hidden');
+  stop(); reviewing=false; view='paper'; $('bar').classList.add('hidden'); $('sw').hidden=true; syncHeader();
   const t=tally(); $('clock').textContent='Done'; $('clock').classList.remove('low');
   testTabs();
   const gR=grade(t.r), gU=grade(t.u);
@@ -613,7 +648,7 @@ function results(animate){
     <div class="go-row"><button class="pill dark" type="button" id="rev">Review my answers</button><button class="pill" type="button" id="again">Take it again</button>${(n=>n?`<a class="pill" href="${testUrl(n.id)}">Try ${esc(n.title)} &rsaquo;</a>`:'')(M.tests[M.tests.indexOf(T)+1])}<a class="pill" href="/index.html?openModal=${FROM}">Back to ${FROM==='reading'?'Reading':'Use of English'}</a></div>
   </div>`;
   $('rev').onclick=()=>{ reviewing=true; $('bar').classList.remove('hidden'); $('finish').textContent='Scores'; show(ONLY[0]); };
-  $('again').onclick=()=>{ S=null; store.set(KEY,null); gate(); };
+  $('again').onclick=()=>{ S=fresh(); store.set(KEY,null); openPaper(); };
   const fill=()=>{ if(!$('pR')) return; /* the pupil may already have moved on to the review */ document.querySelectorAll('.prow .tr i').forEach(i=>i.style.width=i.dataset.w+'%');
     $('pR').style.left=pos(t.r)+'%'; $('pU').style.left=pos(t.u)+'%';
     if(MODE==='english') $('pR').style.display='none'; if(MODE==='reading') $('pU').style.display='none';

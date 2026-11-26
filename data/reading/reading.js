@@ -101,7 +101,12 @@ function fill(html, phrases, cls) {
   st2.textContent =
     '.viewrow{position:fixed!important;left:0;right:0;bottom:var(--rd-bar-h,64px);z-index:39;display:flex!important;flex-direction:column;align-items:center;gap:.45rem;margin:0!important;' +
       'padding:.5rem 12px;background:#F3F1ED;border-top:1px solid rgba(20,17,14,.1);box-shadow:0 -6px 14px -10px rgba(20,17,14,.25)}' +
-    '.viewrow .viewtog{align-self:center}' +
+    /* 26 Nov 2026 (the owner: "remove the duplicate from the footer and allow more space for
+       text"): the pages are switched from the pill beside the title; the footer's toggle stays
+       in the page only as the engine's record of the open page. The strip shows only when
+       something is in hand, and otherwise gives its height back to the text. */
+    '.viewrow .viewtog{display:none!important}' +
+    '.viewrow:not(:has(.rd-carry:not([hidden]))){display:none!important}' +
     'body{padding-bottom:calc(var(--rd-bar-h,64px) + var(--rd-pin-h,52px) + 18px)!important}' +
     '.rd-carry{width:100%;max-width:40rem}.rd-carry[hidden]{display:none}' +
     '.rd-carry-q{font-size:.9rem;line-height:1.35;color:#1E1A17;margin-bottom:.4rem}.rd-carry-q b{font:700 .7rem/1 "Geist Mono",ui-monospace,monospace;color:#8E6238;margin-right:.45rem}' +

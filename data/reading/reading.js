@@ -135,9 +135,10 @@ function showAnswer(i) {
 var marked = false;
 /* TWO PAGES, AS THE PAPER (26 Nov 2026, the owner: "a toggle that gives them two screens:
    one for text and one for questions"). 'full' is the TEXT page in every Part; 'one' is the
-   other page: Part 5 Questions, Part 6 Sentences, Part 7 Statements. Part 6 opens on its
-   text (gist first); Parts 5 and 7 on their questions (read the question, then find it). */
-var view = GAPPED ? 'full' : 'one';
+   other page: Part 5 Questions, Part 6 Sentences, Part 7 Statements. Parts 5 and 6 open on
+   their text, as the owner asked (26 Nov 2026); Part 7 on its statements. */
+var view = MATCH ? 'one' : 'full';
+var sawQs = false;   /* Part 5: the question in hand is pinned on the Text page only once the pupil has been to the Questions */
 var PLACE = {};   /* scroll position per view and text */
 var cur7 = 0;     /* the question, gap or statement in hand, carried onto the other page */
 
@@ -576,6 +577,7 @@ function render() {
 
   if (view === 'one') {
     /* QUESTIONS: every question with its four options on the page; the text is one tap away */
+    sawQs = true;
     $('board').innerHTML = '<div class="mc-card">' + head + cards().map(q5HTML).join('') + '</div>';
   } else {
     /* TEXT: the passage alone, as the paper's left-hand page; the question in hand is pinned */
@@ -646,7 +648,7 @@ function paintCarry() {
     box.innerHTML = '<div class="rd-carry-q"><b>Gap ' + (cur7 + 1) + '</b>' + (tail ? esc(tail) + ' <span class="rd-carry-gap">___</span>' : 'Which sentence fits?') + '</div>' +
       (answers[cur7] !== undefined && !shown[cur7] ? '<button class="rd-show" type="button" data-s="' + cur7 + '">Show answer</button>' : '');
   } else {
-    var c = cards()[cur7]; if (!c) { box.hidden = true; return; }
+    var c = cards()[cur7]; if (!c || !sawQs) { box.hidden = true; box.innerHTML = ''; fitPins(); return; }
     box.innerHTML = '<div class="rd-carry-q"><b>Question ' + (cur7 + 1) + '</b>' + esc(c.question) + '</div>';
   }
   box.querySelectorAll('.rd-show[data-s]').forEach(function (b) { b.onclick = function () { showAnswer(+b.dataset.s); }; });

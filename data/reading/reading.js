@@ -550,16 +550,20 @@ function rubricHTML() {
     r = 'You are going to read <b>' + esc(t.rubric || 'an article') + '</b>. For questions 1–' + count() +
         ', choose the answer (A, B, C or D) which you think fits best according to the text.';
   }
-  var other = view === 'full' ? 'one' : 'full', ob = document.querySelector('.viewbtn[data-view="' + other + '"]');
-  var label = ob ? ob.textContent.trim() : (other === 'full' ? 'Text' : 'Questions');
+  /* the switch (26 Nov 2026, the owner: "simple iOS, not a full circle"): an iOS-style switch
+     named for the questions page. Off is the text, on is the questions; the knob slides, then
+     the page turns. */
+  var qb = document.querySelector('.viewbtn[data-view="one"]'), qname = qb ? qb.textContent.trim() : 'Questions', on = view === 'one';
   return '<div class="rd-rubric"><p>' + r + '</p>' +
-    '<button class="rd-go" type="button" data-go="' + other + '" aria-label="Open the ' + esc(label) + '">' +
-      '<span class="rd-go-ring" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M7.5 4.5 13 10l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>' +
-      '<span class="rd-go-l">' + esc(label) + '</span></button></div>';
+    '<button class="rd-sw' + (on ? ' on' : '') + '" type="button" role="switch" aria-checked="' + on + '" aria-label="' + esc(qname) + '">' +
+      '<span class="rd-sw-l">' + esc(qname) + '</span><span class="rd-sw-t" aria-hidden="true"><span class="rd-sw-k"></span></span></button></div>';
 }
 document.addEventListener('click', function (e) {
-  var g = e.target.closest && e.target.closest('.rd-go'); if (!g) return;
-  setView(g.dataset.go);
+  var g = e.target.closest && e.target.closest('.rd-sw'); if (!g) return;
+  var to = g.classList.contains('on') ? 'full' : 'one';
+  g.classList.toggle('on'); g.setAttribute('aria-checked', String(to === 'one'));
+  sfx('tick');
+  setTimeout(function () { setView(to); }, 190);
 });
 
 function render() {

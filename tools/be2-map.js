@@ -55,17 +55,37 @@ var SKILLS = {
      Game are the page's footer pills (tools/english-foot.js), and nothing switches to another
      Part. The whole paper is the menu's Full tests pill. */
   english:[
-    {group:"The four Parts"},
+    /* THREE SECTIONS, HAIRLINES BETWEEN (26 Nov 2026, the owner, as in the Writing menu): the whole
+       paper; its two halves, each timed on its own (the pupils: "why not a whole test of Use of
+       English?"); then the Parts. Use of English and Reading share the top two sections, so a
+       pupil finds the tests in the same place on either menu. The Full tests pill became the top
+       section. */
+    {group:"The whole paper · 75 minutes", tests:true},
+    {name:"Full tests", glyph:"1–7", url:"skills/full-test/full-test.html?from=english"},
+    {group:"Half a paper", rule:true, tests:true},
+    {name:"Full Use of English", glyph:"1–4", url:"skills/full-test/full-test.html?paper=english&from=english"},
+    {name:"Full Reading", glyph:"5–7", url:"skills/full-test/full-test.html?paper=reading&from=english"},
+    {group:"The four Parts", rule:true},
     {name:"Multiple choice", part:1, url:"skills/use-of-english/multiple-choice/multiple-choice-texts.html"},
     {name:"Open cloze", part:2, url:"skills/use-of-english/gap-fill/gap-fill.html"},
     {name:"Word formation", part:3, url:"skills/use-of-english/word-formation/word-formation.html"},
     {name:"Key word transformation", part:4, url:"skills/use-of-english/word-transformation/word-transformation.html"}
   ],
   reading:[
-    {name:"Part 5 \u00b7 Multiple Choice", url:"skills/reading/multiple-choice-menu/reading-part5.html"},
-    {name:"Part 6 \u00b7 Gapped Text", url:"skills/reading/gapped-texts-menu/reading-part6.html"},
-    {name:"Part 7 \u00b7 Multiple Matching", url:"skills/reading/multiple-matching-menu/reading-part7.html"},
-    {name:"Full tests", url:"skills/full-test/full-test.html?from=reading"}
+    /* THREE SECTIONS, HAIRLINES BETWEEN (26 Nov 2026, the owner, as in the Writing menu): the whole
+       paper; its two halves, each timed on its own (the pupils: "why not a whole test of Use of
+       English?"); then the Parts. Use of English and Reading share the top two sections, so a
+       pupil finds the tests in the same place on either menu. The Full tests pill became the top
+       section. */
+    {group:"The whole paper · 75 minutes", tests:true},
+    {name:"Full tests", glyph:"1–7", url:"skills/full-test/full-test.html?from=reading"},
+    {group:"Half a paper", rule:true, tests:true},
+    {name:"Full Use of English", glyph:"1–4", url:"skills/full-test/full-test.html?paper=english&from=reading"},
+    {name:"Full Reading", glyph:"5–7", url:"skills/full-test/full-test.html?paper=reading&from=reading"},
+    {group:"The three Parts", rule:true},
+    {name:"Multiple choice", part:5, url:"skills/reading/multiple-choice-menu/reading-part5.html"},
+    {name:"Gapped text", part:6, url:"skills/reading/gapped-texts-menu/reading-part6.html"},
+    {name:"Multiple matching", part:7, url:"skills/reading/multiple-matching-menu/reading-part7.html"}
   ],
   /* Writing is grouped (Oct 2026): what you write / what helps / check yourself.
      Numbers read as a sequence that never existed, so each ring carries a glyph.
@@ -185,8 +205,8 @@ var PILLS = {
   /* Full tests on the title's line (16 Nov 2026, a learner's review): below the
      eight rings it sat under the fold, with nothing to say it was there. It
      stays in the list too. No footer pill, no play mark. */
-    speaking:{ left:{ label:"Full test", aria:"Full test: all four Parts, about 14 minutes", url:"skills/speaking/test.html", play:false } },
-    english:{ left:{ label:"Full tests", aria:"Full tests: the whole Reading and Use of English paper, 75 minutes", url:"skills/full-test/full-test.html", play:false } }
+    speaking:{ left:{ label:"Full test", aria:"Full test: all four Parts, about 14 minutes", url:"skills/speaking/test.html", play:false } }
+    /* 26 Nov 2026: Use of English's Full tests pill became the top section of its menu */
 };
 
   /* a page's identity for "explored": its path, plus the one query that picks

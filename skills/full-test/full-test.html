@@ -218,8 +218,19 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const P=new URLSearchParams(location.search);
 const TEST_ID=+(P.get('test')||1);
-const FROM=P.get('from')==='reading'?'reading':'english';
-const KEY='intuity.fulltest.'+TEST_ID, HIST='intuity.fulltest.history';
+const FROM=['reading','english'].includes(P.get('from'))?P.get('from'):(P.get('paper')==='reading'?'reading':'english');   /* back to the menu the pupil came from */
+/* ONE PAPER, OR HALF OF IT (26 Nov 2026, the pupils: "why not a whole test of Use of English?").
+   ?paper=english sits Parts 1–4 on a 30-minute clock; ?paper=reading Parts 5–7 on 45; with neither,
+   the whole Reading and Use of English paper, 75 minutes, as Cambridge sets it. Each keeps its own
+   attempt and personal bests. Cambridge scores Part 1 as Reading, so the Use of English score of
+   the half paper is exact (Parts 2–4) and Part 1 shows in marks; the Reading half estimates its
+   score from Parts 5–7 alone, and says so. */
+const MODE=['english','reading'].includes(P.get('paper'))?P.get('paper'):'';
+const ONLY=MODE==='english'?[1,2,3,4]:MODE==='reading'?[5,6,7]:[1,2,3,4,5,6,7];
+const KEY='intuity.fulltest.'+TEST_ID+(MODE?'.'+MODE:''), HIST='intuity.fulltest.history'+(MODE?'.'+MODE:'');
+const MIN=()=>MODE==='english'?30:MODE==='reading'?45:M.minutes;
+const NQ=()=>PARTS.reduce((s,p)=>s+p.qs.length,0);
+const partOf=n=>PARTS.find(x=>x.n===n);
 const LET='ABCDEFGH';
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const store={get(k,d){try{return JSON.parse(localStorage.getItem(k))||d;}catch(e){return d;}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}};
@@ -242,14 +253,15 @@ let M=null, T=null, PARTS=[], S=null, cur=1, tick=null, reviewing=false;
 async function load(){
   M=await (await fetch('/data/full-test/full-tests.json',{cache:'no-store'})).json();
   T=M.tests.find(t=>t.id===TEST_ID)||M.tests[0];
-  const src={}; await Promise.all(Object.entries(T.parts).map(async([n,p])=>{ src[n]=await (await fetch(p.src,{cache:'no-store'})).json(); }));
-  PARTS=[1,2,3,4,5,6,7].map(n=>build(n,T.parts[n],src[n]));
-  $('sub').textContent=innerWidth<560?'Full '+T.title.toLowerCase():'Full '+T.title.toLowerCase()+' · Reading and Use of English';
+  const src={}; await Promise.all(Object.entries(T.parts).filter(([n])=>ONLY.includes(+n)).map(async([n,p])=>{ src[n]=await (await fetch(p.src,{cache:'no-store'})).json(); }));
+  PARTS=ONLY.map(n=>build(n,T.parts[n],src[n]));
+  const PAPER=MODE==='english'?'Use of English':MODE==='reading'?'Reading':'Reading and Use of English';
+  $('sub').textContent=MODE?'Full '+PAPER+' · '+T.title.toLowerCase():(innerWidth<560?'Full '+T.title.toLowerCase():'Full '+T.title.toLowerCase()+' · Reading and Use of English');
   document.title='Be2FIRST — Full '+T.title.toLowerCase();
   S=store.get(KEY,null);
   /* the clock kept running while the page was closed: hand the paper in
      at 75:00, as an invigilator would, rather than lose the attempt */
-  if(S&&!S.done&&S.start&&Date.now()-S.start>=M.minutes*60000){ submit(true); return; }
+  if(S&&!S.done&&S.start&&Date.now()-S.start>=MIN()*60000){ submit(true); return; }
   if(S&&S.done){ results(false); } else gate();
 }
 
@@ -365,22 +377,25 @@ function seenNote(){
 
 /* ── THE GATE ────────────────────────────────────────────────────────── */
 function gate(){
-  stop(); $('bar').classList.add('hidden'); testTabs(); $('clock').textContent=M.minutes+':00'; $('clock').classList.remove('low');
+  stop(); $('bar').classList.add('hidden'); testTabs(); $('clock').textContent=MIN()+':00'; $('clock').classList.remove('low');
   const hist=store.get(HIST,[]).filter(h=>h.test===TEST_ID);
   const best=hist.length?hist.reduce((b,h)=>(h.r+h.u>b.r+b.u?h:b)):null;
   const live=S&&!S.done&&S.start;
-  const left=live?Math.max(0,M.minutes*60-Math.floor((Date.now()-S.start)/1000)):0;
+  const left=live?Math.max(0,MIN()*60-Math.floor((Date.now()-S.start)/1000)):0;
   const rows=PARTS.map(p=>`<tr><td>Part ${p.n}</td><td>${esc(p.info.name)}<span class="tag ${p.info.skill}">${p.info.skill==='r'?'Reading':'Use of English'}</span></td><td>${p.qs.length} × ${p.info.per} = ${p.qs.length*p.info.per}</td></tr>`).join('');
   $('main').innerHTML=`<div class="paper">
-    <p class="kick">Reading and Use of English<span class="r">Cambridge B2 First</span></p>
+    <p class="kick">${MODE==='english'?'Use of English · Parts 1–4':MODE==='reading'?'Reading · Parts 5–7':'Reading and Use of English'}<span class="r">Cambridge B2 First</span></p>
     <h1 class="big">${esc(T.title)}</h1>
-    <div class="facts"><div><b>7</b>parts</div><div><b>52</b>questions</div><div><b>${M.minutes}</b>minutes</div><div><b>2</b>scores</div></div>
+    <div class="facts"><div><b>${PARTS.length}</b>parts</div><div><b>${NQ()}</b>questions</div><div><b>${MIN()}</b>minutes</div><div><b>${MODE?1:2}</b>${MODE?'score':'scores'}</div></div>
     <table class="ptable">${rows}</table>
     <ul class="rules">
       <li>One clock for the whole paper. Spend your time where you need it.</li>
       <li>Move between parts freely, in any order.</li>
       <li>Nothing is marked until you finish. Flag any question you want to come back to.</li>
-      <li>You get two scores, as Cambridge reports them: Reading (Parts 1, 5, 6 and 7) and Use of English (Parts 2, 3 and 4).</li>
+      <li>${MODE==='english'?'You get your Use of English score, as Cambridge works it out from Parts 2, 3 and 4. On the real paper Part 1 counts towards Reading, so it shows here in marks.'
+        :MODE==='reading'?'You get a Reading score, estimated from Parts 5, 6 and 7. On the real paper Part 1 counts towards Reading too.'
+        :'You get two scores, as Cambridge reports them: Reading (Parts 1, 5, 6 and 7) and Use of English (Parts 2, 3 and 4).'}</li>
+      ${MODE?'<li>The real exam is one paper, Reading and Use of English together, 75 minutes.</li>':''}
     </ul>
     ${seenNote()}
     ${best?`<p class="best">Your best on this paper: <b>Reading ${best.r}</b> · <b>Use of English ${best.u}</b>${hist.length>1?` · ${hist.length} attempts`:''}</p>`:''}
@@ -392,7 +407,7 @@ function gate(){
 }
 function begin(fresh){
   if(fresh) S={start:Date.now(),a:{},f:{},done:false};
-  store.set(KEY,S); reviewing=false; cur=S.part||1;
+  store.set(KEY,S); reviewing=false; cur=ONLY.includes(S.part)?S.part:ONLY[0];
   $('bar').classList.remove('hidden'); run(); show(cur);
 }
 
@@ -400,7 +415,7 @@ function begin(fresh){
 const fmt=s=>Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
 function run(){
   stop();
-  const step=()=>{ const left=M.minutes*60-Math.floor((Date.now()-S.start)/1000);
+  const step=()=>{ const left=MIN()*60-Math.floor((Date.now()-S.start)/1000);
     $('clock').textContent=fmt(Math.max(0,left)); $('clock').classList.toggle('low',left<=600);
     if(left<=0){ stop(); submit(true); } };
   step(); tick=setInterval(step,1000);
@@ -417,21 +432,21 @@ function tabs(){
   }).join('');
   $('tabs').querySelectorAll('.vtab').forEach(b=>b.onclick=()=>show(+b.dataset.p));
   const total=PARTS.reduce((s,p)=>s+answered(p),0);
-  $('left').textContent=reviewing?'Review':`${total}/52 answered`;
+  $('left').textContent=reviewing?'Review':`${total}/${NQ()} answered`;
 }
 
 /* ── ONE PART ────────────────────────────────────────────────────────── */
 function show(n){
   cur=n; if(S&&!S.done){ S.part=n; store.set(KEY,S); }
-  const p=PARTS[n-1];
+  const p=partOf(n), at=ONLY.indexOf(n);
   const body=[null,p1,p2,p3,p4,p5,p6,p7][n](p);
   const flags=reviewing?'':`<div class="flags-row"><span class="lbl">Flag to come back</span>${p.qs.map(q=>`<button type="button" class="flag${S.f[q.num]?' on':''}" data-f="${q.num}">${q.num}</button>`).join('')}</div>`;
   $('main').innerHTML=`<div class="paper${n===5||n===7?' wide':''}">
     <p class="kick">Part ${n} · ${esc(p.info.name)}<span class="r">${p.info.skill==='r'?'Reading':'Use of English'} · ${p.qs.length*p.info.per} marks</span></p>
     <p class="rubric">${esc(p.rubric||p.info.rubric)}</p>${body}${flags}</div>`;
-  $('prev').disabled=n===1; $('next').disabled=n===7;
-  $('prev').innerHTML=n>1?`&lsaquo; Part ${n-1}`:'&lsaquo; Part';
-  $('next').innerHTML=n<7?`Part ${n+1} &rsaquo;`:'Part &rsaquo;';
+  $('prev').disabled=at<=0; $('next').disabled=at>=ONLY.length-1;
+  $('prev').innerHTML=at>0?`&lsaquo; Part ${ONLY[at-1]}`:'&lsaquo; Part';
+  $('next').innerHTML=at<ONLY.length-1?`Part ${ONLY[at+1]} &rsaquo;`:'Part &rsaquo;';
   wire(p); tabs(); window.scrollTo(0,0);
 }
 const lock=()=>reviewing?' disabled':'';
@@ -512,13 +527,13 @@ function wire(p){
     b.parentNode.querySelectorAll('[data-q="'+q+'"]').forEach(x=>x.classList.toggle('on',x===b)); save(); });
   $('main').querySelectorAll('.flag').forEach(b=>b.onclick=()=>{ const q=b.dataset.f; S.f[q]=!S.f[q]; b.classList.toggle('on',!!S.f[q]); save(); });
 }
-$('prev').onclick=()=>{ if(cur>1) show(cur-1); };
-$('next').onclick=()=>{ if(cur<7) show(cur+1); };
+$('prev').onclick=()=>{ const i=ONLY.indexOf(cur); if(i>0) show(ONLY[i-1]); };
+$('next').onclick=()=>{ const i=ONLY.indexOf(cur); if(i<ONLY.length-1) show(ONLY[i+1]); };
 $('finish').onclick=()=>{ if(reviewing){ results(false); return; } confirmFinish(); };
 
 function confirmFinish(){
   const blank=PARTS.reduce((s,p)=>s+p.qs.length-answered(p),0), fl=Object.values(S.f).filter(Boolean).length;
-  const left=M.minutes*60-Math.floor((Date.now()-S.start)/1000);
+  const left=MIN()*60-Math.floor((Date.now()-S.start)/1000);
   const sc=document.createElement('div'); sc.className='scrim';
   sc.innerHTML=`<div class="paper"><p class="kick">Finish the paper</p><h2 class="ptitle">Hand in now?</h2>
     <p class="rubric">${blank?`<b>${blank}</b> ${blank===1?'question is':'questions are'} still blank. `:'Every question has an answer. '}${fl?`<b>${fl}</b> flagged. `:''}You still have <b>${fmt(Math.max(0,left))}</b>. Once you finish, the paper is marked and cannot be changed.</p>
@@ -539,10 +554,12 @@ const grade=s=>M.scale.grades.find(g=>s!=null&&s>=g[0])||M.scale.grades[M.scale.
 function tally(){
   const parts=PARTS.map(p=>({n:p.n,got:p.qs.reduce((s,q)=>s+markQ(p,q),0),max:p.qs.length*p.info.per,skill:p.info.skill}));
   const rr=parts.filter(x=>x.skill==='r').reduce((s,x)=>s+x.got,0), ur=parts.filter(x=>x.skill==='u').reduce((s,x)=>s+x.got,0);
+  if(MODE==='english') return {parts,rr,ur,r:null,u:scale(ur,M.scale.useOfEnglish)};
+  if(MODE==='reading'){ const mx=parts.reduce((s,x)=>s+x.max,0); return {parts,rr,ur,r:scale(Math.round(rr*42/mx),M.scale.reading),u:null}; }
   return {parts,rr,ur,r:scale(rr,M.scale.reading),u:scale(ur,M.scale.useOfEnglish)};
 }
 function submit(timeUp){
-  stop(); S.done=true; S.end=Math.min(Date.now(),S.start+M.minutes*60000); S.timeUp=!!timeUp; store.set(KEY,S);
+  stop(); S.done=true; S.end=Math.min(Date.now(),S.start+MIN()*60000); S.timeUp=!!timeUp; store.set(KEY,S);
   const t=tally();
   const hist=store.get(HIST,[]); const prev=hist.filter(h=>h.test===TEST_ID);
   const pb=prev.length?Math.max(...prev.map(h=>(h.r||0)+(h.u||0))):null;
@@ -582,25 +599,26 @@ function results(animate){
     <p class="kick">${esc(T.title)} · Results<span class="r">${S.timeUp?'Time ran out':((m=>m+(m===1?' minute':' minutes'))(Math.max(1,Math.round(((S.end||Date.now())-S.start)/60000))))}</span></p>
     ${S.pb?'<span class="pb">New personal best</span>':''}
     <div class="duo">
-      <div class="score" id="sR"><div class="disc" id="dR"><span id="nR">122</span></div><div class="lab">Reading · Parts 1, 5, 6, 7</div><div class="grade">${esc(gR[1])}</div><div class="raw">${t.rr} / 42 marks${gR[2]?' · '+gR[2]:''}</div></div>
-      <div class="score" id="sU"><div class="disc" id="dU"><span id="nU">122</span></div><div class="lab">Use of English · Parts 2, 3, 4</div><div class="grade">${esc(gU[1])}</div><div class="raw">${t.ur} / 28 marks${gU[2]?' · '+gU[2]:''}</div></div>
+      <div class="score" id="sR"${MODE==='english'?' hidden':''}><div class="disc" id="dR"><span id="nR">122</span></div><div class="lab">Reading · ${MODE==='reading'?'Parts 5, 6, 7 (estimate)':'Parts 1, 5, 6, 7'}</div><div class="grade">${esc(gR[1])}</div><div class="raw">${t.rr} / ${MODE==='reading'?t.parts.reduce((s,x)=>s+x.max,0):42} marks${gR[2]?' · '+gR[2]:''}</div></div>
+      <div class="score" id="sU"${MODE==='reading'?' hidden':''}><div class="disc" id="dU"><span id="nU">122</span></div><div class="lab">Use of English · Parts 2, 3, 4</div><div class="grade">${esc(gU[1])}</div><div class="raw">${t.ur} / 28 marks${gU[2]?' · '+gU[2]:''}${MODE==='english'?' · Part 1: '+t.rr+' / 8':''}</div></div>
     </div>
     <div class="scale" aria-hidden="true"><div class="track"></div>
       ${[[140,'B1'],[160,'B2'],[180,'C1']].map(([v,l])=>`<span class="band" style="left:${pos(v)+ (v===180?7:10)}%">${l}</span>`).join('')}
       ${[122,140,160,173,180,190].map(v=>`<span class="tick" style="left:${pos(v)}%">${v}</span>`).join('')}
       <span class="dot" id="pR" style="left:0"><b>R</b><i></i></span><span class="dot" id="pU" style="left:0"><b>U</b><i></i></span></div>
-    <p class="estimate">${avg?`Across this paper you average <b>${avg}</b>, which is <b>${esc(gA[1])}</b>${gA[2]?' ('+gA[2]+')':''}. `:''}This is an estimate. Cambridge's final grade averages five skills (Reading, Use of English, Writing, Listening and Speaking), and this paper measures two of them.</p>
+    <p class="estimate">${avg?`Across this paper you average <b>${avg}</b>, which is <b>${esc(gA[1])}</b>${gA[2]?' ('+gA[2]+')':''}. `:''}This is an estimate. Cambridge's final grade averages five skills (Reading, Use of English, Writing, Listening and Speaking), and ${MODE?'this half of the Reading and Use of English paper measures one of them':'this paper measures two of them'}.</p>
     <div class="parts">${t.parts.map(x=>`<div class="prow${x.n===weak.n&&weak.lost>0?' weak':''}"><span class="nm">Part ${x.n}<small>${esc(PART_INFO[x.n].name)}</small></span><span class="tr"><i data-w="${x.max?x.got/x.max*100:0}"></i></span><span class="sc">${x.got}/${x.max}</span></div>`).join('')}</div>
     ${weak.lost>0?`<p class="lesson">Part ${weak.n} cost you the most: <b>${weak.lost} ${weak.lost===1?'mark':'marks'}</b>. <a href="${PART_INFO[weak.n].practice}">Practise ${esc(PART_INFO[weak.n].name.toLowerCase())}</a>${weak.n===4?'. The transformations you missed are waiting there under <b>to fix</b>.':'.'}</p>`:'<p class="lesson"><b>Full marks.</b> Every part, every question.</p>'}
     ${hist.length>1?`<div class="hist">${hist.slice(-8).map((h,i)=>`<span>${h.date} · R ${h.r||'<122'} · U ${h.u||'<122'}</span>`).join('')}</div>`:''}
     <div class="go-row"><button class="pill dark" type="button" id="rev">Review my answers</button><button class="pill" type="button" id="again">Take it again</button>${(n=>n?`<a class="pill" href="${testUrl(n.id)}">Try ${esc(n.title)} &rsaquo;</a>`:'')(M.tests[M.tests.indexOf(T)+1])}<a class="pill" href="/index.html?openModal=${FROM}">Back to ${FROM==='reading'?'Reading':'Use of English'}</a></div>
   </div>`;
-  $('rev').onclick=()=>{ reviewing=true; $('bar').classList.remove('hidden'); $('finish').textContent='Scores'; show(1); };
+  $('rev').onclick=()=>{ reviewing=true; $('bar').classList.remove('hidden'); $('finish').textContent='Scores'; show(ONLY[0]); };
   $('again').onclick=()=>{ S=null; store.set(KEY,null); gate(); };
   const fill=()=>{ if(!$('pR')) return; /* the pupil may already have moved on to the review */ document.querySelectorAll('.prow .tr i').forEach(i=>i.style.width=i.dataset.w+'%');
     $('pR').style.left=pos(t.r)+'%'; $('pU').style.left=pos(t.u)+'%';
+    if(MODE==='english') $('pR').style.display='none'; if(MODE==='reading') $('pU').style.display='none';
     /* two scores in the same place share one label instead of printing over each other */
-    if(Math.abs(pos(t.r)-pos(t.u))<6){ $('pR').querySelector('b').textContent='R · U'; $('pU').querySelector('b').textContent=''; } };
+    if(!MODE&&Math.abs(pos(t.r)-pos(t.u))<6){ $('pR').querySelector('b').textContent='R · U'; $('pU').querySelector('b').textContent=''; } };
   const count=(el,disc,box,to,delay,done)=>{
     const end=to||122, p=v=>disc.style.setProperty('--p',pos(v));
     if(!animate||reduce){ el.textContent=label(to); p(end); box.classList.add('shown'); done&&done(); return; }
@@ -609,7 +627,9 @@ function results(animate){
         el.textContent=k<1?v:label(to); p(v); if(k<1) requestAnimationFrame(f); else { box.classList.add('shown'); done&&done(); } };
       requestAnimationFrame(f); },delay);
   };
-  count($('nR'),$('dR'),$('sR'),t.r,250); count($('nU'),$('dU'),$('sU'),t.u,900,()=>setTimeout(fill,100));
+  if(MODE==='english') count($('nU'),$('dU'),$('sU'),t.u,250,()=>setTimeout(fill,100));
+  else if(MODE==='reading') count($('nR'),$('dR'),$('sR'),t.r,250,()=>setTimeout(fill,100));
+  else { count($('nR'),$('dR'),$('sR'),t.r,250); count($('nU'),$('dU'),$('sU'),t.u,900,()=>setTimeout(fill,100)); }
   if(!animate||reduce) fill();
   if(animate&&window.SFX&&SFX.fanfare) setTimeout(()=>{ try{SFX.fanfare();}catch(e){} },2300);
 }

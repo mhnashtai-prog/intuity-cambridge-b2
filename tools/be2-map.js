@@ -59,12 +59,13 @@ var SKILLS = {
        paper; its two halves, each timed on its own (the pupils: "why not a whole test of Use of
        English?"); then the Parts. Use of English and Reading share the top two sections, so a
        pupil finds the tests in the same place on either menu. The Full tests pill became the top
-       section. */
+       section. The rings carry a drawn sign, not numbers (the owner: "the numbers look odd"):
+       a full disc for the whole paper, its left and right halves for the two halves. */
     {group:"The whole paper · 75 minutes", tests:true},
-    {name:"Full tests", glyph:"1–7", url:"skills/full-test/full-test.html?from=english"},
+    {name:"Full tests", pie:"full", url:"skills/full-test/full-test.html?from=english"},
     {group:"Half a paper", rule:true, tests:true},
-    {name:"Full Use of English", glyph:"1–4", url:"skills/full-test/full-test.html?paper=english&from=english"},
-    {name:"Full Reading", glyph:"5–7", url:"skills/full-test/full-test.html?paper=reading&from=english"},
+    {name:"Full Use of English", pie:"l", url:"skills/full-test/full-test.html?paper=english&from=english"},
+    {name:"Full Reading", pie:"r", url:"skills/full-test/full-test.html?paper=reading&from=english"},
     {group:"The four Parts", rule:true},
     {name:"Multiple choice", part:1, url:"skills/use-of-english/multiple-choice/multiple-choice-texts.html"},
     {name:"Open cloze", part:2, url:"skills/use-of-english/gap-fill/gap-fill.html"},
@@ -76,12 +77,13 @@ var SKILLS = {
        paper; its two halves, each timed on its own (the pupils: "why not a whole test of Use of
        English?"); then the Parts. Use of English and Reading share the top two sections, so a
        pupil finds the tests in the same place on either menu. The Full tests pill became the top
-       section. */
+       section. The rings carry a drawn sign, not numbers (the owner: "the numbers look odd"):
+       a full disc for the whole paper, its left and right halves for the two halves. */
     {group:"The whole paper · 75 minutes", tests:true},
-    {name:"Full tests", glyph:"1–7", url:"skills/full-test/full-test.html?from=reading"},
+    {name:"Full tests", pie:"full", url:"skills/full-test/full-test.html?from=reading"},
     {group:"Half a paper", rule:true, tests:true},
-    {name:"Full Use of English", glyph:"1–4", url:"skills/full-test/full-test.html?paper=english&from=reading"},
-    {name:"Full Reading", glyph:"5–7", url:"skills/full-test/full-test.html?paper=reading&from=reading"},
+    {name:"Full Use of English", pie:"l", url:"skills/full-test/full-test.html?paper=english&from=reading"},
+    {name:"Full Reading", pie:"r", url:"skills/full-test/full-test.html?paper=reading&from=reading"},
     {group:"The three Parts", rule:true},
     {name:"Multiple choice", part:5, url:"skills/reading/multiple-choice-menu/reading-part5.html"},
     {name:"Gapped text", part:6, url:"skills/reading/gapped-texts-menu/reading-part6.html"},

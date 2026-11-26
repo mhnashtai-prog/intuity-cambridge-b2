@@ -118,7 +118,8 @@ function fill(html, phrases, cls) {
     '.rd-carry{width:100%;max-width:40rem}.rd-carry[hidden]{display:none}' +
     '.rd-carry-q{font-size:.9rem;line-height:1.35;color:#1E1A17;margin-bottom:.4rem}.rd-carry-q b{font:700 .7rem/1 "Geist Mono",ui-monospace,monospace;color:#8E6238;margin-right:.45rem}' +
     '.rd-carry-l{display:flex;gap:.45rem}.rd-carry-l .rd-pick{min-width:40px;min-height:40px}' +
-    '.rd-st.inhand{box-shadow:inset 3px 0 0 #C2956E;background:rgba(194,149,110,.08);border-radius:6px}' +
+    /* (26 Nov 2026, the owner: "remove the highlight from the selected statement") the statement in hand
+       is remembered and pinned on the Sections page, but not marked in the list */
     '.rd-st-q{cursor:pointer}' +
     /* criticism-free (as Writing and Use of English): what the pupil chose is grey, never rust or struck */
     '.rd-slot.no,.rd-gap.no,.rd-gap.no .sen{color:#8C857B!important;text-decoration:none!important;border-color:rgba(20,17,14,.15)!important;background:rgba(20,17,14,.04)!important}' +

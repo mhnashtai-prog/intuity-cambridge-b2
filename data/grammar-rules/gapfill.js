@@ -457,11 +457,12 @@
          to do. The tally follows it. */
       document.getElementById('progressText').innerHTML =
         '<span class="quiz-instruction">Write the missing words</span>' +
-        '<span class="quiz-tally">' + countAnswered() + '/' +
-        test.sentences.length + '</span>';
+        (countAnswered() ? '<span class="quiz-tally">' + countAnswered() + '/' +
+        test.sentences.length + '</span>' : '');   /* no 0/10 before the first answer (27 Nov 2026) */
 
       const dots = document.getElementById('progressDots');
       dots.innerHTML = '';
+      if (!countAnswered()) return;   /* and no row of empty dots */
 
       test.sentences.forEach(function (item, idx) {
         const dot = document.createElement('div');

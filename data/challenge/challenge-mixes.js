@@ -106,7 +106,7 @@
 
   /* the header: subtitle, the rules links, and Defuse ↔ Forge carrying ?topic= */
   function dress(topic, here){
-    const sub = document.querySelector('.app-subtitle'); if (sub) sub.textContent = 'B2 First ' + topic.label;
+    const sub = document.querySelector('.app-subtitle'); if (sub) sub.textContent = topic.label;   /* 27 Nov 2026: the LEVEL B2 badge already says B2 */
     document.title = 'Be2FIRST \u2014 ' + topic.label + ' \u00b7 ' + (here === 'defuse' ? 'Defuse' : 'Forge');
     document.querySelectorAll('.mode-selector a.mode-btn').forEach(a => {
       const h = a.getAttribute('href') || '';

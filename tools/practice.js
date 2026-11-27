@@ -312,8 +312,9 @@ function isAnswered(i) {
 function updateStrip() {
   var test = allTests[currentTest];
   var done = test.items.filter(function (_, i) { return isAnswered(i); }).length;
-  $('practiceTally').textContent = done + '/' + test.items.length;
-  $('practiceDots').innerHTML = test.items.map(function (_, i) {
+  /* no count and no row of empty dots before the first answer (27 Nov 2026, as in Use of English) */
+  $('practiceTally').textContent = done ? done + '/' + test.items.length : '';
+  $('practiceDots').innerHTML = !done ? '' : test.items.map(function (_, i) {
     return '<div class="practice-dot' + (isAnswered(i) ? ' answered' : '') + '"></div>';
   }).join('');
 }

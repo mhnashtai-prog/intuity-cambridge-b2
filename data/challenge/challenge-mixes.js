@@ -288,7 +288,7 @@
   /* The header on a vocabulary run: the page's own siblings, then Defuse. */
   function dressVocab(v, here){
     here = here || 'defuse';
-    const sub = document.querySelector('.app-subtitle'); if (sub) sub.textContent = v.label.length > 16 ? v.label : v.label + ' \u00b7 B2 First';
+    const sub = document.querySelector('.app-subtitle'); if (sub) sub.textContent = v.label;   /* the LEVEL B2 badge says B2 (27 Nov 2026) */
     document.title = 'Be2FIRST \u2014 ' + v.label + ' \u00b7 ' + (here === 'forge' ? 'Forge' : 'Defuse');
     const lv = document.querySelector('.header-spacer b'); if (lv) lv.textContent = 'B2';
     const back = document.querySelector('.back-link');

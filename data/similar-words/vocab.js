@@ -382,7 +382,7 @@ function updateStrip() {
     total += set.sentences.length;
     done += Object.keys(answers[si] || {}).length;
   });
-  $('tally').textContent = done + '/' + total;
+  $('tally').textContent = done ? done + '/' + total : '';   /* no 0/20 before an answer (27 Nov 2026) */
 
   var dots = $('dots'), one = view === 'one' && !isChecked;
   dots.classList.toggle('cards', one);
@@ -402,6 +402,8 @@ function updateStrip() {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goCard(+el.dataset.c); }
       });
     });
+  } else if (!done) {
+    dots.innerHTML = '';   /* and no row of empty dots */
   } else {
     dots.innerHTML = tests[currentTest].map(function (set, si) {
       return set.sentences.map(function (_, li) {

@@ -51,7 +51,7 @@
    section=vocabulary) take Use of English's calm colours. */
 (function () { try {
   var L = location;
-  if (!(/\/skills\/grammar-rules\//.test(L.pathname) || (/\/skills\/challenge\//.test(L.pathname) && !/[?&]section=(vocabulary|writing)\b/.test(L.search)))) return;
+  /* 27 Nov 2026: Vocabulary joins, so every page takes the calm miss colours */
   var st = document.createElement('style'); st.textContent =
     ':root,html body{--wrong:#9A6A3C!important;--wrong-soft:rgba(154,106,60,.1)!important;--wrong-rgb:154,106,60!important;' +
     '--tile-no-ink:#8C857B!important;--tile-no-bg:rgba(20,17,14,.05)!important}';
@@ -225,7 +225,7 @@
   /* Progress: the streak and the review deck every activity reports to. */
   if (!window.Be2 && !document.querySelector('script[src*="/tools/be2-progress.js"]')) {
     var prog = document.createElement('script');
-    prog.src = '/tools/be2-progress.js?v=20261127';
+    prog.src = '/tools/be2-progress.js?v=20261127b';
     (document.head || document.documentElement).appendChild(prog);
   }
 

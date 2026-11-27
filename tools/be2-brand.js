@@ -54,7 +54,7 @@
   var TOG = '.viewtog,.seg,.modes,.vmode,.view-toggle,.mode-toggle,.nav-pill,.mode-pill,.register-bar,.mk-tog,.mg,.fc-seg,.pr-seg,.wr-stages:not(.wf-st)';
   /* rows of their own making that choose WHICH ONE (topics, sets, families, activities): 27 Nov 2026 audit */
   var ROW = '.f5subs,.cat-nav-buttons,.set-row,.pl-fams,.affix-row,.pr-kind,.test-selector,.mixrow,.topic-tabs,.pr-tabs';
-  var ON = '.active,.on,[aria-selected=true],[aria-pressed=true],[aria-checked=true],[aria-current]';
+  var ON = '.active,.on,[aria-selected=true],[aria-pressed=true],[aria-checked=true],[aria-current=page],[aria-current=true]';
   var TAB = '.vtab,.ttab,.ftab,.mode-selector .mode-btn';
   var GREY = 'rgba(118,118,128,.12)';
   var st = document.createElement('style'); st.textContent =
@@ -76,8 +76,8 @@
   'html body .set-choice .seg :is(button,a){color:#4A4541!important}' +
   'html body .set-choice .seg :is(button,a):is(' + ON + '){background:' + GREY + '!important;color:#14110E!important}' +
   /* which one: header tabs, grey and never underlined */
-  'html body :is(' + TAB + '):is(.active,[aria-current])::after{content:none!important;display:none!important}' +
-  'html body :is(' + TAB + '):is(.active,[aria-current]){background:' + GREY + '!important;color:#14110E!important;border-radius:999px!important;box-shadow:none!important;border-bottom:none!important;text-decoration:none!important}' +
+  'html body :is(' + TAB + '):is(.active,[aria-current=page],[aria-current=true])::after{content:none!important;display:none!important}' +
+  'html body :is(' + TAB + '):is(.active,[aria-current=page],[aria-current=true]){background:' + GREY + '!important;color:#14110E!important;border-radius:999px!important;box-shadow:none!important;border-bottom:none!important;text-decoration:none!important}' +
   'html body .ovf-row.has-pill > :is(' + TAB + ',button,a){background:none!important}' +
   /* the Master pages' test row is a header row too: no outlines, the chosen test on the grey pill */
   'html body .mk-trow .mk-t{border-color:transparent!important;background:none!important;color:#4A4541!important}' +

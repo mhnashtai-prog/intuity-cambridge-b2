@@ -517,8 +517,8 @@
       const from = allTests[currentTest + 1 < base ? currentTest + 1 : Math.max(0, currentTest - 1)];
       const picks = (from.sentences || []).filter(function (it) { return parseSentence(it) && it.answer; }).slice(0, 2);
       if (!picks.length) return '';
-      let h = '<div class="warmup"><div class="wu-kick">Warm-up · think first</div>' +
-              '<div class="wu-sub">Say the missing words in your head, then tap the gap to check.</div>';
+      /* one line, not three (27 Nov 2026): the first gap of the ten comes into view at once */
+      let h = '<div class="warmup"><div class="wu-kick">Warm-up · say it in your head, then tap ?</div>';
       picks.forEach(function (item, k) {
         const p = parseSentence(item);
         const gap = '<button type="button" class="wu-gap" data-k="' + k + '" aria-label="Show the answer">?</button>';
@@ -529,7 +529,7 @@
              '<div class="wu-reveal" data-k="' + k + '" hidden><b>' + escapeHtml(item.answer) + '</b>' +
              ruleNoteHtml(item) + '</div></div>';
       });
-      return h + '<div class="wu-go">Now write the ' + allTests[currentTest].sentences.length + ' below.</div></div>';
+      return h + '</div>';
     }
     document.addEventListener('click', function (e) {
       const g = e.target.closest && e.target.closest('.wu-gap');
@@ -541,10 +541,10 @@
     (function () {
       const st = document.createElement('style');
       st.textContent =
-        '.warmup{margin:0 0 1.4rem;padding:1rem 1.1rem;background:var(--card,#FAF8F5);border:1px solid var(--rule,rgba(20,17,14,.12));border-radius:6px}' +
-        '.wu-kick{font:600 .6875rem/1 var(--f-mono,ui-monospace,monospace);letter-spacing:.14em;text-transform:uppercase;color:var(--caramel,#A9774A)}' +
+        '.warmup{margin:0 0 1rem;padding:.7rem .9rem .4rem;background:var(--card,#FAF8F5);border:1px solid var(--rule,rgba(20,17,14,.12));border-radius:6px}' +
+        '.wu-kick{font:600 .6875rem/1.3 var(--f-mono,ui-monospace,monospace);letter-spacing:.1em;text-transform:uppercase;color:var(--caramel,#A9774A);margin-bottom:.35rem}' +
         '.wu-sub{font-size:.85rem;color:var(--quiet,#5C5852);margin:.45rem 0 .8rem}' +
-        '.wu-item{font-family:var(--f-serif,"Newsreader",Georgia,serif);font-size:1.05rem;line-height:1.7;padding:.45rem 0;border-top:1px solid var(--rule,rgba(20,17,14,.08))}' +
+        '.wu-item{font-family:var(--f-serif,"Newsreader",Georgia,serif);font-size:1rem;line-height:1.6;padding:.35rem 0;border-top:1px solid var(--rule,rgba(20,17,14,.08))}' +
         '.wu-gap{display:inline-flex;align-items:center;justify-content:center;min-width:3.2rem;height:1.9rem;margin:0 .25rem;vertical-align:baseline;' +
           'border:1.5px dashed var(--caramel,#A9774A);border-radius:4px;background:transparent;color:var(--caramel,#A9774A);font:600 .95rem/1 var(--f-body,system-ui);cursor:pointer}' +
         '.wu-gap.shown{border-style:solid;background:var(--caramel,#A9774A);color:#fff}' +

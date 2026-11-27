@@ -640,7 +640,7 @@ function submitAndScore() {
   const completedCount = Object.keys(firstAttemptScores).length;
   
   document.getElementById('modalSubtitle').textContent = 
-    `Test ${currentTest + 1} of ${allSets.length}`;
+    `Set ${currentTest + 1} of ${allSets.length}`;
   document.getElementById('scoreNumber').textContent = 
     `${correctCount}/${testData.gaps.length}`;
   document.getElementById('answeredStat').textContent = 

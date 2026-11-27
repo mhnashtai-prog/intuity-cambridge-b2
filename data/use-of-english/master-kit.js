@@ -121,7 +121,7 @@
     var self = this, p = this.prog(), nd = this.dueList().length;
     var pills = this.tests.map(function (_, t) {
       var r = p[self.sig(t)], cls = 'mk-t' + (t === self.test ? ' on' : '') + (r ? ' done' : '') + (r && r.got < r.max ? ' miss' : '');
-      return '<button class="' + cls + '" type="button" data-t="' + t + '">Test ' + (t + 1) + (r ? '<small>' + r.got + '/' + r.max + '</small>' : '') + '</button>';
+      return '<button class="' + cls + '" type="button" data-t="' + t + '">Set ' + (t + 1) + (r ? '<small>' + r.got + '/' + r.max + '</small>' : '') + '</button>';
     }).join('');
     var done = this.tests.filter(function (_, t) { return p[self.sig(t)]; }).length;
     /* 25 Nov 2026 (the owner: no intimidating zeros): the count shows once there is one */
@@ -202,7 +202,7 @@
     var self = this, cfg = this.cfg, qs = this.qs, n = qs.length, one = this.view === 'one';
     if (!n) { this.el.innerHTML = '<p class="mk-empty">Nothing to practise in this tab yet. Try another.</p>'; return; }
     var shown = one ? [this.qi] : qs.map(function (_, i) { return i; });
-    var kick = '<div class="mk-kick">' + esc((cfg.kick || 'Practice') + ' · ' + (this.test === 'fix' ? 'To learn' : 'Test ' + (this.test + 1))) + '<span class="right">' +
+    var kick = '<div class="mk-kick">' + esc((cfg.kick || 'Practice') + ' · ' + (this.test === 'fix' ? 'To learn' : 'Set ' + (this.test + 1))) + '<span class="right">' +
       (one ? 'Sentence ' + (this.qi + 1) + ' of ' + n : (this.answered() ? this.answered() + ' / ' + n + ' answered' : n + ' to do')) + '</span></div>';
     var rubric = cfg.rubric && (!one || this.qi === 0) && !this.marked ? '<p class="mk-rubric">' + esc(cfg.rubric) + '</p>' : '';
     var dots = qs.map(function (q, i) {

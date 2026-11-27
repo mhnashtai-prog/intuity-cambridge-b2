@@ -173,7 +173,7 @@ function paintTests() {
   $('tdots').innerHTML = TESTS.map(function (t, i) {
     return '<button class="tdot' + (i === si ? ' cur' : '') + '" type="button" data-i="' + i
       + '" role="tab" aria-selected="' + (i === si) + '" aria-label="'
-      + esc(TEXTS ? (t.title || ('Text ' + (i + 1))) : ('Test ' + (i + 1))) + '"></button>';
+      + esc(TEXTS ? (t.title || ('Text ' + (i + 1))) : ('Set ' + (i + 1))) + '"></button>';
   }).join('');
   $('tdots').querySelectorAll('.tdot').forEach(function (b) {
     b.onclick = function () { if (+b.dataset.i !== si) loadTest(+b.dataset.i); };
@@ -265,7 +265,7 @@ function gapHTML(k) {
 
 function bankLabel() {
   var d = (CFG.datasets || [])[bi];
-  return TEXTS ? ('Part 1 · ' + (d ? d.name : '')) : ((d ? d.name : '') + ' · Test ' + (si + 1));
+  return TEXTS ? ('Part 1 · ' + (d ? d.name : '')) : ((d ? d.name : '') + ' · Set ' + (si + 1));
 }
 function progressLabel() {
   var qs = questions();

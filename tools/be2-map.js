@@ -6,7 +6,8 @@
 (function (g) {
 var AREAS = [
   /* 27 Nov 2026 (the owner, after a pupil's idea): the exam papers first, in the paper's order;
-     Vocabulary and Grammar last. The colours
+     then Grammar, and Vocabulary last (the owner: many coursebooks put
+     the word lists at the end). The colours
      belong to the places, not the areas (the owner: the old order of colours was more appealing):
      caramel, sage, sand, tan, charcoal, caramel, top to bottom */
   { key:'english',    name:'Use of English', tone:{bg:'#DD8E58', fg:'#FEFCF9'},
@@ -17,10 +18,10 @@ var AREAS = [
     what:'Essays, reviews, reports, emails, articles' },
   { key:'speaking',   name:'Speaking',   tone:{bg:'#C2956E', fg:'#2B2129'},
     what:'Four Parts: Maya asks, you answer, now' },
-  { key:'vocabulary', name:'Vocabulary', tone:{bg:'#484641', fg:'#EBE7DE'},
-    what:'Collocations, phrase banks, synonyms' },
-  { key:'grammar',    name:'Grammar',    tone:{bg:'#DD8E58', fg:'#FEFCF9'},
-    what:'Tense maps, conditionals, modals, phrasal verbs' }
+  { key:'grammar',    name:'Grammar',    tone:{bg:'#484641', fg:'#EBE7DE'},
+    what:'Tense maps, conditionals, modals, phrasal verbs' },
+  { key:'vocabulary', name:'Vocabulary', tone:{bg:'#DD8E58', fg:'#FEFCF9'},
+    what:'Collocations, phrase banks, synonyms' }
 ];
 
 var SKILLS = {

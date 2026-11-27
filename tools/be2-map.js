@@ -5,10 +5,9 @@
    Window globals: BE2_MAP = {areas, skills, sub, keyOf(url), itemsOf(key)}. */
 (function (g) {
 var AREAS = [
-  { key:'grammar',    name:'Grammar',    tone:{bg:'#DD8E58', fg:'#FEFCF9'},
-    what:'Tense maps, conditionals, modals, phrasal verbs' },
-  { key:'vocabulary', name:'Vocabulary', tone:{bg:'#708A81', fg:'#FEFCF9'},
-    what:'Collocations, phrase banks, synonyms' },
+  /* 27 Nov 2026 (the owner, after a pupil's idea): the exam papers first, in the paper's order;
+     Vocabulary and Grammar last (Vocabulary before Grammar so the two caramel banners, Speaking
+     and Grammar, never sit side by side) */
   { key:'english',    name:'Use of English', tone:{bg:'#E5D1B8', fg:'#2B2129'},
     what:'Parts 1–4, with key word transformation' },
   { key:'reading',    name:'Reading',    tone:{bg:'#C2956E', fg:'#2B2129'},
@@ -16,7 +15,11 @@ var AREAS = [
   { key:'writing',    name:'Writing',    tone:{bg:'#484641', fg:'#EBE7DE'},
     what:'Essays, reviews, reports, emails, articles' },
   { key:'speaking',   name:'Speaking',   tone:{bg:'#DD8E58', fg:'#FEFCF9'},
-    what:'Four Parts: Maya asks, you answer, now' }
+    what:'Four Parts: Maya asks, you answer, now' },
+  { key:'vocabulary', name:'Vocabulary', tone:{bg:'#708A81', fg:'#FEFCF9'},
+    what:'Collocations, phrase banks, synonyms' },
+  { key:'grammar',    name:'Grammar',    tone:{bg:'#DD8E58', fg:'#FEFCF9'},
+    what:'Tense maps, conditionals, modals, phrasal verbs' }
 ];
 
 var SKILLS = {

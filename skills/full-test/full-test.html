@@ -26,7 +26,10 @@ body{color:var(--ink,#14110E);background:var(--screen,#F3F1ED);margin:0}
 .clock{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:.72rem;letter-spacing:.08em;
   color:var(--poster-ink);background:var(--tile-bg);padding:.3rem .65rem;border-radius:999px;justify-self:end}
 .clock.low{background:#F3D9D2;color:#8a2f22}
-#clock{visibility:hidden}   /* the clock lives in the switch now (26 Nov 2026) */
+#clock{visibility:hidden}
+.nx{display:flex;width:max-content;max-width:100%;margin:.2rem auto 1.1rem;padding:3px;border-radius:999px;background:rgba(20,17,14,.07);overflow-x:auto;scrollbar-width:none}
+.nx a{font:700 .6875rem/1 'Geist',system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#4A4541;text-decoration:none;padding:.65rem .9rem;border-radius:999px;white-space:nowrap}
+.nx a.on{background:#FAF8F5;color:#14110E;box-shadow:0 1px 2px rgba(20,17,14,.12)}   /* the clock lives in the switch now (26 Nov 2026) */
 /* START | INSTRUCTIONS (26 Nov 2026, the owner: "remove the instruction page"). The paper opens at
    once; the instructions are one tap away. Start turns into the clock, counting up from 00:00. */
 .ft-sw{display:flex;justify-content:center;padding:.55rem 0 .15rem}
@@ -467,8 +470,8 @@ function tabs(){
   $('tabs').setAttribute('aria-label','Parts');
   $('tabs').innerHTML=PARTS.map(p=>{
     const n=answered(p), all=n===p.qs.length, fl=p.qs.some(q=>S.f[q.num]);
-    const rv=reviewing?`${p.qs.reduce((s,q)=>s+markQ(p,q),0)}/${p.qs.length*p.info.per}`:`${n}/${p.qs.length}`;
-    return `<button class="vtab${p.n===cur?' active':''}${all&&!reviewing?' full':''}${fl&&!reviewing?' has-due':''}" type="button" role="tab" aria-selected="${p.n===cur}" data-p="${p.n}">Part ${p.n}<span class="pct">${rv}</span><span class="due"></span></button>`;
+    const rv=reviewing?`${p.qs.reduce((s,q)=>s+markQ(p,q),0)}/${p.qs.length*p.info.per}`:(n?`${n}/${p.qs.length}`:'');   /* no 0/8 before an answer: the bar already counts */
+    return `<button class="vtab${p.n===cur?' active':''}${all&&!reviewing?' full':''}${fl&&!reviewing?' has-due':''}" type="button" role="tab" aria-selected="${p.n===cur}" data-p="${p.n}">Part ${p.n}${rv?`<span class="pct">${rv}</span>`:''}<span class="due"></span></button>`;
   }).join('');
   $('tabs').querySelectorAll('.vtab').forEach(b=>b.onclick=()=>show(+b.dataset.p));
   const total=PARTS.reduce((s,p)=>s+answered(p),0);
@@ -624,6 +627,19 @@ function submit(timeUp){
 }
 
 /* ── THE REVEAL ──────────────────────────────────────────────────────── */
+/* WHAT NEXT (27 Nov 2026, the owner: "the test mode is no distraction tool"). Nothing during the paper
+   leads away from it; the options come after it, for the Part with most marks to win back: a Use of
+   English Part's own footer (Practise · Learn · Drill · Game, as tools/english-foot.js), a Reading Part's
+   practice page. */
+const UOE_NEXT={1:['/skills/use-of-english/multiple-choice/multiple-choice-texts.html','/skills/use-of-english/multiple-choice/master-part1.html','uoe-part1'],
+  2:['/skills/use-of-english/gap-fill/gap-fill.html','/skills/use-of-english/gap-fill/master-part2.html','uoe-part2'],
+  3:['/skills/use-of-english/word-formation/word-formation.html','/skills/use-of-english/word-formation/word-families.html','word-formation'],
+  4:['/skills/use-of-english/word-transformation/word-transformation.html','/skills/use-of-english/word-transformation/master-part4.html','uoe-part4']};
+function nextRow(n){
+  const L=n<=4?[['Practise',UOE_NEXT[n][0]],['Learn',UOE_NEXT[n][1]+'?mode=explore'],['Drill',UOE_NEXT[n][1]+'?mode=practice'],
+    ['Game','/skills/challenge/challenge.html?board=1&section=vocabulary&topic='+UOE_NEXT[n][2]]]:[['Practise',PART_INFO[n].practice]];
+  return `<nav class="nx" aria-label="Practise Part ${n}">${L.map(([t,u],i)=>`<a class="${i?'':'on'}" href="${u}">${t}</a>`).join('')}</nav>`;
+}
 function results(animate){
   stop(); reviewing=false; view='paper'; $('bar').classList.add('hidden'); $('sw').hidden=true; syncHeader();
   const t=tally(); $('clock').textContent='Done'; $('clock').classList.remove('low');
@@ -647,7 +663,7 @@ function results(animate){
       <span class="dot" id="pR" style="left:0"><b>R</b><i></i></span><span class="dot" id="pU" style="left:0"><b>U</b><i></i></span></div>
     <p class="estimate">${avg?`Across this paper you average <b>${avg}</b>, which is <b>${esc(gA[1])}</b>${gA[2]?' ('+gA[2]+')':''}. `:''}This is an estimate. Cambridge's final grade averages five skills (Reading, Use of English, Writing, Listening and Speaking), and ${MODE?'this half of the Reading and Use of English paper measures one of them':'this paper measures two of them'}.</p>
     <div class="parts">${t.parts.map(x=>`<div class="prow${x.n===weak.n&&weak.lost>0?' weak':''}"><span class="nm">Part ${x.n}<small>${esc(PART_INFO[x.n].name)}</small></span><span class="tr"><i data-w="${x.max?x.got/x.max*100:0}"></i></span><span class="sc">${x.got}/${x.max}</span></div>`).join('')}</div>
-    ${weak.lost>0?`<p class="lesson">Part ${weak.n} cost you the most: <b>${weak.lost} ${weak.lost===1?'mark':'marks'}</b>. <a href="${PART_INFO[weak.n].practice}">Practise ${esc(PART_INFO[weak.n].name.toLowerCase())}</a>${weak.n===4?'. The transformations you missed are waiting there under <b>to fix</b>.':'.'}</p>`:'<p class="lesson"><b>Full marks.</b> Every part, every question.</p>'}
+    ${weak.lost>0?`<p class="lesson">Most marks to win back: <b>Part ${weak.n} · ${esc(PART_INFO[weak.n].name)}</b>, ${weak.lost} ${weak.lost===1?'mark':'marks'}.${weak.n===4?' The transformations still to learn wait in Drill, under <b>to fix</b>.':''}</p>${nextRow(weak.n)}`:'<p class="lesson"><b>Full marks.</b> Every part, every question.</p>'}
     ${hist.length>1?`<div class="hist">${hist.slice(-8).map((h,i)=>`<span>${h.date} · R ${h.r||'<122'} · U ${h.u||'<122'}</span>`).join('')}</div>`:''}
     <div class="go-row"><button class="pill dark" type="button" id="rev">Review my answers</button><button class="pill" type="button" id="again">Take it again</button>${(n=>n?`<a class="pill" href="${testUrl(n.id)}">Try ${esc(n.title)} &rsaquo;</a>`:'')(M.tests[M.tests.indexOf(T)+1])}<a class="pill" href="/index.html?openModal=${FROM}">Back to ${FROM==='reading'?'Reading':'Use of English'}</a></div>
   </div>`;

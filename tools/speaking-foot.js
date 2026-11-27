@@ -21,9 +21,9 @@
   /* 25 Nov 2026: the drill for every Part is Mirroring, built from Tomás's and Beatriz's turns */
   var DRILL = '/skills/speaking/mirror.html?part=' + part;
   var ITEMS = [['practise','Practise','/skills/speaking/test.html?part=' + part],
-               ['structures','Structures','/skills/speaking/five.html?part=' + part],
-               ['drills','Drills',DRILL],
-               ['games','Games','/skills/speaking/useful-expressions.html?part=' + part + '&view=play']];
+               ['structures','Learn','/skills/speaking/five.html?part=' + part],
+               ['drills','Drill',DRILL],
+               ['games','Game','/skills/speaking/useful-expressions.html?part=' + part + '&view=play']];
   var css = document.createElement('style');
   css.textContent =
     '.sp-foot{position:fixed;left:0;right:0;bottom:0;z-index:210;display:flex;justify-content:center;background:var(--screen,#F3F1ED);border-top:1px solid rgba(20,17,14,.12);padding:.6rem 1rem calc(.6rem + env(safe-area-inset-bottom))}' +

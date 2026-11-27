@@ -2,7 +2,7 @@
    The owner, after Speaking: a task tile opens its practice at once (the question page,
    then Plan, Model, Guided, Write it: the step track), and the task's clever pages are
    footer pills, the same four everywhere, as in Speaking:
-     Practise · Basics · Exercises · Game
+     Practise · Learn · Drill · Game (27 Nov 2026: one set of words on every menu; Learn opens Basics, Drill opens Exercises)
    The task comes from the page (data-writing, ?task=, ?type=, the challenge's topic or the
    folder); the pill of the page you are on is lit. No pill leads to another task.
    The step track (writing-chrome.js, .wr-foot) sits just above this footer. */
@@ -61,8 +61,8 @@
     var here = hereOf();
     var pills = [
       ['practise', 'Practise', MODEL[k]],   /* 25 Nov 2026 (the owner): the Model is the entry; the rest are options */
-      ['basics', 'Basics', '/skills/writing/five.html?task=' + k],
-      ['exercises', 'Exercises', '/skills/writing/practice.html?task=' + k],
+      ['basics', 'Learn', '/skills/writing/five.html?task=' + k],
+      ['exercises', 'Drill', '/skills/writing/practice.html?task=' + k],
       ['game', 'Game', '/skills/challenge/challenge.html?board=1&section=writing&topic=writing-' + TOPIC[k]]
     ];
     var css = document.createElement('style');

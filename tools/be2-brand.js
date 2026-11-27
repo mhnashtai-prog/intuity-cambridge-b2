@@ -40,6 +40,42 @@
   '.parts a:not(.on),.roof a:not(.on),.mk-t:not(.on),.mg-b:not(.on),' +
   '.pl-switch button[aria-checked=false],.rd-pages button[aria-checked=false]{color:#4A4541!important}';
   (document.head || document.documentElement).appendChild(st); } catch (e) {} })();
+/* THREE RULES FOR CHOOSING (27 Nov 2026, the owner: "beige highlights should be completely removed …
+   toggle switches black and light grey, selector header tabs in grey"). The app had beige tracks,
+   white knobs, black knobs and caramel underlines for the same jobs. Now:
+     WHICH ONE (header rows: sets, tests, texts, topics, sections) — words, and the chosen one on the
+       flat light grey iOS pill (the sliding pill of intuity-overflow.js, or a still one where a row
+       has none). No underline.
+     WHICH VIEW (a toggle: All | One at a time, Text | Questions, Cards | Phrases) — the Play | List
+       pill: a light grey track, the chosen side black, small capitals.
+     WHICH PAGE (the footers: Practise · Learn · Drill · Game) — untouched: the iOS white-on-grey.
+   html body + !important, because many pages still carry their own tab CSS after this loads. */
+(function () { try {
+  var TOG = '.viewtog,.seg,.modes,.vmode,.view-toggle,.mode-toggle,.nav-pill,.mode-pill,.register-bar,.mk-tog,.mg,.fc-seg';
+  var ON = '.active,.on,[aria-selected=true],[aria-pressed=true],[aria-checked=true],[aria-current]';
+  var TAB = '.vtab,.ttab,.ftab,.mode-selector .mode-btn';
+  var GREY = 'rgba(118,118,128,.12)';
+  var st = document.createElement('style'); st.textContent =
+  /* which view: the toggle */
+  'html body :is(' + TOG + '){background:rgba(20,17,14,.07)!important;border:none!important;box-shadow:none!important;border-radius:999px!important;padding:3px!important}' +
+  'html body :is(' + TOG + ') :is(button,a){background:none!important;border:none!important;box-shadow:none!important;border-radius:999px!important;color:#4A4541!important;' +
+    "font:700 10.5px/1 'Geist',system-ui,sans-serif!important;letter-spacing:.11em!important;text-transform:uppercase!important;padding:8px 13px!important;min-height:0!important}" +
+  'html body :is(' + TOG + ') :is(button,a):is(' + ON + '){background:#14110E!important;color:#F6F3EE!important}' +
+  'html body :is(' + TOG + ') :is(button,a) small{color:inherit!important;opacity:.6}' +
+  'html body :is(.seg .thumb,.mode-toggle-slider,.toggle-thumb){background:#14110E!important;box-shadow:none!important}' +
+  /* which one: the set row above the tests is a header row, not a toggle */
+  'html body .set-choice .seg{background:none!important;padding:0!important}' +
+  'html body .set-choice .seg :is(button,a){color:#4A4541!important}' +
+  'html body .set-choice .seg :is(button,a):is(' + ON + '){background:' + GREY + '!important;color:#14110E!important}' +
+  /* which one: header tabs, grey and never underlined */
+  'html body :is(' + TAB + '):is(.active,[aria-current])::after{content:none!important;display:none!important}' +
+  'html body :is(' + TAB + '):is(.active,[aria-current]){background:' + GREY + '!important;color:#14110E!important;border-radius:999px!important;box-shadow:none!important;border-bottom:none!important;text-decoration:none!important}' +
+  'html body .ovf-row.has-pill > :is(' + TAB + ',button,a){background:none!important}' +
+  /* the Master pages' test row is a header row too: no outlines, the chosen test on the grey pill */
+  'html body .mk-trow .mk-t{border-color:transparent!important;background:none!important;color:#4A4541!important}' +
+  'html body .mk-trow .mk-t.done{color:#14110E!important}' +
+  'html body .mk-trow .mk-t.on{background:' + GREY + '!important;color:#14110E!important}';
+  (document.head || document.documentElement).appendChild(st); } catch (e) {} })();
 (function () { try { var st = document.createElement('style'); st.textContent = 'html{-webkit-text-size-adjust:100%;text-size-adjust:100%}'; (document.head || document.documentElement).appendChild(st); } catch (e) {} })();
 (function () {
   var OLD_NAME = /INTUITY/g;

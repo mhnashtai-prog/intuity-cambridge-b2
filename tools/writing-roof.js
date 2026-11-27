@@ -19,7 +19,7 @@
   var CSS = '.roof{display:flex;justify-content:center;gap:.25rem;margin:-.55rem 0 .35rem;white-space:nowrap;flex-wrap:wrap}' +
     '.roof a{color:#4A4541;position:relative;display:inline-block;padding:.5rem .4rem .35rem;font:700 .6875rem/1 "Geist Mono",ui-monospace,monospace;letter-spacing:.1em;' +
     'text-transform:uppercase;text-decoration:none;-webkit-tap-highlight-color:transparent}' +
-    '.roof a.on{color:#14110E;box-shadow:inset 0 -2px 0 #C2956E}' +
+    '.roof a.on{color:#14110E;box-shadow:none;background:rgba(118,118,128,.12);border-radius:999px}' +   /* 27 Nov 2026: header tabs grey, no underline */
     '.roof a:focus-visible{outline:2px solid #C2956E;outline-offset:2px}' +
     '.roofed .back-link{white-space:nowrap}' +
     /* the Level badge makes way for the tabs (it said the same on every page) */

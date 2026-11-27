@@ -6,17 +6,18 @@
 (function (g) {
 var AREAS = [
   /* 27 Nov 2026 (the owner, after a pupil's idea): the exam papers first, in the paper's order;
-     Vocabulary and Grammar last (Vocabulary before Grammar so the two caramel banners, Speaking
-     and Grammar, never sit side by side) */
-  { key:'english',    name:'Use of English', tone:{bg:'#E5D1B8', fg:'#2B2129'},
+     Vocabulary and Grammar last. The colours
+     belong to the places, not the areas (the owner: the old order of colours was more appealing):
+     caramel, sage, sand, tan, charcoal, caramel, top to bottom */
+  { key:'english',    name:'Use of English', tone:{bg:'#DD8E58', fg:'#FEFCF9'},
     what:'Parts 1–4, with key word transformation' },
-  { key:'reading',    name:'Reading',    tone:{bg:'#C2956E', fg:'#2B2129'},
+  { key:'reading',    name:'Reading',    tone:{bg:'#708A81', fg:'#FEFCF9'},
     what:'Parts 5–7 and full practice tests' },
-  { key:'writing',    name:'Writing',    tone:{bg:'#484641', fg:'#EBE7DE'},
+  { key:'writing',    name:'Writing',    tone:{bg:'#E5D1B8', fg:'#2B2129'},
     what:'Essays, reviews, reports, emails, articles' },
-  { key:'speaking',   name:'Speaking',   tone:{bg:'#DD8E58', fg:'#FEFCF9'},
+  { key:'speaking',   name:'Speaking',   tone:{bg:'#C2956E', fg:'#2B2129'},
     what:'Four Parts: Maya asks, you answer, now' },
-  { key:'vocabulary', name:'Vocabulary', tone:{bg:'#708A81', fg:'#FEFCF9'},
+  { key:'vocabulary', name:'Vocabulary', tone:{bg:'#484641', fg:'#EBE7DE'},
     what:'Collocations, phrase banks, synonyms' },
   { key:'grammar',    name:'Grammar',    tone:{bg:'#DD8E58', fg:'#FEFCF9'},
     what:'Tense maps, conditionals, modals, phrasal verbs' }

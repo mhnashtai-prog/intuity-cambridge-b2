@@ -129,13 +129,12 @@
      tests (five sets), split in two when it runs past 25 sentences, so
      Defuse's tabs line up with the page's numbered tabs. */
   const VBASE = '/data/similar-words/', VPAGE = '/skills/similar-words/';
-  const WORDBANK_TRIO = [['similar-words','Similar Words','vocabulary.html'],
-                         ['topic-vocabulary','Topic Vocabulary','topic-vocabulary.html'],
-                         ['academic','Academic','academic-vocabulary.html']];
+  /* 27 Nov 2026: each word page's row leads to its own Gap-fill, not to its two siblings (the menu has them) */
+  const WORDBANK_TRIO = null;
   const VOCAB = {
-    'similar-words':    { label:'Similar Words',          file:'similar-words.json',             home:'vocabulary.html',        nav:WORDBANK_TRIO },
-    'topic-vocabulary': { label:'Topic Vocabulary',       file:'topic-vocabulary.json',          home:'topic-vocabulary.html',  nav:WORDBANK_TRIO },
-    'academic':         { label:'Synonyms',    file:'academic-vocabulary-sets.json',  home:'academic-vocabulary.html', nav:WORDBANK_TRIO },
+    'similar-words':    { label:'Similar Words',          file:'similar-words.json',             home:'vocabulary.html',        nav:[['similar-words','Gap-fill','vocabulary.html']] },
+    'topic-vocabulary': { label:'Topic Vocabulary',       file:'topic-vocabulary.json',          home:'topic-vocabulary.html',  nav:[['topic-vocabulary','Gap-fill','topic-vocabulary.html']] },
+    'academic':         { label:'Synonyms',    file:'academic-vocabulary-sets.json',  home:'academic-vocabulary.html', nav:[['academic','Gap-fill','academic-vocabulary.html']] },
     'collocations':     { label:'Collocations',           file:'data-collocations-gapfill.json', home:'collocations.html' },
     'collective':       { label:'Collective Expressions', file:'collective-expressions-data.json', home:'collective-expressions-master.html', kind:'questions' },
     /* Descriptive Words' (Expression Master's) own Practice questions, one tab per topic tab on

@@ -16,7 +16,7 @@
   /* THE WRITING TAB (14 Nov 2026): the section tab every Writing page already
      uses (Games, the Sentence pages, How it's marked): mono, 11px, bold, a
      caramel underline on the chosen one, no fill. */
-  var CSS = '.roof{display:flex;justify-content:center;gap:.25rem;margin:.45rem 0 .35rem;white-space:nowrap;flex-wrap:wrap}' +
+  var CSS = '.roof{display:flex;justify-content:center;gap:.25rem;margin:0 0 .35rem;white-space:nowrap;flex-wrap:wrap}' +
     '.roof a{color:#4A4541;position:relative;display:inline-block;padding:.45rem .7rem;font:700 .6875rem/1 "Geist Mono",ui-monospace,monospace;letter-spacing:.1em;' +
     'text-transform:uppercase;text-decoration:none;-webkit-tap-highlight-color:transparent}' +
     '.roof a.on{color:#14110E;box-shadow:none;background:rgba(118,118,128,.12);border-radius:999px}' +   /* 27 Nov 2026: header tabs grey, no underline */
@@ -36,7 +36,7 @@
     '.rf-title{display:flex;flex-direction:column;align-items:center;line-height:1.1}' +
     '.rf-word{font:900 1.09rem/1.1 Geist,system-ui,sans-serif;letter-spacing:.2em;color:#14110E}' +
     '.rf-sub{font:600 .6875rem/1.1 Geist,system-ui,sans-serif;letter-spacing:.16em;text-transform:uppercase;color:#5C5852;margin-top:.1rem}' +
-    '.rf-head + .roof{margin-top:.45rem}' +   /* 27 Nov 2026: room between the title and the grey pill */
+    '.rf-head + .roof{margin-top:0}' +   /* 27 Nov 2026: a little room between the title and the grey pill (the owner: 14px was too much) */
     '.rf-hide{display:none!important}' +
     /* ONE HEADER ON ALL FOUR LEARN IT TABS (16 Nov 2026, a learner's review): the task line is the
        task picker (with its chevron) and the sound button sits on the right, as on In five and Models */

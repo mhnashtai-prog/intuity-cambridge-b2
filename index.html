@@ -296,7 +296,14 @@
   <h1 class="brand">Intuity</h1>
   <p class="byline">Majid Nashtai</p>
   <!-- DAILY 5 (12 Nov 2026, the teacher's layout): today's session, on the right under the byline -->
-  <div class="bar-act"><a class="rv-corner" id="rvCorner" href="/review.html?today=1" aria-label="Daily 5"><b id="rvN">Daily</b><small id="rvU">5</small></a></div>
+  <!-- SEARCH (27 Nov 2026, the owner: "a search pill for direct access"): left of Daily 5, same pill -->
+  <div class="bar-act"><button type="button" class="rv-corner sr-pill" id="srPill" aria-haspopup="dialog">Search</button><a class="rv-corner" id="rvCorner" href="/review.html?today=1" aria-label="Daily 5"><b id="rvN">Daily</b><small id="rvU">5</small></a></div>
+  <div class="sr-ov" id="srOv" role="dialog" aria-modal="true" aria-label="Search" hidden>
+    <div class="sr-sheet">
+      <div class="sr-row"><input id="srIn" type="search" placeholder="Conditionals, Part 2, essay…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Search the app"><button type="button" class="sr-x" id="srX">Close</button></div>
+      <ul class="sr-list" id="srList"></ul>
+    </div>
+  </div>
 </header>
 
 <!-- TODAY (10 Nov 2026): the streak and the review deck, as a dial where the
@@ -357,7 +364,20 @@ document.addEventListener('visibilitychange', function () { if (!document.hidden
      bite, one phrase). Its rim keeps the 24-day colour code below; once today's session is
      done it says DONE. The board is one tap away from the session. -->
 <style>
-  .bar-act{align-self:stretch;display:flex;justify-content:flex-end;margin:14px 0 0}
+  .bar-act{align-self:stretch;display:flex;justify-content:space-between;margin:14px 0 0}
+  .sr-pill{cursor:pointer}
+  .sr-ov{position:fixed;inset:0;z-index:1000;background:rgba(20,17,14,.32);display:flex;justify-content:center;align-items:flex-start}
+  .sr-ov[hidden]{display:none}
+  .sr-sheet{width:min(560px,100%);max-height:88vh;overflow:auto;background:#F3F1ED;border-radius:0 0 18px 18px;padding:calc(14px + env(safe-area-inset-top)) 14px 14px;box-shadow:0 8px 30px rgba(20,17,14,.2)}
+  .sr-row{display:flex;gap:8px;align-items:center}
+  .sr-row input{flex:1;min-width:0;font:500 1rem/1.2 Geist,system-ui,sans-serif;color:#14110E;background:#FAF8F5;border:1px solid #C9C1B4;border-radius:999px;padding:.75rem 1rem;outline:none}
+  .sr-row input:focus{border-color:#14110E}
+  .sr-row input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
+  .sr-x{font:700 .6875rem/1 Geist,system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#4A4541;background:none;border:0;padding:.75rem .4rem;cursor:pointer}
+  .sr-list{list-style:none;margin:10px 0 0;padding:0}
+  .sr-list a{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:.85rem .3rem;border-top:1px solid rgba(20,17,14,.1);text-decoration:none;color:#14110E;font:600 1rem/1.25 Geist,system-ui,sans-serif}
+  .sr-list a small{font:600 .625rem/1 'Geist Mono',ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:#8C857B;white-space:nowrap}
+  .sr-list .sr-hint{padding:.9rem .3rem;color:#6E6660;font:400 .9rem/1.4 Geist,system-ui,sans-serif}
   .rv-corner{position:relative;z-index:5;
     display:inline-flex;align-items:center;gap:.4em;min-height:38px;padding:0 18px 0 calc(18px + .16em);box-sizing:border-box;
     border-radius:999px;border:1px solid #C9C1B4;background:rgba(250,248,245,.92);text-decoration:none;color:#3A3530;
@@ -424,9 +444,49 @@ document.addEventListener('visibilitychange', function () { if (!document.hidden
   <div class="panel" id="panel"></div>
 </div>
 
-<script src="/tools/be2-map.js?v=40"></script>
+<script src="/tools/be2-map.js?v=41"></script>
 <script>
-const AREAS = BE2_MAP.areas, SKILLS = BE2_MAP.skills, SUB = BE2_MAP.sub;   /* the menus live in /tools/be2-map.js (11 Nov 2026) */
+const AREAS = BE2_MAP.areas, SKILLS = BE2_MAP.skills, SUB = BE2_MAP.sub;
+/* SEARCH (27 Nov 2026). Every page in the menus, found by its name, its menu, its Part, or the words a
+   pupil would type for it. Every word typed must appear; results name their menu. */
+(function () {
+  const MENU = { grammar:'Grammar', vocabulary:'Vocabulary', english:'Use of English', reading:'Reading', writing:'Writing', speaking:'Speaking' };
+  const ALSO = [   /* a part of the url → words a pupil might type */
+    ['multiple-choice-texts','cloze options'], ['gap-fill/gap-fill','gap fill gaps grammar words'], ['word-formation','prefixes suffixes word families'],
+    ['word-transformation','rewrite transformations'], ['reading-part5','questions options'], ['reading-part6','missing sentences gaps'],
+    ['reading-part7','matching statements sections'], ['essay-model','for and against opinion discursive'], ['email-model','letter informal formal'],
+    ['tenses-rules','present past future perfect continuous'], ['conditionals-rules','if zero first second third mixed wish'],
+    ['past-modals','must have could have should have might have'], ['passive-voice','passive'], ['reported-speech','said told reporting'],
+    ['linking-words','however although despite linkers connectors'], ['inversion','hardly never seldom'], ['gerunds-infinitives','ing to infinitive verb patterns'],
+    ['miscellaneous-rules','relative who which whose that'], ['phrasal-verbs','phrasal'], ['proverbs-quiz','idioms proverbs fixed phrases'],
+    ['collocations','make do take have'], ['prepositions','dependent prepositions'], ['academic-vocabulary','synonyms academic'],
+    ['speaking/test','examiner maya'], ['full-test','exam paper whole test timed'] ];
+  const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9 ]+/g, ' ');
+  const ALL = [];
+  Object.keys(SKILLS).forEach(k => { let group = '';
+    (Array.isArray(SKILLS[k]) ? SKILLS[k] : (SKILLS[k].items || [])).forEach(it => {
+      if (it.group) { group = it.group; return; } if (!it.url) return;
+      const also = ALSO.filter(a => it.url.indexOf(a[0]) >= 0).map(a => a[1]).join(' ');
+      ALL.push({ name: it.name, menu: MENU[k] || k, url: '/' + it.url.replace(/^\//, ''),
+                 hay: norm([it.name, MENU[k], group, it.part ? 'part ' + it.part : '', also].join(' ')) });
+    }); });
+  Object.keys(MENU).forEach(k => ALL.push({ name: MENU[k] + ' menu', menu: 'Menu', url: '/index.html?openModal=' + k, hay: norm(MENU[k] + ' menu') }));
+  const $ = id => document.getElementById(id), ov = $('srOv'), inp = $('srIn'), list = $('srList');
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+  function draw() {
+    const words = norm(inp.value).split(' ').filter(Boolean);
+    if (!words.length) { list.innerHTML = '<li class="sr-hint">Try: conditionals, Part 2, essay, phrasal verbs, full test.</li>'; return; }
+    const seen = new Set(), hits = ALL.filter(x => words.every(w => x.hay.indexOf(w) >= 0) && !seen.has(x.url + x.menu) && seen.add(x.url + x.menu));
+    list.innerHTML = hits.length ? hits.slice(0, 14).map(x => '<li><a href="' + esc(x.url) + '">' + esc(x.name) + '<small>' + esc(x.menu) + '</small></a></li>').join('')
+      : '<li class="sr-hint">Nothing by that name yet. Try fewer words.</li>';
+  }
+  function open() { ov.hidden = false; inp.value = ''; draw(); setTimeout(() => inp.focus(), 30); }
+  function close() { ov.hidden = true; $('srPill').focus(); }
+  $('srPill').onclick = open; $('srX').onclick = close; inp.oninput = draw;
+  ov.addEventListener('click', e => { if (e.target === ov) close(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !ov.hidden) close(); });
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') { const a = list.querySelector('a'); if (a) location.href = a.href; } });
+})();   /* the menus live in /tools/be2-map.js (11 Nov 2026) */
 
 const $ = id => document.getElementById(id);
 try{ sessionStorage.removeItem('intuity.sheetReturn'); }catch(e){}

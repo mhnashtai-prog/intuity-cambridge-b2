@@ -115,6 +115,11 @@
       else if (/\/boardgame(\.html)?(\?|#|$)/.test(h)) a.setAttribute('href', '/skills/challenge/boardgame.html?topic=' + encodeURIComponent(topic.id));   /* Game */
       else if (/challenge\.html\?board=1/.test(h)) a.setAttribute('href', '/skills/challenge/challenge.html?board=1&topic=' + encodeURIComponent(topic.id));   /* Board */
     });
+    /* 27 Nov 2026: Past Modals has a second game, Odd one out, beside Defuse */
+    const row = document.querySelector('.mode-selector');
+    if (row && topic.id === 'past-modals' && !row.querySelector('a[href*="past-modal-game"]')) {
+      const a = document.createElement('a'); a.className = 'mode-btn'; a.href = '/skills/grammar-rules/past-modal-game.html'; a.textContent = 'Odd one out'; row.appendChild(a);
+    }
   }
 
 

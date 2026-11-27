@@ -98,7 +98,7 @@
       var tk = document.createElement('div'); tk.className = 'wr-foot wr-steps wf-own';
       tk.innerHTML = '<div class="wr-row"><div class="wr-stages wf-st" role="group" aria-label="Stages">' + STEPS[k].map(function (x) {
         return x[0] === 'write' ? '<span class="wr-stage wf-s on" aria-current="step">Write it</span>'
-          : '<a class="wr-stage wf-s be2-nohit" href="' + x[1] + '" target="_top">' + x[0].charAt(0).toUpperCase() + x[0].slice(1) + '</a>';
+          : '<a class="wr-stage wf-s be2-nohit" href="' + x[1] + '" target="_top">' + (x[0] === 'sample' ? 'Full answer' : x[0].charAt(0).toUpperCase() + x[0].slice(1)) + '</a>';   /* the fourth step is Full answer (27 Nov 2026) */
       }).join('') + '</div></div>';
       document.body.appendChild(tk);
     }

@@ -22,7 +22,7 @@
    ═══════════════════════════════════════════════════════════════════════ */
 (function () {
   if (window.__modeGroups) return; window.__modeGroups = true;
-  var PLAY = /^(game|defuse|board|pegs|rack|pairs|pulse|stars|burrow|forge|rush|mill|duel|hunt|swing|knock-?out)$/i;
+  var PLAY = /^(game|defuse|board|pegs|rack|pairs|pulse|stars|burrow|forge|rush|mill|duel|hunt|swing|knock-?out|odd one out)$/i;
   var LEARN = /^(explore|learn|rules)$/i;
   var NAMES = { learn: 'Learn', practise: 'Practise', play: 'Play' };
 
@@ -95,7 +95,7 @@
      last mode's content (Explore under PLAY). So the screen clears to the
      pendulum, as every other entry in the app does: one instruction, and the
      group's modes as picks — tapping one is the same as tapping it above. */
-  var WHAT = { game: 'Noughts & Crosses', defuse: 'Beat the clock', board: '14 tiles, one game each',
+  var WHAT = { game: 'Noughts & Crosses', defuse: 'Beat the clock', 'odd one out': 'Spot the one that doesn’t fit', board: '14 tiles, one game each',
     'gap-fill': 'Fill each gap', rewrite: 'Rewrite the sentence', quiz: 'Choose the answer', practice: 'Fill each gap', match: 'Match the pairs' };
   var GATE = { practise: ['Pick an exercise', 'Choose one to start — the same choices are in the row above.'],
     play: ['Pick a game', 'Choose one to start — the same choices are in the row above.'],

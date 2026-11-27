@@ -83,7 +83,7 @@ emails:   { label:'Email',   part:'Part 2', back:'/index.html?openModal=writing'
 var G = GENRES[GENRE];
 if (!G) return;
 /* 25 Nov 2026: the task's footer (Practise · Basics · Exercises · Game) under the step track */
-(function () { if (document.querySelector('script[src*="writing-foot.js"]')) return; var sc = document.createElement('script'); sc.src = '/tools/writing-foot.js?v=5'; document.head.appendChild(sc); })();
+(function () { if (document.querySelector('script[src*="writing-foot.js"]')) return; var sc = document.createElement('script'); sc.src = '/tools/writing-foot.js?v=6'; document.head.appendChild(sc); })();
 
 /* THE LEAN HEADER (7 Nov 2026), Essay first as the blueprint. A study
    screen, not a newspaper: one line for where you are (back · task and

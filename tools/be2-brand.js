@@ -51,7 +51,9 @@
      WHICH PAGE (the footers: Practise · Learn · Drill · Game) — untouched: the iOS white-on-grey.
    html body + !important, because many pages still carry their own tab CSS after this loads. */
 (function () { try {
-  var TOG = '.viewtog,.seg,.modes,.vmode,.view-toggle,.mode-toggle,.nav-pill,.mode-pill,.register-bar,.mk-tog,.mg,.fc-seg';
+  var TOG = '.viewtog,.seg,.modes,.vmode,.view-toggle,.mode-toggle,.nav-pill,.mode-pill,.register-bar,.mk-tog,.mg,.fc-seg,.pr-seg,.wr-stages:not(.wf-st)';
+  /* rows of their own making that choose WHICH ONE (topics, sets, families, activities): 27 Nov 2026 audit */
+  var ROW = '.f5subs,.cat-nav-buttons,.set-row,.pl-fams,.affix-row,.pr-kind,.test-selector,.mixrow,.topic-tabs,.pr-tabs';
   var ON = '.active,.on,[aria-selected=true],[aria-pressed=true],[aria-checked=true],[aria-current]';
   var TAB = '.vtab,.ttab,.ftab,.mode-selector .mode-btn';
   var GREY = 'rgba(118,118,128,.12)';
@@ -63,6 +65,12 @@
   'html body :is(' + TOG + ') :is(button,a):is(' + ON + '){background:#14110E!important;color:#F6F3EE!important}' +
   'html body :is(' + TOG + ') :is(button,a) small{color:inherit!important;opacity:.6}' +
   'html body :is(.seg .thumb,.mode-toggle-slider,.toggle-thumb){background:#14110E!important;box-shadow:none!important}' +
+  /* which page: a row of pages inside a footer keeps the footers' iOS white-on-grey, not the toggle (27 Nov 2026) */
+  'html body .foot :is(.nav-pill) :is(button,a){font:700 .6875rem/1 Geist,system-ui,sans-serif!important;letter-spacing:.08em!important}' +
+  'html body .foot :is(.nav-pill) :is(button,a):is(' + ON + '){background:#FAF8F5!important;color:#14110E!important;box-shadow:0 1px 2px rgba(20,17,14,.12)!important}' +
+  /* which one: Prefixes | Suffixes chooses a set, in the header */
+  'html body #kind.seg{background:none!important;padding:0!important}' +
+  'html body #kind.seg :is(button,a):is(' + ON + '){background:' + GREY + '!important;color:#14110E!important}' +
   /* which one: the set row above the tests is a header row, not a toggle */
   'html body .set-choice .seg{background:none!important;padding:0!important}' +
   'html body .set-choice .seg :is(button,a){color:#4A4541!important}' +
@@ -74,7 +82,13 @@
   /* the Master pages' test row is a header row too: no outlines, the chosen test on the grey pill */
   'html body .mk-trow .mk-t{border-color:transparent!important;background:none!important;color:#4A4541!important}' +
   'html body .mk-trow .mk-t.done{color:#14110E!important}' +
-  'html body .mk-trow .mk-t.on{background:' + GREY + '!important;color:#14110E!important}';
+  'html body .mk-trow .mk-t.on{background:' + GREY + '!important;color:#14110E!important}' +
+  'html body :is(' + ROW + '){background:none!important;box-shadow:none!important;border-color:transparent!important}' +
+  'html body :is(' + ROW + ') > :is(button,a){background:none!important;border-color:transparent!important;box-shadow:none!important;color:#4A4541!important}' +
+  'html body :is(' + ROW + ') > :is(button,a)::after{content:none!important}' +
+  'html body :is(' + ROW + ') > :is(button,a):is(' + ON + '){background:' + GREY + '!important;color:#14110E!important;border-radius:999px!important}' +
+  /* the last caramel underlines (27 Nov 2026 audit): rows that marked the chosen one with a line */
+  'html body :is(.mode-btn.active,.tabitem.active,.kind button[aria-checked=true],.tabs a[aria-current=page]){box-shadow:none!important;border-bottom-color:transparent!important;background:' + GREY + '!important;color:#14110E!important;border-radius:999px!important}';
   (document.head || document.documentElement).appendChild(st); } catch (e) {} })();
 (function () { try { var st = document.createElement('style'); st.textContent = 'html{-webkit-text-size-adjust:100%;text-size-adjust:100%}'; (document.head || document.documentElement).appendChild(st); } catch (e) {} })();
 (function () {

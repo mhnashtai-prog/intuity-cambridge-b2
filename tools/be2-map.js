@@ -122,13 +122,13 @@ var SKILLS = {
        of Look it up, and it is a tile of its own. */
     /* 19 Nov 2026 (a learner: "my question is How do I give my opinion?"): the one
        cross-task reference, phrases by what you want to say; it keeps Essentials' grouping */
-    {name:"Phrases", glyph:"❝", hint:"Learn them, one step at a time", url:"skills/writing/phrases-ladder.html"},   /* 21 Nov 2026: the ladder is the way in; the list is one tap away on it */
+    {name:"Phrase ladder", glyph:"❝", hint:"Learn them, one step at a time", url:"skills/writing/phrases-ladder.html"},   /* 21 Nov 2026: the ladder is the way in; the list is one tap away on it */
     {name:"Compare", glyph:"⇄", hint:"Same topic, two tasks", url:"skills/writing/compare.html"},
     /* 14 Nov 2026: Practice (Finish it…) moved into each task's Practise it, so this
        tile keeps what belongs to no one task, and a name that is not "Practise" twice */
     /* 19 Nov 2026 (a learner: "every tile is a skill… Games is what it really is") */
     /* 21 Nov 2026 (the owner): the Games tile moved to the menu footer, a ringed pill (index.html, contHTML) */
-    {name:"Test yourself", glyph:"◆", hint:"Revision Round, Challenge", roof:"test"}
+    {name:"Revision", glyph:"◆", hint:"Revision Round, Challenge", roof:"test"}
   ],
   /* SPEAKING ON WRITING'S PATTERN (22 Nov 2026): each Part is a gate with four doors
      (skills/speaking/gate.html?part=N), as each writing task is; what helps any Part sits
@@ -158,7 +158,7 @@ var ROOFS = {
     {name:"Sentences", url:"skills/writing/sentence-structure/sentence-builder.html"},
     {name:"Types", url:"skills/writing/sentence-structure/sentence-type.html"}
   ]},
-  test:{ name:"Test yourself", items:[
+  test:{ name:"Revision", items:[
     {name:"Revision", url:"skills/writing/the-question.html"},
     {name:"Challenge", url:"skills/challenge/challenge.html?section=writing"}
   ]}
@@ -173,13 +173,13 @@ var TASKROOFS = {
      read and kept, so it joins Learn it; the doing goes behind Practise it. */
   learn:{ name:"Learn it", items:[
     /* 19 Nov 2026 (the owner): "Basics" on trial; a class poll against "5 Sentences" decides */
-    {name:"Basics", url:"skills/writing/five.html?task={k}"},
+    {name:"The five", url:"skills/writing/five.html?task={k}"},
     /* 22 Nov 2026 (the owner): the Guided essay straight after Basics, essays only: the core
        phrases of Basics seen at once in a whole essay (introduce, then the model, then variety) */
     /* 25 Nov 2026: Guided left these tabs; it is step 4 of the practice track */
-    {name:"Build", url:"skills/writing/build.html?type={k}&view=models"},   /* 17 Nov: a frame you build, not model essays (those are in door 3) */
+    {name:"Build your own", url:"skills/writing/build.html?type={k}&view=models"},   /* 17 Nov: a frame you build, not model essays (those are in door 3) */
     /* 25 Nov 2026 (the owner: "we lost the ready-made cards next to Build"): Cards is back */
-    {name:"Cards", url:"skills/writing/cue-cards-print.html?type={print}"}
+    {name:"Ready-made", url:"skills/writing/cue-cards-print.html?type={print}"}
     /* 25 Nov 2026 (the owner: Basics must be immediately likeable): Cards left these tabs; the Model
        page is the study card now */
     /* 17 Nov 2026 (the owner, after a teen's review): Essentials left Learn it. It opened on the same

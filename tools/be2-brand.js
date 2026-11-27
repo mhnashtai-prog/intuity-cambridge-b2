@@ -41,7 +41,7 @@
   '.pl-switch button[aria-checked=false],.rd-pages button[aria-checked=false]{color:#4A4541!important}';
   (document.head || document.documentElement).appendChild(st); } catch (e) {} })();
 /* THE HELP PILL (27 Nov 2026): one pill, one corner, a FiveCard on tap; only where help is written (tools/help-pill.js) */
-(function () { try { var sc = document.createElement('script'); sc.src = '/tools/help-pill.js?v=2'; sc.defer = true;
+(function () { try { var sc = document.createElement('script'); sc.src = '/tools/help-pill.js?v=3'; sc.defer = true;
   (document.head || document.documentElement).appendChild(sc); } catch (e) {} })();
 
 /* The subtitle sits centred under INTUITY, a little clear of the back link (27 Nov 2026: long topic

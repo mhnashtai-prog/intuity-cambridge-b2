@@ -154,7 +154,7 @@
     ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Help: ' + H.task);
     document.body.appendChild(pill); document.body.appendChild(ov);
     function open() {
-      need('script', 'src', '/tools/five-card.js?v=6', function () {
+      need('script', 'src', '/tools/five-card.js?v=7', function () {
         ov.innerHTML = '<div class="hp-sheet">' + cardHTML() + '<button type="button" class="hp-go">Got it</button></div>';
         ov.hidden = false; ov.querySelector('.hp-go').focus();
       });

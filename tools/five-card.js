@@ -124,7 +124,7 @@
     if (!ph || !cd || !c.closest('.fc-wrap')) return;
     c.__fcSeg = 1;
     var w = document.createElement('span'); w.className = 'fc-seg'; w.setAttribute('role', 'group'); w.setAttribute('aria-label', 'View');
-    w.innerHTML = '<button type="button" class="on" aria-pressed="true">Cards</button><button type="button" aria-pressed="false">Phrases</button>';
+    w.innerHTML = '<button type="button" class="on" aria-pressed="true">Outline</button><button type="button" aria-pressed="false">Phrases</button>';
     w.children[1].onclick = function (e) { e.stopPropagation(); ph.click(); };
     w.children[0].onclick = function (e) { e.stopPropagation(); };
     c.insertBefore(w, c.firstChild);

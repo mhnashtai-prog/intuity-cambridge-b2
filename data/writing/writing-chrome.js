@@ -101,7 +101,7 @@ var LEAN = /^(essays|reviews|reports|emails|articles|story)$/.test(GENRE);   /* 
 /* 25 Nov 2026 (the owner): the track starts with the Model (see one first), then the question,
    the plan, the sample and Write it */
 var ORDER = ['model','question','plan','sample','write'];
-var NAMES = { question:'Question', plan:'Plan', model:'Model', generate:'Generate', sample:'Sample', write:'Write it' };
+var NAMES = { question:'Question', plan:'Plan', model:'Model', generate:'Generate', sample:'Full answer', write:'Write it' };
 /* 25 Nov 2026 (the owner): Write it is the track's last step, not a door of its own */
 Object.keys(GENRES).forEach(function (k) { GENRES[k].stages.write = '/skills/writing/write.html?task=' + k;
   GENRES[k].back = GENRES[k].stages.model; });   /* 25 Nov 2026 (the owner): a task's home is its Model; back leads there */

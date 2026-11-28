@@ -176,8 +176,33 @@
        explanations so a wrong answer can carry one. */
     let RULE_INDEX = {};
 
+    /* WHY? (28 Nov 2026, the Rules blueprint): a rule that carries its card's lines
+       (rules[].lines, Conditionals first) gets a Why? beside its form on a "Not yet";
+       it opens the rule card (/tools/rule-card.js). Matched by the item's form, so it
+       works in the mixed Sets too, then by the test's id. */
+    let RULE_CARDS = {}, RULE_BY_FORM = {}, RULE_TOPIC = '';
+    function indexCards(data) {
+      RULE_CARDS = {}; RULE_BY_FORM = {}; RULE_TOPIC = data.title || '';
+      (Array.isArray(data.rules) ? data.rules : []).forEach(function (r) {
+        if (!r || !Array.isArray(r.lines) || !r.lines.length) return;
+        RULE_CARDS[r.id] = r;
+        if (r.structure) RULE_BY_FORM[String(r.structure).trim().toLowerCase()] = r;
+      });
+      if (Object.keys(RULE_CARDS).length && !window.RuleCard) {
+        const sc = document.createElement('script'); sc.src = '/tools/rule-card.js?v=1'; document.head.appendChild(sc);
+      }
+    }
+    function cardFor(item) {
+      const f = String(item.rule || '').trim().toLowerCase();
+      if (f && RULE_BY_FORM[f]) return RULE_BY_FORM[f];
+      const t = allTests[currentTest];
+      return t && RULE_CARDS[t.id] || null;
+    }
+    window.__gfWhy = function (id) { if (window.RuleCard && RULE_CARDS[id]) RuleCard.show(RULE_CARDS[id], RULE_TOPIC); };
+
     function indexRules(data) {
       RULE_INDEX = {};
+      indexCards(data || {});
 
       /* A topic may file its rules as sections in an array, each with a
          `structure` and the `explanation` of when to use it. Index those
@@ -217,6 +242,11 @@
       const rule = (item.rule || '').trim();
       if (!rule) return '';
 
+      /* a rule with a card shows its form and Why?; the card holds the explanation, so the
+         paragraph no longer repeats under every sentence (28 Nov 2026, the Rules blueprint) */
+      const card = cardFor(item);
+      if (card) return '<div class="rule-note" style="flex-direction:row;flex-wrap:wrap;align-items:center;gap:.35rem .6rem"><span class="rule-pattern">' + escapeHtml(rule) + '</span>' +
+        '<button type="button" class="rc-why" style="margin:0" onclick="__gfWhy(\'' + escapeHtml(card.id) + '\')">Why?</button></div>';
       const entry = RULE_INDEX[rule.toLowerCase()];
       let html = '<div class="rule-note"><span class="rule-pattern">' + escapeHtml(rule) + '</span>';
       if (entry && entry.example) {

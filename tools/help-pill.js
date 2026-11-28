@@ -66,6 +66,13 @@
             'Listen plays the question; Speak records your answer.',
             'Answer in two or three sentences: an answer, a reason, an example.'],
       tip: 'Learn, in the footer, shows the phrases that make answers longer.' }],
+    /* 28 Nov 2026, the Rules blueprint: Conditionals first */
+    [/\/grammar-rules\/conditionals-rules\.html/, { label: 'Grammar', task: 'Rules · Practise · Play',
+      open: 'One grammar topic: the rules to look up, then plenty to do.',
+      how: ['Rules: tap Explore on a set, then a number, for the rule with its example.',
+            'Practise has Gap-fill and Rewrite. Pick a set to start.',
+            'Play is Defuse and the boards. After a Not yet, Why? opens the rule.'],
+      tip: 'Go straight to Practise if you like; the Rules are there when you are stuck.' }],
     [/\/grammar-rules\/[a-z-]+-rules\.html/, { label: 'Grammar', task: 'Learn · Practise · Play',
       open: 'One grammar topic, three ways in.',
       how: ['Learn shows the rule with examples; Explore opens each set.',

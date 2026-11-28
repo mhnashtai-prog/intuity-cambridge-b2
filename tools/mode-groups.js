@@ -72,7 +72,7 @@
     row.classList.toggle('mg-solo', inShown.length === 1 && isActive(inShown[0]));
     if (!bar) { bar = document.createElement('div'); bar.className = 'mg'; row.parentNode.insertBefore(bar, row); }
     var html = '<div class="mg-in" role="group" aria-label="Learn, practise or play">' + order.map(function (g) {
-      return '<button type="button" class="mg-b' + (g === shown ? ' on' : '') + '" data-g="' + g + '" aria-pressed="' + (g === shown) + '">' + NAMES[g] + '</button>';
+      return '<button type="button" class="mg-b' + (g === shown ? ' on' : '') + '" data-g="' + g + '" aria-pressed="' + (g === shown) + '">' + ((g === 'learn' && row.getAttribute('data-learn')) || NAMES[g]) + '</button>';   /* 28 Nov 2026: a row may rename Learn (Grammar's Rules) */
     }).join('') + '</div>';
     if (bar.innerHTML !== html) bar.innerHTML = html;
     gate(row, its, gs, shown, act);

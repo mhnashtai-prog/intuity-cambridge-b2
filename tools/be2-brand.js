@@ -41,7 +41,7 @@
   '.pl-switch button[aria-checked=false],.rd-pages button[aria-checked=false]{color:#4A4541!important}';
   (document.head || document.documentElement).appendChild(st); } catch (e) {} })();
 /* THE HELP PILL (27 Nov 2026): one pill, one corner, a FiveCard on tap; only where help is written (tools/help-pill.js) */
-(function () { try { var sc = document.createElement('script'); sc.src = '/tools/help-pill.js?v=4'; sc.defer = true;
+(function () { try { var sc = document.createElement('script'); sc.src = '/tools/help-pill.js?v=5'; sc.defer = true;
   (document.head || document.documentElement).appendChild(sc); } catch (e) {} })();
 
 /* The subtitle sits centred under INTUITY, a little clear of the back link (27 Nov 2026: long topic
@@ -373,7 +373,7 @@
 })();
 
 /* LEARN · PRACTISE · PLAY: the long mode rows, grouped (tools/mode-groups.js) */
-(function(){ try{ var s=document.createElement('script'); s.src='/tools/mode-groups.js?v=8'; (document.head||document.documentElement).appendChild(s); }catch(e){} })();
+(function(){ try{ var s=document.createElement('script'); s.src='/tools/mode-groups.js?v=9'; (document.head||document.documentElement).appendChild(s); }catch(e){} })();
 
 /* ONE CARD: every pop-up in one square style (tools/intuity-cards.css).
    To bring the old looks back, delete this block. */

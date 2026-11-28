@@ -69,7 +69,9 @@
     row.__mgShown = shown;
     its.forEach(function (el, i) { el.classList.toggle('mg-off', gs[i] !== shown); });
     var inShown = its.filter(function (_, i) { return gs[i] === shown; });
-    row.classList.toggle('mg-solo', inShown.length === 1 && isActive(inShown[0]));
+    /* 28 Nov 2026 (the owner: RULES is chosen, then a pill says Explore, then the card says Explore again):
+       a group with one mode never shows its row; the group's name is enough, and tapping it opens that mode */
+    row.classList.toggle('mg-solo', inShown.length === 1);
     if (!bar) { bar = document.createElement('div'); bar.className = 'mg'; row.parentNode.insertBefore(bar, row); }
     var html = '<div class="mg-in" role="group" aria-label="Learn, practise or play">' + order.map(function (g) {
       return '<button type="button" class="mg-b' + (g === shown ? ' on' : '') + '" data-g="' + g + '" aria-pressed="' + (g === shown) + '">' + ((g === 'learn' && row.getAttribute('data-learn')) || NAMES[g]) + '</button>';   /* 28 Nov 2026: a row may rename Learn (Grammar's Rules) */

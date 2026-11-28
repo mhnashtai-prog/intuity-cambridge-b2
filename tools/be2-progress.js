@@ -192,6 +192,26 @@
   }
   function weekAgo(n) { var d = today(); for (var i = 0; i < n; i++) d = dayBefore(d); return d; }
 
+  /* at the top of the screen, clear of the bars and the Tell us pill at the bottom */
+  /* COMES BACK (28 Nov 2026, a pupil's-eye audit: tie each miss to the review habit): the first
+     "Not yet" on a page that makes a review card says, once, quietly, where it goes. Never on the
+     full tests (a test is no distraction tool) and never on the home page, where Daily 5 lives. */
+  var told = false;
+  function comesBack() {
+    if (told || /\/full-test\/|^\/(index\.html)?$/.test(location.pathname)) return;
+    told = true;
+    try {
+      var t = document.createElement('div');
+      t.setAttribute('role', 'status');
+      t.textContent = 'This one comes back in your Daily 5';
+      t.style.cssText = 'position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top));transform:translate(-50%,-8px);z-index:1002;' +
+        'background:#FFFFFF;color:#14110E;font:600 .78rem/1.2 Geist,system-ui,sans-serif;padding:.7rem 1.1rem;border-radius:999px;' +
+        'box-shadow:0 6px 20px rgba(20,17,14,.12);opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;white-space:nowrap';
+      document.body.appendChild(t);
+      requestAnimationFrame(function () { t.style.opacity = '1'; t.style.transform = 'translate(-50%,0)'; });
+      setTimeout(function () { t.style.opacity = '0'; setTimeout(function () { t.remove(); }, 300); }, 3200);
+    } catch (e) {}
+  }
   var Be2 = {
     /* a checked answer that makes no review card (a Reading question needs its whole text) */
     score: function (skill, ok) { markDay(); score(skill, ok); if (!ok) missed({ topic: skill }); },
@@ -239,6 +259,7 @@
         c.misses++; c.rights = c.step = 0; c.rday = null; c.due = today(); c.last = today();
         fill(c, r);
         missed({ topic: topic, id: r.id, prompt: r.ask ? r.prompt + ' \u2014 ' + r.ask : r.prompt, answer: r.answer, given: r.given });
+        if (c.prompt || r.prompt) comesBack();
       }
       /* keep the deck small: the oldest, least-missed cards go first */
       var keys = Object.keys(deck);

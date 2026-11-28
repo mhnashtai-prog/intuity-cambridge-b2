@@ -237,6 +237,14 @@
   .modalCard .rl{display:grid;grid-template-columns:4.6rem 1fr;gap:10px;align-items:baseline}
   .modalCard .rk{font-family:'Geist Mono',ui-monospace,monospace;font-size:.6rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#8C857B}
   .modalCard .rt{font-size:.9rem;line-height:1.45;color:#2B2622}
+  /* THE DECK (28 Nov 2026, the owner: "the menu is removed but these cards can stay and be navigated"):
+     ?deck=1 opens the set's first card at once, no map; ‹ › and a swipe walk the cards, on into the next set */
+  body.deck .bar, body.deck .mapPath, body.deck .nodes{visibility:hidden}
+  body.deck .modalWrap .backdrop{background:transparent}
+  .modalCard .dnav{display:flex;align-items:center;justify-content:space-between;margin-top:clamp(16px,4vw,22px);padding-top:12px;border-top:1px solid rgba(20,17,14,.12)}
+  .modalCard .dnav button{min-width:44px;height:44px;border:0;border-radius:999px;background:rgba(118,118,128,.12);color:#14110E;font:600 1.1rem/1 Geist,system-ui,sans-serif;cursor:pointer;padding:0 .9rem}
+  .modalCard .dnav button[disabled]{opacity:.3;cursor:default}
+  .modalCard .dnav span{font-family:'Geist Mono',ui-monospace,monospace;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:#8C857B;text-align:center}
   .msg{margin:auto;text-align:center;color:var(--soft);font-size:.92rem;line-height:1.55;padding:24px;}
   @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms !important;}}
 </style>
@@ -316,6 +324,8 @@ const JSON_URL = P.get('json') || (DATA_DIR + CFG.json);
 const RULE_ID  = P.get('rule');
 const RULE_IX  = P.get('index') !== null ? parseInt(P.get('index'),10) : null;
 const START    = P.get('section') !== null ? parseInt(P.get('section'),10) : null;
+const DECK     = P.get('deck') === '1';
+if(DECK) document.body.classList.add('deck');
 
 /* Six fixed points, hand-placed to fit one phone screen without scrolling.
    Everything below is plain percentages — no JS layout math, no resize
@@ -634,6 +644,7 @@ function openSection(i){
   $('back').textContent = START !== null ? '\u2190 List' : '\u2190 Sections';
   $('title').textContent = uc.title;
   buildMap();
+  if(DECK) openNode(0);
 }
 
 /* ---------------- map ---------------- */
@@ -903,7 +914,7 @@ function openNode(i){
   $('modalCard').style.setProperty('--accent', accentFor(MARK));
   $('modalCard').innerHTML =
     '<button class="x" id="modalClose" type="button">&#10005;</button>'+
-    '<div class="kick">'+(tense.name||'')+'</div>'+
+    '<div class="kick">'+(tense.name||'')+(DECK ? ((((useCases[secIdx]||{}).title||'').match(/set\s*\d+/i)||[''])[0].replace(/^/, ' · ').replace(/^ · $/,'')) : '')+'</div>'+
     '<div class="cue display">'+c.cue+'</div>'+
     (c.structure ? '<div class="struct">'+c.structure+'</div>' : '')+
     '<div class="sentence">'+mark(c.text, c.markers)+'</div>'+
@@ -912,6 +923,15 @@ function openNode(i){
        explains in short labelled rows, dark enough to read; the old grey paragraph stays for the rest */
     (c.lines ? '<div class="rlines">'+c.lines.map(l=>'<div class="rl"><span class="rk">'+l[0]+'</span><span class="rt">'+l[1]+'</span></div>').join('')+'</div>'
              : c.note ? '<div class="note">'+c.note+'</div>' : '');
+  if(DECK){
+    const hasNextSet = secIdx + 1 < useCases.length, last = i >= cards.length - 1;
+    $('modalCard').insertAdjacentHTML('beforeend', '<div class="dnav"><button type="button" id="dPrev" aria-label="Previous"'+(i||secIdx?'':' disabled')+'>&lsaquo;</button>'+
+      '<span>'+(i+1)+' / '+cards.length+(last&&hasNextSet?' · next set':'')+'</span>'+
+      '<button type="button" id="dNext" aria-label="Next"'+(!last||hasNextSet?'':' disabled')+'>&rsaquo;</button></div>');
+    $('dPrev').onclick = () => deckGo(-1);
+    $('dNext').onclick = () => deckGo(1);
+    $('modalCard').scrollTop = 0;
+  }
   $('modalWrap').classList.add('open');
   try{ if(window.parent!==window) parent.postMessage({intuity:'cardOpen',open:true},'*'); }catch(e){}   /* one close, not two */
   $('modalClose').onclick = closeToPage;
@@ -931,7 +951,24 @@ function closeToPage(){
   closeModal();
   leave();
 }
-$('backdrop').onclick = closeModal;
+$('backdrop').onclick = () => DECK ? closeToPage() : closeModal();
+/* the deck: a step within the set, or on into the next (or back to the last card of the one before) */
+function deckGo(d){
+  const n = openIdx + d;
+  if(n >= 0 && n < cards.length) return openNode(n);
+  const s2 = secIdx + d;
+  if(s2 < 0 || s2 >= useCases.length) return;
+  openSection(s2);
+  if(d < 0) openNode(cards.length - 1);
+}
+(function(){ let x0 = null, y0 = 0;
+  const card = $('modalCard');
+  card.addEventListener('touchstart', e => { if(!DECK) return; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, {passive:true});
+  card.addEventListener('touchend', e => { if(!DECK || x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+    if(Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) deckGo(dx < 0 ? 1 : -1); }, {passive:true});
+  document.addEventListener('keydown', e => { if(!DECK) return; if(e.key === 'ArrowRight') deckGo(1); if(e.key === 'ArrowLeft') deckGo(-1); });
+})();
 
 /* ---------------- chrome ---------------- */
 function leave(){

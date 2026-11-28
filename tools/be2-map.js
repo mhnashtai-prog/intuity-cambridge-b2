@@ -17,7 +17,7 @@ var AREAS = [
   { key:'writing',    name:'Writing',    tone:{bg:'#E5D1B8', fg:'#2B2129'},
     what:'Essays, reviews, reports, emails, articles' },
   { key:'speaking',   name:'Speaking',   tone:{bg:'#C2956E', fg:'#2B2129'},
-    what:'Four Parts: Maya asks, you answer, now' },
+    what:'Parts 1–4: interview, photos, discussion' },
   { key:'grammar',    name:'Grammar',    tone:{bg:'#484641', fg:'#EBE7DE'},
     what:'Tenses, passive voice, conditionals, etc.' },
   { key:'vocabulary', name:'Vocabulary', tone:{bg:'#DD8E58', fg:'#FEFCF9'},

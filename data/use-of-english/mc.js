@@ -161,7 +161,7 @@ function paintTests() {
     $('setTabs').innerHTML = TESTS.map(function (t, i) {
       var p = bestOf(i), on = i === si;
       return '<button class="vtab' + (on ? ' active' : '') + '" type="button" role="tab" aria-selected="' + on
-        + '" data-i="' + i + '">' + (TEXTS ? 'Text ' : 'Test ') + (i + 1)
+        + '" data-i="' + i + '">' + (TEXTS ? 'Text ' : 'Set ') + (i + 1)
         + (p == null ? '' : '<span class="pct">' + (p === 100 ? '\u2605' : p + '%') + '</span>') + '</button>';
     }).join('');
     $('setTabs').querySelectorAll('.vtab').forEach(function (b) {
@@ -325,7 +325,7 @@ function paintBar() {
   var left = questions().length - answered();
   if ($('testInfo')) {
     var nq = questions().length;
-    $('testInfo').textContent = (TEXTS ? 'Text ' : 'Test ') + (si + 1) + ' · ' + nq
+    $('testInfo').textContent = (TEXTS ? 'Text ' : 'Set ') + (si + 1) + ' · ' + nq
       + (TEXTS ? ' gaps' : ' sentences') + (answered() ? ' · ' + answered() + '/' + nq + ' done' : '');
   }
   $('btnSubmit').disabled = !all || marked;

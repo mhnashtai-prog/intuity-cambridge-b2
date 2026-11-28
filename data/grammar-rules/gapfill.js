@@ -189,7 +189,7 @@
         if (r.structure) RULE_BY_FORM[String(r.structure).trim().toLowerCase()] = r;
       });
       if (Object.keys(RULE_CARDS).length && !window.RuleCard) {
-        const sc = document.createElement('script'); sc.src = '/tools/rule-card.js?v=2'; document.head.appendChild(sc);
+        const sc = document.createElement('script'); sc.src = '/tools/rule-card.js?v=1'; document.head.appendChild(sc);
       }
     }
     function cardFor(item) {

@@ -36,25 +36,21 @@
 
   function name(t) { t = String(t || ''); return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase(); }
   function has(rule) { return !!(rule && Array.isArray(rule.lines) && rule.lines.length); }
-  function ready(cb) { need('link', 'href', '/tools/five-card.css?v=7'); need('script', 'src', '/tools/five-card.js?v=7', cb); }
-  function spec(rule, topic) {
+  function show(rule, topic) {
+    if (!has(rule)) return;
+    need('link', 'href', '/tools/five-card.css?v=7');
+    need('script', 'src', '/tools/five-card.js?v=7', function () {
+      /* Use opens, Watch out closes, the rest (Tip, From Portuguese) sit between */
       var L = rule.lines, use = L[0], watch = null, mid = [];
       L.slice(1).forEach(function (l) { if (/watch/i.test(l[0]) && !watch) watch = l; else mid.push(l); });
-      return { label: (topic || 'Rule') + ' · Rule', task: name(rule.title) + (/conditionals/i.test(topic || '') && !/wish/i.test(rule.title) ? ' conditional' : ''),
+      var spec = { label: (topic || 'Rule') + ' · Rule', task: name(rule.title) + (/conditionals/i.test(topic || '') && !/wish/i.test(rule.title) ? ' conditional' : ''),
         roles: [use[0], mid.length ? mid[0][0] : '', watch ? watch[0] : ''],
         open: [(rule.structure ? '<span class="rc-form">' + esc(rule.structure) + '</span> ' : '') + esc(use[1])],
         body: mid.map(function (l, i) { return { html: esc(l[1]), head: i ? l[0] : '' }; }),
         close: watch ? [esc(watch[1])] : [] };
-  }
-  /* the card's HTML, for a page that draws it in place (call after ready) */
-  function card(rule, topic) { return has(rule) && window.FiveCard ? FiveCard.card(spec(rule, topic)) : ''; }
-  function show(rule, topic) {
-    if (!has(rule)) return;
-    ready(function () {
-      var spec_ = spec(rule, topic);
       var ov = document.createElement('div'); ov.className = 'rc-ov';
-      ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'The rule: ' + spec_.task);
-      ov.innerHTML = '<div class="rc-sheet">' + (window.FiveCard ? FiveCard.card(spec_) : '') + '<button type="button" class="rc-go">Got it</button></div>';
+      ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'The rule: ' + spec.task);
+      ov.innerHTML = '<div class="rc-sheet">' + (window.FiveCard ? FiveCard.card(spec) : '') + '<button type="button" class="rc-go">Got it</button></div>';
       document.body.appendChild(ov);
       var close = function () { ov.remove(); document.removeEventListener('keydown', key); };
       var key = function (e) { if (e.key === 'Escape') close(); };
@@ -73,5 +69,5 @@
       show(r, d.title || topic);
     }).catch(function () {});
   }
-  window.RuleCard = { show: show, open: open, has: has, load: load, card: card, ready: ready };
+  window.RuleCard = { show: show, open: open, has: has, load: load };
 })();

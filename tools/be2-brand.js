@@ -80,12 +80,17 @@
   var GREY = 'rgba(118,118,128,.12)';
   var st = document.createElement('style'); st.textContent =
   /* which view: the toggle */
-  'html body :is(' + TOG + '){background:rgba(20,17,14,.07)!important;border:none!important;box-shadow:none!important;border-radius:999px!important;padding:3px!important}' +
+  'html body :is(' + TOG + '){background:' + GREY + '!important;border:none!important;box-shadow:none!important;border-radius:999px!important;padding:3px!important}' +
   'html body :is(' + TOG + ') :is(button,a){background:none!important;border:none!important;box-shadow:none!important;border-radius:999px!important;color:#4A4541!important;' +
     "font:700 10.5px/1 'Geist',system-ui,sans-serif!important;letter-spacing:.11em!important;text-transform:uppercase!important;padding:8px 13px!important;min-height:0!important}" +
-  'html body :is(' + TOG + ') :is(button,a):is(' + ON + '){background:#14110E!important;color:#F6F3EE!important}' +
+  /* 28 Nov 2026 (the owner: flat, "all the pages across the app"): the chosen side is white on the light track, never black */
+  'html body :is(' + TOG + ') :is(button,a):is(' + ON + '){background:#FFFFFF!important;color:#14110E!important}' +
   'html body :is(' + TOG + ') :is(button,a) small{color:inherit!important;opacity:.6}' +
-  'html body :is(.seg .thumb,.mode-toggle-slider,.toggle-thumb){background:#14110E!important;box-shadow:none!important}' +
+  /* the toggles that kept their own black (28 Nov 2026 sweep): the full test's Start | Instructions, Reading's
+     Text | Questions, the Phrase bank's Play | List, the boards' Question | Noughts & Crosses, Writing practice's parts */
+  'html body :is(.ft-sw,.rd-pages,.pl-switch,.gseg,.pr-seg):not(#x) :is(span,div){background-color:transparent}' +
+  'html body :is(.ft-sw,.rd-pages,.pl-switch,.gseg,.pr-seg):not(#x) :is(button,a):not(.run):is(' + ON + '){background:#FFFFFF!important;color:#14110E!important;box-shadow:none!important}' +
+  'html body :is(.seg .thumb,.mode-toggle-slider,.toggle-thumb){background:#FFFFFF!important;box-shadow:none!important}' +
   /* which page: a row of pages inside a footer keeps the footers' iOS white-on-grey, not the toggle (27 Nov 2026) */
   'html body .foot :is(.nav-pill) :is(button,a){font:700 .6875rem/1 Geist,system-ui,sans-serif!important;letter-spacing:.08em!important}' +
   'html body .foot :is(.nav-pill) :is(button,a):is(' + ON + '){background:#FAF8F5!important;color:#14110E!important;box-shadow:0 1px 2px rgba(20,17,14,.12)!important}' +

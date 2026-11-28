@@ -191,6 +191,13 @@
         if (r.top > vh * 0.5 && r.bottom > vh * 0.6 && r.top < top) top = r.top;
       });
       pill.style.bottom = Math.max(12, vh - top + 10) + 'px';
+      /* 28 Nov 2026 (a pupil's-eye audit): Help is about the page, so it steps aside while a results card or other dialog is open over it */
+      var dlg = [].some.call(document.querySelectorAll('[role=dialog],[aria-modal=true]'), function (d) {
+        if (d.closest('.hp-ov') || d.closest('.ri-veil')) return false;
+        var cs = getComputedStyle(d); if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity < 0.1) return false;
+        var r = d.getBoundingClientRect(); return r.width > 200 && r.height > vh * 0.4;
+      });
+      pill.style.display = dlg ? 'none' : '';
     }
     place(); window.addEventListener('resize', place);
     var n = 0, t = setInterval(function () { place(); if (++n > 12) clearInterval(t); }, 500);

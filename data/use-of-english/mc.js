@@ -47,6 +47,7 @@ var answers = {};  /* key -> answer. Sentences key by index and store a
                       index. Nothing outside the two renderers reads it,
                       so the two shapes never meet. */
 var marked = false;
+var retrying = false, firstTry = '';   /* 28 Nov 2026: a second try is of the Not yet ones only; the first try stays the score */
 var view = 'full';
 
 function $(id) { return document.getElementById(id); }
@@ -101,7 +102,7 @@ function loadBank(i) {
 }
 function loadTest(i) {
   si = (i + TESTS.length) % TESTS.length;
-  qi = 0; answers = {}; marked = false;
+  qi = 0; answers = {}; marked = false; retrying = false;
   paintTests(); render();
 }
 var T = function () { return TESTS[si]; };
@@ -418,6 +419,7 @@ function submit() {
   var qs = questions();
   if (marked || !qs.every(function (q, i) { return answers[keyOf(q, i)] !== undefined; })) return;
   marked = true;
+  var second = retrying; retrying = false;
   if (TEXTS) seenMark((CFG.datasets[bi] || {}).path, 'n' + (T().testNumber || (si + 1)));
   var got = qs.filter(function (q, i) { return isRight(q, i); }).length;
   if (view === 'one') qi = 0;
@@ -426,7 +428,8 @@ function submit() {
   var pct = Math.round(got / qs.length * 100);
   $('ovEm').textContent    = pct === 100 ? '\uD83C\uDFC6' : pct >= 75 ? '\uD83C\uDF89' : pct >= 50 ? '\uD83D\uDC4D' : '\uD83D\uDCDA';
   $('ovTitle').textContent = pct === 100 ? 'Perfect' : pct >= 75 ? 'Strong' : pct >= 50 ? 'Getting there' : 'Keep going';
-  $('ovScore').textContent = got + ' / ' + qs.length + ' correct \u00b7 ' + pct + '%';
+  $('ovScore').textContent = (second ? 'Second try \u00b7 ' : '') + got + ' / ' + qs.length + ' \u00b7 ' + pct + '%';
+  if (!second) firstTry = got + ' / ' + qs.length;
   /* A class, not an inline colour — the bars have to agree with the words
      and the dots, and three places hard-coding the same pair is how they
      stop agreeing. uoe.css owns the colour. */
@@ -442,7 +445,7 @@ function submit() {
         var right = TEXTS ? q.options[q.correct] : wordFor(q, q.answer);
         var note = q.distractors && q.distractors[yours];
         return '<div class="ov-miss-i">' + String(TEXTS ? k : i + 1).padStart(2, '0') +
-          ' \u00b7 <s>' + esc(yours) + '</s> \u2192 <b>' + esc(right) + '</b>' +
+          ' \u00b7 ' + esc(yours) + ' \u2192 <b>' + esc(right) + '</b>' +
           (q.why ? '<span class="ov-miss-w">' + esc(q.why) + '</span>' : '') +
           (note ? '<span class="ov-miss-w">' + esc(yours) + ' \u2014 ' + esc(note) + '</span>' : '') +
           '</div>';
@@ -450,10 +453,14 @@ function submit() {
       /* the way to fix it, from the result (3 Nov 2026) */
       '<a class="to-master" href="/skills/use-of-english/multiple-choice/master-part1.html">Practise Part 1 item by item, with a reason for each \u2192</a>'
     : '';
-  saveScore(pct);
+  if (second) $('ovMiss').innerHTML = '<div class="ov-miss-w" style="display:block;margin:0 0 .8rem">Your first try, ' + esc(firstTry) + ', stays your score. The ones you met here come back in your Daily 5.</div>' + $('ovMiss').innerHTML;
+  if (!second) saveScore(pct);
+  /* TRY THE NOT YET (28 Nov 2026) */
+  $('ovAgain').hidden = !missed.length;
+  $('ovAgain').textContent = 'Try the ' + missed.length + ' not yet';
   /* THE REVIEW DECK (3 Nov 2026): every answered gap reports, so a missed
      one comes back on the review page with its reason, spaced over days. */
-  try { if (window.Be2 && Be2.answer) qs.forEach(function (q, i) {
+  try { if (!second && window.Be2 && Be2.answer) qs.forEach(function (q, i) {
     var k = keyOf(q, i), a = answers[k];
     var yours = TEXTS ? q.options[a] : wordFor(q, a), right = TEXTS ? q.options[q.correct] : wordFor(q, q.answer);
     var prompt = TEXTS ? Be2.around(T().text, '{' + q.number + '}').replace('{' + q.number + '}', '_____').replace(/\{\d+\}/g, '\u2026')
@@ -493,7 +500,9 @@ if ($('prevSet')) $('prevSet').onclick = function () { loadTest(si - 1); };
 if ($('nextSet')) $('nextSet').onclick = function () { loadTest(si + 1); };
 $('ovClose').onclick = function () { $('ov').classList.remove('show'); };
 $('ovAgain').onclick = function () {
-  $('ov').classList.remove('show'); answers = {}; marked = false; qi = 0; render();
+  var qs = questions();
+  qs.forEach(function (q, i) { if (!isRight(q, i)) delete answers[keyOf(q, i)]; });
+  $('ov').classList.remove('show'); marked = false; retrying = true; qi = 0; render();
 };
 $('ovNext').onclick = function () {
   $('ov').classList.remove('show');

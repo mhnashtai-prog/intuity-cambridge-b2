@@ -116,7 +116,7 @@
     })[0];
     if (!d) return null;
     /* just above the card's list of answers, where the pupil compares; else at the card's end */
-    var slot = d.querySelector('[data-ri-slot], .answers-section, .ov-miss, .ov-btns, .modal-footer');
+    var slot = d.querySelector('[data-ri-slot]') || d.querySelector('.answers-section, .ov-miss, .ov-btns, .modal-footer');
     if (slot) return { host: slot.parentNode, before: slot };
     var host = d.firstElementChild || d;
     return { host: host, before: null };

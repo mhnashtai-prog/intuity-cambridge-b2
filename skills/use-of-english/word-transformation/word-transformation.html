@@ -50,7 +50,8 @@
 </style>
   <link rel="stylesheet" href="/tools/intuity-pills.css?v=20261012">
   <script src="/tools/intuity-overflow.js?v=3"></script>
-<script src="/tools/be2-brand.js?v=20261128k"></script>
+<script src="/tools/be2-brand.js?v=20261128l"></script>
+<script src="/tools/uoe-result.js?v=6"></script>
 </head>
 <body data-uoe-modes="All|One at a time">
   <header class="header">
@@ -125,13 +126,14 @@
         <h2 class="modal-title" id="scoreModalTitle">Results</h2>
         <div class="modal-subtitle" id="modalSubtitle"></div>
       </div>
-      <div class="score-display">
+      <div class="score-display rh-off">
         <div class="score-number" id="scoreNumber" aria-label="Score">0/0</div>
       </div>
       <div class="answers-section">
         <div id="answersDisplay"></div>
       </div>
       <div class="modal-footer">
+        <button class="modal-btn modal-btn-secondary" id="retryBtn" onclick="retryNotYet()" hidden></button>
         <button class="modal-btn modal-btn-secondary" onclick="closeModal()">Close</button>
         <button class="modal-btn modal-btn-primary" onclick="nextTest()">Next</button>
       </div>
@@ -178,6 +180,7 @@
     let currentSection = 0;
     let userAnswers = {};
     let showingResults = false;
+    let retrying = false, lastSecond = false, firstTryText = '';   /* 28 Nov 2026: a second try is of the Not yet ones only, and the first try stays the score */
     let testScores = {};
     let currentMode = 'classic';
     let answersVisible = false;
@@ -436,6 +439,7 @@
     }
 
     function loadTest(testIdx) {
+      retrying = false;
       if (!allTests[testIdx]) return;
       currentTest = testIdx;
       currentSection = 0;
@@ -832,11 +836,12 @@ item.appendChild(keywordDiv);
 
     function submitAndScore() {
       const test = allTests[currentTest];
+      const second = retrying; retrying = false; lastSecond = second;
       let correct = 0;
       const total = test.sentences.length;
       test.sentences.forEach((sentence, idx) => { correct += kwScore(sentence, userAnswers[idx]).m; });
       /* THE REVIEW DECK (3 Nov 2026): answered items report, laid out like the exam */
-      try { if (window.Be2 && Be2.answer) test.sentences.forEach((x, idx) => {
+      try { if (!second && window.Be2 && Be2.answer) test.sentences.forEach((x, idx) => {
         const ua = userAnswers[idx] || ''; if (!ua.trim()) return;
         Be2.answer('uoe-part4', { id: x.uid ? 'wt-' + x.uid : 't' + currentTest + '-' + (x.number || idx),
           prompt: (x.original_sentence || x.first_sentence || '') + ' \u2192 ' + String(x.keyword || '').toUpperCase() + ': ' + String(x.gapped_sentence || x.prompt || '').replace(/\.{3,}|_{3,}/, '_____'),
@@ -845,7 +850,8 @@ item.appendChild(keywordDiv);
       const percentage = Math.round((correct / (2 * total)) * 100);
       const existingScore = testScores[`test${currentTest}`];
       const isNewBest = !existingScore || percentage > (existingScore.bestPercentage || 0);
-      testScores[`test${currentTest}`] = {
+      if (!second) firstTryText = `${correct} / ${2 * total} marks`;
+      if (!second) testScores[`test${currentTest}`] = {
         correct,
         total,
         percentage,
@@ -869,28 +875,12 @@ item.appendChild(keywordDiv);
       const isNewBest = !existingScore || percentage >= (existingScore.bestPercentage || 0);
       const attempts = existingScore ? existingScore.attempts : 1;
       let subtitle = `Set ${currentTest + 1}`;
-      if (attempts > 1) subtitle += ` • Attempt ${attempts}`;
       document.getElementById('modalSubtitle').textContent = subtitle;
       document.getElementById('scoreNumber').textContent = `${correct}/${2 * total}`;
       const answersDisplay = document.getElementById('answersDisplay');
-      let html = '';
-      if (isNewBest) {
-        let badge = '';
-        if (percentage === 100) {
-          badge = '<div style="text-align: center; padding: 1.5rem; font-size: 1.375rem; color: var(--tile-ok-ink); font-weight: 600;">Perfect Score ⭐</div>';
-        } else if (percentage >= 75) {
-          badge = '<div style="text-align: center; padding: 1.5rem; font-size: 1.25rem; color: var(--tile-ok-ink); font-weight: 600;">Great Job</div>';
-        } else if (percentage >= 60) {
-          badge = '<div style="text-align: center; padding: 1.5rem; color: var(--poster-body); font-weight: 500;">Good Effort</div>';
-        } else if (percentage >= 50) {
-          badge = '<div style="text-align: center; padding: 1.5rem; color: var(--accent-ink); font-weight: 500;">Keep Practicing</div>';
-        } else {
-          badge = '<div style="text-align: center; padding: 1.5rem; color: var(--accent-ink); font-weight: 500;">Review & Try Again</div>';
-        }
-        html += badge;
-      } else {
-        html += `<div style="text-align: center; padding: 1rem; color: var(--poster-faint);">Your best: ${existingScore.bestScore}/${2 * total} (${existingScore.bestPercentage}%)</div>`;
-      }
+      let html = UoeResult.head({ right: test.sentences.map((x, idx) => kwScore(x, userAnswers[idx] || '').m === 2), got: correct, max: 2 * total, unit: 'marks',
+        second: lastSecond, first: firstTryText, best: (!lastSecond && existingScore && attempts > 1) ? `${existingScore.bestScore} / ${2 * total} (${existingScore.bestPercentage}%)` : '' });
+      setRetryBtn(test);
       test.sentences.forEach((sentence, idx) => {
         const userAns = userAnswers[idx] || '';
         const sc = kwScore(sentence, userAns), isCorrect = sc.m === 2;
@@ -909,6 +899,22 @@ item.appendChild(keywordDiv);
       if (correct < 2 * total) html += '<a class="to-master" href="/skills/use-of-english/word-transformation/master-part4.html">Practise Part 4 item by item, with a reason for each \u2192</a>';
       answersDisplay.innerHTML = html;
       document.getElementById('scoreModal').classList.add('active');
+    }
+
+
+    /* TRY THE NOT YET (28 Nov 2026): the ones not yet right come back empty; the right ones stay */
+    function notYetKeys(test) { return test.sentences.map((x, idx) => idx).filter(idx => kwScore(test.sentences[idx], userAnswers[idx] || '').m !== 2); }
+    function setRetryBtn(test) {
+      const b = document.getElementById('retryBtn'); if (!b) return;
+      const n = notYetKeys(test).length; b.hidden = !n; b.textContent = UoeResult.retryLabel(n);
+    }
+    function retryNotYet() {
+      const test = allTests[currentTest];
+      notYetKeys(test).forEach(k => { delete userAnswers[k]; });
+      retrying = true; showingResults = false; answersVisible = false;
+      closeModal();
+      if (currentMode === 'guided') renderGuidedMode(); else renderClassicMode();
+      createDots(); updateKeyButton(); if (typeof updateFooter === 'function') updateFooter();
     }
 
     function closeModal() {

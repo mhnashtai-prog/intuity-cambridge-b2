@@ -70,7 +70,8 @@
   </style>
   <link rel="stylesheet" href="/tools/intuity-pills.css?v=20261012">
   <script src="/tools/intuity-overflow.js?v=3"></script>
-<script src="/tools/be2-brand.js?v=20261128k"></script>
+<script src="/tools/be2-brand.js?v=20261128l"></script>
+<script src="/tools/uoe-result.js?v=6"></script>
 </head>
 <body data-uoe-modes="All|One at a time">
   <header class="header">
@@ -148,13 +149,14 @@
         <h2 class="modal-title" id="scoreModalTitle">Results</h2>
         <div class="modal-subtitle" id="modalSubtitle"></div>
       </div>
-      <div class="score-display">
+      <div class="score-display rh-off">
         <div class="score-number" id="scoreNumber" aria-label="Score">0/0</div>
       </div>
       <div class="answers-section">
         <div id="answersDisplay"></div>
       </div>
       <div class="modal-footer">
+        <button class="modal-btn modal-btn-secondary" id="retryBtn" onclick="retryNotYet()" hidden></button>
         <button class="modal-btn modal-btn-secondary" onclick="closeModal()">Close</button>
         <button class="modal-btn modal-btn-primary" onclick="nextTest()">Next</button>
       </div>
@@ -256,6 +258,7 @@
     let currentSection = 0;
     let userAnswers = {};
     let showingResults = false;
+    let retrying = false, lastSecond = false, firstTryText = '';   /* 28 Nov 2026: a second try is of the Not yet ones only, and the first try stays the score */
     let testScores = {};
     let currentMode = 'classic';
     let answersVisible = false;
@@ -493,6 +496,7 @@
     }
 
     function loadTest(testIdx) {
+      retrying = false;
       if (!allTests[testIdx]) return;
       
       currentTest = testIdx;
@@ -1142,6 +1146,7 @@
     function seenMark(file, idx){ try { var k=String(file||'').split('/').pop()+'#'+idx, s=JSON.parse(localStorage.getItem('intuity.seen.v1')||'{}')||{}; s[k]=Date.now(); localStorage.setItem('intuity.seen.v1', JSON.stringify(s)); } catch (e) {} }
     function submitAndScore() {
       const test = allTests[currentTest];
+      const second = retrying; retrying = false; lastSecond = second;
       seenMark(DATASETS[currentDatasetIndex].path, currentTest);
       
       let correct = 0;
@@ -1167,7 +1172,7 @@
       }
       
       /* THE REVIEW DECK (3 Nov 2026): answered gaps report, so a miss comes back */
-      try { if (window.Be2 && Be2.answer) {
+      try { if (!second && window.Be2 && Be2.answer) {
         const put = (num, prompt, ans) => { const ua = userAnswers[num] || ''; if (!ua.trim()) return;
           Be2.answer('uoe-part3', { id: (test.id || ('t' + currentTest)) + '-' + num, prompt, answer: String(ans).split('/')[0],
             given: ua, correct: answersMatch(ua, ans), accept: String(ans).split('/'), rule: wfWhy(stemOf(prompt), ans).replace(/<[^>]+>/g, ''), href: location.pathname }); };
@@ -1183,7 +1188,8 @@
       const existingScore = testScores[`test${currentTest}`];
       const isNewBest = !existingScore || percentage > (existingScore.bestPercentage || 0);
       
-      testScores[`test${currentTest}`] = {
+      if (!second) firstTryText = `${correct} / ${total}`;
+      if (!second) testScores[`test${currentTest}`] = {
         correct,
         total,
         percentage,
@@ -1211,12 +1217,6 @@
       const attempts = existingScore?.attempts || 1;
       
       let subtitle = `${datasetName} • ${test.title} • Set ${currentTest + 1}`;
-      if (attempts > 1) {
-        subtitle += ` • Attempt ${attempts}`;
-        if (percentage > (existingScore.firstAttemptScore || 0)) {
-          subtitle += ' (Improved!)';
-        }
-      }
       if (hintsUsed.size > 0) subtitle += ` • ${hintsUsed.size} hint${hintsUsed.size !== 1 ? 's' : ''}`;
       
       document.getElementById('modalSubtitle').textContent = subtitle;
@@ -1225,20 +1225,13 @@
       const answersDisplay = document.getElementById('answersDisplay');
       let html = '';
       
-      if (percentage === 100 && hintsUsed.size === 0) {
-        html += '<div style="text-align: center; padding: 1.5rem; font-size: 1.375rem; color: var(--tile-ok-ink); font-weight: 600;">Perfect Score ⭐<br><span style="font-size: 0.875rem; color: var(--poster-faint); font-weight: 400; margin-top: 0.5rem; display: block;">No hints used</span></div>';
-      } else if (percentage === 100) {
-        html += '<div style="text-align: center; padding: 1.5rem; font-size: 1.375rem; color: var(--tile-ok-ink); font-weight: 600;">Perfect Score ⭐</div>';
-      } else if (percentage >= 75) {
-        html += '<div style="text-align: center; padding: 1.5rem; font-size: 1.25rem; color: var(--tile-ok-ink); font-weight: 600;">Great Job!</div>';
-      } else if (percentage >= 60) {
-        html += '<div style="text-align: center; padding: 1.5rem; color: var(--poster-body); font-weight: 500;">Good Effort</div>';
-      } else if (percentage >= 50) {
-        html += '<div style="text-align: center; padding: 1.5rem; color: var(--accent-ink); font-weight: 500;">Keep Practicing</div>';
-      } else {
-        html += '<div style="text-align: center; padding: 1.5rem; color: var(--accent-ink); font-weight: 500;">Review & Try Again</div>';
-      }
-      
+      const rightP = isSentenceFormat && test.sentences
+        ? test.sentences.filter(x => !x.isExample).map(x => answersMatch(userAnswers[x.number] || '', x.answer || ''))
+        : Object.keys(test.gaps || {}).filter(n => n !== '0').sort((a, b) => a - b).map(n => answersMatch(userAnswers[n] || '', test.gaps[n].answer || test.gaps[n]));
+      html += UoeResult.head({ right: rightP, got: correct, max: total, second: lastSecond, first: firstTryText,
+        best: (!lastSecond && existingScore && attempts > 1) ? `${existingScore.bestPercentage}%` : '' });
+      setRetryBtn(test);
+
       if (isSentenceFormat && test.sentences) {
         test.sentences.filter(s => !s.isExample).forEach((sentence, idx) => {
           const num = sentence.number;
@@ -1304,6 +1297,22 @@
       const fam = WF_FAM && (WF_FAM[s] || WF_FAM[core]);
       if (fam && fam.length > 1) bits.push('The family: ' + fam.slice(0, 7).map(w => w.toLowerCase() === a ? `<b>${w}</b>` : w).join(', ') + '.');
       return bits.length ? `<div class="area-tip">${stem.toUpperCase()} → ${a}. ${bits.join(' ')}</div>` : '';
+    }
+
+
+    /* TRY THE NOT YET (28 Nov 2026): the ones not yet right come back empty; the right ones stay */
+    function notYetKeys(test) { return isSentenceFormat && test.sentences ? test.sentences.filter(x => !x.isExample && !answersMatch(userAnswers[x.number] || '', x.answer || '')).map(x => x.number) : Object.keys(test.gaps || {}).filter(n => n !== '0' && !answersMatch(userAnswers[n] || '', test.gaps[n].answer || test.gaps[n])); }
+    function setRetryBtn(test) {
+      const b = document.getElementById('retryBtn'); if (!b) return;
+      const n = notYetKeys(test).length; b.hidden = !n; b.textContent = UoeResult.retryLabel(n);
+    }
+    function retryNotYet() {
+      const test = allTests[currentTest];
+      notYetKeys(test).forEach(k => { delete userAnswers[k]; });
+      retrying = true; showingResults = false; answersVisible = false;
+      closeModal();
+      if (currentMode === 'guided') renderGuidedMode(); else renderClassicMode();
+      createDots(); updateKeyButton(); if (typeof updateFooter === 'function') updateFooter();
     }
 
     function closeModal() {

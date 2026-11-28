@@ -116,16 +116,22 @@ function paintBanks() {
      pages; an option that belongs to the other page is a link to it. Each
      carries how many tests it holds. */
   if (CFG.seg && $('bankSeg')) {
+    /* (with a year, the tile drops its count: the row of texts under it already shows how many) */
+    /* 28 Nov 2026 (an experiment, after a pupil's-eye audit asked how a pupil
+       would know which to pick): each density carries the exam year that set
+       it, so the row reads as the exam's history, today's paper first. */
+    var YR = function (o) { return o.yr ? '<span style="display:inline-flex;flex-direction:column;align-items:center;line-height:1.1"><span class="yr" style="display:block;font-weight:400;font-size:.6rem;letter-spacing:.12em;opacity:.62;margin-bottom:.15rem">' + esc(o.yr) + '</span>' : '<span>'; };
     $('bankSeg').innerHTML = CFG.seg.map(function (o) {
       /* A density not written yet stays in the row, disabled: the ladder
          8 · 12 · 15 · 20 is part of what the toggle teaches. */
       if (o.soon) return '<button type="button" role="tab" aria-selected="false" disabled title="Coming soon">' + esc(o.label) + '</button>';
       if (o.href) return '<button type="button" role="tab" aria-selected="false" data-href="' + esc(o.href) + '">'
-        + esc(o.label) + (o.n ? '<small>' + o.n + '</small>' : '') + '</button>';
+        + YR(o) + esc(o.label) + '</span>' + (o.n && !o.yr ? '<small>' + o.n + '</small>' : '') + '</button>';
       if (!BANKS[o.bank]) return '<button type="button" role="tab" aria-selected="false" disabled title="Coming soon">' + esc(o.label) + '</button>';
       return '<button type="button" role="tab" aria-selected="' + (o.bank === bi) + '" data-bank="' + o.bank + '">'
-        + esc(o.label) + '<small>' + BANKS[o.bank].tests.length + '</small></button>';
+        + YR(o) + esc(o.label) + '</span>' + (o.yr ? '' : '<small>' + BANKS[o.bank].tests.length + '</small>') + '</button>';
     }).join('');
+    if (CFG.seg.some(function (o) { return o.yr; })) $('bankSeg').querySelectorAll('button').forEach(function (b) { b.style.setProperty('padding-left', '10px', 'important'); b.style.setProperty('padding-right', '10px', 'important'); });
     $('bankSeg').querySelectorAll('button').forEach(function (b) {
       b.onclick = function () {
         if (b.disabled) return;

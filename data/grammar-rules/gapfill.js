@@ -447,7 +447,7 @@
       gate.className = 'sheet-gate open gate-standalone';
       gate.innerHTML =
         '<div class="gate-mark pend-hang"><div class="pend-dial"><span>?</span></div></div>' +
-        '<div class="gate-head">Quiz</div>' +
+        '<div class="gate-head">Gap-fill</div>' +
         '<div class="gate-sub">Pick a set to begin. You can switch at any time ' +
         'once you have started.</div>' +
         '<div class="gate-list">' +

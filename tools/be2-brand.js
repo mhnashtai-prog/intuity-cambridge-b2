@@ -109,7 +109,18 @@
   'html body :is(' + ROW + ') > :is(button,a)::after{content:none!important}' +
   'html body :is(' + ROW + ') > :is(button,a):is(' + ON + '){background:' + GREY + '!important;color:#14110E!important;border-radius:999px!important}' +
   /* the last caramel underlines (27 Nov 2026 audit): rows that marked the chosen one with a line */
-  'html body :is(.mode-btn.active,.tabitem.active,.kind button[aria-checked=true],.tabs a[aria-current=page]){box-shadow:none!important;border-bottom-color:transparent!important;background:' + GREY + '!important;color:#14110E!important;border-radius:999px!important}';
+  'html body :is(.mode-btn.active,.tabitem.active,.kind button[aria-checked=true],.tabs a[aria-current=page]){box-shadow:none!important;border-bottom-color:transparent!important;background:' + GREY + '!important;color:#14110E!important;border-radius:999px!important}' +
+  /* FLAT (28 Nov 2026, the owner: "make the highlighted pills in the header more flat and less intense",
+     after the Claude app's own pills): the Rules · Practise · Play switch is one light track, no second
+     ring, the chosen side white; the header's chosen pills sit lower and lighter, and keep a 44px
+     touch area through the invisible hit pseudo-element */
+  'html body .mg.mg.mg{background:none!important;padding:0!important}' +
+  'html body .mg.mg .mg-in.mg-in{background:' + GREY + '!important;padding:3px!important;box-shadow:none!important}' +
+  'html body .mg.mg .mg-in .mg-b.mg-b{box-shadow:none!important;color:#4A4541!important;min-height:0!important;padding:.42rem .95rem!important}' +
+  'html body .mg.mg .mg-in .mg-b.mg-b.on{background:#FFFFFF!important;color:#14110E!important}' +
+  'html body :is(.mode-selector .mode-btn.mode-btn,#frameTabs .vtab.vtab,.set-tabs .vtab.vtab){min-height:2.125rem!important}' +
+  'html body .mode-selector .mode-btn.mode-btn:is(.active,[aria-current=page],[aria-current=true]){background:rgba(118,118,128,.09)!important}' +
+  'html body .ovf-row.has-pill > :is(.vtab,button,a).vtab{background:none!important}';
   (document.head || document.documentElement).appendChild(st); } catch (e) {} })();
 (function () { try { var st = document.createElement('style'); st.textContent = 'html{-webkit-text-size-adjust:100%;text-size-adjust:100%}'; (document.head || document.documentElement).appendChild(st); } catch (e) {} })();
 (function () {

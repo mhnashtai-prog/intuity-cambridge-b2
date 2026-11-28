@@ -19,7 +19,7 @@ var AREAS = [
   { key:'speaking',   name:'Speaking',   tone:{bg:'#C2956E', fg:'#2B2129'},
     what:'Four Parts: Maya asks, you answer, now' },
   { key:'grammar',    name:'Grammar',    tone:{bg:'#484641', fg:'#EBE7DE'},
-    what:'Tense maps, conditionals, modals, phrasal verbs' },
+    what:'Tenses, passive voice, conditionals, etc.' },
   { key:'vocabulary', name:'Vocabulary', tone:{bg:'#DD8E58', fg:'#FEFCF9'},
     what:'Collocations, phrase banks, synonyms' }
 ];

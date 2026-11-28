@@ -38,6 +38,7 @@
       'min-height:36px;padding:0 .9rem;border:0;border-radius:999px;background:#14110E;color:#FAF8F5;font:600 12px/1 "Geist",system-ui,sans-serif;letter-spacing:.01em;' +
       'box-shadow:0 0 0 2px #FAF8F5,0 6px 18px rgba(20,17,14,.22);cursor:pointer;opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s}' +
     '.ri-pill.on{opacity:1;transform:none}' +
+    '.ri-pill.ri-in{position:static!important;top:auto;bottom:auto;right:auto;display:flex;width:max-content;margin:0 auto 12px;box-shadow:none;transition:none}' +
     '.ri-pill::before{content:"";width:8px;height:8px;border-radius:50%;background:#B0865C;flex:none}' +
     '.ri-veil{position:fixed;inset:0;z-index:9001;background:rgba(20,17,14,.45);display:flex;align-items:flex-end;justify-content:center;padding:0 12px calc(env(safe-area-inset-bottom,0px) + 12px)}' +
     '.ri-veil .fc-card{width:100%;max-width:30rem;max-height:86vh;overflow:auto;padding:16px 16px 14px;box-shadow:0 18px 40px rgba(20,17,14,.3)}' +
@@ -76,7 +77,7 @@
   /* 25 Nov 2026, criticism-free Writing: on a Writing page the pill invites, it never says 'wrong' */
   var CALM = true;   /* every menu is criticism-free (27 Nov 2026: Vocabulary, the last, joins) */
   /* ── the pill ── */
-  var pill = null;
+  var pill = null, waitT = 0, watchT = 0;
   function showPill() {
     if (open) return;
     if (!pill) {
@@ -84,6 +85,19 @@
       pill.textContent = CALM ? 'Think yours works too? Tell us' : 'Marked wrong? Tell us';
       pill.onclick = openCard; document.body.appendChild(pill);
     }
+    /* 28 Nov 2026 (a pupil's-eye audit): over a results card the pill floated on the
+       explanations; there it sits inside the card, at its top, and stays while the card is open */
+    var card = openCard_();
+    if (card) {
+      pill.classList.add('ri-in'); pill.hidden = false; pill.classList.add('on');
+      if (pill.parentNode !== card.host) card.host.insertBefore(pill, card.before);
+      clearInterval(watchT); watchT = setInterval(function () {   /* the card closed: the pill leaves with it */
+        if (openCard_()) return; clearInterval(watchT);
+        pill.classList.remove('ri-in', 'on'); pill.hidden = true; document.body.appendChild(pill);
+      }, 700);
+      return;
+    }
+    if (pill.classList.contains('ri-in')) { pill.classList.remove('ri-in'); document.body.appendChild(pill); }
     pill.hidden = false; requestAnimationFrame(function () { pill.classList.add('on'); });
     clearTimeout(pillT); pillT = setTimeout(hidePill, SHOW_MS);
     /* it never sits over the page the pupil is reading (15 Nov 2026, a learner's review):
@@ -94,7 +108,20 @@
       addEventListener('scroll', off, { capture: true, passive: true }); addEventListener('pointerdown', off, true);
     }, 400);
   }
-  function hidePill() { if (!pill) return; pill.classList.remove('on'); setTimeout(function () { if (pill && !pill.classList.contains('on')) pill.hidden = true; }, 260); }
+  function openCard_() {
+    var vh = window.innerHeight, d = [].filter.call(document.querySelectorAll('[role=dialog],[aria-modal=true]'), function (x) {
+      if (x.closest('.ri-veil') || x.closest('.hp-ov')) return false;
+      var cs = getComputedStyle(x); if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity < 0.1) return false;
+      var r = x.getBoundingClientRect(); return r.width > 200 && r.height > vh * 0.4;
+    })[0];
+    if (!d) return null;
+    /* just above the card's list of answers, where the pupil compares; else at the card's end */
+    var slot = d.querySelector('[data-ri-slot], .answers-section, .ov-miss, .ov-btns, .modal-footer');
+    if (slot) return { host: slot.parentNode, before: slot };
+    var host = d.firstElementChild || d;
+    return { host: host, before: null };
+  }
+  function hidePill() { if (pill && pill.classList.contains('ri-in')) return; if (!pill) return; pill.classList.remove('on'); setTimeout(function () { if (pill && !pill.classList.contains('on')) pill.hidden = true; }, 260); }
 
   /* ── the card ── */
   var WHY = [['count', 'My answer should count'], ['key', 'The right answer is wrong'], ['unclear', 'The question is unclear'], ['other', 'Something else']];
@@ -144,7 +171,8 @@
     var d = e.detail || {}, now = Date.now();
     misses = misses.filter(function (m) { return now - m.at < GROUP_MS; });
     misses.push({ at: now, topic: d.topic, id: d.id, prompt: d.prompt, answer: d.answer, given: d.given });
-    showPill();
+    /* a results card often opens a moment after the marking: wait for it, so the pill goes inside */
+    clearTimeout(waitT); waitT = setTimeout(showPill, 450);
   });
   addEventListener('online', flush);
   setTimeout(flush, 3000);

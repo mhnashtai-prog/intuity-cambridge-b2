@@ -321,7 +321,7 @@
   window.Be2 = Be2;
   visit();
   /* TELL US (12 Nov 2026): every page that marks answers also lets a pupil report a mark (tools/report-it.js) */
-  try { if (!window.ReportIt && !document.querySelector('script[src*="/tools/report-it.js"]')) { var ri = document.createElement('script'); ri.src = '/tools/report-it.js?v=8'; (document.head || document.documentElement).appendChild(ri); } } catch (e) {}
+  try { if (!window.ReportIt && !document.querySelector('script[src*="/tools/report-it.js"]')) { var ri = document.createElement('script'); ri.src = '/tools/report-it.js?v=9'; (document.head || document.documentElement).appendChild(ri); } } catch (e) {}
 
   /* ── Feed from intuity-log.js, without touching any game ──
      Its items are ids chosen by each game. Only ids that read as language

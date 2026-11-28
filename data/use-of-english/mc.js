@@ -167,7 +167,7 @@ function paintTests() {
     $('setTabs').innerHTML = TESTS.map(function (t, i) {
       var p = bestOf(i), on = i === si;
       return '<button class="vtab' + (on ? ' active' : '') + '" type="button" role="tab" aria-selected="' + on
-        + '" data-i="' + i + '">' + (TEXTS ? 'Text ' : 'Set ') + (i + 1)
+        + '" data-i="' + i + '">' + 'Set ' + (i + 1)
         + (p == null ? '' : '<span class="pct">' + (p === 100 ? '\u2605' : p + '%') + '</span>') + '</button>';
     }).join('');
     $('setTabs').querySelectorAll('.vtab').forEach(function (b) {
@@ -179,7 +179,7 @@ function paintTests() {
   $('tdots').innerHTML = TESTS.map(function (t, i) {
     return '<button class="tdot' + (i === si ? ' cur' : '') + '" type="button" data-i="' + i
       + '" role="tab" aria-selected="' + (i === si) + '" aria-label="'
-      + esc(TEXTS ? (t.title || ('Text ' + (i + 1))) : ('Set ' + (i + 1))) + '"></button>';
+      + esc(TEXTS && t.title ? t.title : ('Set ' + (i + 1))) + '"></button>';
   }).join('');
   $('tdots').querySelectorAll('.tdot').forEach(function (b) {
     b.onclick = function () { if (+b.dataset.i !== si) loadTest(+b.dataset.i); };
@@ -331,7 +331,7 @@ function paintBar() {
   var left = questions().length - answered();
   if ($('testInfo')) {
     var nq = questions().length;
-    $('testInfo').textContent = (TEXTS ? 'Text ' : 'Set ') + (si + 1) + ' · ' + nq
+    $('testInfo').textContent = 'Set ' + (si + 1) + ' · ' + nq
       + (TEXTS ? ' gaps' : ' sentences') + (answered() ? ' · ' + answered() + '/' + nq + ' done' : '');
   }
   $('btnSubmit').disabled = !all || marked;

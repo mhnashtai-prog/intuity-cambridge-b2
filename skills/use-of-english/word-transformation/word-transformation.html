@@ -52,7 +52,7 @@
   <script src="/tools/intuity-overflow.js?v=3"></script>
 <script src="/tools/be2-brand.js?v=20261128j"></script>
 </head>
-<body data-uoe-modes="All six|One at a time">
+<body data-uoe-modes="All|One at a time">
   <header class="header">
     <div class="header-top">
       <a class="back-link" href="/index.html?openModal=english" target="_top">&larr; Use of English</a>
@@ -63,12 +63,14 @@
       <span class="header-spacer">Level <b>B2</b></span>
     </div>
     <!-- Exam only: Explore, Practice and Game live on the Master page (its own ring on the menu). -->
-    <!-- Which material. The number is how many tests the set holds. -->
-    <!-- 28 Nov 2026: the top row holds Packs, so a Set is never inside a Set (a pupil's-eye audit) -->
+    <!-- Which material, by the exam year that set it (28 Nov 2026): one pool of
+         transformations, grouped six to a set as today's paper (2026), eight as
+         2008-2015, ten as 1996-2008. 'set1' keeps its old key, so Pack 1's scores stay. -->
     <div class="set-choice"><div class="dataset-selector">
       <div class="seg" id="datasetDropdown" role="tablist" aria-label="Which set">
-        <button type="button" class="set-opt" data-set="set1" role="tab" aria-selected="true">Pack 1<small>16</small></button>
-        <button type="button" class="set-opt" data-set="set2" role="tab" aria-selected="false">Pack 2<small>28</small></button>
+        <button type="button" class="set-opt" data-set="set1" role="tab" aria-selected="true"><span style="display:inline-flex;flex-direction:column;align-items:center;line-height:1.1"><span class="yr" style="display:block;font-weight:400;font-size:.6rem;letter-spacing:.12em;opacity:.62;margin-bottom:.15rem">2026</span>6 sentences</span></button>
+        <button type="button" class="set-opt" data-set="y2008" role="tab" aria-selected="false"><span style="display:inline-flex;flex-direction:column;align-items:center;line-height:1.1"><span class="yr" style="display:block;font-weight:400;font-size:.6rem;letter-spacing:.12em;opacity:.62;margin-bottom:.15rem">2008</span>8 sentences</span></button>
+        <button type="button" class="set-opt" data-set="y1996" role="tab" aria-selected="false"><span style="display:inline-flex;flex-direction:column;align-items:center;line-height:1.1"><span class="yr" style="display:block;font-weight:400;font-size:.6rem;letter-spacing:.12em;opacity:.62;margin-bottom:.15rem">1996</span>10 sentences</span></button>
       </div>
     </div></div>
     <!-- The tests, by name. Built by createDots(); intuity-overflow.js makes
@@ -145,11 +147,11 @@
       <div class="help-content">
         <div class="help-item">
           <div class="help-item-title">All or One at a time</div>
-          <div class="help-item-desc">All six by default. Tap One at a time to see one transformation at a time.</div>
+          <div class="help-item-desc">All the set by default. Tap One at a time to see one transformation at a time.</div>
         </div>
         <div class="help-item">
           <div class="help-item-title">Submit</div>
-          <div class="help-item-desc">Marks all six at once: a right answer turns green; beside the others, the answer appears. Your score follows.</div>
+          <div class="help-item-desc">Marks the whole set at once: a right answer turns green; beside the others, the answer appears. Your score follows.</div>
         </div>
         <div class="help-item">
           <div class="help-item-title">Key</div>
@@ -180,10 +182,11 @@
     let currentMode = 'classic';
     let answersVisible = false;
     
-    const DATASETS = {
-      'set1': '../../../data/use-of-english/word-transformation/word-transformation-6sentences.json',
-      'set2': '../../../data/use-of-english/word-transformation/word-transformation-6sentences1.json'
-    };
+    const FILES = [
+      '../../../data/use-of-english/word-transformation/word-transformation-6sentences.json',
+      '../../../data/use-of-english/word-transformation/word-transformation-6sentences1.json'
+    ];
+    const PER = { set1: 6, y2008: 8, y1996: 10 };
 
     function sanitizeText(text) {
       const div = document.createElement('div');
@@ -316,30 +319,20 @@
     async function loadQuizData() {
       try {
         showLoadingState();
-        const dataPath = DATASETS[currentDataset];
-        const response = await fetch(dataPath);
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const data = await response.json();
-        
-        if (!data || !data.exercises || !Array.isArray(data.exercises)) {
-          throw new Error('Invalid data format');
-        }
-        
-        allTests = data.exercises;
-        
-        // Only filter Set 2 which has incomplete data
-        if (currentDataset === 'set2') {
-          allTests = allTests
-            .map(exercise => ({
-              sentences: exercise.sentences.filter(s => 
-                s.answers && 
-                s.answers.length > 0 && 
-                !s.answers.includes('ANSWER_NEEDED') &&
-                s.answers[0] !== ''
-              )
-            }))
-            .filter(test => test.sentences.length > 0);
-        }
+        /* one pool from both files (the second still has unfinished items, left out),
+           grouped by the year's set size */
+        const datas = await Promise.all(FILES.map(f => fetch(f).then(r => { if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`); return r.json(); })));
+        const pool = [];
+        datas.forEach((data, fi) => {
+          if (!data || !Array.isArray(data.exercises)) throw new Error('Invalid data format');
+          data.exercises.forEach((ex, ei) => ex.sentences.forEach((x, si) => {
+            if (!x.answers || !x.answers.length || x.answers.includes('ANSWER_NEEDED') || x.answers[0] === '') return;
+            pool.push(Object.assign({}, x, { uid: 'f' + fi + '-' + ei + '-' + si }));
+          }));
+        });
+        const per = PER[currentDataset] || 6;
+        allTests = [];
+        for (let i = 0; i + per <= pool.length; i += per) allTests.push({ sentences: pool.slice(i, i + per) });
         
         if (allTests.length === 0) {
           throw new Error('No valid exercises found');
@@ -845,7 +838,7 @@ item.appendChild(keywordDiv);
       /* THE REVIEW DECK (3 Nov 2026): answered items report, laid out like the exam */
       try { if (window.Be2 && Be2.answer) test.sentences.forEach((x, idx) => {
         const ua = userAnswers[idx] || ''; if (!ua.trim()) return;
-        Be2.answer('uoe-part4', { id: 't' + currentTest + '-' + (x.number || idx),
+        Be2.answer('uoe-part4', { id: x.uid ? 'wt-' + x.uid : 't' + currentTest + '-' + (x.number || idx),
           prompt: (x.original_sentence || x.first_sentence || '') + ' \u2192 ' + String(x.keyword || '').toUpperCase() + ': ' + String(x.gapped_sentence || x.prompt || '').replace(/\.{3,}|_{3,}/, '_____'),
           answer: (x.answers || [])[0] || '', accept: x.answers || [], given: ua, correct: kwScore(x, ua).m === 2, rule: x.why || '', href: location.pathname });
       }); } catch (e) {}

@@ -83,15 +83,14 @@
       <span class="header-spacer">Level <b>B2</b></span>
     </div>
     <!-- Exam only: Explore, Practice and Game live on the Master page (its own ring on the menu). -->
-    <!-- Which material. The number is how many tests it holds. Both text
-         sets hold 10-gap texts (the first file is named 8gaps, but every
-         text in it has ten), so they are named as sets, not by gap count. -->
-    <!-- 28 Nov 2026: the top row holds Packs, so a Set is never inside a Set (a pupil's-eye audit) -->
+    <!-- Which material, by the exam year that set it (28 Nov 2026): 2026 is today's
+         paper, eight gaps (toToday() keeps a ten-gap text's first eight); 2008 is the
+         2008-2015 paper, ten gaps; Sentences are extra. -->
     <div class="set-choice"><div class="dataset-selector">
       <div class="seg" id="datasetDropdown" role="tablist" aria-label="Which material">
-        <button type="button" class="set-opt" data-index="0" role="tab" aria-selected="true">Pack 1<small>8</small></button>
-        <button type="button" class="set-opt" data-index="1" role="tab" aria-selected="false">Pack 2<small>8</small></button>
-        <button type="button" class="set-opt" data-index="2" role="tab" aria-selected="false">Sentences<small>10</small></button>
+        <button type="button" class="set-opt" data-index="0" role="tab" aria-selected="true"><span style="display:inline-flex;flex-direction:column;align-items:center;line-height:1.1"><span class="yr" style="display:block;font-weight:400;font-size:.6rem;letter-spacing:.12em;opacity:.62;margin-bottom:.15rem">2026</span>8 gaps</span></button>
+        <button type="button" class="set-opt" data-index="1" role="tab" aria-selected="false"><span style="display:inline-flex;flex-direction:column;align-items:center;line-height:1.1"><span class="yr" style="display:block;font-weight:400;font-size:.6rem;letter-spacing:.12em;opacity:.62;margin-bottom:.15rem">2008</span>10 gaps</span></button>
+        <button type="button" class="set-opt" data-index="2" role="tab" aria-selected="false"><span style="display:inline-flex;flex-direction:column;align-items:center;line-height:1.1"><span class="yr" style="display:block;font-weight:400;font-size:.6rem;letter-spacing:.12em;opacity:.62;margin-bottom:.15rem">Extra</span>Sentences</span></button>
       </div>
     </div></div>
     <!-- The tests, by name. Built by createDots(); intuity-overflow.js makes
@@ -246,9 +245,9 @@
     function stripLeaders(t){ return String(t).replace(/\s*\.{4,}\s*/g, ' '); }
 
     const DATASETS = [
-      { name: '8 Gaps', label: 'Pack 1', path: '../../../data/use-of-english/word-formation/word-formation-8gaps.json' },
-      { name: '10 Gaps', label: 'Pack 2', path: '../../../data/use-of-english/word-formation/word-formation-10gaps.json' },
-      { name: 'Single Sentences', label: 'Sentences', path: '../../../data/use-of-english/word-formation/word-formation-sentences.json' }
+      { name: '8 Gaps', label: '8 gaps', yr: '2026', today: true, path: '../../../data/use-of-english/word-formation/word-formation-8gaps.json' },
+      { name: '10 Gaps', label: '10 gaps', yr: '2008', path: '../../../data/use-of-english/word-formation/word-formation-10gaps.json' },
+      { name: 'Single Sentences', label: 'Sentences', yr: 'Extra', path: '../../../data/use-of-english/word-formation/word-formation-sentences.json' }
     ];
 
     let allTests = [];
@@ -387,6 +386,17 @@
       });
     }
 
+    function toToday(ex) {
+      const keys = Object.keys(ex.gaps).filter(k => k !== '0').sort((a, b) => a - b);
+      const keep = keys.slice(0, 8), drop = keys.slice(8);
+      let text = ex.text;
+      drop.forEach(k => { const w = String(ex.gaps[k].answer).split('/')[0].trim();
+        text = text.replace(new RegExp('\\(' + k + '\\)\\s*' + ex.gaps[k].prompt + '\\s*\\.{3,}'), w); });
+      const gaps = {}; if (ex.gaps['0']) gaps['0'] = ex.gaps['0'];
+      keep.forEach((k, i) => { const n = String(17 + i); gaps[n] = ex.gaps[k]; text = text.replace('(' + k + ')', '(@' + n + ')'); });
+      return Object.assign({}, ex, { text: text.replace(/\(@(\d+)\)/g, '($1)'), gaps: gaps });
+    }
+
     async function loadDataset(index) {
       try {
         showLoadingState();
@@ -400,7 +410,10 @@
           throw new Error('Invalid data format');
         }
         
-        allTests = data.exercises;
+        /* 28 Nov 2026: the 2026 tile is today's paper: eight gaps numbered 17-24, as
+           Part 3 is printed now. A text written with ten keeps its first eight as
+           gaps and prints the last ones as words (the full tests use the same eight). */
+        allTests = DATASETS[index].today ? data.exercises.map(toToday) : data.exercises;
         isSentenceFormat = data.metadata.format === 'word-formation-sentences';
         
         createDots();
@@ -1193,7 +1206,7 @@
     }
 
     function showResultsModal(test, correct, total, percentage) {
-      const datasetName = DATASETS[currentDatasetIndex].label; /* 28 Nov 2026: the name is the progress key; the label is what the pupil saw (Pack 1, not "8 Gaps" over a 10-gap text) */
+      const datasetName = DATASETS[currentDatasetIndex].yr + ' · ' + DATASETS[currentDatasetIndex].label; /* 28 Nov 2026: the name is the progress key; the label is what the pupil saw (Pack 1, not "8 Gaps" over a 10-gap text) */
       const existingScore = testScores[`test${currentTest}`];
       const attempts = existingScore?.attempts || 1;
       

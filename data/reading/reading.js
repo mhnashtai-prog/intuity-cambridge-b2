@@ -1,5 +1,5 @@
 /* the results card's reward (11 Nov 2026): loads /tools/check-reward.js */
-(function(){ if(window.CheckReward) return; var s=document.createElement('script'); s.src='/tools/check-reward.js?v=1'; (document.head||document.documentElement).appendChild(s); })();
+(function(){ if(window.CheckReward) return; var s=document.createElement('script'); s.src='/tools/check-reward.js?v=2'; (document.head||document.documentElement).appendChild(s); })();
 /* ═══════════════════════════════════════════════════════════════════════
    READING — THE ENGINE
 
@@ -149,6 +149,7 @@ function showAnswer(i) {
     if (e) try { e.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (x) {} }, 60);
 }
 var marked = false;
+var retrying = false, firstTry = '';   /* 28 Nov 2026: a second try is of the Not yet ones only; the first try stays the score */
 /* TWO PAGES, AS THE PAPER (26 Nov 2026, the owner: "a toggle that gives them two screens:
    one for text and one for questions"). 'full' is the TEXT page in every Part; 'one' is the
    other page: Part 5 Questions, Part 6 Sentences, Part 7 Statements. Parts 5 and 6 open on
@@ -250,11 +251,14 @@ function skPanel() {
   if (!rows.length) return '';
   return '<div class="sk"><div class="sk-h">Your reading skills</div>' + rows.map(function (r) {
       return '<div class="sk-r' + (target && target.k === r.k ? ' t' : '') + '"><span class="sk-n">' + esc(SKILLS[r.k][0]) + '<small>' + esc(SKILLS[r.k][1]) + '</small></span>' +
-        '<span class="sk-b"><i style="width:' + r.pct + '%"></i></span><span class="sk-p">' + r.pct + '%</span></div>';
+        /* 28 Nov 2026 (a pupil's-eye audit: "I'm 0% at detail? It was one question"): a skill
+           shows a score only after three questions of its kind; before that, how far it has got */
+        (r.n < 3 ? '<span class="sk-b"></span><span class="sk-p sk-wait">' + r.n + ' of 3</span></div>'
+                 : '<span class="sk-b"><i style="width:' + r.pct + '%"></i></span><span class="sk-p">' + r.pct + '%</span></div>');
     }).join('') +
     (target ? '<div class="sk-go">Next target: <b>' + esc(SKILLS[target.k][0]) + '</b>' +
       (!GAPPED ? ' <a class="rd-show" href="?skill=' + target.k + '">Practise 5 \u2192</a>' : ' \u00b7 watch for it in the next text') + '</div>' :
-      '<div class="sk-go">' + (rows.some(function (r) { return r.n < 3; }) ? 'A target appears after three questions of a kind.' : 'No weak spot yet. Keep going.') + '</div>') + '</div>';
+      '<div class="sk-go">' + (rows.some(function (r) { return r.n < 3; }) ? 'Each skill shows a score after three questions of its kind.' : 'No weak spot yet. Keep going.') + '</div>') + '</div>';
 }
 (function () {
   var st = document.createElement('style');
@@ -264,7 +268,7 @@ function skPanel() {
     '.sk-n{font-size:.8rem;font-weight:600;line-height:1.15}.sk-n small{display:block;font-weight:400;font-size:.68rem;color:#8A847C}' +
     '.sk-b{height:8px;border-radius:4px;background:rgba(20,17,14,.08);overflow:hidden}.sk-b i{display:block;height:100%;background:#5FA42B;border-radius:4px}' +
     '.sk-r.t .sk-b i{background:#C2956E}.sk-r.t .sk-n{color:#9A5A2C}' +
-    '.sk-p{font:600 .72rem/1 "Geist Mono",ui-monospace,monospace;text-align:right}' +
+    '.sk-p{font:600 .72rem/1 "Geist Mono",ui-monospace,monospace;text-align:right}.sk-p.sk-wait{font-weight:400;color:#8A847C;white-space:nowrap}' +
     '.sk-go{font-size:.8rem;margin:.5rem 0 0;color:#4A443D}.sk-go .rd-show{margin:0 0 0 .3rem;text-decoration:none;vertical-align:middle}';
   (document.head || document.documentElement).appendChild(st);
 })();
@@ -327,7 +331,7 @@ function paintTexts() {
 
 function openText(i) {
   if (!BANKS[i]) return;
-  bi = i; qi = 0; answers = {}; shown = {}; marked = false;
+  bi = i; qi = 0; answers = {}; shown = {}; marked = false; retrying = false;
   paintTexts(); render();
 }
 
@@ -831,28 +835,30 @@ function submit() {
   var idx = []; for (var z = 0; z < n; z++) idx.push(z);
   if (marked || !idx.every(function (i) { return answers[i] !== undefined; })) return;
   marked = true;
-  if (!DRILL && CFG.path) seenMark(CFG.path(bi + 1), '');
+  var second = retrying; retrying = false; SECOND = second;
+  if (!second && !DRILL && CFG.path) seenMark(CFG.path(bi + 1), '');
   var got = idx.filter(isRight).length;
-  skRecord(idx);
+  if (!second) skRecord(idx);
   var w = CFG.marksPerQuestion || 1;
   /* 11 Nov 2026: every checked question feeds the Reading bar on the review's data screen */
   /* 12 Nov 2026: a Part 5 question also becomes a review card that trains the
      skill itself: the sentence that proves the answer, and which option it proves.
      (Parts 6 and 7 need their whole text, so they only score.) */
   var logged = false;
-  try { if (window.Be2 && Be2.answer && !GAPPED && !MATCH) idx.forEach(function (i) {
+  try { if (!second && window.Be2 && Be2.answer && !GAPPED && !MATCH) idx.forEach(function (i) {
     var c = cards()[i]; if (!c || !c.highlight || !c.choices) return;
     Be2.answer('reading-part5', { id: c._rid || ('p5-' + bi + '-' + i), prompt: c.highlight, ask: c.question + ' The words above give the answer.',
       opts: c.choices.map(String), answer: c.choices[c.answer], given: c.choices[answers[i]] || '', correct: isRight(i),
       rule: c.why || '', href: location.pathname });
     logged = true; }); } catch (e) {}
-  try { if (!logged && window.Be2 && Be2.score) idx.forEach(function (i) { Be2.score('reading', isRight(i)); }); } catch (e) {}
+  try { if (!second && !logged && window.Be2 && Be2.score) idx.forEach(function (i) { Be2.score('reading', isRight(i)); }); } catch (e) {}
   render();
 
   var pct = Math.round(got / n * 100);
   $('ovEm').textContent    = pct === 100 ? '\uD83C\uDFC6' : pct >= 75 ? '\uD83C\uDF89' : pct >= 50 ? '\uD83D\uDC4D' : '\uD83D\uDCDA';
   $('ovTitle').textContent = pct === 100 ? 'Perfect' : pct >= 75 ? 'Strong' : pct >= 50 ? 'Getting there' : 'Keep going';
-  $('ovScore').textContent = (got * w) + ' / ' + (n * w) + ' marks \u00b7 ' + pct + '%';
+  $('ovScore').textContent = (second ? 'Second try \u00b7 ' : '') + (got * w) + ' / ' + (n * w) + ' marks \u00b7 ' + pct + '%';
+  if (!second) firstTry = (got * w) + ' / ' + (n * w) + ' marks';
   $('ovBars').innerHTML = idx.map(function (i) {
     return '<div class="ov-bar ' + (isRight(i) ? 'ok' : 'no') + '"></div>';
   }).join('');
@@ -888,15 +894,20 @@ function submit() {
 
 /* The last three lines of submit(), shared — MATCH writes its own review
    list and then needs exactly this. */
+var SECOND = false;
 function finishScore(got, n, pct) {
-  saveScore(pct);
+  if (!SECOND) saveScore(pct);
+  else try { $('ovMiss').insertAdjacentHTML('afterbegin', '<p class="ov-again" style="margin:0 0 .8rem">Your first try, ' + esc(firstTry) + ', stays your score. This text still comes back tomorrow.</p>'); } catch (e) {}
+  /* TRY THE NOT YET (28 Nov 2026) */
+  var left = 0; for (var q = 0; q < n; q++) if (!isRight(q)) left++;
+  $('ovAgain').hidden = !left; $('ovAgain').textContent = 'Try the ' + left + ' not yet';
   $('ov').classList.add('show');
   /* 11 Nov 2026 (the four-way report): the results card plays out. Each bar
      lights up in turn with a tick, then the longest run of right answers and
      a best per text kept on the phone; a perfect text gets the fireworks. */
   var line = '';
   try {
-    if (window.CheckReward) {
+    if (window.CheckReward && !SECOND) {   /* a second try keeps no best */
       var bars = [].slice.call(document.querySelectorAll('#ovBars .ov-bar')), ok = [];
       for (var i = 0; i < n; i++) ok.push(isRight(i));
       line = CheckReward.play({ els: bars, ok: ok, first: ok.map(function () { return true; }), dots: null,
@@ -950,7 +961,8 @@ addEventListener('keydown', function (e) { if (e.key === 'Escape') closeSheet();
 
 $('ovClose').onclick = function () { $('ov').classList.remove('show'); };
 $('ovAgain').onclick = function () {
-  $('ov').classList.remove('show'); answers = {}; shown = {}; marked = false; qi = 0; render();
+  for (var q = 0; q < count(); q++) if (!isRight(q)) { delete answers[q]; delete shown[q]; }
+  $('ov').classList.remove('show'); marked = false; retrying = true; qi = 0; render();
 };
 $('ovNext').onclick = function () {
   if (DRILL) { location.href = location.pathname; return; }

@@ -1,5 +1,5 @@
 /* the Check moment's reward (11 Nov 2026): loads /tools/check-reward.js */
-(function(){ if(window.CheckReward) return; var s=document.createElement('script'); s.src='/tools/check-reward.js?v=1'; (document.head||document.documentElement).appendChild(s); })();
+(function(){ if(window.CheckReward) return; var s=document.createElement('script'); s.src='/tools/check-reward.js?v=2'; (document.head||document.documentElement).appendChild(s); })();
 /* ═══════════════════════════════════════════════════════════════════════
    INTUITY — PRACTICE ENGINE
    One engine, twelve topics. Each page is a thin shell that sets

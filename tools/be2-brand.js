@@ -410,8 +410,10 @@
       var c=document.createElement('div'); c.className='ov-card';
       while(o.firstChild) c.appendChild(o.firstChild); o.appendChild(c); });
     var em=document.getElementById('ovEm'), sc=document.getElementById('ovScore'); if(!em||!sc||em.__res) return; em.__res=true;
+    /* 28 Nov 2026 (a pupil's-eye audit: a giant 0% is a blow): the big number is the marks, "2 / 12";
+       the percentage stays in the small line under the title */
     function sync(){ var t=sc.textContent||'', m=t.match(/(\d+)\s*%/), f=t.match(/(\d+)\s*\/\s*(\d+)/), v='';
-      if(m) v=m[1]+'%'; else if(f&&+f[2]) v=Math.round(+f[1]/+f[2]*100)+'%';
+      if(f&&+f[2]) v=f[1]+'\u2009/\u2009'+f[2]; else if(m) v=m[1]+'%';
       if(em.textContent!==v) em.textContent=v; }
     var mo=new MutationObserver(sync); mo.observe(sc,{childList:true,characterData:true,subtree:true}); mo.observe(em,{childList:true,characterData:true,subtree:true});
     sync();

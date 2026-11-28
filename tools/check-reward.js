@@ -54,7 +54,8 @@
       setTimeout(function () {
         if (o.score === o.total) cheer('finale');
         else if (nb && b) cheer('streak', o.at);
-        else cheer('done', o.at);
+        /* 28 Nov 2026 (a pupil's-eye audit): glitter over a low score read as a joke at his expense */
+        else if (o.score * 2 >= o.total) cheer('done', o.at);
       }, 260 + n * step);
       return (longest >= 2 ? 'Longest run <b>' + longest + '</b> · ' : '') +
         (nb ? (b ? '<span class="new">New best</span> · beat ' + b + '/' + o.total : 'First score to beat') : b ? 'Best <b>' + b + '/' + o.total + '</b>' : 'First score to beat');

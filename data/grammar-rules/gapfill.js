@@ -537,6 +537,9 @@
        start, rather than in Explore, which most of them skip. The items come
        from another set, so nothing in the ten below is given away. */
     function warmupHtml() {
+      /* 28 Nov 2026 (the owner): no warm-up, "one more tapping and reading that prevents
+         immediate focus". The set's first sentence is the first thing a pupil sees. */
+      return '';
       if (isChecked || quizScores['test' + currentTest] || allTests.length < 2) return '';
       /* A mix is the test of choosing; a warm-up would choose for them. */
       if (allTests[currentTest].mix) return '';
